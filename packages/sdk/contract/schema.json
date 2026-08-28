@@ -8,6 +8,9 @@
       "description": "Any request accepted by the server, in wire (pre-parse) shape.",
       "anyOf": [
         {
+          "$ref": "#/$defs/assessModelFit.request"
+        },
+        {
           "$ref": "#/$defs/audioGenStream.request"
         },
         {
@@ -130,6 +133,9 @@
       "title": "AnyResponse",
       "description": "Any response emitted by the server, including progress updates and error envelopes.",
       "anyOf": [
+        {
+          "$ref": "#/$defs/assessModelFit.response"
+        },
         {
           "$ref": "#/$defs/audioGenStream.response"
         },
@@ -260,6 +266,257 @@
           "$ref": "#/$defs/worldStepStream.response"
         }
       ]
+    },
+    "assessModelFit.request": {
+      "title": "AssessModelFitRequest",
+      "type": "object",
+      "properties": {
+        "models": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Catalog name of the model entry."
+                  },
+                  "sha256Checksum": {
+                    "type": "string",
+                    "description": "Expected SHA-256 checksum of the model file."
+                  }
+                },
+                "required": ["name", "sha256Checksum"],
+                "description": "Catalog model constant to assess.",
+                "title": "AssessModelFitRequestModelsItemModel"
+              },
+              "artifacts": {
+                "description": "Additional catalog constants this load also requires.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Catalog name of the model entry."
+                    },
+                    "sha256Checksum": {
+                      "type": "string",
+                      "description": "Expected SHA-256 checksum of the model file."
+                    }
+                  },
+                  "required": ["name", "sha256Checksum"],
+                  "title": "AssessModelFitRequestModelsItemArtifactsItem"
+                }
+              },
+              "workload": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "llm"
+                      },
+                      "contextTokens": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "Context window the caller intends to use, in tokens."
+                      }
+                    },
+                    "required": ["kind", "contextTokens"],
+                    "description": "Token-context workload for llama.cpp completion and embedding models.",
+                    "title": "AssessModelFitRequestModelsItemWorkloadLlm"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "audio"
+                      },
+                      "windowMs": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "Audio window handed to the engine per call, in milliseconds."
+                      },
+                      "streaming": {
+                        "type": "boolean",
+                        "description": "Whether the caller streams continuously."
+                      },
+                      "batch": {
+                        "description": "Concurrent windows per call.",
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": ["kind", "windowMs", "streaming"],
+                    "description": "Audio-window workload for speech-to-text models.",
+                    "title": "AssessModelFitRequestModelsItemWorkloadAudio"
+                  }
+                ],
+                "description": "Workload the caller intends to run."
+              }
+            },
+            "required": ["model", "workload"],
+            "title": "AssessModelFitRequestModelsItem"
+          },
+          "description": "Candidates to assess together under one memory budget."
+        },
+        "execution": {
+          "default": "sequential",
+          "description": "Declared co-residency assumption for aggregation. Not a scheduling instruction: the SDK does not serialize, reserve, or enforce anything.",
+          "type": "string",
+          "enum": ["sequential", "concurrent"],
+          "title": "AssessModelFitRequestExecution"
+        },
+        "policy": {
+          "default": "interactive-v1",
+          "description": "Headroom policy. `interactive-v1` leaves the larger of 2 GiB or 15% of total RAM on desktop, 1 GiB or 20% on mobile.",
+          "type": "string",
+          "const": "interactive-v1"
+        },
+        "type": {
+          "type": "string",
+          "const": "assessModelFit"
+        }
+      },
+      "required": ["models", "type"]
+    },
+    "assessModelFit.response": {
+      "title": "AssessModelFitResponse",
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": ["likely-fits", "likely-too-large", "unknown"],
+          "description": "Combined verdict across every candidate.",
+          "title": "AssessModelFitResponseVerdict"
+        },
+        "basis": {
+          "type": "string",
+          "const": "system-memory",
+          "description": "The only evidence used. GPU/VRAM metrics are deliberately excluded — they are `unverified`-scoped by design."
+        },
+        "execution": {
+          "type": "string",
+          "enum": ["sequential", "concurrent"],
+          "description": "The declared execution mode this result assumed.",
+          "title": "AssessModelFitResponseExecution"
+        },
+        "budget": {
+          "description": "Absent when memory evidence was unusable.",
+          "type": "object",
+          "properties": {
+            "totalBytes": {
+              "type": "number",
+              "description": "Total system RAM reported by the sample."
+            },
+            "usedBytes": {
+              "type": "number",
+              "description": "System RAM in use at sample time."
+            },
+            "reservedBytes": {
+              "type": "number",
+              "description": "Headroom withheld by the policy."
+            },
+            "availableAfterReserveBytes": {
+              "type": "number",
+              "description": "Budget the estimate is compared against: total − used − reserved."
+            }
+          },
+          "required": ["totalBytes", "usedBytes", "reservedBytes", "availableAfterReserveBytes"],
+          "additionalProperties": false,
+          "title": "AssessModelFitResponseBudget"
+        },
+        "estimate": {
+          "description": "Absent when the combined verdict is `unknown`.",
+          "type": "object",
+          "properties": {
+            "lowerBoundBytes": {
+              "type": "number"
+            },
+            "upperBoundBytes": {
+              "type": "number"
+            }
+          },
+          "required": ["lowerBoundBytes", "upperBoundBytes"],
+          "additionalProperties": false,
+          "title": "AssessModelFitResponseEstimate"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Catalog name of the assessed model."
+              },
+              "verdict": {
+                "type": "string",
+                "enum": ["likely-fits", "likely-too-large", "unknown"],
+                "title": "AssessModelFitResponseModelsItemVerdict"
+              },
+              "estimate": {
+                "description": "Absent when this model assessed as `unknown`.",
+                "type": "object",
+                "properties": {
+                  "lowerBoundBytes": {
+                    "type": "number"
+                  },
+                  "upperBoundBytes": {
+                    "type": "number"
+                  }
+                },
+                "required": ["lowerBoundBytes", "upperBoundBytes"],
+                "additionalProperties": false,
+                "title": "AssessModelFitResponseModelsItemEstimate"
+              },
+              "estimatorVersion": {
+                "description": "Estimator that produced the bounds, e.g. `llm-v1`.",
+                "type": "string"
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Why this model got this verdict."
+              }
+            },
+            "required": ["name", "verdict", "reasons"],
+            "additionalProperties": false,
+            "title": "AssessModelFitResponseModelsItem"
+          },
+          "description": "Per-candidate verdicts, in input order."
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Why the combined verdict came out this way."
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Everything the result took for granted, including estimator defaults."
+        },
+        "type": {
+          "type": "string",
+          "const": "assessModelFit"
+        }
+      },
+      "required": ["verdict", "basis", "execution", "models", "reasons", "assumptions", "type"],
+      "additionalProperties": false
     },
     "audioGenStream.request": {
       "title": "AudioGenStreamRequest",
@@ -8253,126 +8510,161 @@
                   "type": "object",
                   "properties": {
                     "strategy": {
+                      "description": "Decoding strategy: `'greedy'` or `'beam_search'`.",
                       "type": "string",
                       "enum": ["greedy", "beam_search"],
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy"
                     },
                     "n_threads": {
+                      "description": "CPU threads for transcription; `0` = auto (half of hardware cores).",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "n_max_text_ctx": {
+                      "description": "Maximum text tokens from previous segments used as context.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "offset_ms": {
+                      "description": "Milliseconds to skip at the start of the audio.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "duration_ms": {
+                      "description": "Maximum duration of audio to transcribe, in milliseconds.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "audio_ctx": {
+                      "description": "Audio context window size in samples; `0` = model default.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "translate": {
+                      "description": "Translate the transcribed audio into English.",
                       "type": "boolean"
                     },
                     "no_context": {
+                      "description": "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
                       "type": "boolean"
                     },
                     "no_timestamps": {
+                      "description": "Omit timestamps from the transcription output.",
                       "type": "boolean"
                     },
                     "single_segment": {
+                      "description": "Force the whole audio into one output segment (for streaming or short clips).",
                       "type": "boolean"
                     },
                     "print_special": {
+                      "description": "Print special tokens in the output.",
                       "type": "boolean"
                     },
                     "print_progress": {
+                      "description": "Print progress updates during transcription.",
                       "type": "boolean"
                     },
                     "print_realtime": {
+                      "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                       "type": "boolean"
                     },
                     "print_timestamps": {
+                      "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
                       "type": "boolean"
                     },
                     "token_timestamps": {
+                      "description": "Experimental: compute per-token timestamps (populates `t0`/`t1`).",
                       "type": "boolean"
                     },
                     "thold_pt": {
+                      "description": "Word-timestamp probability threshold for accepting a word (0–1).",
                       "type": "number"
                     },
                     "thold_ptsum": {
+                      "description": "Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
                       "type": "number"
                     },
                     "max_len": {
+                      "description": "Maximum tokens per transcription segment.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "split_on_word": {
+                      "description": "When `max_len > 0`, split segments on word boundaries instead of mid-token.",
                       "type": "boolean"
                     },
                     "max_tokens": {
+                      "description": "Maximum tokens per segment; `0` = no limit.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "debug_mode": {
+                      "description": "Experimental: emit extra debug output (e.g. the computed log-mel).",
                       "type": "boolean"
                     },
                     "tdrz_enable": {
+                      "description": "Enable tinydiarize (lightweight speaker-turn detection).",
                       "type": "boolean"
                     },
                     "suppress_regex": {
+                      "description": "Regular-expression pattern for tokens to suppress.",
                       "type": "string"
                     },
                     "initial_prompt": {
+                      "description": "Initial prompt (context) prepended to the transcription.",
                       "type": "string"
                     },
                     "language": {
+                      "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                       "type": "string"
                     },
                     "detect_language": {
+                      "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
                       "type": "boolean"
                     },
                     "suppress_blank": {
+                      "description": "Suppress the blank / leading-space token at the start of sampling.",
                       "type": "boolean"
                     },
                     "suppress_nst": {
+                      "description": "Suppress non-speech tokens (NST).",
                       "type": "boolean"
                     },
                     "temperature": {
+                      "description": "Sampling temperature (0–1). Default 0.0.",
                       "type": "number"
                     },
                     "length_penalty": {
+                      "description": "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
                       "type": "number"
                     },
                     "temperature_inc": {
+                      "description": "Temperature increment applied when sampling fails.",
                       "type": "number"
                     },
                     "entropy_thold": {
+                      "description": "Entropy threshold for filtering uncertain words.",
                       "type": "number"
                     },
                     "logprob_thold": {
+                      "description": "Log-probability threshold for filtering words; `-1` disables.",
                       "type": "number"
                     },
                     "greedy_best_of": {
+                      "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "beam_search_beam_size": {
+                      "description": "Beam size for beam-search decoding; `-1` = default.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
@@ -8381,27 +8673,34 @@
                       "type": "object",
                       "properties": {
                         "threshold": {
+                          "description": "VAD probability threshold for classifying a segment as speech.",
                           "type": "number"
                         },
                         "min_speech_duration_ms": {
+                          "description": "Minimum duration for a segment to count as speech (ms).",
                           "type": "number"
                         },
                         "min_silence_duration_ms": {
+                          "description": "Minimum silence duration required to split speech segments (ms).",
                           "type": "number"
                         },
                         "max_speech_duration_s": {
+                          "description": "Maximum duration of a single speech segment (s).",
                           "type": "number"
                         },
                         "speech_pad_ms": {
+                          "description": "Padding added before and after each speech segment (ms).",
                           "type": "number"
                         },
                         "samples_overlap": {
+                          "description": "Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
                           "type": "number"
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams"
                     },
                     "audio_format": {
+                      "description": "Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
                       "type": "string",
                       "enum": ["f32le", "s16le"],
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat"
@@ -8410,15 +8709,19 @@
                       "type": "object",
                       "properties": {
                         "model": {
+                          "description": "Path to the whisper model file (context override).",
                           "type": "string"
                         },
                         "use_gpu": {
+                          "description": "Enable GPU acceleration. Default false.",
                           "type": "boolean"
                         },
                         "flash_attn": {
+                          "description": "Enable flash attention.",
                           "type": "boolean"
                         },
                         "gpu_device": {
+                          "description": "GPU device index to use.",
                           "type": "number"
                         }
                       },
@@ -8428,12 +8731,14 @@
                       "type": "object",
                       "properties": {
                         "caption_enabled": {
+                          "description": "Format output segments as captions.",
                           "type": "boolean"
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig"
                     },
                     "vadModelSrc": {
+                      "description": "Voice-activity-detection (VAD) model source; enables VAD when set.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -8563,57 +8868,73 @@
                       "type": "object",
                       "properties": {
                         "language": {
+                          "description": "Transcription language (ISO 639-1). Default `en`.",
                           "type": "string"
                         },
                         "n_threads": {
+                          "description": "Number of CPU threads. `0` = auto.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "temperature": {
+                          "description": "Sampling temperature. Default 0.0.",
                           "type": "number"
                         },
                         "suppress_nst": {
+                          "description": "Suppress non-speech tokens (NST).",
                           "type": "boolean"
                         },
                         "suppress_blank": {
+                          "description": "Suppress the blank / leading-space token at the start of sampling.",
                           "type": "boolean"
                         },
                         "duration_ms": {
+                          "description": "Maximum duration of audio to transcribe, in milliseconds.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "translate": {
+                          "description": "Translate the transcribed audio into English.",
                           "type": "boolean"
                         },
                         "no_timestamps": {
+                          "description": "Omit timestamps from the transcription output.",
                           "type": "boolean"
                         },
                         "single_segment": {
+                          "description": "Force the whole audio into one output segment (for streaming or short clips).",
                           "type": "boolean"
                         },
                         "print_special": {
+                          "description": "Print special tokens in the output.",
                           "type": "boolean"
                         },
                         "print_progress": {
+                          "description": "Print progress updates during transcription.",
                           "type": "boolean"
                         },
                         "print_realtime": {
+                          "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                           "type": "boolean"
                         },
                         "print_timestamps": {
+                          "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
                           "type": "boolean"
                         },
                         "detect_language": {
+                          "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
                           "type": "boolean"
                         },
                         "greedy_best_of": {
+                          "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "beam_search_beam_size": {
+                          "description": "Beam size for beam-search decoding; `-1` = default.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
@@ -8625,6 +8946,7 @@
                       "type": "object",
                       "properties": {
                         "day_idx": {
+                          "description": "Session day index selecting day-specific projection matrices; `-1` enables mel passthrough (parity testing only).",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
@@ -8636,15 +8958,19 @@
                       "type": "object",
                       "properties": {
                         "model": {
+                          "description": "Optional whisper model path override (usually set via the loaded model files).",
                           "type": "string"
                         },
                         "use_gpu": {
+                          "description": "Enable GPU acceleration. Enabled by default; set false to force CPU.",
                           "type": "boolean"
                         },
                         "flash_attn": {
+                          "description": "Enable flash attention.",
                           "type": "boolean"
                         },
                         "gpu_device": {
+                          "description": "GPU device index to use.",
                           "type": "number"
                         }
                       },
@@ -8654,15 +8980,18 @@
                       "type": "object",
                       "properties": {
                         "caption_enabled": {
+                          "description": "Format output segments with caption markers. Default false.",
                           "type": "boolean"
                         }
                       },
                       "title": "LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig"
                     },
                     "backendsDir": {
+                      "description": "Android only: override the default ggml backend prebuilds directory. Defaults to `<addon>/prebuilds`.",
                       "type": "string"
                     },
                     "embedderModelSrc": {
+                      "description": "BCI embedder model source (neural-signal embedder weights).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -8789,98 +9118,121 @@
                   "type": "object",
                   "properties": {
                     "maxThreads": {
+                      "description": "CPU threads; `0` defers to hardware concurrency. Default 4.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "useGPU": {
+                      "description": "Enable the ggml GPU backend. Default false.",
                       "type": "boolean"
                     },
                     "sampleRate": {
+                      "description": "Input audio sample rate in Hz. Default 16000.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "channels": {
+                      "description": "Input audio channel count. Default 1 (mono).",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "captionEnabled": {
+                      "description": "Format output segments as captions. Default false.",
                       "type": "boolean"
                     },
                     "timestampsEnabled": {
+                      "description": "Emit per-segment timestamps. Default true.",
                       "type": "boolean"
                     },
                     "seed": {
+                      "description": "Sampling RNG seed; `-1` picks a random seed. Default -1.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "streaming": {
+                      "description": "Open a long-lived streaming session. Default false.",
                       "type": "boolean"
                     },
                     "streamingChunkMs": {
+                      "description": "Streaming chunk cadence in ms. Default 2000.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingHistoryMs": {
+                      "description": "Sortformer rolling-history window in ms. Default 30000.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingEmitPartials": {
+                      "description": "Emit partial results before chunk boundaries. Default true.",
                       "type": "boolean"
                     },
                     "streamingEnergyVad": {
+                      "description": "CTC/TDT-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
                       "type": "boolean"
                     },
                     "streamingLeftContextMs": {
+                      "description": "ASR encoder left-context window in ms; omit to keep the model default (10000).",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingRightLookaheadMs": {
+                      "description": "ASR encoder right-lookahead window in ms; omit to keep the model default (2000).",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "language": {
+                      "description": "Multilingual CTC language id (e.g. `hi`, `ta`); required for Indic Conformer GGUFs, ignored on monolingual CTC.",
                       "type": "string"
                     },
                     "streamingSpkCacheEnable": {
+                      "description": "AOSC (Sortformer v2.1): enable speaker-cache streaming. Default true.",
                       "type": "boolean"
                     },
                     "streamingSpkCacheLen": {
+                      "description": "AOSC: long-term speaker-cache rows (~15 s). Default 188.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingFifoLen": {
+                      "description": "AOSC: FIFO warmup buffer rows. Default 188.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingChunkLeftContextMs": {
+                      "description": "AOSC: encoder left-context window in ms. Default 80.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingChunkRightContextMs": {
+                      "description": "AOSC: encoder right-context window in ms. Default 560.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingSpkCacheUpdatePeriod": {
+                      "description": "AOSC: FIFO-overflow pop-out count. Default 144.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "backendsDir": {
+                      "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
                       "type": "string"
                     },
                     "openclCacheDir": {
+                      "description": "Persistent directory for ggml-opencl's compiled-program cache (Android only).",
                       "type": "string"
                     },
                     "parakeetEncoderSrc": {},
@@ -9059,37 +9411,47 @@
                       "type": "object",
                       "properties": {
                         "mode": {
+                          "description": "Generation mode; currently only `'full'` is supported. Default `'full'`.",
                           "type": "string",
                           "enum": ["full"],
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode"
                         },
                         "beamsize": {
+                          "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                           "type": "number"
                         },
                         "lengthpenalty": {
+                          "description": "Length-normalization strength (≥0). Default 1.0.",
                           "type": "number"
                         },
                         "maxlength": {
+                          "description": "Maximum generated tokens (>0). Default 512.",
                           "type": "number"
                         },
                         "repetitionpenalty": {
+                          "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                           "type": "number"
                         },
                         "norepeatngramsize": {
+                          "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "temperature": {
+                          "description": "Sampling temperature (0–2). Default 0.3.",
                           "type": "number"
                         },
                         "topk": {
+                          "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "topp": {
+                          "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                           "type": "number"
                         },
                         "engine": {
                           "type": "string",
-                          "const": "Bergamot"
+                          "const": "Bergamot",
+                          "description": "Translation backend: Bergamot — fast bilingual models keyed by ISO 639-1 codes."
                         },
                         "from": {
                           "type": "string",
@@ -9149,6 +9511,7 @@
                             "tr",
                             "vi"
                           ],
+                          "description": "Source language (ISO 639-1, e.g. `en`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom"
                         },
                         "to": {
@@ -9209,9 +9572,11 @@
                             "tr",
                             "vi"
                           ],
+                          "description": "Target language (ISO 639-1, e.g. `de`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo"
                         },
                         "srcVocabSrc": {
+                          "description": "Source-language vocabulary file source (required for Bergamot).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -9295,6 +9660,7 @@
                           ]
                         },
                         "dstVocabSrc": {
+                          "description": "Target-language vocabulary file source (required for Bergamot).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -9378,38 +9744,49 @@
                           ]
                         },
                         "normalize": {
+                          "description": "Input normalization: 1 = on (default), 0 = off.",
                           "type": "number"
                         },
                         "pivotModel": {
+                          "description": "Optional second-stage model for pivot translation (translate via an intermediate language).",
                           "type": "object",
                           "properties": {
                             "mode": {
+                              "description": "Generation mode; currently only `'full'` is supported. Default `'full'`.",
                               "type": "string",
                               "enum": ["full"],
                               "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode"
                             },
                             "beamsize": {
+                              "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                               "type": "number"
                             },
                             "lengthpenalty": {
+                              "description": "Length-normalization strength (≥0). Default 1.0.",
                               "type": "number"
                             },
                             "maxlength": {
+                              "description": "Maximum generated tokens (>0). Default 512.",
                               "type": "number"
                             },
                             "repetitionpenalty": {
+                              "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                               "type": "number"
                             },
                             "norepeatngramsize": {
+                              "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                               "type": "number"
                             },
                             "temperature": {
+                              "description": "Sampling temperature (0–2). Default 0.3.",
                               "type": "number"
                             },
                             "topk": {
+                              "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                               "type": "number"
                             },
                             "topp": {
+                              "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                               "type": "number"
                             },
                             "modelSrc": {
@@ -9493,9 +9870,11 @@
                                   "required": ["src"],
                                   "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc"
                                 }
-                              ]
+                              ],
+                              "description": "Second-stage (pivot) translation model source."
                             },
                             "srcVocabSrc": {
+                              "description": "Pivot model source-language vocabulary file source.",
                               "anyOf": [
                                 {
                                   "type": "string"
@@ -9579,6 +9958,7 @@
                               ]
                             },
                             "dstVocabSrc": {
+                              "description": "Pivot model target-language vocabulary file source.",
                               "anyOf": [
                                 {
                                   "type": "string"
@@ -9662,6 +10042,7 @@
                               ]
                             },
                             "normalize": {
+                              "description": "Pivot model input normalization: 1 = on (default), 0 = off.",
                               "type": "number"
                             }
                           },
@@ -9676,37 +10057,47 @@
                       "type": "object",
                       "properties": {
                         "mode": {
+                          "description": "Generation mode; currently only `'full'` is supported. Default `'full'`.",
                           "type": "string",
                           "enum": ["full"],
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode"
                         },
                         "beamsize": {
+                          "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                           "type": "number"
                         },
                         "lengthpenalty": {
+                          "description": "Length-normalization strength (≥0). Default 1.0.",
                           "type": "number"
                         },
                         "maxlength": {
+                          "description": "Maximum generated tokens (>0). Default 512.",
                           "type": "number"
                         },
                         "repetitionpenalty": {
+                          "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                           "type": "number"
                         },
                         "norepeatngramsize": {
+                          "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "temperature": {
+                          "description": "Sampling temperature (0–2). Default 0.3.",
                           "type": "number"
                         },
                         "topk": {
+                          "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "topp": {
+                          "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                           "type": "number"
                         },
                         "engine": {
                           "type": "string",
-                          "const": "IndicTrans"
+                          "const": "IndicTrans",
+                          "description": "Translation backend: IndicTrans2 — keyed by ISO 15924 codes; full generation-parameter support."
                         },
                         "from": {
                           "type": "string",
@@ -9738,6 +10129,7 @@
                             "tel_Telu",
                             "urd_Arab"
                           ],
+                          "description": "Source language (ISO 15924, e.g. `hin_Deva`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom"
                         },
                         "to": {
@@ -9770,6 +10162,7 @@
                             "tel_Telu",
                             "urd_Arab"
                           ],
+                          "description": "Target language (ISO 15924, e.g. `eng_Latn`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo"
                         }
                       },
@@ -9822,7 +10215,8 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "chatterbox"
+                          "const": "chatterbox",
+                          "description": "TTS engine: Chatterbox (multilingual, voice cloning)."
                         },
                         "language": {
                           "type": "string",
@@ -9851,49 +10245,60 @@
                             "zh",
                             "hi"
                           ],
+                          "description": "Language code. Default `en`.",
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage"
                         },
                         "voice": {
+                          "description": "Ignored by Chatterbox; use `referenceAudioSrc` for voice cloning.",
                           "type": "string"
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "streamChunkTokens": {
+                          "description": "Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
                         "streamFirstChunkTokens": {
+                          "description": "Smaller first streaming chunk for lower first-audio latency.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
                         "cfmSteps": {
+                          "description": "Chatterbox CFM Euler step count. Default 2.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
                         "cfgRate": {
+                          "description": "Chatterbox S3Gen classifier-free-guidance rate; `0` skips the unconditioned pass, a positive value overrides the model’s baked rate. Omit to keep the baked rate.",
                           "type": "number",
                           "minimum": 0
                         },
                         "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 9007199254740991
                         },
                         "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "s3genModelSrc": {
+                          "description": "Chatterbox S3Gen + HiFT model source (speech tokens to 24 kHz waveform).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -9977,6 +10382,7 @@
                           ]
                         },
                         "referenceAudioSrc": {
+                          "description": "Chatterbox voice-cloning reference audio source (wav).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10060,6 +10466,7 @@
                           ]
                         },
                         "mecabDictSrc": {
+                          "description": "Chatterbox MTL only: compiled MeCab/IPAdic dictionary source for Japanese segmentation (required for language `ja`).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10143,6 +10550,7 @@
                           ]
                         },
                         "cangjieTsvSrc": {
+                          "description": "Chatterbox MTL only: Cangjie TSV source for Chinese romanisation (required for language `zh`).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10226,6 +10634,7 @@
                           ]
                         },
                         "lavasrEnhancerModelSrc": {
+                          "description": "LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10309,6 +10718,7 @@
                           ]
                         },
                         "lavasrDenoiserModelSrc": {
+                          "description": "LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10414,7 +10824,8 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "supertonic"
+                          "const": "supertonic",
+                          "description": "TTS engine: Supertonic."
                         },
                         "language": {
                           "type": "string",
@@ -10451,30 +10862,38 @@
                             "uk",
                             "vi"
                           ],
+                          "description": "Language code. Default `en`.",
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage"
                         },
                         "voice": {
+                          "description": "Supertonic baked voice id, e.g. `F1` or `M1`.",
                           "type": "string"
                         },
                         "ttsSpeed": {
+                          "description": "Speech-rate / duration multiplier (1.0 = unchanged, <1 slower, >1 faster). Supertonic scales its native duration predictor.",
                           "type": "number"
                         },
                         "ttsNumInferenceSteps": {
+                          "description": "Supertonic vector-estimator CFM steps; 0 uses the GGUF default.",
                           "type": "number"
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
                           "type": "integer",
                           "minimum": 8000,
-                          "maximum": 192000
+                          "maximum": 192000,
+                          "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
                         },
                         "vulkanCacheDir": {
+                          "description": "Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.",
                           "type": "string",
                           "minLength": 1
                         },
                         "lavasrEnhancerModelSrc": {
+                          "description": "LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10558,6 +10977,7 @@
                           ]
                         },
                         "lavasrDenoiserModelSrc": {
+                          "description": "LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10663,21 +11083,26 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "parler"
+                          "const": "parler",
+                          "description": "TTS engine: Parler."
                         },
                         "description": {
+                          "description": "Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
                           "type": "string",
                           "minLength": 1
                         },
                         "voiceDescription": {
+                          "description": "Alias of `description`; mutually exclusive with the voice-template fields.",
                           "type": "string",
                           "minLength": 1
                         },
                         "voice": {
+                          "description": "Parler voice-template speaker name; also Supertonic’s baked voice id.",
                           "type": "string",
                           "minLength": 1
                         },
                         "emotion": {
+                          "description": "Speaking style (Parler voice-template field).",
                           "type": "string",
                           "enum": [
                             "command",
@@ -10696,78 +11121,95 @@
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion"
                         },
                         "pitch": {
+                          "description": "Parler voice-template pitch descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "pace": {
+                          "description": "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`.",
                           "type": "string",
                           "enum": ["slow", "moderate", "fast"],
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerPace"
                         },
                         "expressivity": {
+                          "description": "Parler voice-template expressivity descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "noise": {
+                          "description": "Parler voice-template background-noise descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "reverb": {
+                          "description": "Parler voice-template reverb descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "quality": {
+                          "description": "Parler voice-template audio-quality descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
                           "type": "integer",
                           "minimum": 8000,
-                          "maximum": 192000
+                          "maximum": 192000,
+                          "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
                         },
                         "streamChunkTokens": {
+                          "description": "Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "streamFirstChunkTokens": {
+                          "description": "Smaller first streaming chunk for lower first-audio latency.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "temperature": {
+                          "description": "Sampling temperature; unset defers to the engine default (Parler 1.0, Audio8 0.7).",
                           "type": "number",
                           "minimum": 0
                         },
                         "topK": {
+                          "description": "Top-k sampling cutoff; unset defers to the engine default (50).",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "topP": {
+                          "description": "Top-p (nucleus) sampling cutoff (0 < p ≤ 1); unset defers to the engine default.",
                           "type": "number",
                           "exclusiveMinimum": 0,
                           "maximum": 1
                         },
                         "maxFrames": {
+                          "description": "Generation-length cap in decoder frames; 0 = engine default (Parler ≈86 frames/s, Audio8 ≈21.5).",
                           "anyOf": [
                             {
                               "type": "number",
@@ -10781,11 +11223,13 @@
                           ]
                         },
                         "minNewTokens": {
+                          "description": "Parler minimum tokens before EOS; `-1` uses the model default.",
                           "type": "integer",
                           "minimum": -1,
                           "maximum": 2147483647
                         },
                         "normalizeNumbers": {
+                          "description": "Parler prompt digit expansion (engine default: enabled).",
                           "type": "boolean"
                         }
                       },
@@ -10798,19 +11242,23 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "cosyvoice3"
+                          "const": "cosyvoice3",
+                          "description": "TTS engine: CosyVoice3."
                         },
                         "emotion": {
+                          "description": "Speaking style: `'anger'`, `'happy'`, `'neutral'`, or `'sad'`. One conditioning control per synthesis (emotion / non-moderate pace / instruct).",
                           "type": "string",
                           "enum": ["anger", "happy", "neutral", "sad"],
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion"
                         },
                         "pace": {
+                          "description": "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`; `'moderate'` disengages the pace channel.",
                           "type": "string",
                           "enum": ["slow", "moderate", "fast"],
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace"
                         },
                         "instruct": {
+                          "description": "Natural-language control: a structured object (one of dialect / volume / style) or a raw instruction string. One conditioning control per synthesis.",
                           "anyOf": [
                             {
                               "type": "string",
@@ -10859,39 +11307,47 @@
                           ]
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
                           "type": "integer",
                           "minimum": 8000,
-                          "maximum": 192000
+                          "maximum": 192000,
+                          "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
                         },
                         "streamChunkTokens": {
+                          "description": "Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "streamFirstChunkTokens": {
+                          "description": "Smaller first streaming chunk for lower first-audio latency.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "lavasrEnhancerModelSrc": {
+                          "description": "LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10975,6 +11431,7 @@
                           ]
                         },
                         "lavasrDenoiserModelSrc": {
+                          "description": "LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -11067,53 +11524,65 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "audio8"
+                          "const": "audio8",
+                          "description": "TTS engine: Audio8."
                         },
                         "referenceText": {
+                          "description": "Transcript of `referenceAudioSrc`; required when cloning a voice.",
                           "type": "string",
                           "minLength": 1
                         },
                         "greedy": {
+                          "description": "Audio8: take the argmax instead of sampling.",
                           "type": "boolean"
                         },
                         "temperature": {
+                          "description": "Sampling temperature; unset defers to the engine default (Parler 1.0, Audio8 0.7).",
                           "type": "number",
                           "minimum": 0
                         },
                         "topK": {
+                          "description": "Top-k sampling cutoff; unset defers to the engine default (50).",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "topP": {
+                          "description": "Top-p (nucleus) sampling cutoff (0 < p ≤ 1); unset defers to the engine default.",
                           "type": "number",
                           "exclusiveMinimum": 0,
                           "maximum": 1
                         },
                         "maxFrames": {
+                          "description": "Generation-length cap in decoder frames; 0 = engine default (Parler ≈86 frames/s, Audio8 ≈21.5).",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
                           "type": "integer",
                           "minimum": 8000,
-                          "maximum": 192000
+                          "maximum": 192000,
+                          "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
                         },
                         "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -11199,9 +11668,11 @@
                               "required": ["src"],
                               "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc"
                             }
-                          ]
+                          ],
+                          "description": "Audio8 codec decoder model source (codes to 44.1 kHz waveform)."
                         },
                         "audio8CodecEncoderModelSrc": {
+                          "description": "Audio8 codec encoder model source (waveform to codes); required only for voice cloning.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -11285,6 +11756,7 @@
                           ]
                         },
                         "referenceAudioSrc": {
+                          "description": "Audio8 voice-cloning reference recording source; pair with `referenceText`.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -11415,49 +11887,61 @@
                   "type": "object",
                   "properties": {
                     "langList": {
+                      "description": "Languages handled by the recognizer, e.g. `['en']` or `['en', 'fr']`. Required for `easyocr`; ignored by the language-agnostic `doctr` pipeline.",
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
                     },
                     "pipelineType": {
+                      "description": "OCR pipeline: `'easyocr'` (CRAFT detector + CRNN recognizer, default) or `'doctr'` (DBNet detector + doctr recognizer, language-agnostic).",
                       "type": "string",
                       "enum": ["easyocr", "doctr"],
                       "title": "LoadModelSrcRequestGgmlOcrModelConfigPipelineType"
                     },
                     "magRatio": {
+                      "description": "Detection magnification ratio (easyocr only). Default 1.5.",
                       "type": "number"
                     },
                     "canvasSize": {
+                      "description": "Detection canvas cap (long side, px) applied after `magRatio` scaling; lower it on memory-constrained targets. Default 2560. easyocr only.",
                       "type": "number"
                     },
                     "defaultRotationAngles": {
+                      "description": "Rotation angles tried when the primary pass is low-confidence (easyocr only). Default [90, 270].",
                       "type": "array",
                       "items": {
                         "type": "number"
                       }
                     },
                     "contrastRetry": {
+                      "description": "Retry low-confidence boxes with contrast adjustment (easyocr only). Default false.",
                       "type": "boolean"
                     },
                     "lowConfidenceThreshold": {
+                      "description": "Confidence threshold below which contrast-retry kicks in (easyocr only). Default 0.4.",
                       "type": "number"
                     },
                     "recognizerBatchSize": {
+                      "description": "Recognizer batch size (easyocr only). Default 32.",
                       "type": "number"
                     },
                     "nThreads": {
+                      "description": "GGML CPU thread count: `0` (default) auto-detects physical cores, `> 0` sets an explicit count, `< 0` leaves the backend's default unchanged.",
                       "type": "number"
                     },
                     "backendDevice": {
+                      "description": "ggml backend device: `'cpu'` (default), `'vulkan'`, `'metal'`, or `'opencl'`. Falls back to CPU when the requested GPU device is unavailable.",
                       "type": "string",
                       "enum": ["cpu", "vulkan", "metal", "opencl"],
                       "title": "LoadModelSrcRequestGgmlOcrModelConfigBackendDevice"
                     },
                     "gpuDevice": {
+                      "description": "0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`.",
                       "type": "number"
                     },
                     "detectorModelSrc": {
+                      "description": "Text-detector model source (easyocr: CRAFT; doctr: DBNet). Derived from the recognizer model source when omitted.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -11591,9 +12075,11 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
                     },
                     "threads": {
+                      "description": "CPU threads for loading and CPU ops. Default: auto.",
                       "type": "number"
                     },
                     "device": {
+                      "description": "Prefer GPU backends (`'gpu'`, default) or force CPU (`'cpu'`).",
                       "type": "string",
                       "enum": ["gpu", "cpu"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigDevice"
@@ -11641,11 +12127,13 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigType"
                     },
                     "rng": {
+                      "description": "Context RNG type: `'cpu'`, `'cuda'` (default; Philox, not GPU-specific), or `'std_default'`.",
                       "type": "string",
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigRng"
                     },
                     "sampler_rng": {
+                      "description": "Sampler RNG type override. Default: auto (follows `rng`).",
                       "type": "string",
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"
@@ -11691,6 +12179,7 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode"
                     },
                     "verbosity": {
+                      "description": "Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
                       "type": "number"
                     },
                     "clipLModelSrc": {
@@ -12933,28 +13422,34 @@
                   "type": "object",
                   "properties": {
                     "useGPU": {
+                      "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
                       "type": "boolean"
                     },
                     "inferenceSteps": {
+                      "description": "DiT sampling steps; `0` (default) lets the engine auto-pick per DiT architecture (turbo 8 / sft 50).",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "shift": {
+                      "description": "Flow-matching time-shift; `0` (default) lets the engine auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
                       "type": "number",
                       "minimum": 0
                     },
                     "nGpuLayers": {
+                      "description": "GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "threads": {
+                      "description": "CPU thread count; `0` (default) lets the engine auto-pick.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "backendsDir": {
+                      "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
                       "type": "string",
                       "minLength": 1
                     },
@@ -13039,7 +13534,8 @@
                           "required": ["src"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc"
                         }
-                      ]
+                      ],
+                      "description": "Text-encoder model source; turns the caption and lyrics into embeddings."
                     },
                     "lmModelSrc": {
                       "anyOf": [
@@ -13122,7 +13618,8 @@
                           "required": ["src"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc"
                         }
-                      ]
+                      ],
+                      "description": "Language-model source; plans the song structure."
                     },
                     "ditModelSrc": {
                       "anyOf": [
@@ -13205,7 +13702,8 @@
                           "required": ["src"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc"
                         }
-                      ]
+                      ],
+                      "description": "DiT model source; generates the audio latent (the quality-defining stage)."
                     },
                     "vaeModelSrc": {
                       "anyOf": [
@@ -13288,7 +13786,8 @@
                           "required": ["src"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc"
                         }
-                      ]
+                      ],
+                      "description": "VAE model source; decodes the latent into the output waveform."
                     }
                   },
                   "required": ["textEncModelSrc", "lmModelSrc", "ditModelSrc", "vaeModelSrc"],
@@ -13432,14 +13931,17 @@
                   "type": "object",
                   "properties": {
                     "modelPath": {
+                      "description": "Absolute path to the GGUF weights file. Defaults to the bundled model inside @qvac/classification-ggml.",
                       "type": "string"
                     },
                     "topK": {
+                      "description": "Limit returned results to the top-K classes. Default: all classes.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "nativeLogger": {
+                      "description": "Forward native C++ log lines through the engine logger. Off by default.",
                       "type": "boolean"
                     }
                   },
@@ -13526,126 +14028,161 @@
               "type": "object",
               "properties": {
                 "strategy": {
+                  "description": "Decoding strategy: `'greedy'` or `'beam_search'`.",
                   "type": "string",
                   "enum": ["greedy", "beam_search"],
                   "title": "ReloadConfigRequestModelConfigStrategy"
                 },
                 "n_threads": {
+                  "description": "CPU threads for transcription; `0` = auto (half of hardware cores).",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "n_max_text_ctx": {
+                  "description": "Maximum text tokens from previous segments used as context.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "offset_ms": {
+                  "description": "Milliseconds to skip at the start of the audio.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "duration_ms": {
+                  "description": "Maximum duration of audio to transcribe, in milliseconds.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "audio_ctx": {
+                  "description": "Audio context window size in samples; `0` = model default.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "translate": {
+                  "description": "Translate the transcribed audio into English.",
                   "type": "boolean"
                 },
                 "no_context": {
+                  "description": "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
                   "type": "boolean"
                 },
                 "no_timestamps": {
+                  "description": "Omit timestamps from the transcription output.",
                   "type": "boolean"
                 },
                 "single_segment": {
+                  "description": "Force the whole audio into one output segment (for streaming or short clips).",
                   "type": "boolean"
                 },
                 "print_special": {
+                  "description": "Print special tokens in the output.",
                   "type": "boolean"
                 },
                 "print_progress": {
+                  "description": "Print progress updates during transcription.",
                   "type": "boolean"
                 },
                 "print_realtime": {
+                  "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                   "type": "boolean"
                 },
                 "print_timestamps": {
+                  "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
                   "type": "boolean"
                 },
                 "token_timestamps": {
+                  "description": "Experimental: compute per-token timestamps (populates `t0`/`t1`).",
                   "type": "boolean"
                 },
                 "thold_pt": {
+                  "description": "Word-timestamp probability threshold for accepting a word (0–1).",
                   "type": "number"
                 },
                 "thold_ptsum": {
+                  "description": "Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
                   "type": "number"
                 },
                 "max_len": {
+                  "description": "Maximum tokens per transcription segment.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "split_on_word": {
+                  "description": "When `max_len > 0`, split segments on word boundaries instead of mid-token.",
                   "type": "boolean"
                 },
                 "max_tokens": {
+                  "description": "Maximum tokens per segment; `0` = no limit.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "debug_mode": {
+                  "description": "Experimental: emit extra debug output (e.g. the computed log-mel).",
                   "type": "boolean"
                 },
                 "tdrz_enable": {
+                  "description": "Enable tinydiarize (lightweight speaker-turn detection).",
                   "type": "boolean"
                 },
                 "suppress_regex": {
+                  "description": "Regular-expression pattern for tokens to suppress.",
                   "type": "string"
                 },
                 "initial_prompt": {
+                  "description": "Initial prompt (context) prepended to the transcription.",
                   "type": "string"
                 },
                 "language": {
+                  "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                   "type": "string"
                 },
                 "detect_language": {
+                  "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
                   "type": "boolean"
                 },
                 "suppress_blank": {
+                  "description": "Suppress the blank / leading-space token at the start of sampling.",
                   "type": "boolean"
                 },
                 "suppress_nst": {
+                  "description": "Suppress non-speech tokens (NST).",
                   "type": "boolean"
                 },
                 "temperature": {
+                  "description": "Sampling temperature (0–1). Default 0.0.",
                   "type": "number"
                 },
                 "length_penalty": {
+                  "description": "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
                   "type": "number"
                 },
                 "temperature_inc": {
+                  "description": "Temperature increment applied when sampling fails.",
                   "type": "number"
                 },
                 "entropy_thold": {
+                  "description": "Entropy threshold for filtering uncertain words.",
                   "type": "number"
                 },
                 "logprob_thold": {
+                  "description": "Log-probability threshold for filtering words; `-1` disables.",
                   "type": "number"
                 },
                 "greedy_best_of": {
+                  "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "beam_search_beam_size": {
+                  "description": "Beam size for beam-search decoding; `-1` = default.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
@@ -13654,27 +14191,34 @@
                   "type": "object",
                   "properties": {
                     "threshold": {
+                      "description": "VAD probability threshold for classifying a segment as speech.",
                       "type": "number"
                     },
                     "min_speech_duration_ms": {
+                      "description": "Minimum duration for a segment to count as speech (ms).",
                       "type": "number"
                     },
                     "min_silence_duration_ms": {
+                      "description": "Minimum silence duration required to split speech segments (ms).",
                       "type": "number"
                     },
                     "max_speech_duration_s": {
+                      "description": "Maximum duration of a single speech segment (s).",
                       "type": "number"
                     },
                     "speech_pad_ms": {
+                      "description": "Padding added before and after each speech segment (ms).",
                       "type": "number"
                     },
                     "samples_overlap": {
+                      "description": "Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
                       "type": "number"
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigVadParams"
                 },
                 "audio_format": {
+                  "description": "Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
                   "type": "string",
                   "enum": ["f32le", "s16le"],
                   "title": "ReloadConfigRequestModelConfigAudioFormat"
@@ -13683,15 +14227,19 @@
                   "type": "object",
                   "properties": {
                     "model": {
+                      "description": "Path to the whisper model file (context override).",
                       "type": "string"
                     },
                     "use_gpu": {
+                      "description": "Enable GPU acceleration. Default false.",
                       "type": "boolean"
                     },
                     "flash_attn": {
+                      "description": "Enable flash attention.",
                       "type": "boolean"
                     },
                     "gpu_device": {
+                      "description": "GPU device index to use.",
                       "type": "number"
                     }
                   },
@@ -13701,12 +14249,14 @@
                   "type": "object",
                   "properties": {
                     "caption_enabled": {
+                      "description": "Format output segments as captions.",
                       "type": "boolean"
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigMiscConfig"
                 },
                 "vadModelSrc": {
+                  "description": "Voice-activity-detection (VAD) model source; enables VAD when set.",
                   "anyOf": [
                     {
                       "type": "string"
@@ -15437,18 +15987,22 @@
           "exclusiveMinimum": 0
         },
         "description": {
+          "description": "Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
           "type": "string",
           "minLength": 1
         },
         "voiceDescription": {
+          "description": "Alias of `description`; mutually exclusive with the voice-template fields.",
           "type": "string",
           "minLength": 1
         },
         "voice": {
+          "description": "Parler voice-template speaker name; also Supertonic’s baked voice id.",
           "type": "string",
           "minLength": 1
         },
         "emotion": {
+          "description": "Speaking style (Parler voice-template field).",
           "type": "string",
           "enum": [
             "command",
@@ -15467,27 +16021,33 @@
           "title": "TextToSpeechRequestEmotion"
         },
         "pitch": {
+          "description": "Parler voice-template pitch descriptor.",
           "type": "string",
           "minLength": 1
         },
         "pace": {
+          "description": "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`.",
           "type": "string",
           "enum": ["slow", "moderate", "fast"],
           "title": "TextToSpeechRequestPace"
         },
         "expressivity": {
+          "description": "Parler voice-template expressivity descriptor.",
           "type": "string",
           "minLength": 1
         },
         "noise": {
+          "description": "Parler voice-template background-noise descriptor.",
           "type": "string",
           "minLength": 1
         },
         "reverb": {
+          "description": "Parler voice-template reverb descriptor.",
           "type": "string",
           "minLength": 1
         },
         "quality": {
+          "description": "Parler voice-template audio-quality descriptor.",
           "type": "string",
           "minLength": 1
         },
@@ -15575,18 +16135,22 @@
           "exclusiveMinimum": 0
         },
         "description": {
+          "description": "Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
           "type": "string",
           "minLength": 1
         },
         "voiceDescription": {
+          "description": "Alias of `description`; mutually exclusive with the voice-template fields.",
           "type": "string",
           "minLength": 1
         },
         "voice": {
+          "description": "Parler voice-template speaker name; also Supertonic’s baked voice id.",
           "type": "string",
           "minLength": 1
         },
         "emotion": {
+          "description": "Speaking style (Parler voice-template field).",
           "type": "string",
           "enum": [
             "command",
@@ -15605,27 +16169,33 @@
           "title": "TextToSpeechStreamRequestEmotion"
         },
         "pitch": {
+          "description": "Parler voice-template pitch descriptor.",
           "type": "string",
           "minLength": 1
         },
         "pace": {
+          "description": "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`.",
           "type": "string",
           "enum": ["slow", "moderate", "fast"],
           "title": "TextToSpeechStreamRequestPace"
         },
         "expressivity": {
+          "description": "Parler voice-template expressivity descriptor.",
           "type": "string",
           "minLength": 1
         },
         "noise": {
+          "description": "Parler voice-template background-noise descriptor.",
           "type": "string",
           "minLength": 1
         },
         "reverb": {
+          "description": "Parler voice-template reverb descriptor.",
           "type": "string",
           "minLength": 1
         },
         "quality": {
+          "description": "Parler voice-template audio-quality descriptor.",
           "type": "string",
           "minLength": 1
         },

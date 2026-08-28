@@ -134,7 +134,7 @@ interface TTSGgmlFiles {
      * enhancer and is rate-preserving (the canonical way to enable denoising;
      * `denoiser.denoiserPath` is the only alternative).
      *
-     * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+     * The tts-cpp UL-UNAS forward is implemented in qvac-fabric-speech.cpp
      * PR #78 (scalar CPU port, validated bit-close to the ONNX reference).
      */
     lavasrDenoiser?: string;

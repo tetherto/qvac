@@ -1,9 +1,9 @@
 import {
   type GetLoadedModelInfoParams,
   type GetLoadedModelInfoRequest,
-  type LoadedModelInfo
+  type LoadedModelInfo,
+  type RPCOptions
 } from '@qvac/inference/surface'
-import { type RPCOptions } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
 
