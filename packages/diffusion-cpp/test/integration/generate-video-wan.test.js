@@ -163,7 +163,11 @@ function sniffAvi(buf) {
 // on GPU runners; we only assert structural validity of the AVI output, not
 // visual quality.
 const SMOKE_FRAMES = 5
-const SMOKE_STEPS = 1
+// 2, not 1: with a single step the sampler assertions degenerate to "some
+// tick reported (1, 1)", which any single-tile VAE pass would also satisfy.
+// Two steps keep the run cheap while making the sampler sequence's own
+// start (step 0) and completion (step === total) distinguishable.
+const SMOKE_STEPS = 2
 const SMOKE_WIDTH = 416
 const SMOKE_HEIGHT = 240
 const SMOKE_FPS = 16
@@ -295,19 +299,25 @@ test(
         ),
         'every progress tick carries finite step + total >= 1'
       )
-      // The pinned stable-diffusion.cpp fork emits progress only from sampler
-      // and tiling code. On the supported single-expert Wan path, the first
-      // sequence is therefore the sampler, not text encoding.
-      if (progressTicks.length > 0) {
-        t.is(progressTicks[0].step, 0, 'first progress tick starts the sampler sequence')
+      // Other phases may tick around the sampler (VAE tiling passes; the
+      // model loader ticks only during load() since the addon loads
+      // eagerly), so constrain the sampler's own sequence rather than the
+      // global first tick: the first tick whose total is the configured step
+      // count must be the sequence start (step 0), and the sequence must run
+      // to completion (step === total).
+      const samplerTicks = progressTicks.filter((p) => p.total === SMOKE_STEPS)
+      t.ok(samplerTicks.length > 0, `sampler ticks present (total=${SMOKE_STEPS})`)
+      if (samplerTicks.length > 0) {
         t.is(
-          progressTicks[0].total,
-          SMOKE_STEPS,
-          `first progress sequence reports the configured ${SMOKE_STEPS} sampler step(s)`
+          samplerTicks[0].step,
+          0,
+          'sampler sequence starts at step 0 (no earlier phase claimed it)'
         )
       }
-      const phaseTotals = new Set(progressTicks.map((p) => p.total))
-      t.ok(phaseTotals.size >= 1, `progress ticks span ${phaseTotals.size} distinct phase total(s)`)
+      t.ok(
+        samplerTicks.some((p) => p.step === SMOKE_STEPS),
+        `sampler sequence completed (step=${SMOKE_STEPS}/total=${SMOKE_STEPS})`
+      )
       console.log(
         'First/last progress tick:',
         JSON.stringify(progressTicks[0]),

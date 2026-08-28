@@ -2,6 +2,21 @@
 #   filename:  schema.json
 
 from ._internal import (
+    AssessModelFitRequest,
+    AssessModelFitRequestExecution,
+    AssessModelFitRequestModelsItem,
+    AssessModelFitRequestModelsItemArtifactsItem,
+    AssessModelFitRequestModelsItemModel,
+    AssessModelFitRequestModelsItemWorkloadAudio,
+    AssessModelFitRequestModelsItemWorkloadLlm,
+    AssessModelFitResponse,
+    AssessModelFitResponseBudget,
+    AssessModelFitResponseEstimate,
+    AssessModelFitResponseExecution,
+    AssessModelFitResponseModelsItem,
+    AssessModelFitResponseModelsItemEstimate,
+    AssessModelFitResponseModelsItemVerdict,
+    AssessModelFitResponseVerdict,
     AudioGenStreamRequest,
     AudioGenStreamRequestReferenceAudioBase64,
     AudioGenStreamRequestReferenceAudioFilePath,
@@ -781,6 +796,21 @@ from ._internal import (
 )
 
 __all__ = [
+    "AssessModelFitRequest",
+    "AssessModelFitRequestExecution",
+    "AssessModelFitRequestModelsItem",
+    "AssessModelFitRequestModelsItemArtifactsItem",
+    "AssessModelFitRequestModelsItemModel",
+    "AssessModelFitRequestModelsItemWorkloadAudio",
+    "AssessModelFitRequestModelsItemWorkloadLlm",
+    "AssessModelFitResponse",
+    "AssessModelFitResponseBudget",
+    "AssessModelFitResponseEstimate",
+    "AssessModelFitResponseExecution",
+    "AssessModelFitResponseModelsItem",
+    "AssessModelFitResponseModelsItemEstimate",
+    "AssessModelFitResponseModelsItemVerdict",
+    "AssessModelFitResponseVerdict",
     "AudioGenStreamRequest",
     "AudioGenStreamRequestReferenceAudioBase64",
     "AudioGenStreamRequestReferenceAudioFilePath",

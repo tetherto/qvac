@@ -20,7 +20,7 @@ namespace qvac::ttsggml {
 //   ggufPath      empty => denoiser disabled (returns null).
 //   errorContext  prefix for the InitializationFailed message on load failure.
 //
-// The UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78; an
+// The UL-UNAS forward is implemented in qvac-fabric-speech.cpp PR #78; an
 // older tts-cpp pin (pre-#78) makes Denoiser::load throw, surfacing here as a
 // clean InitializationFailed error.
 inline std::shared_ptr<tts_cpp::lavasr::Denoiser>
