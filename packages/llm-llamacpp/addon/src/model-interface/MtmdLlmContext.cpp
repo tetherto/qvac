@@ -1670,6 +1670,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     tokenId = reasoningState_.cached_close_tag_token;
     tokenStr = common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
     reasoningState_.inside_reasoning = false;
+    // EOS substitution skips the `updateReasoningBuffer` handshake, so the
+    // substituted close never reaches the capture site on its own. Seed it
+    // first, as the six sibling close sites do, or the replay restores an
+    // end-of-prefill prefix that opens a `<think>` nothing closes.
+    compactor_.recordCloseMarkerForReplay(tokenId);
     compactor_.requestCloseCapture();
     if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
       forcedTokens_.push_back(reasoningState_.cached_newline_token);
