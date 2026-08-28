@@ -193,6 +193,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             ${{ inputs.project-directory }}
+            packages/inference
             .github/actions/sdk-e2e-prepare-inference
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -715,6 +716,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             ${{ inputs.project-directory }}
+            packages/inference
             .github/actions/sdk-e2e-fail-on-failures
             .github/actions/sdk-e2e-prepare-inference
 

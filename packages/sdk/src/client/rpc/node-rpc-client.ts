@@ -2,9 +2,8 @@ import RPC from 'bare-rpc'
 import spawn, { type ChildProcess as BareChildProcess } from 'bare-runtime/spawn'
 import type { Duplex, DuplexEvents } from 'bare-stream'
 import { randomBytes } from 'node:crypto'
-import { existsSync, unlinkSync } from 'node:fs'
+import fs, { existsSync, unlinkSync } from 'node:fs'
 import { createServer } from 'node:net'
-import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,6 +17,7 @@ import {
   WorkerShutdownError
 } from '@/utils/errors-client'
 import type { RuntimeContext } from '@qvac/inference/surface'
+import { createRPCInitTimeoutCause, type WorkerExit } from './worker-startup-error'
 
 const RPC_INIT_TIMEOUT_MS = 30_000
 const WORKER_STDERR_TAIL_CHARS = 16_384
@@ -175,13 +175,6 @@ function appendWorkerStderrTail(current: string, chunk: string) {
   const next = current + chunk
   if (next.length <= WORKER_STDERR_TAIL_CHARS) return next
   return next.slice(next.length - WORKER_STDERR_TAIL_CHARS)
-}
-
-function createWorkerStartupError(details: string, stderrTail: string) {
-  const stderr = stderrTail.trimEnd()
-  if (!stderr) return new Error(details)
-
-  return new Error(`${details}\n\nWorker stderr:\n${stderr}`)
 }
 
 function resetModuleState() {
@@ -362,16 +355,12 @@ async function ensureRPC(): Promise<RPC> {
   rpcPromise = new Promise((resolve, reject) => {
     let settled = false
     let workerStderrTail = ''
+    let workerExitBeforeHandshake: WorkerExit | null = null
 
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      const cause = workerStderrTail
-        ? createWorkerStartupError(
-            'Worker did not establish IPC before the RPC initialization timeout',
-            workerStderrTail
-          )
-        : undefined
+      const cause = createRPCInitTimeoutCause(workerStderrTail, workerExitBeforeHandshake)
       teardownFailedInit()
       reject(new RPCInitTimeoutError(RPC_INIT_TIMEOUT_MS, cause))
     }, RPC_INIT_TIMEOUT_MS)
@@ -442,8 +431,10 @@ async function ensureRPC(): Promise<RPC> {
             handlePostHandshakeExit(code, exitSignal as NodeJS.Signals | null, spawnResources)
             return
           }
-          // Pre-handshake failures are rejected from "close" so stderr has
-          // drained before we assemble the startup error cause.
+          // Keep waiting for "close" so piped stderr can drain, but retain the
+          // exit status in case a slow stream (for example, a core dump) lets
+          // the initialization timer win that race.
+          workerExitBeforeHandshake = { code, signal: exitSignal }
         })
 
         bareWorkerProc.on('close', (...args: unknown[]) => {
@@ -459,10 +450,7 @@ async function ensureRPC(): Promise<RPC> {
           reject(
             new RPCInitTimeoutError(
               RPC_INIT_TIMEOUT_MS,
-              createWorkerStartupError(
-                `Worker process exited with code ${code}, signal ${exitSignal} before IPC connection was established`,
-                workerStderrTail
-              )
+              createRPCInitTimeoutCause(workerStderrTail, { code, signal: exitSignal })
             )
           )
         })

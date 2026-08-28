@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.9.0] - 2026-08-25
+
+### Added
+
+- ROCm/HIP compute backend (`libqvac-ggml-hip.so`, gfx1151 / Strix Halo) in the
+  linux-x64 prebuild, via the `qvac-fabric[hip-backend]` feature. It ships as a
+  `GGML_BACKEND_DL` module under `prebuilds/linux-x64/qvac__fabric/` alongside
+  Vulkan, so every consumer of the shared runtime can select it — previously the
+  feature was requested per-consumer by `@qvac/vla-ggml`, which no longer builds
+  its own ggml. At **runtime** this is fail-safe: the DL loader skips the module
+  on non-AMD hosts and falls back to Vulkan/CPU. At **build time** it is not —
+  the `hip` port is deterministic and hard-fails when no ROCm SDK is found,
+  because a host-dependent skip would let the vcpkg binary cache conflate a
+  no-HIP build with a real HIP build under an identical ABI hash. Building
+  `packages/fabric` for linux-x64 therefore requires a ROCm/TheRock install,
+  located via `ROCM_PATH` or `/opt/rocm`. Other platforms are unaffected — the
+  `hip` dependency is gated on `linux & x64`.
+
+### Changed
+
+- Linux-x64 CI installs the ROCm SDK (`include-rocm` / `include-rocm-sdk`,
+  landed in #4132). That is mandatory once this package requests `hip-backend`:
+  without it `cpp-lint` fails at configure time resolving the port's
+  `$ENV{ROCM_PATH}` shim to an empty prefix (`/lib/cmake/hip/hip-config.cmake`),
+  which a warm vcpkg binary cache can disguise as a successful `hip` install.
+  No AMD GPU is required on the runner.
+- `qvac-registry-vcpkg` baseline `c57eec31` -> `f04e2447`, matching
+  `@qvac/vla-ggml`. Required because `qvac-fabric[hip-backend]` depends on `hip`
+  with no version constraint, so its version comes from the pinned baseline, and
+  the `hip` port does not exist at `c57eec31`. No other version selected by this
+  package changes: `qvac-fabric` and `qvac-lint-cpp` are pinned above their
+  baseline entries by `version>=`, `opencl` / `vcpkg-cmake` /
+  `vcpkg-cmake-config` are identical in both baselines, and `spirv-headers`
+  resolves from the separately pinned `microsoft/vcpkg` registry.
+
 ## [0.8.0] - 2026-08-24
 
 ### Changed

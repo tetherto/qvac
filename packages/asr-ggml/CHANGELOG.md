@@ -16,6 +16,30 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- CUDA GPU acceleration on linux x64: the prebuild now builds with
+  `ASR_CUDA=ON` and bundles the CUDA backend alongside Vulkan and the
+  per-arch CPU variants as runtime-loaded modules, and `use_gpu` /
+  `useGPU: true` prefers CUDA on NVIDIA hosts (whisper and parakeet). CUDA
+  engages where the NVIDIA driver and CUDA 13 runtime libraries (cudart,
+  cuBLAS) are present; on every other host the CUDA module is skipped and
+  the addon behaves as before (Vulkan or CPU). The whisper backend loader
+  now also runs
+  on desktop linux-x64 (previously Android and linux-arm64 only) so the
+  modules register before `whisper_init`.
+
+### Changed
+
+- CUDA builds no longer link the CUDA runtime into the addon and no longer
+  export `CUDAHOSTCXX`: on linux-x64 the CUDA backend is a runtime-loaded
+  module carrying its own runtime dependencies, and nvcc's clang host
+  compiler comes from the shared linux toolchain. A CUDA build now loads on
+  hosts without the CUDA runtime instead of failing with unresolved cudart
+  symbols.
+
+## [0.4.0] - 2026-08-27
+
+### Added
+
 - **CUDA GPU backend for both engines on Linux / Windows (NVIDIA).** The
   addon already resolved and reported CUDA at runtime (`BackendId.CUDA`, `2`),
   but no build ever compiled the backend in. `asr-ggml[cuda]` now forwards to
@@ -50,6 +74,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
     (`packages/ggml-coload-smoke`) cannot produce two CUDA runtime instances.
 
 ### Changed
+
+- Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
+  `qvac-fabric-speech.cpp` in the package documentation, following the
+  upstream repository rename. Old GitHub links keep working via redirect.
 
 - **The GPU integration tests accept CUDA as a desktop backend.**
   `gpu.test.js` and `parakeet-gpu-smoke.test.js` asserted

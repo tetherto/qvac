@@ -42,6 +42,13 @@ test('transformLlmConfig: positive reasoning_budget survives as string token cap
   )
 })
 
+test('transformLlmConfig: load_mode survives as an underscore key', (t) => {
+  const config = makeConfig({ load_mode: 'mmap+mlock' })
+  const result = transformLlmConfig(config)
+  t.is(result['load_mode'], 'mmap+mlock')
+  t.absent('load-mode' in result)
+})
+
 test('transformLlmConfig: stop_sequences is renamed to reverse_prompt', (t) => {
   const config = makeConfig({ stop_sequences: ['</s>', '<|im_end|>'] })
   const result = transformLlmConfig(config)

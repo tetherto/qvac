@@ -24,7 +24,7 @@ Legend:
 | ocr-ggml | Optical Character Recognition (OCR) addon (EasyOCR pipeline) on the GGML backend | Addon |
 | rag | JavaScript library for Retrieval-Augmented Generation (RAG) with document ingestion, vector search, and LLM integration | Addon |
 | transcription-parakeet | Speech-to-text (ASR) and Sortformer speaker-diarization addon using NVIDIA Parakeet models | Addon |
-| transcription-whispercpp | Whisper-based audio transcription addon via `qvac-ext-lib-whisper.cpp` | Addon |
+| transcription-whispercpp | Whisper-based audio transcription addon via `qvac-fabric-speech.cpp` | Addon |
 | translation-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
 | tts-ggml | Text-to-Speech (TTS) addon wrapping the Chatterbox and Supertonic engines on the GGML backend | Addon |
 | vla-ggml | Vision-Language-Action (VLA) inference addon on the GGML backend | Addon |

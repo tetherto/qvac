@@ -9,7 +9,7 @@ interface FakeRequestStream {
 }
 
 function createDuplexFactory(lines: string[]) {
-  return async function createDuplex() {
+  return async function () {
     const requestStream: FakeRequestStream = {
       write() {},
       end() {},
