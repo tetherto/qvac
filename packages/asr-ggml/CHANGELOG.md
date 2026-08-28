@@ -35,6 +35,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   compiler comes from the shared linux toolchain. A CUDA build now loads on
   hosts without the CUDA runtime instead of failing with unresolved cudart
   symbols.
+- Declare the `cuda` feature Linux-only (`supports: linux`). A Windows CUDA
+  build never worked: ggml-cuda links statically there and the addon carries
+  no CUDA runtime link, so the build failed with unresolved CUDA runtime
+  symbols. Selecting the feature on Windows now fails fast at manifest
+  resolution instead of at link time.
 
 ## [0.4.0] - 2026-08-27
 

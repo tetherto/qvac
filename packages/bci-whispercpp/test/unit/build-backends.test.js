@@ -24,6 +24,7 @@ const CUDA_CMAKE_OPTION = 'ENABLE_CUDA'
 const CUDA_MANIFEST_FEATURE = 'cuda'
 const SPEECH_PORT = 'speech-cpp'
 const DESKTOP_PLATFORM = '!(osx | ios | android)'
+const CUDA_PLATFORM = 'linux'
 
 function speechDependencies(dependencies) {
   return dependencies.filter((dependency) => dependency.name === SPEECH_PORT)
@@ -85,9 +86,9 @@ test('[build] the cuda feature forwards to the speech-cpp CUDA backend', (t) => 
   t.is(cudaSpeechDependency()['default-features'], false)
 })
 
-test('[build] the cuda feature is confined to the platforms that have NVIDIA GPUs', (t) => {
-  t.is(cudaFeature().supports, DESKTOP_PLATFORM)
-  t.is(cudaSpeechDependency().platform, DESKTOP_PLATFORM)
+test('[build] the cuda feature is confined to Linux, the one supported CUDA build platform', (t) => {
+  t.is(cudaFeature().supports, CUDA_PLATFORM)
+  t.is(cudaSpeechDependency().platform, CUDA_PLATFORM)
 })
 
 test('[build] the cuda feature requires a speech-cpp that declares it', (t) => {

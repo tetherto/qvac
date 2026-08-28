@@ -507,12 +507,16 @@ GPU backends are selected per platform via `vcpkg.json` features; no
 - **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
 - **macOS / iOS** — Metal, statically linked
 
-**CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
+**CUDA (Linux on NVIDIA)** needs `nvcc` on the build host, so it is
 gated behind the `ASR_CUDA` CMake option. The published linux-x64 prebuild
-turns it on (the prebuild workflow installs the CUDA toolkit); elsewhere build
-it yourself with `npm run build:cuda` (or
+turns it on (the prebuild workflow installs the CUDA toolkit); on other Linux
+hosts build it yourself with `npm run build:cuda` (or
 `bare-make generate -D ASR_CUDA=ON`), which adds the `cuda` feature to the
-`speech-cpp` dependency and turns on `GGML_CUDA`. On linux-x64 the cuda
+`speech-cpp` dependency and turns on `GGML_CUDA`. Windows is not supported:
+there the port links ggml-cuda statically and the addon carries no CUDA
+runtime link, so the build cannot resolve the CUDA runtime symbols (the
+`cuda` feature declares `"supports": "linux"` and fails fast). On linux-x64
+the cuda
 feature flips ggml into hybrid dynamically-loaded backend mode: the
 CPU-variant, Vulkan, and CUDA backends ship as `.so` modules next to the
 addon, and only the CUDA module depends on the CUDA runtime. Engaging CUDA
@@ -634,7 +638,7 @@ rationale.
   spirv-tools` on Ubuntu/Debian); Metal needs nothing on macOS/iOS; the
   opt-in CUDA build additionally needs the
   [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) (`nvcc`) on
-  Linux/Windows
+  Linux
 
 ### Build
 

@@ -46,9 +46,10 @@ backends ship as `.so` modules beside the addon, and only the CUDA module
 depends on the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the
 CUDA 13 runtime libraries (cudart and cuBLAS) resolvable at load time; hosts that
 cannot resolve them skip the module and fall back to Vulkan or CPU. The engine
-prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
-opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`
-on the build host).
+prefers CUDA when both GPU backends are usable. On other Linux hosts the CUDA
+backend is opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON`
+(needs `nvcc` on the build host); Windows is not supported — there ggml-cuda
+links statically and the addon carries no CUDA runtime link.
 
 To build the native addon from source in a repository checkout:
 

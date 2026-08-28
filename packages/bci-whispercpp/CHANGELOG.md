@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runtime libraries (cudart, cuBLAS) are present; on every other host the
   CUDA module is skipped and the addon behaves as before (Vulkan or CPU).
 
+### Changed
+
+- Declare the `cuda` feature Linux-only (`supports: linux`). A Windows CUDA
+  build never worked: ggml-cuda links statically there and the addon carries
+  no CUDA runtime link, so the build failed with unresolved CUDA runtime
+  symbols. Selecting the feature on Windows now fails fast at manifest
+  resolution instead of at link time.
+
 ## [0.8.0] - 2026-08-27
 
 ### Added

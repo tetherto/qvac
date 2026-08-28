@@ -44,8 +44,8 @@
   ],
   "features": {
     "cuda": {
-      "description": "Enable the CUDA GPU backend (Linux / Windows on NVIDIA). Off by default because it needs nvcc on the build host; opt in with `bare-make generate -D ENABLE_CUDA=ON`. The runtime needs only the NVIDIA driver.",
-      "supports": "!(osx | ios | android)",
+      "description": "Enable the CUDA GPU backend (Linux on NVIDIA). Off by default because it needs nvcc on the build host; opt in with `bare-make generate -D ENABLE_CUDA=ON`. The runtime needs the NVIDIA driver plus the CUDA 13 runtime libraries; hosts without them fall back to Vulkan or CPU. Not supported on Windows, where ggml-cuda links statically and the addon carries no CUDA runtime link.",
+      "supports": "linux",
       "dependencies": [
         {
           "name": "speech-cpp",
@@ -54,7 +54,7 @@
           "features": [
             "cuda"
           ],
-          "platform": "!(osx | ios | android)"
+          "platform": "linux"
         }
       ]
     },

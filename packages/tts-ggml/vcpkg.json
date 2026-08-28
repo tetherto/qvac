@@ -42,7 +42,8 @@
   ],
   "features": {
     "cuda": {
-      "description": "Enable CUDA GPU acceleration",
+      "description": "Enable CUDA GPU acceleration (Linux on NVIDIA). Not supported on Windows, where ggml-cuda links statically and the addon carries no CUDA runtime link.",
+      "supports": "linux",
       "dependencies": [
         {
           "name": "speech-cpp",
@@ -51,7 +52,7 @@
           "features": [
             "cuda"
           ],
-          "platform": "!(osx | ios | android)"
+          "platform": "linux"
         }
       ]
     },

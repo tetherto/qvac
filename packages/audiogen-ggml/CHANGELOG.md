@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AudiogenBackendName` type, so a consumer can name a `stats.backendId`
   without copying the code table out of this README.
 
+### Changed
+
+- Declare the `cuda` feature Linux-only (`supports: linux`). A Windows CUDA
+  build never worked: ggml-cuda links statically there and the addon carries
+  no CUDA runtime link, so the build failed with unresolved CUDA runtime
+  symbols. Selecting the feature on Windows now fails fast at manifest
+  resolution instead of at link time.
+
 ## [0.3.0] - 2026-08-27
 
 ### Added

@@ -18,6 +18,7 @@ const CUDA_CMAKE_OPTION = 'ASR_CUDA'
 const CUDA_MANIFEST_FEATURE = 'cuda'
 const SPEECH_PORT = 'speech-cpp'
 const DESKTOP_PLATFORM = '!(osx | ios | android)'
+const CUDA_PLATFORM = 'linux'
 const GPU_TEST_FILES = [
   'test/integration/gpu.test.js',
   'test/integration/parakeet-gpu-smoke.test.js'
@@ -69,9 +70,9 @@ test('the cuda feature forwards to the speech-cpp CUDA backend', () => {
   assert.equal(cudaSpeechDependency()['default-features'], false)
 })
 
-test('the cuda feature is confined to the platforms that have NVIDIA GPUs', () => {
-  assert.equal(cudaFeature().supports, DESKTOP_PLATFORM)
-  assert.equal(cudaSpeechDependency().platform, DESKTOP_PLATFORM)
+test('the cuda feature is confined to Linux, the one supported CUDA build platform', () => {
+  assert.equal(cudaFeature().supports, CUDA_PLATFORM)
+  assert.equal(cudaSpeechDependency().platform, CUDA_PLATFORM)
 })
 
 test('the cuda feature requires a speech-cpp that declares it', () => {
