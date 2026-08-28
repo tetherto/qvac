@@ -27,6 +27,14 @@ on:
 permissions:
   contents: read
 
+# Not keyed on github.ref alone: the pull_request_target caller sets it to the
+# base branch, so every in-flight LLM PR would share one group. PR number keeps
+# them independent; github.ref serialises dispatch, push and schedule runs,
+# which is wanted because those are the ones that write the cache.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   test-cpp:
     strategy:

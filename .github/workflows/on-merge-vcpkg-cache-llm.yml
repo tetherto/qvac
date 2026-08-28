@@ -1,4 +1,4 @@
-name: Refresh vcpkg cache (LLM)
+name: On Merge vcpkg Cache (LLM)
 
 # cpp-tests-llm.yml only writes its vcpkg cache on a trusted event, and its
 # only other caller is pull_request_target -- so without this, nothing populates
