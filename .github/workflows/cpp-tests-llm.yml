@@ -52,8 +52,6 @@ jobs:
 
     env:
       WORKDIR: ${{ inputs.workdir }}
-      # keep cache inside workdir so everything is self-contained
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir }}/vcpkg/cache,readwrite"
       GIT_TERMINAL_PROMPT: "0"
 
     steps:
@@ -83,6 +81,25 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
+      # Must come after setup-vcpkg, which writes this same variable to
+      # $GITHUB_ENV and would otherwise win. `clear;` drops its S3 source, which
+      # this job has no credentials for; MODEL_S3_BUCKET above is still required
+      # by setup-vcpkg's own validation.
+      - name: Point vcpkg at the cached binary directory
+        if: ${{ matrix.os != 'windows-2025' }}
+        shell: bash
+        run: |
+          echo "VCPKG_BINARY_SOURCES=clear;files,$GITHUB_WORKSPACE/$WORKDIR/vcpkg/cache,readwrite" >> "$GITHUB_ENV"
+
+      # Native path required: a mixed-separator path resolves elsewhere and
+      # vcpkg silently finds nothing.
+      - name: Point vcpkg at the cached binary directory (Windows)
+        if: ${{ matrix.os == 'windows-2025' }}
+        shell: powershell
+        run: |
+          $cacheDir = [IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE (Join-Path $env:WORKDIR 'vcpkg/cache')))
+          echo "VCPKG_BINARY_SOURCES=clear;files,$cacheDir,readwrite" >> $env:GITHUB_ENV
+
       - name: Cleanup vcpkg
         shell: bash
         run: |
@@ -101,12 +118,34 @@ jobs:
         shell: bash
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
-      - name: Get vcpkg cache
+      # This job runs PR-head code, so only trusted events may write the shared
+      # cache (.cursor/rules/devops/github-actions.mdc:82). No restore-keys: a
+      # prefix match would re-save the previous entry's archives and grow without
+      # bound. The key covers the manifests and the shared vcpkg overlays, but
+      # not the runner image's compiler: a toolchain bump there gives an exact
+      # hit whose contents all miss, and actions/cache skips the save on an exact
+      # hit -- bump `v6` to recover.
+      - name: Get vcpkg cache (restore + save, trusted contexts)
+        if: >-
+          github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch' ||
+          github.event_name == 'merge_group' ||
+          github.event_name == 'schedule'
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
+          key: cpp-tests-v6-llm-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), 'vcpkg-overlays/triplets/**', 'vcpkg-overlays/toolchains/**') }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
-          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+
+      - name: Get vcpkg cache (restore-only, untrusted contexts)
+        if: >-
+          github.event_name != 'push' &&
+          github.event_name != 'workflow_dispatch' &&
+          github.event_name != 'merge_group' &&
+          github.event_name != 'schedule'
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: cpp-tests-v6-llm-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), 'vcpkg-overlays/triplets/**', 'vcpkg-overlays/toolchains/**') }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
