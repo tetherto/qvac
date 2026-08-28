@@ -157,7 +157,10 @@ test('a @tetherto spec is resolved from GitHub Packages, with auth', () => {
   })
 
   assert.equal(run.status, 0, run.output)
-  assert.match(run.invocations, new RegExp(`registry=${GPR_HOST}`))
+  assert.ok(
+    run.invocations.includes(`registry=${GPR_HOST}`),
+    `npm should have resolved ${GPR_HOST}, got:\n${run.invocations}`,
+  )
   assert.match(run.invocations, /auth=token/)
   assert.match(run.output, /GitHub Packages/)
   assert.ok(run.androidPrebuildInstalled, 'android prebuild landed in prebuilds/')
@@ -170,7 +173,10 @@ test('a @qvac spec still goes to npmjs.org and never to GitHub Packages', () => 
   })
 
   assert.equal(run.status, 0, run.output)
-  assert.match(run.invocations, new RegExp(`registry=${NPM_HOST}`))
+  assert.ok(
+    run.invocations.includes(`registry=${NPM_HOST}`),
+    `npm should have resolved ${NPM_HOST}, got:\n${run.invocations}`,
+  )
   assert.match(run.invocations, /npmrc_present=no/)
   assert.doesNotMatch(run.invocations, /npm\.pkg\.github\.com/)
 })
@@ -180,7 +186,10 @@ test('an empty package-version still resolves <addon>@latest from npmjs.org', ()
 
   assert.equal(run.status, 0, run.output)
   assert.match(run.invocations, /spec=@qvac\/llm-llamacpp@latest/)
-  assert.match(run.invocations, new RegExp(`registry=${NPM_HOST}`))
+  assert.ok(
+    run.invocations.includes(`registry=${NPM_HOST}`),
+    `npm should have resolved ${NPM_HOST}, got:\n${run.invocations}`,
+  )
 })
 
 test('a @tetherto spec without a token fails before contacting any registry', () => {
