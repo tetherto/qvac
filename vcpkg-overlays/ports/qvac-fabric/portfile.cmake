@@ -10,13 +10,8 @@
 vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
   URL https://github.com/tetherto/qvac-fabric-llm.cpp
-  REF 29db2fb9fd0aab52590926922b66da6edea7c340
+  REF ab483bd1ed9e5e8307b720616eea83f7a95f5917
   PATCHES
-    # Pipeline parallelism was silently disabled on any build with an ACCEL
-    # device present (Accelerate on macOS), because the caps check skipped only
-    # DEVICE_TYPE_CPU. Resolves the TODO upstream already left on that line.
-    # Belongs upstream in qvac-fabric-llm.cpp; carried here until it lands.
-    0001-pipeline-parallel-ignore-accel-devices.patch
     # get_command_queue() held one global mutex across the full connect (TCP
     # connect + hello negotiation, up to RPC_CLIENT_CONNECT_TIMEOUT_MS each),
     # so registering N 'rpc-servers' endpoints was N times slower than one,
