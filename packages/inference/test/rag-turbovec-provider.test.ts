@@ -20,7 +20,11 @@ import {
   isWorkspaceLoaded
 } from '@/rag/rag-workspace-manager'
 import { deleteWorkspace as handleDeleteWorkspace } from '@/rag/handlers/delete-workspace'
-import { PathTraversalError, RAGWorkspaceInUseError } from '@/errors/index'
+import {
+  PathTraversalError,
+  RAGWorkspaceInUseError,
+  RAGWorkspaceNotOpenError
+} from '@/errors/index'
 import { getEnv, initEnv } from '@/runtime/env'
 import { getConfiguredCacheDir } from '@/runtime/state'
 import { getRegisteredResourceCounts } from '@/runtime/runtime-lifecycle'
@@ -531,6 +535,62 @@ test('in-flight TurboVec open blocks deletion and is settled by shutdown', async
   } finally {
     releaseReady()
     if (shutdownPromise) await shutdownPromise
+    if (openPromise) await openPromise.catch(() => undefined)
+    TurboVecAdapter.prototype.ready = originalReady
+    restoreEnv(originalFlag)
+    clearPlugins()
+    await cleanupWorkspace(workspace)
+  }
+})
+
+test('closing during a failed in-flight open reports the workspace as not open', async (t) => {
+  const workspace = workspaceName('opening-close-failure')
+  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
+  const originalReady = TurboVecAdapter.prototype.ready
+  const openError = new Error('TurboVec initialization failed')
+  let markReadyStarted = () => {}
+  let releaseReady = () => {}
+  const readyStarted = new Promise<void>((resolve) => {
+    markReadyStarted = resolve
+  })
+  const readyGate = new Promise<void>((resolve) => {
+    releaseReady = resolve
+  })
+  const { provider } = observableIndexProvider()
+
+  clearPlugins()
+  registerProviderPlugin('test-turbovec-opening-close-failure', provider)
+  env[TURBOVEC_ROLLOUT_ENV] = '1'
+  TurboVecAdapter.prototype.ready = async function () {
+    markReadyStarted()
+    await readyGate
+    throw openError
+  }
+
+  let openPromise: Promise<TurboVecAdapter | HyperDBAdapter> | undefined
+  try {
+    openPromise = getRagDbAdapter(workspace)
+    await readyStarted
+
+    const closePromise = closeRagInstance(workspace)
+    // Prevent an unhandled rejection while the open is released below.
+    const closeOutcome = closePromise.then(
+      () => undefined,
+      (error) => error
+    )
+    releaseReady()
+
+    await openPromise.then(
+      () => t.fail('the gated open should fail'),
+      (error) => t.is(error, openError, 'the open rejects with its own error')
+    )
+    const closeError = await closeOutcome
+    t.ok(
+      closeError instanceof RAGWorkspaceNotOpenError,
+      'close reports not-open instead of rethrowing the open error'
+    )
+  } finally {
+    releaseReady()
     if (openPromise) await openPromise.catch(() => undefined)
     TurboVecAdapter.prototype.ready = originalReady
     restoreEnv(originalFlag)

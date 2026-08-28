@@ -382,11 +382,31 @@ export async function getRagInstance(
   return rag
 }
 
+const OPEN_SETTLE_TIMEOUT_MS = 10_000
+
+async function waitForSettledOpen(key: string, opening: Promise<unknown>) {
+  const settled = opening.then(
+    () => true,
+    () => true
+  )
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(false), OPEN_SETTLE_TIMEOUT_MS)
+  })
+  const didSettle = await Promise.race([settled, timedOut])
+  if (timer !== undefined) clearTimeout(timer)
+  if (!didSettle) {
+    logger.warn(
+      `Abandoned the in-flight open of RAG workspace '${key}' after ${OPEN_SETTLE_TIMEOUT_MS}ms`
+    )
+  }
+}
+
 export async function closeRagInstance(workspace?: string) {
   const key = getWorkspaceKey(workspace)
   const opening = openingWorkspaces.get(key)
   if (opening) {
-    await opening
+    await waitForSettledOpen(key, opening)
   }
   const entry = ragWorkspaces.get(key)
 
@@ -410,8 +430,8 @@ export async function closeAllRagInstances() {
   try {
     cancelAllRagOperations()
 
-    const openingAttempts = Array.from(openingWorkspaces.values())
-    await Promise.allSettled(openingAttempts)
+    const openingAttempts = Array.from(openingWorkspaces.entries())
+    await Promise.all(openingAttempts.map(([key, attempt]) => waitForSettledOpen(key, attempt)))
 
     const closures = Array.from(ragWorkspaces.entries()).map(async ([key, entry]) => {
       if (entry.rag) {
