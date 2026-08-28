@@ -10375,7 +10375,7 @@
                           "type": "string"
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "streamChunkTokens": {
@@ -11066,7 +11066,7 @@
                           "type": "number"
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
@@ -11362,7 +11362,7 @@
                           "minLength": 1
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
@@ -11520,7 +11520,7 @@
                           ]
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
@@ -11795,7 +11795,7 @@
                           "maximum": 2147483647
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
