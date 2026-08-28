@@ -1,5 +1,76 @@
 # Changelog
 
+## [0.21.0] - 2026-08-28
+
+This release makes the diffusion addon load on Linux hosts with no graphics
+stack: GPU backends become dynamically loaded modules, so a CPU-only server
+(the reported gh#3853 environment) starts the worker instead of aborting at
+addon load. The native dependency stack moves to the `2026-08-11` engine
+pair.
+
+### Added
+
+#### Dynamic GPU backend loading on desktop Linux (x64/arm64)
+
+- The prebuilt addon (`qvac__diffusion-cpp.bare`) links only
+  libc/libm/libgcc; the Vulkan backend ships as a dlopen'd module
+  (`prebuilds/<target>/qvac__diffusion-cpp/libqvac-diffusion-ggml-vulkan.so`)
+  that loads when a graphics stack is present and is silently absent
+  otherwise — the same hybrid `GGML_BACKEND_DL` + `GGML_CPU_STATIC` layout
+  the package already used on Android and `@qvac/llm-llamacpp` uses on
+  Linux. CPU code generation and performance are unchanged.
+- Regression gates keep it that way: an ELF `DT_NEEDED` forbid-list test
+  over the shipped artifacts (desktop and mobile suites), CI legs that run
+  the full CPU suite on hosts with libvulkan force-removed (linux x64 and
+  arm64, plus a GitHub-hosted CPU-only leg), a linux GPU assertion that the
+  dlopen'd module actually registers with the ggml device registry, and a
+  merge-blocking `verify-prebuild-linking` job wired into the
+  `qvac/prebuild-diffusion-cpp` required status.
+
+### Changed
+
+- `stable-diffusion-cpp` and `ggml` resolve at `2026-08-11` from the
+  `tetherto/qvac-registry-vcpkg` registry. The August engine API is not
+  source-compatible with the previous pin, so the addon internals migrated
+  (`generate_image()`/`upscale()`/`generate_video()` out-parameter results,
+  CPU-residency options mapped onto the engine's `params_backend`
+  assignment spec, FLUX.2 handled via engine auto-detection, reference-image
+  options mapped onto `ref_image_args`); the JavaScript configuration
+  surface is unchanged.
+- Model weights load eagerly at `load()` on desktop, so generation emits
+  only sampler and VAE-tiling progress sequences and weight-load time is
+  reported in `modelLoadMs`; mobile keeps lazy loading to keep `load()`
+  fast on phones. Denoise phase statistics attribute ticks by sampler total
+  with sequence-start accounting, covering multi-expert video, batches and
+  second-order samplers.
+- Engine-owned result batches (images, video frames) are released
+  exclusively through the engine deallocators (`free_sd_images`,
+  `free_sd_audio`), removing an allocator/CRT-boundary hazard on Windows.
+- `SD_CUDA` on Linux configures under the libc++ triplets by pinning nvcc's
+  host compiler to clang, and the CUDA toolkit runtime is not linked into
+  the addon under dynamic backend loading (the CUDA module carries its own
+  dependencies).
+
+### Fixed
+
+- Engine fixes surfaced by this migration, included via the pinned REFs:
+  ABot world-session teardown use-after-free (sd.cpp#32), Windows Wan
+  img2vid crash in the VAE CPU-fallback path plus fallback hardening
+  (sd.cpp#35), hybrid dynamic-backend configure failure on x86 (ggml#61),
+  and an Android OpenCL duplicate-case compile error (ggml#64).
+
+### Pull Requests
+
+- [#3978](https://github.com/tetherto/qvac/pull/3978) - QVAC-23767
+  feat[api]: dynamic GPU backends (GGML_BACKEND_DL) on desktop Linux for
+  diffusion
+- [#4085](https://github.com/tetherto/qvac/pull/4085) - QVAC-23799
+  fix[diffusion-cpp]: point nvcc at clang so SD_CUDA can configure on Linux
+- [#3850](https://github.com/tetherto/qvac/pull/3850) - QVAC-23347 infra:
+  drop redundant publish-time builds, gate wrapper drift in CI
+- [#3852](https://github.com/tetherto/qvac/pull/3852) - QVAC-23466 infra:
+  serve mobile e2e models from an S3 bucket in the Device Farm region
+
 ## [0.20.0] - 2026-08-14
 
 This release adds production LTX-2.3 Ingredients IC-LoRA video generation

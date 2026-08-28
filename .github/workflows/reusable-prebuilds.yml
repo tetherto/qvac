@@ -59,10 +59,28 @@ on:
         required: false
         default: false
       rocm-version:
-        description: "TheRock ROCm dist tarball version used when include-rocm is set"
+        description: >-
+          TheRock ROCm dist tarball version used when include-rocm is set.
+          Must be updated together with rocm-gfx and rocm-sha256 so the pin
+          matches setup-rocm's defaults and /opt/rocm/.qvac-rocm on self-hosted
+          linux-x64 images. Passing version alone would keep the action's
+          default sha256 and miss the host-baked stamp.
         type: string
         required: false
         default: "7.13.0"
+      rocm-gfx:
+        description: "AMD GPU arch target forwarded to setup-rocm when include-rocm is set"
+        type: string
+        required: false
+        default: "gfx1151"
+      rocm-sha256:
+        description: >-
+          Expected SHA-256 of the TheRock dist tarball, forwarded to setup-rocm.
+          Must match rocm-version/rocm-gfx. Leave unset to use this default;
+          do not pass an empty string (that skips integrity verification).
+        type: string
+        required: false
+        default: "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
       include-cuda:
         description: >-
           Install a pinned CUDA toolkit on the linux-x64 build so a consumer's
@@ -269,8 +287,13 @@ jobs:
       - if: ${{ inputs.include-rocm && matrix.platform == 'linux' && matrix.arch == 'x64' }}
         name: Setup ROCm SDK for HIP cross-compile
         uses: ./.github/actions/setup-rocm
+        # Forward the full pin. setup-rocm matches /opt/rocm/.qvac-rocm against
+        # gfx + version + sha256 together; a partial `with:` would override only
+        # some defaults and miss the host-baked SDK (or skip sha256 verify).
         with:
           rocm-version: ${{ inputs.rocm-version }}
+          gfx: ${{ inputs.rocm-gfx }}
+          sha256: ${{ inputs.rocm-sha256 }}
 
       - if: ${{ inputs.include-cuda && matrix.platform == 'linux' && matrix.arch == 'x64' }}
         name: Setup CUDA toolkit for nvcc compile
