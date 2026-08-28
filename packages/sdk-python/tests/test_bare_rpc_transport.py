@@ -415,12 +415,9 @@ async def test_completion_orchestrate_runs_the_tool_loop(transport) -> None:
                 "handler": get_secret_code,
             }
         ],
-        # `reasoning_budget: 0` turns Qwen3's thinking channel off for this run.
-        # Greedy decoding is not bit-identical across the CPUs the e2e runners
-        # hand out, and with thinking on a 0.6B model that wobble is enough to
-        # send it into a <think> ramble that eats all 512 tokens and never emits
-        # the tool call -- the loop under test then never starts. This case is
-        # about the orchestrate plumbing, not the model's reasoning.
+        # reasoning_budget 0 keeps thinking off: with it on, a 0.6B model can
+        # spend the whole predict budget in <think> and never emit the tool
+        # call, which is the loop under test (QVAC-24318).
         generation_params={
             "predict": 512,
             "temp": 0,
