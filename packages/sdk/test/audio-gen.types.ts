@@ -31,16 +31,16 @@ const minimaxRuntimeConfig: AudioGenRuntimeConfig = {
 }
 void minimaxRuntimeConfig
 
-// @ts-expect-error MiniMax rejects ACE-Step-only runtime controls
 const invalidMinimaxRuntimeConfig: AudioGenRuntimeConfig = {
   engine: 'minimax',
+  // @ts-expect-error MiniMax rejects ACE-Step-only runtime controls
   shift: 3
 }
 void invalidMinimaxRuntimeConfig
 
-// @ts-expect-error ACE-Step rejects MiniMax-only cfgScale
 const invalidAcestepRuntimeConfig: AudioGenRuntimeConfig = {
   engine: 'acestep',
+  // @ts-expect-error ACE-Step rejects MiniMax-only cfgScale
   cfgScale: 1.8
 }
 void invalidAcestepRuntimeConfig
