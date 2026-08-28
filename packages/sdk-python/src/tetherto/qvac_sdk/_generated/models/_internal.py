@@ -63,8 +63,35 @@ class AudioGenStreamRequest(GeneratedBaseModel):
     duration: Annotated[
         float | None,
         Field(
-            description="Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
+            description="Approximate requested duration in seconds. Engines round to their frame grid; use output frames or stats.audioDurationMs as authoritative.",
             gt=0.0,
+        ),
+    ] = None
+    max_frames: Annotated[
+        int | None,
+        Field(
+            alias="maxFrames",
+            description="MiniMax semantic-frame cap. Cannot be combined with duration.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    inference_steps: Annotated[
+        int | None,
+        Field(
+            alias="inferenceSteps",
+            description="MiniMax flow steps for this generation; 0 uses the model default.",
+            ge=0,
+            le=1000,
+        ),
+    ] = None
+    cfg_scale: Annotated[
+        float | None,
+        Field(
+            alias="cfgScale",
+            description="MiniMax flow classifier-free guidance scale for this generation.",
+            ge=0.0,
+            le=3.4028234663852886e38,
         ),
     ] = None
     lm_temperature: Annotated[
@@ -2160,6 +2187,11 @@ class CompletionStreamResponse(GeneratedBaseModel):
         | CompletionStreamResponseEventsItemCompletionDoneError
         | CompletionStreamResponseEventsItemCompletionDone
     ]
+
+
+class AudioGenEngine(Enum):
+    acestep = "acestep"
+    minimax = "minimax"
 
 
 class AudioGenTaskType(Enum):
@@ -11269,7 +11301,7 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -11297,7 +11329,9 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc(GeneratedBaseModel):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
     model_id: Annotated[str | None, Field(alias="modelId")] = None
@@ -11309,13 +11343,13 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc(GeneratedBaseMod
     expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
     sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
-        LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon
+        LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon
         | Literal["vad"]
         | None
     ) = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -11343,7 +11377,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc(GeneratedBaseModel):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
     model_id: Annotated[str | None, Field(alias="modelId")] = None
@@ -11355,13 +11389,13 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc(GeneratedBaseModel):
     expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
     sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
-        LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon
+        LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon
         | Literal["vad"]
         | None
     ) = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -11389,7 +11423,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc(GeneratedBaseModel):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
     model_id: Annotated[str | None, Field(alias="modelId")] = None
@@ -11401,13 +11435,13 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc(GeneratedBaseModel):
     expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
     sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
-        LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon
+        LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon
         | Literal["vad"]
         | None
     ) = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -11435,7 +11469,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc(GeneratedBaseModel):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
     model_id: Annotated[str | None, Field(alias="modelId")] = None
@@ -11447,46 +11481,25 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc(GeneratedBaseModel):
     expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
     sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
-        LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon
+        LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon
         | Literal["vad"]
         | None
     ) = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfig(GeneratedBaseModel):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    engine: Annotated[
+        Literal["acestep"] | None,
+        Field(description="Use the ACE-Step music-generation engine."),
+    ] = None
     use_gpu: Annotated[
         bool | None,
         Field(
             alias="useGPU",
             description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
-        ),
-    ] = None
-    inference_steps: Annotated[
-        int | None,
-        Field(
-            alias="inferenceSteps",
-            description="DiT sampling steps; `0` (default) lets the engine auto-pick per DiT architecture (turbo 8 / sft 50).",
-            ge=0,
-            le=9007199254740991,
-        ),
-    ] = None
-    shift: Annotated[
-        float | None,
-        Field(
-            description="Flow-matching time-shift; `0` (default) lets the engine auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
-            ge=0.0,
-        ),
-    ] = None
-    n_gpu_layers: Annotated[
-        int | None,
-        Field(
-            alias="nGpuLayers",
-            description="GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
-            ge=0,
-            le=9007199254740991,
         ),
     ] = None
     threads: Annotated[
@@ -11505,32 +11518,216 @@ class LoadModelSrcRequestAudiogenGgmlModelConfig(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
+    inference_steps: Annotated[
+        int | None,
+        Field(
+            alias="inferenceSteps",
+            description="DiT sampling steps; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / sft 50).",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    shift: Annotated[
+        float | None,
+        Field(
+            description="Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
+            ge=0.0,
+        ),
+    ] = None
+    n_gpu_layers: Annotated[
+        int | None,
+        Field(
+            alias="nGpuLayers",
+            description="ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     text_enc_model_src: Annotated[
-        str | LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc,
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc,
         Field(
             alias="textEncModelSrc",
             description="Text-encoder model source; turns the caption and lyrics into embeddings.",
         ),
     ]
     lm_model_src: Annotated[
-        str | LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc,
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc,
         Field(
             alias="lmModelSrc",
             description="Language-model source; plans the song structure.",
         ),
     ]
     dit_model_src: Annotated[
-        str | LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc,
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc,
         Field(
             alias="ditModelSrc",
             description="DiT model source; generates the audio latent (the quality-defining stage).",
         ),
     ]
     vae_model_src: Annotated[
-        str | LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc,
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc,
         Field(
             alias="vaeModelSrc",
             description="VAE model source; decodes the latent into the output waveform.",
+        ),
+    ]
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc(
+    GeneratedBaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    engine: Annotated[
+        Literal["minimax"],
+        Field(description="Use the MiniMax-Music3 generation engine."),
+    ] = "minimax"
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
+        ),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count; `0` (default) lets the engine auto-pick.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+            min_length=1,
+        ),
+    ] = None
+    inference_steps: Annotated[
+        int | None,
+        Field(
+            alias="inferenceSteps",
+            description="MiniMax flow sampling steps; `0` uses the model default.",
+            ge=0,
+            le=1000,
+        ),
+    ] = None
+    cfg_scale: Annotated[
+        float | None,
+        Field(
+            alias="cfgScale",
+            description="MiniMax flow classifier-free guidance scale; `0` uses the model default.",
+            ge=0.0,
+            le=3.4028234663852886e38,
+        ),
+    ] = None
+    lm_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc,
+        Field(
+            alias="lmModelSrc",
+            description="MiniMax language-model source; generates semantic music tokens.",
+        ),
+    ]
+    synth_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc,
+        Field(
+            alias="synthModelSrc",
+            description="MiniMax synthesis-model source; converts semantic tokens into the output waveform.",
         ),
     ]
 
@@ -11563,8 +11760,9 @@ class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
         "audiogen-ggml"
     )
     model_config_: Annotated[
-        LoadModelSrcRequestAudiogenGgmlModelConfig,
-        Field(alias="modelConfig", title="LoadModelSrcRequestAudiogenGgmlModelConfig"),
+        LoadModelSrcRequestAudiogenGgmlModelConfigAcestep
+        | LoadModelSrcRequestAudiogenGgmlModelConfigMinimax,
+        Field(alias="modelConfig"),
     ]
 
 
