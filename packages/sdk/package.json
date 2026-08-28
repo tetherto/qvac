@@ -212,8 +212,8 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
-    "@qvac/asr-ggml": "^0.3.0",
     "@qvac/audiogen-ggml": "^0.2.1",
+    "@qvac/asr-ggml": "^0.3.0",
     "@qvac/bci-whispercpp": "^0.7.1",
     "@qvac/classification-ggml": "^0.22.0",
     "@qvac/decoder-audio": "^0.5.0",
