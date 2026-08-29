@@ -85,6 +85,41 @@ test('audioGen client collects progress, PCM, stats, and requestId', async (t) =
   t.is(capturedRequest?.requestId, run.requestId)
 })
 
+test('audioGen client forwards MiniMax frame and flow controls', async (t) => {
+  let capturedRequest: AudioGenStreamRequest | undefined
+  const run = createAudioGenResult(
+    {
+      modelId: 'minimax-model',
+      caption: 'warm cinematic piano',
+      maxFrames: 250,
+      inferenceSteps: 12,
+      cfgScale: 1.8
+    },
+    function streamFactory(request) {
+      capturedRequest = request
+      return mockResponses([
+        {
+          type: 'audioGenStream',
+          data: 'AAE=',
+          sampleRate: 44100,
+          channels: 2,
+          bitsPerSample: 16
+        },
+        {
+          type: 'audioGenStream',
+          done: true,
+          stopReason: 'completed'
+        }
+      ])
+    }
+  )
+
+  await run.audio
+  t.is(capturedRequest?.maxFrames, 250)
+  t.is(capturedRequest?.inferenceSteps, 12)
+  t.is(capturedRequest?.cfgScale, 1.8)
+})
+
 test('audioGen client rejects aggregates with a typed cancellation error', async (t) => {
   const run = createRun([
     {

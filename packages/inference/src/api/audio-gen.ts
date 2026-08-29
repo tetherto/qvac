@@ -26,8 +26,8 @@ function concatenateChunks(chunks: Uint8Array[]) {
 }
 
 /**
- * Generates audio (music / speech) from a caption using a loaded AudioGen
- * (ACE-Step) model.
+ * Generates audio (music / speech) from a caption using a loaded ACE-Step or
+ * MiniMax-Music3 AudioGen model.
  *
  * @param params - AudioGen request parameters (model, caption, optional lyrics, seed, bpm, etc.).
  * @returns A result object exposing `requestId`, `progressStream` (async iterator of `{ stage, step, total }`), `audio` (promise of the generated PCM and its format), and `stats` (promise of generation statistics).
