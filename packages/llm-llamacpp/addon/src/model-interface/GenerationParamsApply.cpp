@@ -143,6 +143,22 @@ std::function<void()> applyGenerationParamsToContext(
     params.sampling = savedSampling;
     params.n_predict = savedPredict;
     params.reasoning_budget = savedReasoningBudget;
-    smpl.reset(common_sampler_init(model, params.sampling));
+    // This lambda runs from a `ScopeGuard` destructor, which is implicitly
+    // noexcept — `common_sampler_init` throws on a grammar it cannot parse,
+    // and letting that escape would call std::terminate and take down every
+    // other in-flight job in the runtime. The restored params are already
+    // committed above; losing the sampler only fails the next request.
+    try {
+      smpl.reset(common_sampler_init(model, params.sampling));
+    } catch (const std::exception& ex) {
+      LOG_WRN("%s: failed to rebuild the sampler while restoring "
+              "per-request generation params: %s\n",
+              __func__,
+              ex.what());
+    } catch (...) {
+      LOG_WRN("%s: failed to rebuild the sampler while restoring "
+              "per-request generation params\n",
+              __func__);
+    }
   };
 }

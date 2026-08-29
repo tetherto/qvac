@@ -390,14 +390,28 @@ void TextLlmContext::tokenizeChat(
       templateStopTokens_.push_back(ids[0]);
     }
   }
+  // Snapshot before configuring: `common_sampler_init` *throws* on a grammar
+  // it cannot parse, and the new sampling block is already committed by then.
+  // Without this rollback a template- or caller-derived grammar that fails to
+  // build stays resident in `params_` for the life of the loaded model, so
+  // every later request rebuilding the sampler fails too.
+  common_params_sampling savedSampling = params_.sampling;
   if (configureTemplateDerivedSampling(
           params_, tokenize, rendered, !tools.empty())) {
-    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
-    if (!smpl_) {
-      std::string errorMsg = string_format(
-          "[TextLlm] %s: failed to initialize sampling subsystem\n", __func__);
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+    try {
+      CommonSamplerPtr nextSmpl(
+          common_sampler_init(modelCtx_.model, params_.sampling));
+      if (!nextSmpl) {
+        std::string errorMsg = string_format(
+            "[TextLlm] %s: failed to initialize sampling subsystem\n",
+            __func__);
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+      }
+      smpl_ = std::move(nextSmpl);
+    } catch (...) {
+      params_.sampling = std::move(savedSampling);
+      throw;
     }
   }
 

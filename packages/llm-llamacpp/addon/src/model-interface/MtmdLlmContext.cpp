@@ -399,14 +399,26 @@ void MtmdLlmContext::tokenizeChat(
       templateStopTokens_.push_back(ids[0]);
     }
   }
+  // See TextLlmContext::tokenizeChat: `common_sampler_init` throws on an
+  // unparseable grammar, so the sampling block must roll back rather than
+  // stay poisoned for the life of the loaded model.
+  common_params_sampling savedSampling = params_.sampling;
   if (configureTemplateDerivedSampling(
           params_, tokenize, rendered, !tools.empty())) {
-    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
-    if (!smpl_) {
-      std::string errorMsg = string_format(
-          "[MtmdLlm] %s: failed to initialize sampling subsystem\n", __func__);
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+    try {
+      CommonSamplerPtr nextSmpl(
+          common_sampler_init(modelCtx_.model, params_.sampling));
+      if (!nextSmpl) {
+        std::string errorMsg = string_format(
+            "[MtmdLlm] %s: failed to initialize sampling subsystem\n",
+            __func__);
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+      }
+      smpl_ = std::move(nextSmpl);
+    } catch (...) {
+      params_.sampling = std::move(savedSampling);
+      throw;
     }
   }
 
