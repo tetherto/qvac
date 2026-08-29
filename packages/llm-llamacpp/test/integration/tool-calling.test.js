@@ -382,9 +382,9 @@ safeTest(
     const modelVariant = TOOL_MODEL_VARIANTS[0]
     const { model, release } = await createToolModel(modelVariant)
     try {
-      async function runWithToolChoice(toolChoice) {
+      async function runWithToolChoice(toolChoice, extraParams = {}) {
         const response = await model.run(clonePrompt(), {
-          generationParams: { tool_choice: toolChoice }
+          generationParams: { tool_choice: toolChoice, ...extraParams }
         })
         return (await collectResponse(response)).text
       }
@@ -396,9 +396,21 @@ safeTest(
       )
       assertDeclaredToolCalls(t, required, clonePrompt(), 'required')
 
-      const named = await runWithToolChoice('queryDB')
+      // `reasoning_budget: 0` is load-bearing, and the reason is a real limit
+      // of the feature, not test tidying. The tool grammar is deliberately
+      // suppressed for the whole reasoning block, so an eager `required`
+      // grammar constrains nothing until the model leaves `<think>`. If the
+      // model ends generation from inside the reasoning block — by running
+      // out of `n_predict` (seen on linux-arm64, 84s) or by simply stopping
+      // (seen on darwin-arm64, 4.6s) — no tool call is forced at all.
+      // `tool_choice` therefore does not guarantee a call while the reasoning
+      // channel is on; see the KNOWN LIMITATION note in the PR. Disabling it
+      // here pins the property actually under test — that a named choice
+      // restricts the call to that function — in the regime where the
+      // guarantee holds.
+      const named = await runWithToolChoice('queryDB', { reasoning_budget: 0 })
       const namedCalls = parseToolCalls(named, t)
-      t.ok(namedCalls.length > 0, 'named function produced a tool call')
+      t.ok(namedCalls.length > 0, `named function produced a tool call: ${named.slice(0, 200)}`)
       for (const call of namedCalls) {
         t.is(call.name, 'queryDB', 'named function restricts the call to that function')
       }

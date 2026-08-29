@@ -20,7 +20,10 @@
   function name) controls whether a tool call is forced, allowed or disabled for
   a request that declares tools; a function name restricts the call to it.
   `"required"` and a function name now fail with `InvalidArgument` rather than
-  silently answering in prose when the demand cannot be honoured.
+  silently answering in prose when the demand cannot be honoured. Known limit:
+  the tool grammar is suppressed inside the reasoning block, so a request that
+  ends generation from within `<think>` produces no tool call even under
+  `"required"`. Set `reasoning_budget: 0` when a call must be guaranteed.
 
 ### Fixed
 
