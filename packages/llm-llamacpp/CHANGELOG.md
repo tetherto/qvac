@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.48.0] - 2026-08-29
 
 ### Added
 
@@ -35,6 +35,10 @@
 - `flash-attn` (and the `flash_attn` alias) is now a narrowed field on `LlamaConfig` rather than
   reaching callers only through the `[key: string]` escape hatch, making the tensor-mode
   requirement visible at compile time. Propagating it to the SDK schema is separate SDK-pod work.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.0` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting).
 
 ## [0.47.0] - 2026-08-24
 

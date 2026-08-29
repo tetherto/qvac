@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.0] - 2026-08-29
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.0` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting; no API change for this package).
+
 ## [0.9.0] - 2026-08-25
 
 ### Added

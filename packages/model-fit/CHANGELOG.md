@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.8.0] - 2026-08-29
 
 ### Fixed
 
@@ -15,6 +15,10 @@
 
 - `bare-url` is now declared. `test/mobile/integration-runtime.cjs` requires it
   and nothing in this package listed it.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.0` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting; no API change for this package).
 
 ## [0.7.0] - 2026-08-24
 
