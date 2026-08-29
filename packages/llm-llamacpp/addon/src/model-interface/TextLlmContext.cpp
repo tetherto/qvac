@@ -353,19 +353,16 @@ void TextLlmContext::tokenizeChat(
 
   // `tool_choice` may narrow the tool list (named function) and decides
   // whether the template emits an eager, lazy or no tool grammar. A
-  // per-request json_schema is composed into that grammar by the template
-  // only when tools are present; without tools the sampler-side
-  // OUTPUT_FORMAT grammar keeps handling it.
+  // per-request `json_schema` is deliberately NOT handed to the template:
+  // fabric's handlers return a response-format-only parser and exclude tool
+  // calls, so composing gains nothing over the sampler-side OUTPUT_FORMAT
+  // grammar and silently yields a never-arming lazy grammar on several
+  // model families.
   const ResolvedToolChoice toolChoice =
       resolveToolChoice(renderOverrides_.toolChoice, tools);
-  bool composedJsonSchema = false;
   if (!toolChoice.tools.empty()) {
     inputs.tools = toolChoice.tools;
     inputs.tool_choice = toolChoice.choice;
-    if (renderOverrides_.jsonSchema && !renderOverrides_.jsonSchema->empty()) {
-      inputs.json_schema = *renderOverrides_.jsonSchema;
-      composedJsonSchema = true;
-    }
   }
   const PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
   prompt = rendered.prompt;
@@ -394,7 +391,7 @@ void TextLlmContext::tokenizeChat(
     }
   }
   if (configureTemplateDerivedSampling(
-          params_, tokenize, rendered, !tools.empty(), composedJsonSchema)) {
+          params_, tokenize, rendered, !tools.empty())) {
     smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
     if (!smpl_) {
       std::string errorMsg = string_format(

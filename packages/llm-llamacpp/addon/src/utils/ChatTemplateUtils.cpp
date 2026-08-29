@@ -525,8 +525,7 @@ ResolvedToolChoice resolveToolChoice(
 
 bool configureTemplateDerivedSampling(
     common_params& params, const Tokenizer& tokenize,
-    const PromptRenderResult& rendered, bool toolsRequested,
-    bool composedJsonSchema) {
+    const PromptRenderResult& rendered, bool toolsRequested) {
   common_params_sampling next = params.sampling;
   applyReasoningBudget(
       next,
@@ -541,23 +540,20 @@ bool configureTemplateDerivedSampling(
   // must survive a tools-free request untouched.
   if (next.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS) {
     next.grammar = {};
-    next.grammar_lazy = false;
-    next.grammar_triggers.clear();
-    next.preserved_tokens.clear();
   }
+  // The companion fields, however, are cleared unconditionally: this function
+  // is their only writer, so whatever is in them belongs to a tool grammar
+  // from an earlier request. Leaving them behind would attach a stale
+  // `grammar_lazy` and its `<tool_call>` trigger to a USER / OUTPUT_FORMAT
+  // grammar installed later, making the caller's grammar lazy on a trigger it
+  // can never emit — i.e. silently unenforced.
+  next.grammar_lazy = false;
+  next.grammar_triggers.clear();
+  next.preserved_tokens.clear();
 
   bool toolGrammarApplied = false;
   if (toolsRequested && rendered.renderedByJinja && !rendered.grammar.empty() &&
       tokenize) {
-    // The per-request json_schema was rendered into the tool grammar, so the
-    // OUTPUT_FORMAT grammar built from the same schema is now redundant and
-    // the composed grammar takes its place.
-    const bool schemaAlreadyComposed =
-        composedJsonSchema &&
-        next.grammar.type == COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT;
-    if (schemaAlreadyComposed) {
-      next.grammar = {};
-    }
     if (next.grammar.type == COMMON_GRAMMAR_TYPE_USER ||
         next.grammar.type == COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT) {
       QLOG_IF(

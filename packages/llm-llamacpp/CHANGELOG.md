@@ -9,21 +9,28 @@
   template computes, so malformed tool-call markup and schema-invalid
   arguments cannot be generated. A load-time or per-request `grammar` /
   `json_schema` still takes precedence over the tool grammar.
-- Chat-template `additional_stops` are honoured per request alongside the
-  load-time antiprompts.
+- Chat-template `additional_stops` are plumbed through per request alongside the
+  load-time antiprompts. No template in qvac-fabric 10297.0.0 populates the
+  field yet, so this is forward-compatible plumbing rather than a behaviour
+  change.
 - `RuntimeStats.toolDefinitionsDropped` reports renders where the template
-  rejected the tool definitions and the prompt was produced without them.
+  rejected the tool definitions, or where the prompt was rendered without a
+  Jinja template, and the model therefore never saw the tools.
 - `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
   function name) controls whether a tool call is forced, allowed or disabled for
   a request that declares tools; a function name restricts the call to it.
-- With tools in the prompt, `generationParams.json_schema` is composed into the
-  template's tool grammar so the response schema and the tool calls are
-  enforced by one grammar. Without tools it behaves as before.
+  `"required"` and a function name now fail with `InvalidArgument` rather than
+  silently answering in prose when the demand cannot be honoured.
 
 ### Fixed
 
 - A tool grammar applied for one request no longer leaks into a following
-  request that carries no tools on the same loaded model.
+  request that carries no tools on the same loaded model, and no longer leaves
+  its lazy-grammar triggers attached to a later per-request `grammar` or
+  `json_schema`.
+- A chat-template grammar the sampler rejects no longer stays resident in the
+  loaded model's sampling parameters, and a failing per-request restore can no
+  longer terminate the process.
 
 ## [0.49.0] - 2026-08-31
 

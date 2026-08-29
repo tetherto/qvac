@@ -76,8 +76,7 @@ struct GenerationParams {
 
 /// The render-time subset of a request's `GenerationParams`.
 inline RenderOverrides renderOverridesFrom(const GenerationParams& p) {
-  return RenderOverrides{
-      .jsonSchema = p.json_schema, .toolChoice = p.tool_choice};
+  return RenderOverrides{.toolChoice = p.tool_choice};
 }
 
 struct CommonSamplerDeleter {

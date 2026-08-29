@@ -106,6 +106,34 @@ TEST(TemplateDerivedSamplingTest, UserGrammarSurvivesToolRender) {
   EXPECT_TRUE(params.sampling.grammar_triggers.empty());
 }
 
+// Regression: the companion fields are cleared unconditionally, not only when
+// the grammar itself is TOOL_CALLS. Request 1 carries tools and no
+// generationParams, so its lazy grammar + trigger are written into the
+// long-lived params with no restore lambda to roll them back; request 2
+// installs a USER grammar and carries no tools. If the companions survived,
+// common_sampler_init would build a *lazy* sampler for the caller's grammar,
+// arming only on a `<tool_call>` the caller never asked for.
+TEST(TemplateDerivedSamplingTest, CompanionFieldsClearedBeforeUserGrammar) {
+  common_params params = paramsWithoutReasoningBudget();
+  ASSERT_TRUE(configureTemplateDerivedSampling(
+      params, stubTokenizer(), toolRender(), /* toolsRequested = */ true));
+  ASSERT_TRUE(params.sampling.grammar_lazy);
+  ASSERT_FALSE(params.sampling.grammar_triggers.empty());
+
+  // Request 2: the caller's own grammar, no tools.
+  params.sampling.grammar =
+      common_grammar(COMMON_GRAMMAR_TYPE_USER, "root ::= \"yes\" | \"no\"");
+  PromptRenderResult rendered;
+  EXPECT_TRUE(configureTemplateDerivedSampling(
+      params, stubTokenizer(), rendered, /* toolsRequested = */ false));
+
+  EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_USER);
+  EXPECT_FALSE(params.sampling.grammar_lazy)
+      << "a stale lazy flag makes the caller's grammar arm only on a trigger";
+  EXPECT_TRUE(params.sampling.grammar_triggers.empty());
+  EXPECT_TRUE(params.sampling.preserved_tokens.empty());
+}
+
 TEST(TemplateDerivedSamplingTest, LoadTimeUserGrammarSurvivesToolsAbsentClear) {
   common_params params = paramsWithoutReasoningBudget();
   params.sampling.grammar =
@@ -117,29 +145,18 @@ TEST(TemplateDerivedSamplingTest, LoadTimeUserGrammarSurvivesToolsAbsentClear) {
   EXPECT_EQ(params.sampling.grammar.grammar, "root ::= \"loaded\"");
 }
 
-TEST(
-    TemplateDerivedSamplingTest,
-    ComposedJsonSchemaReplacesOutputFormatGrammar) {
+// A per-request json_schema is enforced by the sampler-side OUTPUT_FORMAT
+// grammar and must suppress the tool grammar — it is never handed to the
+// template, because fabric returns a response-format-only parser that
+// excludes tool calls anyway.
+TEST(TemplateDerivedSamplingTest, JsonSchemaGrammarSuppressesToolGrammar) {
   common_params params = paramsWithoutReasoningBudget();
   params.sampling.grammar =
       common_grammar(COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, "root ::= \"{}\"");
-  EXPECT_TRUE(configureTemplateDerivedSampling(
-      params,
-      stubTokenizer(),
-      toolRender(),
-      /* toolsRequested = */ true,
-      /* composedJsonSchema = */ true));
-  EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
-  EXPECT_EQ(params.sampling.grammar.grammar, toolRender().grammar);
-}
-
-TEST(TemplateDerivedSamplingTest, ComposedFlagNeverOverridesUserGrammar) {
-  common_params params = paramsWithoutReasoningBudget();
-  params.sampling.grammar =
-      common_grammar(COMMON_GRAMMAR_TYPE_USER, "root ::= \"x\"");
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), true, true));
-  EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_USER);
+      params, stubTokenizer(), toolRender(), /* toolsRequested = */ true));
+  EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT);
+  EXPECT_EQ(params.sampling.grammar.grammar, "root ::= \"{}\"");
 }
 
 TEST(TemplateDerivedSamplingTest, ToolChoiceDoesNotCountAsSamplerOverride) {

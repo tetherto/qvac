@@ -456,27 +456,28 @@ TEST_F(ChatTemplateUtilsTest, GetPromptNoneToolChoiceKeepsToolsDropsGrammar) {
   EXPECT_TRUE(rendered.grammar.empty());
 }
 
-TEST_F(ChatTemplateUtilsTest, GetPromptComposesJsonSchemaIntoToolGrammar) {
+// Pins why the addon never hands a per-request json_schema to the template:
+// fabric short-circuits on `has_response_format` and returns a
+// response-format-only parser, so the rendered grammar excludes tool calls
+// rather than composing with them.
+TEST_F(ChatTemplateUtilsTest, TemplateResponseFormatExcludesToolCalls) {
   common_chat_templates_ptr tmpls =
       common_chat_templates_init(nullptr, getFixedQwen3Template());
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs plain = makeQwenInputs();
   plain.tools = {makeWeatherTool()};
-  const PromptRenderResult withoutSchema = getPrompt(tmpls.get(), plain);
+  const PromptRenderResult toolsOnly = getPrompt(tmpls.get(), plain);
+  ASSERT_FALSE(toolsOnly.grammar.empty());
 
   common_chat_templates_inputs withSchema = makeQwenInputs();
   withSchema.tools = {makeWeatherTool()};
   withSchema.json_schema =
       R"({"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"]})";
-  const PromptRenderResult composed = getPrompt(tmpls.get(), withSchema);
+  const PromptRenderResult withResponseFormat = getPrompt(tmpls.get(), withSchema);
 
-  EXPECT_FALSE(composed.grammar.empty());
-  EXPECT_NE(composed.grammar, withoutSchema.grammar)
-      << "the response schema must change the rendered grammar";
-  EXPECT_TRUE(composed.renderedByJinja);
-  EXPECT_FALSE(composed.toolDefinitionsDropped)
-      << "json_schema with tools must not trip the tools-stripped retry";
+  EXPECT_NE(withResponseFormat.grammar, toolsOnly.grammar)
+      << "a response format must replace the tool-call grammar, not extend it";
 }
 
 TEST_F(ChatTemplateUtilsTest, GetPromptWithoutToolsExportsNoGrammar) {

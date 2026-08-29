@@ -11,9 +11,6 @@
 // `SequenceDriver` consume it and `LlmContext.hpp` includes
 // `SequenceDriver.hpp`.
 struct RenderOverrides {
-  // Raw JSON Schema string. With tools present it is handed to the template so
-  // the tool-call grammar and the response schema compose into one grammar.
-  std::optional<std::string> jsonSchema;
   // "auto" | "none" | "required" | <declared function name>.
   std::optional<std::string> toolChoice;
 };

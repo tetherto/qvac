@@ -218,10 +218,7 @@ using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
  *     carries no tools.
  *   - USER / OUTPUT_FORMAT belong to the caller (load-time config or
  *     per-request generationParams) and are left untouched; a rendered tool
- *     grammar is then suppressed and logged. Exception: when
- *     `composedJsonSchema` is true the per-request schema was already handed
- *     to the template, so the rendered grammar carries it and replaces the
- *     OUTPUT_FORMAT grammar.
+ *     grammar is then suppressed and logged.
  *   - NONE: the rendered tool grammar is applied when `toolsRequested` and
  *     the render came from the Jinja engine.
  *
@@ -230,8 +227,7 @@ using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
  */
 bool configureTemplateDerivedSampling(
     common_params& params, const Tokenizer& tokenize,
-    const PromptRenderResult& rendered, bool toolsRequested,
-    bool composedJsonSchema = false);
+    const PromptRenderResult& rendered, bool toolsRequested);
 
 /**
  * @brief The template-side view of a request's `tool_choice`.

@@ -331,9 +331,9 @@ TEST_F(ToolGrammarModelTest, ToolChoiceUnknownFunctionIsRejected) {
   EXPECT_FALSE(model->processPrompt(makePrompt(PLAIN_PROMPT)).empty());
 }
 
-// json_schema + tools: the schema is composed into the tool grammar rather
-// than suppressing it, so the sampler runs one TOOL_CALLS grammar.
-TEST_F(ToolGrammarModelTest, JsonSchemaWithToolsComposesIntoToolGrammar) {
+// json_schema + tools: the schema wins and the tool grammar is suppressed, so
+// the answer is schema-shaped rather than a tool call.
+TEST_F(ToolGrammarModelTest, JsonSchemaWithToolsSuppressesToolGrammar) {
   if (!hasQwen3Model()) {
     GTEST_SKIP() << qwen3Model_.missingMessage();
   }
@@ -343,14 +343,8 @@ TEST_F(ToolGrammarModelTest, JsonSchemaWithToolsComposesIntoToolGrammar) {
 
   const std::string output = model->processPrompt(prompt);
   EXPECT_FALSE(output.empty());
-  // json_schema is a sampler override, so the restore lambda has already put
-  // the baseline grammar back; assert on what the composed grammar permits
-  // instead: a well-formed tool call or a schema-shaped JSON answer, never
-  // free text.
-  EXPECT_TRUE(
-      hasToolCallBlock(output) ||
-      output.find("\"colour\"") != std::string::npos)
-      << output;
+  EXPECT_NE(output.find("\"colour\""), std::string::npos) << output;
+  EXPECT_FALSE(hasToolCallBlock(output)) << output;
   EXPECT_EQ(
       test_common::getStatValue(
           model->runtimeStats(), "toolDefinitionsDropped"),
