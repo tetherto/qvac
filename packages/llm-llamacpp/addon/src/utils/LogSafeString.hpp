@@ -16,8 +16,7 @@ inline std::string toLowerAscii(std::string_view value) {
   std::string out;
   out.reserve(value.size());
   for (const char c : value) {
-    out += static_cast<char>(
-        std::tolower(static_cast<unsigned char>(c)));
+    out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   }
   return out;
 }

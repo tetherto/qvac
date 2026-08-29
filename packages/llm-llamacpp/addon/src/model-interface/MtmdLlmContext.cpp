@@ -129,7 +129,8 @@ void MtmdLlmContext::initializeCommonState() {
   // antiprompt init
   antipromptLower_.reserve(params_.antiprompt.size());
   for (const std::string& antiprompt : params_.antiprompt) {
-    antipromptLower_.push_back(utils::toLowerAscii(antiprompt));
+    antipromptLower_.push_back(
+        qvac_lib_inference_addon_llama::utils::toLowerAscii(antiprompt));
     auto ids = ::common_tokenize(modelCtx_.lctx, antiprompt, false, true);
     if (ids.size() == 1) {
       antipromptTokens_.push_back(ids[0]);
@@ -291,7 +292,8 @@ bool MtmdLlmContext::checkAntiprompt() {
   // appear at the start of such a token, far from the string's tail.
   // Matching is case-insensitive so callers don't have to list every
   // casing variant the model might emit.
-  const std::string lastOutputLower = utils::toLowerAscii(lastOutput);
+  const std::string lastOutputLower =
+      qvac_lib_inference_addon_llama::utils::toLowerAscii(lastOutput);
   auto containsAnyStop = [&](const std::vector<std::string>& stopsLower) {
     for (const std::string& stopLower : stopsLower) {
       if (lastOutputLower.find(stopLower) != std::string::npos) {
@@ -391,7 +393,8 @@ void MtmdLlmContext::tokenizeChat(
   templateStopsLower_.clear();
   templateStopsLower_.reserve(templateStops_.size());
   for (const std::string& stop : templateStops_) {
-    templateStopsLower_.push_back(utils::toLowerAscii(stop));
+    templateStopsLower_.push_back(
+        qvac_lib_inference_addon_llama::utils::toLowerAscii(stop));
     const auto ids = tokenize(stop);
     if (ids.size() == 1) {
       templateStopTokens_.push_back(ids[0]);

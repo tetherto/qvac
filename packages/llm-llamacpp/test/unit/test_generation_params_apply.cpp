@@ -390,9 +390,7 @@ static PromptRenderResult reasoningRender() {
   return rendered;
 }
 
-TEST(
-    TemplateDerivedSamplingTest,
-    ReasoningBudgetClearsStaleStateWhenDisabled) {
+TEST(TemplateDerivedSamplingTest, ReasoningBudgetClearsStaleStateWhenDisabled) {
   common_params params;
   params.reasoning_budget = 0;
   params.sampling.reasoning_budget_tokens = 16;
@@ -412,7 +410,9 @@ TEST(
   EXPECT_TRUE(params.sampling.generation_prompt.empty());
 }
 
-TEST(TemplateDerivedSamplingTest, ReasoningBudgetKeepsPositiveCapWithoutTokenizer) {
+TEST(
+    TemplateDerivedSamplingTest,
+    ReasoningBudgetKeepsPositiveCapWithoutTokenizer) {
   common_params params;
   params.reasoning_budget = 8;
   params.sampling.reasoning_budget_tokens = -1;

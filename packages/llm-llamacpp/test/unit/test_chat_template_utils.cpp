@@ -422,7 +422,8 @@ TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsDuplicateToolNames) {
   const std::vector<common_chat_tool> tools{makeWeatherTool(), duplicate};
   // Rejected even for "auto", where no name is being looked up: the duplicate
   // would still reach the template as two indistinguishable blocks.
-  EXPECT_THROW(resolveToolChoice(std::nullopt, tools), qvac_errors::StatusError);
+  EXPECT_THROW(
+      resolveToolChoice(std::nullopt, tools), qvac_errors::StatusError);
   EXPECT_THROW(
       resolveToolChoice(std::string("get_weather"), tools),
       qvac_errors::StatusError);
@@ -498,7 +499,8 @@ TEST_F(ChatTemplateUtilsTest, TemplateResponseFormatExcludesToolCalls) {
   withSchema.tools = {makeWeatherTool()};
   withSchema.json_schema =
       R"({"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"]})";
-  const PromptRenderResult withResponseFormat = getPrompt(tmpls.get(), withSchema);
+  const PromptRenderResult withResponseFormat =
+      getPrompt(tmpls.get(), withSchema);
 
   EXPECT_NE(withResponseFormat.grammar, toolsOnly.grammar)
       << "a response format must replace the tool-call grammar, not extend it";

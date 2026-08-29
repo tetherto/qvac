@@ -151,14 +151,16 @@ std::function<void()> applyGenerationParamsToContext(
     try {
       smpl.reset(common_sampler_init(model, params.sampling));
     } catch (const std::exception& ex) {
-      LOG_WRN("%s: failed to rebuild the sampler while restoring "
-              "per-request generation params: %s\n",
-              __func__,
-              ex.what());
+      LOG_WRN(
+          "%s: failed to rebuild the sampler while restoring "
+          "per-request generation params: %s\n",
+          __func__,
+          ex.what());
     } catch (...) {
-      LOG_WRN("%s: failed to rebuild the sampler while restoring "
-              "per-request generation params\n",
-              __func__);
+      LOG_WRN(
+          "%s: failed to rebuild the sampler while restoring "
+          "per-request generation params\n",
+          __func__);
     }
   };
 }
