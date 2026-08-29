@@ -364,6 +364,7 @@ void applyReasoningBudget(
     const Tokenizer& tokenize, const std::string& thinkingStartTag,
     const std::vector<std::string>& thinkingEndTags,
     const std::string& generationPrompt) {
+  // The token cap is what `reasoning_budget` controls; -1 means unlimited.
   next.reasoning_budget_tokens =
       params.reasoning_budget > 0 ? params.reasoning_budget : -1;
   next.reasoning_budget_start.clear();
@@ -371,9 +372,27 @@ void applyReasoningBudget(
   next.reasoning_budget_forced.clear();
   next.generation_prompt.clear();
 
-  if (params.reasoning_budget > 0 && tokenize && !thinkingEndTags.empty() &&
+  // The tag vectors are populated whenever the template exposes thinking
+  // tags, *regardless* of the cap — llama-server does the same
+  // (tools/server/server-common.cpp). fabric only builds the reasoning-budget
+  // sampler when these are non-empty, and that sampler is also what keeps a
+  // lazy tool grammar from arming inside the reasoning block: without it,
+  // `grammar_should_apply` returns true unconditionally and a `<tool_call>`
+  // written inside `<think>` would trigger tool-call syntax mid-reasoning.
+  // With an unlimited cap and no lazy grammar fabric still builds nothing, so
+  // this costs only the tokenization.
+  //
+  // `generation_prompt` is deliberately NOT set here. It doubles as the
+  // grammar-prefill input, and fabric feeds it to any eager prefill-needing
+  // grammar (common/sampling.cpp). An OUTPUT_FORMAT grammar built from
+  // json_schema_to_grammar starts at a JSON value, so prefilling an assistant
+  // header into it makes common_sampler_init throw. Only the reasoning-budget
+  // sampler and applyToolGrammar, which know their grammar accepts it, set it.
+  if (tokenize && !thinkingEndTags.empty() &&
       !thinkingEndTags.front().empty()) {
-    next.generation_prompt = generationPrompt;
+    if (params.reasoning_budget > 0) {
+      next.generation_prompt = generationPrompt;
+    }
     if (!thinkingStartTag.empty()) {
       next.reasoning_budget_start = tokenize(thinkingStartTag);
     }
