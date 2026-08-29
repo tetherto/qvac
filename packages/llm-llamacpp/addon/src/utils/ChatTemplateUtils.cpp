@@ -14,6 +14,7 @@
 
 #include "QwenTemplate.hpp"
 #include "addon/LlmErrors.hpp"
+#include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -289,10 +290,17 @@ PromptRenderResult getPrompt(
   std::string firstError;
   try {
     auto params = common_chat_templates_apply(tmpls, inputs);
+    // The legacy (non-Jinja) renderer succeeds while silently ignoring
+    // `inputs.tools`, so a successful render is still a tools-stripped one
+    // whenever jinja is off and tools were supplied.
+    const bool legacyDroppedTools = !inputs.use_jinja && !inputs.tools.empty();
+    if (legacyDroppedTools) {
+      inputs.tools.clear();
+    }
     return exportParams(
         params,
         /* renderedByJinja = */ inputs.use_jinja,
-        /* toolDefinitionsDropped = */ false);
+        /* toolDefinitionsDropped = */ legacyDroppedTools);
   } catch (const std::exception& e) {
     firstError = e.what();
   } catch (...) {
@@ -330,10 +338,14 @@ PromptRenderResult getPrompt(
           firstError.c_str()));
   inputs.use_jinja = false;
   auto params = common_chat_templates_apply(tmpls, inputs);
+  const bool legacyDroppedTools = !inputs.tools.empty();
+  // Keep the header's contract: callers never see a tool list the rendered
+  // prompt does not carry.
+  inputs.tools.clear();
   return exportParams(
       params,
       /* renderedByJinja = */ false,
-      /* toolDefinitionsDropped = */ !inputs.tools.empty());
+      /* toolDefinitionsDropped = */ legacyDroppedTools);
 }
 
 namespace {
@@ -498,7 +510,7 @@ ResolvedToolChoice resolveToolChoice(
     resolved.choice = common_chat_tool_choice_parse_oaicompat(raw);
     if (resolved.choice == COMMON_CHAT_TOOL_CHOICE_REQUIRED && tools.empty()) {
       throw qvac_errors::StatusError(
-          qvac_lib_inference_addon_llama::errors::ADDON_ID,
+          errors::ADDON_ID,
           qvac_errors::general_error::toString(
               qvac_errors::general_error::InvalidArgument),
           "generationParams.tool_choice is \"required\" but the prompt "
@@ -511,16 +523,46 @@ ResolvedToolChoice resolveToolChoice(
       tools, [&](const common_chat_tool& t) { return t.name == raw; });
   if (it == tools.end()) {
     throw qvac_errors::StatusError(
-        qvac_lib_inference_addon_llama::errors::ADDON_ID,
+        errors::ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InvalidArgument),
         string_format(
             "generationParams.tool_choice names an undeclared function: %s",
-            raw.c_str()));
+            forLogMessage(raw).c_str()));
   }
   resolved.choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
   resolved.tools = {*it};
   return resolved;
+}
+
+void requireToolChoiceHonoured(
+    common_chat_tool_choice choice, bool toolDefinitionsDropped,
+    bool toolGrammarApplied, const char* logTag) {
+  // Only REQUIRED is a demand. "auto" tolerates a prose answer by definition,
+  // and "none" asked for no constraint, so neither can be violated here.
+  if (choice != COMMON_CHAT_TOOL_CHOICE_REQUIRED) {
+    return;
+  }
+  if (toolDefinitionsDropped) {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s generationParams.tool_choice demanded a tool call, but the "
+            "chat template did not render the tool definitions",
+            logTag));
+  }
+  if (!toolGrammarApplied) {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s generationParams.tool_choice demanded a tool call, but no "
+            "tool-call grammar could be applied to constrain it",
+            logTag));
+  }
 }
 
 bool configureTemplateDerivedSampling(

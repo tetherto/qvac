@@ -253,6 +253,21 @@ ResolvedToolChoice resolveToolChoice(
     const std::optional<std::string>& rawToolChoice,
     const std::vector<common_chat_tool>& tools);
 
+/**
+ * @brief Fails the request when an explicit tool choice cannot be honoured.
+ *
+ * `REQUIRED` (from `"required"` or a named function) is a demand, not a hint.
+ * If the template dropped the tool definitions, or refused to produce a
+ * grammar, the model would answer in prose instead — silently, since the only
+ * other trace is a log line. Throws `InvalidArgument` in that case.
+ *
+ * @p toolGrammarApplied is the return of `configureTemplateDerivedSampling`'s
+ *    tool-grammar step, i.e. whether a TOOL_CALLS grammar is actually live.
+ */
+void requireToolChoiceHonoured(
+    common_chat_tool_choice choice, bool toolDefinitionsDropped,
+    bool toolGrammarApplied, const char* logTag);
+
 std::string getThinkingForcedOpenText(
     const std::string& generationPrompt, const std::string& thinkingStartTag);
 

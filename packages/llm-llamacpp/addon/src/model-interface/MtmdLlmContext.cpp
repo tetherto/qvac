@@ -421,6 +421,12 @@ void MtmdLlmContext::tokenizeChat(
       throw;
     }
   }
+  // See TextLlmContext::tokenizeChat.
+  requireToolChoiceHonoured(
+      toolChoice.choice,
+      rendered.toolDefinitionsDropped,
+      params_.sampling.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS,
+      "[MtmdLlm]");
 
   QLOG_IF(
       Priority::DEBUG,

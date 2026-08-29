@@ -414,6 +414,13 @@ void TextLlmContext::tokenizeChat(
       throw;
     }
   }
+  // An explicit `tool_choice` is a demand: fail rather than silently answer
+  // in prose when the template dropped the tools or refused a grammar.
+  requireToolChoiceHonoured(
+      toolChoice.choice,
+      rendered.toolDefinitionsDropped,
+      params_.sampling.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS,
+      "[TextLlm]");
 
   QLOG_IF(
       Priority::DEBUG,
