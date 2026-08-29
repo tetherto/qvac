@@ -912,6 +912,12 @@ SequenceStepResult TextLlmContext::onLogitsReady(
   } else {
     tokenId = forcedTokens_.front();
     forcedTokens_.erase(forcedTokens_.begin());
+    // Forced tokens are emitted output, so the sampler must see them too.
+    // Without this the grammar and the reasoning-budget sampler drift from
+    // the text actually produced, which an attached tool grammar then
+    // rejects. (The related EOS-substitution drift below is not fixed here —
+    // see the comment at the substitution site.)
+    common_sampler_accept(smpl_.get(), tokenId, true);
   }
 
   std::string tokenStr =
@@ -979,6 +985,16 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     } else if (
         reasoningState_.inside_reasoning &&
         reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
+      // KNOWN LIMITATION: the sampler already accepted the original EOS
+      // above, but the text emitted is this close tag instead, so the
+      // grammar and reasoning-budget samplers are one token out of step for
+      // the rest of the request. With an eager tool grammar
+      // (`tool_choice: "required"`) that can make every continuation
+      // invalid. Correcting it means deferring the accept until after this
+      // substitution, which several early returns between here and the
+      // sample site would skip — leaving a worse, permanent drift. Left as
+      // is deliberately; needs the generation loop restructured around a
+      // single accept point.
       tokenId = reasoningState_.cached_close_tag_token;
       tokenStr =
           common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
