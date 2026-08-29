@@ -1011,11 +1011,19 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     return out;
   }
 
+  // Validate `tool_choice` here, outside the try below: a bad value is a
+  // caller error, and the catch-all in that block invalidates the active KV
+  // cache. Throwing before it means a typo costs the caller an error rather
+  // than a warm session, matching how an invalid `json_schema` already
+  // behaves via applyGenerationParams.
+  (void)qvac_lib_inference_addon_llama::utils::resolveToolChoice(
+      prompt.generationParams.tool_choice, resolved.tools);
+
   auto restore =
       state_->llmContext_->applyGenerationParams(prompt.generationParams);
   // Render-time overrides ride alongside the sampler overrides and are
-  // cleared with them, so a request's `tool_choice` / `json_schema` can never
-  // leak into the next request's prompt render.
+  // cleared with them, so a request's `tool_choice` can never leak into the
+  // next request's prompt render.
   state_->llmContext_->setRenderOverrides(
       renderOverridesFrom(prompt.generationParams));
 

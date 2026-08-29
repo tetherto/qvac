@@ -416,6 +416,30 @@ TEST_F(
   EXPECT_EQ(named.tools[0].name, "get_time");
 }
 
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsDuplicateToolNames) {
+  common_chat_tool duplicate = makeWeatherTool();
+  duplicate.description = "a second, different weather tool";
+  const std::vector<common_chat_tool> tools{makeWeatherTool(), duplicate};
+  // Rejected even for "auto", where no name is being looked up: the duplicate
+  // would still reach the template as two indistinguishable blocks.
+  EXPECT_THROW(resolveToolChoice(std::nullopt, tools), qvac_errors::StatusError);
+  EXPECT_THROW(
+      resolveToolChoice(std::string("get_weather"), tools),
+      qvac_errors::StatusError);
+}
+
+// An exotic name is a warning, not an error — the grammar rule it maps to is
+// an internal detail of the vendored converter.
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceAllowsUnusualToolNames) {
+  common_chat_tool odd = makeWeatherTool();
+  odd.name = "get weather/now";
+  const std::vector<common_chat_tool> tools{odd};
+  EXPECT_NO_THROW(resolveToolChoice(std::nullopt, tools));
+  EXPECT_EQ(
+      resolveToolChoice(std::string("get weather/now"), tools).choice,
+      COMMON_CHAT_TOOL_CHOICE_REQUIRED);
+}
+
 TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsUnknownOrToolless) {
   const std::vector<common_chat_tool> tools{makeWeatherTool()};
   EXPECT_THROW(

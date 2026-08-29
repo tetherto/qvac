@@ -190,19 +190,6 @@ PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs);
 
-/**
- * @brief Configures the common-sampling reasoning-budget fields from
- * template-derived thinking tags.
- *
- * Returns true when the sampling block changed and the caller should recreate
- * the common_sampler.
- */
-bool configureReasoningBudgetSampling(
-    common_params& params, ::llama_context* lctx,
-    const std::string& thinkingStartTag,
-    const std::vector<std::string>& thinkingEndTags,
-    const std::string& generationPrompt);
-
 /// Tokenizes one string the way the sampler expects (`common_tokenize(lctx,
 /// text, false, true)`). Injected so the conversion below is testable
 /// without a model.

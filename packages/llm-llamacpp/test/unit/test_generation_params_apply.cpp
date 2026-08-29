@@ -1,4 +1,5 @@
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -7,7 +8,6 @@
 #include "model-interface/GenerationParamsApply.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 
-using qvac_lib_inference_addon_llama::utils::configureReasoningBudgetSampling;
 using qvac_lib_inference_addon_llama::utils::configureTemplateDerivedSampling;
 using qvac_lib_inference_addon_llama::utils::PromptRenderResult;
 using qvac_lib_inference_addon_llama::utils::Tokenizer;
@@ -61,7 +61,24 @@ TEST(TemplateDerivedSamplingTest, ToolGrammarTaggedAsToolCalls) {
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
   EXPECT_EQ(params.sampling.grammar.grammar, toolRender().grammar);
   EXPECT_TRUE(params.sampling.grammar_lazy);
-  EXPECT_TRUE(common_grammar_needs_prefill(params.sampling.grammar));
+}
+
+// A TOOL_CALLS grammar needs prefill, so the assistant header already in the
+// prompt has to be handed to the sampler or it would be re-validated as
+// generated text. Covered on an *eager* grammar because a lazy one is not
+// checked against the grammar until its trigger fires, which would hide a
+// missing `generation_prompt`.
+TEST(TemplateDerivedSamplingTest, EagerToolGrammarCarriesGenerationPrompt) {
+  common_params params = paramsWithoutReasoningBudget();
+  PromptRenderResult rendered = toolRender();
+  rendered.grammarLazy = false;
+  rendered.grammarTriggers.clear();
+
+  EXPECT_TRUE(configureTemplateDerivedSampling(
+      params, stubTokenizer(), rendered, /* toolsRequested = */ true));
+  EXPECT_FALSE(params.sampling.grammar_lazy);
+  ASSERT_TRUE(common_grammar_needs_prefill(params.sampling.grammar));
+  EXPECT_EQ(params.sampling.generation_prompt, "<|im_start|>assistant\n");
 }
 
 TEST(TemplateDerivedSamplingTest, LegacyRenderedGrammarNeverTaggedToolCalls) {
@@ -362,9 +379,20 @@ TEST(
   EXPECT_TRUE(sampling.reasoning_budget_forced.empty());
 }
 
+// Builds the render a reasoning-budget test needs: thinking tags present, no
+// tool grammar, so only the budget half of the pass is exercised.
+static PromptRenderResult reasoningRender() {
+  PromptRenderResult rendered;
+  rendered.renderedByJinja = true;
+  rendered.thinkingStartTag = "<think>";
+  rendered.thinkingEndTags = {"</think>", "<tool_call>"};
+  rendered.generationPrompt = "<assistant><think>";
+  return rendered;
+}
+
 TEST(
-    GenerationParamsApplyTest,
-    ConfigureReasoningBudgetSamplingClearsStaleStateWhenDisabled) {
+    TemplateDerivedSamplingTest,
+    ReasoningBudgetClearsStaleStateWhenDisabled) {
   common_params params;
   params.reasoning_budget = 0;
   params.sampling.reasoning_budget_tokens = 16;
@@ -373,12 +401,10 @@ TEST(
   params.sampling.reasoning_budget_forced = tokens({12});
   params.sampling.generation_prompt = "<assistant><think>";
 
-  EXPECT_TRUE(configureReasoningBudgetSampling(
-      params,
-      nullptr,
-      "<think>",
-      std::vector<std::string>{"</think>", "<tool_call>"},
-      "<assistant><think>"));
+  // No tokenizer: the tag vectors cannot be built, so they must end up empty
+  // rather than keeping the previous request's ids.
+  EXPECT_TRUE(configureTemplateDerivedSampling(
+      params, Tokenizer{}, reasoningRender(), /* toolsRequested = */ false));
   EXPECT_EQ(params.sampling.reasoning_budget_tokens, -1);
   EXPECT_TRUE(params.sampling.reasoning_budget_start.empty());
   EXPECT_TRUE(params.sampling.reasoning_budget_end.empty());
@@ -386,9 +412,7 @@ TEST(
   EXPECT_TRUE(params.sampling.generation_prompt.empty());
 }
 
-TEST(
-    GenerationParamsApplyTest,
-    ConfigureReasoningBudgetSamplingKeepsPositiveCapWithoutContext) {
+TEST(TemplateDerivedSamplingTest, ReasoningBudgetKeepsPositiveCapWithoutTokenizer) {
   common_params params;
   params.reasoning_budget = 8;
   params.sampling.reasoning_budget_tokens = -1;
@@ -397,12 +421,8 @@ TEST(
   params.sampling.reasoning_budget_forced = tokens({12});
   params.sampling.generation_prompt = "<assistant><think>";
 
-  EXPECT_TRUE(configureReasoningBudgetSampling(
-      params,
-      nullptr,
-      "<think>",
-      std::vector<std::string>{"</think>", "<tool_call>"},
-      "<assistant><think>"));
+  EXPECT_TRUE(configureTemplateDerivedSampling(
+      params, Tokenizer{}, reasoningRender(), /* toolsRequested = */ false));
   EXPECT_EQ(params.sampling.reasoning_budget_tokens, 8);
   EXPECT_TRUE(params.sampling.reasoning_budget_start.empty());
   EXPECT_TRUE(params.sampling.reasoning_budget_end.empty());

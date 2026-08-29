@@ -1058,8 +1058,8 @@ void RuntimeStatsSnapshot::recordDecodeStep(
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
-    int64_t nPast, int64_t thinkingDiscards, const Request& req,
-    int64_t toolsDropped) {
+    int64_t nPast, int64_t thinkingDiscards, int64_t toolsDropped,
+    const Request& req) {
   cacheTokens += nPast;
   thinkingBlockDiscards += thinkingDiscards;
   toolDefinitionsDropped += toolsDropped;
@@ -1629,7 +1629,7 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
         static_cast<int64_t>(slot.driver->getToolDefinitionsDropped());
     stopReason = slot.driver->getGenerationStopReason();
   }
-  stats_.accumulateSlot(nPast, thinkingDiscards, req, toolsDropped);
+  stats_.accumulateSlot(nPast, thinkingDiscards, toolsDropped, req);
   // Every terminal path that folds a slot into the aggregate also records the
   // request's observed end-to-end figures for its submitter, next to its
   // output.

@@ -298,9 +298,14 @@ private:
   // `tokenizeChat`, unlike the load-time `params_.antiprompt`.
   std::vector<std::string> templateStops_;
   std::vector<llama_token> templateStopTokens_;
+  // Lowercased copies of the two stop lists. `checkAntiprompt` runs once per
+  // generated token, and both lists are constant for a whole generation, so
+  // the case folding is done once rather than per token.
+  std::vector<std::string> antipromptLower_;
+  std::vector<std::string> templateStopsLower_;
   // Renders in the current request where the template dropped the tools.
   int32_t toolDefinitionsDropped_ = 0;
-  // Per-request `json_schema` / `tool_choice` for the chat-template render.
+  // Per-request `tool_choice` for the chat-template render.
   RenderOverrides renderOverrides_;
   std::vector<llama_token> forcedTokens_;
 

@@ -18,6 +18,7 @@
 #include "common/log.h"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 #include "utils/ReasoningUtils.hpp"
@@ -204,7 +205,9 @@ void TextLlmContext::initializeCommonState() {
     }
   }
 
+  antipromptLower_.reserve(params_.antiprompt.size());
   for (const std::string& antiprompt : params_.antiprompt) {
+    antipromptLower_.push_back(utils::toLowerAscii(antiprompt));
     auto ids = ::common_tokenize(modelCtx_.lctx, antiprompt, false, true);
     if (ids.size() == 1) {
       antipromptTokens_.push_back(ids[0]);
@@ -267,7 +270,7 @@ void TextLlmContext::initializeOwnedThreadpools() {
 }
 
 bool TextLlmContext::checkAntiprompt() {
-  if (params_.antiprompt.empty() && templateStops_.empty()) {
+  if (antipromptLower_.empty() && templateStopsLower_.empty()) {
     return false;
   }
   constexpr int kNPrev = 32;
@@ -280,27 +283,17 @@ bool TextLlmContext::checkAntiprompt() {
   // appear at the start of such a token, far from the string's tail.
   // Matching is case-insensitive so callers don't have to list every
   // casing variant the model might emit.
-  std::string lastOutputLower = lastOutput;
-  std::transform(
-      lastOutputLower.begin(),
-      lastOutputLower.end(),
-      lastOutputLower.begin(),
-      [](unsigned char c) { return std::tolower(c); });
-  auto containsAnyStop = [&](const std::vector<std::string>& stops) {
-    for (const std::string& stop : stops) {
-      std::string stopLower = stop;
-      std::transform(
-          stopLower.begin(),
-          stopLower.end(),
-          stopLower.begin(),
-          [](unsigned char c) { return std::tolower(c); });
+  const std::string lastOutputLower = utils::toLowerAscii(lastOutput);
+  auto containsAnyStop = [&](const std::vector<std::string>& stopsLower) {
+    for (const std::string& stopLower : stopsLower) {
       if (lastOutputLower.find(stopLower) != std::string::npos) {
         return true;
       }
     }
     return false;
   };
-  if (containsAnyStop(params_.antiprompt) || containsAnyStop(templateStops_)) {
+  if (containsAnyStop(antipromptLower_) ||
+      containsAnyStop(templateStopsLower_)) {
     return true;
   }
 
@@ -381,10 +374,15 @@ void TextLlmContext::tokenizeChat(
   const Tokenizer tokenize = [this](const std::string& text) {
     return ::common_tokenize(modelCtx_.lctx, text, false, true);
   };
-  // Template stop strings are per request: replace, never accumulate.
+  // Template stop strings are per request: replace, never accumulate. No
+  // template in qvac-fabric 10297.0.0 populates `additional_stops`, so these
+  // lists are empty in practice today; the plumbing is forward-compatible.
   templateStops_ = rendered.additionalStops;
   templateStopTokens_.clear();
+  templateStopsLower_.clear();
+  templateStopsLower_.reserve(templateStops_.size());
   for (const std::string& stop : templateStops_) {
+    templateStopsLower_.push_back(utils::toLowerAscii(stop));
     const auto ids = tokenize(stop);
     if (ids.size() == 1) {
       templateStopTokens_.push_back(ids[0]);

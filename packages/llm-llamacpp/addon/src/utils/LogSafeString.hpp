@@ -10,6 +10,18 @@ namespace utils {
 /// Longest caller-supplied fragment echoed into an error or log message.
 inline constexpr size_t K_MAX_LOG_ECHO = 64;
 
+/// Lowercases in place, for case-insensitive stop-string matching. Kept here
+/// so the two LLM contexts share one definition.
+inline std::string toLowerAscii(std::string_view value) {
+  std::string out;
+  out.reserve(value.size());
+  for (const char c : value) {
+    out += static_cast<char>(
+        std::tolower(static_cast<unsigned char>(c)));
+  }
+  return out;
+}
+
 /**
  * @brief Makes a caller-supplied string safe to embed in an error message.
  *

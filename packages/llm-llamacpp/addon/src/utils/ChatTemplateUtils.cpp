@@ -260,23 +260,25 @@ PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs) {
   // Single export point for all three render paths below.
-  auto exportParams = [](const common_chat_params& params,
+  // Takes ownership: every caller below hands over a local it no longer
+  // reads, and the payload carries several strings plus three vectors.
+  auto exportParams = [](common_chat_params&& params,
                          bool renderedByJinja,
                          bool toolDefinitionsDropped) {
     PromptRenderResult out;
-    out.prompt = params.prompt;
+    out.prompt = std::move(params.prompt);
     out.thinkingForcedOpen = params.thinking_forced_open;
-    out.thinkingStartTag = params.thinking_start_tag;
+    out.thinkingStartTag = std::move(params.thinking_start_tag);
     out.thinkingEndTag = params.thinking_end_tags.empty()
                              ? std::string()
                              : params.thinking_end_tags.front();
-    out.thinkingEndTags = params.thinking_end_tags;
-    out.generationPrompt = params.generation_prompt;
-    out.grammar = params.grammar;
+    out.thinkingEndTags = std::move(params.thinking_end_tags);
+    out.generationPrompt = std::move(params.generation_prompt);
+    out.grammar = std::move(params.grammar);
     out.grammarLazy = params.grammar_lazy;
-    out.grammarTriggers = params.grammar_triggers;
-    out.preservedTokens = params.preserved_tokens;
-    out.additionalStops = params.additional_stops;
+    out.grammarTriggers = std::move(params.grammar_triggers);
+    out.preservedTokens = std::move(params.preserved_tokens);
+    out.additionalStops = std::move(params.additional_stops);
     out.renderedByJinja = renderedByJinja;
     out.toolDefinitionsDropped = toolDefinitionsDropped;
     return out;
@@ -298,7 +300,7 @@ PromptRenderResult getPrompt(
       inputs.tools.clear();
     }
     return exportParams(
-        params,
+        std::move(params),
         /* renderedByJinja = */ inputs.use_jinja,
         /* toolDefinitionsDropped = */ legacyDroppedTools);
   } catch (const std::exception& e) {
@@ -320,7 +322,7 @@ PromptRenderResult getPrompt(
               firstError.c_str()));
       inputs.tools.clear();
       return exportParams(
-          params,
+          std::move(params),
           /* renderedByJinja = */ inputs.use_jinja,
           /* toolDefinitionsDropped = */ true);
     } catch (...) {
@@ -343,21 +345,12 @@ PromptRenderResult getPrompt(
   // prompt does not carry.
   inputs.tools.clear();
   return exportParams(
-      params,
+      std::move(params),
       /* renderedByJinja = */ false,
       /* toolDefinitionsDropped = */ legacyDroppedTools);
 }
 
 namespace {
-
-Tokenizer tokenizerFor(::llama_context* lctx) {
-  if (lctx == nullptr) {
-    return {};
-  }
-  return [lctx](const std::string& text) {
-    return common_tokenize(lctx, text, false, true);
-  };
-}
 
 void applyReasoningBudget(
     common_params_sampling& next, const common_params& params,
@@ -496,29 +489,48 @@ bool applyToolGrammar(
 
 } // namespace
 
-bool configureReasoningBudgetSampling(
-    common_params& params, ::llama_context* lctx,
-    const std::string& thinkingStartTag,
-    const std::vector<std::string>& thinkingEndTags,
-    const std::string& generationPrompt) {
-  common_params_sampling next = params.sampling;
-  applyReasoningBudget(
-      next,
-      params,
-      tokenizerFor(lctx),
-      thinkingStartTag,
-      thinkingEndTags,
-      generationPrompt);
-  const bool changed = samplingChanged(params.sampling, next);
-  if (changed) {
-    params.sampling = std::move(next);
+namespace {
+
+/// Two tools sharing a name make `tool_choice: "<name>"` ambiguous and give
+/// the template two blocks the model cannot tell apart. Rejected outright.
+/// A name outside `[A-Za-z0-9_.-]` is only warned about: the grammar builder
+/// derives a rule name from it, so exotic characters risk colliding with
+/// another tool's rule, but which characters are actually unsafe is an
+/// internal detail of the vendored converter and would drift if mirrored.
+void validateToolNames(const std::vector<common_chat_tool>& tools) {
+  std::set<std::string> seen;
+  for (const common_chat_tool& tool : tools) {
+    if (!seen.insert(tool.name).second) {
+      throw qvac_errors::StatusError(
+          errors::ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "prompt declares two tools named %s",
+              forLogMessage(tool.name).c_str()));
+    }
+    const bool plain = std::ranges::all_of(tool.name, [](char c) {
+      return (std::isalnum(static_cast<unsigned char>(c)) != 0) || c == '_' ||
+             c == '.' || c == '-';
+    });
+    if (!plain) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[ChatTemplateUtils] tool name %s contains characters outside "
+              "[A-Za-z0-9_.-]; its grammar rule name may collide with another "
+              "tool's\n",
+              forLogMessage(tool.name).c_str()));
+    }
   }
-  return changed;
 }
+
+} // namespace
 
 ResolvedToolChoice resolveToolChoice(
     const std::optional<std::string>& rawToolChoice,
     const std::vector<common_chat_tool>& tools) {
+  validateToolNames(tools);
   ResolvedToolChoice resolved;
   resolved.tools = tools;
   if (!rawToolChoice || rawToolChoice->empty() || *rawToolChoice == "auto") {
