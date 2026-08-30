@@ -1022,6 +1022,13 @@ TEST_F(MtmdLlmContextTest, BatchPreservesMixedByteAndPathMediaOrder) {
   auto cfg = config_files;
   cfg["parallel"] = "2";
   cfg["n_predict"] = "16";
+  // With the addition of llava-uhd grid slicing for idefics3-style
+  // projectors (set_limit_image_tokens), each SmolVLM image can expand
+  // into a slice grid plus overview instead of the previous overview-only
+  // encoding. Raise the context so the per-slot budget (ctx_size / parallel)
+  // fits the sliced prompt; this test asserts media ordering, not context
+  // limits.
+  cfg["ctx_size"] = "4096";
   std::string modelPath = test_model_path;
   std::string projectionPath = test_projection_path;
   auto model = std::make_unique<LlamaModel>(
