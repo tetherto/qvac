@@ -71,11 +71,17 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     environment: release
-    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.force_vulkan == 'true' && '-vulkan' || '' }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WORKDIR: packages/llm-llamacpp
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
+      # QVAC-23763: marks a leg as the Vulkan half of an NVIDIA runner. Not set
+      # as CUDA_VISIBLE_DEVICES directly, because an unset matrix field is the
+      # empty string and an empty CUDA_VISIBLE_DEVICES hides every CUDA device
+      # just like -1. The test step exports the real variable when this is
+      # 'true'.
+      FORCE_VULKAN: ${{ matrix.force_vulkan || 'false' }}
     permissions:
       contents: read
       packages: read
@@ -102,6 +108,16 @@ jobs:
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
             timeout_minutes: 480
             label: linux-x64-u24-gpu
+          # QVAC-23763: the qvac-ubuntu*-x64-gpu runners are NVIDIA, so the same
+          # box covers both GPU backends. This entry is the Vulkan half; the one
+          # above runs CUDA, now the default.
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
+            timeout_minutes: 480
+            force_vulkan: 'true'
+            label: linux-x64-u24-gpu-vulkan
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -286,6 +302,13 @@ jobs:
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
+          # QVAC-23763: export CUDA_VISIBLE_DEVICES only for the Vulkan leg.
+          # Exporting it unconditionally would set it to the empty string
+          # elsewhere, which hides every CUDA device just as -1 does.
+          if [ "${FORCE_VULKAN}" = "true" ]; then
+            echo "FORCE_VULKAN=true: hiding CUDA devices so the addon selects Vulkan"
+            export CUDA_VISIBLE_DEVICES=-1
+          fi
           if [ "${{ inputs.qvac_perf_only }}" = "true" ]; then
             echo "qvac_perf_only=true: regenerating test/integration/all.js with perf-emitting tests only"
             npx brittle -r test/integration/all.js \

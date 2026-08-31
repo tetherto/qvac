@@ -28,6 +28,14 @@ const isIos = platform === 'ios'
 // Some Android GPUs (e.g. Galaxy S25 / Adreno 830 in CI) can time out even
 // on the first f16+f16 row, so these smoke tests are disabled on Android.
 const isAndroid = platform === 'android'
+
+// linux x64 now enumerates CUDA ahead of Vulkan, and CUDA has no TurboQuant or
+// PolarQuant kernels, so the addon refuses those cache types there. Ask for
+// Vulkan explicitly on the tbq/pq rows only; the f16 baseline still runs on
+// whatever the host prefers, which is what makes the memory comparison below
+// meaningful on both backends.
+const pinTbqPqToVulkan = platform === 'linux' && os.arch() === 'x64'
+
 const skipReason =
   isDarwin || isIos
     ? 'Quantized KV cache smoke tests are skipped on Apple Metal/iOS targets'
@@ -144,7 +152,8 @@ async function runBenchmark(cfg, modelInfo) {
       verbosity: '2',
       'flash-attn': 'on',
       'cache-type-k': cfg.k,
-      'cache-type-v': cfg.v
+      'cache-type-v': cfg.v,
+      ...(cfg.kind === 'tbqpq' && pinTbqPqToVulkan ? { backend: 'vulkan' } : {})
     },
     logger: console,
     opts: { stats: true }
@@ -184,6 +193,7 @@ async function runBenchmark(cfg, modelInfo) {
 
 async function runHeadDimSmoke(t, modelInfo, label) {
   const results = []
+  let tbqpqSkipped = false
 
   for (const cfg of CACHE_CONFIGS) {
     console.log(
@@ -196,6 +206,7 @@ async function runHeadDimSmoke(t, modelInfo, label) {
       t.ok(result.generatedTokens > 0, `${cfg.label}: generated tokens (${result.generatedTokens})`)
     } catch (err) {
       if (cfg.kind === 'tbqpq' && isTurboQuantUnsupported(err)) {
+        tbqpqSkipped = true
         t.comment(`${cfg.label}: SKIPPED (tbq/pq unsupported on this backend: ${err.message})`)
         continue
       }
@@ -206,6 +217,17 @@ async function runHeadDimSmoke(t, modelInfo, label) {
   const f16 = results.find((r) => r.cfg.label === 'f16+f16')?.result
   const tbq3pq3 = results.find((r) => r.cfg.label === 'tbq3_0+pq3_0')?.result
   t.ok(f16, `${label} head_dim=${modelInfo.headDim} f16 baseline completed`)
+
+  // Every tbq/pq row was refused by the backend, so there is no row to assert
+  // on and nothing to compare against. Demanding one here is what turned the
+  // skip above into a failure.
+  if (tbqpqSkipped) {
+    t.comment(
+      `${label} head_dim=${modelInfo.headDim}: tbq/pq rows skipped on this backend, no memory comparison`
+    )
+    return
+  }
+
   t.ok(tbq3pq3, `${label} head_dim=${modelInfo.headDim} TBQ/PQ cache completed`)
 
   if (

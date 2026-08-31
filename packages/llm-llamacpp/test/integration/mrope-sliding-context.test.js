@@ -21,6 +21,12 @@ const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const useCpu = isDarwinX64 || isLinuxArm64
 const skipTbqPq = isDarwin || isIos || isAndroid
 
+// linux x64 enumerates CUDA ahead of Vulkan now, and CUDA has no TurboQuant or
+// PolarQuant kernels, so the addon refuses these cache types there. Name the
+// backend these rows need rather than relying on enumeration order; the q8 and
+// f16 rows above stay on whatever the host prefers.
+const TBQ_PQ_BACKEND = platform === 'linux' && arch === 'x64' ? { backend: 'vulkan' } : {}
+
 function safeTest(name, opts, fn) {
   integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
 }
@@ -474,6 +480,7 @@ safeTest(
       label: 'tbq4 K-cache multimodal',
       cacheFileName: 'qwen3-5-tbq4-kcache-multimodal-sliding-cache.bin',
       extraConfig: {
+        ...TBQ_PQ_BACKEND,
         'cache-type-k': 'tbq4_0'
       }
     })
@@ -491,6 +498,7 @@ safeTest(
       label: 'pq4 K-cache multimodal',
       cacheFileName: 'qwen3-5-pq4-kcache-multimodal-sliding-cache.bin',
       extraConfig: {
+        ...TBQ_PQ_BACKEND,
         'cache-type-k': 'pq4_0'
       }
     })
@@ -508,6 +516,7 @@ safeTest(
       label: 'llama3.2 pq4 K-cache prefill',
       cacheFileName: 'llama3-2-pq4-kcache-prefill-sliding-cache.bin',
       extraConfig: {
+        ...TBQ_PQ_BACKEND,
         'cache-type-k': 'pq4_0'
       }
     })
@@ -525,6 +534,7 @@ safeTest(
       label: 'llama3.2 tbq4 K-cache prefill',
       cacheFileName: 'llama3-2-tbq4-kcache-prefill-sliding-cache.bin',
       extraConfig: {
+        ...TBQ_PQ_BACKEND,
         'cache-type-k': 'tbq4_0'
       }
     })
@@ -543,6 +553,7 @@ safeTest(
       label: 'llama3.2 3B pq4 K-cache prefill',
       cacheFileName: 'llama3-2-3b-pq4-kcache-prefill-sliding-cache.bin',
       extraConfig: {
+        ...TBQ_PQ_BACKEND,
         'cache-type-k': 'pq4_0'
       }
     })
@@ -561,6 +572,7 @@ safeTest(
       label: 'llama3.2 3B tbq4 K-cache prefill',
       cacheFileName: 'llama3-2-3b-tbq4-kcache-prefill-sliding-cache.bin',
       extraConfig: {
+        ...TBQ_PQ_BACKEND,
         'cache-type-k': 'tbq4_0'
       }
     })

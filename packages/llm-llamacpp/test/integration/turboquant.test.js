@@ -35,6 +35,12 @@ const isVulkanHappyPath =
 const isMetalRejectPath = platform === 'darwin' || platform === 'ios'
 const isAndroid = platform === 'android'
 
+// isVulkanHappyPath is a platform test, and on linux x64 the platform no longer
+// decides the backend: CUDA enumerates ahead of Vulkan and has no TurboQuant or
+// PolarQuant kernels, so the addon refuses these cache types there. Name the
+// backend the sweep is actually about instead of relying on enumeration order.
+const pinToVulkan = platform === 'linux' && arch === 'x64'
+
 const skipReason =
   isVulkanHappyPath || isMetalRejectPath
     ? false
@@ -83,6 +89,7 @@ function makeConfig(kv) {
     'cache-type-k': kv.k,
     'cache-type-v': kv.v,
     'flash-attn': 'on',
+    ...(pinToVulkan ? { backend: 'vulkan' } : {}),
     verbosity: '2'
   }
 }

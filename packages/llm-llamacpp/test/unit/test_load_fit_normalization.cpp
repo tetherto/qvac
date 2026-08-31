@@ -329,11 +329,13 @@ protected:
   static lfn::NormalizationDependencies
   backend(lfn::SelectedBackend selected, bool supportsRowSplit = false) {
     return {
-        .resolveBackend = [selected](
-                              backend_selection::BackendType,
-                              const std::optional<backend_selection::MainGpu>&,
-                              const ModelMetaData&,
-                              bool) { return selected; },
+        .resolveBackend =
+            [selected](
+                backend_selection::BackendType,
+                const std::optional<backend_selection::MainGpu>&,
+                const ModelMetaData&,
+                bool,
+                const std::vector<std::string>&) { return selected; },
         .gpuBackendSupportsRowSplit =
             [supportsRowSplit]() { return supportsRowSplit; }};
   }
@@ -426,7 +428,8 @@ TEST_F(LoadFitNormalizationTest, RowSplitProbeRunsOnlyForSelectedGpuRowMode) {
       [](backend_selection::BackendType,
          const std::optional<backend_selection::MainGpu>&,
          const ModelMetaData&,
-         bool) {
+         bool,
+         const std::vector<std::string>&) {
         return lfn::SelectedBackend{
             .type = backend_selection::GPU, .name = "none"};
       };
@@ -439,6 +442,116 @@ TEST_F(LoadFitNormalizationTest, RowSplitProbeRunsOnlyForSelectedGpuRowMode) {
   static_cast<void>(lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(gpuRowConfig), metadata_, {}, dependencies));
   EXPECT_EQ(probeCalls, 1);
+}
+
+// QVAC-23763: the split-mode --device branch. A CPU-only test process has no
+// real GPU device to name, so these lean on qvac-fabric's own
+// parse_device_list: the whole value "none" is legal and yields a one-entry
+// devices list, while any multi-entry value is looked up per name and throws.
+// That is enough to pin down whether the flag was emitted at all and whether
+// the comma join happened.
+TEST_F(LoadFitNormalizationTest, SplitModeOmitsDeviceWhenTheDependencyIsUnset) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.devices.empty());
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeOmitsDeviceOnAnEmptyDeviceList) {
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  dependencies.splitModeDeviceNames = [](const std::string&) {
+    return std::vector<std::string>{};
+  };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  EXPECT_TRUE(result.params.devices.empty());
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeEmitsDeviceForTheScopedList) {
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  std::string seenSelectedName;
+  dependencies.splitModeDeviceNames =
+      [&seenSelectedName](const std::string& selectedName) {
+        seenSelectedName = selectedName;
+        return std::vector<std::string>{"none"};
+      };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  EXPECT_EQ(seenSelectedName, "none");
+  EXPECT_FALSE(result.params.devices.empty());
+}
+
+// A two-name list must reach the parser as one comma-joined value. If the join
+// were dropped and only the first name emitted, the value would be the legal
+// "none" and this would not throw.
+TEST_F(LoadFitNormalizationTest, SplitModeJoinsSeveralDevicesIntoOneValue) {
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  dependencies.splitModeDeviceNames = [](const std::string&) {
+    return std::vector<std::string>{"none", "phantom0"};
+  };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
+// QVAC-23763: --main-gpu indexes the list llama.cpp is handed. Once --device is
+// scoped, the caller's index is resolved against a longer list and must be
+// rewritten to the selected device's position rather than forwarded as-is.
+TEST_F(LoadFitNormalizationTest, SplitModeRewritesMainGpuToTheScopedPosition) {
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  dependencies.splitModeDeviceNames = [](const std::string&) {
+    return std::vector<std::string>{"none"};
+  };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["main-gpu"] = "3";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  EXPECT_EQ(result.params.main_gpu, 0);
+}
+
+// A single-registry host omits --device, so llama.cpp still sees every device
+// and the caller's index must survive untouched.
+TEST_F(LoadFitNormalizationTest, SplitModeKeepsMainGpuWhenDeviceIsOmitted) {
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  dependencies.splitModeDeviceNames = [](const std::string&) {
+    return std::vector<std::string>{};
+  };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["main-gpu"] = "3";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  EXPECT_EQ(result.params.main_gpu, 3);
+}
+
+// Single-GPU mode keeps pinning to the selected device and must not consult the
+// split-mode list at all.
+TEST_F(LoadFitNormalizationTest, SingleGpuModeIgnoresTheSplitDeviceList) {
+  bool consulted = false;
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  dependencies.splitModeDeviceNames = [&consulted](const std::string&) {
+    consulted = true;
+    return std::vector<std::string>{"phantom0"};
+  };
+  auto config = baseConfig();
+  config["split-mode"] = "none";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  EXPECT_FALSE(consulted);
+  EXPECT_FALSE(result.params.devices.empty());
 }
 
 TEST_F(

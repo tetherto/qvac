@@ -5,9 +5,10 @@
 #include <string>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
-#include <llama.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama.h>
 
 namespace backend_selection {
 
@@ -23,6 +24,20 @@ std::optional<MainGpu> parseMainGpu(const std::string& mainGpuStr);
 
 std::optional<MainGpu>
 tryMainGpuFromMap(std::unordered_map<std::string, std::string>& configFilemap);
+
+/// @brief Parse a `backend` override into a lowercased priority list, e.g.
+/// "CUDA,Vulkan" -> {"cuda", "vulkan"}.
+///
+/// An unknown name is a config mistake and throws StatusError(InvalidArgument).
+/// A known name with no device attached is legitimate, asking for cuda on a
+/// Vulkan-only host say, and falls through to the next entry. "auto" is
+/// accepted and dropped, so it parses to no preference.
+std::vector<std::string> parseBackendOverride(const std::string& backendStr);
+
+/// @brief Extract and erase the `backend` key from a config map.
+/// Returns an empty vector when the key is absent.
+std::vector<std::string> tryBackendOverrideFromMap(
+    std::unordered_map<std::string, std::string>& configFilemap);
 
 using llamaLogCallbackF =
     void (*)(ggml_log_level level, const char* text, void* userData);
@@ -43,14 +58,26 @@ struct BackendInterface {
 
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
-    const std::optional<MainGpu>& mainGpu = std::nullopt);
+    const std::optional<MainGpu>& mainGpu = std::nullopt,
+    const std::vector<std::string>& backendOverride = {});
 
 /// @brief Choose the backend to use for the model based on GPU device and
-/// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise Vulkan
-/// backend. Uses CPU if no GPU backends are available.
+/// available backends. Prefer OpenCL backend for Adreno GPUs, then CUDA on
+/// NVIDIA, otherwise Vulkan. Uses CPU if no GPU backends are available.
+///
+/// The CUDA preference is stated here rather than inherited: qvac-fabric loads
+/// cuda before vulkan and registration is an unsorted push_back, so CUDA
+/// already happens to enumerate first. Relying on that would make backend
+/// choice a silent function of ggml's load order. QVAC-23763.
+///
+/// @p backendOverride, when non-empty, restricts the choice to those backend
+/// families in priority order (e.g. {"cuda", "vulkan"}). Entries with no device
+/// present are skipped; if none match, selection falls through to the normal
+/// cascade rather than failing, because an absent device is not a config error.
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
-    const std::optional<MainGpu>& mainGpu = std::nullopt);
+    const std::optional<MainGpu>& mainGpu = std::nullopt,
+    const std::vector<std::string>& backendOverride = {});
 
 /// @brief Count GPU devices available for multi-GPU split mode.
 /// Returns the number of discrete GPUs when any are present; otherwise
@@ -70,4 +97,21 @@ bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 /// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
 /// registry.
 bool gpuBackendSupportsRowSplit();
+
+/// @brief The device names to pass as `--device` in multi-GPU split mode,
+/// namely those sharing @p selectedDeviceName's backend registry.
+///
+/// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
+/// registers twice, as CUDA0 and Vulkan0, so the old unconditional omission of
+/// `--device` would spread a single card across two backends.
+///
+/// Empty when every GPU/iGPU device comes from one registry, which is every
+/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
+/// caller then keeps omitting `--device`.
+std::vector<std::string> splitModeDeviceNames(
+    const BackendInterface& bckI, const std::string& selectedDeviceName);
+
+/// @brief `splitModeDeviceNames()` against the real ggml backend registry.
+std::vector<std::string>
+splitModeDeviceNames(const std::string& selectedDeviceName);
 } // namespace backend_selection
