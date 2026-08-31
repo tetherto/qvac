@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
-import { createExecutor, SkipExecutor } from '@qvac/qvac-test-suite/mobile'
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import { createExecutor, SkipExecutor } from '@qvac/test-suite/mobile'
+import type { TestDefinition } from '@qvac/test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,

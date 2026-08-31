@@ -77,7 +77,11 @@ export function loadModel<S extends ModelDescriptor>(
  *
  * @overloadLabel "Load new model"
  * @param options - An object that defines all configuration parameters required for loading the model, including:
- *   - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL)
+ *   - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL).
+ *     Hugging Face URLs (huggingface.co / hf.co) are verified against the Hub's SHA-256, and their transport is
+ *     hardened (plaintext http:// and https://→http:// downgrades rejected, loopback excepted). Other HTTP(S) URLs
+ *     are downloaded as-is and unverified (bring-your-own — plaintext on any host is allowed). Set
+ *     `requireHttpChecksum` in the config to reject Hugging Face downloads that expose no usable checksum.
  *   - modelType: The canonical type of model ("llamacpp-completion",
  *     "whispercpp-transcription", "llamacpp-embedding", "nmtcpp-translation",
  *     "tts-ggml", ...). May be omitted when `modelSrc` is a registry descriptor

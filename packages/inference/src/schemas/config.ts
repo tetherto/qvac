@@ -136,6 +136,33 @@ export const qvacConfigSchema = z.object({
   httpConnectionTimeoutMs: z.number().int().positive().optional(),
 
   /**
+   * Require HTTP model downloads to be verified against a trusted checksum.
+   * Sources that expose one (currently Hugging Face, via the Hub's SHA-256)
+   * are always verified regardless of this flag, and a mismatch always fails.
+   * This flag only governs the unverifiable cases:
+   * - false (default): a source with no available checksum downloads with a
+   *   warning (Hugging Face URLs that expose no SHA-256, and non-Hugging-Face
+   *   URLs which have no checksum source).
+   * - true: a source that should be verifiable but exposes no usable checksum
+   *   (e.g. a Hugging Face URL without a SHA-256) is rejected; a source with no
+   *   checksum source at all still downloads, with a warning that no checksum
+   *   source was available.
+   * Defaults to false.
+   */
+  requireHttpChecksum: z.boolean().optional(),
+
+  /**
+   * Enforce secure transport for HTTP model downloads: reject plaintext http://
+   * and HTTPS->HTTP downgrade redirects (loopback exempt).
+   * - false (default): enforced only for Hugging Face sources, whose Hub SHA-256
+   *   attestation a downgrade could sidestep. Bring-your-own HTTP on any host,
+   *   plaintext included, is left as-is.
+   * - true: enforced for every HTTP source, so all downloads must use HTTPS.
+   * Defaults to false.
+   */
+  requireSecureTransport: z.boolean().optional(),
+
+  /**
    * Maximum number of retry attempts for registry (P2P) downloads on timeout.
    * When a download times out due to a P2P connection stall, we
    * automatically retry up to this many times before failing.

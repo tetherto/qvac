@@ -415,7 +415,15 @@ async def test_completion_orchestrate_runs_the_tool_loop(transport) -> None:
                 "handler": get_secret_code,
             }
         ],
-        generation_params={"predict": 512, "temp": 0, "seed": 42},
+        # reasoning_budget 0 keeps thinking off: with it on, a 0.6B model can
+        # spend the whole predict budget in <think> and never emit the tool
+        # call, which is the loop under test (QVAC-24318).
+        generation_params={
+            "predict": 512,
+            "temp": 0,
+            "seed": 42,
+            "reasoning_budget": 0,
+        },
     )
     async for _event in run.events:
         pass

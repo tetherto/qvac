@@ -11,7 +11,7 @@ import {
   logMqttConnectionSecurity,
   startNodeMemoryPoller,
   type TestDefinition
-} from '@qvac/qvac-test-suite'
+} from '@qvac/test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,

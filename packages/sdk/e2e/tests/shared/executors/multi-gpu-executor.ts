@@ -6,7 +6,7 @@ import {
   LLAMA_3_2_1B_INST_Q4_0,
   EMBEDDINGGEMMA_300M_Q8_0
 } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import type { ResourceManager } from '../resource-manager.js'
 import {
