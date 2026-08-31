@@ -355,22 +355,26 @@ async function main() {
     console.log('the held-out peak exceeded the upper bound; do not ship these coefficients')
   }
 
-  if (!write) {
+  if (write) {
+    const target = path.join(
+      os.cwd(),
+      'src',
+      'resources',
+      'model-fit',
+      'calibration',
+      `${platform}.ts`
+    )
+    fs.writeFileSync(target, fixtureSource(platform, calibration))
+    console.log(`\nwrote ${target}`)
+    console.log('remember to add the platform to calibration/index.ts and run prettier')
+  } else {
     console.log('\nre-run with --write to update the fixture')
-    return
   }
 
-  const target = path.join(
-    os.cwd(),
-    'src',
-    'resources',
-    'model-fit',
-    'calibration',
-    `${platform}.ts`
-  )
-  fs.writeFileSync(target, fixtureSource(platform, calibration))
-  console.log(`\nwrote ${target}`)
-  console.log('remember to add the platform to calibration/index.ts and run prettier')
+  // A failed gate exits non-zero so a CI job cannot rot green: the fixture (if
+  // written) still carries validated: false and is auditable, but green must
+  // mean "these coefficients are defensible".
+  if (!holds) Bare.exit(1)
 }
 
 main().catch((error) => {

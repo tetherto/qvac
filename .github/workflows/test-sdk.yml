@@ -107,6 +107,14 @@ on:
         description: "Advanced: Snap runners (JSON array)"
         type: string
         default: '["qvac-ubuntu2204-x64-gpu"]'
+      calibration:
+        description: "Run the assessModelFit calibration harness (QVAC-24215; slow: seven model loads per platform)"
+        type: boolean
+        default: false
+      calibration-platforms:
+        description: "Advanced: Calibration runners (JSON array)"
+        type: string
+        default: '["qvac-macos26-arm64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-win25-x64-gpu"]'
 
   workflow_call:
     inputs:
@@ -478,3 +486,82 @@ jobs:
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
     secrets: inherit
+
+  # assessModelFit calibration (QVAC-24215). Dispatch-only and off by default:
+  # `calibration` is not a workflow_call input, so the PR label path can never
+  # trigger it — seven model loads per platform per labelled PR would be brutal.
+  # The self-hosted runners use Manual Workspace Cleanup, so a job owns the
+  # machine while it runs, which the harness needs: it takes a peak over 25 ms
+  # RSS samples, and anything co-scheduled pollutes the measurement.
+  #
+  # The job fails when the held-out gate fails (the harness exits non-zero), so
+  # green means "these coefficients are defensible" — never just "the step ran".
+  # The fixture is uploaded as an artifact either way: a failing fixture carries
+  # `validated: false` and is worth auditing, and copying the committed file
+  # from the artifact rather than from log output is what keeps transcription
+  # errors out of fixtures.
+  calibration:
+    if: github.event_name == 'workflow_dispatch' && inputs.calibration
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.calibration-platforms || '["qvac-macos26-arm64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-win25-x64-gpu"]') }}
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 180
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.test-version || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Configure package registries
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+          ];
+          if (process.env.NPM_TOKEN) {
+            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
+          }
+          if (process.env.PAT_TOKEN) {
+            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
+          }
+          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
+
+      - name: Install and build inference
+        shell: bash
+        working-directory: packages/inference
+        run: |
+          npm install
+          npm run build
+
+      - name: Run calibration harness
+        shell: bash
+        working-directory: packages/inference
+        run: npx bare scripts/calibrate-model-fit.ts --write
+
+      - name: Upload fixture
+        # The fixture is evidence on failure too (`validated: false`), so
+        # upload it regardless of the harness verdict.
+        if: success() || failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: calibration-fixture-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: packages/inference/src/resources/model-fit/calibration/
+          if-no-files-found: error
+          retention-days: 30
