@@ -1,9 +1,11 @@
 #pragma once
 
 #include <exception>
+#include <string>
 #include <utility>
 
-#include <common/log.h>
+#include "common/common.h"
+#include "utils/LoggingMacros.hpp"
 
 template <typename F> class ScopeGuard {
   F fn_;
@@ -22,14 +24,18 @@ public:
   // state inconsistent, and without a line here that happens invisibly.
   // Callers that need to react to a failure must still catch inside the
   // callable — the guard cannot propagate.
+  //
+  // Logging is itself wrapped, because it allocates and takes a mutex: an
+  // exception leaving a catch handler in a noexcept destructor is the same
+  // std::terminate this catch exists to prevent.
   ~ScopeGuard() {
     if (active_) {
       try {
         fn_();
       } catch (const std::exception& ex) {
-        LOG_WRN("ScopeGuard(%s): cleanup threw: %s\n", label_, ex.what());
+        logCleanupFailure(ex.what());
       } catch (...) {
-        LOG_WRN("ScopeGuard(%s): cleanup threw a non-exception\n", label_);
+        logCleanupFailure("non-exception");
       }
     }
   }
@@ -42,4 +48,18 @@ public:
   ScopeGuard& operator=(const ScopeGuard&) = delete;
   ScopeGuard& operator=(ScopeGuard&&) = delete;
   void dismiss() { active_ = false; }
+
+private:
+  // `QLOG_IF` to match the package's other logging header
+  // (model-interface/ReasoningRecoveryHelpers.hpp), so a guard failure honours
+  // the configured verbosity and lands in the same sink as its callers.
+  void logCleanupFailure(const char* reason) const noexcept {
+    try {
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          string_format("ScopeGuard(%s): cleanup threw: %s\n", label_, reason));
+    } catch (...) { // NOLINT(bugprone-empty-catch)
+      // Nothing left to do: the logger is the thing that failed.
+    }
+  }
 };

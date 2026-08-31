@@ -515,14 +515,34 @@ void validateToolNames(const std::vector<common_chat_tool>& tools) {
               "prompt declares two tools named %s",
               forLogMessage(tool.name).c_str()));
     }
+    // Mirrors fabric's `rule_name()` (common/peg-parser.cpp), which is
+    // `std::regex_replace(name, "[^a-zA-Z0-9-]+", "-")`: every byte outside
+    // `[A-Za-z0-9-]` folds to '-', and a *run* of them collapses to a single
+    // '-'. An explicit ASCII range rather than `std::isalnum`, which is
+    // locale-dependent and can accept bytes >= 0x80 that the regex rejects.
+    // Getting this wrong in either direction produces a false negative: an
+    // earlier version treated '_' and '.' as safe and so missed `get_weather`
+    // vs `get-weather`, the most plausible real collision.
+    const auto isRuleSafe = [](char c) {
+      return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+             (c >= '0' && c <= '9') || c == '-';
+    };
     std::string foldedName;
     foldedName.reserve(tool.name.size());
     bool plain = true;
+    bool lastWasFolded = false;
     for (const char c : tool.name) {
-      const bool safe = (std::isalnum(static_cast<unsigned char>(c)) != 0) ||
-                        c == '_' || c == '.' || c == '-';
-      plain = plain && safe;
-      foldedName += safe ? c : '-';
+      const bool safe = isRuleSafe(c);
+      // '_' and '.' fold in fabric but are conventional in tool names, so they
+      // do not trip the "exotic characters" warning below.
+      plain = plain && (safe || c == '_' || c == '.');
+      if (safe) {
+        foldedName += c;
+        lastWasFolded = false;
+      } else if (!lastWasFolded) {
+        foldedName += '-';
+        lastWasFolded = true;
+      }
     }
     if (!plain) {
       QLOG_IF(
@@ -566,6 +586,13 @@ struct ToolChoiceCore {
 ToolChoiceCore resolveToolChoiceCore(
     const std::optional<std::string>& rawToolChoice,
     const std::vector<common_chat_tool>& tools) {
+  // Runs on every path deliberately, which means twice per single-prompt
+  // request (once from `validateToolChoice` before the KV-invalidating try,
+  // once from `resolveToolChoice` at render time) and once on the batch path,
+  // which never calls `validateToolChoice`. Validating twice costs two small
+  // container allocations per request and duplicates any warning; validating
+  // only in `validateToolChoice` would leave the batch path unchecked, which is
+  // the worse trade.
   validateToolNames(tools);
   ToolChoiceCore core;
   if (!rawToolChoice || rawToolChoice->empty() || *rawToolChoice == "auto") {

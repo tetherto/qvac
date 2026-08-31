@@ -36,6 +36,7 @@ add_executable(
   test_recurrent_state_snapshot.cpp
   test_qwen_template.cpp
   test_logging_macros.cpp
+  test_log_safe_string.cpp
   test_llama_lazy_init_backend.cpp
   test_borrow_tracked_shared_buffer.cpp
   test_continuous_batching_default.cpp

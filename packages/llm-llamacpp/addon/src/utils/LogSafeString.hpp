@@ -16,7 +16,11 @@ inline std::string toLowerAscii(std::string_view value) {
   std::string out;
   out.reserve(value.size());
   for (const char c : value) {
-    out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    // Explicit 'A'-'Z' rather than `std::tolower`, which is locale-dependent:
+    // under a non-"C" LC_CTYPE it can fold bytes >= 0x80 and corrupt the UTF-8
+    // in a stop string. Stop-string matching is byte-wise, so leaving
+    // multibyte sequences untouched is what makes it correct.
+    out += (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
   }
   return out;
 }

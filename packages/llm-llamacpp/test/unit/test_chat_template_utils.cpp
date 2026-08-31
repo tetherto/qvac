@@ -389,7 +389,11 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsToolGrammarWhenToolsPresent) {
 }
 
 TEST_F(ChatTemplateUtilsTest, ResolveToolChoicePassesThroughAutoNoneRequired) {
-  const std::vector<common_chat_tool> tools{makeWeatherTool()};
+  // Two tools, so "tools are not narrowed" is observable: against a
+  // one-element list the size assertion below would hold either way.
+  common_chat_tool other = makeWeatherTool();
+  other.name = "get_time";
+  const std::vector<common_chat_tool> tools{makeWeatherTool(), other};
   EXPECT_EQ(
       resolveToolChoice(std::nullopt, tools).choice,
       COMMON_CHAT_TOOL_CHOICE_AUTO);
@@ -402,7 +406,7 @@ TEST_F(ChatTemplateUtilsTest, ResolveToolChoicePassesThroughAutoNoneRequired) {
   const ResolvedToolChoice required =
       resolveToolChoice(std::string("required"), tools);
   EXPECT_EQ(required.choice, COMMON_CHAT_TOOL_CHOICE_REQUIRED);
-  EXPECT_EQ(required.tools.size(), 1u) << "tools list is not narrowed";
+  EXPECT_EQ(required.tools.size(), 2u) << "tools list is not narrowed";
 }
 
 TEST_F(
@@ -617,39 +621,6 @@ TEST(RequireToolChoiceHonouredTest, AutoAndNoneNeverThrow) {
   }
 }
 
-// `forLogMessage` guards every caller string echoed into an error message that
-// reaches JS and the log sinks. Both of its jobs regress invisibly.
-TEST(ForLogMessageTest, PassesThroughShortPrintableInput) {
-  EXPECT_EQ(forLogMessage("get_weather"), "get_weather");
-}
-
-TEST(ForLogMessageTest, ReplacesNonPrintableBytes) {
-  EXPECT_EQ(forLogMessage(std::string("a\nb\tc")), "a?b?c");
-  // Embedded NUL must not terminate the result early.
-  EXPECT_EQ(forLogMessage(std::string("a\0b", 3)), "a?b");
-}
-
-TEST(ForLogMessageTest, TruncatesAtTheEchoCapAndMarksIt) {
-  const std::string longName(K_MAX_LOG_ECHO + 10, 'x');
-  const std::string out = forLogMessage(longName);
-  EXPECT_EQ(out.size(), K_MAX_LOG_ECHO + 3);
-  EXPECT_EQ(out.substr(0, K_MAX_LOG_ECHO), std::string(K_MAX_LOG_ECHO, 'x'));
-  EXPECT_EQ(out.substr(K_MAX_LOG_ECHO), "...");
-}
-
-TEST(ForLogMessageTest, ExactlyAtTheCapIsNotTruncated) {
-  const std::string atCap(K_MAX_LOG_ECHO, 'x');
-  EXPECT_EQ(forLogMessage(atCap), atCap);
-}
-
-// Multibyte input becomes '?' per byte, so the message can never carry
-// invalid UTF-8 across the JS boundary.
-TEST(ForLogMessageTest, MultibyteBecomesPlaceholders) {
-  EXPECT_EQ(forLogMessage(std::string("\xE2\x82\xAC")), "???");
-}
-
-TEST(ToLowerAsciiTest, FoldsAsciiAndLeavesOtherBytes) {
-  EXPECT_EQ(toLowerAscii("ASSISTANT:"), "assistant:");
-  EXPECT_EQ(toLowerAscii("MiXeD_123"), "mixed_123");
-  EXPECT_EQ(toLowerAscii(""), "");
-}
+// `forLogMessage` and `toLowerAscii` are declared in `utils/LogSafeString.hpp`,
+// so their tests live in `test_log_safe_string.cpp` — one test file per header,
+// as elsewhere in this directory.
