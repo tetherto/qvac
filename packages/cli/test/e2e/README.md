@@ -56,8 +56,10 @@ test/e2e/
   helpers/            config · server (in-process) · cli (spawned) · http · fixtures
   smoke.test.ts       harness smoke
   helpers.test.ts     harness self-tests (incl. SSE-via-inject)
-  http/               /v1/* route tests, in-process & modelless
-    *-validation.test.ts, models, routing-cors-auth, audio-*
+  core/               shape-agnostic server behavior, in-process & modelless
+    routing-cors-auth.test.ts, model-load-config.test.ts
+  openai/             /v1/* route tests, in-process & modelless
+    *-validation.test.ts, models, models-catalog, audio-*
   cli/                commands, serve lifecycle & flag behavior (spawned binary)
   model/              everything that loads a real model — runs serially (see below)
     real-model.test.ts            in-process: LLM / embed / whisper

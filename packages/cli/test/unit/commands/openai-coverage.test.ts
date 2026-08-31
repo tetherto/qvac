@@ -11,9 +11,9 @@ import { parseRouter } from '@/openai/coverage/parse-router'
 import { parseSpec } from '@/openai/coverage/parse-spec'
 import { CONSUMER_PRIMARY_ENDPOINTS } from '@/openai/coverage/primary'
 
-const TEST_DIR = dirname(fileURLToPath(import.meta.url))
-const FIXTURE_SPEC = join(TEST_DIR, 'fixtures', 'openai-spec-mini.yaml')
-const FIXTURE_ROUTER = join(TEST_DIR, 'fixtures', 'openai-router-mini.ts')
+const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures')
+const FIXTURE_SPEC = join(FIXTURE_DIR, 'openai-spec-mini.yaml')
+const FIXTURE_ROUTER = join(FIXTURE_DIR, 'openai-router-mini.ts')
 
 describe('openai coverage categorize', () => {
   it('assigns known categories deterministically', () => {

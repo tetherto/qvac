@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
 import { parseSpecWithDependencies } from '@/openai/coverage/parse-spec'
 
-const TEST_DIR = dirname(fileURLToPath(import.meta.url))
-const FIXTURE_SPEC = join(TEST_DIR, 'fixtures', 'openai-spec-mini.yaml')
+const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures')
+const FIXTURE_SPEC = join(FIXTURE_DIR, 'openai-spec-mini.yaml')
 const SPEC_CACHE_NAME = 'openai-spec.yaml'
 const ETAG_CACHE_NAME = 'openai-spec.etag'
 const SHA_CACHE_NAME = 'openai-spec.sha256'
