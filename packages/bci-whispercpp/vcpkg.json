@@ -44,7 +44,7 @@
   ],
   "features": {
     "cuda": {
-      "description": "Enable the CUDA GPU backend (Linux / Windows on NVIDIA). Off by default because it needs nvcc on the build host; opt in with `bare-make generate -D ENABLE_CUDA=ON`. The runtime needs only the NVIDIA driver.",
+      "description": "Enable the CUDA GPU backend (Linux / Windows on NVIDIA). Off by default; the published linux-x64 prebuild enables it, and building it elsewhere needs nvcc on the build host, so opt in with `bare-make generate -D ENABLE_CUDA=ON`. At runtime CUDA engages only where the NVIDIA driver and the CUDA 13 runtime libraries (cudart, cuBLAS) both resolve; hosts without them skip the CUDA backend and fall back to Vulkan or CPU.",
       "supports": "!(osx | ios | android)",
       "dependencies": [
         {
