@@ -112,6 +112,12 @@ resources.define('llm', {
   config: { verbosity: 0, ctx_size: 2048 }
 })
 
+resources.define('llm-small-ctx', {
+  constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 512 }
+})
+
 resources.define('llm-batch', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llm',

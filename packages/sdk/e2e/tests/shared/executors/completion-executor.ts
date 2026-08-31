@@ -1,4 +1,4 @@
-import { completion } from '@qvac/sdk'
+import { completion, ContextOverflowError } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { completionTests } from '../../completion-tests.js'
@@ -71,6 +71,12 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       }
       if (test.testId === 'completion-stop-reason-length') {
         return [test.testId, this.stopReasonLength.bind(this)]
+      }
+      if (test.testId === 'completion-context-boundary-stop') {
+        return [test.testId, this.contextBoundaryStop.bind(this)]
+      }
+      if (test.testId === 'completion-context-overflow-prefill') {
+        return [test.testId, this.contextOverflowPrefill.bind(this)]
       }
       return [test.testId, this.generic.bind(this)]
     })
@@ -320,6 +326,72 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     return {
       passed: true,
       output: `stopReason is "length" as expected`
+    }
+  }
+
+  // Context is never evicted: with predict -1 the only source of a "length"
+  // stop is the context boundary, and the run must keep the tokens it produced.
+  async contextBoundaryStop(params: CompletionTestParams): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
+    const run = completion({
+      modelId: llmModelId,
+      ...params,
+      stream: false
+    } as CompletionFnParams)
+
+    const final = await run.final
+    if (final.stopReason !== 'length') {
+      return {
+        passed: false,
+        output: `Expected stopReason "length" at the context boundary, got ${JSON.stringify(final.stopReason)}`
+      }
+    }
+    if (final.raw.fullText.length === 0) {
+      return {
+        passed: false,
+        output: 'Expected the tokens produced before the boundary to be returned, got empty output'
+      }
+    }
+    return {
+      passed: true,
+      output: `Context boundary stop reported as "length" with ${final.raw.fullText.length} chars retained`
+    }
+  }
+
+  // A prompt that cannot fit the window is refused before any decoding with
+  // the typed ContextOverflowError carrying the parsed sizes.
+  async contextOverflowPrefill(params: CompletionTestParams): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
+    try {
+      const run = completion({
+        modelId: llmModelId,
+        ...params,
+        stream: false
+      } as CompletionFnParams)
+      await run.final
+      return { passed: false, output: 'Expected ContextOverflowError for oversized prefill' }
+    } catch (error) {
+      if (!(error instanceof ContextOverflowError)) {
+        return { passed: false, output: `Expected ContextOverflowError, got: ${error}` }
+      }
+      if (typeof error.promptTokens !== 'number' || typeof error.ctxSize !== 'number') {
+        return {
+          passed: false,
+          output: `Expected parsed sizes on the error, got promptTokens=${error.promptTokens} ctxSize=${error.ctxSize}`
+        }
+      }
+      // The addon guards trigger on `>=`, so equality is emittable; below
+      // the window means the parser extracted the wrong quantity.
+      if (error.promptTokens < error.ctxSize) {
+        return {
+          passed: false,
+          output: `Expected promptTokens of at least ctxSize, got promptTokens=${error.promptTokens} ctxSize=${error.ctxSize}`
+        }
+      }
+      return {
+        passed: true,
+        output: `ContextOverflowError with promptTokens=${error.promptTokens} ctxSize=${error.ctxSize}`
+      }
     }
   }
 

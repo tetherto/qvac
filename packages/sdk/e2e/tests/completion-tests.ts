@@ -50,7 +50,7 @@ interface CompletionTestOptions {
   estimatedDurationMs?: number
   suites?: string[]
   skip?: { reason: string }
-  dependency?: 'llm' | 'llm-batch' | 'none'
+  dependency?: 'llm' | 'llm-batch' | 'llm-small-ctx' | 'none'
 }
 
 // Helper for creating completion tests with common structure
@@ -646,6 +646,49 @@ export const completionStats: TestDefinition = {
   metadata: { category: 'completion', dependency: 'llm', estimatedDurationMs: 10000 }
 }
 
+// Context is never evicted: a generation that fills the small window must stop
+// at the boundary and surface as the public stopReason "length" (predict is -1,
+// so the boundary is the only length source), keeping the tokens it produced.
+// The prompt has no natural terminus, so greedy decode cannot EOS its way out
+// of reaching the boundary.
+export const completionContextBoundaryStop = createCompletionTest(
+  'completion-context-boundary-stop',
+  {
+    history: [
+      {
+        role: 'user',
+        content:
+          'Count upward from 1 forever, one number per line. There is no final number; never stop counting.'
+      }
+    ],
+    stream: false,
+    generationParams: { ...DETERMINISTIC, predict: -1 }
+  },
+  { validation: 'type', expectedType: 'string' },
+  { estimatedDurationMs: 45000, dependency: 'llm-small-ctx' }
+)
+
+// A prompt that cannot fit the window is refused before any decoding with the
+// typed ContextOverflowError carrying the parsed sizes.
+export const completionContextOverflowPrefill = createCompletionTest(
+  'completion-context-overflow-prefill',
+  {
+    history: [
+      {
+        role: 'user',
+        content:
+          'The quick brown fox jumps over the lazy dog and keeps running through the field. '.repeat(
+            120
+          ) + 'After all this text, what is 4+4?'
+      }
+    ],
+    stream: false,
+    generationParams: { ...DETERMINISTIC, predict: 8 }
+  },
+  { validation: 'throws-error', errorContains: 'context' },
+  { estimatedDurationMs: 15000, dependency: 'llm-small-ctx' }
+)
+
 export const completionTests = [
   completionStreaming,
   completionTemperature01,
@@ -690,5 +733,7 @@ export const completionTests = [
   completionReasoningBudgetUnrestricted,
   completionRemoveThinkingFromContext,
   completionStats,
-  completionStopReasonLength
+  completionStopReasonLength,
+  completionContextBoundaryStop,
+  completionContextOverflowPrefill
 ]
