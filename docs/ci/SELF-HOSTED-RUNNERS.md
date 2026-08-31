@@ -4,6 +4,45 @@ QVAC CI uses a mix of **GitHub-hosted** runners (`ubuntu-*`, `macos-*`, `windows
 
 This document explains the **Manual Workspace Cleanup** step used at the start of many workflows, and why two fields are required on that step.
 
+## Addon runner labels (QVAC-14347)
+
+Specialized runner labels used by addon workflows (`cpp-tests-*`, `integration-test-*`, `integration-mobile-test-*`, `reusable-prebuilds.yml`, and related files) live in [`.github/runners.yaml`](../../.github/runners.yaml). `ubuntu-latest` orchestration jobs stay hardcoded.
+
+GitHub evaluates `runs-on` and `strategy.matrix` before any step runs, so callers cannot read that YAML directly. A generated reusable workflow exports the labels as job outputs:
+
+1. Edit [`.github/runners.yaml`](../../.github/runners.yaml).
+2. Run `node .github/scripts/sync-runner-names.mjs` to regenerate [`.github/workflows/reusable-runner-names.yml`](../../.github/workflows/reusable-runner-names.yml). Do not hand-edit the reusable workflow.
+3. Run `node --test .github/scripts/test/runner-names.test.mjs` (or `node .github/scripts/validate-runner-names.mjs`).
+4. In addon workflows, add a bootstrap job and reference outputs instead of hardcoding labels:
+
+```yaml
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  test-cpp:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+```
+
+The `runner_names` job declares an explicit least-privilege `permissions: contents: read` (every job must declare permissions; a reusable-calling job with no block inherits broad defaults and is flagged by the workflow-security audit).
+
+Do **not** add `timeout-minutes:` to the `runner_names` caller job — GitHub forbids `timeout-minutes` on a job that calls a reusable workflow via `uses:` (actionlint: "when a reusable workflow is called with 'uses', 'timeout-minutes' is not available. only following keys are allowed: name, uses, with, secrets, needs, if, permissions"). The timeout is enforced inside the reusable, whose `export` job already sets `timeout-minutes: 5`.
+
+Keep [`.github/actionlint.yaml`](../../.github/actionlint.yaml) in sync: every `qvac-*` label in the catalog must be listed there. Prefer `runner.environment` for cleanup gating so steps do not couple to `qvac-` prefixes.
+
+### `os` is a frozen logical id, not a catalog label
+
+The catalog governs only **where a job runs** — `runs-on:` and matrix `runner:`. It deliberately does **not** manage the `os:` matrix field, `matrix.os == '...'` step conditionals, or `"os":"..."` inside `fromJSON` matrices. `os` is a frozen logical identity: it names a matrix row, gates platform-specific steps (e.g. `if: matrix.os == 'macos-14'` in [`pr-test-inference-addon-cpp.yml`](../../.github/workflows/pr-test-inference-addon-cpp.yml)), and labels artifacts. Self-hosted rows intentionally pair a logical `os` with a different runner (e.g. `os: macos-14` + `runner: qvac-macos26-arm64-gpu`).
+
+Because every catalog-label `os` row also carries an explicit `runner:` from the catalog, `runs-on` never falls back to `matrix.os`. So bumping a catalog label (e.g. `macos_arm64_gpu: qvac-macos26-arm64-gpu` → a new label) never requires touching any `os:` value, and re-imaging the logical `os` id (should the darwin fleet move off the `macos-14` string) is a separate, deliberate edit. `validate-runner-names.mjs` does not flag `os` for this reason. If you ever need `os` values that must track the runner, add an explicit `runner:` from the catalog to that row rather than relying on the `os` string.
+
+### The `runner_names` bootstrap job runs unconditionally
+
+Every wired workflow gains a `runner_names` job with no `if:` / `needs:` gate, so it runs on every PR event even when the consumer matrix is skipped (e.g. an unauthorized fork where `authorize` sets `allowed=false`). This is an accepted cost: the job is `ubuntu-latest`, has no checkout, and only echoes static label strings (~5s). Replicating each consumer's bespoke skip conditions (authorize gates, draft/label checks, CI-router outputs) onto the bootstrap across ~40 heterogeneous workflows would be high-churn and fragile for a job this cheap, and a skipped `runner_names` would cascade its `needs` consumers into skips anyway. Leave it ungated.
+
 ## Manual Workspace Cleanup
 
 Several workflows begin with a step named **Manual Workspace Cleanup** that runs before `actions/checkout`:
@@ -76,6 +115,7 @@ Example: [`.github/workflows/cpp-tests-classification.yml`](../../.github/workfl
 2. Include `working-directory: .` on that step.
 3. Include `if: runner.environment != 'github-hosted'` when the matrix mixes hosted and self-hosted runners.
 4. Prefer `runner.environment` over `startsWith(matrix.runner, 'qvac-')` for any self-hosted-only step.
+5. Addon jobs that need a specialized runner must take the label from `needs.runner_names.outputs.*` (see [Addon runner labels](#addon-runner-labels-qvac-14347)). Do not hardcode `qvac-*`, `macos-14`, or other catalog labels.
 
 ## See also
 

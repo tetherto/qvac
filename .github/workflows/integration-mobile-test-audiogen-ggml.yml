@@ -110,6 +110,11 @@ concurrency:
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Manual (workflow_dispatch) runs must name a device that exists on Device
   # Farm. This gate fails fast BEFORE the (~120 min) build or any Device Farm
   # run, so a typo or an empty selection costs nothing. Skipped for workflow_call.
@@ -173,9 +178,9 @@ jobs:
     # validate-devices is skipped on workflow_call (its `skipped` result keeps
     # this job running); on a manual run a bad/empty device selection blocks the
     # build before it starts, so no long build is wasted on a typo.
-    needs: [validate-devices]
-    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
-    runs-on: ${{ matrix.runner }}
+    needs: [runner_names, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     environment: release
     timeout-minutes: 120
     permissions:
@@ -200,7 +205,7 @@ jobs:
       # shorten the clip to have any chance of fitting a device slot.
       # On workflow_dispatch, build only the chosen platform (functional smoke).
       # workflow_call keeps the benchmark sweep / default both-platform matrix.
-      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64"}]}') || inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q4","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q8","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"sft","use_gpu":false,"warmup":0,"runs":1,"duration":10},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q4","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q8","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"sft","use_gpu":true,"warmup":0,"runs":1,"duration":10},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q4","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q8","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"sft","use_gpu":false,"warmup":0,"runs":1,"duration":10},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q4","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q8","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"sft","use_gpu":true,"warmup":0,"runs":1,"duration":10}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04"}]}') || inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","dit_variant":"turbo-q4","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","dit_variant":"turbo-q8","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","dit_variant":"sft","use_gpu":false,"warmup":0,"runs":1,"duration":10},{"platform":"Android","os":"ubuntu-24.04","dit_variant":"turbo-q4","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","dit_variant":"turbo-q8","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","dit_variant":"sft","use_gpu":true,"warmup":0,"runs":1,"duration":10},{"platform":"iOS","os":"macos-14","dit_variant":"turbo-q4","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","dit_variant":"turbo-q8","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","dit_variant":"sft","use_gpu":false,"warmup":0,"runs":1,"duration":10},{"platform":"iOS","os":"macos-14","dit_variant":"turbo-q4","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","dit_variant":"turbo-q8","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","dit_variant":"sft","use_gpu":true,"warmup":0,"runs":1,"duration":10}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04"},{"platform":"iOS","os":"macos-14"}]}') }}
 
     steps:
       - name: Checkout composite action source
@@ -413,3 +418,5 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
+

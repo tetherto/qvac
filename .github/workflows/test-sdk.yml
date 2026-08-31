@@ -67,6 +67,17 @@ on:
       inference-version:
         description: "npm inference version or dist-tag (blank defaults to latest)"
         type: string
+      test-suite-source:
+        description: "Test-suite source (branch builds packages/test-suite; npm resolves a version; manifest keeps the e2e package.json)"
+        type: choice
+        options:
+          - manifest
+          - branch
+          - npm
+        default: manifest
+      test-suite-version:
+        description: "npm test-suite version or dist-tag (blank defaults to latest)"
+        type: string
       cache-models:
         description: "Reuse downloaded models for Desktop, Electron, and Snap"
         type: boolean
@@ -155,6 +166,14 @@ on:
         default: "branch"
       inference-version:
         description: "Inference version or dist-tag for npm"
+        type: string
+        default: ""
+      test-suite-source:
+        description: "Test-suite source: branch, npm, or manifest"
+        type: string
+        default: "manifest"
+      test-suite-version:
+        description: "Test-suite version or dist-tag for npm"
         type: string
         default: ""
       cache-models:
@@ -358,8 +377,88 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  prepare-test-suite:
+    name: Resolve test-suite source
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      source: ${{ steps.test-suite.outputs.source }}
+      dependency-spec: ${{ steps.test-suite.outputs.dependency-spec }}
+      provenance: ${{ steps.test-suite.outputs.provenance }}
+      artifact-name: ${{ steps.artifact.outputs.name }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+    steps:
+      - id: checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk/e2e/package.json
+            packages/test-suite
+            .github/actions/sdk-e2e-prepare-test-suite
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Configure package registries
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+          ];
+          if (process.env.NPM_TOKEN) {
+            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
+          }
+          if (process.env.PAT_TOKEN) {
+            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
+          }
+          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
+
+      - name: Resolve and prepare test-suite
+        id: test-suite
+        shell: bash
+        env:
+          TEST_SUITE_SOURCE: ${{ inputs.test-suite-source || 'manifest' }}
+          TEST_SUITE_VERSION: ${{ inputs.test-suite-version || '' }}
+          PROJECT_DIRECTORY: packages/sdk/e2e
+          TEST_SUITE_DIRECTORY: packages/test-suite
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/sdk-e2e-test-suite-package
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
+        run: node .github/actions/sdk-e2e-prepare-test-suite/prepare.mjs resolve
+
+      - name: Derive branch artifact name
+        id: artifact
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const name = `sdk-e2e-test-suite-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `name=${name}\n`);
+
+      - name: Upload branch test-suite package
+        if: steps.test-suite.outputs.source == 'branch'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.test-suite.outputs.artifact-path }}
+          if-no-files-found: error
+          retention-days: 7
+
   desktop-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     if: needs.resolve.outputs.run-desktop == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
@@ -376,11 +475,15 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   electron-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     if: needs.resolve.outputs.run-electron == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
@@ -397,11 +500,15 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   snap-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     if: needs.resolve.outputs.run-snap == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
@@ -418,11 +525,15 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   android-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     permissions:
       actions: read
       id-token: write
@@ -448,10 +559,14 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
     secrets: inherit
 
   ios-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     permissions:
       actions: read
       id-token: write
@@ -477,4 +592,8 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
     secrets: inherit
