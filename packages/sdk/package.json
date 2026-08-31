@@ -212,7 +212,7 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
-    "@qvac/audiogen-ggml": "^0.2.1",
+    "@qvac/audiogen-ggml": "^0.3.0",
     "@qvac/asr-ggml": "^0.3.0",
     "@qvac/bci-whispercpp": "^0.7.1",
     "@qvac/classification-ggml": "^0.22.0",
@@ -225,7 +225,6 @@
     "@qvac/llm-llamacpp": "^0.47.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.20.0",
-    "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.1",
     "@qvac/translation-nmtcpp": "^0.12.0",
     "@qvac/tts-ggml": "^0.7.4",

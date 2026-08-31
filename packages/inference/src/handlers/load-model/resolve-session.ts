@@ -9,6 +9,7 @@ import type {
   DownloadSecurityOptions
 } from '@/handlers/load-model/types'
 import { mergeDownloadStats } from '@/handlers/load-model/download-stats'
+import { getRuntimeContext } from '@/runtime/state'
 
 export interface ResolveSessionOptions {
   progressCallback?: ((update: ModelProgressUpdate) => void) | undefined
@@ -109,11 +110,13 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
     modelType: string,
     modelName?: string
   ): ResolveContext {
+    const platform = getRuntimeContext().platform
     return {
       resolveModelPath: resolveForPlugin,
       modelSrc,
       modelType,
-      ...(modelName !== undefined && { modelName })
+      ...(modelName !== undefined && { modelName }),
+      ...(platform !== undefined && { platform })
     }
   }
 
