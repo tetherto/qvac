@@ -175,6 +175,16 @@ export const qvacConfigSchema = z.object({
   deviceDefaults: z.array(devicePatternSchema).optional(),
 
   /**
+   * Create new RAG workspaces on the TurboVec index instead of HyperDB.
+   * The choice is per workspace and one-way: a workspace records its adapter
+   * on first open and keeps it regardless of later config changes. The only
+   * way to move an existing workspace back is `deleteWorkspace`, which
+   * deletes its data.
+   * Defaults to false.
+   */
+  ragTurbovec: z.boolean().optional(),
+
+  /**
    * Inert: we do not read this field. Plugins are registered
    * in code with `registerPlugin` / `plugins([...])`, and there are no
    * defaults — nothing is registered until you register it. Carried over

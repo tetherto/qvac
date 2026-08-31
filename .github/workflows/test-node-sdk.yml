@@ -173,6 +173,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             ${{ inputs.project-directory }}
+            packages/inference
             .github/actions/sdk-e2e-fail-on-failures
             .github/actions/sdk-e2e-prepare-inference
 

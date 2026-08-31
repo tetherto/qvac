@@ -11,7 +11,8 @@
 // streams the engine's output (progress ticks + one interleaved-Int16 PCM
 // chunk) and resolves with the run stats.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
+exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
+exports.audiogenBackendName = audiogenBackendName;
 exports.detectEngineType = detectEngineType;
 const infer_base_1 = require("@qvac/infer-base");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
@@ -33,6 +34,21 @@ const MINIMAX_MAX_INFERENCE_STEPS = 1000;
 const INT32_MAX = 2147483647;
 const FLOAT32_MAX = 3.4028234663852886e38;
 const FLOAT32_MIN_POSITIVE = 1.401298464324817e-45;
+/** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
+exports.AUDIOGEN_BACKEND_NAMES = {
+    0: 'cpu',
+    1: 'metal',
+    2: 'cuda',
+    3: 'vulkan',
+    4: 'opencl',
+    99: 'other'
+};
+/** `undefined` for an unset or unrecognised id, never a guessed name. */
+function audiogenBackendName(backendId) {
+    if (backendId === undefined)
+        return undefined;
+    return exports.AUDIOGEN_BACKEND_NAMES[backendId];
+}
 function asNativeData(data) {
     if (typeof data !== 'object' || data === null)
         return null;
