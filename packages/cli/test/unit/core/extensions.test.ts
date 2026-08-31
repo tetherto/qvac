@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import { buildServer } from '@/serve/index'
+import { extensionErrorCodes, type ServeExtension } from '@/serve/core/extensions'
 import { DEFAULT_EXTENSION, EXTENSIONS, resolveExtensions } from '@/serve/extensions'
 
 function routePaths(printed: string): string[] {
@@ -32,6 +33,41 @@ describe('resolveExtensions', () => {
 
   it('rejects an unknown name and lists what is available', () => {
     assert.throws(() => resolveExtensions(['nope']), /Unknown serve extension "nope".*openai/s)
+  })
+})
+
+describe('extensionErrorCodes', () => {
+  function stub(name: string, errorCodes: Record<string, string>): ServeExtension {
+    // lunte-disable-next-line require-await
+    return { name, description: name, errorCodes, register: async () => {} }
+  }
+
+  it('merges the codes of every mounted extension', () => {
+    assert.deepEqual(
+      extensionErrorCodes([
+        stub('a', { text: 'missing_text' }),
+        stub('b', { input: 'missing_input' })
+      ]),
+      { text: 'missing_text', input: 'missing_input' }
+    )
+  })
+
+  it('allows two extensions to agree on the same field and code', () => {
+    assert.deepEqual(
+      extensionErrorCodes([
+        stub('a', { text: 'missing_text' }),
+        stub('b', { text: 'missing_text' })
+      ]),
+      { text: 'missing_text' }
+    )
+  })
+
+  it('refuses a field two extensions map to different codes', () => {
+    assert.throws(
+      () =>
+        extensionErrorCodes([stub('a', { text: 'missing_text' }), stub('b', { text: 'no_text' })]),
+      /"a" and "b" both map the "text" request field/
+    )
   })
 })
 
