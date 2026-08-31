@@ -8314,10 +8314,6 @@
                         "type": "string"
                       }
                     },
-                    "n_discarded": {
-                      "description": "Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`).",
-                      "type": "number"
-                    },
                     "parallel": {
                       "description": "Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding and splits the KV cache evenly across slots.",
                       "type": "integer",

@@ -109,13 +109,13 @@ const resources = new ResourceManager({
 resources.define('llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+  config: { verbosity: 0, ctx_size: 2048 }
 })
 
 resources.define('llm-batch', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llm',
-  config: { verbosity: 0, ctx_size: 4096, n_discarded: 256, parallel: 4 }
+  config: { verbosity: 0, ctx_size: 4096, parallel: 4 }
 })
 
 resources.define('tools-batch', {
@@ -127,13 +127,13 @@ resources.define('tools-batch', {
 resources.define('finetune-llm', {
   constant: QWEN3_1_7B_INST_Q4,
   type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+  config: { verbosity: 0, ctx_size: 2048 }
 })
 
 resources.define('finetune-llm-qwen35', {
   constant: QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+  config: { verbosity: 0, ctx_size: 2048 }
 })
 
 resources.define('embeddings', {
@@ -254,7 +254,7 @@ resources.define('sharded-embeddings', {
 resources.define('sharded-llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
   type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+  config: { verbosity: 0, ctx_size: 2048 },
   skipPreDownload: true
 })
 

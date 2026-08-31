@@ -42,6 +42,20 @@ test('llmConfigBaseSchema: rejects legacy no_mmap under strict validation', (t) 
   t.is(llmConfigBaseSchema.strict().safeParse({ no_mmap: true }).success, false)
 })
 
+test('llmConfigBaseSchema: rejects retired n_discarded under strict validation', (t) => {
+  t.is(llmConfigBaseSchema.strict().safeParse({ n_discarded: 256 }).success, false)
+})
+
+test('loadModelOptionsToRequestSchema: rejects retired n_discarded for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { n_discarded: 256 }
+    }).success,
+    false
+  )
+})
+
 test('llmConfigSchema: leaves load_mode unset by default', (t) => {
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
