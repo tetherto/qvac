@@ -12,9 +12,18 @@ export interface RagParams {
   adapter?: 'turbovec'
 }
 
+/**
+ * `no-manifest` is a TurboVec workspace that never checkpointed; `no-root`
+ * means it was never a TurboVec workspace, so the test proved nothing.
+ */
+export type TurboVecCheckpointProbe =
+  { state: 'present' } | { state: 'no-manifest'; root: string } | { state: 'no-root'; root: string }
+
 interface TurboVecPlatformOperations {
   prepareWorkspace: (workspace: string) => void | Promise<void>
-  hasCheckpoint: (workspace: string) => boolean | Promise<boolean>
+  inspectCheckpoint: (
+    workspace: string
+  ) => TurboVecCheckpointProbe | Promise<TurboVecCheckpointProbe>
 }
 
 interface RunTurboVecRagOptions extends TurboVecPlatformOperations {
@@ -32,8 +41,21 @@ export function getRagWorkspaceName(params: RagParams, embeddingModelId: string)
   return `${params.workspace}-${workspaceSuffix}`
 }
 
+function describeCheckpoint(probe: TurboVecCheckpointProbe) {
+  switch (probe.state) {
+    case 'present':
+      return 'present'
+    // Path last: failure output is truncated at 200 characters.
+    case 'no-manifest':
+      return `missing, no checkpoint written under ${probe.root}`
+    case 'no-root':
+      return `missing, not a TurboVec workspace, no ${probe.root}`
+  }
+}
+
 export async function runTurboVecRag(options: RunTurboVecRagOptions) {
-  const { params, content, embeddingModelId, workspace, prepareWorkspace, hasCheckpoint } = options
+  const { params, content, embeddingModelId, workspace, prepareWorkspace, inspectCheckpoint } =
+    options
   let workspaceOpen = false
 
   try {
@@ -64,7 +86,7 @@ export async function runTurboVecRag(options: RunTurboVecRagOptions) {
     await ragCloseWorkspace({ workspace })
     workspaceOpen = false
 
-    const checkpoint = (await hasCheckpoint(workspace)) ? 'present' : 'missing'
+    const checkpoint = describeCheckpoint(await inspectCheckpoint(workspace))
     return `${results[0]?.content || ''}\ncheckpoint:${checkpoint}`
   } finally {
     if (workspaceOpen) {

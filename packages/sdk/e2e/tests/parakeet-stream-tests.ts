@@ -128,7 +128,7 @@ export const parakeetStreamIteratorThrow: TestDefinition = {
   metadata: {
     category: 'parakeet',
     dependency: 'parakeet-tdt',
-    estimatedDurationMs: 180000
+    estimatedDurationMs: 200000
   }
 }
 
