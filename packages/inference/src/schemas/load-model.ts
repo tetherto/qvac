@@ -69,7 +69,9 @@ const loadModelCommonFields = {
     .optional()
     .describe(
       'Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.'
-    )
+    ),
+  requireHttpChecksum: z.boolean().optional(),
+  requireSecureTransport: z.boolean().optional()
 }
 
 const loadModelRequestCommonFields = {
@@ -108,7 +110,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   ],
   [ModelType.ggmlOcr, configKeys(ocrConfigSchema)],
   [ModelType.sdcppGeneration, configKeys(sdcppConfigSchema)],
-  [ModelType.audiogenGgml, configKeys(audioGenConfigSchema)],
+  [ModelType.audiogenGgml, configKeys(...audioGenConfigSchema.options)],
   [ModelType.ggmlVla, configKeys(vlaConfigSchema)],
   [ModelType.ggmlClassification, configKeys(classificationConfigSchema)]
 ])
@@ -255,6 +257,27 @@ export const loadModelOptionsSchema = loadModelOptionsBaseSchema.transform((data
   seed: data.seed ?? false
 }))
 
+// Optional passthrough fields common to every load-model request branch. Spread
+// this into each transform so a new one is added in a single place, not copied
+// across every model type.
+function optionalRequestFields(data: {
+  fallbackSrc?: string | undefined
+  requireHttpChecksum?: boolean | undefined
+  requireSecureTransport?: boolean | undefined
+  requestId?: string | undefined
+}) {
+  return {
+    ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
+    ...(data.requireHttpChecksum !== undefined && {
+      requireHttpChecksum: data.requireHttpChecksum
+    }),
+    ...(data.requireSecureTransport !== undefined && {
+      requireSecureTransport: data.requireSecureTransport
+    }),
+    ...(data.requestId !== undefined && { requestId: data.requestId })
+  }
+}
+
 export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
   z
     .object({
@@ -271,8 +294,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: (data.modelConfig ?? {}) as LlmConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -289,8 +311,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -307,8 +328,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -325,8 +345,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -343,8 +362,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: (data.modelConfig ?? {}) as EmbedConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -370,8 +388,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
           : data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -388,8 +405,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -406,8 +422,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -424,8 +439,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -443,8 +457,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -461,8 +474,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -480,8 +492,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     }))
 ])
 
@@ -501,8 +512,7 @@ export const loadCustomPluginToRequestSchema = z
     modelConfig: data.modelConfig ?? {},
     seed: data.seed ?? false,
     withProgress: data.withProgress ?? !!data.onProgress,
-    ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-    ...(data.requestId !== undefined && { requestId: data.requestId })
+    ...optionalRequestFields(data)
   }))
 
 const loadModelOptionsToRequestBaseSchema = z.union([
@@ -525,6 +535,18 @@ const commonModelConfigSchema = z.object({
     .optional()
     .describe(
       'Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.'
+    ),
+  requireHttpChecksum: z
+    .boolean()
+    .optional()
+    .describe(
+      'Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).'
+    ),
+  requireSecureTransport: z
+    .boolean()
+    .optional()
+    .describe(
+      'Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).'
     ),
   requestId: z
     .string()

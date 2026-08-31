@@ -36,22 +36,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   test-cpp:
+    needs: runner_names
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
             platform: linux
-            runner: qvac-ubuntu2404-x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
             arch: x64
           - os: macos-15-xlarge
             platform: darwin
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
             arch: arm64
           - os: windows-2025
             platform: windows
-            runner: qvac-win25-x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
             arch: x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
@@ -268,3 +274,4 @@ jobs:
             cat build/test/unit/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
+

@@ -1,4 +1,4 @@
-import { AssetExecutor, type TestDefinitions } from '@qvac/qvac-test-suite/mobile'
+import { AssetExecutor, type TestDefinitions } from '@qvac/test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { modelSetup, modelTeardown } from '../../shared/resource-lifecycle.js'
 import { resolveBundledAssetUri } from '../asset-uri.js'

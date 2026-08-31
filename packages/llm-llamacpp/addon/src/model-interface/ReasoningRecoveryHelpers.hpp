@@ -18,23 +18,6 @@
 
 namespace qvac_lib_inference_addon_llama::reasoning_recovery {
 
-[[noreturn]] inline void throwUnsupportedRecurrentReasoningCompaction(
-    const char* labelTag,
-    qvac_lib_inference_addon_llama::utils::RecurrentReasoningBoundaryDecision
-        decision) {
-  throw qvac_errors::StatusError(
-      qvac_lib_inference_addon_llama::errors::ADDON_ID,
-      qvac_lib_inference_addon_llama::errors::toString(
-          qvac_lib_inference_addon_llama::errors::FailedToDecode),
-      string_format(
-          "%s remove_thinking_from_context is enabled for a hybrid/recurrent "
-          "model, but recurrent reasoning compaction requires a single-token "
-          "reasoning close marker; unsupported because %s",
-          labelTag,
-          qvac_lib_inference_addon_llama::utils::
-              recurrentReasoningBoundaryFailureReason(decision)));
-}
-
 inline void clearSeqForRecovery(::llama_context* ctx, llama_seq_id seqId) {
   auto* mem = llama_get_memory(ctx);
   if (mem != nullptr) {
@@ -133,7 +116,6 @@ struct CompactionOutcomeHooks {
   std::function<void(
       const qvac_lib_inference_addon_llama::ReasoningBlockCompactor::Outcome&)>
       onCompacted;
-  std::function<void()> onFailedKvIntact;
   std::function<void()> onFailedKvWiped;
 };
 
@@ -144,19 +126,11 @@ inline void handleCompactionOutcome(
   using OutcomeKind =
       qvac_lib_inference_addon_llama::ReasoningBlockCompactor::Outcome::Kind;
   switch (outcome.kind) {
-  case OutcomeKind::CompactedAttention:
-  case OutcomeKind::CompactedRecurrent:
+  case OutcomeKind::Compacted:
     hooks.onCompacted(outcome);
     return;
   case OutcomeKind::NoOp:
     return;
-  case OutcomeKind::FailedKvIntact:
-    hooks.onFailedKvIntact();
-    throw qvac_errors::StatusError(
-        qvac_lib_inference_addon_llama::errors::ADDON_ID,
-        qvac_lib_inference_addon_llama::errors::toString(
-            qvac_lib_inference_addon_llama::errors::FailedToDecode),
-        outcome.failureMessage);
   case OutcomeKind::FailedKvWiped:
     hooks.onFailedKvWiped();
     throw qvac_errors::StatusError(
