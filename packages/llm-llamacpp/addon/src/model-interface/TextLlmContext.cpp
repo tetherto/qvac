@@ -314,6 +314,18 @@ bool TextLlmContext::checkAntiprompt() {
   return false;
 }
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void TextLlmContext::requireSampler() const {
+  if (smpl_) {
+    return;
+  }
+  std::string errorMsg = string_format(
+      "[TextLlm] %s: no sampler is installed; a previous request's generation "
+      "parameter restore failed to rebuild it\n",
+      __func__);
+  throw qvac_errors::StatusError(
+      ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+}
+
 void TextLlmContext::tokenizeChat(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools,
@@ -323,6 +335,12 @@ void TextLlmContext::tokenizeChat(
         string_format("[TextLlm] %s: no chat messages provided\n", __func__);
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
+  // A previous request's generation-params restore can fail to rebuild the
+  // sampler and leave it null (see GenerationParamsApply). Reject the request
+  // here: fabric's `common_sampler_sample` dereferences without a null check,
+  // so without this the failure surfaces as a SIGSEGV that takes the whole
+  // runtime down instead of one request.
+  requireSampler();
 
   std::string prompt;
   common_chat_templates_inputs inputs;
@@ -918,6 +936,11 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     // Forced tokens are emitted output, so the sampler's history must see
     // them: `prev` is what `common_sampler_prev_str` returns and
     // `checkAntiprompt` scans, and the chain owns the penalty state.
+    //
+    // Scope: this is the batch path. The single-prompt path substitutes in
+    // `handleReasoningEOS`, which injects the same tokens without accepting
+    // them at all — a pre-existing asymmetry this comment does not claim to
+    // have fixed. See the note at that injection site.
     //
     // `is_generated = false` is load-bearing, not a default. A forced token
     // was never grammar-sampled, so the grammar may not accept it — and
@@ -1729,6 +1752,14 @@ bool TextLlmContext::handleReasoningEOS(
   ++nPast;
   ++lastGeneratedTokenCount_;
 
+  // KNOWN LIMITATION, pre-existing: the tokens injected here are streamed and
+  // decoded but never handed to `common_sampler_accept`, so on this
+  // single-prompt path the sampler's `prev` — what `checkAntiprompt` scans —
+  // omits them, unlike the batch path's forced-token branch in
+  // `onLogitsReady`. Fixing it means an accept with `is_generated = false`
+  // here; left alone because this function's decode bookkeeping is shared with
+  // recurrent rollback and is out of scope for the tool-grammar work.
+  //
   // Close marker just committed — record span end before injecting
   // the trailing newlines (they are excluded from the span).
   // Seed the replay buffer with the substituted close-tag token id

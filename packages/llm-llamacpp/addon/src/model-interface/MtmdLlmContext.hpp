@@ -284,6 +284,9 @@ private:
       const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
       bool isCacheLoaded);
 
+  // See TextLlmContext::requireSampler.
+  void requireSampler() const;
+
   /**
    * The init vision context method. It initializes the vision context.
    *

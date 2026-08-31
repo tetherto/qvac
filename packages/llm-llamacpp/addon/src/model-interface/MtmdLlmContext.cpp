@@ -322,6 +322,18 @@ bool MtmdLlmContext::checkAntiprompt() {
   return false;
 }
 
+void MtmdLlmContext::requireSampler() const {
+  if (smpl_) {
+    return;
+  }
+  std::string errorMsg = string_format(
+      "[MtmdLlm] %s: no sampler is installed; a previous request's generation "
+      "parameter restore failed to rebuild it\n",
+      __func__);
+  throw qvac_errors::StatusError(
+      ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+}
+
 void MtmdLlmContext::tokenizeChat(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
@@ -331,6 +343,9 @@ void MtmdLlmContext::tokenizeChat(
         string_format("[MtmdLlm] %s: no chat messages provided\n", __func__);
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
+  // See TextLlmContext::tokenizeChat: a null sampler left by a failed restore
+  // must fail this request, not dereference at the next sample site.
+  requireSampler();
 
   common_chat_templates_inputs inputs;
   std::string formattedChat;
