@@ -3,7 +3,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as crypto from 'node:crypto'
-import { BaseExecutor, type TestResult } from '@qvac/qvac-test-suite'
+import { BaseExecutor, type TestResult } from '@qvac/test-suite'
 import {
   downloadResilienceRegistrySuspend,
   downloadResilienceHttpNetdrop,
