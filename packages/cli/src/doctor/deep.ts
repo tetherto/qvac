@@ -15,6 +15,36 @@ const DEFAULT_TIMEOUT_MS = 45_000
 const MAX_OUTPUT_CHARS = 16_384
 const TERMINATION_GRACE_MS = 2_000
 
+// Mirrors the SDK's own default handshake budget. Not imported from @qvac/sdk
+// on purpose: the doctor has to keep working when the installed SDK is the
+// thing that is broken.
+const DEFAULT_RPC_INIT_TIMEOUT_MS = 30_000
+const RPC_INIT_TIMEOUT_ENV_VAR = 'QVAC_RPC_INIT_TIMEOUT_MS'
+// The probe does more than the handshake — import, worker spawn, teardown — so
+// it has always allowed this much beyond the handshake budget. Preserve that
+// margin rather than inventing a new one.
+const PROBE_TIMEOUT_HEADROOM_MS = DEFAULT_TIMEOUT_MS - DEFAULT_RPC_INIT_TIMEOUT_MS
+
+/**
+ * The forked probe inherits this process's environment, so the SDK inside it
+ * honours `QVAC_RPC_INIT_TIMEOUT_MS`. Without matching it here the probe's own
+ * cap would kill a worker the SDK was still legitimately waiting for, and
+ * report the raised budget as a timeout.
+ *
+ * Only the environment variable is read. `qvac doctor` deliberately does not
+ * load the project's config, so an `rpcInitTimeoutMs` set only in
+ * `qvac.config.*` does not extend the probe.
+ */
+export function resolveProbeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env[RPC_INIT_TIMEOUT_ENV_VAR]
+  if (raw === undefined || raw.trim() === '') return DEFAULT_TIMEOUT_MS
+
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed <= 0) return DEFAULT_TIMEOUT_MS
+
+  return Math.max(DEFAULT_TIMEOUT_MS, parsed + PROBE_TIMEOUT_HEADROOM_MS)
+}
+
 export interface SdkRuntimeProbeResult {
   outcome: 'pass' | 'fail' | 'timeout' | 'spawn-error' | 'protocol-error'
   durationMs: number
@@ -112,7 +142,7 @@ export function probeSdkRuntime(
   projectRoot: string,
   options: SdkRuntimeProbeOptions = {}
 ): Promise<SdkRuntimeProbeResult> {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const timeoutMs = options.timeoutMs ?? resolveProbeTimeoutMs()
   const maxOutputChars = options.maxOutputChars ?? MAX_OUTPUT_CHARS
   const startedAt = Date.now()
   let child: ReturnType<typeof fork>
@@ -289,7 +319,7 @@ const FAILURE_RULES: readonly FailureRule[] = [
     matches: (result, diagnostics) =>
       result.outcome === 'timeout' ||
       /RPC_INIT_TIMEOUT|RPCInitTimeoutError|RPC initialization timed out/i.test(diagnostics),
-    hint: 'The SDK worker did not complete its startup handshake. Re-run with --verbose to inspect the bounded worker output. On slow storage or embedded hardware, raise the limit with QVAC_RPC_INIT_TIMEOUT_MS or rpcInitTimeoutMs in qvac.config.*.'
+    hint: 'The SDK worker did not complete its startup handshake. Re-run with --verbose to inspect the bounded worker output. On slow storage or embedded hardware, re-run as QVAC_RPC_INIT_TIMEOUT_MS=<ms> qvac doctor, which raises this probe as well as the SDK handshake budget; set rpcInitTimeoutMs in qvac.config.* to make it permanent for the app.'
   },
   {
     id: 'spawn-error',

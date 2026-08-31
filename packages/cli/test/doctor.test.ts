@@ -27,6 +27,7 @@ import {
   checkSdkRuntime,
   classifySdkRuntimeFailure,
   probeSdkRuntime,
+  resolveProbeTimeoutMs,
   type SdkRuntimeProbeResult
 } from '../src/doctor/deep.js'
 import {
@@ -476,6 +477,28 @@ describe('deep SDK runtime probe', () => {
       }
     } finally {
       fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('probe cap stays at 45s when the handshake budget is not raised', () => {
+    assert.equal(resolveProbeTimeoutMs({}), 45_000)
+    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '' }), 45_000)
+    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '30000' }), 45_000)
+    // Shortening the handshake must not shorten the probe: it also imports,
+    // spawns and tears down.
+    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '5000' }), 45_000)
+  })
+
+  it('probe cap follows a raised handshake budget, keeping the 15s margin', () => {
+    // Without this the probe would kill the worker at 45s and report a timeout
+    // for a budget the user had already raised to 120s.
+    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '120000' }), 135_000)
+    assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: '60000' }), 75_000)
+  })
+
+  it('probe cap ignores a malformed handshake budget', () => {
+    for (const value of ['abc', '0', '-5', '1.5', 'Infinity']) {
+      assert.equal(resolveProbeTimeoutMs({ QVAC_RPC_INIT_TIMEOUT_MS: value }), 45_000)
     }
   })
 

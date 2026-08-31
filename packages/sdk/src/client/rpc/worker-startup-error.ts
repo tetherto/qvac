@@ -5,10 +5,16 @@ export interface WorkerExit {
   signal: string | null
 }
 
+/**
+ * Always returns a cause, including for a worker that is still running and has
+ * written nothing. That case carries no diagnostic text, but `workerExited:
+ * false` is the answer to the question this error exists to settle — a slow
+ * worker may be worth waiting longer for, a dead one never is.
+ */
 export function createRPCInitTimeoutCause(
   stderrTail: string,
   workerExit: WorkerExit | null
-): WorkerStartupError | undefined {
+): WorkerStartupError {
   const stderr = stderrTail.trimEnd()
 
   if (workerExit) {
@@ -18,10 +24,6 @@ export function createRPCInitTimeoutCause(
       stderr
     )
   }
-
-  // A silent process that is still running carries no diagnostic worth
-  // attaching; the bare timeout already says everything we know.
-  if (!stderr) return undefined
 
   return new WorkerStartupError(
     'Worker did not establish IPC before the RPC initialization timeout',
