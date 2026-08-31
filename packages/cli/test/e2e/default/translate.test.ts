@@ -59,6 +59,15 @@ describe('qvac translate: validation', () => {
     assertStatusAndError(res, 400, 'missing_text')
   })
 
+  it('rejects a batch over the input cap with its own code', async () => {
+    const res = await server().inject({
+      method: 'POST',
+      url: '/qvac/v1/translate',
+      payload: { model: 'ta-en', text: Array.from({ length: 101 }, () => 'a') }
+    })
+    assertStatusAndError(res, 400, 'too_many_inputs')
+  })
+
   it('rejects an unknown field', async () => {
     const res = await server().inject({
       method: 'POST',
