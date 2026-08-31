@@ -14,6 +14,7 @@
     "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
     "example:minimax": "bare examples/generate-music-minimax.js",
     "example:cover": "bare examples/generate-cover.js",
+    "example:lego": "bare examples/generate-lego.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "node scripts/check-generated.mjs",
     "test:dts": "tsc --noEmit -p tsconfig.dts.json",

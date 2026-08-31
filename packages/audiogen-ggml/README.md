@@ -225,7 +225,20 @@ const response = await gen.run('clean electric guitar with syncopated fills', {
 Valid `track` names: `vocals`, `backing_vocals`, `drums`, `bass`, `guitar`,
 `keyboard`, `percussion`, `strings`, `synth`, `fx`, `brass`, `woodwinds`.
 Output length locks to the source length. Takes vary per seed; generate a few
-and keep the best.
+and keep the best. The base DiT is not in the registry `ditVariant` set yet,
+so pass it as an explicit `files.ditModel` path next to `modelDir` (which
+still resolves the three fixed stages).
+
+See [`examples/generate-lego.js`](examples/generate-lego.js) for a runnable
+stem example using raw stereo 48 kHz float PCM input:
+
+```bash
+ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  AUDIOGEN_BASE_DIT_MODEL=/path/to/acestep-v15-base-Q8_0.gguf \
+  AUDIOGEN_SOURCE_PCM=source.f32le \
+  npm run example:lego
+```
 
 See [`examples/generate-cover.js`](examples/generate-cover.js) for a runnable
 cover example using raw stereo 48 kHz float PCM input.

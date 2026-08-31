@@ -684,6 +684,13 @@ class AudioGen {
         if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
             throw invalidInput("taskType 'lego' requires track: one of " + [...LEGO_TRACKS].join('|'));
         }
+        if (opts.track !== undefined && taskType !== 'lego') {
+            throw invalidInput("track is only valid with taskType 'lego'");
+        }
+        const guidanceScale = optionalFiniteNumber(opts.guidanceScale, 'guidanceScale');
+        if (guidanceScale !== undefined && guidanceScale < 0) {
+            throw invalidInput('guidanceScale must be >= 0 (0 = engine default)');
+        }
         return {
             type: 'text',
             input: caption,
@@ -708,7 +715,7 @@ class AudioGen {
             sourceAudio,
             taskType,
             track: opts.track,
-            guidanceScale: optionalFiniteNumber(opts.guidanceScale, 'guidanceScale'),
+            guidanceScale,
             audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
             coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
         };
