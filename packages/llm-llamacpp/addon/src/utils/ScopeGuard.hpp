@@ -34,8 +34,7 @@ public:
     }
   }
   ScopeGuard(ScopeGuard&& other) noexcept
-      : fn_(std::move(other.fn_)),
-        label_(other.label_),
+      : fn_(std::move(other.fn_)), label_(other.label_),
         active_(other.active_) {
     other.dismiss();
   }
