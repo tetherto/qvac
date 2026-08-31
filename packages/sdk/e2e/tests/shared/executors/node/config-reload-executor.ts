@@ -82,7 +82,7 @@ export class ConfigReloadExecutor extends AbstractModelExecutor<typeof configRel
       await loadModel({
         modelId: whisperModelId,
         modelType: 'llamacpp-completion',
-        modelConfig: { n_ctx: 2048 }
+        modelConfig: { ctx_size: 2048 }
       } as never)
       return { passed: false, output: 'Expected error for model type mismatch' }
     } catch (error) {

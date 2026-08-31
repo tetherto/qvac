@@ -230,6 +230,12 @@ export interface AudiogenStats {
     /** 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other. */
     backendId?: number;
 }
+/** Name of a backend `AudiogenStats.backendId` can resolve to. */
+export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'other';
+/** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
+export declare const AUDIOGEN_BACKEND_NAMES: Readonly<Record<number, AudiogenBackendName>>;
+/** `undefined` for an unset or unrecognised id, never a guessed name. */
+export declare function audiogenBackendName(backendId: number | undefined): AudiogenBackendName | undefined;
 export declare function detectEngineType(files?: AudioGenFiles, explicitEngine?: AudioGenEngine): AudioGenEngine;
 type EditRunner = (source: AudioEditSource, operations: readonly AudioEditOperationData[], options: AudioEditRunOptions) => Promise<QvacResponse<AudiogenOutputChunk>>;
 /**

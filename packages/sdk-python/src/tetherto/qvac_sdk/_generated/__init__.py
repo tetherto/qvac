@@ -9,6 +9,7 @@ from __future__ import annotations
 from .models import (
     AssessModelFitRequest,
     AssessModelFitResponse,
+    AudioGenEngine,
     AudioGenStreamRequest,
     AudioGenStreamResponse,
     AudioGenTaskType,
@@ -105,6 +106,7 @@ from .models.translate import Request as TranslateRequest
 __all__ = [
     "AssessModelFitRequest",
     "AssessModelFitResponse",
+    "AudioGenEngine",
     "AudioGenStreamRequest",
     "AudioGenStreamResponse",
     "AudioGenTaskType",
