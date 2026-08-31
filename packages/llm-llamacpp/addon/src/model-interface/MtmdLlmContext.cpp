@@ -354,11 +354,12 @@ void MtmdLlmContext::tokenizeChat(
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
 
-  // See TextLlmContext::tokenizeChat for the tool_choice rules.
-  const ResolvedToolChoice toolChoice =
+  // See TextLlmContext::tokenizeChat for the tool_choice rules, and for why
+  // this is not const.
+  ResolvedToolChoice toolChoice =
       resolveToolChoice(renderOverrides_.toolChoice, tools);
   if (!toolChoice.tools.empty()) {
-    inputs.tools = toolChoice.tools;
+    inputs.tools = std::move(toolChoice.tools);
     inputs.tool_choice = toolChoice.choice;
   }
   const PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
@@ -1673,6 +1674,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
   } else {
     tokenId = forcedTokens_.front();
     forcedTokens_.erase(forcedTokens_.begin());
+    // Mirrors TextLlmContext::onLogitsReady: the sampler's history must see
+    // emitted forced tokens, but `is_generated = false` keeps them out of
+    // the grammar, which never sampled them and would throw on an emptied
+    // stack. See the long comment there for the full rationale.
+    common_sampler_accept(smpl_.get(), tokenId, false);
   }
 
   std::string tokenStr =

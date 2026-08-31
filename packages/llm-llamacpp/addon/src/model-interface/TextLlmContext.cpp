@@ -353,10 +353,12 @@ void TextLlmContext::tokenizeChat(
   // calls, so composing gains nothing over the sampler-side OUTPUT_FORMAT
   // grammar and silently yields a never-arming lazy grammar on several
   // model families.
-  const ResolvedToolChoice toolChoice =
+  // Not const: `tools` is moved into `inputs` below. Only `.choice` is read
+  // afterwards.
+  ResolvedToolChoice toolChoice =
       resolveToolChoice(renderOverrides_.toolChoice, tools);
   if (!toolChoice.tools.empty()) {
-    inputs.tools = toolChoice.tools;
+    inputs.tools = std::move(toolChoice.tools);
     inputs.tool_choice = toolChoice.choice;
   }
   const PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
@@ -913,12 +915,21 @@ SequenceStepResult TextLlmContext::onLogitsReady(
   } else {
     tokenId = forcedTokens_.front();
     forcedTokens_.erase(forcedTokens_.begin());
-    // Forced tokens are emitted output, so the sampler must see them too.
-    // Without this the grammar and the reasoning-budget sampler drift from
-    // the text actually produced, which an attached tool grammar then
-    // rejects. (The related EOS-substitution drift below is not fixed here —
-    // see the comment at the substitution site.)
-    common_sampler_accept(smpl_.get(), tokenId, true);
+    // Forced tokens are emitted output, so the sampler's history must see
+    // them: `prev` is what `common_sampler_prev_str` returns and
+    // `checkAntiprompt` scans, and the chain owns the penalty state.
+    //
+    // `is_generated = false` is load-bearing, not a default. A forced token
+    // was never grammar-sampled, so the grammar may not accept it — and
+    // `llama_grammar_accept_impl` assigns the emptied stack *before* it
+    // throws (fabric src/llama-grammar.cpp:1516-1522), so feeding one both
+    // breaks the grammar and throws from a call `common_sampler_accept` does
+    // not guard. That throw would escape to ContinuousBatchScheduler's step
+    // handler, which fails every co-scheduled request, not just this one.
+    // `false` skips `grmr` and `rbudget` and cannot throw; the grammar
+    // stays out of step with the substituted text, which is the KNOWN
+    // LIMITATION recorded at the substitution site below.
+    common_sampler_accept(smpl_.get(), tokenId, false);
   }
 
   std::string tokenStr =
@@ -996,6 +1007,11 @@ SequenceStepResult TextLlmContext::onLogitsReady(
       // sample site would skip — leaving a worse, permanent drift. Left as
       // is deliberately; needs the generation loop restructured around a
       // single accept point.
+      //
+      // The forced newlines queued below are deliberately NOT fed to the
+      // grammar (see the `is_generated = false` accept above): doing so
+      // would turn this bounded drift into a throw that fails every
+      // co-scheduled request.
       tokenId = reasoningState_.cached_close_tag_token;
       tokenStr =
           common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
