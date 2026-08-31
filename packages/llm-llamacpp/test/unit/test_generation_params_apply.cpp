@@ -429,3 +429,74 @@ TEST(
   EXPECT_TRUE(params.sampling.reasoning_budget_forced.empty());
   EXPECT_TRUE(params.sampling.generation_prompt.empty());
 }
+
+// Regression: a tools request leaves `generation_prompt` (and the rest of the
+// tool grammar's companion fields) in the context's long-lived sampling block,
+// because `tool_choice` is excluded from `hasOverrides()` and so takes no
+// restore snapshot. `common_grammar_needs_prefill` is true for OUTPUT_FORMAT
+// too, so inheriting an assistant prefix into a json_schema request made
+// fabric prefill it into a JSON grammar and throw — permanently, since that
+// happens before `tokenizeChat` and so before the clear there could run.
+TEST(GenerationParamsApplyTest, InstallingASchemaClearsToolGrammarCompanions) {
+  common_params_sampling sampling;
+  // State a preceding `tool_choice: "required"` request would leave behind.
+  sampling.grammar =
+      common_grammar(COMMON_GRAMMAR_TYPE_TOOL_CALLS, "root ::= \"x\"");
+  sampling.generation_prompt = "<|im_start|>assistant\n<think>\n";
+  sampling.grammar_lazy = true;
+  sampling.grammar_triggers = {
+      common_grammar_trigger{COMMON_GRAMMAR_TRIGGER_TYPE_TOKEN, "<t>", 101}};
+  sampling.preserved_tokens = {101};
+
+  GenerationParams overrides;
+  overrides.json_schema = R"({"type":"object"})";
+  int nPredict = -1;
+  applyGenerationOverridesToSampling(sampling, nPredict, overrides);
+
+  EXPECT_EQ(sampling.grammar.type, COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT);
+  EXPECT_TRUE(sampling.generation_prompt.empty())
+      << "an assistant prefix prefilled into a JSON grammar throws";
+  EXPECT_FALSE(sampling.grammar_lazy);
+  EXPECT_TRUE(sampling.grammar_triggers.empty());
+  EXPECT_TRUE(sampling.preserved_tokens.empty());
+}
+
+// The same clear applies to a per-request `grammar`, which is USER-typed and
+// does not need prefill — but inheriting a stale lazy trigger would make the
+// caller's own grammar arm on a token it never asked for.
+TEST(GenerationParamsApplyTest, InstallingAUserGrammarClearsToolGrammarCompanions) {
+  common_params_sampling sampling;
+  sampling.grammar =
+      common_grammar(COMMON_GRAMMAR_TYPE_TOOL_CALLS, "root ::= \"x\"");
+  sampling.generation_prompt = "<|im_start|>assistant\n";
+  sampling.grammar_lazy = true;
+
+  GenerationParams overrides;
+  overrides.grammar = "root ::= \"yes\" | \"no\"";
+  int nPredict = -1;
+  applyGenerationOverridesToSampling(sampling, nPredict, overrides);
+
+  EXPECT_EQ(sampling.grammar.type, COMMON_GRAMMAR_TYPE_USER);
+  EXPECT_TRUE(sampling.generation_prompt.empty());
+  EXPECT_FALSE(sampling.grammar_lazy);
+}
+
+// A request that installs no grammar must not touch the companions: the tool
+// grammar it inherits is still the live one, and `configureTemplateDerivedSampling`
+// owns clearing it at render time.
+TEST(GenerationParamsApplyTest, NoGrammarOverrideLeavesCompanionsAlone) {
+  common_params_sampling sampling;
+  sampling.grammar =
+      common_grammar(COMMON_GRAMMAR_TYPE_TOOL_CALLS, "root ::= \"x\"");
+  sampling.generation_prompt = "<|im_start|>assistant\n";
+  sampling.grammar_lazy = true;
+
+  GenerationParams overrides;
+  overrides.temp = 0.5F;
+  int nPredict = -1;
+  applyGenerationOverridesToSampling(sampling, nPredict, overrides);
+
+  EXPECT_EQ(sampling.grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
+  EXPECT_EQ(sampling.generation_prompt, "<|im_start|>assistant\n");
+  EXPECT_TRUE(sampling.grammar_lazy);
+}

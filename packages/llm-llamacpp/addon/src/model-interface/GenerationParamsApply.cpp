@@ -65,11 +65,13 @@ void applyGenerationOverridesToSampling(
   // it did. An earlier revision tried to compose the two; fabric's handlers
   // return on the response-format branch before the tool-call parser, so the
   // composition was never possible and was reverted.
+  bool installedGrammar = false;
   if (overrides.json_schema) {
     try {
       auto parsed = nlohmann::ordered_json::parse(*overrides.json_schema);
       sampling.grammar = common_grammar(
           COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, json_schema_to_grammar(parsed));
+      installedGrammar = true;
     } catch (const std::exception& ex) {
       throw qvac_errors::StatusError(
           ADDON_ID,
@@ -80,6 +82,30 @@ void applyGenerationOverridesToSampling(
   } else if (overrides.grammar) {
     sampling.grammar =
         common_grammar(COMMON_GRAMMAR_TYPE_USER, *overrides.grammar);
+    installedGrammar = true;
+  }
+
+  // Replacing the grammar means the previous grammar's companion fields no
+  // longer belong to it, so clear them here rather than inheriting them.
+  // Gated on having actually installed one: a request with no grammar override
+  // inherits the live tool grammar legitimately, and clearing its companions
+  // here would strip the triggers it needs.
+  //
+  // `generation_prompt` is the load-bearing one. A tool-grammar request sets it
+  // (an assistant prefix a TOOL_CALLS grammar must skip), and because
+  // `tool_choice` is excluded from `hasOverrides()` such a request takes no
+  // restore snapshot — so the value survives in the context's long-lived
+  // sampling params. `common_grammar_needs_prefill` is true for OUTPUT_FORMAT
+  // as well, so without this clear fabric would prefill an assistant header
+  // into a JSON grammar and `llama_grammar_accept_token` throws. That runs
+  // before `tokenizeChat`, so `applyReasoningBudget`'s own clear never gets a
+  // chance and every later `json_schema` request on this context fails the
+  // same way, with fabric's sliced rethrow reporting only "std::exception".
+  if (installedGrammar) {
+    sampling.generation_prompt.clear();
+    sampling.grammar_lazy = false;
+    sampling.grammar_triggers.clear();
+    sampling.preserved_tokens.clear();
   }
 }
 
@@ -151,12 +177,25 @@ std::function<void()> applyGenerationParamsToContext(
     // other in-flight job in the runtime. The restored params are already
     // committed above; losing the sampler only fails the next request.
     try {
-      smpl.reset(common_sampler_init(model, params.sampling));
+      // `common_sampler_init` has two failure modes: it throws on a grammar it
+      // cannot parse, and returns nullptr on other bad inputs. Both must null
+      // `smpl`, and both must say so — a silent null is the one outcome that
+      // reaches a sample site unexplained.
+      common_sampler* rebuilt = common_sampler_init(model, params.sampling);
+      if (rebuilt == nullptr) {
+        LOG_WRN(
+            "%s: sampler rebuild returned null while restoring per-request "
+            "generation params; the next request will be rejected\n",
+            __func__);
+      }
+      smpl.reset(rebuilt);
     } catch (const std::exception& ex) {
       // Null it rather than leaving the request's sampler installed: the
       // params above now read as the baseline, so a following request whose
       // derived config matches skips the rebuild and would generate under
-      // this request's grammar. A null sampler fails loudly instead.
+      // this request's grammar. Both `tokenizeChat`s reject a null sampler at
+      // request entry, which is what makes this a failed request rather than a
+      // null dereference at the next sample site.
       smpl.reset();
       LOG_WRN(
           "%s: failed to rebuild the sampler while restoring "
