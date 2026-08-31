@@ -5,7 +5,7 @@ import {
   REASONING_BUDGET_MAX
 } from '@/schemas/llamacpp-config'
 import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
-import { ModelType } from '@/schemas'
+import { ModelType, deviceConfigDefaultsSchema } from '@/schemas'
 
 const LLM_BASE = {
   modelType: ModelType.llamacppCompletion,
@@ -54,6 +54,37 @@ test('loadModelOptionsToRequestSchema: rejects retired n_discarded for LLM', (t)
     }).success,
     false
   )
+})
+
+// The raw wire request must fail closed too: a non-strict modelConfig would
+// strip the retired key and silently disable sliding for an older or
+// hand-rolled client instead of failing the load.
+test('loadModelSrcRequestSchema: rejects retired n_discarded for LLM', (t) => {
+  t.is(
+    loadModelSrcRequestSchema.safeParse({
+      type: 'loadModel',
+      modelType: ModelType.llamacppCompletion,
+      modelSrc: 'model.gguf',
+      modelConfig: { n_discarded: 256 }
+    }).success,
+    false
+  )
+})
+
+// Same for a stale deployment config: deviceDefaults carrying the retired
+// key must fail config validation, on the canonical key and the alias.
+test('deviceConfigDefaultsSchema: rejects retired n_discarded on both keys', (t) => {
+  t.is(
+    deviceConfigDefaultsSchema.safeParse({
+      [ModelType.llamacppCompletion]: { ctx_size: 2048, n_discarded: 256 }
+    }).success,
+    false
+  )
+  t.is(
+    deviceConfigDefaultsSchema.safeParse({ llm: { ctx_size: 2048, n_discarded: 256 } }).success,
+    false
+  )
+  t.is(deviceConfigDefaultsSchema.safeParse({ llm: { ctx_size: 2048 } }).success, true)
 })
 
 test('llmConfigSchema: leaves load_mode unset by default', (t) => {

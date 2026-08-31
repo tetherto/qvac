@@ -33,3 +33,12 @@ def test_load_mode_is_optional() -> None:
     )
 
     assert config.load_mode is None
+
+
+def test_retired_n_discarded_is_rejected() -> None:
+    # The generated model forbids extra fields, so the retired sliding-window
+    # key fails construction instead of being silently dropped from the wire.
+    with pytest.raises(ValidationError):
+        LoadModelSrcRequestLlamacppCompletionModelConfig.model_validate(
+            {"ctx_size": 2048, "n_discarded": 256}
+        )

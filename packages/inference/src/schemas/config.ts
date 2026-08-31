@@ -46,7 +46,7 @@ export type DeviceMatch = z.infer<typeof deviceMatchSchema>
 export const deviceConfigDefaultsSchema = z
   .object({
     // Canonical keys
-    [ModelType.llamacppCompletion]: llmConfigBaseSchema.optional(),
+    [ModelType.llamacppCompletion]: llmConfigBaseSchema.strict().optional(),
     [ModelType.llamacppEmbedding]: embedConfigBaseSchema.optional(),
     [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
     [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
@@ -56,7 +56,7 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.sdcppGeneration]: sdcppConfigSchema.partial().optional(),
     [ModelType.ggmlVla]: vlaConfigSchema.partial().optional(),
     // Alias keys (user-friendly)
-    [AliasKeys.llm]: llmConfigBaseSchema.optional(),
+    [AliasKeys.llm]: llmConfigBaseSchema.strict().optional(),
     [AliasKeys.embeddings]: embedConfigBaseSchema.optional(),
     [AliasKeys.whisper]: whisperConfigSchema.partial().optional(),
     [AliasKeys.parakeet]: parakeetConfigSchema.partial().optional(),

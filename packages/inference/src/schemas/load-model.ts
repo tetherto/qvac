@@ -563,7 +563,12 @@ const commonModelConfigSchema = z.object({
 export const loadLlmModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppCompletion),
-    modelConfig: llmConfigBaseSchema
+    // Strict so a retired key (`n_discarded`) fails the load on the wire —
+    // raw RPC and generated clients included — instead of being stripped
+    // and silently changing behaviour. Also what marks the contract's
+    // modelConfig `additionalProperties: false`, which the Python
+    // generator turns into `extra="forbid"`.
+    modelConfig: llmConfigBaseSchema.strict()
   })
   .strict()
 
