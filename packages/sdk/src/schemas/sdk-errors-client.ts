@@ -25,6 +25,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   RPC_INIT_TIMEOUT: 50204,
   WORKER_CRASHED: 50205,
   WORKER_SHUTDOWN: 50206,
+  WORKER_STARTUP_FAILED: 50207,
 
   // Build/Bundle Errors (50,600-50,799)
   SDK_NOT_FOUND_IN_NODE_MODULES: 50600,
@@ -124,6 +125,13 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN]: {
     name: 'WORKER_SHUTDOWN',
     message: () => `SDK is shutting down — in-flight RPC call aborted`
+  },
+  [SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED]: {
+    name: 'WORKER_STARTUP_FAILED',
+    // `details` carries the wording the pre-handshake paths used before this
+    // code existed, so text already matching those sentences keeps working.
+    message: (details: string, stderrTail: string) =>
+      stderrTail ? `${details}\n\nWorker stderr:\n${stderrTail}` : details
   },
 
   // Build/Bundle Errors (50,600-50,799)
