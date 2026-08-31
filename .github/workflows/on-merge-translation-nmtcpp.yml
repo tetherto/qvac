@@ -92,12 +92,26 @@ jobs:
 
   publish-gpr:
     needs: [build, publish-logic, verify-generated]
+    # `!cancelled()` is required, not cosmetic. `build` depends on
+    # release-merge-guard, which is SKIPPED on every non-release-* branch;
+    # `build` survives that because its own `if` opens with `!cancelled()`, but
+    # without the same opt-out here GitHub's skip propagation reaches this job
+    # through `build` and it never runs. That is why
+    # @tetherto/translation-nmtcpp-mono has been frozen at 2026-06-30
+    # (QVAC-24365).
+    #
+    # `!cancelled()` alone would also disable the implicit "all needs succeeded"
+    # check and let a FAILED build publish stale or missing prebuilds, so the
+    # explicit needs.build.result test replaces that guarantee. Same shape as
+    # publish-npm below, which already had it and therefore was never affected.
     if: >-
+      !cancelled() &&
+      needs.build.result == 'success' &&
       needs.verify-generated.result == 'success' &&
       (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     continue-on-error: true
     outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.gpr_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -226,11 +240,24 @@ jobs:
           set -euo pipefail
           should="false"
 
-          if [ "${{ needs.publish-gpr.result }}" = "success" ] || \
-             [ "${{ needs.publish-npm.result }}" = "success" ]; then
+          # Deliberately keyed on publish-npm ONLY, not publish-gpr.
+          #
+          # Integration tests already run on the PR, and the PR's merge-guard
+          # consumes their result as `integration-tests-status` before the merge
+          # is allowed (see on-pr-<addon>.yml). Re-running the same 6-leg matrix
+          # on merge duplicates that work on GPU/Windows/macOS runners for no new
+          # signal.
+          #
+          # This mattered when QVAC-24365 fixed publish-gpr: that job had never
+          # succeeded, so this gate had only ever opened on release-* (where
+          # publish-npm runs). Keying on publish-gpr would have silently switched
+          # merge-time integration tests on for every main/feature-*/tmp-* push.
+          # Publishing a GPR dev build is not a reason to re-test.
+          if [ "${{ needs.publish-npm.result }}" = "success" ]; then
             should="true"
           fi
 
+          echo "publish-gpr=${{ needs.publish-gpr.result }} publish-npm=${{ needs.publish-npm.result }} should_run_tests=$should"
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
