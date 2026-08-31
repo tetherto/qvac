@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { extractGenerationParams, type GenerationParams } from './common.js'
+import { extractGenerationParams, type GenerationParams } from '@/serve/schemas/common'
 
 export const completionsBody = z
   .object({

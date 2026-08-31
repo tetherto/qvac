@@ -7,7 +7,7 @@ import {
   ragCloseWorkspace,
   ragIngest
 } from '@qvac/sdk'
-import { HttpError } from '../lib/http-error.js'
+import { HttpError } from '@/serve/lib/http-error'
 import {
   vectorStoreIdParams,
   vectorStoreCreateBody,
@@ -18,7 +18,7 @@ import {
   parseMetadata,
   InvalidExpiresAfterError,
   InvalidMetadataError
-} from '../schemas/vector-stores.js'
+} from '@/serve/schemas/vector-stores'
 import {
   idToWorkspace,
   InvalidVectorStoreIdError,
@@ -28,10 +28,10 @@ import {
   type CreateVectorStoreInput,
   type UpdateVectorStoreInput,
   type VectorStoreMeta
-} from '../adapters/openai/vector-stores-store.js'
-import type { ResolvedModelEntry, ServeConfig } from '../core/model-registry.js'
-import type { QvacContext } from '../lib/types.js'
-import { ensureReady } from '../plugins/require-model.js'
+} from '@/serve/adapters/openai/vector-stores-store'
+import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/model-registry'
+import type { QvacContext } from '@/serve/lib/types'
+import { ensureReady } from '@/serve/plugins/require-model'
 
 const SYNTHETIC_TIMESTAMP = 0
 

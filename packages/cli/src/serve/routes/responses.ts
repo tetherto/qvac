@@ -2,10 +2,10 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import type { Tool } from '@qvac/sdk'
-import { HttpError } from '../lib/http-error.js'
-import { initSSE } from '../lib/sse.js'
-import { requireModel } from '../plugins/require-model.js'
-import { logUnsupported } from '../plugins/log-unsupported.js'
+import { HttpError } from '@/serve/lib/http-error'
+import { initSSE } from '@/serve/lib/sse'
+import { requireModel } from '@/serve/plugins/require-model'
+import { logUnsupported } from '@/serve/plugins/log-unsupported'
 import {
   responsesBody,
   responsesIdParams,
@@ -16,19 +16,19 @@ import {
   InvalidResponsesConversationError,
   toSdkResponsesArgs,
   UnsupportedToolTypeError
-} from '../schemas/responses.js'
+} from '@/serve/schemas/responses'
 import {
   InvalidResponseFormatError,
   type GenerationParams,
   type ResponseFormat
-} from '../schemas/common.js'
-import { responseId as allocResponseId } from '../adapters/openai/responses-shape.js'
-import { RESPONSES_VOLATILE_STUB } from '../adapters/openai/responses-store.js'
+} from '@/serve/schemas/common'
+import { responseId as allocResponseId } from '@/serve/adapters/openai/responses-shape'
+import { RESPONSES_VOLATILE_STUB } from '@/serve/adapters/openai/responses-store'
 import {
   writeBlockingResponse,
   writeStreamingResponse,
   type ResponsesHandlerParams
-} from '../adapters/openai/response-writers.js'
+} from '@/serve/adapters/openai/response-writers'
 
 const VOLATILE_HEADER = 'X-QVAC-Stub'
 

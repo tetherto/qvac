@@ -4,8 +4,8 @@ import {
   hasZodFastifySchemaValidationErrors,
   isResponseSerializationError
 } from 'fastify-type-provider-zod'
-import { HttpError, errorType } from '../lib/http-error.js'
-import { sendSSE, endSSE } from '../lib/sse.js'
+import { HttpError, errorType } from '@/serve/lib/http-error'
+import { sendSSE, endSSE } from '@/serve/lib/sse'
 
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsync = async (app) => {
