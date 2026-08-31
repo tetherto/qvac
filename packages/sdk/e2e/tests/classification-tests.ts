@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 // The bundled MobileNetV3-Small classifier returns 3 classes
 // ("food", "report", "other") with softmax probabilities. These tests

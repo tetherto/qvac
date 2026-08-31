@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 export const errorInvalidModelId: TestDefinition = {
   testId: 'error-invalid-model-id',

@@ -1,4 +1,4 @@
-import type { TestDefinition, Expectation } from '@qvac/qvac-test-suite'
+import type { TestDefinition, Expectation } from '@qvac/test-suite'
 
 const createBergamotTest = (
   testId: string,

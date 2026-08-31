@@ -1,5 +1,5 @@
 import { ragIngest } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite/mobile'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import {
   getRagWorkspaceName,
