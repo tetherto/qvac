@@ -1,5 +1,5 @@
 {
-  "name": "@qvac/llm-rpc-server",
+  "name": "@qvac/ggml-rpc-server",
   "version": "0.1.0",
   "description": "Managed ggml RPC server process for QVAC LLM inference",
   "addon": true,

@@ -5,7 +5,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
-project(llm-rpc-server C CXX)
+project(ggml-rpc-server C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
@@ -24,7 +24,7 @@ find_package(llama CONFIG REQUIRED)
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(PREBUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/${bare_target_value}/${module_name}")
-message("Building llm-rpc-server tool bundle at '${PREBUILD_DIR}'")
+message("Building ggml-rpc-server tool bundle at '${PREBUILD_DIR}'")
 
 if(WIN32)
   set(RPC_SERVER_TOOL_NAME "ggml-rpc-server.exe")
@@ -41,7 +41,7 @@ find_program(
 )
 
 add_custom_target(
-  llm-rpc-server-tool ALL
+  ggml-rpc-server-tool ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory "${PREBUILD_DIR}"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "${GGML_RPC_SERVER_TOOL}"
@@ -52,7 +52,7 @@ add_custom_target(
 if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     add_custom_command(
-      TARGET llm-rpc-server-tool
+      TARGET ggml-rpc-server-tool
       POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
               $<TARGET_FILE:ggml::${_backend}>

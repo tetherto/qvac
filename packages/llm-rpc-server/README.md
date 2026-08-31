@@ -1,4 +1,4 @@
-# @qvac/llm-rpc-server
+# @qvac/ggml-rpc-server
 
 Managed process wrapper for `ggml-rpc-server`.
 
@@ -8,7 +8,7 @@ and stops the server process so applications do not need to invoke the CLI
 manually.
 
 ```js
-const { startRpcServer } = require('@qvac/llm-rpc-server')
+const { startRpcServer } = require('@qvac/ggml-rpc-server')
 
 const server = await startRpcServer({ device: 'Vulkan0' })
 

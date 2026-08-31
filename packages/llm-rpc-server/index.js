@@ -24,7 +24,7 @@ exports.DEFAULT_RPC_SERVER_HOST = "127.0.0.1";
 exports.DEFAULT_RPC_SERVER_START_TIMEOUT_MS = 10000;
 exports.DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS = 2000;
 exports.RPC_SERVER_HEALTH_POLL_INTERVAL_MS = 100;
-const PREBUILD_MODULE_DIR = "qvac__llm-rpc-server";
+const PREBUILD_MODULE_DIR = "qvac__ggml-rpc-server";
 const SUPPORTED_PREBUILD_TARGETS = new Set(["darwin-arm64", "linux-x64"]);
 class RpcServerBinaryNotFoundError extends Error {
   constructor(path) {

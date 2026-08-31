@@ -10,7 +10,7 @@ export const DEFAULT_RPC_SERVER_START_TIMEOUT_MS: number = 10000
 export const DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS: number = 2000
 export const RPC_SERVER_HEALTH_POLL_INTERVAL_MS: number = 100
 
-const PREBUILD_MODULE_DIR = 'qvac__llm-rpc-server'
+const PREBUILD_MODULE_DIR = 'qvac__ggml-rpc-server'
 const SUPPORTED_PREBUILD_TARGETS = new Set(['darwin-arm64', 'linux-x64'])
 
 export class RpcServerBinaryNotFoundError extends Error {
