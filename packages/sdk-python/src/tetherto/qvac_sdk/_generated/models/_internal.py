@@ -15975,7 +15975,7 @@ class OcrStreamResponseBlocksItem(GeneratedBaseModel):
         extra="forbid",
     )
     text: str
-    bbox: list[Any] | None = None
+    bbox: tuple[float, float, float, float] | None = None
     confidence: float | None = None
 
 
