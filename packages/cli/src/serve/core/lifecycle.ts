@@ -1,14 +1,44 @@
 import { unloadModel as sdkUnloadModel, close as sdkClose } from '@qvac/sdk'
-import type { ModelRegistry, ServeConfig } from './model-registry.js'
+import type { LoadConfig, ModelRegistry, ServeConfig } from './model-registry.js'
 import type { LoadManager } from './load-manager.js'
 import type { Logger } from '../../logger.js'
+
+export interface PreloadResult {
+  /** Number of models marked `preload` that were attempted. */
+  attempted: number
+  /** How many of them reached READY. */
+  loaded: number
+}
+
+// Render an error and its `cause` chain: RPC-init failures carry the worker's
+// stderr (missing addon, bad `.so`) on `cause`.
+export function formatErrorChain(err: unknown): string {
+  const parts: string[] = []
+  const seen = new Set<unknown>()
+  let current: unknown = err
+  while (current instanceof Error && !seen.has(current)) {
+    seen.add(current)
+    parts.push(current.message)
+    current = (current as { cause?: unknown }).cause
+  }
+  if (current !== undefined && current !== null && !(current instanceof Error)) {
+    parts.push(String(current))
+  }
+  return parts.join('\n  caused by: ')
+}
+
+// Refuse to start only when lazy loading is off and every preload model failed:
+// preloaded models are then the only ones that can serve.
+export function shouldRefuseStart(load: Pick<LoadConfig, 'lazy'>, preload: PreloadResult): boolean {
+  return !load.lazy && preload.attempted > 0 && preload.loaded === 0
+}
 
 export async function preloadModels(
   serveConfig: ServeConfig,
   registry: ModelRegistry,
   logger: Logger,
   loadManager: LoadManager
-): Promise<void> {
+): Promise<PreloadResult> {
   const toPreload: string[] = []
 
   for (const [alias, entry] of serveConfig.models) {
@@ -20,20 +50,23 @@ export async function preloadModels(
 
   if (toPreload.length === 0) {
     logger.info('No models configured for preload.')
-    return
+    return { attempted: 0, loaded: 0 }
   }
 
   logger.info(`Preloading ${toPreload.length} model(s): ${toPreload.join(', ')}`)
 
+  let loaded = 0
   for (const alias of toPreload) {
     try {
       // No signal: a preload is a permanent waiter, never disconnect-cancelled.
       await loadManager.load(alias)
+      loaded++
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      logger.error(`Failed to preload "${alias}": ${message}`)
+      logger.error(`Failed to preload "${alias}": ${formatErrorChain(err)}`)
     }
   }
+
+  return { attempted: toPreload.length, loaded }
 }
 
 export async function unloadModel(
