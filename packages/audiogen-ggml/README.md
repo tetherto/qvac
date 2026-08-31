@@ -50,6 +50,13 @@ prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
 opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`
 on the build host).
 
+The prebuilt CUDA module targets **compute capability 8.0 and newer**. It
+carries native code for 8.6 (RTX 30xx, A40) and 8.9 (RTX 40xx, L40) and
+JIT-compiles from 8.0 PTX for anything newer (Hopper, Blackwell / RTX 50xx),
+which costs a one-off compile on first use that the driver then caches. Cards
+below 8.0 — Turing (RTX 20xx, GTX 16xx, T4), Volta and Pascal — have no CUDA
+code path in the prebuild and should run on Vulkan.
+
 To build the native addon from source in a repository checkout:
 
 ```bash
