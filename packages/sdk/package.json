@@ -222,7 +222,7 @@
     "@qvac/error": "^0.1.1",
     "@qvac/inference": "^0.18.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.47.0",
+    "@qvac/llm-llamacpp": "^0.48.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.20.0",
     "@qvac/registry-client": "^0.6.1",
