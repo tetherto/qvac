@@ -115,10 +115,8 @@ jobs:
     # explicit needs.build.result test replaces that guarantee. Same shape as
     # publish-npm below, which already had it and therefore was never affected.
     if: >-
-      !cancelled() &&
-      needs.build.result == 'success' &&
       needs.verify-generated.result == 'success' &&
-      ((needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
+      ((!cancelled() && needs.build.result == 'success' && (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')))
     timeout-minutes: 20
     outputs:
       published_version: ${{ steps.publish.outputs.gpr_published_version }}

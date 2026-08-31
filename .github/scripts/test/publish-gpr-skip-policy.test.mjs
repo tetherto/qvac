@@ -12,33 +12,35 @@
 // Without the same opt-out on `publish-gpr`, the skip travels through `build`
 // and the job never runs.
 //
-// The invariant is therefore conditional: a `publish-gpr` whose `build` can be
-// skipped upstream MUST opt out with !cancelled()/always(), and — because that
-// also disables the implicit "all needs succeeded" check — MUST then assert
-// needs.build.result explicitly, or a failed build could publish.
+// The invariant is therefore conditional: a `publish-gpr` with a skippable
+// dependency MUST opt out with !cancelled()/always(), and — because that also
+// disables the implicit "all needs succeeded" check — MUST then assert that
+// dependency's result explicitly, or a failed build could publish.
 //
 // Parsed as text on purpose: the `policy-tests` job runs `node --test` with no
 // npm install, so no YAML library is available. Same approach as
-// ci-trust-policy.test.mjs.
+// ci-trust-policy.test.mjs and publish-gate-policy.test.mjs.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+const WORKFLOW_DIR = join(root, '.github/workflows')
 
 function read(relativePath) {
   return readFileSync(join(root, relativePath), 'utf8')
 }
 
+// readdirSync, not `git ls-files`: no spawn to fail, and an untracked new
+// on-merge workflow is still covered when running locally. Matches
+// publish-gate-policy.test.mjs.
 function onMergeWorkflows() {
-  const out = spawnSync('git', ['ls-files', '.github/workflows/on-merge-*.yml'], {
-    cwd: root,
-    encoding: 'utf8',
-  }).stdout
-  return out.trim().split('\n').filter(Boolean)
+  return readdirSync(WORKFLOW_DIR)
+    .filter((name) => /^on-merge-.*\.ya?ml$/.test(name))
+    .sort()
+    .map((name) => `.github/workflows/${name}`)
 }
 
 // Text of one top-level job, from `  <name>:` to the next job at the same indent.
@@ -50,14 +52,33 @@ function jobBlock(source, jobName) {
   return next === -1 ? rest : rest.slice(0, next)
 }
 
-// The `if:` value, flattened to one line. Handles both `if: >-` folded blocks
-// and a single-line `if:`.
-function condition(block) {
-  if (!block) return ''
-  const folded = block.match(/\n {4}if: *>-?\n([\s\S]*?)(?=\n {4}[A-Za-z_][A-Za-z0-9_-]*:|\n {4}#|$)/)
-  if (folded) return folded[1].replace(/\s+/g, ' ').trim()
-  const inline = block.match(/\n {4}if: *(.+)/)
+// The `if:` value, flattened to one line. Accepts BOTH block-scalar styles:
+// `>`/`>-`/`>+` and `|`/`|-`/`|+`. Handling only `>-` made a `|-` job fall
+// through to the inline branch and return the scalar indicator itself ("|-")
+// as the condition — on-merge-decoder-audio.yml uses `if: |-` today.
+function condition(jobText) {
+  if (!jobText) return ''
+  const folded = jobText.match(/^ {4}if:[ \t]*[|>][-+]?[ \t]*\n((?: {6}.*\n|\n)*)/m)
+  if (folded) {
+    return folded[1].split('\n').map((l) => l.trim()).filter(Boolean).join(' ')
+  }
+  const inline = jobText.match(/^ {4}if:[ \t]*(.+)$/m)
   return inline ? inline[1].trim() : ''
+}
+
+// Job names listed under this job's `needs:`, in either the block or the
+// inline-array form.
+function needsOf(jobText) {
+  if (!jobText) return []
+  const inline = jobText.match(/^ {4}needs:[ \t]*\[([^\]]*)\]/m)
+  if (inline) {
+    return inline[1].split(',').map((s) => s.trim()).filter(Boolean)
+  }
+  const block = jobText.match(/^ {4}needs:[ \t]*\n((?: {6}- .*\n)+)/m)
+  if (block) {
+    return block[1].split('\n').map((l) => l.replace(/^ *- */, '').trim()).filter(Boolean)
+  }
+  return []
 }
 
 const WORKFLOWS = onMergeWorkflows()
@@ -67,18 +88,43 @@ test('on-merge workflows were discovered', () => {
 })
 
 for (const relativePath of WORKFLOWS) {
-  const slug = relativePath.replace(/.*on-merge-|\.yml$/g, '')
+  const slug = relativePath.replace(/.*on-merge-|\.ya?ml$/g, '')
   const source = read(relativePath)
   const gpr = jobBlock(source, 'publish-gpr')
   if (!gpr) continue
 
-  const build = jobBlock(source, 'build')
-  // The real skippable dependency: release-merge-guard only runs on release-*.
-  // Reached transitively, via publish-gpr -> build -> release-merge-guard.
-  const buildCanBeSkipped = Boolean(build) && /needs:[\s\S]*?release-merge-guard/.test(build)
+  // Which dependency chain can leak a skip into publish-gpr?
+  //
+  // NOT simply "the dependency has an if:" — every `build` job is gated on the
+  // publish flags, and when those are false the build is legitimately skipped
+  // and publish-gpr should be skipped too. That is normal operation, not a bug.
+  //
+  // The bug is a dependency that is skipped WHILE publish-gpr's own condition is
+  // still true. The concrete case is `release-merge-guard`, gated on
+  // `startsWith(github.ref_name, 'release-')`: on every other branch it is
+  // skipped, and GitHub propagates that skip transitively through whatever
+  // depends on it — even though that intermediate job itself succeeded, because
+  // it carries its own !cancelled().
+  //
+  // So: look for release-merge-guard in publish-gpr's TRANSITIVE needs, and
+  // report which direct dependency carries it. Not hardcoded to the name
+  // `build` — classification-ggml calls the equivalent job `prebuild`.
+  const GUARD = 'release-merge-guard'
+
+  function reachesGuard(jobName, seen = new Set()) {
+    if (seen.has(jobName)) return false
+    seen.add(jobName)
+    const deps = needsOf(jobBlock(source, jobName))
+    if (deps.includes(GUARD)) return true
+    return deps.some((d) => reachesGuard(d, seen))
+  }
+
+  const skippableDeps = needsOf(gpr).filter(
+    (dep) => dep === GUARD || reachesGuard(dep),
+  )
 
   test(`${slug}: publish-gpr survives a skipped upstream dependency`, () => {
-    if (!buildCanBeSkipped) return
+    if (skippableDeps.length === 0) return
 
     const cond = condition(gpr)
     assert.ok(cond, 'publish-gpr has an if: condition')
@@ -86,18 +132,23 @@ for (const relativePath of WORKFLOWS) {
     assert.match(
       cond,
       /!cancelled\(\)|always\(\)/,
-      'publish-gpr depends on build, which depends on release-merge-guard and is ' +
-        'therefore skippable off release-*. Without !cancelled() the skip ' +
-        `propagates and publish-gpr silently never runs. Condition:\n  ${cond}`,
+      `publish-gpr depends on ${skippableDeps.join(', ')}, which can be skipped. ` +
+        'Without !cancelled() the skip propagates and publish-gpr silently never ' +
+        `runs. Condition:\n  ${cond}`,
     )
 
-    assert.match(
-      cond,
-      /needs\.build\.result\s*==\s*'success'/,
+    // The opt-out also drops the implicit needs-succeeded check, so the job must
+    // assert the result of at least one skippable dependency itself, or a failed
+    // build could publish.
+    const assertsADep = skippableDeps.some((dep) =>
+      new RegExp(`needs\\.${dep}\\.result`).test(cond),
+    )
+    assert.ok(
+      assertsADep,
       'publish-gpr opts out with !cancelled()/always(), which also drops the ' +
-        'implicit needs-succeeded check, so it must assert ' +
-        `needs.build.result == 'success' explicitly or a failed build can ` +
-        `publish. Condition:\n  ${cond}`,
+        'implicit needs-succeeded check, so it must assert the result of one of ' +
+        `its skippable dependencies (${skippableDeps.join(', ')}) explicitly or a ` +
+        `failed build can publish. Condition:\n  ${cond}`,
     )
   })
 
@@ -127,20 +178,34 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
   // Fixing publish-gpr must not switch merge-time integration tests on: they
   // already run on the PR, and the PR's merge-guard consumes their result
   // before the merge is allowed.
+  //
+  // Matched on co-occurrence rather than one exact spelling: the point is that
+  // publish-gpr's result must not gate this step at all, however it is written
+  // (==, single quotes, or moved into `env:`).
   test(`${slug}: a GPR publish does not re-run integration tests on merge`, () => {
     const gate = jobBlock(read(`.github/workflows/on-merge-${slug}.yml`), 'post-build-gate')
     assert.ok(gate, 'post-build-gate exists')
 
+    // Only the shell `if` test decides; an `echo` naming publish-gpr is
+    // deliberate diagnostics, so the assertion must look at the gating
+    // expression rather than at any mention in the step.
+    const gatingLines = gate
+      .split('\n')
+      .filter((l) => /^\s*(if|elif)\s+\[/.test(l) || /^\s*\[/.test(l))
+      .join(' ')
+
+    assert.ok(gatingLines, 'the gate has a shell condition')
     assert.match(
-      gate,
-      /needs\.publish-npm\.result \}\}" = "success"/,
+      gatingLines,
+      /needs\.publish-npm\.result/,
       'the gate must still open for a real npm release',
     )
     assert.ok(
-      !/needs\.publish-gpr\.result \}\}" = "success"/.test(gate),
-      'a GPR dev publish must not open the integration-test gate — those tests ' +
-        'already ran on the PR and merge-guard gated on them. Keying on ' +
-        'publish-gpr silently adds a 6-leg GPU matrix to every main/tmp push.',
+      !/needs\.publish-gpr\.result/.test(gatingLines),
+      'a GPR dev publish must not gate the integration-test decision — those ' +
+        'tests already ran on the PR and merge-guard gated on them. Keying on ' +
+        `publish-gpr silently adds a 6-leg GPU matrix to every main/tmp push. ` +
+        `Gating expression:\n  ${gatingLines}`,
     )
   })
 }
