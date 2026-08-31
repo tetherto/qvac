@@ -1,6 +1,6 @@
 # Agent Stack E2E Test Ownership
 
-Use this guide when adding tests for `qvac serve openai`, `@qvac/ai-sdk-provider`, OpenCode, OpenClaw, or other agent tools that consume QVAC through an OpenAI-compatible interface.
+Use this guide when adding tests for `qvac serve --openai`, `@qvac/ai-sdk-provider`, OpenCode, OpenClaw, or other agent tools that consume QVAC through an OpenAI-compatible interface.
 
 The SDK e2e suite should stay focused on SDK consumer behavior. Agent-stack tests belong closer to the HTTP, provider, or plugin layer that owns the compatibility risk.
 
@@ -11,7 +11,7 @@ The SDK e2e suite should stay focused on SDK consumer behavior. Agent-stack test
 | SDK e2e                       | `packages/sdk/e2e`                                                    | Public SDK consumer/device behavior, including `loadModel()`, inference, download, lifecycle, and mobile/desktop coverage through the test-suite framework.                                                      |
 | CLI TypeScript contract tests | `packages/cli/test/unit`                                              | OpenAI-compatible adapter and helper contracts, structured JSON assertions, SSE parsing, content-parts handling, tool-call payloads, and deterministic model-free behavior that does not need a Fastify request. |
 | CLI in-process HTTP e2e       | `packages/cli/test/e2e/core` and `packages/cli/test/e2e/openai`       | Modelless wire-level validation through `useServer` / `app.inject`, including status codes, error codes, routing, CORS, multipart parsing, and OpenAI-compatible endpoint validation.                            |
-| CLI spawned-binary e2e        | `packages/cli/test/e2e/cli` and `packages/cli/test/e2e/model`         | Built CLI startup, real `qvac serve openai` process smoke, model-load checks, network-bound endpoint smoke, logs, diagnostics, and process cleanup.                                                              |
+| CLI spawned-binary e2e        | `packages/cli/test/e2e/cli` and `packages/cli/test/e2e/model`         | Built CLI startup, real `qvac serve --openai` process smoke, model-load checks, network-bound endpoint smoke, logs, diagnostics, and process cleanup.                                                            |
 | ai-sdk-provider integration   | `packages/ai-sdk-provider/test/managed-integration.test.ts`           | Vercel AI SDK calls through managed `qvac serve`, real managed serve reuse, close behavior, and opt-in real-model integration checks.                                                                            |
 | Plugin integration            | `plugins/opencode` and future tool plugins such as `plugins/openclaw` | Tool-specific host, proxy, config, readiness, request-shaping, and shutdown behavior.                                                                                                                            |
 

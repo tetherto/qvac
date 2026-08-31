@@ -14,6 +14,7 @@ import type { QvacContext } from '@/serve/core/context'
 import { createCoreServer } from '@/serve/core/server'
 import {
   extensionBanners,
+  extensionSummary,
   mountExtensions,
   setupExtensions,
   type ServeExtension
@@ -149,6 +150,7 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
 
   await app.listen({ port: options.port, host: options.host })
   app.qvac.logger.info(`QVAC API server listening on http://${options.host}:${options.port}`)
+  app.qvac.logger.info(extensionSummary(extensions))
   logStartupSummary(app, app.qvac.logger)
   return app
 }

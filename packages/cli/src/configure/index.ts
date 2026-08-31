@@ -150,6 +150,6 @@ export async function runConfigure(options: ConfigureOptions): Promise<void> {
       )
     }
   }
-  print('\n   Run:  qvac serve openai')
+  print('\n   Run:  qvac serve --openai')
   print(`   Docs: ${CONFIG_DOCS_URL}`)
 }

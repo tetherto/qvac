@@ -142,7 +142,7 @@ describe('openai coverage live report (fixture)', () => {
       routerPath: FIXTURE_ROUTER
     })
     const text = formatCoverageReportHuman(report, report.rows)
-    const titleIdx = text.indexOf('qvac serve openai — coverage')
+    const titleIdx = text.indexOf('qvac serve --openai — coverage')
     const noticeIdx = text.indexOf('Unmapped OpenAI spec labels')
     const specIdx = text.indexOf('Spec:')
     assert.ok(titleIdx >= 0)

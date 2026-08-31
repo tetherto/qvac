@@ -1,33 +1,14 @@
-# `qvac serve openai`
+# OpenAI extension
 
-The CLI exposes an **OpenAI-compatible HTTP API** (`qvac serve openai`) so tools and SDKs that target OpenAI can run against local QVAC models.
+Mount with `qvac serve --openai`. The extension serves an OpenAI-compatible HTTP API so
+tools and SDKs that target OpenAI can run against local QVAC models. Every route below
+lives under `/v1`.
 
-This document describes the supported routes and how to configure `serve.models` for each capability. For general CLI usage, see [README.md](../README.md).
+Server-wide behavior — authentication, CORS, model loading and `serve.models` — is
+described in [README.md](README.md) and applies here. This page covers the routes this
+extension adds and the `serve.openai` config block it reads.
 
-## Network security and CORS
-
-The default `127.0.0.1` bind is unauthenticated. A non-loopback `--host` refuses to start without `--api-key <key>` or `--api-key-file <path>`; `--allow-unauthenticated` downgrades that refusal to a warning for operators who accept the exposure.
-
-Prefer `--api-key-file`: `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. The file must be a regular file, and the CLI warns when it is readable beyond its owner (`chmod 600`).
-
-Browser access requires explicit trusted origins unless `--docs` enables its same-port loopback defaults. Repeat `--cors-origin` or configure `serve.cors.origins`; wildcard (`*`) is rejected:
-
-```bash
-qvac serve openai \
-  --api-key "$QVAC_API_KEY" \
-  --cors-origin https://app.example.com \
-  --cors-origin http://localhost:3000
-```
-
-The legacy `--cors` flag is only a compatibility validation switch: it does not enable CORS and fails unless at least one explicit CLI/config origin is supplied. `--cors --docs` also fails without one because docs defaults are added after that validation.
-
-Independently, `--docs` adds same-port `localhost`, `127.0.0.1`, and `[::1]` origins for Swagger UI, plus the bound host's same-port origin when that host is itself loopback. Add any non-loopback or forwarded browser origin explicitly.
-
-`/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. `/openapi.json` is always public; the docs routes exist only with `--docs`. Do not enable docs on a non-loopback bind unless public introspection is acceptable.
-
-For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac serve`, `@qvac/opencode-plugin`, models.dev, layer ownership, and release choreography — see [Agent Integrations](../../../docs/architecture/AGENT-INTEGRATIONS.md). Use this file for CLI serve route/config details; use the agent integration reference when deciding whether behavior belongs in SDK, CLI, provider, plugin, docs, or models.dev.
-
-## Implemented endpoints (today)
+## Endpoints
 
 | Method   | Path                             | Notes                                                                                                       |
 | -------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -69,22 +50,9 @@ For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac se
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
 
-## Model loading & lifecycle
+## Model listing and load state
 
-Every model listed under `serve.models` is addressable by its alias. How and when
-it loads depends on `preload`:
-
-- `preload: true` — the model loads at server startup. The port stays closed
-  until every preload model is ready, so the first request is fast.
-- `preload: false` — the model loads lazily on the **first request** that names
-  it (cold start). That first request blocks while the model loads; later
-  requests are fast. Concurrent first requests share a single load.
-
-`preload` defaults to `true` for constant-form entries (`{ "model": "…" }`) and
-`false` for explicit `{ "src", "type" }` entries. To force a lazy model to warm
-at startup, pass `--model <alias>` on the command line.
-
-Because loading is transparent, `GET /v1/models` lists **all** configured
+`GET /v1/models` lists **all** configured
 aliases whether or not they are currently loaded — naming any of them in a
 request just works.
 
@@ -95,27 +63,6 @@ separate "load" endpoint — send a normal request (or set `preload: true`).
 `GET /v1/models` (and `GET /v1/models/{id}`) include a non-standard `state`
 field (`idle` | `loading` | `ready` | `error`) so a client can see load state
 without triggering a load. OpenAI clients ignore the extra field.
-
-### Load management (`serve.load`)
-
-Tune lazy-load behavior under `serve.load` in `qvac.config.*` (each has a CLI
-flag override):
-
-| Field                | Default | CLI flag                         | Meaning                                                                                                                                  |
-| -------------------- | ------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `lazy`               | `true`  | `--no-lazy-load`                 | When `false`, requests never trigger a load; an unloaded model returns `503 model_not_loaded`. Only `preload: true` models serve.        |
-| `concurrency`        | `1`     | `--load-concurrency <n>`         | Max simultaneous loads across different aliases. `1` mirrors startup preload and bounds memory when many models lazy-load under traffic. |
-| `timeoutMs`          | `null`  | `--load-timeout <ms>`            | Per-load deadline. On expiry the load is cancelled and the request gets `503 model_load_timeout`. `null` = unbounded.                    |
-| `cancelOnDisconnect` | `true`  | `--no-cancel-load-on-disconnect` | When `true`, a client disconnecting mid-load cancels the load — but only once no other request is still waiting on that same load.       |
-
-```json
-{
-  "serve": {
-    "load": { "lazy": true, "concurrency": 1, "timeoutMs": 600000, "cancelOnDisconnect": true },
-    "models": { "my-llm": { "model": "QWEN3_600M_INST_Q4" } }
-  }
-}
-```
 
 ## Browse the model catalog
 
@@ -174,36 +121,6 @@ curl 'http://localhost:11434/v1/models/catalog?search=qwen'
 
 The live remote model registry and on-disk download state are not included yet (planned
 follow-ups).
-
-## Model source constants in config
-
-`serve.models[*].config` fields ending in `ModelSrc` accept SDK model constant
-names, including fields inside nested objects. The CLI resolves those names to
-the same `ModelConstant` objects accepted by the SDK. The snake-case
-`upscaler.model_src` field follows the same rules except in video mode, where
-the SDK ignores the entire `upscaler` block and the CLI leaves it unchanged:
-
-```json
-{
-  "serve": {
-    "models": {
-      "chatterbox": {
-        "model": "TTS_T3_TURBO_EN_CHATTERBOX_Q8_0",
-        "type": "tts",
-        "config": {
-          "ttsEngine": "chatterbox",
-          "language": "en",
-          "s3genModelSrc": "TTS_S3GEN_EN_CHATTERBOX"
-        }
-      }
-    }
-  }
-}
-```
-
-These fields also accept full source URLs such as `registry://…` and filesystem
-paths. Bare filenames remain unchanged for downstream filesystem resolution.
-Unknown `CONSTANT_CASE` values are rejected with the full config path.
 
 ## `POST /v1/completions`
 
@@ -424,7 +341,7 @@ curl -sS http://127.0.0.1:11434/v1/images/generations \
 **`url` mode (server started with `--public-base-url`):**
 
 ```bash
-qvac serve openai --public-base-url "https://api.example.com"
+qvac serve --openai --public-base-url "https://api.example.com"
 ```
 
 ```bash
