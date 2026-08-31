@@ -38,6 +38,8 @@ interface CompletionTestParams {
   responseFormat?: ResponseFormat
   tools?: Array<Record<string, unknown>>
   generationParams?: GenerationParams
+  /** Second-turn user message for the warm-cache overflow flow. */
+  followUpContent?: string
 }
 
 type CompletionExpectation =
@@ -649,8 +651,11 @@ export const completionStats: TestDefinition = {
 // Context is never evicted: a generation that fills the small window must stop
 // at the boundary and surface as the public stopReason "length" (predict is -1,
 // so the boundary is the only length source), keeping the tokens it produced.
-// The prompt has no natural terminus, so greedy decode cannot EOS its way out
-// of reaching the boundary.
+// The prompt has no natural terminus, which makes an early EOS unlikely under
+// greedy decode — not impossible: the addon still stops on a sampled EOG, so
+// a backend whose greedy path ends early fails here on model behaviour. Treat
+// a failure with stopReason "eos" as a fixture-model diagnostic, not an SDK
+// regression.
 export const completionContextBoundaryStop = createCompletionTest(
   'completion-context-boundary-stop',
   {
@@ -687,6 +692,35 @@ export const completionContextOverflowPrefill = createCompletionTest(
   },
   { validation: 'throws-error', errorContains: 'context' },
   { estimatedDurationMs: 15000, dependency: 'llm-small-ctx' }
+)
+
+// A real warm cache must reach the overflow guard: turn one fills most of
+// the 512 window and is cached under a per-run key, and the follow-up fits
+// the window on its own but not on top of the cache. Passes against both
+// addon generations — the published 0.47.x short form reports the failing
+// sum, the current addon reports the cached and appended halves separately —
+// and `requiredTokens` carries the failing total either way.
+export const completionContextOverflowWarmCache = createCompletionTest(
+  'completion-context-overflow-warm-cache',
+  {
+    history: [
+      {
+        role: 'user',
+        content:
+          'The quick brown fox jumps over the lazy dog and keeps running through the field. '.repeat(
+            20
+          ) + 'Reply with the single word: noted.'
+      }
+    ],
+    followUpContent:
+      'The quick brown fox jumps over the lazy dog and keeps running through the field. '.repeat(
+        10
+      ) + 'After all this text, what is 4+4?',
+    stream: false,
+    generationParams: { ...DETERMINISTIC, predict: 16 }
+  },
+  { validation: 'throws-error', errorContains: 'context' },
+  { estimatedDurationMs: 30000, dependency: 'llm-small-ctx' }
 )
 
 export const completionTests = [
@@ -735,5 +769,6 @@ export const completionTests = [
   completionStats,
   completionStopReasonLength,
   completionContextBoundaryStop,
-  completionContextOverflowPrefill
+  completionContextOverflowPrefill,
+  completionContextOverflowWarmCache
 ]

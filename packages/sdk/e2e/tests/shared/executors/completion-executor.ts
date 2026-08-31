@@ -1,4 +1,4 @@
-import { completion, ContextOverflowError } from '@qvac/sdk'
+import { completion, ContextOverflowError, deleteCache } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { completionTests } from '../../completion-tests.js'
@@ -36,6 +36,8 @@ interface CompletionTestParams {
   tools?: ReadonlyArray<Record<string, unknown>>
   stopSequences?: ReadonlyArray<string>
   generationParams?: GenerationParams
+  /** Second-turn user message for the warm-cache overflow flow. */
+  followUpContent?: string
 }
 
 type CompletionFnParams = Parameters<typeof completion>[0]
@@ -77,6 +79,9 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       }
       if (test.testId === 'completion-context-overflow-prefill') {
         return [test.testId, this.contextOverflowPrefill.bind(this)]
+      }
+      if (test.testId === 'completion-context-overflow-warm-cache') {
+        return [test.testId, this.contextOverflowWarmCache.bind(this)]
       }
       return [test.testId, this.generic.bind(this)]
     })
@@ -388,10 +393,78 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
           output: `Expected promptTokens of at least ctxSize, got promptTokens=${error.promptTokens} ctxSize=${error.ctxSize}`
         }
       }
+      // The reported window must be the configured one, not a rescaled or
+      // defaulted figure.
+      if (error.ctxSize !== 512) {
+        return {
+          passed: false,
+          output: `Expected ctxSize to equal the configured 512, got ${error.ctxSize}`
+        }
+      }
       return {
         passed: true,
         output: `ContextOverflowError with promptTokens=${error.promptTokens} ctxSize=${error.ctxSize}`
       }
+    }
+  }
+
+  // A real warm cache grown into the overflow guard: the follow-up fits the
+  // window on its own but not on top of the cached first turn, so only the
+  // cached-plus-prompt check can refuse it. The typed error must cross the
+  // RPC with the failing total. Sizing cannot pin which guard fires across
+  // tokenizers, so the assertion accepts any overflow whose requiredTokens
+  // reaches the window.
+  async contextOverflowWarmCache(params: CompletionTestParams): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
+    const kvCache = `ctx-overflow-warm-${Date.now()}`
+    try {
+      const first = completion({
+        modelId: llmModelId,
+        history: params.history,
+        stream: false,
+        kvCache,
+        generationParams: params.generationParams
+      } as CompletionFnParams)
+      const firstFinal = await first.final
+      const followUp = [
+        ...params.history,
+        { role: 'assistant', content: firstFinal.raw.fullText || 'noted.' },
+        { role: 'user', content: params.followUpContent ?? '' }
+      ]
+      try {
+        const second = completion({
+          modelId: llmModelId,
+          history: followUp,
+          stream: false,
+          kvCache,
+          generationParams: params.generationParams
+        } as CompletionFnParams)
+        await second.final
+        return {
+          passed: false,
+          output: 'Expected ContextOverflowError on the warm-cache follow-up'
+        }
+      } catch (error) {
+        if (!(error instanceof ContextOverflowError)) {
+          return { passed: false, output: `Expected ContextOverflowError, got: ${error}` }
+        }
+        if (error.ctxSize !== 512) {
+          return { passed: false, output: `Expected ctxSize 512, got ${error.ctxSize}` }
+        }
+        if (typeof error.requiredTokens !== 'number' || error.requiredTokens < error.ctxSize) {
+          return {
+            passed: false,
+            output: `Expected requiredTokens of at least the window, got requiredTokens=${error.requiredTokens} ctxSize=${error.ctxSize}`
+          }
+        }
+        const cached = error.cachedTokens !== undefined ? ` cachedTokens=${error.cachedTokens}` : ''
+        return {
+          passed: true,
+          output: `Warm-cache overflow: requiredTokens=${error.requiredTokens}${cached} ctxSize=${error.ctxSize}`
+        }
+      }
+    } finally {
+      await deleteCache({ kvCacheKey: kvCache, modelId: llmModelId }).catch(() => undefined)
     }
   }
 
