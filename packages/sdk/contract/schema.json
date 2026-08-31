@@ -8444,10 +8444,16 @@
                       ]
                     },
                     "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
                       "type": "string",
-                      "enum": ["none", "layer", "row"],
+                      "enum": ["none", "layer", "row", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
+                    },
+                    "flash-attn": {
+                      "description": "Flash attention: `'on'`, `'off'`, or `'auto'` (the backend decides). Unset uses the addon default, `'on'` outside finetuning. `'off'` is incompatible with `'split-mode': 'tensor'`.",
+                      "type": "string",
+                      "enum": ["on", "off", "auto"],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn"
                     },
                     "tensor-split": {
                       "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
