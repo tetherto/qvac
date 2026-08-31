@@ -285,7 +285,10 @@ jobs:
           manifest-path: addon/${{ inputs.workdir || 'packages/diffusion-cpp' }}/test/integration/models.manifest.json
           s3-prefix: qvac_models_compiled/mobile-pilot/diffusion/
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          output-map: ${{ runner.temp }}/diffusion-url-map.json
+          # github.workspace, not runner.temp: _work/_temp is swept mid-job on
+          # the self-hosted fleet, which has already made this map disappear
+          # between the presign step and the step that reads it.
+          output-map: ${{ github.workspace }}/diffusion-url-map.json
           # Only the two models a phone actually downloads (the rest are
           # skip = isMobile || noGpu and keep their HF fallback).
           model-names: stable-diffusion-v2-1-Q8_0.gguf,RealESRGAN_x4plus_anime_6B.pth
@@ -296,7 +299,7 @@ jobs:
       - name: Repoint diffusion manifest to US bucket
         env:
           MANIFEST_PATH: addon/${{ inputs.workdir || 'packages/diffusion-cpp' }}/test/integration/models.manifest.json
-          URL_MAP: ${{ runner.temp }}/diffusion-url-map.json
+          URL_MAP: ${{ github.workspace }}/diffusion-url-map.json
         run: |
           node ./.github/actions/run-mobile-integration-tests/seed-and-presign-models/rewrite-manifest-urls.mjs
 
