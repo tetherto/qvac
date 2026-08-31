@@ -464,7 +464,9 @@ TEST(GenerationParamsApplyTest, InstallingASchemaClearsToolGrammarCompanions) {
 // The same clear applies to a per-request `grammar`, which is USER-typed and
 // does not need prefill — but inheriting a stale lazy trigger would make the
 // caller's own grammar arm on a token it never asked for.
-TEST(GenerationParamsApplyTest, InstallingAUserGrammarClearsToolGrammarCompanions) {
+TEST(
+    GenerationParamsApplyTest,
+    InstallingAUserGrammarClearsToolGrammarCompanions) {
   common_params_sampling sampling;
   sampling.grammar =
       common_grammar(COMMON_GRAMMAR_TYPE_TOOL_CALLS, "root ::= \"x\"");
@@ -482,8 +484,8 @@ TEST(GenerationParamsApplyTest, InstallingAUserGrammarClearsToolGrammarCompanion
 }
 
 // A request that installs no grammar must not touch the companions: the tool
-// grammar it inherits is still the live one, and `configureTemplateDerivedSampling`
-// owns clearing it at render time.
+// grammar it inherits is still the live one, and
+// `configureTemplateDerivedSampling` owns clearing it at render time.
 TEST(GenerationParamsApplyTest, NoGrammarOverrideLeavesCompanionsAlone) {
   common_params_sampling sampling;
   sampling.grammar =
