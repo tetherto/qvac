@@ -260,8 +260,7 @@ function prepareMessagesForCache(
   turn: TurnHandle,
   cacheExists: boolean,
   history: HistoryMsg[],
-  tools?: Tool[],
-  toolBlockEvictable = false
+  tools?: Tool[]
 ): CachePayload {
   const toolBlock = tools?.length ? transformMessages(tools) : []
 
@@ -297,9 +296,8 @@ function prepareMessagesForCache(
   // conversation. Skip it only when the prefix is known to hold a rendered
   // one: `toolBlockCached` records that a previous turn actually got it into
   // the cache, which a committed message count does not prove. A stale
-  // boundary means we are resending the whole conversation anyway, and an
-  // evictable block can no longer be assumed present.
-  const skipToolBlock = turn.toolBlockCached && !clearStaleCount && !toolBlockEvictable
+  // boundary means we are resending the whole conversation anyway.
+  const skipToolBlock = turn.toolBlockCached && !clearStaleCount
   const blockToSend = skipToolBlock ? [] : toolBlock
 
   return {
@@ -399,13 +397,6 @@ export async function* completion(
   const modelConfig = getModelConfig(modelId)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
   const toolsActive = !!tools?.length && toolsEnabled
-  // Sliding is opt-in (`n_discarded` defaults to 0). Once on, the addon's
-  // discard window opens at the end of the primed prefix — which is where the
-  // tool block sits, since the prime is the system prompt alone — and nothing
-  // protects it. So while sliding is possible the block cannot be assumed to
-  // survive, and it has to travel with every turn.
-  const toolBlockEvictable = ((modelConfig as { n_discarded?: number }).n_discarded ?? 0) > 0
-
   const dialect =
     tools && tools.length > 0 ? (params.toolDialect ?? detectToolDialect(modelId)) : undefined
 
@@ -549,8 +540,7 @@ export async function* completion(
     turn,
     /* cacheExists */ true,
     history,
-    toolsActive ? tools : undefined,
-    toolBlockEvictable
+    toolsActive ? tools : undefined
   )
   const messagesToSend = payload.messages
   logMessagesToAddon(messagesToSend, 'PROMPT_SEND')
