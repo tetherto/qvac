@@ -111,10 +111,24 @@ export interface GenerateOptions {
     sourceAudio?: Float32Array;
     /**
      * Task discriminator. Supported today: `"text2music"` (default) |
-     * `"cover-nofsq"`. `"cover"` (FSQ roundtrip) is accepted but not implemented
-     * in the engine yet.
+     * `"cover-nofsq"` | `"lego"`. `"cover"` (FSQ roundtrip) is accepted but not
+     * implemented in the engine yet. `"lego"` generates a new instrument layer
+     * that follows `sourceAudio` and returns only that layer; it requires the
+     * base DiT variant (turbo and sft are rejected by the engine).
      */
-    taskType?: 'text2music' | 'cover' | 'cover-nofsq';
+    taskType?: 'text2music' | 'cover' | 'cover-nofsq' | 'lego';
+    /**
+     * Lego target layer. Required when `taskType` is `"lego"`; one of
+     * vocals|backing_vocals|drums|bass|guitar|keyboard|percussion|strings|
+     * synth|fx|brass|woodwinds.
+     */
+    track?: string;
+    /**
+     * DiT classifier-free guidance scale. 0 (default) resolves automatically:
+     * 1.0 on turbo variants (CFG disabled), 7.0 on base/sft. Values > 1 run
+     * CFG via APG and double the DiT cost per step.
+     */
+    guidanceScale?: number;
     /**
      * Fraction of DiT steps that keep the source context (0..1). Default 1.0.
      * Values < 1 are rejected by the engine until context switching lands.

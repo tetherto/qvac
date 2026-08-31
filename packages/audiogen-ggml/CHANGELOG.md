@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Multi-Track (lego) generation: `taskType: 'lego'` with a `track` option
+  (one of the 12 ACE-Step layer names) generates a new isolated instrument
+  layer that follows `sourceAudio` and returns only that stem. Requires the
+  base DiT variant; turbo and sft are rejected by the engine.
+- Optional `guidanceScale` generation control for DiT classifier-free
+  guidance. `0` (default) resolves automatically: `1.0` on turbo variants,
+  `7.0` on base/sft, where guidance runs through APG.
+
+### Changed
+
+- Require `speech-cpp` port revision `2026-08-31`, which pins the ext-lib
+  Multi-Track (lego) task and base-model CFG/APG sampling.
+
 ## [0.3.1] - 2026-08-28
 
 ### Added
@@ -245,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-08-03
 
 ### Changed
+
 - Update `ggml-speech` dependency version to align with other packages that also depend on it.
 
 ## [0.1.0] - 2026-07-30

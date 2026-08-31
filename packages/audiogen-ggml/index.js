@@ -100,7 +100,21 @@ function requireMinimaxCfgScale(value) {
     }
     return scale;
 }
-const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq']);
+const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq', 'lego']);
+const LEGO_TRACKS = new Set([
+    'vocals',
+    'backing_vocals',
+    'drums',
+    'bass',
+    'guitar',
+    'keyboard',
+    'percussion',
+    'strings',
+    'synth',
+    'fx',
+    'brass',
+    'woodwinds'
+]);
 const AUDIO_LATENT_RATE = 25;
 const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE;
 const REPAINT_RANGE_EPSILON_SECONDS = 1e-5;
@@ -109,7 +123,7 @@ function optionalTaskType(value) {
     if (value === undefined)
         return undefined;
     if (typeof value !== 'string' || !GENERATE_TASK_TYPES.has(value)) {
-        throw invalidInput('taskType must be one of text2music|cover|cover-nofsq');
+        throw invalidInput('taskType must be one of text2music|cover|cover-nofsq|lego');
     }
     return value;
 }
@@ -663,8 +677,12 @@ class AudioGen {
         const taskType = optionalTaskType(opts.taskType);
         const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio');
         const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio');
-        if (isCoverTask(taskType) && (sourceAudio === undefined || sourceAudio.length === 0)) {
+        if ((isCoverTask(taskType) || taskType === 'lego') &&
+            (sourceAudio === undefined || sourceAudio.length === 0)) {
             throw invalidInput(`taskType '${taskType}' requires sourceAudio`);
+        }
+        if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
+            throw invalidInput("taskType 'lego' requires track: one of " + [...LEGO_TRACKS].join('|'));
         }
         return {
             type: 'text',
@@ -689,6 +707,8 @@ class AudioGen {
             referenceAudio,
             sourceAudio,
             taskType,
+            track: opts.track,
+            guidanceScale: optionalFiniteNumber(opts.guidanceScale, 'guidanceScale'),
             audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
             coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
         };

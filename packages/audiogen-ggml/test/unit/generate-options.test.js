@@ -172,6 +172,47 @@ test('AudioGen.run rejects empty sourceAudio for cover', async (t) => {
   )
 })
 
+test('AudioGen.run forwards lego track and guidance scale', async (t) => {
+  const { gen, received } = createHarness()
+  const sourceAudio = new Float32Array([0.3, -0.3, 0.4, -0.4])
+
+  const response = await gen.run('guitar layer', {
+    taskType: 'lego',
+    track: 'guitar',
+    guidanceScale: 7,
+    sourceAudio
+  })
+  await response.await()
+
+  const job = received()
+  t.is(job.taskType, 'lego')
+  t.is(job.track, 'guitar')
+  t.is(job.guidanceScale, 7)
+  t.is(job.sourceAudio, sourceAudio)
+})
+
+test('AudioGen.run requires sourceAudio for lego', async (t) => {
+  await rejectRunOptions(
+    t,
+    { taskType: 'lego', track: 'guitar' },
+    /taskType 'lego' requires sourceAudio/
+  )
+})
+
+test('AudioGen.run requires a known lego track', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  await rejectRunOptions(t, { taskType: 'lego', sourceAudio }, /taskType 'lego' requires track/)
+  await rejectRunOptions(
+    t,
+    { taskType: 'lego', track: 'accordion', sourceAudio },
+    /taskType 'lego' requires track/
+  )
+})
+
+test('AudioGen.run rejects non-finite guidanceScale', async (t) => {
+  await rejectRunOptions(t, { guidanceScale: Number.NaN }, /guidanceScale/)
+})
+
 test('AudioGen.run requires Float32Array referenceAudio', async (t) => {
   await rejectRunOptions(
     t,
