@@ -9,7 +9,11 @@ import {
   UnsupportedImageContentError,
   extractGenerationParams
 } from '../src/serve/schemas/common.js'
-import { openaiMessagesToHistory, writeChatImages } from '../src/serve/schemas/chat.js'
+import {
+  openaiMessagesToHistory,
+  writeChatImages,
+  type OpenAIMessage
+} from '../src/serve/schemas/chat.js'
 import {
   parseExpiresAfter,
   parseMetadata,
@@ -44,7 +48,7 @@ import type { VectorStoreMeta } from '../src/serve/adapters/openai/vector-stores
 
 describe('openaiMessagesToHistory', () => {
   it('converts simple user/assistant messages', () => {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       { role: 'user', content: 'hello' },
       { role: 'assistant', content: 'hi there' }
     ]
@@ -56,19 +60,19 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('handles null content gracefully', () => {
-    const messages = [{ role: 'assistant', content: null }]
+    const messages: OpenAIMessage[] = [{ role: 'assistant', content: null }]
     const history = openaiMessagesToHistory(messages, 'hermes')
     assert.equal(history[0]!.content, '')
   })
 
   it('handles undefined content gracefully', () => {
-    const messages = [{ role: 'assistant', content: undefined }]
+    const messages: OpenAIMessage[] = [{ role: 'assistant', content: undefined }]
     const history = openaiMessagesToHistory(messages, 'hermes')
     assert.equal(history[0]!.content, '')
   })
 
   it('synthesizes hermes JSON tool_call content for assistant messages', () => {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
         role: 'assistant',
         content: null,
@@ -93,7 +97,7 @@ describe('openaiMessagesToHistory', () => {
   // foreign shape and emit a malformed hybrid frame, which then leaks raw markup
   // into `content`. Render it in the model's native Pythonic-XML instead.
   it('synthesizes native qwen35 XML tool_call content for assistant messages', () => {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
         role: 'assistant',
         content: null,
@@ -116,7 +120,7 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('renders qwen35 non-string params as text/JSON per the parser contract', () => {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
         role: 'assistant',
         content: null,
@@ -139,7 +143,7 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('handles multiple tool calls in single message', () => {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
         role: 'assistant',
         content: null,
@@ -156,7 +160,7 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('handles malformed tool call arguments JSON', () => {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
         role: 'assistant',
         content: null,
@@ -174,13 +178,15 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('preserves tool_call_id messages as-is', () => {
-    const messages = [{ role: 'tool', content: '{"result": 42}', tool_call_id: 'call_1' }]
+    const messages: OpenAIMessage[] = [
+      { role: 'tool', content: '{"result": 42}', tool_call_id: 'call_1' }
+    ]
     const history = openaiMessagesToHistory(messages, 'hermes')
     assert.deepEqual(history[0], { role: 'tool', content: '{"result": 42}' })
   })
 
   it('concatenates text content parts into a string', () => {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
         role: 'user',
         content: [
@@ -197,7 +203,7 @@ describe('openaiMessagesToHistory', () => {
     // 1x1 transparent PNG.
     const dataUrl =
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
         role: 'user',
         content: [
@@ -216,7 +222,9 @@ describe('openaiMessagesToHistory', () => {
 
   it('accepts a string (data URL) image_url', () => {
     const dataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRg=='
-    const messages = [{ role: 'user', content: [{ type: 'image_url', image_url: dataUrl }] }]
+    const messages: OpenAIMessage[] = [
+      { role: 'user', content: [{ type: 'image_url', image_url: dataUrl }] }
+    ]
     const history = openaiMessagesToHistory(messages, 'hermes')
     assert.equal(history[0]!.attachments!.length, 1)
     assert.equal(history[0]!.attachments![0]!.ext, 'jpg')
@@ -225,7 +233,7 @@ describe('openaiMessagesToHistory', () => {
   // Reviewer ask: an image the server cannot materialize must fail loudly (→ 400) instead of
   // silently dropping to a text-only completion the user never asked for.
   it('throws on a remote (non-data) image_url', () => {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       { role: 'user', content: [{ type: 'image_url', image_url: 'https://example.com/x.png' }] }
     ]
     assert.throws(() => openaiMessagesToHistory(messages, 'hermes'), UnsupportedImageContentError)
@@ -233,7 +241,7 @@ describe('openaiMessagesToHistory', () => {
 
   it('throws on an unsupported image format (e.g. webp)', () => {
     const webp = 'data:image/webp;base64,UklGRhIAAABXRUJQVlA4TAYAAAAvAAAAAAfQ//73v/+BiOh/AAA='
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
         role: 'user',
         content: [
@@ -246,7 +254,7 @@ describe('openaiMessagesToHistory', () => {
   })
 
   it('throws on a payload that is not valid base64 image data', () => {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
         role: 'user',
         content: [
@@ -260,7 +268,7 @@ describe('openaiMessagesToHistory', () => {
   it('writeChatImages materializes attachment bytes to flat temp files', async () => {
     const dataUrl =
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    const messages = [
+    const messages: OpenAIMessage[] = [
       { role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }] }
     ]
     const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages, 'hermes'))
@@ -716,6 +724,7 @@ function fixtureMeta(overrides: Partial<VectorStoreMeta> = {}): VectorStoreMeta 
     expiresAfter: null,
     expiresAt: null,
     lastActiveAt: 1_700_000_000_000,
+    embeddingAlias: null,
     ...overrides
   }
 }

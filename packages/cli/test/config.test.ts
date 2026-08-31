@@ -45,7 +45,7 @@ describe('resolveExplicitServeModel', () => {
     })
     assert.equal(r.sdkType, 'whispercpp-transcription')
     assert.equal(r.endpointCategory, 'transcription')
-    assert.equal((r.config.whisperConfig as Record<string, unknown>).translate, false)
+    assert.equal((r.config['whisperConfig'] as Record<string, unknown>)['translate'], false)
   })
 })
 

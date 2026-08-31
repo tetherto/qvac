@@ -11,6 +11,8 @@ import { createVideoJobsStore, type VideoJob } from '../src/serve/core/video-job
 import { tearDownJob, resolveInputReferenceImage } from '../src/serve/routes/videos.js'
 import type { QvacContext } from '../src/serve/lib/types.js'
 
+type CancelInput = Parameters<NonNullable<QvacContext['cancelOverride']>>[0]
+
 function expectIssue(input: unknown, path: string): { message: string } {
   const result = videosCreateBody.safeParse(input)
   assert.equal(result.success, false, `expected validation to fail for ${JSON.stringify(input)}`)
@@ -178,18 +180,18 @@ describe('extractVideoCreateParams', () => {
     it('returns mode=img2vid with init_image when initImage is provided', () => {
       const params = extractVideoCreateParams({ prompt: 'turns and smiles' }, initImage, 'm')
       assert.equal(params.mode, 'img2vid')
-      assert.equal((params as Record<string, unknown>).init_image, initImage)
+      assert.equal((params as Record<string, unknown>)['init_image'], initImage)
       assert.equal(params.prompt, 'turns and smiles')
     })
 
     it('includes coerced strength when provided as number', () => {
       const params = extractVideoCreateParams({ prompt: 'p', strength: 0.85 }, initImage, 'm')
-      assert.equal((params as Record<string, unknown>).strength, 0.85)
+      assert.equal((params as Record<string, unknown>)['strength'], 0.85)
     })
 
     it('coerces strength from string to float', () => {
       const params = extractVideoCreateParams({ prompt: 'p', strength: '0.5' }, initImage, 'm')
-      assert.equal((params as Record<string, unknown>).strength, 0.5)
+      assert.equal((params as Record<string, unknown>)['strength'], 0.5)
     })
 
     it('omits strength when not provided', () => {
@@ -554,7 +556,7 @@ describe('resolveInputReferenceImage', () => {
 
 describe('tearDownJob', () => {
   it('aborts the controller and cancels the SDK request for in-progress jobs', () => {
-    const cancelled: Array<{ requestId: string }> = []
+    const cancelled: CancelInput[] = []
     const ctx = makeCtxStub({
       // lunte-disable-next-line require-await
       cancelOverride: async (opts) => {
@@ -569,7 +571,7 @@ describe('tearDownJob', () => {
   })
 
   it('skips cancel for completed jobs', () => {
-    const cancelled: Array<{ requestId: string }> = []
+    const cancelled: CancelInput[] = []
     const ctx = makeCtxStub({
       // lunte-disable-next-line require-await
       cancelOverride: async (opts) => {
@@ -584,7 +586,7 @@ describe('tearDownJob', () => {
   })
 
   it('skips cancel when requestId is not yet set', () => {
-    const cancelled: Array<{ requestId: string }> = []
+    const cancelled: CancelInput[] = []
     const ctx = makeCtxStub({
       // lunte-disable-next-line require-await
       cancelOverride: async (opts) => {

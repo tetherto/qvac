@@ -259,8 +259,8 @@ describe('parseServeConfig — openai.audio.speech.voices', () => {
       },
       {}
     )
-    assert.equal(cfg.openai.audio.speech.voices?.alloy, 'tts-a')
-    assert.equal(cfg.openai.audio.speech.voices?.echo, 'tts-b')
+    assert.equal(cfg.openai.audio.speech.voices?.['alloy'], 'tts-a')
+    assert.equal(cfg.openai.audio.speech.voices?.['echo'], 'tts-b')
   })
 
   it('rejects a non-object voices value', () => {

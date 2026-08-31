@@ -38,7 +38,7 @@ describe('e2e harness helpers', () => {
       { name: 'model', value: 'whisper' },
       { name: 'file', filename: 'a.wav', contentType: 'audio/wav', data: Buffer.from('RIFF') }
     ])
-    assert.match(headers['content-type'], /multipart\/form-data; boundary=/)
+    assert.match(headers['content-type']!, /multipart\/form-data; boundary=/)
     assert.ok(payload.includes('name="model"'))
     assert.ok(payload.includes('filename="a.wav"'))
   })

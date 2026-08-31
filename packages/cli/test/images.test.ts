@@ -14,6 +14,21 @@ import {
   InvalidImageStrengthError,
   UnsupportedImageOutputError
 } from '../src/serve/schemas/images.js'
+import type { Logger } from '../src/logger.js'
+
+// Collects warnings so the log-only helpers can be asserted on.
+function makeLogger(): { warnings: string[]; logger: Logger } {
+  const warnings: string[] = []
+  const logger: Logger = {
+    error: () => {},
+    warn: (message) => {
+      warnings.push(message)
+    },
+    info: () => {},
+    debug: () => {}
+  }
+  return { warnings, logger }
+}
 
 describe('parseImageSize', () => {
   it('returns null for undefined / null / empty', () => {
@@ -128,17 +143,6 @@ describe('extractImageGenerationParams', () => {
 })
 
 describe('logImageUnsupportedParams', () => {
-  function makeLogger(): {
-    warnings: string[]
-    logger: Parameters<typeof logImageUnsupportedParams>[1]
-  } {
-    const warnings: string[] = []
-    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<
-      typeof logImageUnsupportedParams
-    >[1]
-    return { warnings, logger }
-  }
-
   it('does not warn on empty body', () => {
     const { warnings, logger } = makeLogger()
     logImageUnsupportedParams({}, logger)
@@ -328,17 +332,6 @@ describe('extractImageEditParams', () => {
 })
 
 describe('logImageEditExtraWarnings', () => {
-  function makeLogger(): {
-    warnings: string[]
-    logger: Parameters<typeof logImageEditExtraWarnings>[2]
-  } {
-    const warnings: string[] = []
-    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<
-      typeof logImageEditExtraWarnings
-    >[2]
-    return { warnings, logger }
-  }
-
   it('warns on extra images', () => {
     const { warnings, logger } = makeLogger()
     logImageEditExtraWarnings({}, { extraImageCount: 2 }, logger)
