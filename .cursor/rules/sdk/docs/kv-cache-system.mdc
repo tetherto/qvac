@@ -214,10 +214,12 @@ Nothing is evicted from the cache to make room. A conversation that grows past
 `ctx_size` runs out of context, and there are two ways to see it:
 
 1. A prompt that does not fit is refused before any decoding, with a typed `ContextOverflowError` carrying the parsed sizes.
-2. A generation that fills the window stops and reports `stopReason: "contextOverflow"`, keeping the tokens it already produced.
+2. A generation that fills the window stops and reports `stopReason: "length"`, keeping the tokens it already produced.
 
-The second one is a normal completion, not an error, so a caller can tell a full
-context from a `predict` cutoff.
+The second one is a normal completion, not an error. `stopReason` alone does not
+distinguish a full context from a positive `predict` cutoff — the SDK maps both
+to `"length"` (with `predict: -1` there is no cutoff, so `"length"` can only
+mean the boundary).
 
 **Config for long conversations:** size `ctx_size` for the whole conversation you
 intend to hold.
