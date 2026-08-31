@@ -75,6 +75,12 @@ anyway — the conservative reading, recorded as an assumption on every result.
 Measure with the same defaults the SDK uses, or the residuals will not describe
 what users actually run.
 
+One observed consequence: the very first load of a freshly downloaded file ran
+~250 MiB of RSS above the warm repeats of the same load (page-cache effects on
+a 2.4 GiB model). The committed coefficients describe warm loads and do not
+cover that transient — deliberately, because the excess is file-backed and
+evictable, so it is not memory the system has to find under pressure.
+
 ## Scope of a fixture
 
 Coefficients are keyed by **platform**, while several of the buffers they cover
@@ -98,11 +104,14 @@ one.
 
 ## Status
 
-| Platform     | Coefficients           | Validated |
-| ------------ | ---------------------- | --------- |
-| darwin-arm64 | placeholder shape only | no        |
+| Platform     | Coefficients                              | Validated |
+| ------------ | ----------------------------------------- | --------- |
+| darwin-arm64 | measured 2026-08-31 (Metal, Apple M4 Pro) | yes       |
 
-`darwin-arm64` currently ships an unvalidated placeholder, so every assessment
-on it returns `unknown`. Run the harness on Apple silicon to replace it. Adding
-a platform means: run the harness with `--write`, add the module to
-`calibration/index.ts`, run prettier, and update the table above.
+`darwin-arm64` was measured on an Apple M4 Pro against the Metal backend
+(`q8_0` KV cache): held-out Qwen3-8B landed at 5.28 GiB against a predicted
+upper of 5.34 GiB. LLM workloads return real verdicts there; audio workloads
+still return `unknown` because the harness has no whisper pass yet, and
+`estimateWhisper` refuses the zeroed audio coefficients rather than consuming
+them. Adding a platform means: run the harness with `--write`, add the module
+to `calibration/index.ts`, run prettier, and update the table above.
