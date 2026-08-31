@@ -3,6 +3,7 @@ import { HttpError } from '@/serve/lib/http-error'
 import { multipartToBody } from '@/serve/lib/multipart'
 import { filesUploadBody, fileIdParams } from '@/serve/extensions/openai/schemas/files'
 import type { EphemeralFileRecord } from '@/serve/extensions/openai/adapters/ephemeral-files-store'
+import { openaiState } from '@/serve/extensions/openai/state'
 
 function toOpenAIFile(id: string, record: EphemeralFileRecord): Record<string, unknown> {
   return {
@@ -50,6 +51,8 @@ will not serve stale bytes after the store has evicted the entry.
 
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
+  const openai = openaiState(app.qvac)
+
   app.post(
     '/v1/files',
     {
@@ -73,14 +76,14 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
       const purpose =
         typeof body.purpose === 'string' && body.purpose.length > 0 ? body.purpose : 'assistants'
-      const id = ctx.ephemeralFiles.put({
+      const id = openai.ephemeralFiles.put({
         data: fileBuf,
         fileName: fileMeta.filename.length > 0 ? fileMeta.filename : 'upload.bin',
         purpose,
         contentType: fileMeta.mimetype
       })
       ctx.logger.info(`  files upload id=${id} bytes=${fileBuf.length} purpose=${purpose}`)
-      const rec = ctx.ephemeralFiles.get(id)
+      const rec = openai.ephemeralFiles.get(id)
       if (rec === null) {
         throw new HttpError(500, 'internal_error', 'File was uploaded but could not be retrieved.')
       }
@@ -96,7 +99,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     // lunte-disable-next-line require-await
     async () => ({
       object: 'list' as const,
-      data: app.qvac.ephemeralFiles.list().map(({ id, record }) => toOpenAIFile(id, record)),
+      data: openai.ephemeralFiles.list().map(({ id, record }) => toOpenAIFile(id, record)),
       has_more: false
     })
   )
@@ -114,7 +117,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     // lunte-disable-next-line require-await
     async (req) => {
       const id = decodeURIComponent(req.params.id)
-      const record = app.qvac.ephemeralFiles.get(id)
+      const record = openai.ephemeralFiles.get(id)
       if (record === null) throw new HttpError(404, 'file_not_found', `File "${id}" not found.`)
       return toOpenAIFile(id, record)
     }
@@ -133,7 +136,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     // lunte-disable-next-line require-await
     async (req, reply) => {
       const id = decodeURIComponent(req.params.id)
-      const record = app.qvac.ephemeralFiles.get(id)
+      const record = openai.ephemeralFiles.get(id)
       if (record === null) throw new HttpError(404, 'file_not_found', `File "${id}" not found.`)
       let cacheControl = 'private, no-store'
       if (record.expiresAtMs !== null) {

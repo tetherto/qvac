@@ -1,5 +1,6 @@
-import type { LoadConfig, OpenAIServeOptions, ServeConfig } from '@/serve/core/config/types'
+import type { LoadConfig, ServeConfig, ServeExtensionConfig } from '@/serve/core/config/types'
 import { resolveDefaults, resolveServeModels, type RawModelEntry } from '@/serve/core/config/models'
+import type { ServeExtension } from '@/serve/core/extensions'
 import { normalizeCorsOrigin } from '@/serve/core/cors'
 
 interface RawServeConfig {
@@ -10,7 +11,8 @@ interface RawServeConfig {
       origins?: unknown
     }
     load?: RawLoadConfig
-    openai?: RawOpenAIOptions
+    /** `serve.<extension>` blocks; each extension parses its own. */
+    [extension: string]: unknown
   }
 }
 
@@ -19,18 +21,6 @@ interface RawLoadConfig {
   concurrency?: unknown
   timeoutMs?: unknown
   cancelOnDisconnect?: unknown
-}
-
-interface RawOpenAIOptions {
-  audio?: {
-    speech?: {
-      defaultVoice?: unknown
-      /** Map OpenAI `voice` -> `serve.models` alias (see ServeConfig.openai.audio.speech.voices). */
-      voices?: unknown
-      /** Cap on `input` length; `null` disables. See ServeConfig.openai.audio.speech.maxInputChars. */
-      maxInputChars?: unknown
-    }
-  }
 }
 
 interface CLIServeOptions {
@@ -45,7 +35,8 @@ interface CLIServeOptions {
 
 export function parseServeConfig(
   rawConfig: RawServeConfig,
-  cliOptions: CLIServeOptions
+  cliOptions: CLIServeOptions,
+  extensions: readonly ServeExtension[] = []
 ): ServeConfig {
   const serve = rawConfig.serve ?? {}
   const models = resolveServeModels(serve.models ?? {})
@@ -66,8 +57,22 @@ export function parseServeConfig(
     load: parseLoadConfig(serve.load, cliOptions),
     publicBaseUrl: normalizePublicBaseUrl(cliOptions.publicBaseUrl ?? serve.publicBaseUrl),
     cors: { origins: parseCorsOrigins(serve.cors?.origins, cliOptions.corsOrigins) },
-    openai: parseOpenAIOptions(serve.openai)
+    extensions: parseExtensionConfigs(serve, extensions)
   }
+}
+
+// Every registered extension parses its block whether or not it is mounted, so
+// a typo in `serve.<extension>` fails at startup rather than lying dormant.
+function parseExtensionConfigs(
+  serve: Record<string, unknown>,
+  extensions: readonly ServeExtension[]
+): Partial<ServeExtensionConfig> {
+  const parsed: Record<string, unknown> = {}
+  for (const extension of extensions) {
+    if (extension.parseConfig === undefined) continue
+    parsed[extension.name] = extension.parseConfig(serve[extension.name])
+  }
+  return parsed as Partial<ServeExtensionConfig>
 }
 
 const DEFAULT_LOAD_CONCURRENCY = 1
@@ -135,59 +140,4 @@ function normalizePublicBaseUrl(raw: string | undefined): string | null {
     throw new Error(`serve.publicBaseUrl must start with http:// or https:// (got "${trimmed}").`)
   }
   return trimmed.replace(/\/+$/, '')
-}
-
-const DEFAULT_SPEECH_VOICE = 'alloy'
-// OpenAI's documented limit for /v1/audio/speech `input`. Keeps memory
-// pressure bounded since we buffer the full WAV before responding.
-const DEFAULT_MAX_INPUT_CHARS = 4096
-
-function parseOpenAIOptions(raw: RawOpenAIOptions | undefined): OpenAIServeOptions {
-  const rawDefaultVoice = raw?.audio?.speech?.defaultVoice
-  let defaultVoice: string | null = DEFAULT_SPEECH_VOICE
-
-  if (rawDefaultVoice === null) {
-    // Explicit null disables the fallback so callers must always send `voice`.
-    defaultVoice = null
-  } else if (typeof rawDefaultVoice === 'string') {
-    const trimmed = rawDefaultVoice.trim()
-    defaultVoice = trimmed.length > 0 ? trimmed : null
-  } else if (rawDefaultVoice !== undefined) {
-    throw new Error('serve.openai.audio.speech.defaultVoice must be a string or null')
-  }
-
-  const rawVoices = raw?.audio?.speech?.voices
-  let voices: Record<string, string> | null = null
-  if (rawVoices !== undefined && rawVoices !== null) {
-    if (typeof rawVoices !== 'object' || Array.isArray(rawVoices)) {
-      throw new Error(
-        'serve.openai.audio.speech.voices must be a JSON object (voice -> model alias)'
-      )
-    }
-    const out: Record<string, string> = {}
-    for (const [key, val] of Object.entries(rawVoices as Record<string, unknown>)) {
-      if (typeof val !== 'string' || !val.trim()) {
-        throw new Error(
-          `serve.openai.audio.speech.voices["${key}"] must be a non-empty string (model alias)`
-        )
-      }
-      const k = key.trim().toLowerCase()
-      if (!k) continue
-      out[k] = val.trim()
-    }
-    voices = Object.keys(out).length > 0 ? out : null
-  }
-
-  const rawMaxInput = raw?.audio?.speech?.maxInputChars
-  let maxInputChars: number | null = DEFAULT_MAX_INPUT_CHARS
-  if (rawMaxInput === null) {
-    maxInputChars = null
-  } else if (rawMaxInput !== undefined) {
-    if (typeof rawMaxInput !== 'number' || !Number.isInteger(rawMaxInput) || rawMaxInput < 1) {
-      throw new Error('serve.openai.audio.speech.maxInputChars must be a positive integer or null')
-    }
-    maxInputChars = rawMaxInput
-  }
-
-  return { audio: { speech: { defaultVoice, voices, maxInputChars } } }
 }

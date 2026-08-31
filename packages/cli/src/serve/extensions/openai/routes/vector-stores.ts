@@ -32,6 +32,7 @@ import {
 import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import type { QvacContext } from '@/serve/core/context'
 import { ensureReady } from '@/serve/core/plugins/require-model'
+import { openaiState } from '@/serve/extensions/openai/state'
 
 const SYNTHETIC_TIMESTAMP = 0
 
@@ -96,6 +97,8 @@ Same embedding-model resolution + mismatch rules as
 
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
+  const openai = openaiState(app.qvac)
+
   app.get(
     '/v1/vector_stores',
     {
@@ -108,7 +111,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     async () => {
       const ctx = app.qvac
       const ragInfo = await safeListWorkspaces(ctx)
-      const local = ctx.vectorStores.list()
+      const local = openai.vectorStores.list()
       const merged = mergeStoresAndWorkspaces(local, ragInfo.workspaces)
       return {
         object: 'list' as const,
@@ -154,7 +157,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       let meta: VectorStoreMeta
       try {
-        meta = ctx.vectorStores.create(input)
+        meta = openai.vectorStores.create(input)
       } catch (err) {
         if (err instanceof InvalidVectorStoreIdError) throwInputError(err)
         throw err
@@ -178,7 +181,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const ctx = app.qvac
       const id = decodeId(req.params.id)
       const ragInfo = await safeListWorkspaces(ctx)
-      const meta = ctx.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
+      const meta = openai.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
       if (!meta) {
         throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
       }
@@ -208,17 +211,17 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
 
       const ragInfo = await safeListWorkspaces(ctx)
-      let meta = ctx.vectorStores.get(id)
+      let meta = openai.vectorStores.get(id)
       if (!meta) {
         const synthetic = syntheticFromWorkspace(id, ragInfo.workspaces)
         if (!synthetic) {
           throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
         }
         try {
-          meta = ctx.vectorStores.create({ id: synthetic.id, name: synthetic.name })
+          meta = openai.vectorStores.create({ id: synthetic.id, name: synthetic.name })
         } catch (err) {
           if (err instanceof InvalidVectorStoreIdError && err.kind === 'duplicate') {
-            const existing = ctx.vectorStores.get(id)
+            const existing = openai.vectorStores.get(id)
             if (!existing) {
               throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
             }
@@ -229,7 +232,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         }
       }
 
-      const updated = ctx.vectorStores.update(meta.id, update)
+      const updated = openai.vectorStores.update(meta.id, update)
       if (!updated) {
         throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
       }
@@ -252,7 +255,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const ctx = app.qvac
       const id = decodeId(req.params.id)
       const ragInfo = await safeListWorkspaces(ctx)
-      const hadMeta = ctx.vectorStores.get(id) !== null
+      const hadMeta = openai.vectorStores.get(id) !== null
       const workspaceExists = ragInfo.workspaces.some((w) => w.name === id)
       if (!hadMeta && !workspaceExists) {
         throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
@@ -270,8 +273,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           )
         }
       }
-      ctx.vectorStores.delete(id)
-      ctx.chunkAttributions.evict(id)
+      openai.vectorStores.delete(id)
+      openai.chunkAttributions.evict(id)
       ctx.logger.info(
         `  vector_store delete id=${id} workspace=${workspaceExists ? 'deleted' : 'noop'}`
       )
@@ -302,7 +305,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const topK = body.max_num_results
 
       const ragInfo = await safeListWorkspaces(ctx)
-      const meta = ctx.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
+      const meta = openai.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
       if (!meta) {
         throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
       }
@@ -319,7 +322,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         )
       }
 
-      ctx.vectorStores.touch(id)
+      openai.vectorStores.touch(id)
       ctx.logger.info(
         `  vector_store search id=${id} model=${embedding.entry.alias} q.len=${body.query.length}${topK ? ` topK=${topK}` : ''}`
       )
@@ -332,7 +335,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           workspace: id
         })
         return searchResultsToOpenAI(results, body.query, (chunkId) =>
-          ctx.chunkAttributions.lookup(id, chunkId)
+          openai.chunkAttributions.lookup(id, chunkId)
         )
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -365,17 +368,17 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const fileId = req.body.file_id
 
       const ragInfo = await safeListWorkspaces(ctx)
-      let meta = ctx.vectorStores.get(id)
+      let meta = openai.vectorStores.get(id)
       if (!meta) {
         const synthetic = syntheticFromWorkspace(id, ragInfo.workspaces)
         if (!synthetic) {
           throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
         }
         try {
-          meta = ctx.vectorStores.create({ id: synthetic.id, name: synthetic.name })
+          meta = openai.vectorStores.create({ id: synthetic.id, name: synthetic.name })
         } catch (err) {
           if (err instanceof InvalidVectorStoreIdError && err.kind === 'duplicate') {
-            const existing = ctx.vectorStores.get(id)
+            const existing = openai.vectorStores.get(id)
             if (!existing) {
               throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
             }
@@ -398,7 +401,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         )
       }
 
-      const record = ctx.ephemeralFiles.get(fileId)
+      const record = openai.ephemeralFiles.get(fileId)
       if (record === null) {
         throw new HttpError(
           404,
@@ -423,7 +426,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         )
       }
 
-      ctx.vectorStores.touch(id)
+      openai.vectorStores.touch(id)
       ctx.logger.info(
         `  vector_store files attach id=${id} file_id=${fileId} bytes=${record.data.length} embed=${embedding.entry.alias}`
       )
@@ -448,9 +451,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         await closeWorkspaceQuiet(ctx, id, 'ingest')
       }
 
-      ctx.vectorStores.setEmbedding(id, embedding.entry.alias)
+      openai.vectorStores.setEmbedding(id, embedding.entry.alias)
       recordChunkAttributions(ctx, id, fileId, record.fileName, ingestResult.processed)
-      ctx.ephemeralFiles.remove(fileId)
+      openai.ephemeralFiles.remove(fileId)
 
       return {
         id: fileId,
@@ -608,12 +611,13 @@ function recordChunkAttributions(
   fileName: string,
   processed: unknown[]
 ): void {
+  const openai = openaiState(ctx)
   for (const entry of processed) {
     if (typeof entry !== 'object' || entry === null) continue
     const e = entry as { status?: unknown; id?: unknown }
     if (e.status !== 'fulfilled') continue
     if (typeof e.id !== 'string') continue
-    ctx.chunkAttributions.record(vectorStoreId, e.id, { fileId, fileName })
+    openai.chunkAttributions.record(vectorStoreId, e.id, { fileId, fileName })
   }
 }
 

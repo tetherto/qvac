@@ -11,7 +11,7 @@ import {
   buildWavBuffer,
   speechAliasKey
 } from '@/serve/extensions/openai/audio'
-import { parseServeConfig } from '@/serve/core/config'
+import { parseOpenAIOptions } from '@/serve/extensions/openai/config'
 import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '@/serve/lib/audio-transcode'
 
 describe('mapResponseFormat', () => {
@@ -242,79 +242,42 @@ function tail(args: string[]): string[] {
   return args.slice(args.indexOf('-c:a'))
 }
 
-describe('parseServeConfig — openai.audio.speech.voices', () => {
-  it('normalizes voice keys to lowercase', async () => {
-    const cfg = await parseServeConfig(
-      {
-        serve: {
-          models: {},
-          openai: {
-            audio: {
-              speech: {
-                voices: { Alloy: 'tts-a', ECHO: 'tts-b' }
-              }
-            }
-          }
-        }
-      },
-      {}
-    )
-    assert.equal(cfg.openai.audio.speech.voices?.['alloy'], 'tts-a')
-    assert.equal(cfg.openai.audio.speech.voices?.['echo'], 'tts-b')
+describe('parseOpenAIOptions — audio.speech.voices', () => {
+  it('normalizes voice keys to lowercase', () => {
+    const options = parseOpenAIOptions({
+      audio: { speech: { voices: { Alloy: 'tts-a', ECHO: 'tts-b' } } }
+    })
+    assert.equal(options.audio.speech.voices?.['alloy'], 'tts-a')
+    assert.equal(options.audio.speech.voices?.['echo'], 'tts-b')
   })
 
   it('rejects a non-object voices value', () => {
     assert.throws(
-      () =>
-        parseServeConfig(
-          {
-            serve: {
-              models: {},
-              openai: { audio: { speech: { voices: ['alloy'] } } }
-            }
-          },
-          {}
-        ),
+      () => parseOpenAIOptions({ audio: { speech: { voices: ['alloy'] } } }),
       /serve\.openai\.audio\.speech\.voices must be a JSON object/
     )
   })
 })
 
-describe('parseServeConfig — openai.audio.speech.maxInputChars', () => {
-  it('defaults to 4096 when unset', async () => {
-    const cfg = await parseServeConfig({ serve: { models: {} } }, {})
-    assert.equal(cfg.openai.audio.speech.maxInputChars, 4096)
+describe('parseOpenAIOptions — audio.speech.maxInputChars', () => {
+  it('defaults to 4096 when unset', () => {
+    assert.equal(parseOpenAIOptions(undefined).audio.speech.maxInputChars, 4096)
   })
 
-  it('accepts an explicit positive integer', async () => {
-    const cfg = await parseServeConfig(
-      { serve: { models: {}, openai: { audio: { speech: { maxInputChars: 1024 } } } } },
-      {}
-    )
-    assert.equal(cfg.openai.audio.speech.maxInputChars, 1024)
+  it('accepts an explicit positive integer', () => {
+    const options = parseOpenAIOptions({ audio: { speech: { maxInputChars: 1024 } } })
+    assert.equal(options.audio.speech.maxInputChars, 1024)
   })
 
-  it('treats null as "no cap"', async () => {
-    const cfg = await parseServeConfig(
-      { serve: { models: {}, openai: { audio: { speech: { maxInputChars: null } } } } },
-      {}
-    )
-    assert.equal(cfg.openai.audio.speech.maxInputChars, null)
+  it('treats null as "no cap"', () => {
+    const options = parseOpenAIOptions({ audio: { speech: { maxInputChars: null } } })
+    assert.equal(options.audio.speech.maxInputChars, null)
   })
 
   it('rejects non-integer or non-positive values', () => {
     for (const bad of [0, -1, 1.5, '4096', true]) {
       assert.throws(
-        () =>
-          parseServeConfig(
-            {
-              serve: {
-                models: {},
-                openai: { audio: { speech: { maxInputChars: bad as unknown as number } } }
-              }
-            },
-            {}
-          ),
+        () => parseOpenAIOptions({ audio: { speech: { maxInputChars: bad } } }),
         /serve\.openai\.audio\.speech\.maxInputChars must be a positive integer or null/
       )
     }

@@ -2,38 +2,23 @@ import type { ModelRegistry, ModelEntry } from '@/serve/core/model-registry'
 import type { ServeConfig } from '@/serve/core/config/types'
 import type { LoadManager, LoadModelFn } from '@/serve/core/load-manager'
 import type { Logger } from '@/logger'
-import type { VectorStoresStore } from '@/serve/extensions/openai/adapters/vector-stores-store'
-import type { EphemeralFilesStore } from '@/serve/extensions/openai/adapters/ephemeral-files-store'
-import type { ChunkAttributionStore } from '@/serve/extensions/openai/adapters/chunk-attribution-store'
-import type { ResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
-import type { VideoJobsStore } from '@/serve/core/video-jobs-store'
-import type * as sdk from '@qvac/sdk'
 
 export interface QvacContext {
   registry: ModelRegistry
   serveConfig: ServeConfig
   loadManager: LoadManager
   logger: Logger
-  vectorStores: VectorStoresStore
-  ephemeralFiles: EphemeralFilesStore
-  chunkAttributions: ChunkAttributionStore
-  responsesStore: ResponsesStore
-  videoJobsStore: VideoJobsStore
-  /** Set at server start: `true` when `ffmpeg` is on PATH (probed once).
-   * Gates both video MP4 transcoding and audio mp3/opus/aac/flac encoding. */
-  ffmpegAvailable: boolean
-  transcribeOverride?: (
-    opts: Parameters<typeof sdk.transcribe>[0]
-  ) => Promise<string | sdk.TranscribeSegment[]> & { requestId: string }
-  /** Test seam — overrides `video()` from `@qvac/sdk` when set. */
-  videoOverride?: typeof sdk.video
-  /** Test seam — overrides `cancel()` from `@qvac/sdk` when set. */
-  cancelOverride?: typeof sdk.cancel
+  /** State owned by each mounted extension, keyed by extension name. */
+  extensions: Partial<ServeExtensionState>
   /** Test seam — overrides the SDK model load when set, so lazy-load and preload
    * can be exercised without a real (expensive) model load. Backed by an
    * accessor in `buildServer`, hence the explicit `| undefined`. */
   loadModelOverride?: LoadModelFn | undefined
 }
+
+/** Augmented by each extension with the state its routes read. */
+// lunte-disable-next-line no-empty-interface
+export interface ServeExtensionState {}
 
 export interface QvacRequestModel {
   alias: string

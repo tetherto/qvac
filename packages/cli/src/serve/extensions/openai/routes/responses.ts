@@ -29,6 +29,7 @@ import {
   writeStreamingResponse,
   type ResponsesHandlerParams
 } from '@/serve/extensions/openai/adapters/response-writers'
+import { openaiState } from '@/serve/extensions/openai/state'
 
 const VOLATILE_HEADER = 'X-QVAC-Stub'
 
@@ -98,6 +99,8 @@ async function markVolatile(_req: FastifyRequest, reply: FastifyReply): Promise<
 
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
+  const openai = openaiState(app.qvac)
+
   app.post(
     '/v1/responses',
     {
@@ -148,7 +151,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       let history = sdk.history
       if (sdk.previousResponseId) {
-        const prev = ctx.responsesStore.get(sdk.previousResponseId)
+        const prev = openai.responsesStore.get(sdk.previousResponseId)
         if (!prev) {
           throw new HttpError(
             404,
@@ -156,7 +159,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
             `No response found for previous_response_id "${sdk.previousResponseId}".`
           )
         }
-        const prefix = historyPrefixFromStoredResponse(prev, (id) => ctx.responsesStore.get(id))
+        const prefix = historyPrefixFromStoredResponse(prev, (id) => openai.responsesStore.get(id))
         history = [...prefix, ...history]
       }
 
@@ -189,7 +192,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       )
 
       const writerParams: ResponsesHandlerParams = {
-        ctx: { logger: ctx.logger, responsesStore: ctx.responsesStore },
+        ctx: { logger: ctx.logger, responsesStore: openai.responsesStore },
         sdkModelId: params.sdkModelId,
         history: params.history,
         ...(params.tools !== undefined ? { tools: params.tools } : {}),
@@ -255,7 +258,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     // lunte-disable-next-line require-await
     async (req, reply) => {
-      const rec = app.qvac.responsesStore.get(req.params.id)
+      const rec = openai.responsesStore.get(req.params.id)
       if (!rec) {
         throw new HttpError(
           404,
@@ -280,7 +283,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     // lunte-disable-next-line require-await
     async (req) => {
-      const ok = app.qvac.responsesStore.delete(req.params.id)
+      const ok = openai.responsesStore.delete(req.params.id)
       if (!ok) {
         throw new HttpError(
           404,
@@ -311,8 +314,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       if (req.query.after !== undefined) opts.after = req.query.after
       const page =
         opts.limit !== undefined || opts.after !== undefined
-          ? app.qvac.responsesStore.listInputItems(req.params.id, opts)
-          : app.qvac.responsesStore.listInputItems(req.params.id)
+          ? openai.responsesStore.listInputItems(req.params.id, opts)
+          : openai.responsesStore.listInputItems(req.params.id)
       if (!page) {
         throw new HttpError(
           404,

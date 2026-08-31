@@ -21,19 +21,18 @@ import { checkNetworkExposure, validateServeStartup } from '@/serve/core/startup
 import { createModelRegistry } from '@/serve/core/model-registry'
 import { createLoadManager, defaultLoadFn } from '@/serve/core/load-manager'
 import { preloadModels, shouldRefuseStart, shutdownSDK } from '@/serve/core/lifecycle'
-import { createResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
-import { createChunkAttributionStore } from '@/serve/extensions/openai/adapters/chunk-attribution-store'
-import { createEphemeralFilesStore } from '@/serve/extensions/openai/adapters/ephemeral-files-store'
-import { createVectorStoresStore } from '@/serve/extensions/openai/adapters/vector-stores-store'
-import { createVideoJobsStore } from '@/serve/core/video-jobs-store'
-import { probeFfmpegAvailable } from '@/serve/lib/video-transcode'
-import { tearDownJob } from '@/serve/extensions/openai/routes/videos'
 import type { QvacContext } from '@/serve/core/context'
 import contextPlugin from '@/serve/core/plugins/context'
 import errorHandlerPlugin from '@/serve/core/plugins/error-handler'
 import authPlugin from '@/serve/core/plugins/auth'
 import cancelBridgePlugin from '@/serve/core/plugins/cancel-bridge'
-import { extensionTags, mountExtensions } from '@/serve/core/extensions'
+import {
+  extensionBanners,
+  extensionTags,
+  mountExtensions,
+  setupExtensions,
+  type ServeExtension
+} from '@/serve/core/extensions'
 import { resolveExtensions } from '@/serve/extensions'
 
 export interface StartServerOptions {
@@ -60,17 +59,28 @@ export interface StartServerOptions {
   cancelLoadOnDisconnect?: boolean | undefined
   /** Extension names to mount. Defaults to every registered extension. */
   extensions?: string[] | undefined
-  transcribeOverride?: QvacContext['transcribeOverride']
+  /** Per-extension options, keyed by extension name, passed to its `setup`. */
+  extensionOptions?: Record<string, unknown> | undefined
   loadModelOverride?: QvacContext['loadModelOverride']
 }
 
 export async function buildServer(options: StartServerOptions): Promise<FastifyInstance> {
+  return (await buildServerParts(options)).app
+}
+
+async function buildServerParts(
+  options: StartServerOptions
+): Promise<{ app: FastifyInstance; extensions: ServeExtension[] }> {
   const logger = createLogger(options.quiet ? 'silent' : options.verbose ? 'debug' : 'info')
   const extensions = resolveExtensions(options.extensions)
 
   const configPath = findConfigFile(options.projectRoot, options.config)
   const rawConfig = configPath ? ((await loadConfig(configPath)) as Record<string, unknown>) : {}
-  const serveConfig = parseServeConfig(rawConfig as Parameters<typeof parseServeConfig>[0], options)
+  const serveConfig = parseServeConfig(
+    rawConfig as Parameters<typeof parseServeConfig>[0],
+    options,
+    extensions
+  )
   validateServeStartup(serveConfig.cors.origins, options)
   const { apiKey, warning: apiKeyWarning } = resolveServeApiKey(options)
   if (apiKeyWarning !== undefined) logger.warn(apiKeyWarning)
@@ -79,30 +89,6 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
   const exposureWarning = checkNetworkExposure({ ...options, apiKey })
   if (exposureWarning !== undefined) logger.warn(exposureWarning)
   const registry = createModelRegistry()
-
-  const responsesStore = createResponsesStore()
-  const vectorStores = createVectorStoresStore()
-  const ephemeralFiles = createEphemeralFilesStore(undefined, {
-    onEvict: (id, reason) => {
-      logger.warn(`ephemeral file evicted id=${id} reason=${reason}`)
-    }
-  })
-  const chunkAttributions = createChunkAttributionStore()
-  const ffmpegAvailable = await probeFfmpegAvailable()
-  if (!ffmpegAvailable) {
-    logger.warn(
-      'ffmpeg not on PATH — /v1/videos/{id}/content defaults to video/avi and /v1/audio/speech rejects mp3/opus/aac/flac. Install ffmpeg to serve those. See: qvac doctor'
-    )
-  }
-  // `onEvict` captures `qvacContext` by reference; the closure runs lazily
-  // (only when the store actually evicts), long after `qvacContext` is wired
-  // below, so the forward reference is safe at invocation time.
-  const videoJobsStore = createVideoJobsStore({
-    onEvict: (job, reason) => {
-      logger.warn(`video job evicted id=${job.id} reason=${reason} status=${job.status}`)
-      tearDownJob(qvacContext, job)
-    }
-  })
 
   // The load fn resolves the override lazily via this ref, so the manager can be
   // built before the context (loadManager is a real required field, no placeholder)
@@ -122,15 +108,7 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     serveConfig,
     loadManager,
     logger,
-    vectorStores,
-    ephemeralFiles,
-    chunkAttributions,
-    responsesStore,
-    videoJobsStore,
-    ffmpegAvailable,
-    ...(options.transcribeOverride !== undefined
-      ? { transcribeOverride: options.transcribeOverride }
-      : {}),
+    extensions: {},
     get loadModelOverride() {
       return overrideRef.current
     },
@@ -138,6 +116,8 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
       overrideRef.current = fn
     }
   }
+
+  await setupExtensions(qvacContext, extensions, options.extensionOptions ?? {})
 
   const app = Fastify({
     logger: false,
@@ -229,11 +209,11 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
 
   await mountExtensions(app, extensions)
 
-  return app as unknown as FastifyInstance
+  return { app: app as unknown as FastifyInstance, extensions }
 }
 
 export async function startServer(options: StartServerOptions): Promise<FastifyInstance> {
-  const app = await buildServer(options)
+  const { app, extensions } = await buildServerParts(options)
 
   // Resolve plugin registrations (decorators, route table) but DON'T listen
   // yet — that way the imperative preload below can use `app.qvac` while
@@ -250,8 +230,9 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
     await app.close().catch(() => {})
     throw new Error(`All ${preload.attempted} preload model(s) failed to load; refusing to start.`)
   }
-  app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
-  app.qvac.logger.warn(app.qvac.videoJobsStore.bannerLine())
+  for (const banner of extensionBanners(app.qvac, extensions)) {
+    app.qvac.logger.warn(banner)
+  }
 
   closeWithGrace({ delay: 10_000 }, async ({ signal }) => {
     app.log.info?.({ signal }, 'shutdown signal received')

@@ -21,6 +21,7 @@ import {
   SPEECH_UNSUPPORTED_PARAMS
 } from '@/serve/extensions/openai/schemas/audio'
 import { resolveModelAlias } from '@/serve/core/config/models'
+import { openaiOptions } from '@/serve/extensions/openai/config'
 import {
   buildWavBuffer,
   int16SamplesToBuffer,
@@ -36,7 +37,7 @@ import {
 } from '@/serve/lib/audio-transcode'
 import type { ModelEntry } from '@/serve/core/model-registry'
 import type { ResolvedModelEntry } from '@/serve/core/config/types'
-import type { QvacContext } from '@/serve/core/context'
+import { openaiState, type OpenAIState } from '@/serve/extensions/openai/state'
 
 const SUPPORTED_TRANSCRIPTION_FORMATS = new Set(['json', 'text', 'srt', 'vtt', 'verbose_json'])
 
@@ -125,6 +126,8 @@ models whose endpoint category is \`speech\`.
 
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
+  const openai = openaiState(app.qvac)
+
   app.post(
     '/v1/audio/transcriptions',
     {
@@ -172,7 +175,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       try {
         const result = await invokeTranscription(
           req,
-          app.qvac.transcribeOverride,
+          openai.transcribeOverride,
           {
             modelId: sdkModelId,
             audioChunk: tmpPath,
@@ -250,7 +253,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       try {
         const result = await invokeTranscription(
           req,
-          app.qvac.transcribeOverride,
+          openai.transcribeOverride,
           {
             modelId: sdkModelId,
             audioChunk: tmpPath,
@@ -306,7 +309,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         )
       }
 
-      const maxInputChars = ctx.serveConfig.openai.audio.speech.maxInputChars
+      const speechOptions = openaiOptions(ctx.serveConfig).audio.speech
+      const maxInputChars = speechOptions.maxInputChars
       if (maxInputChars !== null && input.length > maxInputChars) {
         throw new HttpError(
           400,
@@ -316,7 +320,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         )
       }
 
-      const voice = resolveVoice(body.voice, ctx.serveConfig.openai.audio.speech.defaultVoice)
+      const voice = resolveVoice(body.voice, speechOptions.defaultVoice)
       if (voice === null) {
         throw new HttpError(
           400,
@@ -329,7 +333,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       if (formatMapping.kind === 'invalid') {
         throw new HttpError(400, 'invalid_response_format', formatMapping.message)
       }
-      if (formatMapping.kind === 'transcoded' && !ctx.ffmpegAvailable) {
+      if (formatMapping.kind === 'transcoded' && !openai.ffmpegAvailable) {
         throw new HttpError(
           503,
           'transcode_unavailable',
@@ -340,7 +344,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       // voice_map → hyphen alias → bare model (multi-stage lookup).
       const aliasKey = speechAliasKey(modelName, voice)
       const voiceKey = voice.toLowerCase()
-      const voiceMapAlias = ctx.serveConfig.openai.audio.speech.voices?.[voiceKey] ?? null
+      const voiceMapAlias = speechOptions.voices?.[voiceKey] ?? null
 
       let modelEntry: ResolvedModelEntry | ModelEntry | null = null
       let resolvedAlias = ''
@@ -485,7 +489,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     // lunte-disable-next-line require-await
     async () => {
-      const speech = app.qvac.serveConfig.openai.audio.speech
+      const speech = openaiOptions(app.qvac.serveConfig).audio.speech
       const data = collectVoices(speech.voices, speech.defaultVoice)
       return { object: 'list' as const, voices: data.map((v) => v.id), data }
     }
@@ -547,7 +551,7 @@ interface TranscriptionInvocationResult {
 
 async function invokeTranscription(
   req: FastifyRequest,
-  transcribeOverride: QvacContext['transcribeOverride'],
+  transcribeOverride: OpenAIState['transcribeOverride'],
   options: TranscriptionInvocationOptions,
   timed: boolean,
   operation: 'transcription' | 'translation'

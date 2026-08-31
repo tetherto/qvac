@@ -16,14 +16,15 @@ import {
   extractVideoCreateParams,
   InvalidVideoStrengthError
 } from '@/serve/extensions/openai/schemas/videos'
-import type { VideoJob } from '@/serve/core/video-jobs-store'
-import { videoJobResource } from '@/serve/core/video-jobs-store'
+import type { VideoJob } from '@/serve/extensions/openai/video-jobs-store'
+import { videoJobResource } from '@/serve/extensions/openai/video-jobs-store'
 import {
   transcodeAviToMp4,
   TranscodeFailedError,
   TranscodeTimeoutError
 } from '@/serve/lib/video-transcode'
 import type { QvacContext } from '@/serve/core/context'
+import { openaiState } from '@/serve/extensions/openai/state'
 
 const descriptions = {
   create: `
@@ -87,6 +88,7 @@ const RETRY_AFTER_SECONDS = 2
  * failures are logged at DEBUG.
  */
 function tearDownJob(ctx: QvacContext, job: VideoJob): void {
+  const openai = openaiState(ctx)
   if (job.status === 'queued' || job.status === 'in_progress') {
     try {
       job.controller.abort()
@@ -94,15 +96,15 @@ function tearDownJob(ctx: QvacContext, job: VideoJob): void {
       /* noop */
     }
     if (job.requestId) {
-      const cancelFn = ctx.cancelOverride ?? cancel
+      const cancelFn = openai.cancelOverride ?? cancel
       cancelFn({ requestId: job.requestId }).catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
         ctx.logger.debug(`  video_teardown job=${job.id} cancel failed: ${message}`)
       })
     }
   }
-  if (job.aviFileId) ctx.ephemeralFiles.remove(job.aviFileId)
-  if (job.mp4FileId) ctx.ephemeralFiles.remove(job.mp4FileId)
+  if (job.aviFileId) openai.ephemeralFiles.remove(job.aviFileId)
+  if (job.mp4FileId) openai.ephemeralFiles.remove(job.mp4FileId)
 }
 
 export { tearDownJob }
@@ -115,8 +117,9 @@ export async function resolveInputReferenceImage(
   ref: { image_url?: string | undefined; file_id?: string | undefined },
   ctx: QvacContext
 ): Promise<Uint8Array> {
+  const openai = openaiState(ctx)
   if (ref.file_id !== undefined) {
-    const record = ctx.ephemeralFiles.get(ref.file_id)
+    const record = openai.ephemeralFiles.get(ref.file_id)
     if (!record) {
       throw new HttpError(
         400,
@@ -244,7 +247,8 @@ async function runVideoJob(
   params: VideoClientParams,
   alias: string
 ): Promise<void> {
-  const store = ctx.videoJobsStore
+  const openai = openaiState(ctx)
+  const store = openai.videoJobsStore
   const job = store.get(jobId)
   if (!job) return
   ctx.logger.info(
@@ -252,7 +256,7 @@ async function runVideoJob(
   )
 
   try {
-    const videoFn = ctx.videoOverride ?? video
+    const videoFn = openai.videoOverride ?? video
     const result = videoFn(params)
 
     // Stash requestId so DELETE / onEvict can cancel via the SDK. If
@@ -261,7 +265,7 @@ async function runVideoJob(
     // here since tearDownJob couldn't, then bail.
     const stored = store.update(jobId, { requestId: result.requestId })
     if (!stored) {
-      const cancelFn = ctx.cancelOverride ?? cancel
+      const cancelFn = openai.cancelOverride ?? cancel
       cancelFn({ requestId: result.requestId }).catch(() => {
         /* noop */
       })
@@ -310,7 +314,7 @@ async function runVideoJob(
       throw new Error('video generation produced no output')
     }
 
-    const aviFileId = ctx.ephemeralFiles.put({
+    const aviFileId = openai.ephemeralFiles.put({
       data: Buffer.from(buffer),
       fileName: `video-${jobId}.avi`,
       purpose: 'video',
@@ -337,7 +341,7 @@ async function runVideoJob(
       aviFileId
     })
     if (!updated) {
-      ctx.ephemeralFiles.remove(aviFileId)
+      openai.ephemeralFiles.remove(aviFileId)
       ctx.logger.info(`  video_create job=${jobId} bytes dropped (job torn down during generation)`)
       return
     }
@@ -360,6 +364,7 @@ async function serveContent(
   job: VideoJob,
   formatOverride: 'mp4' | 'avi' | undefined
 ): Promise<void> {
+  const openai = openaiState(ctx)
   if (job.status !== 'completed') {
     if (job.status === 'failed') {
       throw new HttpError(
@@ -383,9 +388,9 @@ async function serveContent(
       `Video bytes for job ${job.id} are no longer available.`
     )
   }
-  const aviRecord = ctx.ephemeralFiles.get(job.aviFileId)
+  const aviRecord = openai.ephemeralFiles.get(job.aviFileId)
   if (!aviRecord) {
-    ctx.videoJobsStore.update(job.id, { aviFileId: null, mp4FileId: null })
+    openai.videoJobsStore.update(job.id, { aviFileId: null, mp4FileId: null })
     throw new HttpError(
       410,
       'video_expired',
@@ -393,7 +398,8 @@ async function serveContent(
     )
   }
 
-  const wantMp4 = formatOverride === 'mp4' || (formatOverride === undefined && ctx.ffmpegAvailable)
+  const wantMp4 =
+    formatOverride === 'mp4' || (formatOverride === undefined && openai.ffmpegAvailable)
 
   if (!wantMp4) {
     reply
@@ -403,7 +409,7 @@ async function serveContent(
     return
   }
 
-  if (!ctx.ffmpegAvailable) {
+  if (!openai.ffmpegAvailable) {
     throw new HttpError(
       503,
       'transcode_unavailable',
@@ -413,9 +419,9 @@ async function serveContent(
 
   let mp4Buffer: Buffer | null = null
   if (job.mp4FileId) {
-    const cached = ctx.ephemeralFiles.get(job.mp4FileId)
+    const cached = openai.ephemeralFiles.get(job.mp4FileId)
     if (cached) mp4Buffer = cached.data
-    else ctx.videoJobsStore.update(job.id, { mp4FileId: null })
+    else openai.videoJobsStore.update(job.id, { mp4FileId: null })
   }
 
   if (!mp4Buffer) {
@@ -443,7 +449,7 @@ async function serveContent(
       }
       throw err
     }
-    const mp4FileId = ctx.ephemeralFiles.put({
+    const mp4FileId = openai.ephemeralFiles.put({
       data: mp4Buffer,
       fileName: `video-${job.id}.mp4`,
       purpose: 'video',
@@ -455,9 +461,9 @@ async function serveContent(
     // ephemeralFiles until that store's own TTL drops it. We still serve the
     // bytes for this in-flight request (the client asked, we already paid for
     // the transcode).
-    const updated = ctx.videoJobsStore.update(job.id, { mp4FileId })
+    const updated = openai.videoJobsStore.update(job.id, { mp4FileId })
     if (!updated) {
-      ctx.ephemeralFiles.remove(mp4FileId)
+      openai.ephemeralFiles.remove(mp4FileId)
       ctx.logger.debug(
         `  video_content job=${job.id} mp4 cache dropped (job torn down during transcode)`
       )
@@ -472,6 +478,8 @@ async function serveContent(
 
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
+  const openai = openaiState(app.qvac)
+
   app.post(
     '/v1/videos',
     {
@@ -509,7 +517,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         throw err
       }
 
-      const job = ctx.videoJobsStore.create({
+      const job = openai.videoJobsStore.create({
         model: alias,
         prompt: params.prompt,
         size:
@@ -540,7 +548,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     // lunte-disable-next-line require-await
     async (req) => {
       const q = req.query
-      const page = app.qvac.videoJobsStore.list({
+      const page = openai.videoJobsStore.list({
         ...(q.limit !== undefined ? { limit: q.limit } : {}),
         ...(q.order !== undefined ? { order: q.order } : {}),
         ...(q.after !== undefined ? { after: q.after } : {})
@@ -568,7 +576,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     // lunte-disable-next-line require-await
     async (req) => {
-      const job = app.qvac.videoJobsStore.get(req.params.id)
+      const job = openai.videoJobsStore.get(req.params.id)
       if (!job) {
         throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
       }
@@ -589,7 +597,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     async (req, reply) => {
       const ctx = app.qvac
-      const job = ctx.videoJobsStore.get(req.params.id)
+      const job = openai.videoJobsStore.get(req.params.id)
       if (!job) {
         throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
       }
@@ -621,14 +629,14 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     // lunte-disable-next-line require-await
     async (req) => {
       const ctx = app.qvac
-      const job = ctx.videoJobsStore.get(req.params.id)
+      const job = openai.videoJobsStore.get(req.params.id)
       if (!job) {
         throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
       }
       // Drop the store entry first so a racing runVideoJob (still mid-`video()`
       // call) sees `store.update` return undefined and self-cancels with the
       // freshly-acquired requestId.
-      ctx.videoJobsStore.delete(req.params.id)
+      openai.videoJobsStore.delete(req.params.id)
       tearDownJob(ctx, job)
       return {
         id: req.params.id,

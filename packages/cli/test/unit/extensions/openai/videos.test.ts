@@ -7,11 +7,12 @@ import {
   InvalidVideoStrengthError,
   DEFAULT_FPS
 } from '@/serve/extensions/openai/schemas/videos'
-import { createVideoJobsStore, type VideoJob } from '@/serve/core/video-jobs-store'
+import { createVideoJobsStore, type VideoJob } from '@/serve/extensions/openai/video-jobs-store'
 import { tearDownJob, resolveInputReferenceImage } from '@/serve/extensions/openai/routes/videos'
 import type { QvacContext } from '@/serve/core/context'
+import type { OpenAIState } from '@/serve/extensions/openai/state'
 
-type CancelInput = Parameters<NonNullable<QvacContext['cancelOverride']>>[0]
+type CancelInput = Parameters<NonNullable<OpenAIState['cancelOverride']>>[0]
 
 function expectIssue(input: unknown, path: string): { message: string } {
   const result = videosCreateBody.safeParse(input)
@@ -316,27 +317,27 @@ describe('createVideoJobsStore', () => {
 
 function makeCtxStub(
   opts: {
-    cancelOverride?: QvacContext['cancelOverride']
+    cancelOverride?: OpenAIState['cancelOverride']
     removed?: string[]
     files?: Record<string, { data: Buffer } | undefined>
   } = {}
 ): QvacContext {
   const removed = opts.removed ?? []
   const files = opts.files ?? {}
-  const stub = {
-    logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+  const openai = {
     ephemeralFiles: {
       remove: (id: string) => {
         removed.push(id)
       },
       get: (id: string) => files[id]
-    }
+    },
+    ...(opts.cancelOverride ? { cancelOverride: opts.cancelOverride } : {})
+  } as unknown as OpenAIState
+
+  return {
+    logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+    extensions: { openai }
   } as unknown as QvacContext
-  if (opts.cancelOverride) {
-    ;(stub as { cancelOverride?: QvacContext['cancelOverride'] }).cancelOverride =
-      opts.cancelOverride
-  }
-  return stub
 }
 
 // Temporarily replaces globalThis.fetch for a single async test body; always restores.
