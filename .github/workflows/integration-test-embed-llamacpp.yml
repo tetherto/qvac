@@ -229,13 +229,10 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
-      # QVAC-23763: hide the CUDA devices for the Vulkan half of the NVIDIA
-      # runner. This is a separate step because "Run integration test" below
-      # declares no shell, so on win32 it runs under PowerShell where a bash
-      # `if` is a parse error. llm and vla can guard inline because they already
-      # split that step per platform; embed has one cross-platform step.
-      # Skipping the step rather than writing an empty value matters: an EMPTY
-      # CUDA_VISIBLE_DEVICES hides every CUDA device just as -1 does.
+      # QVAC-23763: its own step because "Run integration test" below declares
+      # no shell, so on win32 it runs under PowerShell where a bash `if` is a
+      # parse error. Skipping the step rather than writing an empty value
+      # matters: an EMPTY CUDA_VISIBLE_DEVICES hides every CUDA device like -1.
       - name: Force Vulkan on the NVIDIA runner
         if: ${{ matrix.force_vulkan == 'true' }}
         shell: bash
