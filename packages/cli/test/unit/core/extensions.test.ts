@@ -94,13 +94,16 @@ describe('mounted surfaces', () => {
     assert.ok(!paths.some((p) => p.includes('v1')))
   })
 
-  it('mounts nothing extra for the default extension alone', async () => {
-    assert.deepEqual(routePaths(await build([DEFAULT_EXTENSION])), routePaths(await build([])))
+  it('mounts the QVAC paths for the default extension, and no OpenAI ones', async () => {
+    const printed = await build([DEFAULT_EXTENSION])
+    assert.match(printed, /\/qvac\/v1\/translate/)
+    assert.ok(!printed.includes('chat'))
   })
 
   it('mounts the OpenAI paths when the openai extension is selected', async () => {
     const printed = await build(['openai'])
     assert.match(printed, /chat/)
     assert.match(printed, /embeddings/)
+    assert.ok(!printed.includes('/qvac/'))
   })
 })
