@@ -21,9 +21,11 @@
   a request that declares tools; a function name restricts the call to it.
   `"required"` and a function name now fail with `InvalidArgument` rather than
   silently answering in prose when the demand cannot be honoured. Known limit:
-  the tool grammar is suppressed inside the reasoning block, so a request that
-  ends generation from within `<think>` produces no tool call even under
-  `"required"`. Set `reasoning_budget: 0` when a call must be guaranteed.
+  the eager grammar these produce admits an unbounded `<think>` prefix on a
+  reasoning model, so `n_predict` can be spent before the tool call is
+  reached. Cap the reasoning channel with a positive `reasoning_budget`, which
+  forces the block closed at the cap, or disable it with `reasoning_budget: 0`,
+  when a call has to be emitted within a tight token budget.
 
 ### Fixed
 

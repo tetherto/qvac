@@ -397,17 +397,28 @@ safeTest(
       assertDeclaredToolCalls(t, required, clonePrompt(), 'required')
 
       // `reasoning_budget: 0` is load-bearing, and the reason is a real limit
-      // of the feature, not test tidying. The tool grammar is deliberately
-      // suppressed for the whole reasoning block, so an eager `required`
-      // grammar constrains nothing until the model leaves `<think>`. If the
-      // model ends generation from inside the reasoning block — by running
-      // out of `n_predict` (seen on linux-arm64, 84s) or by simply stopping
-      // (seen on darwin-arm64, 4.6s) — no tool call is forced at all.
-      // `tool_choice` therefore does not guarantee a call while the reasoning
-      // channel is on; see the KNOWN LIMITATION note in the PR. Disabling it
-      // here pins the property actually under test — that a named choice
-      // restricts the call to that function — in the regime where the
-      // guarantee holds.
+      // of the feature, not test tidying. A named choice resolves to
+      // `required`, which makes the tool grammar eager — and an eager grammar
+      // is built from the whole PEG parser including its reasoning section,
+      // so it *permits* an arbitrarily long `<think>` prefix. All of
+      // `n_predict` can be spent inside that prefix before the call is
+      // reached: this case failed on linux-arm64 (84s, ran to the 1024-token
+      // cap) and darwin-arm64 (4.6s, stopped early) while passing on
+      // linux-x64 and darwin-x64. Narrowing the tools to `queryDB` against a
+      // three-part request is what makes Qwen3-1.7B reason long enough to
+      // hit it.
+      //
+      // `reasoning_budget: 0` stops the template opening `<think>` at all, so
+      // the grammar's first constrained token is the call. A positive budget
+      // would also work — it builds fabric's reasoning-budget sampler, which
+      // forces the block closed at the cap — but 0 is the tighter pin for the
+      // property under test: that a named choice restricts the call to that
+      // function.
+      //
+      // Note this is NOT grammar suppression inside the reasoning block.
+      // `grammar_should_apply` (fabric common/sampling.cpp:452-465) gates
+      // that on `grammar_lazy`, which `required` makes false, so the eager
+      // grammar is active throughout.
       const named = await runWithToolChoice('queryDB', { reasoning_budget: 0 })
       const namedCalls = parseToolCalls(named, t)
       t.ok(namedCalls.length > 0, `named function produced a tool call: ${named.slice(0, 200)}`)
