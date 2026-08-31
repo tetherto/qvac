@@ -8,12 +8,14 @@
   shared `@qvac/fabric` npm dependency (`^0.9.0`). The addon no longer bundles
   ggml or its compute backends; on desktop it resolves the single `@qvac/fabric`
   install and loads backend modules from
-  `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to
-  this addon's own `prebuilds/` on mobile (where the package tree isn't
-  resolvable from the packed worklet bundle). Run `npm install` so `@qvac/fabric`
-  is present before `bare-make generate`/`build`, and ensure the dependency isn't
-  pruned at runtime. A caret on a `0.x` version locks the minor, so `^0.6.0`
-  would not have resolved `0.9.0` on its own.
+  `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`. On mobile the
+  package tree isn't resolvable from the packed worklet, so the loader falls
+  back to this addon's own `prebuilds/`; the mobile packager flattens
+  `@qvac/fabric`'s native prebuilds into that load path. We do not copy
+  backends into this addon. Run `npm install` so `@qvac/fabric` is present
+  before `bare-make generate`/`build`, and ensure the dependency isn't pruned
+  at runtime. A caret on a `0.x` version locks the minor, so `^0.6.0` would
+  not have resolved `0.9.0` on its own.
 - The `qvac-fabric[hip-backend]` vcpkg feature is removed from this package.
   `@qvac/fabric` `0.9.0` ships the ROCm/HIP backend (`libqvac-ggml-hip.so`,
   gfx1151) in the linux-x64 prebuild, so HIP selection in this addon continues
