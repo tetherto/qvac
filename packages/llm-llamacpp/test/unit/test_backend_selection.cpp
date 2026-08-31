@@ -1280,6 +1280,63 @@ TEST_F(BackendSelectionTest, OverridePicksFirstDeviceOfFamily) {
   expectChosen(result, BackendType::GPU, "cuda0");
 }
 
+// A non-Adreno OpenCL device is kept out of the default cascade, which is
+// Adreno-tuned, so the default pick is unchanged.
+TEST_F(BackendSelectionTest, NonAdrenoOpenClNotChosenByDefault) {
+  mockBackend.addDevice(createGPUDevice("Intel Arc A770", OPENCL_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(BackendType::GPU, bckI);
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// But an explicit request must still reach it, otherwise 'opencl' is an
+// accepted family that matches nothing on an Intel or AMD host.
+TEST_F(BackendSelectionTest, OverrideReachesNonAdrenoOpenCl) {
+  mockBackend.addDevice(createGPUDevice("Intel Arc A770", OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice("Intel Arc A770", VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+  auto result = chooseWithOverride(mockBackend, {"opencl"});
+  expectChosen(result, BackendType::GPU, "gpuopencl");
+}
+
+// An override must not resurrect a device a guard just cleared. BitNet TQ on
+// Adreno 800+ prefers Vulkan by clearing the OpenCL bucket.
+TEST_F(
+    BackendSelectionTest, OverrideCannotResurrectOpenClClearedByBitNetGuard) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
+  MockModelMetaData bitnetMeta(true, "bitnet");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &bitnetMeta,
+      std::nullopt,
+      nullptr,
+      false,
+      nullptr,
+      {"opencl"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+}
+
+// Finetuning on Adreno <800 is CPU only, so no override may reach a GPU.
+TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(false, "qwen3");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &meta,
+      std::nullopt,
+      nullptr,
+      true,
+      nullptr,
+      {"vulkan", "opencl"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
 // ---- parseBackendOverride ----
 
 TEST_F(BackendSelectionTest, ParseBackendOverrideBasic) {
@@ -1345,6 +1402,38 @@ TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsAValueNamingNothing) {
 }
 
 // ---- tryBackendOverrideFromMap ----
+
+// 'auto' is vla-ggml's spelling for "no preference" on this same key, so one
+// selector string stays valid across all three addons.
+TEST_F(BackendSelectionTest, ParseBackendOverrideAcceptsAutoAsNoPreference) {
+  EXPECT_TRUE(parseBackendOverride("auto").empty());
+  EXPECT_TRUE(parseBackendOverride(" AUTO ").empty());
+}
+
+TEST_F(BackendSelectionTest, ParseBackendOverrideDropsAutoFromAList) {
+  EXPECT_EQ(
+      parseBackendOverride("auto,cuda"), (std::vector<std::string>{"cuda"}));
+}
+
+// A CRLF config file would otherwise throw on a value that reads as correct,
+// because the offending byte does not render in the error message.
+TEST_F(BackendSelectionTest, ParseBackendOverrideTrimsCarriageReturns) {
+  EXPECT_EQ(
+      parseBackendOverride("cuda\r\n,\tvulkan\r"),
+      (std::vector<std::string>{"cuda", "vulkan"}));
+}
+
+// Accepting 'auto' must not weaken this: a value naming nothing at all is
+// still a config mistake.
+TEST_F(BackendSelectionTest, ParseBackendOverrideStillRejectsSeparatorsOnly) {
+  EXPECT_THROW(parseBackendOverride(","), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride(" , "), qvac_errors::StatusError);
+}
+
+// Blank stays "key not configured", not an error.
+TEST_F(BackendSelectionTest, ParseBackendOverrideBlankIsEmptyList) {
+  EXPECT_TRUE(parseBackendOverride("\r\n").empty());
+}
 
 TEST_F(BackendSelectionTest, TryBackendOverrideFromMapErasesKey) {
   std::unordered_map<std::string, std::string> config{

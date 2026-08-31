@@ -76,11 +76,11 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WORKDIR: packages/llm-llamacpp
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
-      # QVAC-23763: marks a leg as the Vulkan half of an NVIDIA runner. NOT set
-      # as CUDA_VISIBLE_DEVICES directly: an unset matrix field evaluates to the
-      # empty string, and an EMPTY CUDA_VISIBLE_DEVICES hides every CUDA device
-      # exactly like -1, which would silently drop CUDA on all the other legs.
-      # The test step exports the real variable only when this is 'true'.
+      # QVAC-23763: marks a leg as the Vulkan half of an NVIDIA runner. Not set
+      # as CUDA_VISIBLE_DEVICES directly, because an unset matrix field is the
+      # empty string and an empty CUDA_VISIBLE_DEVICES hides every CUDA device
+      # just like -1. The test step exports the real variable when this is
+      # 'true'.
       FORCE_VULKAN: ${{ matrix.force_vulkan || 'false' }}
     permissions:
       contents: read
@@ -110,9 +110,7 @@ jobs:
             label: linux-x64-u24-gpu
           # QVAC-23763: the qvac-ubuntu*-x64-gpu runners are NVIDIA, so the same
           # box covers both GPU backends. This entry is the Vulkan half; the one
-          # above runs CUDA because it is now preferred by default. NVIDIA is
-          # the only GPU kind on the hosted runners, so this is the only way to
-          # exercise both.
+          # above runs CUDA, now the default.
           - os: ubuntu-24.04
             platform: linux
             arch: x64

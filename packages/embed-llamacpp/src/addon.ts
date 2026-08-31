@@ -14,7 +14,7 @@ export interface GGMLConfig {
   embd_normalize?: NumericLike;
   flash_attn?: "on" | "off" | "auto";
   "main-gpu"?: NumericLike | "integrated" | "dedicated";
-  /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, hip, rocm, sycl. An unrecognised name is rejected; a recognised one with no device present is skipped and selection continues down the normal order. Use device 'cpu' to run on CPU. QVAC-23763. */
+  /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, hip, rocm, sycl, plus auto for no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use device 'cpu' to run on CPU. */
   backend?: string;
   /** How to split the model across GPUs. 'row' (tensor parallelism) needs split buffers, which no shipped backend provides as of qvac-fabric v10069, so it is degraded to 'layer' at load with a warning. */
   "split-mode"?: "none" | "layer" | "row";

@@ -506,6 +506,37 @@ TEST_F(LoadFitNormalizationTest, SplitModeJoinsSeveralDevicesIntoOneValue) {
       qvac_errors::StatusError);
 }
 
+// QVAC-23763: --main-gpu indexes the list llama.cpp is handed. Once --device is
+// scoped, the caller's index is resolved against a longer list and must be
+// rewritten to the selected device's position rather than forwarded as-is.
+TEST_F(LoadFitNormalizationTest, SplitModeRewritesMainGpuToTheScopedPosition) {
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  dependencies.splitModeDeviceNames = [](const std::string&) {
+    return std::vector<std::string>{"none"};
+  };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["main-gpu"] = "3";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  EXPECT_EQ(result.params.main_gpu, 0);
+}
+
+// A single-registry host omits --device, so llama.cpp still sees every device
+// and the caller's index must survive untouched.
+TEST_F(LoadFitNormalizationTest, SplitModeKeepsMainGpuWhenDeviceIsOmitted) {
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  dependencies.splitModeDeviceNames = [](const std::string&) {
+    return std::vector<std::string>{};
+  };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["main-gpu"] = "3";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  EXPECT_EQ(result.params.main_gpu, 3);
+}
+
 // Single-GPU mode keeps pinning to the selected device and must not consult the
 // split-mode list at all.
 TEST_F(LoadFitNormalizationTest, SingleGpuModeIgnoresTheSplitDeviceList) {
@@ -550,9 +581,8 @@ TEST_F(
   EXPECT_EQ(result.fitSnapshot.typeV, static_cast<int32_t>(GGML_TYPE_Q8_0));
 }
 
-TEST_F(LoadFitNormalizationTest, FinetuneAndDiscardOutputsRemainExplicit) {
+TEST_F(LoadFitNormalizationTest, FinetuneOutputsRemainExplicit) {
   auto config = baseConfig();
-  config["n_discarded"] = "64";
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf",
       std::move(config),
@@ -567,7 +597,6 @@ TEST_F(LoadFitNormalizationTest, FinetuneAndDiscardOutputsRemainExplicit) {
   EXPECT_EQ(result.params.n_ctx, 256);
   EXPECT_EQ(result.params.n_batch, 64);
   EXPECT_EQ(result.params.n_ubatch, 16);
-  EXPECT_EQ(result.configuredNDiscarded, 64);
 }
 
 TEST_F(LoadFitNormalizationTest, MissingDeviceKeepsLegacyErrorMapping) {
@@ -587,9 +616,9 @@ TEST_F(LoadFitNormalizationTest, MissingDeviceKeepsLegacyErrorMapping) {
   }
 }
 
-TEST_F(LoadFitNormalizationTest, InvalidDiscardKeepsLegacyErrorMapping) {
+TEST_F(LoadFitNormalizationTest, RetiredDiscardKeyIsRejectedAsUnknownArgument) {
   auto config = baseConfig();
-  config["n_discarded"] = "not-a-number";
+  config["n_discarded"] = "64";
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
         "/tmp/model.gguf",
@@ -597,11 +626,11 @@ TEST_F(LoadFitNormalizationTest, InvalidDiscardKeepsLegacyErrorMapping) {
         metadata_,
         {},
         backend({.type = backend_selection::CPU, .name = "none"})));
-    FAIL() << "invalid n_discarded must throw";
+    FAIL() << "retired n_discarded key must throw";
   } catch (const qvac_errors::StatusError& error) {
     EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
-    EXPECT_THAT(
-        error.what(), ::testing::HasSubstr("invalid n_discarded value"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("n-discarded"));
   }
 }
 

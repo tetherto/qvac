@@ -782,6 +782,57 @@ TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsAValueNamingNothing) {
   EXPECT_TRUE(parseBackendOverride("   ").empty());
 }
 
+// A non-Adreno OpenCL device is kept out of the default cascade, which is
+// Adreno-tuned, so the default pick is unchanged.
+TEST_F(BackendSelectionTest, NonAdrenoOpenClNotChosenByDefault) {
+  mockBackend.addDevice(createGPUDevice("Intel Arc A770", OPENCL_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(BackendType::GPU, bckI);
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// But an explicit request must still reach it, otherwise 'opencl' is an
+// accepted family that matches nothing on an Intel or AMD host.
+TEST_F(BackendSelectionTest, OverrideReachesNonAdrenoOpenCl) {
+  mockBackend.addDevice(createGPUDevice("Intel Arc A770", OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice("Intel Arc A770", VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+  auto result = chooseWithOverride(mockBackend, {"opencl"});
+  expectChosen(result, BackendType::GPU, "gpuopencl");
+}
+
+// 'auto' is vla-ggml's spelling for "no preference" on this same key, so one
+// selector string stays valid across all three addons.
+TEST_F(BackendSelectionTest, ParseBackendOverrideAcceptsAutoAsNoPreference) {
+  EXPECT_TRUE(parseBackendOverride("auto").empty());
+  EXPECT_TRUE(parseBackendOverride(" AUTO ").empty());
+}
+
+TEST_F(BackendSelectionTest, ParseBackendOverrideDropsAutoFromAList) {
+  EXPECT_EQ(
+      parseBackendOverride("auto,cuda"), (std::vector<std::string>{"cuda"}));
+}
+
+// A CRLF config file would otherwise throw on a value that reads as correct,
+// because the offending byte does not render in the error message.
+TEST_F(BackendSelectionTest, ParseBackendOverrideTrimsCarriageReturns) {
+  EXPECT_EQ(
+      parseBackendOverride("cuda\r\n,\tvulkan\r"),
+      (std::vector<std::string>{"cuda", "vulkan"}));
+}
+
+// Accepting 'auto' must not weaken this: a value naming nothing at all is
+// still a config mistake.
+TEST_F(BackendSelectionTest, ParseBackendOverrideStillRejectsSeparatorsOnly) {
+  EXPECT_THROW(parseBackendOverride(","), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride(" , "), qvac_errors::StatusError);
+}
+
+// Blank stays "key not configured", not an error.
+TEST_F(BackendSelectionTest, ParseBackendOverrideBlankIsEmptyList) {
+  EXPECT_TRUE(parseBackendOverride("\r\n").empty());
+}
+
 TEST_F(BackendSelectionTest, TryBackendOverrideFromMapErasesKey) {
   std::unordered_map<std::string, std::string> config{
       {"device", "gpu"}, {"backend", "cuda,vulkan"}};

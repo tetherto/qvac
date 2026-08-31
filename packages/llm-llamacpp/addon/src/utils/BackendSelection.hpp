@@ -35,10 +35,10 @@ tryMainGpuFromMap(std::unordered_map<std::string, std::string>& configFilemap);
 /// @brief Parse a `backend` override into a lowercased priority list, e.g.
 /// "CUDA,Vulkan" -> {"cuda", "vulkan"}.
 ///
-/// An unknown NAME is a config mistake and throws
-/// StatusError(InvalidArgument); a known name with no device attached is
-/// legitimate, e.g. asking for cuda on a Vulkan-only host, and falls through to
-/// the next entry and then to the normal cascade.
+/// An unknown name is a config mistake and throws StatusError(InvalidArgument).
+/// A known name with no device attached is legitimate, asking for cuda on a
+/// Vulkan-only host say, and falls through to the next entry. "auto" is
+/// accepted and dropped, so it parses to no preference.
 std::vector<std::string> parseBackendOverride(const std::string& backendStr);
 
 /// @brief Extract and erase the `backend` key from a config map.
@@ -76,10 +76,9 @@ std::pair<BackendType, std::string> chooseBackend(
 /// NVIDIA, otherwise Vulkan. Uses CPU if no GPU backends are available.
 ///
 /// The CUDA preference is stated here rather than inherited: qvac-fabric loads
-/// cuda before vulkan in ggml_backend_load_all_from_path(), and device
-/// registration is an unsorted push_back, so CUDA already happens to enumerate
-/// first. Relying on that would make backend choice a silent function of two
-/// line numbers in ggml-backend-reg.cpp. QVAC-23763.
+/// cuda before vulkan and registration is an unsorted push_back, so CUDA
+/// already happens to enumerate first. Relying on that would make backend
+/// choice a silent function of ggml's load order. QVAC-23763.
 ///
 /// @p backendOverride, when non-empty, restricts the choice to those backend
 /// families in priority order (e.g. {"cuda", "vulkan"}). Entries with no device
@@ -133,9 +132,8 @@ bool gpuBackendSupportsRowSplit();
 /// `--device` would spread a single card across two backends.
 ///
 /// Empty when every GPU/iGPU device comes from one registry, which is every
-/// pre-CUDA configuration, and the caller then keeps omitting `--device`. Also
-/// empty when @p selectedDeviceName matches nothing, so an unexpected name
-/// degrades to that same old behaviour rather than to no GPU at all.
+/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
+/// caller then keeps omitting `--device`.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName);
 

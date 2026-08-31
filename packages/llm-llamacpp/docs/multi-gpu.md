@@ -137,7 +137,7 @@ Use the `backend` config key to choose which backend the split runs on, for exam
 
 ### `main-gpu` indices
 
-`main-gpu` as an integer indexes qvac-fabric's device list. On a host with more than one GPU backend that list holds every backend's devices, so adding CUDA shifts the indices an existing config was written against.
+`main-gpu` as an integer indexes ggml's full device list, CPU device included, so adding CUDA shifts the indices an existing config was written against. In a split mode the addon rewrites it to the selected device's position in the scoped `--device` list, so the two arguments stay in step.
 
 ## Usage examples
 

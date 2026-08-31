@@ -506,9 +506,31 @@ BertModelSetup setupParams(
             nullptr);
         configVector.emplace_back("--device");
         configVector.emplace_back(std::move(deviceList));
+        // QVAC-23763: --main-gpu indexes the list llama.cpp is handed, which is
+        // now this scoped one rather than every enumerated device, so the
+        // caller's index would point at a different card. Rewrite it to the
+        // selected device's position.
+        if (const auto mainGpuIt = configFilemap.find("main-gpu");
+            mainGpuIt != configFilemap.end()) {
+          const auto selectedPos =
+              std::ranges::find(splitDevices, chosenBackend.second);
+          if (selectedPos != splitDevices.end()) {
+            mainGpuIt->second =
+                std::to_string(selectedPos - splitDevices.begin());
+          } else {
+            configFilemap.erase(mainGpuIt);
+            qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+                GGML_LOG_LEVEL_WARN,
+                "[BertModel] main-gpu dropped: the selected device is not in "
+                "the scoped --device list\n",
+                nullptr);
+          }
+        }
       }
     }
-    configFilemap.erase(deviceIt);
+    // Erase by key, not by deviceIt: the configFilemap["main-gpu"] insert above
+    // can rehash the map, which invalidates every iterator.
+    configFilemap.erase("device");
 
     // Disable flash attention by default when the chosen GPU backend is
     // OpenCL: it is not reliably supported there. Users who pass an

@@ -1082,11 +1082,9 @@ TEST_F(TuneConfigMapTest, AutoDefault_AdrenoOpenCl_StaysF16) {
 
 // ---- QVAC-23763: TurboQuant / PolarQuant rejected on CUDA ----
 //
-// ggml-cuda ships no TBQ/PQ kernels at all (`grep -rl tbq ggml/src/ggml-cuda/`
-// is empty, while Vulkan has mul_mat_vec_tbq3_0.comp), so these types would
-// abort natively. Standard quantized types are fine on CUDA, so this mirrors
-// the Metal guard rather than the stricter OpenCL one. CPU stays allowed:
-// ggml-tbq-quants is a core CPU implementation.
+// ggml-cuda ships no TBQ/PQ kernels, so these types abort natively. Standard
+// quantized types are fine there, so this mirrors the Metal guard rather than
+// the stricter OpenCL one. CPU stays allowed: ggml-tbq-quants is CPU-side.
 
 TEST_F(TuneConfigMapTest, Cuda_RejectsTurboQuantKCacheType) {
   MockModelMetaData meta(false, "llama");
