@@ -102,6 +102,19 @@ unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
   return ctxTotalTokens / static_cast<unsigned>(batchSize);
 }
 
+/// Terminal reason a driver should record for a scheduler-imposed stop.
+/// `ContextOverflow` survives `stopReasonAfterRequestRollback`, so a recurrent
+/// driver rolls back its open reasoning span instead of attempting strict
+/// compaction.
+GenerationStopReason toGenerationStopReason(StopReason reason) {
+  switch (reason) {
+  case StopReason::ContextOverflow:
+    return GenerationStopReason::ContextOverflow;
+  default:
+    return GenerationStopReason::None;
+  }
+}
+
 } // namespace
 
 bool finalizeTerminalDriver(
@@ -114,16 +127,9 @@ bool finalizeTerminalDriver(
     driver.onSequenceEnd(outputCallback);
     return true;
   } else {
-    const GenerationStopReason terminalReason =
-        reason == StopReason::LimitReached ? GenerationStopReason::SequenceLimit
-                                           : GenerationStopReason::None;
-    return driver.onGenerationFinished(outputCallback, terminalReason);
+    return driver.onGenerationFinished(
+        outputCallback, toGenerationStopReason(reason));
   }
-}
-
-bool computeSlideCapable(
-    const SequenceDriver& driver, bool slideConfigured, bool isPrefill) {
-  return slideConfigured && !isPrefill && driver.supportsSliding();
 }
 
 bool generationBudgetExceeded(
@@ -153,10 +159,9 @@ TimedDecodeResult timeDecodeStep(
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
     size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-    llama_pos configuredNDiscarded, DriverFactory driverFactory)
+    DriverFactory driverFactory)
     : shared_(shared), baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict), baseParams_(baseParams),
-      configuredNDiscarded_(configuredNDiscarded),
       driverFactory_(std::move(driverFactory)),
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
@@ -189,16 +194,6 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
     throw std::invalid_argument(
         "ContinuousBatchScheduler: ctxTotalTokens / batchSize underflowed "
         "to 0; reduce batchSize or grow n_ctx");
-  }
-  if (configuredNDiscarded_ >= static_cast<llama_pos>(perSeqMaxTokens_)) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "[ContinuousBatchScheduler] n_discarded=%d >= per-sequence cap "
-            "%u (ctxTotalTokens / n_parallel); it will be clamped below the "
-            "per-slot window. Lower n_discarded or grow n_ctx / n_parallel.\n",
-            configuredNDiscarded_,
-            perSeqMaxTokens_));
   }
 }
 
@@ -399,6 +394,23 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             ")");
   }
   const uint32_t seqId = *maybeSeqId;
+  // The batcher frees its slot in `extractFinished`, which runs BEFORE
+  // `drainFinishedLocked` finalizes that seqId, and that finalize holds a
+  // reference into `slots_` across an unlock window. Re-admitting here would
+  // `emplace` over the `SlotState` it is still using. Treat a scheduler slot
+  // that has not been freed yet as occupied.
+  if (slots_[seqId].has_value()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler::submit: failed to add to batch "
+        "(MultiRequestBatcher::AddStatus=" +
+            std::to_string(
+                static_cast<int>(
+                    MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
+            ")");
+  }
   std::unique_ptr<SequenceDriver> driver = driverFactory_(
       tmpParams, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
 
@@ -412,8 +424,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
         *request.overrides.remove_thinking_from_context);
   }
 
-  const bool isCacheLoaded =
-      driver->loadCache(request.cacheKey, configuredNDiscarded_);
+  const bool isCacheLoaded = driver->loadCache(request.cacheKey);
 
   ScopeGuard cacheGuard([this, seqId] { clearSeqKv(seqId); });
 
@@ -425,10 +436,9 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       isCacheLoaded,
       request.prefill);
 
-  // Anchored post-`preparePrefill` so a pure-attention in-prefill slide
-  // is reflected here; see `TextLlmContext::evalMessageWithTools` for
-  // the full rationale. Recurrent throws on slide, so the ordering is
-  // equivalent for that path.
+  // Anchored post-`preparePrefill` so the cursor reflects any position
+  // change preparation made. `TextLlmContext::evalMessageWithTools`
+  // takes the same anchor after its own `preparePrefill`.
   driver->snapshotPreRequestCursor();
   // Hybrid / recurrent full-state disk snapshot for cancel rollback
   // (their memory rejects partial `seq_rm`). No-op for pure-attention.
@@ -491,14 +501,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   }
 
   StreamCallbacks streamsLocal = std::move(request.streams);
-  const bool slideCapable =
-      computeSlideCapable(*driver, configuredNDiscarded_ > 0, request.prefill);
   if (auto status = batcher_.addRequestAt(
-          seqId,
-          std::move(plan),
-          driver->getNPast(),
-          slideCapable,
-          driver->getKvCellsUsed());
+          seqId, std::move(plan), driver->getNPast(), driver->getKvCellsUsed());
       status != MultiRequestBatcher::AddStatus::Ok) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -785,7 +789,8 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
   batcher_.completeMediaBarrier(awaiting->seqId, newPos, prefillCompleteFn());
 }
 
-void ContinuousBatchScheduler::drainFinishedLocked() {
+void ContinuousBatchScheduler::drainFinishedLocked(
+    std::unique_lock<std::mutex>* lock) {
   auto finished = batcher_.extractFinished();
   for (const auto& req : finished | std::views::filter(hasValidDriverF())) {
     auto& slot = *slots_[req.seqId];
@@ -800,8 +805,22 @@ void ContinuousBatchScheduler::drainFinishedLocked() {
     // paths already sync via `sampleAndAppendIdle` and this call is a
     // no-op for them.
     slot.driver->syncPosition(req.currentPos);
-    const bool rollbackOk = finalizeTerminalDriver(
-        *slot.driver, req.stopReason, slot.prefillOnly, outputCallback);
+    // `finalizeTerminalDriver` can run a real `llama_decode`: a reasoning
+    // turn rewinds and replays through `compactThinkSpan()`. Holding the lock
+    // for that stalls every co-tenant slot and blocks a cross-thread
+    // `cancel()`.
+    //
+    // Unlike the decode window this one holds `slot` across the unlock, so
+    // deferred teardown must not reconcile inside it, see
+    // `TeardownDeferGuard`. Declaration order matters: the unlock guard is
+    // destroyed first, so it reacquires while the defer guard is still live.
+    bool rollbackOk = false;
+    {
+      TeardownDeferGuard deferTeardown(*this);
+      StepUnlockGuard unlockGuard(*this, lock);
+      rollbackOk = finalizeTerminalDriver(
+          *slot.driver, req.stopReason, slot.prefillOnly, outputCallback);
+    }
     accumulateSlotRuntimeStats(slot, req);
     // Skip save when the driver reports a failed cancel rollback: live
     // state may not match `getNPast()` and persisting it would leak the
@@ -841,7 +860,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     // A media segment serviced above can finish a slot (prefill-only
     // request or per-sequence cap) without leaving tokens to feed; drain
     // here or the worker would spin on the occupied slot forever.
-    drainFinishedLocked();
+    drainFinishedLocked(lock);
     return true;
   }
 
@@ -933,14 +952,18 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
                 "); inline decoding is not supported by the batcher's "
                 "position tracking");
       }
-      if (result.discarded > 0) {
-        batcher_.applySlide(seqId, result.discarded);
-      }
       if (result.contextOverflow) {
-        // The slot's window is full and the driver could not slide; stop
-        // this one sequence at its cap like a LimitReached truncation
-        // instead of failing the whole batch.
-        batcher_.markFinished(seqId, StopReason::LimitReached);
+        // The slot's window is full; stop this one sequence instead of
+        // failing the whole batch. Carry the driver's own reason through so
+        // the caller can tell a full context from a prediction-limit cutoff.
+        batcher_.markFinished(seqId, StopReason::ContextOverflow);
+      } else if (
+          result.finished &&
+          result.stopReason == GenerationStopReason::PredictionLimit) {
+        // Carried through for the same reason `ContextOverflow` is: the
+        // batcher cannot otherwise tell this sample from an EOG, and the two
+        // are counted differently.
+        batcher_.markFinished(seqId, StopReason::PredictionLimit);
       } else if (result.finished) {
         batcher_.markFinished(seqId);
       }
@@ -955,7 +978,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     batcher_.markAllFinished(StopReason::Cancelled);
   }
 
-  drainFinishedLocked();
+  drainFinishedLocked(lock);
   return true;
 }
 
@@ -1031,10 +1054,8 @@ void RuntimeStatsSnapshot::recordDecodeStep(
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
-    int64_t nPast, int64_t nSlides, int64_t thinkingDiscards,
-    const Request& req) {
+    int64_t nPast, int64_t thinkingDiscards, const Request& req) {
   cacheTokens += nPast;
-  contextSlides += nSlides;
   thinkingBlockDiscards += thinkingDiscards;
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
   // Count tokens actually prefilled, not the prompt size planned at admission:
@@ -1094,7 +1115,12 @@ bool ContinuousBatchScheduler::cancel(uint32_t seqId, uint64_t admissionId) {
   // an unrelated successor) -- do nothing rather than touch that slot.
   const bool owned = slotOwnedByLocked(seqId, admissionId);
   if (owned) {
-    if (workerStarted_ && !stopping_) {
+    // `teardownDeferred_` means a step released `mutex_` while still holding a
+    // slot reference (see `TeardownDeferGuard`). Freeing that slot here would
+    // destroy the driver mid-finalize, so record instead, even during
+    // shutdown, where `~ContinuousBatchScheduler` joins and then clears every
+    // slot anyway.
+    if ((workerStarted_ && !stopping_) || teardownDeferred_) {
       // Notified while mutex_ is held so the wakeup cannot slip between the
       // worker's predicate check and its wait.
       recordPendingSlotCancel(seqId, admissionId);
@@ -1121,7 +1147,9 @@ bool ContinuousBatchScheduler::cancelGroupQueued(const uint64_t groupTag) {
   if (!taggedGroups_.contains(groupTag)) {
     return false;
   }
-  if (workerStarted_ && !stopping_) {
+  // See the note in `cancel`: settling a group frees its slots, so it must
+  // defer while a step owns one across an unlock window.
+  if ((workerStarted_ && !stopping_) || teardownDeferred_) {
     // Notified while mutex_ is held so the wakeup cannot slip between the
     // worker's predicate check and its wait.
     recordPendingGroupCancel(groupTag);
@@ -1277,6 +1305,13 @@ void ContinuousBatchScheduler::cancelSlotLocked(
 }
 
 void ContinuousBatchScheduler::applyDeferredTeardownLocked() noexcept {
+  // A step is inside an unlock window that owns a slot; reconciling now would
+  // tear that slot down under the code holding it. Every record stays queued
+  // (nothing is swapped out below, and `clearRequested_` stays set) and the
+  // worker applies them once the step returns. See `TeardownDeferGuard`.
+  if (teardownDeferred_) {
+    return;
+  }
   std::vector<PendingSlotCancel> pendingCancels;
   std::vector<uint64_t> pendingGroups;
   try {
@@ -1316,7 +1351,9 @@ void ContinuousBatchScheduler::requestCancelAll() {
 
 void ContinuousBatchScheduler::clear() {
   std::scoped_lock lock(mutex_);
-  if (workerStarted_ && !stopping_) {
+  // See the note in `cancel`: `clearLocked` frees every slot, so it must defer
+  // while a step owns one across an unlock window.
+  if ((workerStarted_ && !stopping_) || teardownDeferred_) {
     clearRequested_ = true;
     workCv_.notify_all();
   } else {
@@ -1498,12 +1535,17 @@ ObservedRequestStats computeObservedStats(
   observed.promptTokens = req.isPrefillComplete()
                               ? static_cast<int64_t>(req.prefillTokenCount)
                               : static_cast<int64_t>(req.prefillFedCount);
-  if (!req.firstTokenAt.has_value() || !req.lastTokenAt.has_value()) {
+  if (!req.firstTokenAt.has_value()) {
     return observed; // never sampled a token: no timing figures exist
   }
   observed.ttftMs =
       std::chrono::duration<double, std::milli>(*req.firstTokenAt - enqueuedAt)
           .count();
+  // A request whose only token also ended it has a TTFT but no rate window,
+  // because `lastTokenAt` tracks counted tokens.
+  if (!req.lastTokenAt.has_value()) {
+    return observed;
+  }
   const double genWindowMs = std::chrono::duration<double, std::milli>(
                                  *req.lastTokenAt - *req.firstTokenAt)
                                  .count();
@@ -1559,7 +1601,6 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
   int64_t nPast = 0;
-  int64_t nSlides = 0;
   int64_t thinkingDiscards = 0;
   // Read after the caller has finalized the driver, so a finished sequence
   // reports its terminal reason; a cancelled/prefill-only slot reports None.
@@ -1575,12 +1616,11 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     // logically rolled back to the admission cursor. Work performed is
     // reported via `promptTokens` / `generatedTokens`.
     nPast = static_cast<int64_t>(slot.driver->getNPast());
-    nSlides = static_cast<int64_t>(slot.driver->getNSlides());
     thinkingDiscards =
         static_cast<int64_t>(slot.driver->getThinkingBlockDiscards());
     stopReason = slot.driver->getGenerationStopReason();
   }
-  stats_.accumulateSlot(nPast, nSlides, thinkingDiscards, req);
+  stats_.accumulateSlot(nPast, thinkingDiscards, req);
   // Every terminal path that folds a slot into the aggregate also records the
   // request's observed end-to-end figures for its submitter, next to its
   // output.
