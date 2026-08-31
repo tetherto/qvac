@@ -106,12 +106,22 @@ void probeDecodeOrThrow(
     tokens.push_back(0);
   }
 
+  // Clamp to the context's configured batch geometry, as upstream's warmup
+  // does: the engine enforces `n_tokens <= n_batch` (and `<= n_ubatch` on
+  // encode) with GGML_ASSERT, which aborts the process rather than returning
+  // an error. `batch_size: 1` is a legal public configuration, so an
+  // unclamped two-token probe would turn a valid load into a crash. A
+  // one-token probe is equally diagnostic.
+  const auto clampTokens = [&tokens](uint32_t limit) {
+    return static_cast<int32_t>(
+        std::max<size_t>(1, std::min<size_t>(tokens.size(), limit)));
+  };
+
   int32_t status = 0;
   if (llama_model_has_encoder(model)) {
     status = llama_encode(
         lctx,
-        llama_batch_get_one(
-            tokens.data(), static_cast<int32_t>(tokens.size())));
+        llama_batch_get_one(tokens.data(), clampTokens(llama_n_ubatch(lctx))));
     llama_token decoderStart = llama_model_decoder_start_token(model);
     if (decoderStart == LLAMA_TOKEN_NULL) {
       decoderStart = bos;
@@ -121,23 +131,31 @@ void probeDecodeOrThrow(
   if (status == 0 && llama_model_has_decoder(model)) {
     status = llama_decode(
         lctx,
-        llama_batch_get_one(
-            tokens.data(), static_cast<int32_t>(tokens.size())));
+        llama_batch_get_one(tokens.data(), clampTokens(llama_n_batch(lctx))));
   }
 
-  // Leave no trace of the probe regardless of outcome.
-  llama_memory_clear(llama_get_memory(lctx), true);
+  // Leave no trace of the probe regardless of outcome. Synchronize first:
+  // decode submits asynchronously, and clearing the KV buffers while the
+  // graph may still be writing them is a data race (this codebase forces the
+  // same order at LlamaModel::resetState and TextLlmContext for the same
+  // reason). The perf reset stays last because synchronize is what commits
+  // the timing counters it clears.
   llama_synchronize(lctx);
+  llama_memory_clear(llama_get_memory(lctx), true);
   llama_perf_context_reset(lctx);
 
   if (status != 0) {
+    // Describe the status, do not assert a cause: llama_decode distinguishes
+    // "no KV slot" (1), "invalid batch" (-1), and allocation/compute failure
+    // (<= -2), and only the last one is the memory condition this probe
+    // exists to surface early.
     throw qvac_errors::StatusError(
         ADDON_ID,
         error,
         string_format(
             "%s: model loaded but cannot decode (probe decode failed with "
-            "status %d); the resolved configuration does not fit this "
-            "device's usable memory\n",
+            "status %d; 1 = no KV slot, -1 = invalid batch, <= -2 = "
+            "allocation or compute failure)\n",
             __func__,
             status));
   }
@@ -299,10 +317,24 @@ void LlamaModel::init(bool acquireLock) {
   // Finetuning drives its own graph and never serves inference from this
   // context, so the inference probe would only add noise there.
   if (snap->llmContext_ && !params.training) {
-    probeDecodeOrThrow(
-        snap->llmContext_->getCtx(),
-        snap->llmContext_->getModel(),
-        errorWhenFailed);
+    try {
+      probeDecodeOrThrow(
+          snap->llmContext_->getCtx(),
+          snap->llmContext_->getModel(),
+          errorWhenFailed);
+    } catch (...) {
+      // A failed probe must leave no usable state. The context is already
+      // published on `snap`, and everything downstream keys off it — in
+      // particular, a surviving context with no batch scheduler would let
+      // `parallel >= 2` admit concurrent jobs onto one llama_context with no
+      // serialisation, because a null scheduler is read as "single worker".
+      // Resetting the context restores the "llmContext_ null => not loaded"
+      // invariant; the manager and scheduler must not outlive it.
+      snap->batchScheduler_.reset();
+      snap->cacheManager_.reset();
+      snap->llmContext_.reset();
+      throw;
+    }
   }
 
   if (snap->llmContext_) {
