@@ -16,7 +16,8 @@ namespace vla_backend_selection {
 // `backend: 'cpu'` into forceCpu before this is reached.
 //
 // An unknown NAME throws; a known name with no device attached is legitimate,
-// e.g. cuda on a Vulkan-only host, and falls through to the next entry.
+// e.g. cuda on a Vulkan-only host, and falls through to the next entry. "auto"
+// is accepted and dropped, so it contributes no preference.
 //
 // BEHAVIOUR CHANGE: any value other than "cpu" used to mean "pick the best
 // device", so a typo went unnoticed. It now throws.
