@@ -118,8 +118,7 @@ jobs:
         name: Setup ROCm SDK for HIP cross-compile
         uses: ./.github/actions/setup-rocm
 
-      # Same ordering requirement as ROCm above: must run BEFORE vcpkg so nvcc
-      # is on PATH when the qvac-fabric cuda-backend feature is resolved.
+      # Like ROCm above, must run BEFORE vcpkg so nvcc is on PATH.
       - if: ${{ inputs.include-cuda-sdk }}
         name: Setup CUDA toolkit for the ggml CUDA backend
         uses: ./.github/actions/setup-cuda

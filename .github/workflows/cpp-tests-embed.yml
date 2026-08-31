@@ -175,10 +175,8 @@ jobs:
           ls -lh "${{ env.WORKDIR }}/models/unit-test/"
           du -sh "${{ env.WORKDIR }}/models/unit-test/test-model.gguf"
 
-      # QVAC-23763: the package's vcpkg.json requests the qvac-fabric
-      # cuda-backend feature on linux, and that feature hard-errors without
-      # nvcc rather than silently skipping, so configure fails here without it.
-      # Compile-only; this runner has no NVIDIA GPU and does not need one.
+      # QVAC-23763: cuda-backend hard-errors without nvcc, so linux needs the
+      # toolkit. Compile-only, no NVIDIA GPU required.
       - if: ${{ matrix.platform == 'linux' }}
         name: Setup CUDA toolkit for the ggml CUDA backend
         uses: ./.github/actions/setup-cuda
