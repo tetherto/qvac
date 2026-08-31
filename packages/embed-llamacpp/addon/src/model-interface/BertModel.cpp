@@ -416,8 +416,12 @@ BertModelSetup setupParams(
     const BackendType preferredBackend =
         preferredBackendTypeFromString(deviceIt->second);
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
-    const std::pair<BackendType, std::string> chosenBackend =
-        chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
+    // QVAC-23763: extracted and erased here like main-gpu, so the passthrough
+    // loop never forwards it to llama.cpp's argument parser.
+    const std::vector<std::string> backendOverride =
+        tryBackendOverrideFromMap(configFilemap);
+    const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
+        preferredBackend, llamaLogCallback, mainGpu, backendOverride);
 
     if (chosenBackend.first == BackendType::GPU) {
       result.resolvedBackendDevice = 1;
@@ -472,9 +476,37 @@ BertModelSetup setupParams(
     // In multi-GPU split mode we intentionally omit --device so llama.cpp
     // distributes layers/rows across all available GPUs rather than pinning
     // to the single backend that chooseBackend selected.
+    //
+    // QVAC-23763: that stops being safe once one physical card registers under
+    // two backends, so pass the chosen backend's own devices instead. Empty on
+    // a single-registry host, where --device stays omitted as before.
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(chosenBackend.second);
+    } else if (chosenBackend.first == BackendType::GPU) {
+      const std::vector<std::string> splitDevices =
+          splitModeDeviceNames(chosenBackend.second);
+      if (!splitDevices.empty()) {
+        std::string deviceList;
+        for (const std::string& deviceName : splitDevices) {
+          if (!deviceList.empty()) {
+            deviceList += ',';
+          }
+          deviceList += deviceName;
+        }
+        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+            GGML_LOG_LEVEL_INFO,
+            string_format(
+                "[BertModel] split-mode: restricting --device to the %s "
+                "backend's own devices (%s); this host registers GPUs under "
+                "more than one backend\n",
+                chosenBackend.second.c_str(),
+                deviceList.c_str())
+                .c_str(),
+            nullptr);
+        configVector.emplace_back("--device");
+        configVector.emplace_back(std::move(deviceList));
+      }
     }
     configFilemap.erase(deviceIt);
 

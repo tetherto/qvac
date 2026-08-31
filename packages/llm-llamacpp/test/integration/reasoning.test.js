@@ -663,9 +663,22 @@ safeTest(
 // checkpoint and verifies the recurrent-memory gate keeps the cache
 // untouched. Qwen3.5 thinking traces can exceed 1k tokens before
 // `</think>` closes, so we give a larger n_predict / ctx_size.
+//
+// These four ask for Vulkan on linux x64, where CUDA is now preferred by
+// default. They need the model to emit `</think>` inside n_predict, because
+// the compactor only drops a span that actually closed, and that turns out not
+// to be stable across backends. Measured on one host at v10297.1.0 with greedy
+// decoding, temp 0 seed 50 top_p 1, same model and same prompt: CUDA closed
+// after 355 tokens while CPU ran the full 3072 without closing, and the two
+// traces diverge about fifteen tokens in. The CI CUDA leg does not close
+// either, at 3072 or at 6144. So this is a cross-backend trajectory
+// divergence, not a CUDA fault and not a budget problem. Pinning the backend
+// keeps these tests meaningful. It does not fix the divergence, which is
+// tracked separately.
 const QWEN35_REASONING_CONFIG = {
   ctx_size: '8192',
-  n_predict: '3072'
+  n_predict: '3072',
+  ...(os.platform() === 'linux' && os.arch() === 'x64' ? { backend: 'vulkan' } : {})
 }
 
 // Qwen3.5 is a hybrid SSM family. The recurrent half is rolled back

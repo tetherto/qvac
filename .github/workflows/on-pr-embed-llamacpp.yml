@@ -130,6 +130,10 @@ jobs:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/embed-llamacpp
+      # QVAC-23763: cpp-lint configures the package on a linux runner, and the
+      # vcpkg.json requests the qvac-fabric cuda-backend feature there, which
+      # hard-errors without nvcc.
+      include-cuda-sdk: true
 
   cpp-tests:
     permissions:
