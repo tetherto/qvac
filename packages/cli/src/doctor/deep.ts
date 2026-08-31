@@ -289,7 +289,7 @@ const FAILURE_RULES: readonly FailureRule[] = [
     matches: (result, diagnostics) =>
       result.outcome === 'timeout' ||
       /RPC_INIT_TIMEOUT|RPCInitTimeoutError|RPC initialization timed out/i.test(diagnostics),
-    hint: 'The SDK worker did not complete its startup handshake. Re-run with --verbose to inspect the bounded worker output.'
+    hint: 'The SDK worker did not complete its startup handshake. Re-run with --verbose to inspect the bounded worker output. On slow storage or embedded hardware, raise the limit with QVAC_RPC_INIT_TIMEOUT_MS or rpcInitTimeoutMs in qvac.config.*.'
   },
   {
     id: 'spawn-error',
