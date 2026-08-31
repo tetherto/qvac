@@ -1,0 +1,62 @@
+{
+  "name": "@qvac/llm-rpc-server",
+  "version": "0.1.0",
+  "description": "Managed ggml RPC server process for QVAC LLM inference",
+  "addon": true,
+  "scripts": {
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
+    "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
+    "test": "npm run build:ts && npm run test:node",
+    "test:node": "node --test test/node/*.test.cjs",
+    "test:types": "npm run typecheck",
+    "test:dts": "npm run test:types"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "prebuilds",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/llm-rpc-server"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/llm-rpc-server#readme",
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "lunte": "^1.8.4",
+    "prettier": "^3.9.6",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "types": "index.d.ts"
+}

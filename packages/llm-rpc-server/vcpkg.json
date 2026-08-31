@@ -1,0 +1,15 @@
+{
+  "dependencies": [
+    {
+      "name": "qvac-fabric",
+      "version>=": "10297.0.0",
+      "features": [
+        "rpc-server"
+      ]
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    }
+  ]
+}
