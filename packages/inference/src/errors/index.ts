@@ -632,6 +632,18 @@ export class ChecksumValidationFailedError extends QvacErrorBase {
   }
 }
 
+export class InsecureModelSourceError extends QvacErrorBase {
+  constructor(url: string, reason: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.INSECURE_MODEL_SOURCE, [url, reason], cause))
+  }
+}
+
+export class ChecksumUnavailableError extends QvacErrorBase {
+  constructor(url: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.CHECKSUM_UNAVAILABLE, [url], cause))
+  }
+}
+
 export class HTTPError extends QvacErrorBase {
   /** HTTP status code; `0` denotes a connection/network failure (no response). */
   readonly httpStatus: number

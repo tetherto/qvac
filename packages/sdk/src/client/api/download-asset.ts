@@ -25,6 +25,8 @@ export type DownloadAssetOptions = BaseDownloadAssetOptions
  * @param options - Download configuration including:
  *   - assetSrc: The location from which the asset is downloaded (local path, remote URL, or Hyperdrive URL)
  *   - seed: Optional boolean for hyperdrive seeding
+ *   - requireHttpChecksum: Per-call override — reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Defaults to the engine config (false).
+ *   - requireSecureTransport: Per-call override — reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source (loopback exempt); when unset, only Hugging Face transport is hardened. Defaults to the engine config (false).
  *   - onProgress: Optional callback for download progress
  * @param rpcOptions - Optional RPC options including per-call profiling configuration
  *

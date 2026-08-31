@@ -98,6 +98,8 @@ export const ERROR_CODES = {
   ARCHIVE_MISSING_SHARDS: 53013,
   PARTIAL_DOWNLOAD_OFFLINE: 53014,
   REGISTRY_DOWNLOAD_FAILED: 53015,
+  INSECURE_MODEL_SOURCE: 53016,
+  CHECKSUM_UNAVAILABLE: 53017,
 
   // Cache operations (53,200-53,349)
   DELETE_CACHE_FAILED: 53200,
@@ -492,6 +494,17 @@ const errorDefinitions: ErrorCodesMap = {
   [ERROR_CODES.REGISTRY_DOWNLOAD_FAILED]: {
     name: 'REGISTRY_DOWNLOAD_FAILED',
     message: (details: string) => `Registry download failed: ${details}`
+  },
+  [ERROR_CODES.INSECURE_MODEL_SOURCE]: {
+    name: 'INSECURE_MODEL_SOURCE',
+    message: (url: string, reason: string) =>
+      `Refusing insecure model download from ${url}: ${reason}`
+  },
+  [ERROR_CODES.CHECKSUM_UNAVAILABLE]: {
+    name: 'CHECKSUM_UNAVAILABLE',
+    message: (url: string) =>
+      `Model download from ${url} could not be verified against a trusted checksum ` +
+      `and requireHttpChecksum is enabled`
   },
   [ERROR_CODES.INVALID_SHARD_URL_PATTERN]: {
     name: 'INVALID_SHARD_URL_PATTERN',
