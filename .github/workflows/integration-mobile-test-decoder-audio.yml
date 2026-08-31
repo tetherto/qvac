@@ -71,7 +71,7 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/decoder-audio@<ver> (published) or @tetherto/decoder-audio@<dev> (GPR) to force-install a specific build."
+        description: "NO EFFECT for decoder-audio — kept only for interface parity with the other mobile workflows. This addon has no native prebuild of its own (it rides on bare-ffmpeg's), so the job passes skip-prebuilds: 'true' and the prebuild download step never runs. Whatever you put here is ignored; use `ref` to choose what gets tested."
         type: string
         required: false
         default: ""
