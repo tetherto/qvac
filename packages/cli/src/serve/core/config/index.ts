@@ -61,6 +61,17 @@ export function parseServeConfig(
   }
 }
 
+const CORE_SERVE_KEYS = ['models', 'publicBaseUrl', 'cors', 'load']
+
+/** `serve.*` keys that belong to neither core nor a registered extension. */
+export function unknownServeKeys(
+  rawConfig: RawServeConfig,
+  extensions: readonly ServeExtension[]
+): string[] {
+  const known = new Set([...CORE_SERVE_KEYS, ...extensions.map((e) => e.name)])
+  return Object.keys(rawConfig.serve ?? {}).filter((key) => !known.has(key))
+}
+
 // Every registered extension parses its block whether or not it is mounted, so
 // a typo in `serve.<extension>` fails at startup rather than lying dormant.
 function parseExtensionConfigs(

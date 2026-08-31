@@ -21,6 +21,12 @@ export interface ServeExtension {
   banners?(state: unknown): string[]
 }
 
+export function extensionSummary(extensions: readonly ServeExtension[]): string {
+  if (extensions.length === 0) return 'No surfaces are mounted.'
+  const mounted = extensions.map((e) => `${e.name} (${e.description})`).join(', ')
+  return `Mounted surfaces: ${mounted}.`
+}
+
 export function extensionTags(
   extensions: readonly ServeExtension[]
 ): Array<{ name: string; description: string }> {
