@@ -3,6 +3,7 @@ import {
   ModelType,
   VERBOSITY,
   SUPPORTED_AUDIO_FORMATS,
+  AUDIOGEN_ENGINES,
   AUDIOGEN_TASK_TYPES,
   TTS_PACES,
   TTS_COSYVOICE3_EMOTIONS,
@@ -85,5 +86,6 @@ export const constantsRegistry = {
   TtsCosyvoice3InstructDialect: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_DIALECTS),
   TtsCosyvoice3InstructVolume: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_VOLUMES),
   TtsCosyvoice3InstructStyle: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_STYLES),
+  AudioGenEngine: enumFromVocabulary(AUDIOGEN_ENGINES),
   AudioGenTaskType: enumFromVocabulary(AUDIOGEN_TASK_TYPES)
 } as const

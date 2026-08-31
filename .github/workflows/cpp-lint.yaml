@@ -101,6 +101,9 @@ jobs:
       # hip-backend feature is installed/resolved (setup-rocm exports
       # VCPKG_KEEP_ENV_VARS=ROCM_PATH;HIP_PATH so the hip package is cache-keyed
       # per ROCm prefix and its hip-config resolves at find_dependency time).
+      # Omit `with:` so version/gfx/sha256 all come from the action defaults
+      # and match /opt/rocm/.qvac-rocm on self-hosted linux-x64 images.
+      # Passing only rocm-version would keep the default sha256 and miss the stamp.
       - if: ${{ inputs.include-rocm-sdk }}
         name: Setup ROCm SDK for HIP cross-compile
         uses: ./.github/actions/setup-rocm

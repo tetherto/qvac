@@ -1,5 +1,5 @@
 // Real SDK tests
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
@@ -53,6 +53,29 @@ export const modelLoadLlm: TestDefinition = {
     category: 'model',
     dependency: 'none',
     estimatedDurationMs: 60000
+  }
+}
+
+export const modelLoadLlmLoadModeNone: TestDefinition = {
+  testId: 'model-load-llm-load-mode-none',
+  params: { loadMode: 'none' },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
+
+// Asserts the validation code, not the key name: a native --no-mmap error names it too.
+export const modelLoadLlmLegacyNoMmapRejected: TestDefinition = {
+  testId: 'model-load-llm-legacy-no-mmap-rejected',
+  params: { noMmap: true },
+  expectation: { validation: 'throws-error', errorContains: '50010' },
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 1000
   }
 }
 
@@ -216,6 +239,8 @@ export const modelLifecycleNmt: TestDefinition = {
 export const tests = [
   // Model tests (first section)
   modelLoadLlm,
+  modelLoadLlmLoadModeNone,
+  modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
   modelLoadOcrDoctr,

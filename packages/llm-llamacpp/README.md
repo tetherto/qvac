@@ -153,7 +153,7 @@ const config = {
   gpu_layers: '99', // number of model layers offloaded to GPU.
   ctx_size: '1024', // context length
   device: 'cpu', // must be specified: 'gpu' or 'cpu' else it will throw an error
-  no_mmap: 'true' // disable memory-mapped model loading
+  load_mode: 'none' // read fully into memory: no mmap, mlock or direct I/O
 }
 ```
 
@@ -168,14 +168,13 @@ const config = {
 | top_k             | 0 – 128                                     | 40                           | Top-k sampling                                        |
 | predict         | integer (-1 = infinity)                     | -1                           | Maximum tokens to predict                             |
 | seed              | integer                                     | -1 (random)                  | Random seed for sampling                              |
-| no_mmap           | `""`, `"true"`, or `"false"`                | `"false"`                    | Disable memory mapping for model loading              |
+| load_mode         | `"none"`, `"mmap"`, `"mlock"`, `"mmap+mlock"`, or `"dio"` | `"mmap"`                     | Select the model loading mode                          |
 | reverse_prompt    | string (comma-separated)                    | —                            | Stop generation when these strings are encountered    |
 | repeat_penalty    | float                                       | 1.1                          | Repetition penalty                                    |
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
-| n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context. In batch mode the sliding window is the per-sequence slot (`n_ctx / n_parallel`), so `n_discarded` is clamped to that per-slot window, not the full context; a value `>=` the slot cap is clamped and logs a warning |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
 | split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for layer/row parallelism ([details](./docs/multi-gpu.md)) |
@@ -190,7 +189,7 @@ const config = {
 The addon picks a safe KV-cache type when `cache-type-k`/`cache-type-v` are unset, and validates any explicit choice per backend:
 
 - **Auto-default:** on a **Metal / Vulkan GPU** (with flash attention on) both K and V default to **`q8_0`** — quality-neutral vs `f16` and ~47% smaller KV cache. **CPU** and **OpenCL (Adreno)** keep **`f16`** (ARM CPU `q8_0` has a quality/throughput cost; quantized KV is unsafe on OpenCL — see below). Finetuning manages its own KV types and is left untouched.
-- **OpenCL (Adreno) accepts only `f16`/`f32`/`bf16`:** any other cache type — quantized (`q8_0`, `q4_0`, `q4_1`, `q5_0`, …) or unrecognized — throws a `StatusError`. A quantized K or V cache aborts in `llama_kv_cache::update` on KV-cache shifts / cache management (sliding context, state restore) because ggml-opencl has no `F32→quantized` requantize kernel. Use `f16`/`f32`/`bf16`, or a Vulkan GPU / CPU.
+- **OpenCL (Adreno) accepts only `f16`/`f32`/`bf16`:** any other cache type — quantized (`q8_0`, `q4_0`, `q4_1`, `q5_0`, …) or unrecognized — throws a `StatusError`. A quantized K or V cache aborts in `llama_kv_cache::update` on cache management (reasoning-block compaction, state restore) because ggml-opencl has no `F32→quantized` requantize kernel. Use `f16`/`f32`/`bf16`, or a Vulkan GPU / CPU.
 - **Mixed K≠V is a warning, not an error:** if K and V differ and at least one is quantized, the addon logs a warning (asymmetric quantized K/V falls off the fused flash-attention path — a notable GPU decode penalty — for no quality benefit, and is unsupported on Adreno OpenCL) but proceeds. Prefer a symmetric type. (This may be relaxed once qvac-fabric handles asymmetric quantized K/V efficiently.)
 
 

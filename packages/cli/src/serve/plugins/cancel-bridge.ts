@@ -6,7 +6,7 @@ import { bindClientDisconnectCancel } from '../core/cancel-bridge.js'
 const plugin: FastifyPluginAsync = async (app) => {
   app.addHook('onRequest', (req, reply, done) => {
     req.bindCancel = (requestId: string) => {
-      bindClientDisconnectCancel(req.raw, reply.raw, requestId, app.qvac.logger)
+      bindClientDisconnectCancel(reply.raw, requestId, app.qvac.logger)
     }
     done()
   })

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-08-27
+## [0.8.0] - 2026-08-28
 
 ### Added
 
@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `qvac-fabric-speech.cpp` in the package documentation, following the
   upstream repository rename. Old GitHub links keep working via redirect.
 
+- Raise the `speech-cpp` floor to 2026-08-28, which brings in ggml-speech
+  2026-08-28. Unused IQ / Q1_0 / MXFP4 / NVFP4 and training Vulkan shader
+  payloads are replaced with tiny no-ops so the published natives stay
+  under the npm tarball size limit. CUDA fatbins keep Ampere and Ada
+  (`80-virtual;86-real;89-real`) and drop Turing sm75 and Blackwell
+  sm120/121.
+
 - Raise the `speech-cpp` floor to 2026-08-26#1, aligning all speech addons
   (`asr-ggml`, `tts-ggml`, `audiogen-ggml`, `bci-whispercpp`) on the same
   port and ggml-speech cut. Relative to 2026-08-26 the bundled ggml computes
@@ -38,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validation with GEMV work-group limits.
 
 ### Fixed
+
+- Vulkan device-loss and fence failures now return a graph-compute error
+  instead of aborting the process or continuing with an unusable device.
+  Pending compute state is unwound after the failure.
 
 - Expose `binding.js` through the package `exports` map
   (`@qvac/tts-ggml/binding.js`), so mobile bundlers that resolve the native

@@ -26,6 +26,28 @@ test('llmConfigBaseSchema: split-mode is optional', (t) => {
   t.is(llmConfigBaseSchema.safeParse({}).success, true)
 })
 
+test('llmConfigBaseSchema: accepts every load_mode value', (t) => {
+  for (const load_mode of ['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'] as const) {
+    const result = llmConfigBaseSchema.safeParse({ load_mode })
+    t.is(result.success, true, `${load_mode} must be accepted`)
+    if (result.success) t.is(result.data.load_mode, load_mode)
+  }
+})
+
+test('llmConfigBaseSchema: rejects invalid load_mode values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ load_mode: 'buffered' }).success, false)
+})
+
+test('llmConfigBaseSchema: rejects legacy no_mmap under strict validation', (t) => {
+  t.is(llmConfigBaseSchema.strict().safeParse({ no_mmap: true }).success, false)
+})
+
+test('llmConfigSchema: leaves load_mode unset by default', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.is(result.data.load_mode, undefined)
+})
+
 test('llmConfigBaseSchema: accepts continuous-batching parallel slots', (t) => {
   const result = llmConfigBaseSchema.safeParse({ parallel: 4 })
   t.is(result.success, true)
