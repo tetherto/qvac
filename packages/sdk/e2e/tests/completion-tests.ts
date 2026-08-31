@@ -651,11 +651,8 @@ export const completionStats: TestDefinition = {
 // Context is never evicted: a generation that fills the small window must stop
 // at the boundary and surface as the public stopReason "length" (predict is -1,
 // so the boundary is the only length source), keeping the tokens it produced.
-// The prompt has no natural terminus, which makes an early EOS unlikely under
-// greedy decode — not impossible: the addon still stops on a sampled EOG, so
-// a backend whose greedy path ends early fails here on model behaviour. Treat
-// a failure with stopReason "eos" as a fixture-model diagnostic, not an SDK
-// regression.
+// The terminus-free prompt makes an early EOS unlikely, not impossible — a
+// failure with stopReason "eos" is a fixture-model diagnostic, not an SDK bug.
 export const completionContextBoundaryStop = createCompletionTest(
   'completion-context-boundary-stop',
   {
@@ -694,12 +691,9 @@ export const completionContextOverflowPrefill = createCompletionTest(
   { estimatedDurationMs: 15000, dependency: 'llm-small-ctx' }
 )
 
-// A real warm cache must reach the overflow guard: turn one fills most of
-// the 512 window and is cached under a per-run key, and the follow-up fits
-// the window on its own but not on top of the cache. Passes against both
-// addon generations — the published 0.47.x short form reports the failing
-// sum, the current addon reports the cached and appended halves separately —
-// and `requiredTokens` carries the failing total either way.
+// Turn one fills most of the 512 window and is cached; the follow-up fits
+// the window alone but not on top of the cache. Both addon generations
+// report the failing total, so `requiredTokens` is asserted either way.
 export const completionContextOverflowWarmCache = createCompletionTest(
   'completion-context-overflow-warm-cache',
   {

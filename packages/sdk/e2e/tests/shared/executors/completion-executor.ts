@@ -408,12 +408,9 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     }
   }
 
-  // A real warm cache grown into the overflow guard: the follow-up fits the
-  // window on its own but not on top of the cached first turn, so only the
-  // cached-plus-prompt check can refuse it. The typed error must cross the
-  // RPC with the failing total. Sizing cannot pin which guard fires across
-  // tokenizers, so the assertion accepts any overflow whose requiredTokens
-  // reaches the window.
+  // The follow-up fits the window alone but not on top of the cached first
+  // turn. Sizing cannot pin which guard fires across tokenizers, so any
+  // overflow whose requiredTokens reaches the window passes.
   async contextOverflowWarmCache(params: CompletionTestParams): Promise<TestResult> {
     const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
     const kvCache = `ctx-overflow-warm-${Date.now()}`

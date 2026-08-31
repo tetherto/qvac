@@ -104,19 +104,16 @@ test('parseContextOverflowMessage: extracts from long-form TextLlm message', (t)
 })
 
 test('parseContextOverflowMessage: extracts from short-form bracketed message', (t) => {
-  // The short form is used by both `TextLlmContext.cpp` (the second
-  // overflow site) and `MtmdLlmContext.cpp`:
-  // `"... at prefill step (N tokens, max M)\n"`.
+  // The retired short form. Both of its emitters format a cached total
+  // (nPast_ + nTokens / cacheTokens + nTokens), so promptTokens stays unset.
   const text = '[TextLlm] context overflow at prefill step (8192 tokens, max 4096)\n'
   t.alike(parseContextOverflowMessage(text), {
-    promptTokens: 8192,
     requiredTokens: 8192,
     ctxSize: 4096
   })
 
   const mtmd = '[MtmdLlm] context overflow at prefill step (1024 tokens, max 512)\n'
   t.alike(parseContextOverflowMessage(mtmd), {
-    promptTokens: 1024,
     requiredTokens: 1024,
     ctxSize: 512
   })

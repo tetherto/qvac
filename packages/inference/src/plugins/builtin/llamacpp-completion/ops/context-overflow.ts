@@ -124,9 +124,10 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
     map: ([prompt, ctx]) => ({ promptTokens: prompt!, requiredTokens: prompt!, ctxSize: ctx! })
   },
   {
-    // "(N tokens, max M)", the pre-multimodal short form
+    // "(N tokens, max M)", the retired short form. Both of its emitters
+    // format a cached total, not the prompt alone — promptTokens stays unset.
     pattern: /\((\d+)\s+tokens,\s*max\s+(\d+)\)/i,
-    map: ([prompt, ctx]) => ({ promptTokens: prompt!, requiredTokens: prompt!, ctxSize: ctx! })
+    map: ([total, ctx]) => ({ requiredTokens: total!, ctxSize: ctx! })
   }
 ]
 
