@@ -674,6 +674,35 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRejectsFlashAttnOff) {
   }
 }
 
+// Both spellings reach fabric as separate --flash-attn flags, and ConfigMap is
+// an unordered_map, so with a contradictory pair the value that lands last —
+// and wins in fabric's parser — is unspecified. Checking only the first key
+// found let { "flash-attn": "on", "flash_attn": "off" } skip the guard and
+// still disable flash attention under tensor mode. Both orderings are pinned
+// so neither can regress.
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsContradictoryFlashAttnKeys) {
+  const std::vector<std::pair<std::string, std::string>> kPairs = {
+      {"on", "off"}, {"off", "on"}};
+  for (const auto& [hyphen, underscore] : kPairs) {
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    config["flash-attn"] = hyphen;
+    config["flash_attn"] = underscore;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+      FAIL() << "tensor split with flash-attn=" << hyphen
+             << " and flash_attn=" << underscore << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("flash attention"));
+    }
+  }
+}
+
 // Under finetuning it is tuneLoadConfigMap, not the caller, that writes
 // flash-attn=off, so the message must not tell them to remove a key they never
 // set.
@@ -786,18 +815,24 @@ TEST_F(LoadFitNormalizationTest, TensorSplitCpuFallbackClearsToNone) {
 // named for what it does: it pins that each listed architecture is rejected,
 // with the architecture named in the error. Re-deriving the list from
 // LLM_ARCH_NAMES on a fabric bump remains a manual step.
-// Verified by hand against qvac-fabric v10297.0.0 (30 entries).
+// Verified by hand against qvac-fabric v10297.1.0 (27 entries).
 TEST_F(LoadFitNormalizationTest, TensorSplitArchDenylistCoversFabric) {
   static constexpr const char* kUnsupported[] = {
-      "grok",       "mpt",         "plamo2",         "minicpm3",
-      "gemma3n",    "mamba",       "mamba2",         "jamba",
-      "falcon-h1",  "olmo2",       "olmoe",          "deepseek2",
-      "deepseek32", "deepseek4",   "glm-dsa",        "bitnet",
-      "t5",         "nemotron_h",  "nemotron_h_moe", "granitehybrid",
-      "lfm2",       "lfm2moe",     "minimax-m2",     "minimax-m3",
-      "mistral4",   "kimi-linear", "qwen3tts",       "qwen3next",
-      "qwen35",     "qwen35moe"};
-  EXPECT_EQ(std::size(kUnsupported), 30U);
+      "grok",          "mpt",
+      "plamo2",        "minicpm3",
+      "gemma3n",       "mamba",
+      "mamba2",        "jamba",
+      "falcon-h1",     "olmo2",
+      "olmoe",         "deepseek2",
+      "deepseek32",    "glm-dsa",
+      "bitnet",        "t5",
+      "nemotron_h",    "nemotron_h_moe",
+      "granitehybrid", "lfm2",
+      "lfm2moe",       "minimax-m2",
+      "minimax-m3",    "mistral4",
+      "kimi-linear",   "qwen3tts",
+      "qwen3next"};
+  EXPECT_EQ(std::size(kUnsupported), 27U);
 
   for (const char* arch : kUnsupported) {
     test_common::MockModelMetaData metadata{false, arch};
@@ -820,10 +855,23 @@ TEST_F(LoadFitNormalizationTest, TensorSplitArchDenylistCoversFabric) {
     }
   }
 
-  // Near-misses that fabric DOES support: neither is in its case list, and
-  // both are easy to add to the denylist by mistake because a sibling is.
+  // Near-misses that fabric DOES support: none is in its case list, and each is
+  // easy to add to the denylist by mistake because a sibling is.
+  //
+  // deepseek4, qwen35 and qwen35moe were unsupported at v10297.0.0 and gained
+  // support at v10297.1.0. They are asserted here rather than merely deleted
+  // from the denylist so that re-adding them — the natural mistake, since their
+  // siblings deepseek2/deepseek32 and qwen3next remain unsupported — fails.
   for (const char* arch :
-       {"deepseek2-ocr", "t5encoder", "llama", "qwen3", "qwen3moe", "gemma3"}) {
+       {"deepseek2-ocr",
+        "t5encoder",
+        "llama",
+        "qwen3",
+        "qwen3moe",
+        "gemma3",
+        "deepseek4",
+        "qwen35",
+        "qwen35moe"}) {
     test_common::MockModelMetaData metadata{false, arch};
     auto config = baseConfig();
     config["split-mode"] = "tensor";

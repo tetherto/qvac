@@ -15,15 +15,17 @@
     defaults to every layer and `ctx_size` to the model's trained context, so **set `ctx_size`
     explicitly for large models** or the load can OOM. The override is applied after argument
     parsing, so an explicit `fit: 'on'` cannot silently re-enable it. Logged at WARNING.
-  - Unavailable for some architectures (Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2/4,
-    MiniMax, Qwen3-Next/3.5 and others as of qvac-fabric v10297.0.0); rejected before loading with
-    the architecture named.
+  - Unavailable for some architectures (Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2,
+    MiniMax, Qwen3-Next and others as of qvac-fabric v10297.1.0); rejected before loading with
+    the architecture named. `deepseek4`, `qwen35` and `qwen35moe` were unsupported at v10297.0.0
+    and are supported from v10297.1.0.
 
   Tensor mode pins its own `--device` list. qvac-fabric selects devices for this mode with no
   device-type filter and no deduplication, so left alone it splits weights and KV cache onto the
   integrated GPU of any discrete + integrated host and shards a dual-registered GPU twice. The
   addon enumerates devices itself — discrete when present, otherwise integrated, deduplicated by
-  description. `layer` and `row` are unchanged and still let qvac-fabric choose.
+  the backend-reported `device_id` (PCI bus id), not by description: two identical cards report
+  identical descriptions. `layer` and `row` are unchanged and still let qvac-fabric choose.
 
   **Not selectable through the SDK yet:** `@qvac/inference`'s config schema still enumerates
   `none`/`layer`/`row`, so `'tensor'` is reachable only via direct addon `loadModel`.

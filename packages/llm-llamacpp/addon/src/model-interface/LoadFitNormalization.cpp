@@ -84,21 +84,33 @@ uint32_t trainedContext(const ModelMetaData& metadata) {
 // enforces it. LoadFitNormalizationTest.TensorSplitArchDenylistCoversFabric
 // exercises this list but reads nothing from fabric, so it cannot detect
 // drift; it only pins the addon against its own copy. Verified by hand
-// against qvac-fabric v10297.0.0 (30 entries).
+// against qvac-fabric v10297.1.0 (27 entries).
+//
+// The bump from v10297.0.0 to v10297.1.0 REMOVED three entries — fabric now
+// supports tensor split for deepseek4, qwen35 and qwen35moe. Leaving them here
+// would reject architectures fabric accepts, so the list shrank rather than
+// grew. A denylist drifts in both directions; re-derive it from
+// llm_arch_supports_sm_tensor rather than only appending.
 //
 // An absent general.architecture returns "supported": fabric's own check at
 // src/llama-model.cpp:328 remains the backstop, this list is only a UX layer
 // that turns a bare std::runtime_error into a structured InvalidArgument.
 bool archSupportsTensorSplit(const ModelMetaData& metadata) {
   static const std::unordered_set<std::string> kUnsupported = {
-      "grok",       "mpt",         "plamo2",         "minicpm3",
-      "gemma3n",    "mamba",       "mamba2",         "jamba",
-      "falcon-h1",  "olmo2",       "olmoe",          "deepseek2",
-      "deepseek32", "deepseek4",   "glm-dsa",        "bitnet",
-      "t5",         "nemotron_h",  "nemotron_h_moe", "granitehybrid",
-      "lfm2",       "lfm2moe",     "minimax-m2",     "minimax-m3",
-      "mistral4",   "kimi-linear", "qwen3tts",       "qwen3next",
-      "qwen35",     "qwen35moe"};
+      "grok",          "mpt",
+      "plamo2",        "minicpm3",
+      "gemma3n",       "mamba",
+      "mamba2",        "jamba",
+      "falcon-h1",     "olmo2",
+      "olmoe",         "deepseek2",
+      "deepseek32",    "glm-dsa",
+      "bitnet",        "t5",
+      "nemotron_h",    "nemotron_h_moe",
+      "granitehybrid", "lfm2",
+      "lfm2moe",       "minimax-m2",
+      "minimax-m3",    "mistral4",
+      "kimi-linear",   "qwen3tts",
+      "qwen3next"};
   const auto architecture = metadata.tryGetString("general.architecture");
   if (!architecture.has_value()) {
     return true;
@@ -960,11 +972,20 @@ NormalizedLoad normalizeLoadForFit(
     // "off" alone would let the other three reach fabric in exactly the state
     // this guard exists to prevent. Case is normalised here too, though a
     // mixed-case value would be rejected by fabric's own parser anyway.
-    auto flashAttnIt = configFilemap.find("flash-attn");
-    if (flashAttnIt == configFilemap.end()) {
-      flashAttnIt = configFilemap.find("flash_attn");
-    }
-    if (flashAttnIt != configFilemap.end()) {
+    // BOTH keys are checked, not just the first one found. The configVector
+    // loop below emits one --flash-attn per key, so a caller passing
+    // { "flash-attn": "on", "flash_attn": "off" } hands fabric two
+    // contradictory flags; ConfigMap is an unordered_map, so which one lands
+    // last — and therefore wins in fabric's parser — is unspecified. Stopping
+    // at the first key would let that pair skip the guard and still reach
+    // fabric with flash attention disabled, which is exactly the state this
+    // guard exists to prevent. Rejecting when EITHER key is falsey closes it
+    // deterministically.
+    for (const char* flashAttnKey : {"flash-attn", "flash_attn"}) {
+      const auto flashAttnIt = configFilemap.find(flashAttnKey);
+      if (flashAttnIt == configFilemap.end()) {
+        continue;
+      }
       std::string flashAttnValue = flashAttnIt->second;
       // Lambda form rather than a bare ::tolower: the value is caller-supplied
       // and may carry non-ASCII bytes, which are negative under a signed char
