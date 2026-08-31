@@ -9,7 +9,7 @@ import {
 } from '@/serve/schemas/videos'
 import { createVideoJobsStore, type VideoJob } from '@/serve/core/video-jobs-store'
 import { tearDownJob, resolveInputReferenceImage } from '@/serve/routes/videos'
-import type { QvacContext } from '@/serve/lib/types'
+import type { QvacContext } from '@/serve/core/context'
 
 type CancelInput = Parameters<NonNullable<QvacContext['cancelOverride']>>[0]
 

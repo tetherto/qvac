@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createModelRegistry } from '@/serve/core/model-registry'
-import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/model-registry'
+import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import type { LoadManager } from '@/serve/core/load-manager'
 import { preloadModels, formatErrorChain, shouldRefuseStart } from '@/serve/core/lifecycle'
 import { createLogger } from '@/logger'

@@ -22,7 +22,7 @@ import {
   UnsupportedImageOutputError
 } from '@/serve/schemas/images'
 import type { EphemeralFilesStore } from '@/serve/adapters/openai/ephemeral-files-store'
-import type { QvacContext } from '@/serve/lib/types'
+import type { QvacContext } from '@/serve/core/context'
 
 const SUPPORTED_RESPONSE_FORMATS = new Set(['b64_json', 'url'])
 const RESPONSE_OUTPUT_FORMAT = 'png' as const

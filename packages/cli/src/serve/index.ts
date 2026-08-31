@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { createLogger } from '@/logger'
 import type { Logger } from '@/logger'
 import { findConfigFile, loadConfig } from '@/config'
-import { parseServeConfig } from '@/serve/config'
+import { parseServeConfig } from '@/serve/core/config'
 import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '@/serve/cors'
 import { resolveServeApiKey } from '@/serve/api-key'
 import { checkNetworkExposure, validateServeStartup } from '@/serve/startup'
@@ -32,14 +32,12 @@ import { createVectorStoresStore } from '@/serve/adapters/openai/vector-stores-s
 import { createVideoJobsStore } from '@/serve/core/video-jobs-store'
 import { probeFfmpegAvailable } from '@/serve/lib/video-transcode'
 import { tearDownJob } from '@/serve/routes/videos'
-import type { QvacContext } from '@/serve/lib/types'
+import type { QvacContext } from '@/serve/core/context'
 import contextPlugin from '@/serve/plugins/context'
 import errorHandlerPlugin from '@/serve/plugins/error-handler'
 import authPlugin from '@/serve/plugins/auth'
 import cancelBridgePlugin from '@/serve/plugins/cancel-bridge'
 import { TAG_DESCRIPTIONS } from '@/serve/route-meta'
-
-import '@/serve/lib/types'
 
 export interface StartServerOptions {
   projectRoot: string

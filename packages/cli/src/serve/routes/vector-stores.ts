@@ -29,8 +29,8 @@ import {
   type UpdateVectorStoreInput,
   type VectorStoreMeta
 } from '@/serve/adapters/openai/vector-stores-store'
-import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/model-registry'
-import type { QvacContext } from '@/serve/lib/types'
+import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
+import type { QvacContext } from '@/serve/core/context'
 import { ensureReady } from '@/serve/plugins/require-model'
 
 const SYNTHETIC_TIMESTAMP = 0

@@ -6,8 +6,6 @@ import { join } from 'node:path'
 import { buildServer, type StartServerOptions } from '@/serve/index'
 import { preloadModels } from '@/serve/core/lifecycle'
 import { MODELLESS_CONFIG, writeConfigDir } from './config.js'
-// Side-effect import: augments FastifyInstance with `.qvac`.
-import '@/serve/lib/types'
 
 export interface CreateServerOptions {
   config?: unknown

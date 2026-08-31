@@ -23,7 +23,7 @@ import {
   TranscodeFailedError,
   TranscodeTimeoutError
 } from '@/serve/lib/video-transcode'
-import type { QvacContext } from '@/serve/lib/types'
+import type { QvacContext } from '@/serve/core/context'
 
 const descriptions = {
   create: `

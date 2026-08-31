@@ -20,7 +20,7 @@ import {
   audioSpeechBody,
   SPEECH_UNSUPPORTED_PARAMS
 } from '@/serve/schemas/audio'
-import { resolveModelAlias } from '@/serve/config'
+import { resolveModelAlias } from '@/serve/core/config/models'
 import {
   buildWavBuffer,
   int16SamplesToBuffer,
@@ -34,8 +34,9 @@ import {
   AudioEncodeFailedError,
   AudioEncodeTimeoutError
 } from '@/serve/lib/audio-transcode'
-import type { ModelEntry, ResolvedModelEntry } from '@/serve/core/model-registry'
-import type { QvacContext } from '@/serve/lib/types'
+import type { ModelEntry } from '@/serve/core/model-registry'
+import type { ResolvedModelEntry } from '@/serve/core/config/types'
+import type { QvacContext } from '@/serve/core/context'
 
 const SUPPORTED_TRANSCRIPTION_FORMATS = new Set(['json', 'text', 'srt', 'vtt', 'verbose_json'])
 

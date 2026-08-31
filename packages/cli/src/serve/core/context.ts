@@ -1,4 +1,5 @@
-import type { ModelRegistry, ServeConfig, ModelEntry } from '@/serve/core/model-registry'
+import type { ModelRegistry, ModelEntry } from '@/serve/core/model-registry'
+import type { ServeConfig } from '@/serve/core/config/types'
 import type { LoadManager, LoadModelFn } from '@/serve/core/load-manager'
 import type { Logger } from '@/logger'
 import type { VectorStoresStore } from '@/serve/adapters/openai/vector-stores-store'
@@ -7,7 +8,6 @@ import type { ChunkAttributionStore } from '@/serve/adapters/openai/chunk-attrib
 import type { ResponsesStore } from '@/serve/adapters/openai/responses-store'
 import type { VideoJobsStore } from '@/serve/core/video-jobs-store'
 import type * as sdk from '@qvac/sdk'
-import type { ParsedFile } from '@/serve/lib/multipart'
 
 export interface QvacContext {
   registry: ModelRegistry
@@ -39,19 +39,4 @@ export interface QvacRequestModel {
   alias: string
   sdkModelId: string
   entry: ModelEntry
-}
-
-declare module 'fastify' {
-  interface FastifyInstance {
-    qvac: QvacContext
-  }
-  interface FastifyRequest {
-    qvacModel?: QvacRequestModel
-    bindCancel: (requestId: string) => void
-    multipartFiles?: ParsedFile[]
-  }
-  interface FastifyContextConfig {
-    unsupportedParams?: string[]
-    sseSentinel?: boolean
-  }
 }

@@ -11,7 +11,7 @@ import {
   buildWavBuffer,
   speechAliasKey
 } from '@/serve/audio'
-import { parseServeConfig } from '@/serve/config'
+import { parseServeConfig } from '@/serve/core/config'
 import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '@/serve/lib/audio-transcode'
 
 describe('mapResponseFormat', () => {

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { loadModelConstants } from '@/serve/sdk-constants'
+import { loadModelConstants } from '@/serve/core/config/constants'
 import { buildBuiltinCatalog } from '@/serve/core/model-catalog'
 import {
   DEFAULT_STARTER,

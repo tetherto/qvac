@@ -10,7 +10,7 @@ import {
 } from '@/serve/core/load-manager'
 import { ensureReady, resolveAndCheckModel } from '@/serve/plugins/require-model'
 import { createLogger } from '@/logger'
-import type { QvacContext } from '@/serve/lib/types'
+import type { QvacContext } from '@/serve/core/context'
 import { HttpError } from '@/serve/lib/http-error'
 
 const logger = createLogger('silent')

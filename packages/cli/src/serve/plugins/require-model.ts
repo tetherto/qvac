@@ -1,9 +1,10 @@
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify'
 import { HttpError } from '@/serve/lib/http-error'
-import { resolveModelAlias } from '@/serve/config'
+import { resolveModelAlias } from '@/serve/core/config/models'
 import { ModelLoadTimeoutError } from '@/serve/core/load-manager'
-import type { ModelEntry, ResolvedModelEntry } from '@/serve/core/model-registry'
-import type { QvacContext, QvacRequestModel } from '@/serve/lib/types'
+import type { ModelEntry } from '@/serve/core/model-registry'
+import type { ResolvedModelEntry } from '@/serve/core/config/types'
+import type { QvacContext, QvacRequestModel } from '@/serve/core/context'
 
 export function requireModel(category: string): preHandlerAsyncHookHandler {
   return async function (req, reply) {

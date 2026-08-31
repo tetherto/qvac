@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import { resolveServeApiKey } from '@/serve/api-key'
 import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '@/serve/cors'
-import { parseServeConfig } from '@/serve/config'
+import { parseServeConfig } from '@/serve/core/config'
 import { buildServer } from '@/serve/index'
 import { checkNetworkExposure, ServeOptionsError, validateServeStartup } from '@/serve/startup'
 
