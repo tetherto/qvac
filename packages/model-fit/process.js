@@ -56,6 +56,25 @@ function assertFitPlan(result, required) {
         }
     }
 }
+// Optional on every outcome: results decoded from an older addon or process
+// runner predate the field, and the projection probe is itself allowed to
+// fail without touching the verdict. When present it must be well-formed —
+// a truncated row is a malformed response, not missing evidence.
+function assertProjection(result) {
+    if (result['projection'] === undefined)
+        return;
+    if (!Array.isArray(result['projection'])) {
+        throw new TypeError('Fit process result projection must be an array');
+    }
+    for (const row of result['projection']) {
+        if (!isRecord(row) || typeof row['name'] !== 'string') {
+            throw new TypeError('Fit process result projection rows must carry a string name');
+        }
+        for (const key of ['totalBytes', 'freeBytes', 'modelBytes', 'contextBytes', 'computeBytes']) {
+            assertNumber(row, key);
+        }
+    }
+}
 // `unsupported-config` is reachable only through the v2 llama-load path, so the
 // parser enforces that rather than accepting it on either envelope: a v1
 // response carrying it is malformed, not merely unusual.
@@ -68,6 +87,7 @@ function assertFitResultShape(value, errorReasons) {
     assertNumber(value, 'maxDevices');
     assertNumber(value, 'nDevices');
     assertNumber(value, 'nGpuDevices');
+    assertProjection(value);
     switch (value['status']) {
         case 0:
             if (value['fits'] !== true || value['reason'] !== 'fits') {

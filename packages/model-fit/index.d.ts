@@ -85,6 +85,22 @@ export interface FitBuftOverride {
     /** ggml buffer type the matching tensors were placed in. */
     bufferType: string;
 }
+/**
+ * Projected memory for one device — or the trailing `"host"` row — at the
+ * resolved parameters, in bytes. `totalBytes`/`freeBytes` are the budget the
+ * verdict was judged against; the remaining fields are the projected demand.
+ * Advisory evidence: it shows how far a verdict sat from its budget, it is not
+ * an admission input on its own.
+ */
+export interface FitProjectionRow {
+    /** Device name as the backend reports it, or `"host"` for the host row. */
+    name: string;
+    totalBytes: number;
+    freeBytes: number;
+    modelBytes: number;
+    contextBytes: number;
+    computeBytes: number;
+}
 /** What the fitter measured against. Present on every outcome. */
 export interface FitDeviceInventory {
     /**
@@ -96,6 +112,15 @@ export interface FitDeviceInventory {
     nDevices: number;
     /** Of those, how many are accelerators (GPU or iGPU). 0 means host-only. */
     nGpuDevices: number;
+    /**
+     * Per-device projected memory at the resolved parameters, ending with the
+     * host row. Populated on SUCCESS and FAILURE — a does-not-fit with numbers
+     * is the point. Empty on ERROR, and empty when the extra no-alloc probe
+     * that produces it fails: the projection is the verdict's explanation, and
+     * a missing explanation never changes the verdict. Optional because results
+     * decoded from an older addon or process runner predate the field.
+     */
+    projection?: FitProjectionRow[];
 }
 /** The fitted load plan. Only meaningful on a SUCCESS. */
 export interface FitPlan {
