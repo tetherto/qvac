@@ -80,7 +80,7 @@ on:
         required: false
         default: ""
       package_spec:
-        description: "Package to test (name@version). Leave EMPTY (default) to test this branch's native prebuild artifact; use @qvac/tts-ggml@... for npm or @tetherto/tts-ggml@... for GPR to force-install a specific build."
+        description: "Package to test (name@version). Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; use @qvac/tts-ggml@... for npm or @tetherto/tts-ggml-mono@... for GPR to force-install a specific build."
         type: string
         required: false
         default: ""

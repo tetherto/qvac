@@ -38,7 +38,8 @@ const configRegistry: QvacConfig = {
   httpDownloadConcurrency: undefined,
   registryDownloadMaxRetries: undefined,
   registryStreamTimeoutMs: undefined,
-  deviceDefaults: undefined
+  deviceDefaults: undefined,
+  ragTurbovec: undefined
 }
 
 let configIsSet = false
@@ -119,6 +120,13 @@ export function setConfig(config: QvacConfig) {
   if (config.deviceDefaults !== undefined && config.deviceDefaults !== null) {
     configRegistry.deviceDefaults = config.deviceDefaults
     logger.info(`✅ Device defaults configured: ${config.deviceDefaults.length} pattern(s)`)
+  }
+
+  if (config.ragTurbovec !== undefined && config.ragTurbovec !== null) {
+    configRegistry.ragTurbovec = config.ragTurbovec
+    logger.info(
+      `✅ New RAG workspaces will use ${config.ragTurbovec ? 'TurboVec' : 'HyperDB'} (ragTurbovec: ${config.ragTurbovec})`
+    )
   }
 
   // Mark config as set - now it's immutable

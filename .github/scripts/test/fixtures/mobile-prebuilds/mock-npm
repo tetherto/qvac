@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Stands in for `npm` while testing the mobile setup action's prebuild download
+# step. Records how npm was invoked and what registry configuration it would
+# have resolved, so the test can assert routing without touching a network.
+set -uo pipefail
+
+LOG="${MOCK_NPM_LOG:?MOCK_NPM_LOG must be set}"
+
+case "${1:-}" in
+  pack|config) ;;
+  *)
+    echo "mock-npm: only 'pack' and 'config get' are supported, got '${1:-}'" >&2
+    exit 64
+    ;;
+esac
+
+SPEC="${2:-}"
+
+# Reproduce npm's ACTUAL project-config rule, not a cwd approximation: npm reads
+# the project .npmrc from its localPrefix — the nearest ANCESTOR directory (cwd
+# first, then upward) containing package.json or node_modules. Modelling this
+# faithfully is the point: an .npmrc sitting in cwd is IGNORED when some
+# directory above owns localPrefix, which is how a @tetherto spec can silently
+# fall back to registry.npmjs.org. A cwd-only mock cannot catch that regression.
+find_local_prefix () {
+  local dir="$PWD"
+  while :; do
+    if [ -e "$dir/package.json" ] || [ -d "$dir/node_modules" ]; then
+      printf '%s' "$dir"
+      return 0
+    fi
+    [ "$dir" = "/" ] && break
+    dir="$(dirname "$dir")"
+  done
+  # No owner found: npm falls back to treating cwd as the prefix.
+  printf '%s' "$PWD"
+}
+
+LOCAL_PREFIX="$(find_local_prefix)"
+NPMRC="$LOCAL_PREFIX/.npmrc"
+
+# MOCK_NPM_IGNORE_NPMRC simulates the localPrefix trap: the .npmrc exists on disk
+# but npm never reads it (some ancestor owns localPrefix), which is exactly the
+# silent misroute the action's registry-in-effect check exists to catch.
+if [ -n "${MOCK_NPM_IGNORE_NPMRC:-}" ]; then
+  NPMRC="/nonexistent/.npmrc"
+fi
+
+REGISTRY="https://registry.npmjs.org"
+AUTH="none"
+SCOPE="${SPEC%%/*}"
+if [ -f "$NPMRC" ]; then
+  MAPPED=$(sed -n "s|^${SCOPE}:registry=||p" "$NPMRC")
+  if [ -n "$MAPPED" ]; then
+    REGISTRY="$MAPPED"
+    HOST_PATH="${MAPPED#https://}"
+    if grep -q "^//${HOST_PATH}/:_authToken=." "$NPMRC"; then
+      AUTH="token"
+    fi
+  fi
+fi
+
+# `npm config get <scope>:registry` — the action asks this to prove the .npmrc is
+# in effect. Resolved through the same localPrefix rule as everything else, so a
+# shadowed .npmrc correctly reports the npmjs default here.
+if [ "${1:-}" = "config" ]; then
+  if [ "${2:-}" != "get" ]; then
+    echo "mock-npm: only 'config get' is supported" >&2
+    exit 64
+  fi
+  KEY="${3:-}"
+  KEY_SCOPE="${KEY%:registry}"
+  VALUE="https://registry.npmjs.org"
+  if [ -f "$NPMRC" ]; then
+    FOUND=$(sed -n "s|^${KEY_SCOPE}:registry=||p" "$NPMRC")
+    [ -n "$FOUND" ] && VALUE="$FOUND"
+  fi
+  echo "config_get key=$KEY value=$VALUE local_prefix=$LOCAL_PREFIX" >> "$LOG"
+  printf '%s\n' "$VALUE"
+  exit 0
+fi
+
+# Permissions have to be sampled here: the step deletes the .npmrc on exit, so
+# the test cannot inspect it afterwards. GNU and BSD stat disagree on flags.
+npmrc_mode () {
+  [ -f "$NPMRC" ] || { printf 'absent'; return; }
+  stat -c '%a' "$NPMRC" 2>/dev/null || stat -f '%OLp' "$NPMRC" 2>/dev/null || printf 'unknown'
+}
+
+{
+  echo "spec=$SPEC"
+  echo "cwd=$PWD"
+  echo "local_prefix=$LOCAL_PREFIX"
+  echo "registry=$REGISTRY"
+  echo "auth=$AUTH"
+  echo "npmrc_present=$([ -f "$NPMRC" ] && echo yes || echo no)"
+  echo "npmrc_mode=$(npmrc_mode)"
+} >> "$LOG"
+
+echo "mock-npm: pack $SPEC via $REGISTRY (auth=$AUTH)"
+
+# MOCK_NPM_FAIL_WITH simulates the registry rejecting the spec.
+if [ -n "${MOCK_NPM_FAIL_WITH:-}" ]; then
+  echo "npm error code E${MOCK_NPM_FAIL_WITH}" >&2
+  echo "npm error ${MOCK_NPM_FAIL_WITH} - GET ${REGISTRY}/${SPEC%@*} - Not found" >&2
+  exit 1
+fi
+
+# Success: emit a tarball shaped like a real addon package. MOCK_NPM_VERSION
+# drives package.json so the provenance assertion can be exercised, and
+# MOCK_NPM_NO_PREBUILDS omits prebuilds/ to exercise that guard.
+STAGE="$(mktemp -d)"
+mkdir -p "$STAGE/package"
+# Derive the name the way npm does, not with a blind strip at the last '@':
+# a scoped spec starts with '@', so "${SPEC%@*}" is EMPTY for a versionless
+# "@scope/name". Fabricating a name there would make any name-provenance
+# assertion vacuous. MOCK_NPM_NAME overrides it so a test can simulate the
+# registry returning a DIFFERENT package than the one requested.
+case "${SPEC#@*/}" in
+  *@*) NAME="${SPEC%@*}" ;;
+  *)   NAME="$SPEC" ;;
+esac
+NAME="${MOCK_NPM_NAME:-$NAME}"
+VERSION="${MOCK_NPM_VERSION:-${SPEC##*@}}"
+printf '{"name":"%s","version":"%s"}\n' "$NAME" "$VERSION" > "$STAGE/package/package.json"
+if [ -z "${MOCK_NPM_NO_PREBUILDS:-}" ]; then
+  mkdir -p "$STAGE/package/prebuilds/android-arm64" "$STAGE/package/prebuilds/ios-arm64"
+  echo mock > "$STAGE/package/prebuilds/android-arm64/addon.bare"
+  echo mock > "$STAGE/package/prebuilds/ios-arm64/addon.bare"
+fi
+
+TARBALL="mock-package.tgz"
+tar -czf "$TARBALL" -C "$STAGE" package
+rm -rf "$STAGE"
+echo "$TARBALL"

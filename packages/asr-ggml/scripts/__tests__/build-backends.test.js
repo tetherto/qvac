@@ -9,12 +9,15 @@ const packageRoot = path.resolve(__dirname, '..', '..')
 const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
 const vcpkgManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'vcpkg.json'), 'utf8'))
 const cmakeSource = fs.readFileSync(path.join(packageRoot, 'CMakeLists.txt'), 'utf8')
+const whisperModelSource = fs.readFileSync(
+  path.join(packageRoot, 'addon/src/model-interface/whisper/WhisperModel.cpp'),
+  'utf8'
+)
 
 const CUDA_CMAKE_OPTION = 'ASR_CUDA'
 const CUDA_MANIFEST_FEATURE = 'cuda'
 const SPEECH_PORT = 'speech-cpp'
 const DESKTOP_PLATFORM = '!(osx | ios | android)'
-const CUDA_RUNTIME_LIBRARIES = ['cudart', 'cublas', 'cublasLt']
 const GPU_TEST_FILES = [
   'test/integration/gpu.test.js',
   'test/integration/parakeet-gpu-smoke.test.js'
@@ -75,19 +78,25 @@ test('the cuda feature requires a speech-cpp that declares it', () => {
   assert.ok(versionFloorOf(cudaSpeechDependency()) >= versionFloorOf(desktopSpeechDependency()))
 })
 
-test('the CUDA build links the CUDA runtime ggml-config leaves out', () => {
-  assert.match(cmakeSource, new RegExp(`if\\(${CUDA_CMAKE_OPTION}\\)[\\s\\S]*?CUDAToolkit`))
-  CUDA_RUNTIME_LIBRARIES.forEach((library) =>
-    assert.match(cmakeSource, new RegExp(`CUDA::${library}\\b`), library)
+test('no direct CUDA linkage - the hybrid MODULE backend carries its own', () => {
+  assert.equal(
+    /CUDA::/.test(cmakeSource),
+    false,
+    'linking the CUDA runtime into the .bare would break the graceful CPU/Vulkan fallback on hosts without an NVIDIA driver'
   )
 })
 
-test('the CUDA build steers nvcc at clang without touching shared vcpkg files', () => {
+test('the whisper backend loader covers desktop Linux for hybrid GGML_BACKEND_DL builds', () => {
   assert.match(
-    cmakeSource,
-    new RegExp(`if\\(${CUDA_CMAKE_OPTION}\\)[\\s\\S]*?set\\(ENV\\{CUDAHOSTCXX\\}`)
+    whisperModelSource,
+    /#if defined\(__ANDROID__\) \|\| defined\(__linux__\)/,
+    'ensureBackendsLoaded must compile on all Linux targets, not just arm64'
   )
-  assert.match(cmakeSource, /NOT DEFINED ENV\{CUDAHOSTCXX\}/)
+  assert.equal(
+    /defined\(__aarch64__\)/.test(whisperModelSource),
+    false,
+    'no arm64-only gate may remain around the backend loader'
+  )
 })
 
 test('the GPU integration tests accept CUDA as a desktop backend', () => {

@@ -41,7 +41,7 @@ def main() -> int:
 
         print("\n▸ Completion, streaming live into the cell/stdout")
         llm = client.load_model(
-            model_src=QWEN3_600M_INST_Q4, model_config={"n_ctx": 2048}
+            model_src=QWEN3_600M_INST_Q4, model_config={"ctx_size": 2048}
         )
         text = client.completion(
             llm,

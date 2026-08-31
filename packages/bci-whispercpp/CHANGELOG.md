@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-28
+
+### Added
+
+- CUDA GPU acceleration on linux x64: the prebuild now builds with
+  `ENABLE_CUDA=ON` and bundles the CUDA backend alongside Vulkan and the
+  per-arch CPU variants as runtime-loaded modules; `use_gpu: true` prefers
+  CUDA on NVIDIA hosts. CUDA engages where the NVIDIA driver and CUDA 13
+  runtime libraries (cudart, cuBLAS) are present; on every other host the
+  CUDA module is skipped and the addon behaves as before (Vulkan or CPU).
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-28, which brings in ggml-speech
+  2026-08-28. Unused IQ / Q1_0 / MXFP4 / NVFP4 and training Vulkan shader
+  payloads are replaced with tiny no-ops so the published natives stay
+  under the npm tarball size limit. CUDA fatbins keep Ampere and Ada
+  (`80-virtual;86-real;89-real`) and drop Turing sm75 and Blackwell
+  sm120/121.
+
+### Fixed
+
+- Vulkan device-loss and fence failures now return a graph-compute error
+  instead of aborting the process or continuing with an unusable device.
+  Transcription surfaces the error rather than empty output, and pending
+  compute state is unwound after the failure.
+
 ## [0.8.0] - 2026-08-27
 
 ### Added

@@ -168,7 +168,7 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/llm-llamacpp@<ver> (published) or @tetherto/llm-llamacpp@<dev> (GPR) to force-install a specific build."
+        description: "Full NPM package spec to test. Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; set @qvac/llm-llamacpp@<ver> (published) or @tetherto/llm-llamacpp-mono@<dev> (GPR) to force-install a specific build."
         type: string
         required: false
         default: ""
@@ -396,9 +396,12 @@ jobs:
           # the candidate in this same run) is pulled in when the per-matrix
           # artifact is absent, so the baseline session would silently run the
           # candidate binary. See run-mobile-integration-tests/setup.
-          # Manual dispatch (inputs.platform set): default (empty `package`) tests
-          # this branch's native prebuild; @qvac/llm-llamacpp@<ver> = published, @tetherto/llm-llamacpp@<dev>
-          # = this branch's GPR build). workflow_call keeps addon_npm_version/artifact-first.
+          # Manual dispatch (inputs.platform set). An empty `package` does NOT test
+          # this branch's native code: a standalone dispatch produces no prebuild
+          # artifacts, so the fallback resolves the published @qvac/llm-llamacpp@latest.
+          # @qvac/llm-llamacpp@<ver> = published; @tetherto/llm-llamacpp-mono@<dev> = a branch
+          # build from GitHub Packages, the only way to put unmerged native code on a
+          # device. See docs/ci/MOBILE-ON-DEMAND.md. workflow_call keeps addon_npm_version/artifact-first.
           force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.addon_npm_version != '') && 'true' || 'false' }}
           package-version: ${{ inputs.platform != '' && inputs.package || inputs.addon_npm_version }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}

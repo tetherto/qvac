@@ -189,6 +189,10 @@ jobs:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/fabric
+      # Land ROCm on the base-branch workflow before a follow-up PR requests
+      # qvac-fabric[hip-backend]. pull_request_target loads this YAML from
+      # main, so cpp-lint would otherwise fail at find_dependency(hip).
+      include-rocm-sdk: true
 
   detect-fabric-stack:
     if: needs.authorize.outputs.allowed == 'true'
