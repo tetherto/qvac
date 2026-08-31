@@ -229,6 +229,18 @@ struct ResolvedToolChoice {
 };
 
 /**
+ * @brief Applies every `tool_choice` validity rule and throws on a violation,
+ * without copying the tool list.
+ *
+ * For callers that only need the request rejected early — before a warm KV
+ * session is at risk — and will resolve properly later. Same throws as
+ * `resolveToolChoice`.
+ */
+void validateToolChoice(
+    const std::optional<std::string>& rawToolChoice,
+    const std::vector<common_chat_tool>& tools);
+
+/**
  * @brief Resolves a raw `tool_choice` string against the declared tools.
  *
  * - unset / "auto" / "none" / "required": the matching enum, tools unchanged.

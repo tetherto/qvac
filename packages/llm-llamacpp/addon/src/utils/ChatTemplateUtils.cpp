@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <map>
 #include <ranges>
 #include <set>
 #include <string_view>
@@ -493,12 +494,17 @@ namespace {
 
 /// Two tools sharing a name make `tool_choice: "<name>"` ambiguous and give
 /// the template two blocks the model cannot tell apart. Rejected outright.
-/// A name outside `[A-Za-z0-9_.-]` is only warned about: the grammar builder
-/// derives a rule name from it, so exotic characters risk colliding with
-/// another tool's rule, but which characters are actually unsafe is an
-/// internal detail of the vendored converter and would drift if mirrored.
+/// Two other conditions are warned about rather than rejected: a name outside
+/// `[A-Za-z0-9_.-]`, and two names that fold to the same grammar rule and so
+/// can shadow each other. Both rest on how the vendored converter derives a
+/// rule name, which this package does not mirror on purpose, so neither is
+/// allowed to refuse a configuration that works in practice.
 void validateToolNames(const std::vector<common_chat_tool>& tools) {
   std::set<std::string> seen;
+  // Names folded the way a rule-name sanitiser would, to catch two tools that
+  // are distinct here but collapse to one grammar rule. Maps each folded form
+  // back to the first raw name that produced it, for the warning text.
+  std::map<std::string, std::string> folded;
   for (const common_chat_tool& tool : tools) {
     if (!seen.insert(tool.name).second) {
       throw qvac_errors::StatusError(
@@ -509,10 +515,15 @@ void validateToolNames(const std::vector<common_chat_tool>& tools) {
               "prompt declares two tools named %s",
               forLogMessage(tool.name).c_str()));
     }
-    const bool plain = std::ranges::all_of(tool.name, [](char c) {
-      return (std::isalnum(static_cast<unsigned char>(c)) != 0) || c == '_' ||
-             c == '.' || c == '-';
-    });
+    std::string foldedName;
+    foldedName.reserve(tool.name.size());
+    bool plain = true;
+    for (const char c : tool.name) {
+      const bool safe = (std::isalnum(static_cast<unsigned char>(c)) != 0) ||
+                        c == '_' || c == '.' || c == '-';
+      plain = plain && safe;
+      foldedName += safe ? c : '-';
+    }
     if (!plain) {
       QLOG_IF(
           Priority::WARNING,
@@ -522,24 +533,48 @@ void validateToolNames(const std::vector<common_chat_tool>& tools) {
               "tool's\n",
               forLogMessage(tool.name).c_str()));
     }
+    // Deliberately a warning, not a rejection. The fold is a conservative
+    // approximation of the vendored converter's own rule-name sanitiser, which
+    // this package does not mirror on purpose. A heuristic that guesses an
+    // internal must not be able to refuse a tool set that actually works, so a
+    // false positive costs one log line rather than a failed request.
+    const auto collision = folded.emplace(foldedName, tool.name);
+    if (!collision.second) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[ChatTemplateUtils] tool names %s and %s may fold to the same "
+              "grammar rule; one of them can be shadowed while still being "
+              "advertised in the prompt\n",
+              forLogMessage(collision.first->second).c_str(),
+              forLogMessage(tool.name).c_str()));
+    }
   }
 }
 
 } // namespace
 
-ResolvedToolChoice resolveToolChoice(
+namespace {
+
+/// Every validity rule for `tool_choice`, with no copy of the tool list.
+/// `namedIndex` is set only when the choice names one declared function.
+struct ToolChoiceCore {
+  common_chat_tool_choice choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
+  std::optional<size_t> namedIndex;
+};
+
+ToolChoiceCore resolveToolChoiceCore(
     const std::optional<std::string>& rawToolChoice,
     const std::vector<common_chat_tool>& tools) {
   validateToolNames(tools);
-  ResolvedToolChoice resolved;
-  resolved.tools = tools;
+  ToolChoiceCore core;
   if (!rawToolChoice || rawToolChoice->empty() || *rawToolChoice == "auto") {
-    return resolved;
+    return core;
   }
   const std::string& raw = *rawToolChoice;
   if (raw == "none" || raw == "required") {
-    resolved.choice = common_chat_tool_choice_parse_oaicompat(raw);
-    if (resolved.choice == COMMON_CHAT_TOOL_CHOICE_REQUIRED && tools.empty()) {
+    core.choice = common_chat_tool_choice_parse_oaicompat(raw);
+    if (core.choice == COMMON_CHAT_TOOL_CHOICE_REQUIRED && tools.empty()) {
       throw qvac_errors::StatusError(
           errors::ADDON_ID,
           qvac_errors::general_error::toString(
@@ -547,7 +582,7 @@ ResolvedToolChoice resolveToolChoice(
           "generationParams.tool_choice is \"required\" but the prompt "
           "declares no tools");
     }
-    return resolved;
+    return core;
   }
   // Anything else names one declared function.
   const auto it = std::ranges::find_if(
@@ -561,8 +596,30 @@ ResolvedToolChoice resolveToolChoice(
             "generationParams.tool_choice names an undeclared function: %s",
             forLogMessage(raw).c_str()));
   }
-  resolved.choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
-  resolved.tools = {*it};
+  core.choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
+  core.namedIndex = static_cast<size_t>(std::distance(tools.begin(), it));
+  return core;
+}
+
+} // namespace
+
+void validateToolChoice(
+    const std::optional<std::string>& rawToolChoice,
+    const std::vector<common_chat_tool>& tools) {
+  (void)resolveToolChoiceCore(rawToolChoice, tools);
+}
+
+ResolvedToolChoice resolveToolChoice(
+    const std::optional<std::string>& rawToolChoice,
+    const std::vector<common_chat_tool>& tools) {
+  const ToolChoiceCore core = resolveToolChoiceCore(rawToolChoice, tools);
+  ResolvedToolChoice resolved;
+  resolved.choice = core.choice;
+  if (core.namedIndex) {
+    resolved.tools = {tools[*core.namedIndex]};
+  } else {
+    resolved.tools = tools;
+  }
   return resolved;
 }
 

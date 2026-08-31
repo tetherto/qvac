@@ -11,6 +11,7 @@
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/LogSafeString.hpp"
 #include "utils/QwenTemplate.hpp"
 
 namespace fs = std::filesystem;
@@ -568,4 +569,87 @@ TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextFallsBackToStartTag) {
 
 TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextEmptyWithoutStartTag) {
   EXPECT_EQ(getThinkingForcedOpenText("<|assistant|>\n", ""), "");
+}
+
+// `requireToolChoiceHonoured` is the whole fail-closed rule for an explicit
+// tool_choice. It takes four plain values, so every path is testable with no
+// model — which is what makes its previous zero coverage worth closing.
+TEST(RequireToolChoiceHonouredTest, RequiredThrowsWhenDefinitionsDropped) {
+  EXPECT_THROW(
+      requireToolChoiceHonoured(
+          COMMON_CHAT_TOOL_CHOICE_REQUIRED,
+          /* toolDefinitionsDropped = */ true,
+          /* toolGrammarApplied = */ true,
+          "[test]"),
+      qvac_errors::StatusError);
+}
+
+TEST(RequireToolChoiceHonouredTest, RequiredThrowsWhenNoGrammarApplied) {
+  EXPECT_THROW(
+      requireToolChoiceHonoured(
+          COMMON_CHAT_TOOL_CHOICE_REQUIRED,
+          /* toolDefinitionsDropped = */ false,
+          /* toolGrammarApplied = */ false,
+          "[test]"),
+      qvac_errors::StatusError);
+}
+
+TEST(RequireToolChoiceHonouredTest, RequiredAcceptsAnAppliedGrammar) {
+  EXPECT_NO_THROW(requireToolChoiceHonoured(
+      COMMON_CHAT_TOOL_CHOICE_REQUIRED,
+      /* toolDefinitionsDropped = */ false,
+      /* toolGrammarApplied = */ true,
+      "[test]"));
+}
+
+// AUTO tolerates a prose answer by definition and NONE asked for no
+// constraint, so neither can be violated however the render turned out.
+TEST(RequireToolChoiceHonouredTest, AutoAndNoneNeverThrow) {
+  for (const bool dropped : {false, true}) {
+    for (const bool applied : {false, true}) {
+      EXPECT_NO_THROW(requireToolChoiceHonoured(
+          COMMON_CHAT_TOOL_CHOICE_AUTO, dropped, applied, "[test]"))
+          << "dropped=" << dropped << " applied=" << applied;
+      EXPECT_NO_THROW(requireToolChoiceHonoured(
+          COMMON_CHAT_TOOL_CHOICE_NONE, dropped, applied, "[test]"))
+          << "dropped=" << dropped << " applied=" << applied;
+    }
+  }
+}
+
+// `forLogMessage` guards every caller string echoed into an error message that
+// reaches JS and the log sinks. Both of its jobs regress invisibly.
+TEST(ForLogMessageTest, PassesThroughShortPrintableInput) {
+  EXPECT_EQ(forLogMessage("get_weather"), "get_weather");
+}
+
+TEST(ForLogMessageTest, ReplacesNonPrintableBytes) {
+  EXPECT_EQ(forLogMessage(std::string("a\nb\tc")), "a?b?c");
+  // Embedded NUL must not terminate the result early.
+  EXPECT_EQ(forLogMessage(std::string("a\0b", 3)), "a?b");
+}
+
+TEST(ForLogMessageTest, TruncatesAtTheEchoCapAndMarksIt) {
+  const std::string longName(K_MAX_LOG_ECHO + 10, 'x');
+  const std::string out = forLogMessage(longName);
+  EXPECT_EQ(out.size(), K_MAX_LOG_ECHO + 3);
+  EXPECT_EQ(out.substr(0, K_MAX_LOG_ECHO), std::string(K_MAX_LOG_ECHO, 'x'));
+  EXPECT_EQ(out.substr(K_MAX_LOG_ECHO), "...");
+}
+
+TEST(ForLogMessageTest, ExactlyAtTheCapIsNotTruncated) {
+  const std::string atCap(K_MAX_LOG_ECHO, 'x');
+  EXPECT_EQ(forLogMessage(atCap), atCap);
+}
+
+// Multibyte input becomes '?' per byte, so the message can never carry
+// invalid UTF-8 across the JS boundary.
+TEST(ForLogMessageTest, MultibyteBecomesPlaceholders) {
+  EXPECT_EQ(forLogMessage(std::string("\xE2\x82\xAC")), "???");
+}
+
+TEST(ToLowerAsciiTest, FoldsAsciiAndLeavesOtherBytes) {
+  EXPECT_EQ(toLowerAscii("ASSISTANT:"), "assistant:");
+  EXPECT_EQ(toLowerAscii("MiXeD_123"), "mixed_123");
+  EXPECT_EQ(toLowerAscii(""), "");
 }

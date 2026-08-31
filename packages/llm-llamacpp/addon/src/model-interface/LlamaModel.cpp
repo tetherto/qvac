@@ -1016,7 +1016,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // cache. Throwing before it means a typo costs the caller an error rather
   // than a warm session, matching how an invalid `json_schema` already
   // behaves via applyGenerationParams.
-  (void)qvac_lib_inference_addon_llama::utils::resolveToolChoice(
+  qvac_lib_inference_addon_llama::utils::validateToolChoice(
       prompt.generationParams.tool_choice, resolved.tools);
 
   auto restore =
@@ -1028,10 +1028,14 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       renderOverridesFrom(prompt.generationParams));
 
   try {
-    ScopeGuard paramsGuard([&] {
-      state_->llmContext_->setRenderOverrides({});
-      restore();
-    });
+    // Labelled: `restore()` rebuilds the sampler and is the one guarded
+    // callable here that can legitimately throw.
+    ScopeGuard paramsGuard(
+        [&] {
+          state_->llmContext_->setRenderOverrides({});
+          restore();
+        },
+        "paramsGuard/generationParams-restore");
 
     const LlmContext::EvalMessageResult evalResult =
         resolved.tools.empty()

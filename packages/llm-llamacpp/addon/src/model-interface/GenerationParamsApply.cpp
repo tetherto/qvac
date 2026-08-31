@@ -59,10 +59,12 @@ void applyGenerationOverridesToSampling(
         __func__);
   }
 
-  // On a request that also carries tools, `tokenizeChat` hands the raw schema
-  // to the chat template and `configureTemplateDerivedSampling` replaces this
-  // OUTPUT_FORMAT grammar with the composed TOOL_CALLS one. The conversion
-  // here still runs so tools-free requests behave exactly as before.
+  // This OUTPUT_FORMAT grammar wins over a template tool grammar:
+  // `configureTemplateDerivedSampling` leaves a USER or OUTPUT_FORMAT grammar
+  // untouched and suppresses the rendered tool grammar instead, logging that
+  // it did. An earlier revision tried to compose the two; fabric's handlers
+  // return on the response-format branch before the tool-call parser, so the
+  // composition was never possible and was reverted.
   if (overrides.json_schema) {
     try {
       auto parsed = nlohmann::ordered_json::parse(*overrides.json_schema);
@@ -151,12 +153,18 @@ std::function<void()> applyGenerationParamsToContext(
     try {
       smpl.reset(common_sampler_init(model, params.sampling));
     } catch (const std::exception& ex) {
+      // Null it rather than leaving the request's sampler installed: the
+      // params above now read as the baseline, so a following request whose
+      // derived config matches skips the rebuild and would generate under
+      // this request's grammar. A null sampler fails loudly instead.
+      smpl.reset();
       LOG_WRN(
           "%s: failed to rebuild the sampler while restoring "
           "per-request generation params: %s\n",
           __func__,
           ex.what());
     } catch (...) {
+      smpl.reset();
       LOG_WRN(
           "%s: failed to rebuild the sampler while restoring "
           "per-request generation params\n",

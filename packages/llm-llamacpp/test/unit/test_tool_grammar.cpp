@@ -227,7 +227,16 @@ TEST_F(ToolGrammarModelTest, NoToolsLeavesSamplingUntouched) {
   EXPECT_EQ(after.grammar.type, before.grammar.type);
   EXPECT_EQ(after.grammar.grammar, before.grammar.grammar);
   EXPECT_EQ(after.grammar_lazy, before.grammar_lazy);
-  EXPECT_EQ(after.grammar_triggers.size(), before.grammar_triggers.size());
+  // By content, not size: both sides are empty on a default-configured model,
+  // so a size comparison passes even when the triggers themselves are wrong.
+  ASSERT_EQ(after.grammar_triggers.size(), before.grammar_triggers.size());
+  for (size_t i = 0; i < after.grammar_triggers.size(); ++i) {
+    EXPECT_EQ(after.grammar_triggers[i].type, before.grammar_triggers[i].type);
+    EXPECT_EQ(
+        after.grammar_triggers[i].value, before.grammar_triggers[i].value);
+    EXPECT_EQ(
+        after.grammar_triggers[i].token, before.grammar_triggers[i].token);
+  }
   EXPECT_EQ(after.preserved_tokens, before.preserved_tokens);
   EXPECT_EQ(after.generation_prompt, before.generation_prompt);
 }
@@ -327,7 +336,10 @@ TEST_F(ToolGrammarModelTest, ToolChoiceUnknownFunctionIsRejected) {
   prompt.generationParams.tool_choice = "not_declared";
   EXPECT_THROW(model->processPrompt(prompt), qvac_errors::StatusError);
 
-  // The failed request must not leave render overrides behind.
+  // The rejection happens in `validateToolChoice`, before
+  // `setRenderOverrides` is ever called, so this asserts only that the model
+  // is still usable afterwards. It is NOT a test of the override-clearing
+  // guard, which no longer sees this failure at all.
   EXPECT_FALSE(model->processPrompt(makePrompt(PLAIN_PROMPT)).empty());
 }
 
