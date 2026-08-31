@@ -15,7 +15,7 @@ import {
   type GenerationParams,
   type ResponseFormat,
   type MessageContentPart
-} from '@/serve/schemas/common'
+} from '@/serve/extensions/openai/schemas/common'
 
 export const chatCompletionsBody = z
   .object({

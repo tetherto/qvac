@@ -1,6 +1,6 @@
 import type { LoadConfig, OpenAIServeOptions, ServeConfig } from '@/serve/core/config/types'
 import { resolveDefaults, resolveServeModels, type RawModelEntry } from '@/serve/core/config/models'
-import { normalizeCorsOrigin } from '@/serve/cors'
+import { normalizeCorsOrigin } from '@/serve/core/cors'
 
 interface RawServeConfig {
   serve?: {

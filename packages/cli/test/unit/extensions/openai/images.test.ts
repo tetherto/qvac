@@ -13,7 +13,7 @@ import {
   InvalidImageBatchCountError,
   InvalidImageStrengthError,
   UnsupportedImageOutputError
-} from '@/serve/schemas/images'
+} from '@/serve/extensions/openai/schemas/images'
 import type { Logger } from '@/logger'
 
 // Collects warnings so the log-only helpers can be asserted on.

@@ -4,8 +4,8 @@ import { completion } from '@qvac/sdk'
 import type { Tool } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE } from '@/serve/lib/sse'
-import { requireModel } from '@/serve/plugins/require-model'
-import { logUnsupported } from '@/serve/plugins/log-unsupported'
+import { requireModel } from '@/serve/core/plugins/require-model'
+import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import {
   responsesBody,
   responsesIdParams,
@@ -16,19 +16,19 @@ import {
   InvalidResponsesConversationError,
   toSdkResponsesArgs,
   UnsupportedToolTypeError
-} from '@/serve/schemas/responses'
+} from '@/serve/extensions/openai/schemas/responses'
 import {
   InvalidResponseFormatError,
   type GenerationParams,
   type ResponseFormat
-} from '@/serve/schemas/common'
-import { responseId as allocResponseId } from '@/serve/adapters/openai/responses-shape'
-import { RESPONSES_VOLATILE_STUB } from '@/serve/adapters/openai/responses-store'
+} from '@/serve/extensions/openai/schemas/common'
+import { responseId as allocResponseId } from '@/serve/extensions/openai/adapters/responses-shape'
+import { RESPONSES_VOLATILE_STUB } from '@/serve/extensions/openai/adapters/responses-store'
 import {
   writeBlockingResponse,
   writeStreamingResponse,
   type ResponsesHandlerParams
-} from '@/serve/adapters/openai/response-writers'
+} from '@/serve/extensions/openai/adapters/response-writers'
 
 const VOLATILE_HEADER = 'X-QVAC-Stub'
 

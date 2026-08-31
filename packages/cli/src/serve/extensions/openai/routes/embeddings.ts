@@ -1,8 +1,11 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { embed } from '@qvac/sdk'
-import { requireModel } from '@/serve/plugins/require-model'
-import { logUnsupported } from '@/serve/plugins/log-unsupported'
-import { embeddingsBody, EMBEDDINGS_UNSUPPORTED_PARAMS } from '@/serve/schemas/embeddings'
+import { requireModel } from '@/serve/core/plugins/require-model'
+import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
+import {
+  embeddingsBody,
+  EMBEDDINGS_UNSUPPORTED_PARAMS
+} from '@/serve/extensions/openai/schemas/embeddings'
 
 const descriptions = {
   embed: `

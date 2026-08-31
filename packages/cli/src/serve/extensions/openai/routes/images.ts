@@ -5,7 +5,7 @@ import type { DiffusionClientParams } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { multipartToBody } from '@/serve/lib/multipart'
-import { requireModel } from '@/serve/plugins/require-model'
+import { requireModel } from '@/serve/core/plugins/require-model'
 import {
   imagesGenerationsBody,
   imagesEditsBody,
@@ -20,8 +20,8 @@ import {
   InvalidImageBatchCountError,
   InvalidImageStrengthError,
   UnsupportedImageOutputError
-} from '@/serve/schemas/images'
-import type { EphemeralFilesStore } from '@/serve/adapters/openai/ephemeral-files-store'
+} from '@/serve/extensions/openai/schemas/images'
+import type { EphemeralFilesStore } from '@/serve/extensions/openai/adapters/ephemeral-files-store'
 import type { QvacContext } from '@/serve/core/context'
 
 const SUPPORTED_RESPONSE_FORMATS = new Set(['b64_json', 'url'])

@@ -4,9 +4,12 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
-import { drainCompletion, type OpenAiFinishReason } from '@/serve/adapters/openai/completion-result'
-import { requireModel } from '@/serve/plugins/require-model'
-import { logUnsupported } from '@/serve/plugins/log-unsupported'
+import {
+  drainCompletion,
+  type OpenAiFinishReason
+} from '@/serve/extensions/openai/adapters/completion-result'
+import { requireModel } from '@/serve/core/plugins/require-model'
+import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import {
   chatCompletionsBody,
   CHAT_UNSUPPORTED_PARAMS,
@@ -14,17 +17,20 @@ import {
   toSdkChatArgs,
   writeChatImages,
   type SdkChatArgs
-} from '@/serve/schemas/chat'
+} from '@/serve/extensions/openai/schemas/chat'
 import { resolveToolDialect } from '@/serve/lib/tool-dialect'
-import { InvalidResponseFormatError, UnsupportedImageContentError } from '@/serve/schemas/common'
-import { sdkToolCallsToOpenaiDeltas } from '@/serve/adapters/openai/tool-calls'
+import {
+  InvalidResponseFormatError,
+  UnsupportedImageContentError
+} from '@/serve/extensions/openai/schemas/common'
+import { sdkToolCallsToOpenaiDeltas } from '@/serve/extensions/openai/adapters/tool-calls'
 import {
   buildUsage,
   chatCompletionChunk,
   chatCompletionResponse,
   chatCompletionUsageChunk,
   type ChatCompletionDelta
-} from '@/serve/adapters/openai/chat-shapes'
+} from '@/serve/extensions/openai/adapters/chat-shapes'
 
 interface PreparedRequest extends SdkChatArgs {
   sdkModelId: string

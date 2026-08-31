@@ -8,7 +8,7 @@ import {
   type LoadManagerDeps,
   type LoadModelFn
 } from '@/serve/core/load-manager'
-import { ensureReady, resolveAndCheckModel } from '@/serve/plugins/require-model'
+import { ensureReady, resolveAndCheckModel } from '@/serve/core/plugins/require-model'
 import { createLogger } from '@/logger'
 import type { QvacContext } from '@/serve/core/context'
 import { HttpError } from '@/serve/lib/http-error'

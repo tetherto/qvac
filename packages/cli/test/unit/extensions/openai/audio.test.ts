@@ -10,7 +10,7 @@ import {
   buildWavHeader,
   buildWavBuffer,
   speechAliasKey
-} from '@/serve/audio'
+} from '@/serve/extensions/openai/audio'
 import { parseServeConfig } from '@/serve/core/config'
 import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '@/serve/lib/audio-transcode'
 

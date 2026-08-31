@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { VectorStoreExpiresAfter } from '@/serve/schemas/vector-stores'
+import type { VectorStoreExpiresAfter } from '@/serve/extensions/openai/schemas/vector-stores'
 
 export interface VectorStoreMeta {
   id: string

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createResponsesStore } from '@/serve/adapters/openai/responses-store'
+import { createResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
 
 describe('createResponsesStore', () => {
   it('put then get returns record', () => {

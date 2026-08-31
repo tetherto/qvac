@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { extractGenerationParams, type GenerationParams } from '@/serve/schemas/common'
+import {
+  extractGenerationParams,
+  type GenerationParams
+} from '@/serve/extensions/openai/schemas/common'
 
 export const completionsBody = z
   .object({

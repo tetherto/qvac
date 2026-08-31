@@ -5,7 +5,7 @@ import {
   generateVectorStoreId,
   idToWorkspace,
   InvalidVectorStoreIdError
-} from '@/serve/adapters/openai/vector-stores-store'
+} from '@/serve/extensions/openai/adapters/vector-stores-store'
 
 describe('generateVectorStoreId', () => {
   it('returns a vs_-prefixed id of expected length', () => {

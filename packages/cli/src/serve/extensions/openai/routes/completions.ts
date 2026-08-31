@@ -3,17 +3,20 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
-import { drainCompletion, type OpenAiFinishReason } from '@/serve/adapters/openai/completion-result'
-import { requireModel } from '@/serve/plugins/require-model'
-import { logUnsupported } from '@/serve/plugins/log-unsupported'
+import {
+  drainCompletion,
+  type OpenAiFinishReason
+} from '@/serve/extensions/openai/adapters/completion-result'
+import { requireModel } from '@/serve/core/plugins/require-model'
+import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import {
   completionsBody,
   COMPLETIONS_UNSUPPORTED_PARAMS,
   legacyPromptToHistory,
   InvalidPromptError,
   toSdkCompletionsArgs
-} from '@/serve/schemas/completions'
-import type { GenerationParams } from '@/serve/schemas/common'
+} from '@/serve/extensions/openai/schemas/completions'
+import type { GenerationParams } from '@/serve/extensions/openai/schemas/common'
 
 function randomId(): string {
   return Math.random().toString(36).slice(2, 12)

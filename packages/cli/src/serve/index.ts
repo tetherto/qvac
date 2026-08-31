@@ -1,8 +1,6 @@
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
-import autoload from '@fastify/autoload'
 import cors from '@fastify/cors'
-import multipart from '@fastify/multipart'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import {
@@ -12,32 +10,31 @@ import {
   type ZodTypeProvider
 } from 'fastify-type-provider-zod'
 import closeWithGrace from 'close-with-grace'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import { createLogger } from '@/logger'
 import type { Logger } from '@/logger'
 import { findConfigFile, loadConfig } from '@/config'
 import { parseServeConfig } from '@/serve/core/config'
-import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '@/serve/cors'
-import { resolveServeApiKey } from '@/serve/api-key'
-import { checkNetworkExposure, validateServeStartup } from '@/serve/startup'
+import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '@/serve/core/cors'
+import { resolveServeApiKey } from '@/serve/core/api-key'
+import { checkNetworkExposure, validateServeStartup } from '@/serve/core/startup'
 import { createModelRegistry } from '@/serve/core/model-registry'
 import { createLoadManager, defaultLoadFn } from '@/serve/core/load-manager'
 import { preloadModels, shouldRefuseStart, shutdownSDK } from '@/serve/core/lifecycle'
-import { createResponsesStore } from '@/serve/adapters/openai/responses-store'
-import { createChunkAttributionStore } from '@/serve/adapters/openai/chunk-attribution-store'
-import { createEphemeralFilesStore } from '@/serve/adapters/openai/ephemeral-files-store'
-import { createVectorStoresStore } from '@/serve/adapters/openai/vector-stores-store'
+import { createResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
+import { createChunkAttributionStore } from '@/serve/extensions/openai/adapters/chunk-attribution-store'
+import { createEphemeralFilesStore } from '@/serve/extensions/openai/adapters/ephemeral-files-store'
+import { createVectorStoresStore } from '@/serve/extensions/openai/adapters/vector-stores-store'
 import { createVideoJobsStore } from '@/serve/core/video-jobs-store'
 import { probeFfmpegAvailable } from '@/serve/lib/video-transcode'
-import { tearDownJob } from '@/serve/routes/videos'
+import { tearDownJob } from '@/serve/extensions/openai/routes/videos'
 import type { QvacContext } from '@/serve/core/context'
-import contextPlugin from '@/serve/plugins/context'
-import errorHandlerPlugin from '@/serve/plugins/error-handler'
-import authPlugin from '@/serve/plugins/auth'
-import cancelBridgePlugin from '@/serve/plugins/cancel-bridge'
-import { TAG_DESCRIPTIONS } from '@/serve/route-meta'
+import contextPlugin from '@/serve/core/plugins/context'
+import errorHandlerPlugin from '@/serve/core/plugins/error-handler'
+import authPlugin from '@/serve/core/plugins/auth'
+import cancelBridgePlugin from '@/serve/core/plugins/cancel-bridge'
+import { extensionTags, mountExtensions } from '@/serve/core/extensions'
+import { resolveExtensions } from '@/serve/extensions'
 
 export interface StartServerOptions {
   projectRoot: string
@@ -61,12 +58,15 @@ export interface StartServerOptions {
   loadConcurrency?: number | undefined
   loadTimeoutMs?: number | null | undefined
   cancelLoadOnDisconnect?: boolean | undefined
+  /** Extension names to mount. Defaults to every registered extension. */
+  extensions?: string[] | undefined
   transcribeOverride?: QvacContext['transcribeOverride']
   loadModelOverride?: QvacContext['loadModelOverride']
 }
 
 export async function buildServer(options: StartServerOptions): Promise<FastifyInstance> {
   const logger = createLogger(options.quiet ? 'silent' : options.verbose ? 'debug' : 'info')
+  const extensions = resolveExtensions(options.extensions)
 
   const configPath = findConfigFile(options.projectRoot, options.config)
   const rawConfig = configPath ? ((await loadConfig(configPath)) as Record<string, unknown>) : {}
@@ -161,7 +161,7 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
         version: '1.0.0'
       },
       servers: [{ url: `http://${options.host}:${options.port}`, description: 'this server' }],
-      tags: Object.entries(TAG_DESCRIPTIONS).map(([name, description]) => ({ name, description })),
+      tags: extensionTags(extensions),
       components: {
         securitySchemes: {
           bearerAuth: { type: 'http', scheme: 'bearer' }
@@ -195,13 +195,6 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     })
   }
 
-  await app.register(multipart, {
-    limits: {
-      fileSize: 100 * 1024 * 1024,
-      files: 10
-    }
-  })
-
   await app.register(cancelBridgePlugin)
 
   if (apiKey) {
@@ -234,12 +227,7 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     await shutdownSDK(logger)
   })
 
-  const __dirname = dirname(fileURLToPath(import.meta.url))
-  await app.register(autoload, {
-    dir: join(__dirname, 'routes'),
-    forceESM: true,
-    encapsulate: false
-  })
+  await mountExtensions(app, extensions)
 
   return app as unknown as FastifyInstance
 }

@@ -4,7 +4,7 @@ import { video, cancel } from '@qvac/sdk'
 import type { VideoClientParams } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { multipartToBodyOptional } from '@/serve/lib/multipart'
-import { requireModel } from '@/serve/plugins/require-model'
+import { requireModel } from '@/serve/core/plugins/require-model'
 import {
   videosCreateBody,
   videoResource,
@@ -15,7 +15,7 @@ import {
   videoContentQuery,
   extractVideoCreateParams,
   InvalidVideoStrengthError
-} from '@/serve/schemas/videos'
+} from '@/serve/extensions/openai/schemas/videos'
 import type { VideoJob } from '@/serve/core/video-jobs-store'
 import { videoJobResource } from '@/serve/core/video-jobs-store'
 import {

@@ -18,7 +18,7 @@ import {
   parseMetadata,
   InvalidExpiresAfterError,
   InvalidMetadataError
-} from '@/serve/schemas/vector-stores'
+} from '@/serve/extensions/openai/schemas/vector-stores'
 import {
   idToWorkspace,
   InvalidVectorStoreIdError,
@@ -28,10 +28,10 @@ import {
   type CreateVectorStoreInput,
   type UpdateVectorStoreInput,
   type VectorStoreMeta
-} from '@/serve/adapters/openai/vector-stores-store'
+} from '@/serve/extensions/openai/adapters/vector-stores-store'
 import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import type { QvacContext } from '@/serve/core/context'
-import { ensureReady } from '@/serve/plugins/require-model'
+import { ensureReady } from '@/serve/core/plugins/require-model'
 
 const SYNTHETIC_TIMESTAMP = 0
 

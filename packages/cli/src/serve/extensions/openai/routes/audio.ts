@@ -12,14 +12,14 @@ import {
   formatTimedTranscription,
   isTimedTranscriptionFormat
 } from '@/serve/lib/transcription-response'
-import { resolveAndCheckModel, ensureReady } from '@/serve/plugins/require-model'
-import { logUnsupported } from '@/serve/plugins/log-unsupported'
+import { resolveAndCheckModel, ensureReady } from '@/serve/core/plugins/require-model'
+import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import {
   transcriptionsBody,
   translationsBody,
   audioSpeechBody,
   SPEECH_UNSUPPORTED_PARAMS
-} from '@/serve/schemas/audio'
+} from '@/serve/extensions/openai/schemas/audio'
 import { resolveModelAlias } from '@/serve/core/config/models'
 import {
   buildWavBuffer,
@@ -28,7 +28,7 @@ import {
   pcmContentType,
   resolveSampleRate,
   speechAliasKey
-} from '@/serve/audio'
+} from '@/serve/extensions/openai/audio'
 import {
   transcodeWav,
   AudioEncodeFailedError,

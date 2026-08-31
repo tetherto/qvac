@@ -2,7 +2,10 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { HttpError } from '@/serve/lib/http-error'
 import { buildCatalog, filterCatalog, paginate } from '@/serve/core/model-catalog'
 import { loadModelConstants } from '@/serve/core/config/constants'
-import { modelCatalogQuery, modelCatalogIdParams } from '@/serve/schemas/models-catalog'
+import {
+  modelCatalogQuery,
+  modelCatalogIdParams
+} from '@/serve/extensions/openai/schemas/models-catalog'
 
 const descriptions = {
   list: `

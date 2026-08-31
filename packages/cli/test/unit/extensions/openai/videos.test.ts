@@ -6,9 +6,9 @@ import {
   nearestVideoFrameCount,
   InvalidVideoStrengthError,
   DEFAULT_FPS
-} from '@/serve/schemas/videos'
+} from '@/serve/extensions/openai/schemas/videos'
 import { createVideoJobsStore, type VideoJob } from '@/serve/core/video-jobs-store'
-import { tearDownJob, resolveInputReferenceImage } from '@/serve/routes/videos'
+import { tearDownJob, resolveInputReferenceImage } from '@/serve/extensions/openai/routes/videos'
 import type { QvacContext } from '@/serve/core/context'
 
 type CancelInput = Parameters<NonNullable<QvacContext['cancelOverride']>>[0]

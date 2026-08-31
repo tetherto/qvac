@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
-import { buildResponseObject } from '@/serve/adapters/openai/responses-shape'
-import { writeBlockingResponse } from '@/serve/adapters/openai/response-writers'
+import { buildResponseObject } from '@/serve/extensions/openai/adapters/responses-shape'
+import { writeBlockingResponse } from '@/serve/extensions/openai/adapters/response-writers'
 import type {
   ResponsesHandlerParams,
   ResponseWriterContext
-} from '@/serve/adapters/openai/response-writers'
+} from '@/serve/extensions/openai/adapters/response-writers'
 import type { CompletionRun, ToolCall, CompletionStats } from '@qvac/sdk'
 
 const uuidSuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

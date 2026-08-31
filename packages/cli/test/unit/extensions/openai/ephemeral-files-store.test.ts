@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createEphemeralFilesStore } from '@/serve/adapters/openai/ephemeral-files-store'
+import { createEphemeralFilesStore } from '@/serve/extensions/openai/adapters/ephemeral-files-store'
 
 describe('createEphemeralFilesStore', () => {
   it('put returns a file- prefixed id and get returns the same bytes', () => {

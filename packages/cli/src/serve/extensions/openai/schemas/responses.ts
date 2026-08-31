@@ -9,7 +9,7 @@ import {
   extractGenerationParams,
   type GenerationParams,
   type ResponseFormat
-} from '@/serve/schemas/common'
+} from '@/serve/extensions/openai/schemas/common'
 
 export const responsesBody = z
   .object({
