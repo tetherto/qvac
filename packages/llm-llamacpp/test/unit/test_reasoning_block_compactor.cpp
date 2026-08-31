@@ -6,13 +6,14 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
-#include "model-interface/ContextSlider.hpp"
 #include "model-interface/ReasoningBlockCompactor.hpp"
+#include "test_reasoning_rewind_fake.hpp"
 #include "utils/ReasoningRollbackState.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
 using qvac_lib_inference_addon_llama::ReasoningBlockCompactor;
 using qvac_lib_inference_addon_llama::utils::needsFullStateSnapshot;
+using qvac_lib_inference_addon_llama::utils::reasoningBoundaryTokenIndex;
 using qvac_lib_inference_addon_llama::utils::ReasoningRollbackState;
 using qvac_lib_inference_addon_llama::utils::recurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::RecurrentReasoningBoundaryDecision;
@@ -20,19 +21,18 @@ using qvac_lib_inference_addon_llama::utils::
     shouldCaptureRecurrentReasoningBoundary;
 using qvac_lib_inference_addon_llama::utils::shouldRollbackInterruptedReasoning;
 
-// Unit coverage for the hybrid / recurrent reasoning replay seam.
+// Unit coverage for the reasoning rewind / replay seam.
 //
-// End-of-prefill snapshots are taken at the boundary between prefill
-// and generation. For force-open templates the opener already lives in
-// the snapshot; for generated-opener templates the compactor seeds the
-// sampled opener token span into the replay buffer via
-// `recordPreReasoningToken` so the restored SSM state is still balanced
-// after compaction. Either way the replay buffer must carry the
-// matching close marker so the resulting `<think>...</think>` shape is
-// balanced. These tests pin:
+// The boundary is anchored before the reasoning span: force-open
+// templates subtract their opener from the end of prefill
+// (`reasoningBoundaryTokenIndex`), generated-opener templates anchor at
+// end of prefill and seed the sampled tokens up to the open flip through
+// `recordPreReasoningToken`. Compaction rewinds there, clips the seeded
+// opener pieces and replays, so the compacted cache is
+// `preamble + answer` with no `<think>` or `</think>` left, on every
+// model kind. These tests pin:
 //   1. the unconditional append primitive (`appendPostReasoningToken`),
-//   2. the compactor wrappers (`recordCloseMarkerForReplay` and
-//      `recordPreReasoningToken`) feature gates and open-span
+//   2. `recordPreReasoningToken`'s feature gates and open-span
 //      invariants,
 //   3. the success path against a seeded boundary snapshot.
 
@@ -57,18 +57,12 @@ TEST(ReasoningSnapshotPolicy, RoutesDeepSeekV4ToFullStateSnapshots) {
 
 TEST(ReasoningSnapshotPolicy, CapturesOnlyForForcedOpenRecurrentReasoning) {
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/true));
   EXPECT_EQ(
       recurrentReasoningBoundaryDecision(
-          /*needsRecurrentSnapshot=*/true,
           /*removeThinkingFromContext=*/true,
-          /*reasoningEnabled=*/true,
-          /*thinkingForcedOpen=*/true,
-          /*closeMarkerSingleToken=*/true),
+          /*reasoningEnabled=*/true),
       RecurrentReasoningBoundaryDecision::Capture);
 }
 
@@ -76,68 +70,47 @@ TEST(ReasoningSnapshotPolicy, CapturesGeneratedOpenRecurrentReasoning) {
   // Generated-opener recurrent turns are now supported: the caller
   // seeds the sampled opener token span (including any preamble)
   // into the replay buffer alongside the close marker, so the
-  // restored end-of-prefill prefix no longer needs to contain
+  // restored boundary prefix no longer needs to contain
   // `<think>`. The policy must return `Capture` so the boundary
   // snapshot is taken and the seed-and-replay path can fire.
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/false,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/true));
   EXPECT_EQ(
       recurrentReasoningBoundaryDecision(
-          /*needsRecurrentSnapshot=*/true,
           /*removeThinkingFromContext=*/true,
-          /*reasoningEnabled=*/true,
-          /*thinkingForcedOpen=*/false,
-          /*closeMarkerSingleToken=*/true),
+          /*reasoningEnabled=*/true),
       RecurrentReasoningBoundaryDecision::Capture);
 }
 
 TEST(ReasoningSnapshotPolicy, SkipsWhenFeatureOrReasoningGateIsClosed) {
-  EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/false,
+  // Memory kind no longer gates the boundary: pure attention anchors one too,
+  // it is just a position rather than a state payload.
+  EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/true));
   EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/false,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/true));
   EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/false,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/false));
 }
 
-// Recurrent replay seeds `postReasoningTokens_` with the single sampled
-// token that flips `updateReasoningBuffer` out of `inside_reasoning`. If
-// the close tag tokenises to more than one piece, that seed captures
-// only the tail piece and the restored SSM state ends with an unbalanced
-// `<think>` opener. The policy MUST reject the boundary snapshot in that
-// case so `remove_thinking_from_context` hard-fails instead of leaving
-// reasoning tokens in cache or silently corrupting recurrent state.
-TEST(ReasoningSnapshotPolicy, RejectsWhenCloseMarkerIsMultiToken) {
-  EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
+// A close marker that tokenises to several pieces used to be unsupported,
+// because replay could only seed the single token that tripped the close
+// detector, leaving the restored span with an unbalanced `<think>` opener.
+// No structural marker is replayed at all now, so marker length no longer
+// decides whether compaction is possible.
+TEST(ReasoningSnapshotPolicy, CapturesWhenCloseMarkerIsMultiToken) {
+  EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/false));
+      /*reasoningEnabled=*/true));
   EXPECT_EQ(
       recurrentReasoningBoundaryDecision(
-          /*needsRecurrentSnapshot=*/true,
           /*removeThinkingFromContext=*/true,
-          /*reasoningEnabled=*/true,
-          /*thinkingForcedOpen=*/true,
-          /*closeMarkerSingleToken=*/false),
-      RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose);
+          /*reasoningEnabled=*/true),
+      RecurrentReasoningBoundaryDecision::Capture);
 }
 
 TEST(ReasoningSnapshotPolicy, RollsBackAnyInterruptedOpenReasoningSpan) {
@@ -213,7 +186,7 @@ TEST(ReasoningRollbackStateAppend, PreservesOrderWithCapturedTokens) {
   // `recordPostReasoningToken`. The replay must concatenate them in
   // [close-marker, ...post-close] order so the SSM advance is balanced.
   ReasoningRollbackState rollback;
-  rollback.appendPostReasoningToken(/*closeMarker=*/100);
+  rollback.appendPostReasoningToken(/*preamble=*/100);
   rollback.startPostReasoningCapture(true);
   rollback.recordPostReasoningToken(/*newline=*/198);
   rollback.recordPostReasoningToken(/*answer=*/2500);
@@ -234,16 +207,14 @@ TEST(ReasoningRollbackStateAppend, ResetClearsBuffer) {
   EXPECT_EQ(rollback.seededPostReasoningCount(), 0u);
 }
 
-TEST(
-    ReasoningRollbackStateClip,
-    PreservesSeededCloseMarkerWithEmptyCapturedTail) {
+TEST(ReasoningRollbackStateClip, PreservesSeededPreambleWithEmptyCapturedTail) {
   // `compact()` passes `pos - end` as the captured-tail cap. When no
   // post-close tokens were sampled (e.g. EOS hit immediately after
-  // `</think>`), that cap is zero. The seeded close marker MUST
-  // survive — dropping it would replay an unbalanced
-  // `<think>\n` + answer-tail recurrent state on the next turn.
+  // `</think>`), that cap is zero. The seeded pre-reasoning preamble MUST
+  // survive: it sits before the span, so dropping it would replay fewer
+  // tokens than the rewind removed and leave `newPos` short of live KV.
   ReasoningRollbackState rollback;
-  rollback.appendPostReasoningToken(/*closeMarker=*/100);
+  rollback.appendPostReasoningToken(/*preamble=*/100);
   ASSERT_EQ(rollback.seededPostReasoningCount(), 1u);
 
   rollback.clipPostReasoningTokens(/*maxCapturedTail=*/0);
@@ -251,13 +222,13 @@ TEST(
   EXPECT_EQ(rollback.postReasoningTokens()[0], 100);
 }
 
-TEST(ReasoningRollbackStateClip, PreservesMultipleSeededStructuralTokens) {
-  // Future callers may seed more than one structural token before
-  // capture flips on. Clipping with an empty live tail must preserve
-  // the entire seeded prefix, not just the first token.
+TEST(ReasoningRollbackStateClip, PreservesMultipleSeededPreambleTokens) {
+  // A generated-opener template can sample several preamble tokens before
+  // the span opens and capture flips on. Clipping with an empty live tail
+  // must preserve the entire seeded prefix, not just the first token.
   ReasoningRollbackState rollback;
-  rollback.appendPostReasoningToken(/*closeMarker=*/100);
-  rollback.appendPostReasoningToken(/*structuralNewline=*/198);
+  rollback.appendPostReasoningToken(/*preamble=*/100);
+  rollback.appendPostReasoningToken(/*preamble=*/198);
   rollback.startPostReasoningCapture(true);
   rollback.recordPostReasoningToken(/*capturedTail=*/2500);
   ASSERT_EQ(rollback.seededPostReasoningCount(), 2u);
@@ -275,7 +246,7 @@ TEST(ReasoningRollbackStateClip, KeepsSeededPrefixAndCapsCapturedTail) {
   // is the captured-tail length (2), not the total. The close marker
   // stays; only the last captured token is dropped.
   ReasoningRollbackState rollback;
-  rollback.appendPostReasoningToken(/*closeMarker=*/100);
+  rollback.appendPostReasoningToken(/*preamble=*/100);
   rollback.startPostReasoningCapture(true);
   rollback.recordPostReasoningToken(/*t0=*/198);
   rollback.recordPostReasoningToken(/*t1=*/2500);
@@ -341,94 +312,18 @@ TEST(ReasoningBlockCompactor, DefaultsRemoveThinkingOff) {
   EXPECT_FALSE(fx.compactor.removeThinkingFromContext());
 }
 
-TEST(ReasoningBlockCompactorReplaySeed, NoOpWhenRemoveThinkingOff) {
-  CompactorFixture fx;
-  fx.compactor.setRemoveThinkingFromContext(false);
-  fx.compactor.setReasoningEnabled(true);
-  fx.compactor.setNeedsRecurrentSnapshot(true);
-  fx.compactor.recordCloseMarkerForReplay(/*closeMarker=*/42);
-  EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
-}
-
-TEST(ReasoningBlockCompactorReplaySeed, NoOpWhenReasoningDisabled) {
-  CompactorFixture fx;
-  fx.compactor.setRemoveThinkingFromContext(true);
-  fx.compactor.setReasoningEnabled(false);
-  fx.compactor.setNeedsRecurrentSnapshot(true);
-  fx.compactor.recordCloseMarkerForReplay(42);
-  EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
-}
-
-TEST(ReasoningBlockCompactorReplaySeed, NoOpForPureAttentionModels) {
-  // The replay buffer is consumed only on the recurrent / hybrid
-  // compact path. Pure-attention models use `seq_rm + seq_add` and
-  // never replay tokens, so seeding the buffer would be dead state.
-  CompactorFixture fx;
-  fx.compactor.setRemoveThinkingFromContext(true);
-  fx.compactor.setReasoningEnabled(true);
-  fx.compactor.setNeedsRecurrentSnapshot(false);
-  fx.compactor.recordCloseMarkerForReplay(42);
-  EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
-}
-
-TEST(ReasoningBlockCompactorReplaySeed, NoOpWhenBoundaryNotCaptured) {
-  // All feature gates open but no end-of-prefill snapshot exists
-  // (e.g. capture underflowed). Recording the close marker would be
-  // unsafe — there is nothing to restore to, so compaction will be
-  // skipped anyway. The seed must not silently accumulate in that case.
-  CompactorFixture fx;
-  fx.compactor.setRemoveThinkingFromContext(true);
-  fx.compactor.setReasoningEnabled(true);
-  fx.compactor.setNeedsRecurrentSnapshot(true);
-  ASSERT_FALSE(fx.rollback.hasReasoningBoundary());
-  fx.compactor.recordCloseMarkerForReplay(42);
-  EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
-}
-
-TEST(ReasoningBlockCompactorReplaySeed, AppendsWhenAllGatesAndBoundaryPresent) {
-  // Simulate a successful end-of-prefill capture by seeding a non-empty
-  // snapshot payload directly. The compactor only needs
-  // `hasReasoningBoundary()` to be true to know the recurrent restore
-  // path is viable — the snapshot's exact bytes are irrelevant for
-  // seeding the replay buffer.
-  CompactorFixture fx;
-  fx.compactor.setRemoveThinkingFromContext(true);
-  fx.compactor.setReasoningEnabled(true);
-  fx.compactor.setNeedsRecurrentSnapshot(true);
-  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
-  ASSERT_TRUE(fx.rollback.hasReasoningBoundary());
-
-  fx.compactor.recordCloseMarkerForReplay(/*closeMarker=*/123);
-  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 1u);
-  EXPECT_EQ(fx.rollback.seededPostReasoningCount(), 1u);
-  EXPECT_EQ(fx.rollback.postReasoningTokens()[0], 123);
-}
-
-TEST(ReasoningBlockCompactorReplaySeed, SkipsNullCloseMarker) {
-  CompactorFixture fx;
-  fx.compactor.setRemoveThinkingFromContext(true);
-  fx.compactor.setReasoningEnabled(true);
-  fx.compactor.setNeedsRecurrentSnapshot(true);
-  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/5);
-  ASSERT_TRUE(fx.rollback.hasReasoningBoundary());
-
-  fx.compactor.recordCloseMarkerForReplay(LLAMA_TOKEN_NULL);
-  EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
-  EXPECT_EQ(fx.rollback.seededPostReasoningCount(), 0u);
-}
-
 // ---------------------------------------------------------------------------
 // `recordPreReasoningToken` seed contract
 // ---------------------------------------------------------------------------
 //
-// Generated-opener recurrent turns seed every token sampled between
-// end-of-prefill and the open-detection flip into the replay buffer via
-// `recordPreReasoningToken` so the restored snapshot + replay lands in a
-// balanced `<think>...</think>` state (see the compactor header comment
-// on `recordPreReasoningToken` for full rationale). The tests below mirror
-// the `recordCloseMarkerForReplay` gates so future callers can trust that
-// pre-reasoning seeding is a NO-OP on any configuration where the replay
-// path is not going to fire.
+// Generated-opener turns seed every token sampled between the boundary and
+// the open-detection flip into the replay buffer via
+// `recordPreReasoningToken`, so the restored boundary plus replay lands on
+// `preamble + answer`. No structural `<think>` / `</think>` is ever seeded:
+// the boundary is anchored before the span on every model kind, so there is
+// no open block for a close marker to balance. The tests below pin that the
+// seed is a NO-OP on any configuration where the replay path is not going
+// to fire.
 
 TEST(ReasoningBlockCompactorReplaySeed, PreReasoningNoOpWhenRemoveThinkingOff) {
   CompactorFixture fx;
@@ -451,16 +346,18 @@ TEST(ReasoningBlockCompactorReplaySeed, PreReasoningNoOpWhenReasoningDisabled) {
 }
 
 TEST(
-    ReasoningBlockCompactorReplaySeed, PreReasoningNoOpForPureAttentionModels) {
-  // Pure attention uses `seq_rm + seq_add` at compact time and never
-  // consumes the replay buffer, so pre-reasoning seeding would be dead
-  // state exactly like the close-marker seed path.
+    ReasoningBlockCompactorReplaySeed,
+    PreReasoningSeedsForPureAttentionModels) {
+  // Same reason as the close-marker seed above: the pre-reasoning prefix is
+  // replayed on every memory kind now, so pure attention must seed it.
   CompactorFixture fx;
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/8);
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false);
   fx.compactor.recordPreReasoningToken(198);
-  EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
+  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 1u);
+  EXPECT_EQ(fx.rollback.postReasoningTokens()[0], 198);
 }
 
 TEST(
@@ -489,14 +386,11 @@ TEST(ReasoningBlockCompactorReplaySeed, PreReasoningSkipsNullToken) {
   EXPECT_EQ(fx.rollback.seededPostReasoningCount(), 0u);
 }
 
-TEST(
-    ReasoningBlockCompactorReplaySeed,
-    PreReasoningSeedsInSampleOrderBeforeCloseMarker) {
-  // Simulates a generated-opener recurrent turn where the model emits
-  // some preamble (`\n`) followed by a multi-token opener (`<think>` =>
-  // 2 pieces), then eventually a close marker. Replay buffer must be
-  // `[preamble, opener_piece_0, opener_piece_1, close]` so the SSM
-  // advance is balanced after boundary restore.
+TEST(ReasoningBlockCompactorReplaySeed, PreReasoningSeedsInSampleOrder) {
+  // Simulates a generated-opener turn where the model emits some preamble
+  // (`\n`) followed by a multi-token opener (`<think>` => 2 pieces). All
+  // four land in sample order; `compact()` is what later clips the opener
+  // pieces back off, because only it knows where the span starts.
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
@@ -507,14 +401,12 @@ TEST(
   fx.compactor.recordPreReasoningToken(/*preamble=*/198);
   fx.compactor.recordPreReasoningToken(/*openerPiece0=*/50);
   fx.compactor.recordPreReasoningToken(/*openerPiece1=*/51);
-  fx.compactor.recordCloseMarkerForReplay(/*closeMarker=*/100);
 
-  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 4u);
-  EXPECT_EQ(fx.rollback.seededPostReasoningCount(), 4u);
+  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 3u);
+  EXPECT_EQ(fx.rollback.seededPostReasoningCount(), 3u);
   EXPECT_EQ(fx.rollback.postReasoningTokens()[0], 198);
   EXPECT_EQ(fx.rollback.postReasoningTokens()[1], 50);
   EXPECT_EQ(fx.rollback.postReasoningTokens()[2], 51);
-  EXPECT_EQ(fx.rollback.postReasoningTokens()[3], 100);
 }
 
 TEST(ReasoningBlockCompactorReplaySeed, PreReasoningNoOpAfterOpenSpanRecorded) {
@@ -542,8 +434,7 @@ TEST(ReasoningBlockCompactorReplaySeed, PreReasoningNoOpAfterOpenSpanRecorded) {
   fx.compactor.setOpenSpan(/*start=*/15);
   ASSERT_TRUE(fx.compactor.hasOpenSpan());
 
-  // Close flip fires: close seeded, span end committed, capture on.
-  fx.compactor.recordCloseMarkerForReplay(/*closeMarker=*/100);
+  // Close flip fires: span end committed, capture on.
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/20);
   ASSERT_TRUE(fx.rollback.isCapturingPostReasoning());
@@ -556,21 +447,19 @@ TEST(ReasoningBlockCompactorReplaySeed, PreReasoningNoOpAfterOpenSpanRecorded) {
   fx.rollback.recordPostReasoningToken(/*answer=*/2500);
   fx.compactor.recordPreReasoningToken(/*answer=*/2500);
 
-  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 4u);
-  EXPECT_EQ(fx.rollback.seededPostReasoningCount(), 3u);
+  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 3u);
+  EXPECT_EQ(fx.rollback.seededPostReasoningCount(), 2u);
   EXPECT_EQ(fx.rollback.postReasoningTokens()[0], 198);
   EXPECT_EQ(fx.rollback.postReasoningTokens()[1], 50);
-  EXPECT_EQ(fx.rollback.postReasoningTokens()[2], 100);
-  EXPECT_EQ(fx.rollback.postReasoningTokens()[3], 2500);
+  EXPECT_EQ(fx.rollback.postReasoningTokens()[2], 2500);
 }
 
 TEST(
     ReasoningBlockCompactorReplaySeed,
     PreReasoningSeedSurvivesClipWhenNoCapturedTail) {
-  // Combined preamble + opener + close seed with an empty captured tail:
+  // Preamble + opener seed with an empty captured tail:
   // `clipPostReasoningTokens(0)` MUST preserve the full seeded prefix.
-  // Regression against a future clip cap that only accounts for the
-  // close marker.
+  // Regression against a future clip cap that ignores the seed count.
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
@@ -579,15 +468,13 @@ TEST(
 
   fx.compactor.recordPreReasoningToken(/*preamble=*/198);
   fx.compactor.recordPreReasoningToken(/*opener=*/50);
-  fx.compactor.recordCloseMarkerForReplay(/*closeMarker=*/100);
-  ASSERT_EQ(fx.rollback.seededPostReasoningCount(), 3u);
+  ASSERT_EQ(fx.rollback.seededPostReasoningCount(), 2u);
 
   fx.rollback.clipPostReasoningTokens(/*maxCapturedTail=*/0);
 
-  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 3u);
+  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 2u);
   EXPECT_EQ(fx.rollback.postReasoningTokens()[0], 198);
   EXPECT_EQ(fx.rollback.postReasoningTokens()[1], 50);
-  EXPECT_EQ(fx.rollback.postReasoningTokens()[2], 100);
 }
 
 // Pin the close-capture handshake contract used by every close-marker
@@ -604,6 +491,7 @@ TEST(ReasoningBlockCompactorCloseCommit, IsNoOpWithoutPriorRequest) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/10);
   ASSERT_TRUE(fx.compactor.hasOpenSpan());
   ASSERT_FALSE(fx.compactor.hasPendingCloseCapture());
@@ -618,6 +506,7 @@ TEST(ReasoningBlockCompactorCloseCommit, RecordsSpanEndAfterRequest) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/10);
   ASSERT_TRUE(fx.compactor.hasOpenSpan());
 
@@ -634,17 +523,15 @@ TEST(ReasoningBlockCompactorCloseCommit, RecordsSpanEndAfterRequest) {
 //
 // Any inability to remove the reasoning span from cache is a hard
 // failure under the default-on `remove_thinking_from_context` contract
-// (PR #2813). `snapshotAtPrefillBoundary` still throws
+// (PR #2813). `snapshotAtReasoningBoundary` still throws
 // `qvac_errors::StatusError` on boundary-capture failure (recovery
 // happens one level up in `snapshotForRecurrentRollback`), but
-// `compact()` reports failures via `Outcome::Kind::FailedKvIntact` /
-// `Outcome::Kind::FailedKvWiped` so callers can choose the correct
-// live-KV recovery (pre-request rollback vs full reset) before
-// rethrowing. In every failure path `thinkingBlockDiscards` never
-// bumps for the failed drop.
+// `compact()` reports failures via `Outcome::Kind::FailedKvWiped` so callers
+// reset positional accounting to zero before rethrowing. In every failure
+// path `thinkingBlockDiscards` never bumps for the failed drop.
 //
 // Coverage:
-//   * Boundary-capture failure (`snapshotAtPrefillBoundary` on
+//   * Boundary-capture failure (`snapshotAtReasoningBoundary` on
 //     `ctx == nullptr`, which short-reads inside
 //     `captureReasoningBoundary`).
 //   * Hybrid restore failure (`compact()` on `ctx == nullptr` with a
@@ -672,7 +559,7 @@ TEST(
   ASSERT_FALSE(fx.rollback.hasReasoningBoundary());
   EXPECT_THROW(
       {
-        fx.compactor.snapshotAtPrefillBoundary(
+        fx.compactor.snapshotAtReasoningBoundary(
             /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/10, "[Test]");
       },
       qvac_errors::StatusError);
@@ -721,7 +608,7 @@ TEST(
   // The `ResetGuard` in `compact()` runs on the failure path too,
   // so per-inference state (span, boundary snapshot, replay buffer)
   // must be fully cleared. Without this the next inference's
-  // `snapshotAtPrefillBoundary` no-ops on the stale boundary and the
+  // `snapshotAtReasoningBoundary` no-ops on the stale boundary and the
   // driver would replay stale post-reasoning tokens.
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
   EXPECT_FALSE(fx.rollback.hasReasoningBoundary());
@@ -755,16 +642,15 @@ TEST(
   EXPECT_EQ(fx.compactor.blockDiscards(), 0);
 }
 
-// Defensive no-boundary regression: `ReasoningSnapshotPolicy` still
-// hard-fails multi-token close-marker templates before generation and
-// `snapshotAtPrefillBoundary` throws on capture underflow, but if a
-// future caller bypasses those sites and reaches the compactor with
-// recurrent memory but no boundary snapshot, `setOpenSpan` must still
-// refuse to record a span so `compact()` does not wipe the sequence
-// through its defensive no-boundary branch.
+// Defensive no-boundary regression: `snapshotAtReasoningBoundary` anchors a
+// boundary for every model kind, so the compactor should never see a span
+// without one. If a future caller bypasses it and reaches the compactor
+// with no boundary,
+// `setOpenSpan` must still refuse to record a span so `compact()` does not
+// wipe the sequence through its defensive no-boundary branch.
 TEST(
     ReasoningBlockCompactorFailureStats,
-    RecurrentNoBoundarySpanSkipsCompactionAsDefensiveNoOp) {
+    NoBoundarySpanSkipsCompactionAsDefensiveNoOp) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
@@ -773,8 +659,8 @@ TEST(
 
   fx.compactor.setOpenSpan(/*start=*/15);
   EXPECT_FALSE(fx.compactor.hasOpenSpan())
-      << "recurrent + no boundary must not record a span — otherwise "
-         "compact() will hit its defensive branch and wipe the sequence";
+      << "no boundary must not record a span — otherwise compact() will hit "
+         "its defensive branch and wipe the sequence";
 
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/20);
@@ -783,7 +669,7 @@ TEST(
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::NoOp)
-      << "recurrent no-boundary defensive path must be a clean no-op, "
+      << "the no-boundary defensive path must be a clean no-op, "
          "not FailedKvWiped";
   EXPECT_TRUE(outcome.failureMessage.empty());
   EXPECT_EQ(fx.compactor.blockDiscards(), 0);
@@ -816,85 +702,17 @@ TEST(ReasoningBlockCompactorFailureStats, NoOpOutcomesDoNotThrow) {
 
 namespace {
 
-// Minimal `IContextSliderOps` fakes for the compactor tests.
-// `compactKvRange` on the pure-attention path is the only production
-// call site the compactor routes through the injectable ops. Two
-// fakes are provided so tests can drive either half of the primitive
-// contract without a real llama context:
-//
-//   * `AcceptingSliderOps` — `seqRm` returns `true`, so the compactor
-//     proceeds to `seqAdd` and reports `CompactedAttention`. Used by
-//     the successful-drop tests to observe that `seqAdd` fires.
-//   * `RejectingSliderOps` — `seqRm` returns `false` to mimic a
-//     rejected primitive. The production contract is "all-or-nothing
-//     on rejection", so `seqAdd` MUST NOT fire afterwards; otherwise
-//     the compactor's `FailedKvIntact` outcome would be misleading
-//     (it would imply KV was touched anyway).
-class AcceptingSliderOps final : public IContextSliderOps {
-public:
-  llama_pos nCtx(llama_context*) const override { return 4096; }
-
-  ContextSliderMemoryHandle memory(llama_context*) const override {
-    return fakeMemory_;
-  }
-
-  bool seqRm(ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos)
-      const override {
-    ++seqRmCalls_;
-    return true;
-  }
-
-  void seqAdd(
-      ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos,
-      llama_pos) const override {
-    ++seqAddCalls_;
-  }
-
-  int seqRmCalls() const { return seqRmCalls_; }
-  int seqAddCalls() const { return seqAddCalls_; }
-
-private:
-  ContextSliderMemoryHandle fakeMemory_ =
-      reinterpret_cast<ContextSliderMemoryHandle>(static_cast<uintptr_t>(0x1));
-  mutable int seqRmCalls_ = 0;
-  mutable int seqAddCalls_ = 0;
-};
-
-class RejectingSliderOps final : public IContextSliderOps {
-public:
-  llama_pos nCtx(llama_context*) const override { return 4096; }
-
-  ContextSliderMemoryHandle memory(llama_context*) const override {
-    return fakeMemory_;
-  }
-
-  bool seqRm(ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos)
-      const override {
-    ++seqRmCalls_;
-    return false;
-  }
-
-  void seqAdd(
-      ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos,
-      llama_pos) const override {
-    ++seqAddCalls_;
-  }
-
-  int seqRmCalls() const { return seqRmCalls_; }
-  int seqAddCalls() const { return seqAddCalls_; }
-
-private:
-  ContextSliderMemoryHandle fakeMemory_ =
-      reinterpret_cast<ContextSliderMemoryHandle>(static_cast<uintptr_t>(0x1));
-  mutable int seqRmCalls_ = 0;
-  mutable int seqAddCalls_ = 0;
-};
+// Compaction rewinds to the reasoning boundary and replays, so the
+// shared `FakeReasoningRewindOps` covers every case here. Local names say how
+// each one is configured: `accepting` is the defaults, `rejecting` fails the
+// restore, and the replay-failing cases use `failReplay()`.
+using qvac_test::FakeReasoningRewindOps;
 
 } // namespace
 
 TEST(
     ReasoningBlockCompactorOpenSpan,
-    PureAttentionCompactsResidentOpenSpanWithoutClose) {
+    ResidentOpenSpanRewindsToBoundaryWithoutClose) {
   // Generation can end after `<think>` but before `</think>` due to
   // n_predict, antiprompt, or context limits. If `[start, pos)` is still
   // resident, pure-attention compaction must remove that open span rather
@@ -904,24 +722,235 @@ TEST(
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false);
 
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/15);
   ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
-  EXPECT_EQ(
-      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
-  EXPECT_EQ(outcome.newPos, 15);
-  EXPECT_EQ(outcome.discarded, 5);
-  EXPECT_EQ(outcome.keptPrefixEnd, 15);
-  EXPECT_EQ(accepting.seqRmCalls(), 1);
-  EXPECT_EQ(accepting.seqAddCalls(), 1);
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
+  EXPECT_EQ(outcome.newPos, 10)
+      << "an unfinished span rewinds to the prefill boundary; nothing was "
+         "captured to replay because generation never left the think block";
+  EXPECT_EQ(outcome.discarded, 10);
+  EXPECT_EQ(accepting.restoreCalls(), 1);
+  EXPECT_EQ(accepting.replayCalls(), 1);
   EXPECT_EQ(fx.compactor.blockDiscards(), 1);
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
+}
+
+// An unfinished span must not replay the pieces that opened it. The seeded
+// prefix runs up to and including the open marker, and those tokens live
+// inside `[start, pos)`, the range compaction drops. No close marker was ever
+// captured, so replaying them would rebuild a `<think>` with nothing to close
+// it and the next turn would resume from an open block.
+//
+// Reachable on any pure-attention reasoning model whose generation stops
+// inside the think block: an `n_predict` cutoff, an antiprompt, or a full
+// context. Recurrent memory hard-fails this case instead, and pure attention
+// used to drop the whole span with `seq_rm` + `seq_add`, so it only became
+// reachable when every model started replaying.
+TEST(ReasoningBlockCompactorOpenSpan, OpenSpanDoesNotReplayTheOpener) {
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  fx.compactor.setNeedsRecurrentSnapshot(false);
+
+  constexpr llama_pos kSnapshotPos = 10;
+  constexpr llama_pos kSpanStart = 11;
+  constexpr llama_pos kLivePos = 20;
+
+  fx.rollback.seedReasoningBoundaryForTesting(kSnapshotPos);
+  // Production seeds every token sampled before the open flip: the template
+  // preamble at position 10, then the open marker at position 11.
+  fx.compactor.recordPreReasoningToken(/*preamble=*/700);
+  fx.compactor.recordPreReasoningToken(/*openMarker=*/701);
+  fx.compactor.setOpenSpan(kSpanStart);
+  ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
+  ASSERT_EQ(fx.rollback.seededPostReasoningCount(), 2u);
+
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
+  const auto outcome = fx.compactor.compact(
+      /*ctx=*/nullptr, /*seqId=*/0, kLivePos, "[Test]");
+  fx.compactor.setRewindOpsForTesting(nullptr);
+
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
+  // Only the preamble is replayed, so the cache lands at 11, not 12.
+  EXPECT_EQ(outcome.newPos, kSpanStart);
+  EXPECT_EQ(outcome.replayedTokens, 1u);
+  EXPECT_EQ(outcome.discarded, kLivePos - kSpanStart);
+}
+
+// ---------------------------------------------------------------------------
+// Compacted-cache shape: `preamble + answer`, no reasoning scaffold
+// ---------------------------------------------------------------------------
+
+TEST(ReasoningBlockCompactorBoundary, ForcedOpenAnchorsBeforeTheOpener) {
+  // `<think>\n` tokenises to 2 pieces sitting at the tail of a 40-token
+  // rendered prompt, so the boundary is 38. Generated-opener templates have
+  // nothing to subtract, and a prompt that IS the opener clamps at 0.
+  EXPECT_EQ(
+      reasoningBoundaryTokenIndex(
+          /*prefillEnd=*/40,
+          /*thinkingForcedOpen=*/true,
+          /*forcedOpenTokenCount=*/2),
+      38);
+  EXPECT_EQ(
+      reasoningBoundaryTokenIndex(
+          /*prefillEnd=*/40,
+          /*thinkingForcedOpen=*/false,
+          /*forcedOpenTokenCount=*/2),
+      40);
+  EXPECT_EQ(
+      reasoningBoundaryTokenIndex(
+          /*prefillEnd=*/2,
+          /*thinkingForcedOpen=*/true,
+          /*forcedOpenTokenCount=*/2),
+      0);
+  // A cache hit left part of the opener resident, so this prefill is shorter
+  // than the opener. The anchor clamps to 0 instead of underflowing, which on
+  // the full-state path means the snapshot lands on the admission cursor and
+  // the resident fragment survives. See
+  // `TextLlmContext::computeRecurrentSnapshotBoundary`.
+  EXPECT_EQ(
+      reasoningBoundaryTokenIndex(
+          /*prefillEnd=*/1,
+          /*thinkingForcedOpen=*/true,
+          /*forcedOpenTokenCount=*/5),
+      0);
+}
+
+TEST(
+    ReasoningBlockCompactorClosedSpan,
+    ForcedOpenPureAttentionLeavesNoReasoningScaffold) {
+  // Force-open template: the opener is prompt text, so the boundary is
+  // anchored before it and equals the span start. Nothing is seeded, so the
+  // replay is the visible answer alone and the compacted cache holds no
+  // `<think>` for the next cached turn to resume inside.
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  fx.compactor.setNeedsRecurrentSnapshot(false);
+
+  constexpr llama_pos kBoundary = 10;
+  constexpr llama_pos kSpanEnd = 18;
+  constexpr llama_pos kLivePos = 20;
+
+  fx.rollback.seedReasoningBoundaryForTesting(kBoundary);
+  fx.compactor.setOpenSpan(/*start=*/kBoundary);
+  fx.compactor.requestCloseCapture();
+  fx.compactor.onCloseCommitted(kSpanEnd);
+  ASSERT_TRUE(fx.rollback.isCapturingPostReasoning());
+  fx.rollback.recordPostReasoningToken(/*answer0=*/900);
+  fx.rollback.recordPostReasoningToken(/*answer1=*/901);
+  ASSERT_EQ(fx.rollback.seededPostReasoningCount(), 0u);
+
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
+  const auto outcome = fx.compactor.compact(
+      /*ctx=*/nullptr, /*seqId=*/0, kLivePos, "[Test]");
+  fx.compactor.setRewindOpsForTesting(nullptr);
+
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
+  EXPECT_EQ(outcome.replayedTokens, 2u);
+  EXPECT_EQ(outcome.newPos, kBoundary + 2);
+  ASSERT_EQ(accepting.replayedTokens().size(), 2u);
+  EXPECT_EQ(accepting.replayedTokens()[0], 900);
+  EXPECT_EQ(accepting.replayedTokens()[1], 901);
+}
+
+TEST(
+    ReasoningBlockCompactorClosedSpan,
+    GeneratedOpenerReplaysPreambleWithoutTheOpener) {
+  // Generated-opener template: the boundary is end of prefill, so the
+  // preamble the model emitted before `<think>` has to be replayed. The
+  // opener pieces are seeded alongside it and must be clipped, or the
+  // compacted cache would open a reasoning block with nothing closing it.
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  fx.compactor.setNeedsRecurrentSnapshot(false);
+
+  constexpr llama_pos kBoundary = 10;
+  constexpr llama_pos kSpanStart = 11;
+  constexpr llama_pos kSpanEnd = 18;
+  constexpr llama_pos kLivePos = 20;
+
+  fx.rollback.seedReasoningBoundaryForTesting(kBoundary);
+  fx.compactor.recordPreReasoningToken(/*preamble=*/700);
+  fx.compactor.recordPreReasoningToken(/*openMarker=*/701);
+  fx.compactor.setOpenSpan(kSpanStart);
+  fx.compactor.requestCloseCapture();
+  fx.compactor.onCloseCommitted(kSpanEnd);
+  fx.rollback.recordPostReasoningToken(/*answer0=*/900);
+  fx.rollback.recordPostReasoningToken(/*answer1=*/901);
+
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
+  const auto outcome = fx.compactor.compact(
+      /*ctx=*/nullptr, /*seqId=*/0, kLivePos, "[Test]");
+  fx.compactor.setRewindOpsForTesting(nullptr);
+
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
+  // Preamble + the two answer tokens. The open marker at 11 is clipped.
+  EXPECT_EQ(outcome.replayedTokens, 3u);
+  EXPECT_EQ(outcome.newPos, kBoundary + 3);
+  ASSERT_EQ(accepting.replayedTokens().size(), 3u);
+  EXPECT_EQ(accepting.replayedTokens()[0], 700);
+  EXPECT_EQ(accepting.replayedTokens()[1], 900);
+  EXPECT_EQ(accepting.replayedTokens()[2], 901);
+}
+
+TEST(ReasoningBlockCompactorClosedSpan, RecurrentReplaysTheSeededCloseMarker) {
+  // Same generated-opener turn as above on the full-state path. Its boundary
+  // is the end of prefill, so the restored prefix still opens a block and the
+  // seeded close marker has to survive the clip and be replayed ahead of the
+  // answer. That is what keeps the restored state balanced, and it is why the
+  // prefill decode never has to stop mid-prompt.
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  fx.compactor.setNeedsRecurrentSnapshot(true);
+
+  constexpr llama_pos kBoundary = 10;
+  constexpr llama_pos kSpanStart = 11;
+  constexpr llama_pos kSpanEnd = 18;
+  constexpr llama_pos kLivePos = 20;
+
+  fx.rollback.seedReasoningBoundaryForTesting(kBoundary);
+  fx.compactor.recordPreReasoningToken(/*preamble=*/700);
+  fx.compactor.recordPreReasoningToken(/*openMarker=*/701);
+  fx.compactor.setOpenSpan(kSpanStart);
+  // Seeded at the close-detection site, before capture flips on, exactly as
+  // the drivers do it.
+  fx.compactor.recordCloseMarkerForReplay(/*closeMarker=*/702);
+  fx.compactor.requestCloseCapture();
+  fx.compactor.onCloseCommitted(kSpanEnd);
+  fx.rollback.recordPostReasoningToken(/*answer0=*/900);
+  fx.rollback.recordPostReasoningToken(/*answer1=*/901);
+
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
+  const auto outcome = fx.compactor.compact(
+      /*ctx=*/nullptr, /*seqId=*/0, kLivePos, "[Test]");
+  fx.compactor.setRewindOpsForTesting(nullptr);
+
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
+  EXPECT_EQ(outcome.replayedTokens, 5u);
+  EXPECT_EQ(outcome.newPos, kBoundary + 5);
+  ASSERT_EQ(accepting.replayedTokens().size(), 5u);
+  EXPECT_EQ(accepting.replayedTokens()[0], 700);
+  EXPECT_EQ(accepting.replayedTokens()[1], 701)
+      << "the seeded opener stays on the full-state path, the close balances "
+         "it";
+  EXPECT_EQ(accepting.replayedTokens()[2], 702);
+  EXPECT_EQ(accepting.replayedTokens()[3], 900);
+  EXPECT_EQ(accepting.replayedTokens()[4], 901);
 }
 
 TEST(
@@ -940,25 +969,25 @@ TEST(
   fx.compactor.setOpenSpan(/*start=*/15);
   ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
       << "recurrent open-ended reasoning span must hard-fail instead of "
          "leaking resident reasoning tokens";
   EXPECT_NE(
       outcome.failureMessage.find("open reasoning span"), std::string::npos);
-  EXPECT_EQ(accepting.seqRmCalls(), 0);
-  EXPECT_EQ(accepting.seqAddCalls(), 0);
+  EXPECT_EQ(accepting.restoreCalls(), 0);
+  EXPECT_EQ(accepting.replayCalls(), 0);
   EXPECT_EQ(fx.compactor.blockDiscards(), 0);
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
 
-// Pure-attention `seq_rm + seq_add` rejection MUST surface as
-// `FailedKvIntact` (not `FailedKvWiped`) so the caller can roll back
+// A rejected boundary restore MUST surface as
+// `FailedKvWiped` so the caller resets to zero rather than rolling back
 // `[preRequestCursor, currentCursor)` on live KV instead of resetting
 // to zero. Regression coverage for the single-prompt hardening in
 // `TextLlmContext::compactThinkSpan` / `MtmdLlmContext::compactThinkSpan`
@@ -966,45 +995,80 @@ TEST(
 // zero on this failure, leaving driver metadata and live KV out of
 // sync for the next request on the same driver.
 TEST(
-    ReasoningBlockCompactorFailureStats,
-    PureAttentionSeqRmRejectionReportsFailedKvIntact) {
+    ReasoningBlockCompactorFailureStats, RestoreRejectionReportsFailedKvWiped) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
   // Pure-attention path: no recurrent snapshot needed. This is the
-  // configuration that must produce `FailedKvIntact` on rejection.
+  // A rejected restore leaves the sequence in a state nothing describes.
   fx.compactor.setNeedsRecurrentSnapshot(false);
 
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/15);
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/20);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  RejectingSliderOps rejecting;
-  fx.compactor.setContextSliderOpsForTesting(&rejecting);
+  FakeReasoningRewindOps rejecting;
+  rejecting.failRestore();
+  fx.compactor.setRewindOpsForTesting(&rejecting);
   // `ctx` is passed through untouched by the fake ops; safe to pass
-  // nullptr because neither `memory` nor `nCtx` inspects it.
+  // nullptr because `memory` does not inspect it.
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(
-      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvIntact);
+      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped);
   EXPECT_FALSE(outcome.failureMessage.empty())
       << "failureMessage must be populated so caller can rethrow with "
          "matching diagnostic context";
-  EXPECT_EQ(rejecting.seqRmCalls(), 1)
+  EXPECT_EQ(rejecting.restoreCalls(), 1)
       << "compactor must attempt the pure-attention primitive exactly once";
-  EXPECT_EQ(rejecting.seqAddCalls(), 0)
-      << "seq_rm rejection must short-circuit before seq_add fires — "
-         "otherwise the `FailedKvIntact` invariant (live KV unchanged) is "
-         "violated";
+  EXPECT_EQ(rejecting.replayCalls(), 0)
+      << "a rejected restore must short-circuit before replay fires — "
+         "replaying on top of a failed restore would decode the answer into "
+         "positions nothing describes";
   EXPECT_EQ(fx.compactor.blockDiscards(), 0)
       << "failed drops must not bump the runtime discard counter";
 
   // The `ResetGuard` still clears per-inference bookkeeping on the
   // failure return so a follow-up compact() on the same instance
   // starts clean.
+  EXPECT_FALSE(fx.compactor.hasOpenSpan());
+}
+
+// A replay that fails part way has advanced the sequence an unknown amount
+// past the restored boundary, so the compactor must wipe and send the caller
+// down the reset-to-zero recovery.
+TEST(ReasoningBlockCompactorFailureStats, ReplayRejectionReportsFailedKvWiped) {
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  fx.compactor.setNeedsRecurrentSnapshot(false);
+
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
+  fx.compactor.setOpenSpan(/*start=*/15);
+  fx.compactor.requestCloseCapture();
+  fx.compactor.onCloseCommitted(/*pos=*/20);
+  ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
+
+  // `seqRm` succeeds but the cells stay put, so the readback disagrees.
+  FakeReasoningRewindOps stuck;
+  stuck.failReplay();
+  fx.compactor.setRewindOpsForTesting(&stuck);
+  const auto outcome = fx.compactor.compact(
+      /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
+  fx.compactor.setRewindOpsForTesting(nullptr);
+
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
+      << "a partly-advanced replay must not be reported as KV-intact";
+  EXPECT_NE(outcome.failureMessage.find("replay"), std::string::npos);
+  EXPECT_EQ(stuck.restoreCalls(), 1);
+  EXPECT_EQ(stuck.replayCalls(), 1);
+  EXPECT_EQ(stuck.replayCalls(), 1);
+  EXPECT_EQ(fx.compactor.blockDiscards(), 0)
+      << "a failed drop must not bump the runtime discard counter";
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
 
@@ -1022,8 +1086,8 @@ TEST(
 //   b. Partial span still resident (`start < pos < end`):
 //      * Pure-attention: honor the default-on strict-cleanup
 //        contract by dropping the resident remainder via a
-//        clamped `[start, pos)` `seq_rm + seq_add`; reports
-//        `CompactedAttention`.
+//        clamped `[start, pos)` rewind and replay; reports
+//        `Compacted`.
 //      * Recurrent / hybrid: hard-fail — replay is anchored at a
 //        captured post-reasoning tail we can no longer reconcile
 //        against a shorter live cache without leaving resident
@@ -1044,24 +1108,25 @@ TEST(
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false); // pure-attention
 
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/15);
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   // `pos = 10 <= start = 15`: reasoning span already gone from cache;
   // NoOp is the correct — not a leak — outcome.
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/10, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::NoOp);
-  EXPECT_EQ(accepting.seqRmCalls(), 0)
+  EXPECT_EQ(accepting.restoreCalls(), 0)
       << "when the span is already trimmed away, no KV primitive must "
          "fire";
-  EXPECT_EQ(accepting.seqAddCalls(), 0);
+  EXPECT_EQ(accepting.replayCalls(), 0);
   EXPECT_EQ(fx.compactor.blockDiscards(), 0)
       << "NoOp on whole-span-trimmed must not be counted as a discard";
 
@@ -1071,7 +1136,7 @@ TEST(
 
 TEST(
     ReasoningBlockCompactorTailTrimInteraction,
-    PartialResidentSpanCompactsOnPureAttention) {
+    PartialResidentSpanRewindsToBoundary) {
   // `start < pos < end`: the tail-eraser stopped inside the reasoning
   // span, so `[start, pos)` is still resident. Under the default-on
   // `remove_thinking_from_context` contract the compactor must not
@@ -1082,30 +1147,28 @@ TEST(
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false); // pure-attention
 
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/15);
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   // `pos = 20`, recordedEnd = 25 → effectiveEnd clamped to 20, so the
   // compactor drops `[15, 20)` — 5 tokens.
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
-  EXPECT_EQ(
-      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
-  EXPECT_EQ(outcome.newPos, 15)
-      << "after clamped seq_rm, newPos falls to the reasoning span start";
-  EXPECT_EQ(outcome.discarded, 5)
-      << "discard length must equal the resident remainder `pos - start`";
-  EXPECT_EQ(outcome.keptPrefixEnd, 15);
-  EXPECT_EQ(accepting.seqRmCalls(), 1)
-      << "clamped partial cleanup must issue the pure-attention seq_rm";
-  EXPECT_EQ(accepting.seqAddCalls(), 1)
-      << "successful seq_rm must be followed by its paired seq_add";
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
+  EXPECT_EQ(outcome.newPos, 10)
+      << "the clamped span rewinds to the reasoning boundary and replays";
+  EXPECT_EQ(outcome.discarded, 10);
+  EXPECT_EQ(accepting.restoreCalls(), 1)
+      << "clamped partial cleanup must restore the pure-attention boundary";
+  EXPECT_EQ(accepting.replayCalls(), 1)
+      << "a restored boundary must be followed by its replay";
   EXPECT_EQ(fx.compactor.blockDiscards(), 1)
       << "clamped partial drop is still a real discard and must be counted";
 
@@ -1139,20 +1202,20 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
       << "recurrent partial-resident span must hard-fail instead of "
          "leaking resident reasoning tokens";
   EXPECT_NE(outcome.failureMessage.find("partial-resident"), std::string::npos);
-  EXPECT_EQ(accepting.seqRmCalls(), 0)
+  EXPECT_EQ(accepting.restoreCalls(), 0)
       << "recurrent partial-resident hard-fail must not use partial KV "
          "removal primitives";
-  EXPECT_EQ(accepting.seqAddCalls(), 0);
+  EXPECT_EQ(accepting.replayCalls(), 0);
   EXPECT_EQ(fx.compactor.blockDiscards(), 0)
       << "recurrent hard-fail bail must not be counted as a successful discard";
 

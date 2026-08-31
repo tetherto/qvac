@@ -556,9 +556,27 @@
           "minLength": 1
         },
         "duration": {
-          "description": "Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
+          "description": "Approximate requested duration in seconds. Engines round to their frame grid; use output frames or stats.audioDurationMs as authoritative.",
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "maxFrames": {
+          "description": "MiniMax semantic-frame cap. Cannot be combined with duration. MiniMax only; rejected by ACE-Step.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "inferenceSteps": {
+          "description": "MiniMax flow steps for this generation; 0 uses the model default. MiniMax only; rejected by ACE-Step.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "cfgScale": {
+          "description": "MiniMax flow classifier-free guidance scale for this generation. MiniMax only; rejected by ACE-Step.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "lmTemperature": {
           "description": "LM sampling temperature (ACE-Step default: 0.85).",
@@ -1002,20 +1020,7 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "number", "boolean", "null"]
                                 }
                               }
                             },
@@ -1972,20 +1977,7 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
@@ -2580,20 +2572,7 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
@@ -3053,6 +3032,12 @@
       },
       "required": ["type", "events"],
       "additionalProperties": false
+    },
+    "constants.AudioGenEngine": {
+      "title": "AudioGenEngine",
+      "type": "string",
+      "enum": ["acestep", "minimax"],
+      "x-enum-varnames": ["ACESTEP", "MINIMAX"]
     },
     "constants.AudioGenTaskType": {
       "title": "AudioGenTaskType",
@@ -3545,6 +3530,14 @@
           "type": "boolean"
         },
         "seed": {
+          "type": "boolean"
+        },
+        "requireHttpChecksum": {
+          "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+          "type": "boolean"
+        },
+        "requireSecureTransport": {
+          "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
           "type": "boolean"
         },
         "requestId": {
@@ -8210,6 +8203,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -8282,9 +8283,11 @@
                       "description": "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`",
                       "type": "string"
                     },
-                    "no_mmap": {
-                      "description": "Disable memory-mapped model loading. Default false.",
-                      "type": "boolean"
+                    "load_mode": {
+                      "description": "Model loading mode: `'none'`, `'mmap'`, `'mlock'`, `'mmap+mlock'`, or `'dio'`. Unset uses the addon's default (`'mmap'`).",
+                      "type": "string",
+                      "enum": ["none", "mmap", "mlock", "mmap+mlock", "dio"],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode"
                     },
                     "verbosity": {
                       "description": "Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
@@ -8510,6 +8513,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -8878,6 +8889,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -9143,6 +9162,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -9315,6 +9342,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -9435,6 +9470,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -10294,6 +10337,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -12117,6 +12168,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -12309,6 +12368,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -13808,6 +13875,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -13818,424 +13893,663 @@
                   "const": "audiogen-ggml"
                 },
                 "modelConfig": {
-                  "type": "object",
-                  "properties": {
-                    "useGPU": {
-                      "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
-                      "type": "boolean"
-                    },
-                    "inferenceSteps": {
-                      "description": "DiT sampling steps; `0` (default) lets the engine auto-pick per DiT architecture (turbo 8 / sft 50).",
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    "shift": {
-                      "description": "Flow-matching time-shift; `0` (default) lets the engine auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "nGpuLayers": {
-                      "description": "GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    "threads": {
-                      "description": "CPU thread count; `0` (default) lets the engine auto-pick.",
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    "backendsDir": {
-                      "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "textEncModelSrc": {
-                      "anyOf": [
-                        {
-                          "type": "string"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "engine": {
+                          "description": "Use the ACE-Step music-generation engine.",
+                          "type": "string",
+                          "const": "acestep"
                         },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "src": {
-                              "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
-                            },
-                            "name": {
-                              "description": "Display name for this model instance; overrides the name derived from the source.",
-                              "type": "string"
-                            },
-                            "modelId": {
-                              "description": "Unique identifier used to reference the model in QVAC calls.",
-                              "type": "string"
-                            },
-                            "registryPath": {
-                              "description": "Registry-relative path to the model (set for registry-backed models).",
-                              "type": "string"
-                            },
-                            "registrySource": {
-                              "description": "Registry source identifier, e.g. `huggingface`.",
-                              "type": "string"
-                            },
-                            "blobCoreKey": {
-                              "description": "Hyperdrive blob core key for the model file.",
-                              "type": "string"
-                            },
-                            "blobIndex": {
-                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
-                              "type": "number"
-                            },
-                            "engine": {
-                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
-                              "type": "string"
-                            },
-                            "expectedSize": {
-                              "description": "Expected total size of the model file in bytes.",
-                              "type": "number"
-                            },
-                            "sha256Checksum": {
-                              "description": "Expected SHA-256 checksum of the model file.",
-                              "type": "string"
-                            },
-                            "addon": {
-                              "description": "Inference addon / capability category this model belongs to.",
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "llamacpp-completion",
-                                    "whispercpp-transcription",
-                                    "bci-whispercpp-transcription",
-                                    "llamacpp-embedding",
-                                    "nmtcpp-translation",
-                                    "onnx-tts",
-                                    "tts-ggml",
-                                    "parakeet-transcription",
-                                    "ggml-ocr",
-                                    "sdcpp-generation",
-                                    "audiogen-ggml",
-                                    "ggml-vla",
-                                    "ggml-classification",
-                                    "llm",
-                                    "whisper",
-                                    "bci",
-                                    "embeddings",
-                                    "nmt",
-                                    "parakeet",
-                                    "tts",
-                                    "ocr",
-                                    "diffusion",
-                                    "audiogen",
-                                    "vla",
-                                    "classification"
-                                  ],
-                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon"
-                                },
-                                {
-                                  "type": "string",
-                                  "const": "vad"
-                                }
-                              ]
-                            }
-                          },
-                          "required": ["src"],
-                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc"
-                        }
-                      ],
-                      "description": "Text-encoder model source; turns the caption and lyrics into embeddings."
-                    },
-                    "lmModelSrc": {
-                      "anyOf": [
-                        {
-                          "type": "string"
+                        "useGPU": {
+                          "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
+                          "type": "boolean"
                         },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "src": {
-                              "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
-                            },
-                            "name": {
-                              "description": "Display name for this model instance; overrides the name derived from the source.",
-                              "type": "string"
-                            },
-                            "modelId": {
-                              "description": "Unique identifier used to reference the model in QVAC calls.",
-                              "type": "string"
-                            },
-                            "registryPath": {
-                              "description": "Registry-relative path to the model (set for registry-backed models).",
-                              "type": "string"
-                            },
-                            "registrySource": {
-                              "description": "Registry source identifier, e.g. `huggingface`.",
-                              "type": "string"
-                            },
-                            "blobCoreKey": {
-                              "description": "Hyperdrive blob core key for the model file.",
-                              "type": "string"
-                            },
-                            "blobIndex": {
-                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
-                              "type": "number"
-                            },
-                            "engine": {
-                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
-                              "type": "string"
-                            },
-                            "expectedSize": {
-                              "description": "Expected total size of the model file in bytes.",
-                              "type": "number"
-                            },
-                            "sha256Checksum": {
-                              "description": "Expected SHA-256 checksum of the model file.",
-                              "type": "string"
-                            },
-                            "addon": {
-                              "description": "Inference addon / capability category this model belongs to.",
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "llamacpp-completion",
-                                    "whispercpp-transcription",
-                                    "bci-whispercpp-transcription",
-                                    "llamacpp-embedding",
-                                    "nmtcpp-translation",
-                                    "onnx-tts",
-                                    "tts-ggml",
-                                    "parakeet-transcription",
-                                    "ggml-ocr",
-                                    "sdcpp-generation",
-                                    "audiogen-ggml",
-                                    "ggml-vla",
-                                    "ggml-classification",
-                                    "llm",
-                                    "whisper",
-                                    "bci",
-                                    "embeddings",
-                                    "nmt",
-                                    "parakeet",
-                                    "tts",
-                                    "ocr",
-                                    "diffusion",
-                                    "audiogen",
-                                    "vla",
-                                    "classification"
-                                  ],
-                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon"
-                                },
-                                {
-                                  "type": "string",
-                                  "const": "vad"
-                                }
-                              ]
-                            }
-                          },
-                          "required": ["src"],
-                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc"
-                        }
-                      ],
-                      "description": "Language-model source; plans the song structure."
-                    },
-                    "ditModelSrc": {
-                      "anyOf": [
-                        {
-                          "type": "string"
+                        "threads": {
+                          "description": "CPU thread count; `0` (default) lets the engine auto-pick.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
                         },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "src": {
-                              "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
-                            },
-                            "name": {
-                              "description": "Display name for this model instance; overrides the name derived from the source.",
-                              "type": "string"
-                            },
-                            "modelId": {
-                              "description": "Unique identifier used to reference the model in QVAC calls.",
-                              "type": "string"
-                            },
-                            "registryPath": {
-                              "description": "Registry-relative path to the model (set for registry-backed models).",
-                              "type": "string"
-                            },
-                            "registrySource": {
-                              "description": "Registry source identifier, e.g. `huggingface`.",
-                              "type": "string"
-                            },
-                            "blobCoreKey": {
-                              "description": "Hyperdrive blob core key for the model file.",
-                              "type": "string"
-                            },
-                            "blobIndex": {
-                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
-                              "type": "number"
-                            },
-                            "engine": {
-                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
-                              "type": "string"
-                            },
-                            "expectedSize": {
-                              "description": "Expected total size of the model file in bytes.",
-                              "type": "number"
-                            },
-                            "sha256Checksum": {
-                              "description": "Expected SHA-256 checksum of the model file.",
-                              "type": "string"
-                            },
-                            "addon": {
-                              "description": "Inference addon / capability category this model belongs to.",
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "llamacpp-completion",
-                                    "whispercpp-transcription",
-                                    "bci-whispercpp-transcription",
-                                    "llamacpp-embedding",
-                                    "nmtcpp-translation",
-                                    "onnx-tts",
-                                    "tts-ggml",
-                                    "parakeet-transcription",
-                                    "ggml-ocr",
-                                    "sdcpp-generation",
-                                    "audiogen-ggml",
-                                    "ggml-vla",
-                                    "ggml-classification",
-                                    "llm",
-                                    "whisper",
-                                    "bci",
-                                    "embeddings",
-                                    "nmt",
-                                    "parakeet",
-                                    "tts",
-                                    "ocr",
-                                    "diffusion",
-                                    "audiogen",
-                                    "vla",
-                                    "classification"
-                                  ],
-                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon"
-                                },
-                                {
-                                  "type": "string",
-                                  "const": "vad"
-                                }
-                              ]
-                            }
-                          },
-                          "required": ["src"],
-                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc"
-                        }
-                      ],
-                      "description": "DiT model source; generates the audio latent (the quality-defining stage)."
-                    },
-                    "vaeModelSrc": {
-                      "anyOf": [
-                        {
-                          "type": "string"
+                        "backendsDir": {
+                          "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+                          "type": "string",
+                          "minLength": 1
                         },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "src": {
-                              "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
-                            },
-                            "name": {
-                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                        "inferenceSteps": {
+                          "description": "DiT sampling steps; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / sft 50).",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "shift": {
+                          "description": "Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "nGpuLayers": {
+                          "description": "ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "textEncModelSrc": {
+                          "anyOf": [
+                            {
                               "type": "string"
                             },
-                            "modelId": {
-                              "description": "Unique identifier used to reference the model in QVAC calls.",
-                              "type": "string"
-                            },
-                            "registryPath": {
-                              "description": "Registry-relative path to the model (set for registry-backed models).",
-                              "type": "string"
-                            },
-                            "registrySource": {
-                              "description": "Registry source identifier, e.g. `huggingface`.",
-                              "type": "string"
-                            },
-                            "blobCoreKey": {
-                              "description": "Hyperdrive blob core key for the model file.",
-                              "type": "string"
-                            },
-                            "blobIndex": {
-                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
-                              "type": "number"
-                            },
-                            "engine": {
-                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
-                              "type": "string"
-                            },
-                            "expectedSize": {
-                              "description": "Expected total size of the model file in bytes.",
-                              "type": "number"
-                            },
-                            "sha256Checksum": {
-                              "description": "Expected SHA-256 checksum of the model file.",
-                              "type": "string"
-                            },
-                            "addon": {
-                              "description": "Inference addon / capability category this model belongs to.",
-                              "anyOf": [
-                                {
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
                                   "type": "string",
-                                  "enum": [
-                                    "llamacpp-completion",
-                                    "whispercpp-transcription",
-                                    "bci-whispercpp-transcription",
-                                    "llamacpp-embedding",
-                                    "nmtcpp-translation",
-                                    "onnx-tts",
-                                    "tts-ggml",
-                                    "parakeet-transcription",
-                                    "ggml-ocr",
-                                    "sdcpp-generation",
-                                    "audiogen-ggml",
-                                    "ggml-vla",
-                                    "ggml-classification",
-                                    "llm",
-                                    "whisper",
-                                    "bci",
-                                    "embeddings",
-                                    "nmt",
-                                    "parakeet",
-                                    "tts",
-                                    "ocr",
-                                    "diffusion",
-                                    "audiogen",
-                                    "vla",
-                                    "classification"
-                                  ],
-                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon"
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
-                                {
-                                  "type": "string",
-                                  "const": "vad"
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
                                 }
-                              ]
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc"
                             }
-                          },
-                          "required": ["src"],
-                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc"
+                          ],
+                          "description": "Text-encoder model source; turns the caption and lyrics into embeddings."
+                        },
+                        "lmModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc"
+                            }
+                          ],
+                          "description": "Language-model source; plans the song structure."
+                        },
+                        "ditModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc"
+                            }
+                          ],
+                          "description": "DiT model source; generates the audio latent (the quality-defining stage)."
+                        },
+                        "vaeModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc"
+                            }
+                          ],
+                          "description": "VAE model source; decodes the latent into the output waveform."
                         }
-                      ],
-                      "description": "VAE model source; decodes the latent into the output waveform."
+                      },
+                      "required": ["textEncModelSrc", "lmModelSrc", "ditModelSrc", "vaeModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestep"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "engine": {
+                          "type": "string",
+                          "const": "minimax",
+                          "description": "Use the MiniMax-Music3 generation engine."
+                        },
+                        "useGPU": {
+                          "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
+                          "type": "boolean"
+                        },
+                        "threads": {
+                          "description": "CPU thread count; `0` (default) lets the engine auto-pick.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "backendsDir": {
+                          "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "inferenceSteps": {
+                          "description": "MiniMax flow sampling steps; `0` uses the model default.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000
+                        },
+                        "cfgScale": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 3.4028234663852886e38,
+                          "description": "MiniMax flow classifier-free guidance scale; `0` uses the model default."
+                        },
+                        "lmModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc"
+                            }
+                          ],
+                          "description": "MiniMax language-model source; generates semantic music tokens."
+                        },
+                        "synthModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc"
+                            }
+                          ],
+                          "description": "MiniMax synthesis-model source; converts semantic tokens into the output waveform."
+                        }
+                      },
+                      "required": ["engine", "lmModelSrc", "synthModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimax"
                     }
-                  },
-                  "required": ["textEncModelSrc", "lmModelSrc", "ditModelSrc", "vaeModelSrc"],
-                  "additionalProperties": false,
-                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfig"
+                  ]
                 }
               },
               "required": ["type", "modelSrc", "modelType", "modelConfig"],
@@ -14265,6 +14579,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -14363,6 +14685,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -14420,6 +14750,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -15515,7 +15853,10 @@
                   {
                     "type": "number"
                   }
-                ]
+                ],
+                "items": false,
+                "minItems": 4,
+                "maxItems": 4
               },
               "confidence": {
                 "type": "number"
