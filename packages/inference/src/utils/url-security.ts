@@ -11,7 +11,7 @@
 
 const HUGGING_FACE_HOSTS = new Set(['huggingface.co', 'hf.co'])
 
-type HeaderBag = Record<string, string | string[] | number | undefined>
+export type HeaderBag = Record<string, string | string[] | number | undefined>
 
 function stripBrackets(host: string): string {
   return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host

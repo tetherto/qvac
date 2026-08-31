@@ -2,7 +2,12 @@ import http from 'bare-http1'
 import https from 'bare-https'
 import type { Readable } from 'bare-stream'
 import type { AbortSignal } from 'bare-abort-controller'
-import { extractHubSha256, isHuggingFaceHost, isSecureDownloadUrl } from '@/utils/url-security'
+import {
+  extractHubSha256,
+  isHuggingFaceHost,
+  isSecureDownloadUrl,
+  type HeaderBag
+} from '@/utils/url-security'
 import { DownloadCancelledError, InsecureModelSourceError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 
@@ -16,7 +21,7 @@ type IncomingMessage = http.IncomingMessage
 export interface SafeFetchResponse {
   status: number
   statusText: string
-  headers: Record<string, string | number>
+  headers: HeaderBag
   /** Terminal response body. Consume or destroy it to free the socket. */
   body: Readable
   /** URL of the final (non-redirect) response. */
