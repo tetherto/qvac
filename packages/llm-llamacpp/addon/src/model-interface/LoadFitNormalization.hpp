@@ -93,7 +93,6 @@ struct NormalizedLoad {
   common_params params;
   NormalizedFitSnapshot fitSnapshot;
   std::optional<int> adrenoVersion;
-  llama_pos configuredNDiscarded = 0;
   int64_t runtimeBackendDevice = 0;
 };
 

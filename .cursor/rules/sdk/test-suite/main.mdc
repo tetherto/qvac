@@ -39,10 +39,7 @@ npm run build   # tsc
 
 ## CI
 
-`SDK Pod Checks` gates this package: `format`, `lint`, `typecheck` and `build` run on every PR touching
-it. `trigger-reusable-lib-test-suite.yml` publishes it — GPR dev builds from `main`, `feature-*` and
-`tmp-*`, public npm from `release-test-suite-*`. Because the package ships only compiled output and has
-no `prepare` script, `dist` is built once in a dedicated job and downloaded by each publish job.
-
-The SDK e2e consumer wiring — the `test-suite-source` selector on `test-sdk.yml` — lands with the
-consumer migration, not here.
+`.github/workflows/test-sdk.yml` selects which framework build a run uses via `test-suite-source`
+(`manifest` | `branch` | `npm`), resolved once in the `prepare-test-suite` job and applied per platform by
+`.github/actions/sdk-e2e-prepare-test-suite`. A PR touching this package runs its e2e suite in `branch`
+mode automatically.

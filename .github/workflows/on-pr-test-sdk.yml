@@ -18,6 +18,7 @@ on:
     paths:
       - "packages/sdk/**"
       - "packages/inference/**"
+      - "packages/test-suite/**"
 
 permissions:
   actions: read
@@ -102,6 +103,7 @@ jobs:
       suite: ${{ needs.resolve-config.outputs.suite }}
       test-version: ${{ github.event.pull_request.head.sha }}
       inference-source: branch
+      test-suite-source: branch
     secrets: inherit
 
   apply-label:

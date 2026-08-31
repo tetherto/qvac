@@ -8,7 +8,7 @@ import {
   OCR_DOCTR,
   BERGAMOT_EN_FR
 } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   modelLoadLlm,
