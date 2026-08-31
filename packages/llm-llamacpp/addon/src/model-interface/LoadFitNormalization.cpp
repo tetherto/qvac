@@ -305,7 +305,7 @@ void tuneLoadConfigMap(
   // and cuts KV-cache memory ~47%. CPU keeps the f16 default — ARM q8_0 carries
   // a measured quality and decode-throughput cost. OpenCL (Adreno) is also
   // EXCLUDED: q8_0 attention works there, but quantized KV-cache *shifts*
-  // (sliding context / context management) abort natively in
+  // (reasoning-block compaction / state restore) abort natively in
   // llama_kv_cache::update on Adreno, so f16 stays the safe default — and
   // block 3 now *rejects* any explicit quantized KV on OpenCL (q8_0 and q4_0
   // both crash on a shift). Also skipped for finetuning (manages its own KV
@@ -353,11 +353,11 @@ void tuneLoadConfigMap(
 
   // 3. OpenCL (Adreno): reject ALL quantized KV-cache types. q4_0/q8_0
   // attention works, but a quantized K cache needs a
-  // dequantize->RoPE->requantize copy on every KV-cache *shift* (sliding
-  // context / context management), and ggml-opencl has no F32->quantized copy
-  // kernel for that requantize step — so the shift aborts natively in
+  // dequantize->RoPE->requantize copy on every KV-cache *shift* (reasoning-
+  // block compaction / state restore), and ggml-opencl has no F32->quantized
+  // copy kernel for that requantize step, so the shift aborts natively in
   // llama_kv_cache::update on Adreno. Confirmed for BOTH q8_0 and q4_0 (CI run
-  // 28448086915: S25/S26 crash on a q4_0 sliding shift; Mali Vulkan passes).
+  // 28448086915: S25/S26 crash on a q4_0 KV-cache shift; Mali Vulkan passes).
   // Only f32/f16/bf16 are safe on OpenCL. Metal: standard quant types are
   // supported; only TurboQuant/PolarQuant is rejected.
   if (isOpenCl || isMetal) {
@@ -403,8 +403,8 @@ void tuneLoadConfigMap(
                 "[LlamaModel] cache-type-%s=%s: quantized KV-cache is not "
                 "supported on the OpenCL (Adreno) backend. A quantized K or V "
                 "cache aborts in llama_kv_cache::update on KV-cache shifts / "
-                "cache management (sliding context, state restore) — "
-                "ggml-opencl has no F32->quantized copy kernel for the "
+                "cache management (reasoning-block compaction, state restore), "
+                "because ggml-opencl has no F32->quantized copy kernel for the "
                 "requantize step (true for q8_0 and q4_0 alike). Use "
                 "cache-type-%s f32/f16/bf16, or switch device to a Vulkan GPU "
                 "or CPU.\n",
@@ -586,28 +586,6 @@ NormalizedLoad normalizeLoadForFit(
 
   qvac_lib_inference_addon_llama::applyLoadConfigHandlers(
       params, configFilemap);
-
-  // parse custom nDiscarded from config (apply only if > 0)
-  if (auto iter = configFilemap.find("n_discarded");
-      iter != configFilemap.end()) {
-    try {
-      long long parsed = std::stoll(iter->second);
-      if (parsed > 0) {
-        result.configuredNDiscarded = static_cast<llama_pos>(parsed);
-      }
-    } catch (...) {
-      std::string errorMsg = string_format(
-          "%s: invalid n_discarded value: %s\n",
-          K_LEGACY_PARSER_NAME.data(),
-          iter->second.c_str());
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          errorMsg);
-    }
-    configFilemap.erase(iter);
-  }
 
   llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
   auto hIt = configFilemap.find("split-mode");

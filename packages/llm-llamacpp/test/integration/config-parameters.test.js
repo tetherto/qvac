@@ -86,11 +86,10 @@ const scenarios = [
     expectSuccess: true
   },
   {
-    name: 'Sliding context parameters accepted',
+    name: 'Large context parameters accepted',
     overrides: {
       ctx_size: '4096',
       n_predict: '64',
-      n_discarded: '20',
       temp: '0.95',
       top_k: '50'
     },
@@ -240,8 +239,7 @@ const scenarios = [
       presence_penalty: '-0.5',
       frequency_penalty: '-0.6',
       gpu_layers: '-3',
-      'main-gpu': '-1',
-      n_discarded: '-4'
+      'main-gpu': '-1'
     },
     skipInferenceAfterLoad: true
   },

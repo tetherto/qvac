@@ -24,7 +24,7 @@ import { resolveServeApiKey } from './api-key.js'
 import { checkNetworkExposure, validateServeStartup } from './startup.js'
 import { createModelRegistry } from './core/model-registry.js'
 import { createLoadManager, defaultLoadFn } from './core/load-manager.js'
-import { preloadModels, shutdownSDK } from './core/lifecycle.js'
+import { preloadModels, shouldRefuseStart, shutdownSDK } from './core/lifecycle.js'
 import { createResponsesStore } from './adapters/openai/responses-store.js'
 import { createChunkAttributionStore } from './adapters/openai/chunk-attribution-store.js'
 import { createEphemeralFilesStore } from './adapters/openai/ephemeral-files-store.js'
@@ -254,12 +254,16 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
   // keeping the port closed until models are ready, matching the pre-Fastify
   // semantics that the e2e suite depends on.
   await app.ready()
-  await preloadModels(
+  const preload = await preloadModels(
     app.qvac.serveConfig,
     app.qvac.registry,
     app.qvac.logger,
     app.qvac.loadManager
   )
+  if (shouldRefuseStart(app.qvac.serveConfig.load, preload)) {
+    await app.close().catch(() => {})
+    throw new Error(`All ${preload.attempted} preload model(s) failed to load; refusing to start.`)
+  }
   app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
   app.qvac.logger.warn(app.qvac.videoJobsStore.bannerLine())
 

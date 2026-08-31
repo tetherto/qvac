@@ -27,8 +27,6 @@ public:
   GenerationStopReason terminalReason = GenerationStopReason::None;
 
   [[nodiscard]] llama_pos getNPast() const override { return 0; }
-  [[nodiscard]] int32_t getNSlides() const override { return 0; }
-  [[nodiscard]] bool supportsSliding() const override { return true; }
   PrefillPlan preparePrefill(
       const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
       const std::vector<std::vector<uint8_t>>&,
@@ -59,9 +57,7 @@ public:
     return rollbackOk;
   }
   bool rollbackOk = true;
-  [[nodiscard]] bool loadCache(const std::string&, llama_pos) override {
-    return false;
-  }
+  [[nodiscard]] bool loadCache(const std::string&) override { return false; }
   void saveCache(const std::string&) const override {}
 
   [[nodiscard]] bool fired(const std::string& hook) const {
@@ -109,19 +105,22 @@ TEST(ContinuousBatchFinalize, NaturalFinishRunsGenerationFinishedHook) {
   EXPECT_EQ(driver.terminalReason, GenerationStopReason::None);
 }
 
-/// Scheduler-imposed per-sequence cap is a known truncation reason. Preserve it
-/// at the finalization boundary so recurrent drivers can roll back open
-/// reasoning spans instead of treating the slot as a normal completion and
-/// attempting strict compaction.
-TEST(ContinuousBatchFinalize, LimitReachedPropagatesSequenceLimit) {
+/// A slot whose context window filled must reach the driver as
+/// ContextOverflow, not as the per-sequence cap. Collapsing the two makes a
+/// full context indistinguishable from a prediction-limit cutoff for every
+/// batched caller.
+TEST(ContinuousBatchFinalize, ContextOverflowPropagatesContextOverflow) {
   RecordingDriver driver;
   (void)finalizeTerminalDriver(
-      driver, StopReason::LimitReached, /*prefillOnly=*/false, kNoCallback);
+      driver, StopReason::ContextOverflow, /*prefillOnly=*/false, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onGenerationFinished"));
-  EXPECT_EQ(driver.terminalReason, GenerationStopReason::SequenceLimit);
+  EXPECT_EQ(driver.terminalReason, GenerationStopReason::ContextOverflow);
 }
 
+// `SequenceLimit` is unreachable in production (nothing produces it since the
+// batched full-window stop became `ContextOverflow`); it is pinned here so the
+// classifier keeps covering it if a producer ever returns.
 TEST(GenerationStopReason, IdentifiesReasoningTruncations) {
   EXPECT_TRUE(
       isKnownReasoningTruncation(GenerationStopReason::PredictionLimit));

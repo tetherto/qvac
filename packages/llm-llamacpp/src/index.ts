@@ -149,6 +149,25 @@ function promptToAddonMessages(
   return promptMessages;
 }
 
+// Every key the addon binding reads. Mirrors GENERATION_PARAM_HANDLERS in
+// `addon/src/handlers/GenerationParamHandlers.cpp`, which pulls each key it
+// knows by name and ignores the rest of the object. Keep the two in sync when
+// a param is added.
+const GENERATION_PARAM_KEYS: ReadonlySet<string> = new Set([
+  "temp",
+  "top_p",
+  "top_k",
+  "predict",
+  "seed",
+  "frequency_penalty",
+  "presence_penalty",
+  "repeat_penalty",
+  "grammar",
+  "json_schema",
+  "reasoning_budget",
+  "remove_thinking_from_context",
+]);
+
 // Normalizes the per-request `generationParams.json_schema` field. The
 // addon binding expects a string; callers commonly pass a plain object
 // (a JSON Schema literal) for ergonomics, so we stringify it here. Also
@@ -159,21 +178,53 @@ function normalizeGenerationParams(
 ): GenerationParams | undefined {
   if (generationParams === undefined) return undefined;
 
+  // TypeScript rejects an unknown key on an object literal, so this only ever
+  // fires for JavaScript callers and for objects built up dynamically. Those
+  // used to be dropped in silence: a near miss like `n_predict` for `predict`
+  // ran with the load-time default and looked like the override had applied.
+  //
+  // `Reflect.ownKeys`, not `Object.keys`: the addon reads each parameter with
+  // a named get that walks the prototype chain, so a non-enumerable own key
+  // would pass an `Object.keys` check and still be applied. Symbol keys are
+  // skipped because a named get cannot reach them.
+  const source = generationParams as Record<string, unknown>;
+  const unknownKeys = Reflect.ownKeys(source).filter(
+    (key): key is string => typeof key === "string" && !GENERATION_PARAM_KEYS.has(key),
+  );
+  if (unknownKeys.length > 0) {
+    throw new TypeError(
+      `generationParams has unknown ${unknownKeys.length === 1 ? "key" : "keys"}: ` +
+        `${unknownKeys.join(", ")}. Valid keys are ` +
+        `${[...GENERATION_PARAM_KEYS].join(", ")}`,
+    );
+  }
+
+  // Hand the addon a null-prototype copy carrying only own known keys. Both
+  // halves matter: copying own keys only means a polluted `Object.prototype`
+  // cannot smuggle a value past the check above, and the null prototype means
+  // the addon's named get has nowhere else to look.
+  const params = Object.create(null) as Record<string, unknown>;
+  for (const key of GENERATION_PARAM_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+    const value = source[key];
+    if (value !== undefined) params[key] = value;
+  }
+  const sanitized = params as GenerationParams;
+
   if (
-    generationParams.remove_thinking_from_context !== undefined &&
-    typeof generationParams.remove_thinking_from_context !== "boolean"
+    sanitized.remove_thinking_from_context !== undefined &&
+    typeof sanitized.remove_thinking_from_context !== "boolean"
   ) {
     throw new TypeError(
       "generationParams.remove_thinking_from_context must be a boolean when provided",
     );
   }
 
-  const hasGrammar =
-    typeof generationParams.grammar === "string" && generationParams.grammar.length > 0;
+  const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
   const hasJsonSchema =
-    generationParams.json_schema !== undefined &&
-    generationParams.json_schema !== null &&
-    !(typeof generationParams.json_schema === "string" && generationParams.json_schema.length === 0);
+    sanitized.json_schema !== undefined &&
+    sanitized.json_schema !== null &&
+    !(typeof sanitized.json_schema === "string" && sanitized.json_schema.length === 0);
 
   if (hasGrammar && hasJsonSchema) {
     throw new TypeError(
@@ -181,17 +232,14 @@ function normalizeGenerationParams(
     );
   }
 
-  if (!hasJsonSchema) return generationParams;
+  if (!hasJsonSchema) return sanitized;
 
   let jsonSchemaString: string;
-  if (typeof generationParams.json_schema === "string") {
-    jsonSchemaString = generationParams.json_schema;
-  } else if (
-    typeof generationParams.json_schema === "object" &&
-    !Array.isArray(generationParams.json_schema)
-  ) {
+  if (typeof sanitized.json_schema === "string") {
+    jsonSchemaString = sanitized.json_schema;
+  } else if (typeof sanitized.json_schema === "object" && !Array.isArray(sanitized.json_schema)) {
     try {
-      jsonSchemaString = JSON.stringify(generationParams.json_schema);
+      jsonSchemaString = JSON.stringify(sanitized.json_schema);
     } catch (err) {
       throw new TypeError(
         "generationParams.json_schema is not JSON-serializable: " + (err as Error).message,
@@ -203,7 +251,8 @@ function normalizeGenerationParams(
     );
   }
 
-  return { ...generationParams, json_schema: jsonSchemaString };
+  params.json_schema = jsonSchemaString;
+  return sanitized;
 }
 
 const VALIDATION_TYPES = ["none", "split", "dataset"];
@@ -976,7 +1025,6 @@ namespace LlmLlamacpp {
     frequency_penalty?: NumericLike;
     tools?: boolean | string;
     verbosity?: NumericLike;
-    n_discarded?: NumericLike;
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- `NumericLike` documents the expected form; any string is accepted.
     "main-gpu"?: NumericLike | string;
     /**
@@ -1138,33 +1186,31 @@ namespace LlmLlamacpp {
      * text and multimodal contexts. No-op for models without a recognised
      * reasoning channel.
      *
-     * Recurrent / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba,
-     * Granite-Hybrid, ...) are supported when the reasoning close
-     * marker tokenises to a single vocab token. The recurrent half of
-     * the memory module is snapshotted at the end-of-prefill boundary
-     * and restored at end-of-generation. The replay buffer then feeds
-     * any generated-opener seed tokens, the canonical close marker, and
-     * the post-reasoning tail back through the decoder so both KV halves
-     * stay consistent. Chat templates that force-open the reasoning
-     * channel during prefill and templates that let the model generate
-     * the opener are both supported: on the generated-opener path, every
-     * sampled token from end-of-prefill up to and including the opener
-     * flip is seeded into the replay buffer so the restored snapshot
-     * still lands in a balanced `<think>...</think>` state on the next
-     * turn. If a hybrid / recurrent model uses a multi-token close
-     * marker while this feature is enabled, the request fails with
-     * `StatusError` instead of silently preserving reasoning in cache.
-     * Prefill-only
-     * (cache-warm) requests are exempt from this check: they never
-     * enter generation and cannot emit reasoning tokens, so a cache
-     * warm on a non-conforming hybrid model still succeeds.
+     * Every model kind is handled the same way: the sequence is rewound to a
+     * boundary anchored BEFORE the reasoning span, and the tokens that sit
+     * outside the span, the pre-reasoning preamble and the answer tail, are
+     * replayed through the decoder. Only the anchor's form differs. Recurrent
+     * / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba, Granite-Hybrid, ...)
+     * anchor a full-state snapshot, because the recurrent half cannot be
+     * rewound by dropping cells; pure-attention models anchor a bare position
+     * and rewind with a tail trim.
+     *
+     * No structural reasoning marker is seeded or replayed, so the compacted
+     * cache is preamble plus answer with no `<think>` / `</think>` scaffold
+     * left behind, and close-marker length decides nothing: a marker that
+     * tokenises to several pieces is supported like any other. Chat templates
+     * that force-open the reasoning channel during prefill and templates that
+     * let the model generate the opener are both supported; on the
+     * generated-opener path the sampled pieces that open the block are clipped
+     * out of the replay rather than rebuilt.
+     *
+     * Prefill-only (cache-warm) requests anchor nothing: they never enter
+     * generation and cannot emit reasoning tokens.
      *
      * Uniform hard-fail contract: any inability to remove the reasoning
-     * span from cache — whether the end-of-prefill boundary snapshot
-     * capture, the pure-attention `seq_rm + seq_add` primitive, the
-     * hybrid restore / replay step, or an unsupported multi-token
-     * recurrent close marker — is surfaced to the caller as a
-     * `StatusError`. There is no soft-failure counter: if the feature is
+     * span from cache, whether the boundary anchor, the rewind, or the
+     * replay step, is surfaced to the caller as a `StatusError`. There is no
+     * soft-failure counter: if the feature is
      * enabled and cache cleanup cannot complete, the final request result is
      * failed rather than reported as a successful answer with the reasoning span
      * still resident in cache.
@@ -1178,18 +1224,16 @@ namespace LlmLlamacpp {
      *
      * Before throwing, the affected sequence is cleaned up so that the
      * next request on the same context starts from a coherent state:
-     *   * Pure-attention `seq_rm + seq_add` rejection — the primitive
-     *     is documented all-or-nothing, so live KV is unchanged when
-     *     compaction is rejected. The driver drops the current
-     *     request's contribution (`[preRequestCursor, currentCursor)`)
-     *     from live memory and restores its positional accounting to
-     *     the pre-request cursor before throwing, so both driver
-     *     metadata and live KV agree on the pre-request state.
-     *   * Boundary-capture or hybrid restore / replay failure — the
-     *     driver rolls back to its pre-request checkpoint (or clears
-     *     the sequence entirely on restore underflow) and resets
-     *     positional accounting so subsequent turns cannot decode into
-     *     contaminated positions.
+     *   * Boundary-anchor failure: nothing has been rewound yet, so the
+     *     driver rolls back to its pre-prompt checkpoint (or clears the
+     *     sequence entirely on restore underflow) and resets positional
+     *     accounting, then rethrows.
+     *   * Rewind or replay failure: compaction rewinds before it replays,
+     *     so live KV has already been written to by this point and a tail
+     *     trim can no longer reach a coherent state. The compactor
+     *     best-effort wipes the sequence and the driver zeroes its
+     *     positional accounting to match, so subsequent turns cannot decode
+     *     into contaminated positions.
      *
      * On the continuous-batch path, the scheduler's error-recovery leg
      * deliberately does NOT persist the failed slot's cache: when the
@@ -1300,8 +1344,6 @@ namespace LlmLlamacpp {
     CacheTokens: number;
     generatedTokens: number;
     promptTokens: number;
-    /** Context-window slides for single requests, or the sum across completed batch slots. */
-    contextSlides: number;
     /**
      * Number of `<think>` (or model-equivalent) reasoning blocks dropped
      * from the KV cache at end-of-generation by the
