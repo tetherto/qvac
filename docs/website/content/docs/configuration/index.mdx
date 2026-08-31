@@ -24,6 +24,8 @@ Values marked with `<placeholders>` should be replaced with your actual values.
   "cacheDirectory": "</absolute/path/to/.qvac/models>",
   "httpDownloadConcurrency": 3,
   "httpConnectionTimeoutMs": 10000,
+  "requireHttpChecksum": false,
+  "requireSecureTransport": false,
   "registryDownloadMaxRetries": 3,
   "registryStreamTimeoutMs": 60000,
   "rpcInitTimeoutMs": 30000,
@@ -65,6 +67,8 @@ The following table lists all supported configuration options for `qvac.config.*
 | `cacheDirectory` | Absolute path to the directory where models and other cached assets are stored. | `string` | No | `~/.qvac/models` |
 | `httpDownloadConcurrency` | Maximum number of concurrent HTTP downloads for sharded models. | `number` | No | `3` |
 | `httpConnectionTimeoutMs` | Timeout in milliseconds for HTTP connection establishment (applies to HEAD and GET requests). | `number` | No | `10000` |
+| `requireHttpChecksum` | Reject a Hugging Face download that exposes no usable SHA-256 (instead of downloading it unverified). Hugging Face downloads are always verified when a hash is available regardless of this flag. | `boolean` | No | `false` |
+| `requireSecureTransport` | Reject plaintext `http://` and HTTPS→HTTP downgrade redirects for **every** HTTP source (loopback exempt). When off, this is enforced only for Hugging Face sources; bring-your-own HTTP is left as-is. | `boolean` | No | `false` |
 | `registryDownloadMaxRetries` | Maximum retry attempts for registry (P2P) downloads on timeout. | `number` | No | `3` |
 | `registryStreamTimeoutMs` | Timeout in milliseconds for stalled registry (P2P) download streams. Raise on slow or high-latency connections where the default triggers spurious retries. | `number` | No | `60000` |
 | `rpcInitTimeoutMs` | Timeout in milliseconds for the worker RPC handshake performed when the SDK initializes. Raise on slow storage or embedded hardware where the first worker start legitimately exceeds the default. Overridden by the `QVAC_RPC_INIT_TIMEOUT_MS` environment variable. | `number` | No | `30000` |
