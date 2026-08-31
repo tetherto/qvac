@@ -87,6 +87,11 @@ env:
   PREBUILD_PREFIX: infer-cpp-
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Manual (workflow_dispatch) runs must name a device that exists on Device
   # Farm. This gate fails fast BEFORE the (~90 min) build or any Device Farm
   # run, so a typo or an empty selection costs nothing. Skipped for workflow_call.
@@ -278,9 +283,9 @@ jobs:
     # On a manual single-platform dispatch, skip the unused platform's prebuild
     # (so an Android-only run is not blocked by an iOS prebuild) and fail fast on
     # a bad/empty device selection. validate-devices is skipped on workflow_call.
-    needs: [host-test, validate-devices]
-    if: ${{ !cancelled() && needs.host-test.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (inputs.platform == '' || inputs.platform == 'Android') }}
-    runs-on: ubuntu-24.04
+    needs: [runner_names, host-test, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.host-test.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (inputs.platform == '' || inputs.platform == 'Android') }}
+    runs-on: ${{ needs.runner_names.outputs.ubuntu_2404 }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -338,9 +343,9 @@ jobs:
     # On a manual single-platform dispatch, skip the unused platform's prebuild
     # (so an iOS-only run is not blocked by an Android prebuild) and fail fast on
     # a bad/empty device selection. validate-devices is skipped on workflow_call.
-    needs: [host-test, validate-devices]
-    if: ${{ !cancelled() && needs.host-test.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (inputs.platform == '' || inputs.platform == 'iOS') }}
-    runs-on: macos-14
+    needs: [runner_names, host-test, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.host-test.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (inputs.platform == '' || inputs.platform == 'iOS') }}
+    runs-on: ${{ needs.runner_names.outputs.macos_ios }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -404,6 +409,7 @@ jobs:
     # this job running); on a manual run a bad/empty device selection blocks the
     # build before it starts, so no ~90-min build is wasted on a typo.
     needs:
+      - runner_names
       - resolve-framework
       - prebuild-android
       - prebuild-ios
@@ -413,8 +419,8 @@ jobs:
     # platform the dispatcher chose. workflow_call (inputs.platform == '') still
     # requires both prebuilds. NOTE: matrix.* is unavailable in a job-level if
     # (evaluated pre-fan-out), so the discriminator is inputs.platform, not matrix.
-    if: ${{ !cancelled() && needs.resolve-framework.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && ((inputs.platform == 'Android' && needs.prebuild-android.result == 'success') || (inputs.platform == 'iOS' && needs.prebuild-ios.result == 'success') || (inputs.platform == '' && needs.prebuild-android.result == 'success' && needs.prebuild-ios.result == 'success')) }}
-    runs-on: ${{ matrix.runner }}
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.resolve-framework.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && ((inputs.platform == 'Android' && needs.prebuild-android.result == 'success') || (inputs.platform == 'iOS' && needs.prebuild-ios.result == 'success') || (inputs.platform == '' && needs.prebuild-android.result == 'success' && needs.prebuild-ios.result == 'success')) }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2204_x64 }}
     environment: release
     # Exceeds the 30m default: npm install + expo prebuild + Gradle/xcodebuild.
     timeout-minutes: 90
@@ -427,7 +433,7 @@ jobs:
       fail-fast: false
       # On workflow_dispatch, build only the chosen platform. workflow_call
       # builds both platforms as before.
-      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04"},{"platform":"iOS","os":"macos-14"}]}') }}
 
     steps:
       # persist-credentials:false here too, not just on the addon checkout below:
@@ -724,3 +730,5 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
+
