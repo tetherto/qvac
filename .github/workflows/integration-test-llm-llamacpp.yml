@@ -58,7 +58,13 @@ on:
         default: false
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-integration-tests:
+    needs: runner_names
     # smoke_timeout_minutes applies only in default mode; qvac_perf_only runs
     # the full perf list and keeps the leg's normal timeout_minutes.
     timeout-minutes: ${{ (!inputs.qvac_perf_only && matrix.smoke_timeout_minutes) || matrix.timeout_minutes || 360 }}
@@ -88,43 +94,43 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
             label: linux-x64-u22-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
             timeout_minutes: 480
             label: linux-x64-u24-gpu
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404_arm }}
             no_gpu: 'true'
             label: linux-arm64-u24
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-            runner: ubuntu-22.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
             no_gpu: 'true'
             label: linux-arm64-u22
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
             label: darwin-arm64
           # Smoke check for the x64 prebuild; darwin-arm64 runs the full suite.
           - os: macos-15-large
             platform: darwin
             arch: x64
-            runner: macos-15-large
+            runner: ${{ needs.runner_names.outputs.macos_15_large }}
             smoke_timeout_minutes: 45
             label: darwin-x64
             single_test: test/integration/api-behavior.test.js
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
             label: win32-x64
 
     steps:
@@ -372,3 +378,4 @@ jobs:
             ${{ env.WORKDIR }}/test/results/performance-report.md
           retention-days: 90
           if-no-files-found: ignore
+
