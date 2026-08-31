@@ -1,6 +1,7 @@
 # SDK Tests
 
-SDK dogfooding tests built on [`@qvac/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
+SDK dogfooding tests built on [`@qvac/test-suite`](../../test-suite), the test-orchestration framework
+that lives in this monorepo at `packages/test-suite`.
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
 (packaged Electron main process), strict Snap, or mobile (Bare + React Native).
 

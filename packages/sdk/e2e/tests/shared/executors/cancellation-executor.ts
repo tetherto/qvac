@@ -14,7 +14,7 @@ import {
   transcribe,
   translate
 } from '@qvac/sdk'
-import { type Expectation, type TestResult } from '@qvac/qvac-test-suite'
+import { type Expectation, type TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   cancelBeforeBeginCompletion,
