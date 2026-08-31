@@ -1020,20 +1020,7 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "number", "boolean", "null"]
                                 }
                               }
                             },
@@ -1990,20 +1977,7 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
@@ -2598,20 +2572,7 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
@@ -15780,7 +15741,10 @@
                   {
                     "type": "number"
                   }
-                ]
+                ],
+                "items": false,
+                "minItems": 4,
+                "maxItems": 4
               },
               "confidence": {
                 "type": "number"
