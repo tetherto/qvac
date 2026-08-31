@@ -1,7 +1,39 @@
-import { audioGenConfigSchema, type ResolveContext } from '@/schemas/index'
+import { ModelLoadFailedError } from '@/errors/index'
+import {
+  audioGenConfigSchema,
+  type AcestepAudioGenConfig,
+  type MinimaxAudioGenConfig,
+  type ResolveContext
+} from '@/schemas/index'
 
 export async function resolveAudioGenConfig(config: Record<string, unknown>, ctx: ResolveContext) {
   const parsed = audioGenConfigSchema.parse(config)
+  return parsed.engine === 'minimax'
+    ? resolveMinimaxConfig(parsed, ctx)
+    : resolveAcestepConfig(parsed, ctx)
+}
+
+async function resolveMinimaxConfig(parsed: MinimaxAudioGenConfig, ctx: ResolveContext) {
+  if (ctx.platform === 'android' || ctx.platform === 'ios') {
+    throw new ModelLoadFailedError('MiniMax-Music3 is available on desktop only')
+  }
+
+  const { lmModelSrc, synthModelSrc, ...runtimeConfig } = parsed
+  // Resolve sequentially for the same stall-timeout reason documented for the
+  // larger ACE-Step artifact set below.
+  const lmModelPath = await ctx.resolveModelPath(lmModelSrc)
+  const synthModelPath = await ctx.resolveModelPath(synthModelSrc)
+
+  return {
+    config: runtimeConfig,
+    artifacts: {
+      lmModelPath,
+      synthModelPath
+    }
+  }
+}
+
+async function resolveAcestepConfig(parsed: AcestepAudioGenConfig, ctx: ResolveContext) {
   const { textEncModelSrc, lmModelSrc, ditModelSrc, vaeModelSrc, ...runtimeConfig } = parsed
   // These four artifacts total several gigabytes. Resolving them concurrently
   // splits bandwidth across independent registry streams and can make each one

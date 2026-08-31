@@ -1,6 +1,13 @@
 import test from 'brittle'
 import { z } from 'zod'
-import { clearPlugins, registerPlugin, getPlugin, hasPlugin } from '@/plugins'
+import type { TurboVecIndexProvider } from '@qvac/rag'
+import {
+  clearPlugins,
+  registerPlugin,
+  getPlugin,
+  getTurboVecIndexProvider,
+  hasPlugin
+} from '@/plugins'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { handlePluginInvokeStream } from '@/handlers/plugin-invoke'
 import {
@@ -147,6 +154,115 @@ test('registerPlugin: accepts valid plugin and retrieves it', function (t) {
     t.ok(retrieved, 'getPlugin returns the plugin')
     t.is(retrieved?.modelType, 'test-valid-plugin')
     t.is(retrieved?.displayName, 'Valid Test Plugin')
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('plugin registry exposes a registered TurboVec index provider', function (t) {
+  clearPlugins()
+
+  const provider = {
+    create() {
+      throw new Error('not used')
+    },
+    load() {
+      throw new Error('not used')
+    }
+  } as TurboVecIndexProvider
+
+  try {
+    registerPlugin({
+      modelType: 'test-turbovec-provider',
+      displayName: 'TurboVec Provider Test',
+      addonPackage: '@qvac/test-addon',
+      loadConfigSchema: z.object({}),
+      createModel() {
+        return {
+          model: { load: async function () {} }
+        }
+      },
+      handlers: {},
+      capabilities: {
+        turbovecIndexProvider: provider
+      }
+    })
+
+    t.is(getTurboVecIndexProvider(), provider)
+  } finally {
+    clearPlugins()
+  }
+
+  t.is(getTurboVecIndexProvider(), undefined)
+})
+
+test('registerPlugin: rejects a second TurboVec index provider', function (t) {
+  clearPlugins()
+
+  const firstProvider = {
+    create() {
+      throw new Error('not used')
+    },
+    load() {
+      throw new Error('not used')
+    }
+  } as TurboVecIndexProvider
+  const secondProvider = {
+    create() {
+      throw new Error('not used')
+    },
+    load() {
+      throw new Error('not used')
+    }
+  } as TurboVecIndexProvider
+
+  try {
+    registerPlugin({
+      modelType: 'test-first-turbovec-provider',
+      displayName: 'First TurboVec Provider Test',
+      addonPackage: '@qvac/test-addon',
+      loadConfigSchema: z.object({}),
+      createModel() {
+        return {
+          model: { load: async function () {} }
+        }
+      },
+      handlers: {},
+      capabilities: {
+        turbovecIndexProvider: firstProvider
+      }
+    })
+
+    try {
+      registerPlugin({
+        modelType: 'test-second-turbovec-provider',
+        displayName: 'Second TurboVec Provider Test',
+        addonPackage: '@qvac/test-addon',
+        loadConfigSchema: z.object({}),
+        createModel() {
+          return {
+            model: { load: async function () {} }
+          }
+        },
+        handlers: {},
+        capabilities: {
+          turbovecIndexProvider: secondProvider
+        }
+      })
+      t.fail('Expected registerPlugin to reject a second TurboVec provider')
+    } catch (error) {
+      t.ok(error instanceof PluginDefinitionInvalidError)
+      t.ok(
+        (error as Error).message.includes('test-first-turbovec-provider'),
+        'error names the registered provider plugin'
+      )
+      t.ok(
+        (error as Error).message.includes('test-second-turbovec-provider'),
+        'error names the rejected provider plugin'
+      )
+    }
+
+    t.is(getTurboVecIndexProvider(), firstProvider, 'first provider remains registered')
   } finally {
     clearPlugins()
   }

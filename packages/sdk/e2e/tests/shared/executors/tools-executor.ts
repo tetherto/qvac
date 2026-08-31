@@ -1,6 +1,6 @@
 import { completion } from '@qvac/sdk'
 import type { ToolDialect } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { toolsTests } from '../../tools-tests.js'
 

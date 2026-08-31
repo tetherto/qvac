@@ -27,8 +27,10 @@
 //   - ABOT_MODELS_DIR overrides provisioning entirely (local runs, see
 //     scripts/download-model-abot.sh).
 //   - The fixed-scene walk lane additionally needs a scene pack
-//     (scene.safetensors); it is not part of the published set, so that lane
-//     passes as a no-op with an explanatory message when absent.
+//     (scene.safetensors); it is not part of the published set and is never
+//     requested from the registry (a probe would only log a MODEL_NOT_FOUND
+//     false alarm). Place the file next to the GGUFs (or via ABOT_MODELS_DIR)
+//     to exercise that lane; otherwise it passes as an explanatory no-op.
 //
 // Gate: the lanes run on the Linux x64 GPU legs in CI (NO_GPU excludes the
 // arm64 legs) and anywhere ABOT_MODELS_DIR points at a provisioned set.
@@ -103,8 +105,7 @@ async function provisionFromRegistry(dir) {
   const missing = Object.keys(SET_BYTES).filter(
     (name) => !isComplete(path.join(dir, name), SET_BYTES[name])
   )
-  const sceneMissing = !fs.existsSync(path.join(dir, SCENE_NAME))
-  if (missing.length === 0 && !sceneMissing) return
+  if (missing.length === 0) return
 
   // Lazy require: only lanes that actually provision touch the swarm stack.
   const { QVACRegistryClient } = require(REGISTRY_CLIENT_PKG)
@@ -132,15 +133,6 @@ async function provisionFromRegistry(dir) {
         } catch (_) {}
         throw new Error(`${name}: downloaded ${got} bytes, expected ${SET_BYTES[name]}`)
       }
-    }
-    if (sceneMissing) {
-      // Optional set member (fixed-scene walk lane no-ops without it).
-      await client
-        .downloadModel(`${REGISTRY_PATH}/${SCENE_NAME}`, REGISTRY_SOURCE, {
-          outputFile: path.join(dir, SCENE_NAME),
-          timeout: 300_000
-        })
-        .catch(() => {})
     }
   } finally {
     await client.close().catch(() => {})

@@ -107,6 +107,11 @@ test('[build] the backend loader covers desktop Linux for hybrid GGML_BACKEND_DL
     /#if defined\(__ANDROID__\) \|\| defined\(__linux__\)/.test(bciModelSource),
     'ensureBackendsLoaded compiles on all Linux targets, not just arm64'
   )
+  t.is(
+    /defined\(__aarch64__\)/.test(bciModelSource),
+    false,
+    'no arm64-only gate may remain around the backend loader'
+  )
 })
 
 test('[build] the GPU smoke test accepts CUDA as a desktop backend', (t) => {

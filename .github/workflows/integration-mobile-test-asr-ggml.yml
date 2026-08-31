@@ -88,7 +88,7 @@ on:
         required: false
         default: ""
       package_spec:
-        description: "Package to test (name@version). Leave EMPTY (default) to test this branch's native prebuild artifact; use @qvac/asr-ggml@... for npm or @tetherto/asr-ggml@... for GPR to force-install a specific build."
+        description: "Package to test (name@version). Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; use @qvac/asr-ggml@... for npm or @tetherto/asr-ggml-mono@... for GPR to force-install a specific build."
         type: string
         required: false
         default: ""
@@ -117,6 +117,11 @@ concurrency:
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Manual (workflow_dispatch) runs must name a device that exists on Device
   # Farm. This gate fails fast BEFORE any build or Device Farm run, so a typo
   # or an empty selection costs nothing. Skipped for workflow_call.
@@ -171,9 +176,9 @@ jobs:
     # workflow_call: validate-devices is skipped; the `skipped` branch of the
     # condition keeps this job running exactly as before.
     # workflow_dispatch: a bad/empty device selection blocks this job.
-    needs: [validate-devices]
-    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
-    runs-on: ${{ matrix.runner }}
+    needs: [runner_names, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     environment: release
     # Device Farm monitoring can consume 150 minutes for functional runs and
     # 120 for benchmarks. Reserve another hour for checkout, dependency setup,
@@ -208,7 +213,7 @@ jobs:
       # test-groups" step below maps each row to the single runner function in
       # test/mobile/perf-tests.json that is hard-parameterised for exactly that
       # combination, and passes it as the Mocha grep.
-      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"}]}') || inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"unified","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"unified","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"sortformer","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"unified","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"unified","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"sortformer","use_gpu":false}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04"}]}') || inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","engine":"parakeet","model_type":"unified","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","engine":"parakeet","model_type":"unified","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","engine":"parakeet","model_type":"sortformer","use_gpu":false},{"platform":"iOS","os":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"iOS","os":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"iOS","os":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"iOS","os":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"iOS","os":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"iOS","os":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"iOS","os":"macos-14","engine":"parakeet","model_type":"unified","use_gpu":false},{"platform":"iOS","os":"macos-14","engine":"parakeet","model_type":"unified","use_gpu":true},{"platform":"iOS","os":"macos-14","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"iOS","os":"macos-14","engine":"parakeet","model_type":"sortformer","use_gpu":false}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04"},{"platform":"iOS","os":"macos-14"}]}') }}
 
     steps:
       - name: Manual Workspace Cleanup
@@ -601,3 +606,5 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
+
