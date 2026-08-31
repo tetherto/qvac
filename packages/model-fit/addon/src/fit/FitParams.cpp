@@ -33,6 +33,49 @@ namespace {
 std::mutex
     g_fitMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
+/// Attaches the per-device memory projection for the resolved parameters.
+///
+/// Runs one more no-alloc probe, so it costs roughly what the fit cost. A probe
+/// failure leaves `out.projection` empty and never touches `out.status`.
+/// `mparams`/`cparams` must still borrow from live storage when this is called.
+void captureProjection(
+    const std::string& modelPath, const llama_model_params& mparams,
+    const llama_context_params& cparams, FitResult& out) {
+  try {
+    std::vector<ggml_backend_dev_t> devs;
+    uint32_t hpNgl = 0;
+    uint32_t hpNctTrain = 0;
+    uint32_t hpNexpert = 0;
+    const common_device_memory_data_vec rows = common_get_device_memory_data(
+        modelPath.c_str(),
+        &mparams,
+        &cparams,
+        devs,
+        hpNgl,
+        hpNctTrain,
+        hpNexpert,
+        GGML_LOG_LEVEL_INFO);
+    // One row per device in `devs` order, then the host row.
+    if (rows.size() != devs.size() + 1) {
+      return;
+    }
+    out.projection.reserve(rows.size());
+    for (size_t i = 0; i < rows.size(); ++i) {
+      const bool isHost = i == devs.size();
+      const char* name = isHost ? "host" : ggml_backend_dev_name(devs[i]);
+      out.projection.push_back(
+          {name == nullptr ? "" : name,
+           static_cast<uint64_t>(rows[i].total),
+           static_cast<uint64_t>(rows[i].free),
+           static_cast<uint64_t>(rows[i].model),
+           static_cast<uint64_t>(rows[i].context),
+           static_cast<uint64_t>(rows[i].compute)});
+    }
+  } catch (const std::exception&) {
+    out.projection.clear();
+  }
+}
+
 /// Resolves the directory the packaged ggml backends are loaded from.
 ///
 /// The resolved path is handed to `ggml_backend_load_all_from_path`, which
@@ -427,6 +470,10 @@ FitResult runFit(const FitRequest& req) {
   // A fitted 0 means "the trained context", not a usable load plan.
   detail::finalizeFitContext(out, trainedCtx);
 
+  if (status != COMMON_PARAMS_FIT_STATUS_ERROR) {
+    captureProjection(req.modelPath, mparams, cparams, out);
+  }
+
   return out;
 }
 
@@ -540,6 +587,13 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
   out.nCtx = contextParams.n_ctx;
   out.nBatch = contextParams.n_batch;
   out.nUbatch = contextParams.n_ubatch;
+
+  // Before the tensorSplit move below: `modelParams.tensor_split` points into
+  // `execution.tensorSplit`, and the projection probe reads modelParams.
+  if (status != COMMON_PARAMS_FIT_STATUS_ERROR) {
+    captureProjection(req.modelPath, modelParams, contextParams, out);
+  }
+
   out.tensorSplit = std::move(execution.tensorSplit);
   out.splitMode = static_cast<int32_t>(modelParams.split_mode);
   out.mainGpu = modelParams.main_gpu;

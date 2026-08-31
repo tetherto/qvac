@@ -48,9 +48,29 @@ const plan = fitParams({
 //   maxDevices,   // llama_max_devices() — a build-time bound, NOT a detection
 //   nDevices,     // devices actually registered; 0 => ERROR
 //   nGpuDevices,  // of those, GPU/iGPU; 0 => host-only projection
-//   tensorSplit   // number[] offload proportion per device
+//   tensorSplit,  // number[] offload proportion per device
+//   projection    // per-device projected memory (see below); optional
 // }
 ```
+
+### The memory projection
+
+`projection` explains the verdict in bytes: one row per device in registration
+order, then a final `"host"` row, each carrying `totalBytes`/`freeBytes` (the
+budget the verdict was judged against) and `modelBytes`/`contextBytes`/
+`computeBytes` (the projected demand at the **resolved** parameters). A
+`does-not-fit` with numbers shows how far it missed; a `fits` shows how much
+headroom the margin left.
+
+It is present on SUCCESS and FAILURE, and absent in three cases a consumer must
+handle: an ERROR verdict, a result from an older addon or process runner, and a
+failure of the extra no-alloc probe that gathers it. That probe costs roughly
+what the fit itself cost.
+
+`freeBytes` inherits every caveat of the underlying backend gauges
+(per-process accounting on Metal, host-memory assumptions — see the fit
+semantics above), so the rows are "what the fitter believed", not ground truth
+about the machine.
 
 ### Backend registration
 

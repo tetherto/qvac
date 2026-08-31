@@ -98,6 +98,21 @@ export interface FitBuftOverride {
   bufferType: string
 }
 
+/**
+ * Projected memory for one device — or the trailing `"host"` row — at the
+ * resolved parameters, in bytes. `totalBytes`/`freeBytes` are the budget the
+ * verdict was judged against; the remaining fields are the projected demand.
+ */
+export interface FitProjectionRow {
+  /** Device name as the backend reports it, or `"host"` for the host row. */
+  name: string
+  totalBytes: number
+  freeBytes: number
+  modelBytes: number
+  contextBytes: number
+  computeBytes: number
+}
+
 /** What the fitter measured against. Present on every outcome. */
 export interface FitDeviceInventory {
   /**
@@ -109,6 +124,13 @@ export interface FitDeviceInventory {
   nDevices: number
   /** Of those, how many are accelerators (GPU or iGPU). 0 means host-only. */
   nGpuDevices: number
+  /**
+   * Per-device projected memory at the resolved parameters, ending with the
+   * host row. Populated on SUCCESS and FAILURE; empty on ERROR, and empty when
+   * the probe that produces it fails. Optional because results decoded from an
+   * older addon or process runner predate the field.
+   */
+  projection?: FitProjectionRow[]
 }
 
 /** The fitted load plan. Only meaningful on a SUCCESS. */
