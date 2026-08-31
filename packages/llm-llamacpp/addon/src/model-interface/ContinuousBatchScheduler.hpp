@@ -48,13 +48,6 @@ namespace qvac_lib_inference_addon_llama::batching {
     SequenceDriver& driver, StopReason reason, bool prefillOnly,
     const std::function<void(const std::string&)>& outputCallback);
 
-/// Decide whether a generating slot may temporarily touch its per-slot token
-/// cap because the driver will slide its window back below the ceiling on the
-/// next step. Slides only happen during generation (never prefill) and only
-/// when sliding is configured.
-[[nodiscard]] bool computeSlideCapable(
-    const SequenceDriver& driver, bool slideConfigured, bool isPrefill);
-
 /// Whether prompt + generation budget overruns the per-sequence cap at
 /// admission. `promptSize` is the position span and `promptKvSize` the KV-cell
 /// span of the prompt; for M-RoPE media `promptKvSize >= promptSize`, so the
@@ -169,7 +162,6 @@ struct TimedDecodeResult {
 /// are derived getters computed from live state, not stored.
 struct RuntimeStatsSnapshot {
   int64_t cacheTokens = 0;
-  int64_t contextSlides = 0;
   int64_t thinkingBlockDiscards = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
@@ -187,9 +179,8 @@ struct RuntimeStatsSnapshot {
       uint64_t decodeTokens, std::chrono::nanoseconds stepDuration);
 
   /// Fold one completed slot's contribution into the running totals.
-  void accumulateSlot(
-      int64_t nPast, int64_t nSlides, int64_t thinkingDiscards,
-      const Request& req);
+  void
+  accumulateSlot(int64_t nPast, int64_t thinkingDiscards, const Request& req);
 
   /// How busy the shared backend was, NOT a property of any one request: the
   /// mean number of sequences decoded together, averaged over every
@@ -273,7 +264,7 @@ public:
   ContinuousBatchScheduler(
       LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
       size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-      llama_pos configuredNDiscarded, DriverFactory driverFactory);
+      DriverFactory driverFactory);
 
   ContinuousBatchScheduler(const ContinuousBatchScheduler&) = delete;
   ContinuousBatchScheduler& operator=(const ContinuousBatchScheduler&) = delete;
@@ -426,6 +417,40 @@ private:
     std::unique_lock<std::mutex>* lock_;
   };
 
+  /// RAII that suspends deferred-teardown application while a step has
+  /// dropped `mutex_` around work that owns a specific slot.
+  ///
+  /// `StepUnlockGuard` reconciles teardown on every reacquisition, which is
+  /// exactly right for the decode and media-eval windows: they touch no slot
+  /// the teardown could pull out from under them. It is wrong for the
+  /// finalize window in `drainFinishedLocked`, which holds a reference into
+  /// `slots_` across the unlock. A cancel recorded during that window still
+  /// passes `slotOwnedByLocked` (the slot keeps its `admissionId` until
+  /// `freeSlot`, and `extractFinished` only removed it from the batcher), so
+  /// the reconcile would run `onCancel` on a driver mid-finalize and free the
+  /// slot the loop is still using.
+  ///
+  /// Suspending leaves every record queued: `applyDeferredTeardownLocked`
+  /// returns before it swaps the pending vectors out, and `clearRequested_`
+  /// stays set. The worker applies them at its loop top once the step
+  /// returns, where the apply-time ownership re-check drops the ones whose
+  /// slot has since been freed.
+  class TeardownDeferGuard {
+  public:
+    explicit TeardownDeferGuard(ContinuousBatchScheduler& scheduler) noexcept
+        : scheduler_(scheduler) {
+      scheduler_.teardownDeferred_ = true;
+    }
+    ~TeardownDeferGuard() noexcept { scheduler_.teardownDeferred_ = false; }
+    TeardownDeferGuard(const TeardownDeferGuard&) = delete;
+    TeardownDeferGuard& operator=(const TeardownDeferGuard&) = delete;
+    TeardownDeferGuard(TeardownDeferGuard&&) = delete;
+    TeardownDeferGuard& operator=(TeardownDeferGuard&&) = delete;
+
+  private:
+    ContinuousBatchScheduler& scheduler_;
+  };
+
   struct BatchGroup {
     explicit BatchGroup(size_t requestCount)
         : outputs(requestCount), requestStats(requestCount) {}
@@ -495,7 +520,7 @@ private:
   /// cache-save throw is contained per slot: it fails only that slot's
   /// group (via failSlotLocked), never the sibling slots decoding for
   /// other groups.
-  void drainFinishedLocked();
+  void drainFinishedLocked(std::unique_lock<std::mutex>* lock);
   [[nodiscard]] bool hasWorkLocked() const noexcept;
   [[nodiscard]] unsigned numActiveLocked() const noexcept;
   /// One deferred targeted cancel, kept as the full (seqId, admissionId)
@@ -587,7 +612,6 @@ private:
   common_params_sampling baseSampling_;
   int baseNPredict_;
   common_params baseParams_;
-  llama_pos configuredNDiscarded_;
   DriverFactory driverFactory_;
 
   /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives prompt-size
@@ -617,6 +641,13 @@ private:
   /// Deferred group cancels, same threading rationale as pendingSlotCancels_.
   std::vector<uint64_t> pendingGroupCancels_;
   bool clearRequested_ = false;
+  /// Set while a step has dropped `mutex_` around work that owns a slot; see
+  /// `TeardownDeferGuard`. Written only by the worker and only while `mutex_`
+  /// is held (the guard is declared before `StepUnlockGuard`, so it flips
+  /// before the release and back after the reacquire); `cancel`, `clear`,
+  /// `cancelGroupQueued` and `submitLocked` read it under the same lock. So it
+  /// only writer is the thread holding `mutex_` when the window opens.
+  bool teardownDeferred_ = false;
   /// Live tagged groups, so a cancel can find a group that holds no slot yet.
   /// Guarded by `mutex_`; an entry lives exactly as long as its `processBatch`
   /// call. Weak, so a group settled and abandoned by its submitter cannot be
