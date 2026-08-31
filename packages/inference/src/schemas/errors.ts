@@ -384,13 +384,27 @@ const errorDefinitions: ErrorCodesMap = {
   },
   [ERROR_CODES.CONTEXT_OVERFLOW]: {
     name: 'CONTEXT_OVERFLOW',
-    message: (promptTokens: string, ctxSize: string, modelId: string) => {
-      const prompt = promptTokens ? `${promptTokens} prompt tokens` : 'prompt'
-      const ctx = ctxSize
-        ? ` exceeds the ${ctxSize}-token context window`
-        : " exceeds the model's context window"
+    message: (
+      promptTokens: string,
+      ctxSize: string,
+      modelId: string,
+      cachedTokens?: string,
+      requiredTokens?: string
+    ) => {
       const model = modelId ? ` for model "${modelId}"` : ''
-      return `${prompt}${ctx}${model}. Reduce the prompt size or start a new conversation.`
+      const window = ctxSize ? `the ${ctxSize}-token context window` : "the model's context window"
+      // Warm cache: the whole conversation is what no longer fits, so name
+      // both halves instead of blaming the appended prompt alone.
+      if (requiredTokens && cachedTokens) {
+        return `Conversation needs ${requiredTokens} context tokens (${cachedTokens} already cached) and no longer fits ${window}${model}. Start a new conversation or raise ctx_size.`
+      }
+      // Multimodal guards denominate the prompt in KV cells, not tokens.
+      const prompt = promptTokens
+        ? `${promptTokens} prompt tokens`
+        : requiredTokens
+          ? `prompt spanning ${requiredTokens} KV cells`
+          : 'prompt'
+      return `${prompt} exceeds ${window}${model}. Reduce the prompt size or start a new conversation.`
     }
   },
   [ERROR_CODES.INVALID_AUDIO_INPUT]: {

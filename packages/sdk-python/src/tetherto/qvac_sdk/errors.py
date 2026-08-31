@@ -171,7 +171,14 @@ class ContextOverflowError(QvacError):
     """Prompt exceeded the loaded model's context window. Distinct from a
     generic failure so callers can drive UX (truncate, raise `ctx_size`, start a
     new thread). The token/ctx fields are present only when the worker's
-    error message carried them."""
+    error message carried them.
+
+    `prompt_tokens` is the prompt alone, in tokens, and only when the source
+    reported tokens. `cached_tokens` is the cached conversation a warm-cache
+    overflow reported, and `required_tokens` is the total context the request
+    needs — the figure that failed the guard — both in the same units as
+    `ctx_size` (KV cells; equal to tokens for text). `required_tokens` can
+    equal the window: the guards trigger on `>=` for a generating request."""
 
     def __init__(
         self,
@@ -179,12 +186,16 @@ class ContextOverflowError(QvacError):
         ctx_size: int | None = None,
         model_id: str | None = None,
         *,
+        cached_tokens: int | None = None,
+        required_tokens: int | None = None,
         cause: Any = None,
         message: str | None = None,
     ) -> None:
         self.prompt_tokens = prompt_tokens
         self.ctx_size = ctx_size
         self.model_id = model_id
+        self.cached_tokens = cached_tokens
+        self.required_tokens = required_tokens
         super().__init__(
             message or "prompt exceeds the model's context window",
             name="CONTEXT_OVERFLOW",
@@ -458,6 +469,8 @@ def _reconstruct_context_overflow(response: dict[str, Any]) -> QvacError:
         _opt_num_field(fields, "promptTokens"),
         _opt_num_field(fields, "ctxSize"),
         _opt_str_field(fields, "modelId"),
+        cached_tokens=_opt_num_field(fields, "cachedTokens"),
+        required_tokens=_opt_num_field(fields, "requiredTokens"),
         cause=response.get("cause"),
         message=_opt_str(response, "message"),
     )

@@ -62,6 +62,23 @@ test('createErrorResponse: ContextOverflowError carries overflow fields on typed
   })
 })
 
+test('createErrorResponse: ContextOverflowError carries warm-cache fields on typedFields', (t) => {
+  const err = new ContextOverflowError(31, 8192, 'model-1', undefined, {
+    cachedTokens: 8170,
+    requiredTokens: 8201
+  })
+  const response = createErrorResponse(err)
+
+  t.is(response.name, 'CONTEXT_OVERFLOW')
+  t.alike(response.typedFields, {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192,
+    modelId: 'model-1'
+  })
+})
+
 test('createErrorResponse: ContextOverflowError omits absent fields from typedFields', (t) => {
   // The bare `LlamaModel::processPromptImpl` overflow path emits a
   // message without prompt/ctx numbers — the addon-wrap throws

@@ -227,18 +227,35 @@ export class CompletionFailedError extends QvacErrorBase {
  * works on the consumer side.
  */
 export class ContextOverflowError extends QvacErrorBase {
+  /** The prompt alone, in tokens — only when the source reported tokens. */
   readonly promptTokens?: number
+  /** Cached conversation a warm-cache overflow reported, in `ctxSize` units. */
+  readonly cachedTokens?: number
+  /**
+   * Total context the request needs — the figure that failed the guard,
+   * in `ctxSize` units (KV cells; equal to tokens for text). Can equal
+   * the window: the guards trigger on `>=` for a generating request.
+   */
+  readonly requiredTokens?: number
   readonly ctxSize?: number
   readonly modelId?: string
 
-  constructor(promptTokens?: number, ctxSize?: number, modelId?: string, cause?: unknown) {
+  constructor(
+    promptTokens?: number,
+    ctxSize?: number,
+    modelId?: string,
+    cause?: unknown,
+    sizes?: { cachedTokens?: number; requiredTokens?: number }
+  ) {
     super(
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW,
         [
           promptTokens !== undefined ? String(promptTokens) : '',
           ctxSize !== undefined ? String(ctxSize) : '',
-          modelId ?? ''
+          modelId ?? '',
+          sizes?.cachedTokens !== undefined ? String(sizes.cachedTokens) : '',
+          sizes?.requiredTokens !== undefined ? String(sizes.requiredTokens) : ''
         ],
         cause
       )
@@ -246,11 +263,15 @@ export class ContextOverflowError extends QvacErrorBase {
     if (promptTokens !== undefined) this.promptTokens = promptTokens
     if (ctxSize !== undefined) this.ctxSize = ctxSize
     if (modelId !== undefined) this.modelId = modelId
+    if (sizes?.cachedTokens !== undefined) this.cachedTokens = sizes.cachedTokens
+    if (sizes?.requiredTokens !== undefined) this.requiredTokens = sizes.requiredTokens
   }
 
   toErrorResponseFields(): Record<string, unknown> {
     return {
       ...(this.promptTokens !== undefined && { promptTokens: this.promptTokens }),
+      ...(this.cachedTokens !== undefined && { cachedTokens: this.cachedTokens }),
+      ...(this.requiredTokens !== undefined && { requiredTokens: this.requiredTokens }),
       ...(this.ctxSize !== undefined && { ctxSize: this.ctxSize }),
       ...(this.modelId !== undefined && { modelId: this.modelId })
     }

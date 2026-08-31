@@ -36,6 +36,38 @@ export function isAddonContextOverflowError(err: unknown): boolean {
   )
 }
 
+export type ContextOverflowSizes = {
+  /**
+   * The prompt alone, in tokens — set only when the guard reports an
+   * actual token count for the prompt. Guards that denominate the prompt
+   * in KV cells leave it undefined rather than mislabelling cells as
+   * tokens (M-RoPE media occupies more cells than positions).
+   */
+  promptTokens?: number
+  /**
+   * The cached conversation a warm-cache guard reports, in the same
+   * units as `ctxSize` (KV cells; equal to tokens for text).
+   */
+  cachedTokens?: number
+  /**
+   * The total context the request needs — the figure that failed the
+   * guard, in the same units as `ctxSize`. On a warm cache this is the
+   * cached conversation plus the appended prompt; on a cold prefill it
+   * equals the prompt figure. The guards trigger on `>=` for a request
+   * that must still generate, so this can equal the window rather than
+   * exceed it.
+   */
+  requiredTokens?: number
+  /** The model's context window (`ctx_size`), which counts KV cells. */
+  ctxSize?: number
+}
+
+type PatternEntry = {
+  pattern: RegExp
+  /** Maps the numeric capture groups (in order) to typed fields. */
+  map: (groups: number[]) => ContextOverflowSizes
+}
+
 /**
  * One entry per guard that formats numbers into a `ContextOverflow`
  * message, ordered most specific first. Each pattern keeps its numbers
@@ -43,70 +75,77 @@ export function isAddonContextOverflowError(err: unknown): boolean {
  * that pastes overflow text alongside unrelated numbers cannot produce a
  * mismatched set.
  *
- * Every pattern captures the context size LAST and the quantities that
- * make up the failing requirement before it, so `promptTokens` is the sum
- * of the leading groups and `ctxSize` is the final one. That one rule
- * covers both shapes: the guards that report a warm cache capture the
- * cached size and the appended prompt, and it is their sum that failed
- * the guard, while the rest capture a single figure and the sum is that
- * figure. The guards trigger on `>=` for a request that must still
- * generate, so the reported sum can equal the window rather than exceed
- * it. Reporting the appended prompt alone would render as "31 prompt
- * tokens exceeds the 8192-token context window", which is impossible on
- * its face and useless to truncation logic. Where a guard reports both
- * positions and KV cells, capture the cells: they are the binding
- * measure, since M-RoPE media occupies more cells than positions.
+ * Where a guard reports both positions and KV cells, the cells are
+ * captured: they are the binding measure, and `ctx_size` counts cells,
+ * so `requiredTokens` and `ctxSize` stay comparable. `promptTokens` is
+ * set only from figures the guard denominates in tokens.
  *
  * Keep this in step with the guards in `TextLlmContext.cpp` and
  * `MtmdLlmContext.cpp`. A guard whose wording drifts out of this list
- * does not fail loudly, it silently returns `undefined` for both fields.
+ * does not fail loudly, it silently returns no fields.
  */
-const MESSAGE_PATTERNS: RegExp[] = [
-  // "cached tokens C plus prompt tokens N exceed the max context tokens M"
-  /cached tokens (\d+) plus prompt tokens (\d+) exceeds? the max context tokens (\d+)/i,
-  // "cached P positions / C KV cells plus P2 positions / N KV cells of
-  //  prompt exceed the max context tokens M"
-  /cached \d+ positions \/ (\d+) KV cells plus \d+ positions \/ (\d+) KV cells of prompt exceeds? the max context tokens (\d+)/i,
-  // "prompt tokens N, max context tokens M"
-  /prompt tokens (\d+)[,\s]+max context tokens (\d+)/i,
-  // "prompt spans P positions / N KV cells, max context tokens M"
-  /prompt spans \d+ positions \/ (\d+) KV cells,\s*max context tokens (\d+)/i,
-  // "(N tokens, P positions, max M)"
-  /\((\d+)\s+tokens,\s*\d+\s+positions,\s*max\s+(\d+)\)/i,
-  // "(N tokens, max M)", the pre-multimodal short form
-  /\((\d+)\s+tokens,\s*max\s+(\d+)\)/i
+const MESSAGE_PATTERNS: PatternEntry[] = [
+  {
+    // "cached tokens C plus prompt tokens N exceed the max context tokens M"
+    pattern: /cached tokens (\d+) plus prompt tokens (\d+) exceeds? the max context tokens (\d+)/i,
+    map: ([cached, prompt, ctx]) => ({
+      promptTokens: prompt!,
+      cachedTokens: cached!,
+      requiredTokens: cached! + prompt!,
+      ctxSize: ctx!
+    })
+  },
+  {
+    // "cached P positions / C KV cells plus P2 positions / N KV cells of
+    //  prompt exceed the max context tokens M" — the prompt figure is KV
+    // cells, not tokens, so promptTokens stays unset.
+    pattern:
+      /cached \d+ positions \/ (\d+) KV cells plus \d+ positions \/ (\d+) KV cells of prompt exceeds? the max context tokens (\d+)/i,
+    map: ([cached, prompt, ctx]) => ({
+      cachedTokens: cached!,
+      requiredTokens: cached! + prompt!,
+      ctxSize: ctx!
+    })
+  },
+  {
+    // "prompt tokens N, max context tokens M"
+    pattern: /prompt tokens (\d+)[,\s]+max context tokens (\d+)/i,
+    map: ([prompt, ctx]) => ({ promptTokens: prompt!, requiredTokens: prompt!, ctxSize: ctx! })
+  },
+  {
+    // "prompt spans P positions / N KV cells, max context tokens M" —
+    // KV cells again, so promptTokens stays unset.
+    pattern: /prompt spans \d+ positions \/ (\d+) KV cells,\s*max context tokens (\d+)/i,
+    map: ([prompt, ctx]) => ({ requiredTokens: prompt!, ctxSize: ctx! })
+  },
+  {
+    // "(N tokens, P positions, max M)"
+    pattern: /\((\d+)\s+tokens,\s*\d+\s+positions,\s*max\s+(\d+)\)/i,
+    map: ([prompt, ctx]) => ({ promptTokens: prompt!, requiredTokens: prompt!, ctxSize: ctx! })
+  },
+  {
+    // "(N tokens, max M)", the pre-multimodal short form
+    pattern: /\((\d+)\s+tokens,\s*max\s+(\d+)\)/i,
+    map: ([prompt, ctx]) => ({ promptTokens: prompt!, requiredTokens: prompt!, ctxSize: ctx! })
+  }
 ]
 
 /**
- * Best-effort extraction of `promptTokens` / `ctxSize` from the addon
- * error message. The C++ paths in `TextLlmContext.cpp` and
+ * Best-effort extraction of the overflow sizes from the addon error
+ * message. The C++ paths in `TextLlmContext.cpp` and
  * `MtmdLlmContext.cpp` format the numbers into the message; the
  * `LlamaModel::processPromptImpl` fallback path emits a bare
  * `"<func>: context overflow\n"` with none of them. Returning
- * `undefined` for either field is fine, `ContextOverflowError` holds
- * them as optional and the message factory degrades gracefully.
- *
- * `promptTokens` is what did not fit, which on a warm cache is the
- * cached conversation plus the appended prompt rather than the appended
- * prompt alone. The name predates caching. If a caller ever needs the
- * two halves apart, that wants new typed fields on
- * `ContextOverflowError`, not a narrower reading of this one.
+ * `undefined` fields is fine, `ContextOverflowError` holds them as
+ * optional and the message factory degrades gracefully.
  */
-export function parseContextOverflowMessage(message: string): {
-  promptTokens?: number
-  ctxSize?: number
-} {
-  for (const pattern of MESSAGE_PATTERNS) {
+export function parseContextOverflowMessage(message: string): ContextOverflowSizes {
+  for (const { pattern, map } of MESSAGE_PATTERNS) {
     const match = message.match(pattern)
     if (!match) continue
     const numbers = match.slice(1).map(Number)
-    const ctxSize = numbers.pop()
-    if (ctxSize === undefined || numbers.length === 0) continue
-    if (!Number.isFinite(ctxSize) || !numbers.every(Number.isFinite)) continue
-    return {
-      promptTokens: numbers.reduce((sum, value) => sum + value, 0),
-      ctxSize
-    }
+    if (numbers.length === 0 || !numbers.every(Number.isFinite)) continue
+    return map(numbers)
   }
   return {}
 }
