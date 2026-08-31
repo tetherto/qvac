@@ -47,6 +47,7 @@
   "devDependencies": {
     "@types/node": "^22.14.1",
     "bare-abort-controller": "^1.1.2",
+    "bare-https": "^3.0.0",
     "bare-os": "^3.6.2",
     "bare-process": "^4.2.2",
     "brittle": "^3.13.1",

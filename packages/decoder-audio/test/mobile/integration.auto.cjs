@@ -9,3 +9,7 @@ require('./integration-runtime.cjs')
 async function runFfmpegDecoderTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/ffmpeg-decoder.test.js', options)
 }
+
+async function runVideoBenchTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/video-bench.test.js', options)
+}
