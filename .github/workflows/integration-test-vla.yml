@@ -34,8 +34,7 @@ jobs:
     needs: runner_names
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    # QVAC-23763: the -vulkan suffix only appears on the new Vulkan leg, so
-    # every existing job keeps the exact name any required check refers to.
+    # QVAC-23763: -vulkan only on the new leg, so existing check names are kept.
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.force_vulkan == 'true' && '-vulkan' || '' }}-integration-tests
     permissions:
       contents: read
@@ -44,11 +43,8 @@ jobs:
 
     env:
       WORKDIR: packages/vla-ggml
-      # QVAC-23763: marks a leg as the Vulkan half of an NVIDIA runner. Not set
-      # as CUDA_VISIBLE_DEVICES directly, because an unset matrix field is the
-      # empty string and an empty CUDA_VISIBLE_DEVICES hides every CUDA device
-      # just like -1. The test step exports the real variable when this is
-      # 'true'.
+      # QVAC-23763: not CUDA_VISIBLE_DEVICES directly, because an unset matrix
+      # field is the empty string, which hides every CUDA device like -1.
       FORCE_VULKAN: ${{ matrix.force_vulkan || 'false' }}
 
     strategy:
@@ -67,9 +63,7 @@ jobs:
             platform: linux
             arch: x64
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
-          # QVAC-23763: this runner is NVIDIA, so the same box covers both GPU
-          # backends. This entry is the Vulkan half; the one above runs CUDA
-          # because it is now preferred by default.
+          # QVAC-23763: same NVIDIA box, Vulkan half. The entry above runs CUDA.
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -481,9 +475,7 @@ jobs:
           GROOT_TEST_ACTIVATIONS_V4: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_v4.safetensors', github.workspace, env.WORKDIR) || '' }}
         run: |
           set +e
-          # QVAC-23763: export CUDA_VISIBLE_DEVICES only for the Vulkan leg.
-          # Exporting it unconditionally would set it to the empty string
-          # elsewhere, which hides every CUDA device just as -1 does.
+          # Only for the Vulkan leg, see FORCE_VULKAN above.
           if [ "${FORCE_VULKAN}" = "true" ]; then
             echo "FORCE_VULKAN=true: hiding CUDA devices so the addon selects Vulkan"
             export CUDA_VISIBLE_DEVICES=-1
@@ -560,9 +552,7 @@ jobs:
         if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          # The -vulkan suffix matches the job name: without it both
-          # ubuntu-24.04 linux-x64 legs upload the same artifact and the
-          # second one 409s.
+          # -vulkan matches the job name, or both u24 legs collide and one 409s.
           name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}${{ matrix.force_vulkan == 'true' && '-vulkan' || '' }}
           # Glob picks up addon.test.js's `performance-report.json` (smolvla),
           # pi05.test.js's `performance-report-pi05.json`, and groot.test.js's

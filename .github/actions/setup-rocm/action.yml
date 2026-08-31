@@ -135,12 +135,10 @@ runs:
         echo "ROCM_PATH=$rocm_prefix" >> "$GITHUB_ENV"
         echo "HIP_PATH=$rocm_prefix" >> "$GITHUB_ENV"
         echo "$rocm_prefix/bin" >> "$GITHUB_PATH"
-        # Merge rather than assign: setup-cuda sets the same variable, and a job
-        # that ran both would otherwise keep only whichever action ran last.
+        # Merge, not assign: setup-cuda sets the same var, last one would win.
         keep="ROCM_PATH;HIP_PATH"
         if [ -n "${VCPKG_KEEP_ENV_VARS:-}" ]; then
-          # Strip a trailing ';' first: an empty entry in the keep-list is not
-          # fatal but it is noise in every later vcpkg log line.
+          # Strip a trailing ';', an empty keep-list entry is log noise.
           keep="${VCPKG_KEEP_ENV_VARS%;};${keep}"
         fi
         echo "VCPKG_KEEP_ENV_VARS=$keep" >> "$GITHUB_ENV"

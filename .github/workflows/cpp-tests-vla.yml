@@ -148,10 +148,8 @@ jobs:
         name: Setup ROCm SDK for HIP cross-compile
         uses: ./.github/actions/setup-rocm
 
-      # QVAC-23763: it also requests cuda-backend on linux, which hard-errors
-      # without nvcc rather than silently skipping, so configure fails here
-      # without it. Compile-only; this runner has no NVIDIA GPU and needs none.
-      # setup-cuda MERGES VCPKG_KEEP_ENV_VARS so the ROCm vars above survive.
+      # QVAC-23763: cuda-backend hard-errors without nvcc, so linux needs the
+      # toolkit. Compile-only. Merges VCPKG_KEEP_ENV_VARS, so ROCm above lives.
       - if: ${{ matrix.platform == 'linux' }}
         name: Setup CUDA toolkit for the ggml CUDA backend
         uses: ./.github/actions/setup-cuda
