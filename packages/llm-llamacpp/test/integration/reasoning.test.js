@@ -3,6 +3,7 @@
 const path = require('bare-path')
 const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
+const overflow = require('./_context-overflow')
 const os = require('bare-os')
 const LlmLlamacpp = require('../../index.js')
 
@@ -111,8 +112,8 @@ function verifyReasoningTags(t, response, testName) {
 // forced `</think>` — the only legitimate empty answer is when the forced
 // close-marker tokens themselves exhausted the n_predict budget. That case
 // is detected via `stats.stopReason === 'predictionLimit'` rather than by
-// comparing `generatedTokens` to n_predict: generatedTokens is raw n_eval,
-// which the recovery's inline decodes inflate, so it can reach n_predict
+// comparing `generatedTokens` to n_predict: the recovery commits the close
+// tag plus up to two newlines, all counted, so the stat can reach n_predict
 // while the logical generation loop still had budget.
 function verifyContinuedAfterReasoning(t, response, testName, opts = {}) {
   const thinkCloseIndex = response.indexOf('</think>')
@@ -344,6 +345,64 @@ safeTest(
     t.ok(
       thinkingDiscards >= 1,
       `default run should report at least one compaction (got ${thinkingDiscards})`
+    )
+  }
+)
+
+// Turn 1 is cut off by `n_predict` while still inside the reasoning span, so
+// nothing ever closed the block. Compaction has to drop the opener along with
+// the body: if the rewind left it in cache, the next cached turn would carry
+// on inside a reasoning block and emit a `</think>` it never opened.
+//
+// Qwen3-0.6B renders a generated-opener template, so the opener is a sampled
+// token seeded into the replay buffer rather than prompt text. Qwen3.5 covers
+// the force-open half of this on the hybrid path, in the multi-turn tests
+// below.
+safeTest(
+  'Qwen3 interrupted reasoning span leaves no opener for the next cached turn',
+  {
+    skip: isDarwinX64 || isWindowsX64,
+    timeout: 900_000
+  },
+  async (t) => {
+    const sessionPath = path.join(os.tmpdir(), `qvac-forced-open-${Date.now()}.bin`)
+    t.teardown(() => {
+      try {
+        require('bare-fs').unlinkSync(sessionPath)
+      } catch {}
+    })
+
+    const { inference } = await setupReasoningModel(t, false)
+
+    const messages1 = createInitialMessages()
+    // 24 tokens is not enough to finish a thinking block, so turn 1 stops
+    // inside the span.
+    const t1 = await runCompletionWithStats(inference, messages1, {
+      cacheKey: sessionPath,
+      generationParams: { predict: 24, remove_thinking_from_context: true }
+    })
+    t.is(t1.stats.stopReason, 'predictionLimit', 'turn 1 should stop inside the reasoning span')
+    t.ok(!t1.response.includes('</think>'), 'turn 1 should not have closed its reasoning block')
+    t.comment(`turn 1 (len=${t1.response.length}) stats: ${JSON.stringify(t1.stats)}`)
+
+    const t2 = await runCompletionWithStats(
+      inference,
+      createFollowUpMessages(messages1, stripReasoningForPrompt(t1.response)),
+      {
+        cacheKey: sessionPath,
+        generationParams: { remove_thinking_from_context: true }
+      }
+    )
+    t.comment(`turn 2 (len=${t2.response.length}): ${t2.response.slice(0, 300)}`)
+
+    t.ok(t2.response.length > 0, 'turn 2 should produce a response')
+
+    const openIndex = t2.response.indexOf('<think>')
+    const closeIndex = t2.response.indexOf('</think>')
+    t.ok(
+      closeIndex === -1 || (openIndex !== -1 && openIndex < closeIndex),
+      'turn 2 must not resume inside reasoning: any </think> needs its own <think> first ' +
+        `(open=${openIndex}, close=${closeIndex})`
     )
   }
 )
@@ -1001,108 +1060,71 @@ safeTest(
   }
 )
 
-// ContextShifter invalidates reasoning spans whenever a generation-time slide
-// drops cache tokens. Under the uniform hard-fail contract (PR #2813), a
-// slide that invalidates active reasoning state must reject the request
-// instead of silently preserving reasoning in cache. This test forces that
-// interaction and asserts the failure is explicit and recoverable.
-//
-// We force the slide by squeezing `ctx_size` down to 512 (and setting
-// `n_discarded=64` so overflow triggers a slide instead of a hard
-// error) and running multiple turns whose cumulative tokens overflow
-// that budget. The chat-template wrapping plus turn-1 reasoning output
-// is enough to push later turns past the ctx limit on Qwen3-0.6B — a
-// slide must fire to make room. Without compaction-aware slide
-// handling used to crash on span-end-out-of-cache assertions; with the strict
-// contract it surfaces as a `slide invalidated tracked reasoning state`
-// error.
+// Nothing is evicted to make room any more, so a caller must be able to see
+// "no space left" on both paths that can hit it: a generation that fills the
+// window stops with `stopReason=contextOverflow` and keeps what it produced,
+// while a prompt that cannot fit at all throws. The model must stay usable
+// after either one.
 safeTest(
-  'Qwen3 sliding context hard-fails stale reasoning compaction',
+  'Qwen3 reasoning surfaces context overflow on both paths and recovers',
   { timeout: 600_000 },
   async (t) => {
     const { inference } = await setupReasoningModel(t, false, {
       configOverrides: {
-        // Tight ctx so the cumulative cache from multi-turn overflows
-        // ctx_size and ContextShifter is forced to run. 512 rounds up to
-        // the next 256 multiple, matching the budget used by
-        // sliding-context.test.js. `n_discarded > 0` is required to
-        // enable sliding (the default of 0 turns overflow into a hard
-        // error).
-        ctx_size: '512',
-        n_predict: '512',
-        n_discarded: '64'
+        // Tight ctx so one reasoning turn fills it. 512 rounds up to the
+        // next 256 multiple. Sizing and assertions are shared with
+        // `api-behavior.test.js` through `_context-overflow.js` so a
+        // tokenizer change only has to be recalibrated once.
+        ctx_size: String(overflow.CTX_SIZE),
+        n_predict: String(overflow.PREDICT),
+        // CPU on darwin-x64. This file otherwise forces GPU there, and that
+        // runner's Metal backend cannot decode again after a ContextOverflow
+        // throw: the next request dies with `command buffer 0 failed with
+        // status 5`, then `backend is in error state from a previous command
+        // buffer failure`, so the recovery assertion below fails for a reason
+        // that has nothing to do with the contract being tested. The four
+        // other platforms pass on GPU, and `api-behavior.test.js` already
+        // takes CPU on this platform for the same class of reason. Running on
+        // CPU keeps the test and every assertion alive here rather than
+        // skipping the platform like the rest of this file does.
+        ...(isDarwinX64 ? { device: 'cpu' } : {})
       }
     })
 
-    // Per-turn output cap. Each `inference.run` starts with a fresh KV
-    // cache, so every turn re-tokenizes the full conversation and
-    // prefills it as a single delta. With the default `n_predict=512`,
-    // a single verbose turn (observed >300 tokens on Android
-    // Qwen3-0.6B) pushes turn 2's tokenized prompt past ctx_size and
-    // trips the prefill-time hard-overflow guard before any slide can
-    // fire. Capping per-turn output keeps every turn's tokenized prompt
-    // under ctx_size (so the hard guard never fires) while letting
-    // cumulative cache growth during decode cross the ceiling — which
-    // is where the slide is expected to fire on this test.
-    //
-    // Sizing: initial ~40 + 4 x (PER_TURN_PREDICT + 25) + 25 must stay
-    // safely below 512 on turn 5's prefill, and turn-5 nPast + predict
-    // must exceed 512 so decode triggers the slide.
-    const PER_TURN_PREDICT = 80
-
-    // Drive turns sequentially, accumulating the full conversation in
-    // `messages`. Each turn issues a fresh `inference.run`, so the cache
-    // grows monotonically across turns and eventually trips a
-    // generation-time slide while reasoning state is active.
-    const messages = createInitialMessages()
-    let lastStats = {}
-    let lastResponse = ''
-    let firstError = null
-
-    // Five turns is a comfortable upper bound — every additional turn
-    // roughly doubles cumulative tokens at this prompt scale, so the
-    // cache crosses 512 within 2–3 turns on every backend we test.
-    for (let turn = 1; turn <= 5 && firstError === null; turn++) {
-      let turnStats = {}
-      let turnResponse = ''
-      try {
-        const result = await runCompletionWithStats(inference, messages, {
-          generationParams: {
-            remove_thinking_from_context: true,
-            predict: PER_TURN_PREDICT
-          }
-        })
-        turnStats = result.stats
-        turnResponse = result.response
-      } catch (err) {
-        firstError = firstError || err
-        break
+    // Generation path, in a single deterministic turn. The prompt is sized to
+    // land just inside the window and `predict` is far larger than the room
+    // that leaves, so the stop is always the full context and never the
+    // prediction cap. Driving several turns until one happened to overflow
+    // made the assertion depend on how long the model chose to answer.
+    const { stats, response } = await runCompletionWithStats(
+      inference,
+      [{ role: 'user', content: overflow.fillerPrompt() }],
+      {
+        generationParams: {
+          remove_thinking_from_context: true,
+          predict: overflow.PREDICT
+        }
       }
-      lastStats = turnStats
-      lastResponse = turnResponse
-      t.comment(`turn ${turn} stats: ${JSON.stringify(turnStats)}`)
-      t.comment(`turn ${turn} response (len=${turnResponse.length}): ${turnResponse.slice(0, 120)}`)
+    )
+    t.comment(`overflow turn stats: ${JSON.stringify(stats)}`)
 
-      messages.push({ role: 'assistant', content: turnResponse })
-      messages.push({
-        role: 'user',
-        content:
-          'Please elaborate further on the previous answer in great detail, covering all relevant background.'
-      })
+    overflow.assertStoppedByFullContext(t, stats, response)
+
+    // Prefill path. One message that cannot fit on its own is rejected
+    // before any decoding, so this one does throw.
+    let prefillError = null
+    try {
+      await runCompletionWithStats(
+        inference,
+        [{ role: 'user', content: overflow.oversizedPrompt() }],
+        {
+          generationParams: { reasoning_budget: 0, remove_thinking_from_context: true }
+        }
+      )
+    } catch (err) {
+      prefillError = err
     }
-
-    t.ok(
-      firstError,
-      `multi-turn sliding run must trigger a strict compaction failure (last stats=${JSON.stringify(
-        lastStats
-      )}, last response len=${lastResponse.length})`
-    )
-    t.ok(
-      /slide invalidated tracked reasoning state/i.test(firstError && firstError.message),
-      `slide failure should explain the invalidated reasoning state, got: ${
-        firstError && firstError.message
-      }`
-    )
+    overflow.assertPromptAloneRejected(t, prefillError)
 
     const recovery = await runCompletionWithStats(
       inference,
@@ -1113,7 +1135,7 @@ safeTest(
     )
     t.ok(
       recovery.response.length > 0,
-      'model should recover and generate after strict slide-invalidation failure'
+      'model should recover and generate after a context-overflow failure'
     )
   }
 )

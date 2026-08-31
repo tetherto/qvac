@@ -190,7 +190,6 @@ const config = {
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
-| n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context. In batch mode the sliding window is the per-sequence slot (`n_ctx / n_parallel`), so `n_discarded` is clamped to that per-slot window, not the full context; a value `>=` the slot cap is clamped and logs a warning |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
 | backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm`, `sycl`, or `auto` | —   | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU |
 | split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
@@ -206,7 +205,7 @@ const config = {
 The addon picks a safe KV-cache type when `cache-type-k`/`cache-type-v` are unset, and validates any explicit choice per backend:
 
 - **Auto-default:** on a **Metal / Vulkan GPU** (with flash attention on) both K and V default to **`q8_0`** — quality-neutral vs `f16` and ~47% smaller KV cache. **CPU** and **OpenCL (Adreno)** keep **`f16`** (ARM CPU `q8_0` has a quality/throughput cost; quantized KV is unsafe on OpenCL — see below). Finetuning manages its own KV types and is left untouched.
-- **OpenCL (Adreno) accepts only `f16`/`f32`/`bf16`:** any other cache type — quantized (`q8_0`, `q4_0`, `q4_1`, `q5_0`, …) or unrecognized — throws a `StatusError`. A quantized K or V cache aborts in `llama_kv_cache::update` on KV-cache shifts / cache management (sliding context, state restore) because ggml-opencl has no `F32→quantized` requantize kernel. Use `f16`/`f32`/`bf16`, or a Vulkan GPU / CPU.
+- **OpenCL (Adreno) accepts only `f16`/`f32`/`bf16`:** any other cache type — quantized (`q8_0`, `q4_0`, `q4_1`, `q5_0`, …) or unrecognized — throws a `StatusError`. A quantized K or V cache aborts in `llama_kv_cache::update` on cache management (reasoning-block compaction, state restore) because ggml-opencl has no `F32→quantized` requantize kernel. Use `f16`/`f32`/`bf16`, or a Vulkan GPU / CPU.
 - **Mixed K≠V is a warning, not an error:** if K and V differ and at least one is quantized, the addon logs a warning (asymmetric quantized K/V falls off the fused flash-attention path — a notable GPU decode penalty — for no quality benefit, and is unsupported on Adreno OpenCL) but proceeds. Prefer a symmetric type. (This may be relaxed once qvac-fabric handles asymmetric quantized K/V efficiently.)
 
 
