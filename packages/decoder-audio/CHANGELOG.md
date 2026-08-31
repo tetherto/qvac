@@ -9,8 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrated the wrapper and type declarations to TypeScript. Sources now live under `src/`; the published `index.js`, `constants.js`, `utils/*.js` and their `.d.ts` declarations are generated from them and committed. Public API and CommonJS export shape are unchanged.
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2634](https://github.com/tetherto/qvac/pull/2634)).
 - Promoted `bare-fs`, `bare-path`, and `bare-url` to runtime dependencies because the published mobile test runtime imports them.
+
+### Fixed
+
+- Corrected `DecoderOutput.outputArray` to `Buffer`; it was declared as `ArrayBuffer` while the decoder has always emitted a `Buffer`.
+- Added the missing type declarations for `utils/createStreamAccumulator`, which previously shipped with no `.d.ts`.
 
 ## [0.5.0]
 
