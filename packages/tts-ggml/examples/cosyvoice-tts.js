@@ -35,7 +35,7 @@
  *   bare examples/cosyvoice-tts.js --reference-audio me.wav "任何其他语言。"
  *
  * The model directory is produced by
- * qvac-ext-lib-whisper.cpp/engines/tts/scripts/assemble-cosyvoice3-model.py and
+ * qvac-fabric-speech.cpp/engines/tts/scripts/assemble-cosyvoice3-model.py and
  * must contain:
  *   cosyvoice3-llm-*.gguf  cosyvoice3-flow-*.gguf  cosyvoice3-hift-*.gguf
  *   voice.gguf  vocab.json  merges.txt

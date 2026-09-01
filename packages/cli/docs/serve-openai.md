@@ -34,6 +34,8 @@ For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac se
 | `GET`    | `/v1/models`                     | Lists **all configured** models (loaded or not)                                                             |
 | `GET`    | `/v1/models/{id}`                | Model metadata                                                                                              |
 | `DELETE` | `/v1/models/{id}`                | Unload (reversible — the alias reloads on the next request)                                                 |
+| `GET`    | `/v1/models/catalog`             | **Browse** models the SDK provides, by capability (not an OpenAI route — see below)                         |
+| `GET`    | `/v1/models/catalog/{id}`        | A single catalog entry                                                                                      |
 | `POST`   | `/v1/chat/completions`           | Chat                                                                                                        |
 | `POST`   | `/v1/completions`                | Legacy text completions (single + multi-prompt; blocking + SSE)                                             |
 | `POST`   | `/v1/responses`                  | Responses API (blocking + SSE streaming); volatile, see below                                               |
@@ -114,6 +116,64 @@ flag override):
   }
 }
 ```
+
+## Browse the model catalog
+
+`GET /v1/models/catalog` is a **discovery** endpoint (a QVAC extension, not part of
+OpenAI). It lists every model this server knows of — your configured models **and** the
+models the SDK ships with — so you can find one by capability. It is fully in-process: no
+model is loaded or downloaded by browsing.
+
+Rows are **catalog entries**, not usable `model` objects:
+
+```json
+{
+  "object": "model_catalog_entry",
+  "id": "QWEN3_600M_INST_Q4",
+  "source": "builtin",
+  "configured": false,
+  "usable": false,
+  "state": "not_configured",
+  "role": "chat",
+  "addon": "llm",
+  "engine": "llamacpp-completion",
+  "quantization": "q4",
+  "params": "600M",
+  "size": 382156480,
+  "hint": "Not in serve.models — run `qvac configure` (or add it there by hand) to make it usable."
+}
+```
+
+A **`not_configured`** entry is a model the SDK provides but which is **not** in
+`serve.models`, so it **cannot be called** until you add it. Configured models appear with
+`configured: true`, `usable: true`, and their live load `state` (`idle` / `loading` /
+`ready` / `error`). Only `/v1/models` lists callable models; the catalog never implies a
+row is instantly usable.
+
+Filter with query params (all optional, combined with AND):
+
+| Param          | Meaning                                                                       |
+| -------------- | ----------------------------------------------------------------------------- |
+| `search`       | Substring match on the model id/name                                          |
+| `role`         | Endpoint category: `chat`, `embedding`, `transcription`, `speech`, `image`, … |
+| `addon`/`type` | SDK addon: `llm`, `tts`, `whisper`, `diffusion`, …                            |
+| `quantization` | e.g. `q4`, `q8_0` (case-insensitive)                                          |
+| `engine`       | e.g. `llamacpp-completion`                                                    |
+| `configured`   | `true` / `false`                                                              |
+| `limit`        | Page size; omit for no limit (returns all matching entries)                   |
+| `offset`       | Rows to skip (default 0)                                                      |
+
+Response: `{ "object": "list", "data": [ … ], "has_more": <bool> }`.
+
+```bash
+# All chat-capable models the SDK provides
+curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'
+# Search by name
+curl 'http://localhost:11434/v1/models/catalog?search=qwen'
+```
+
+The live remote model registry and on-disk download state are not included yet (planned
+follow-ups).
 
 ## Model source constants in config
 

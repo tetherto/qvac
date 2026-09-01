@@ -1,5 +1,6 @@
 import test from 'brittle'
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
+import path from 'bare-path'
 
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUg=='
 const JPEG_B64 = '/9j/4AAQSkZJRgABAQEASABIAAA='
@@ -15,7 +16,8 @@ async function withRegisteredVideoModel<T>(
   body: (modelId: string) => Promise<T>,
   cancelImpl: () => Promise<void> = async function () {},
   isLtx = false,
-  isMoeCapable = false
+  isMoeCapable = false,
+  modelConfig: Record<string, unknown> = {}
 ) {
   const [
     { registerModel, unregisterModel },
@@ -38,7 +40,7 @@ async function withRegisteredVideoModel<T>(
     registerModel(modelId, {
       model: fakeModel as never,
       path: '/tmp/video-model.safetensors',
-      config: {},
+      config: modelConfig,
       modelType: ModelType.sdcppGeneration
     } as never)
     return await body(modelId)
@@ -85,6 +87,17 @@ test('video op: decodes base64 inputs, forwards mode, and emits stream responses
       t.is(observed?.['mode'], 'txt2vid')
       t.ok(Array.isArray(observed?.['control_frames']))
       t.is((observed?.['control_frames'] as Uint8Array[]).length, 2)
+      for (const field of [
+        'lora',
+        'lora_strength',
+        'stg_scale',
+        'stg_block',
+        'reference_images',
+        'reference_attention_strength',
+        'reference_downscale_factor'
+      ]) {
+        t.is(field in (observed ?? {}), false, `${field} is omitted instead of forwarded undefined`)
+      }
 
       t.alike(chunks[0], {
         type: 'videoStream',
@@ -279,6 +292,194 @@ test('video op: forwards temporal_tiling to model.run (LTX-2 video VAE knob)', a
 
       t.ok(observed, 'model.run was called')
       t.is(observed?.['temporal_tiling'], true)
+    }
+  )
+})
+
+test('video op: forwards the full LTX Ingredients request to model.run', async function (t) {
+  const { video: videoOp } = await import('@/plugins/builtin/sdcpp-generation/ops/video')
+  let observed: Record<string, unknown> | undefined
+
+  await withRegisteredVideoModel(
+    async function (params: unknown) {
+      observed = params as Record<string, unknown>
+      return {
+        iterate: async function* () {
+          yield new Uint8Array([82, 73, 70, 70])
+        }
+      }
+    },
+    async function (modelId) {
+      for await (const _chunk of videoOp({
+        modelId,
+        mode: 'txt2vid',
+        prompt: 'Reference sheet: an explorer. Generated video: the explorer crosses a ridge.',
+        lora: '/models/ltx-2-ingredients.safetensors',
+        lora_strength: 1.37,
+        stg_scale: 1,
+        stg_block: 29,
+        reference_images: [PNG_B64],
+        reference_attention_strength: 1,
+        reference_downscale_factor: 1,
+        video_frames: 217,
+        scheduler: 'ltx2'
+      })) {
+        // drain
+      }
+
+      t.is(observed?.['lora'], '/models/ltx-2-ingredients.safetensors')
+      t.is(observed?.['lora_strength'], 1.37)
+      t.is(observed?.['stg_scale'], 1)
+      t.is(observed?.['stg_block'], 29)
+      t.ok(Array.isArray(observed?.['reference_images']))
+      const referenceImages = observed?.['reference_images'] as Uint8Array[]
+      t.is(referenceImages.length, 1)
+      t.ok(referenceImages[0] instanceof Uint8Array)
+      t.is(observed?.['reference_attention_strength'], 1)
+      t.is(observed?.['reference_downscale_factor'], 1)
+      t.is(observed?.['scheduler'], 'ltx2')
+    },
+    async function () {},
+    true
+  )
+})
+
+test('video op: warns when the configured LoRA mode may persist the adapter', async function (t) {
+  const [{ video: videoOp }, { getEngineLogger }] = await Promise.all([
+    import('@/plugins/builtin/sdcpp-generation/ops/video'),
+    import('@/logging')
+  ])
+  const logger = getEngineLogger()
+  const originalWarn = logger.warn
+  const warnings: string[] = []
+  logger.warn = function (...args: unknown[]) {
+    warnings.push(args.map(String).join(' '))
+  }
+
+  async function runWithConfig(modelConfig: Record<string, unknown>) {
+    await withRegisteredVideoModel(
+      async function () {
+        return {
+          iterate: async function* () {}
+        }
+      },
+      async function (modelId) {
+        for await (const _chunk of videoOp({
+          modelId,
+          mode: 'txt2vid',
+          prompt: 'a reference-conditioned explorer',
+          lora: '/models/ltx-2-ingredients.safetensors',
+          video_frames: 97
+        })) {
+          // drain
+        }
+      },
+      async function () {},
+      true,
+      false,
+      modelConfig
+    )
+  }
+
+  try {
+    await runWithConfig({})
+    t.is(
+      warnings.some((message) => message.includes('lora_apply_mode="auto" may persist')),
+      true
+    )
+
+    warnings.length = 0
+    await runWithConfig({ lora_apply_mode: 'at_runtime' })
+    t.is(warnings.length, 0, 'at_runtime applies LoRA per call without a persistence warning')
+  } finally {
+    logger.warn = originalWarn
+  }
+})
+
+test('video op: validates LoRA paths using provider filesystem semantics', async function (t) {
+  const [{ video: videoOp }, { PluginRequestValidationFailedError }] = await Promise.all([
+    import('@/plugins/builtin/sdcpp-generation/ops/video'),
+    import('@/errors')
+  ])
+  const windowsLoraPath = 'C:\\models\\ltx-2-ingredients.safetensors'
+  let runCalls = 0
+
+  await withRegisteredVideoModel(
+    async function () {
+      runCalls++
+      return {
+        iterate: async function* () {}
+      }
+    },
+    async function (modelId) {
+      const request = {
+        modelId,
+        mode: 'txt2vid' as const,
+        prompt: 'a reference-conditioned explorer',
+        lora: windowsLoraPath,
+        video_frames: 97
+      }
+
+      if (path.isAbsolute(windowsLoraPath)) {
+        for await (const _chunk of videoOp(request)) {
+          // drain
+        }
+      } else {
+        await t.exception(
+          async function () {
+            await videoOp(request).next()
+          },
+          PluginRequestValidationFailedError as unknown as new () => Error
+        )
+      }
+
+      t.is(runCalls, path.isAbsolute(windowsLoraPath) ? 1 : 0)
+    },
+    async function () {},
+    true,
+    false,
+    { lora_apply_mode: 'at_runtime' }
+  )
+})
+
+test('video op: rejects LTX-only fields on non-LTX models', async function (t) {
+  const [{ video: videoOp }, { PluginRequestValidationFailedError }] = await Promise.all([
+    import('@/plugins/builtin/sdcpp-generation/ops/video'),
+    import('@/errors')
+  ])
+  let runCalls = 0
+
+  await withRegisteredVideoModel(
+    async function () {
+      runCalls++
+      return {
+        iterate: async function* () {}
+      }
+    },
+    async function (modelId) {
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            lora: '/models/adapter.safetensors'
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            scheduler: 'ltx2'
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      t.is(runCalls, 0, 'non-LTX requests never reach model.run')
     }
   )
 })

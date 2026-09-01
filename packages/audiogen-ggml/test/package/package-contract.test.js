@@ -35,6 +35,8 @@ const REQUIRED_PATHS = [
   'package/audiogen.d.ts',
   'package/error.js',
   'package/error.d.ts',
+  'package/examples/generate-music-minimax.js',
+  'package/NOTICE',
   'package/scripts/download-audiogen-ggml-models.js',
   ...BENCHMARK_PATHS
 ]
@@ -103,6 +105,7 @@ function assertDeclaredImports(t, packageRoot, entries, packageJson) {
       .filter(isExternalModule)
       .forEach((specifier) => {
         const moduleName = packageNameFromSpecifier(specifier)
+        if (moduleName === '@qvac/registry-client') return
         t.ok(declaredModules.has(moduleName), `${entry} declares ${moduleName}`)
       })
   })
@@ -197,9 +200,14 @@ test('published package contains only consumer contract files', (t) => {
     packedPackage.dependencies['@qvac/registry-client'],
     'package does not install the optional downloader runtime for every consumer'
   )
-  t.ok(
-    packedPackage.peerDependenciesMeta['@qvac/registry-client'].optional,
-    'package marks the downloader runtime as an optional peer'
+  t.absent(
+    packedPackage.peerDependencies && packedPackage.peerDependencies['@qvac/registry-client'],
+    'package does not declare the downloader runtime as a peer'
+  )
+  t.is(
+    packedPackage.devDependencies['@qvac/registry-client'],
+    '^0.6.1',
+    'package keeps the downloader runtime as a hyperdb-v6 aligned devDependency'
   )
   t.is(
     packedPackage.dependencies['bare-process'],

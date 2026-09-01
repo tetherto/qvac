@@ -26,6 +26,28 @@ test('llmConfigBaseSchema: split-mode is optional', (t) => {
   t.is(llmConfigBaseSchema.safeParse({}).success, true)
 })
 
+test('llmConfigBaseSchema: accepts every load_mode value', (t) => {
+  for (const load_mode of ['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'] as const) {
+    const result = llmConfigBaseSchema.safeParse({ load_mode })
+    t.is(result.success, true, `${load_mode} must be accepted`)
+    if (result.success) t.is(result.data.load_mode, load_mode)
+  }
+})
+
+test('llmConfigBaseSchema: rejects invalid load_mode values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ load_mode: 'buffered' }).success, false)
+})
+
+test('llmConfigBaseSchema: rejects legacy no_mmap under strict validation', (t) => {
+  t.is(llmConfigBaseSchema.strict().safeParse({ no_mmap: true }).success, false)
+})
+
+test('llmConfigSchema: leaves load_mode unset by default', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.is(result.data.load_mode, undefined)
+})
+
 test('llmConfigBaseSchema: accepts continuous-batching parallel slots', (t) => {
   const result = llmConfigBaseSchema.safeParse({ parallel: 4 })
   t.is(result.success, true)
@@ -148,6 +170,34 @@ test('llmConfigSchema: explicit image_tile_mode overrides the default', (t) => {
   const result = llmConfigSchema.safeParse({ image_tile_mode: 'batched' })
   t.is(result.success, true)
   if (result.success) t.is(result.data.image_tile_mode, 'batched')
+})
+
+test('llmConfigBaseSchema: accepts valid image_no_upscale values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'on' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'off' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects invalid image_no_upscale values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: true }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'yes' }).success, false)
+})
+
+// Unset must stay unset. The addon reads absence as fabric's -1 sentinel, meaning
+// "use the model's own GGUF value"; a default here would force one rule on every
+// model and silently change preprocessing for existing callers.
+test('llmConfigBaseSchema: image_no_upscale is optional and has no default', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({}).success, true)
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.is(result.data.image_no_upscale, undefined)
+})
+
+// The regression this guards: load-model.ts validates modelConfig with
+// llmConfigBaseSchema.strict(), so a field present in the SDK copy of this schema but
+// missing here is rejected before it ever reaches the addon.
+test('loadBuiltinModelOptions: strict validation admits image_no_upscale', (t) => {
+  t.is(llmConfigBaseSchema.strict().safeParse({ image_no_upscale: 'on' }).success, true)
 })
 
 test('llmConfigBaseSchema: accepts mmproj-use-gpu boolean', (t) => {

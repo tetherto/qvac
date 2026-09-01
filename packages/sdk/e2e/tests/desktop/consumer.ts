@@ -1,4 +1,4 @@
-import { createExecutor, SkipExecutor, type TestDefinition } from '@qvac/qvac-test-suite'
+import { createExecutor, SkipExecutor, type TestDefinition } from '@qvac/test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -37,9 +37,13 @@ import {
   PI05_BASE_Q_AGGRESSIVE,
   GROOT_Q5_VF16,
   GROOT_MULTI_Q5_VF16,
-  SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
+  ABOT_WORLD_0_5B_Q8_0,
+  ABOT_WORLD_0_5B_LF_VAE,
+  ABOT_WORLD_0_5B_LF_VAE_F16,
+  UMT5_XXL_ENC_Q8_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
   SD_V2_1_1B_Q8_0,
@@ -86,8 +90,8 @@ import { BciExecutor } from '../shared/executors/node/bci-executor.js'
 import { VisionExecutor } from '../shared/executors/node/vision-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
-import { DelegatedInferenceExecutor } from '../shared/executors/node/delegated-inference-executor.js'
 import { NodeDiffusionExecutor } from '../shared/executors/node/diffusion-executor.js'
+import { NodeWorldExecutor } from '../shared/executors/node/world-executor.js'
 import { AudioGenExecutor } from '../shared/executors/audio-gen-executor.js'
 import { FinetuneExecutor } from '../shared/executors/node/finetune-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
@@ -482,21 +486,33 @@ resources.define('bci', {
 })
 
 resources.define('vision', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
     ctx_size: 4096,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
 resources.define('vision-batch', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
     ctx_size: 2048,
     parallel: 2,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+  }
+})
+
+resources.define('vision-upscale', {
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 4096,
+    image_no_upscale: 'off',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
@@ -509,6 +525,21 @@ resources.define('diffusion', {
     prediction: 'flux2_flow',
     llmModelSrc: QWEN3_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE
+  }
+})
+
+// ABot-World. Loaded without sceneSrc on purpose: activation is deferred until
+// worldCreateScene builds a pack, which is the flow the tests exercise. The
+// walk needs real VRAM — at the 448x256 tier the tests use, roughly 6 GB.
+resources.define('world', {
+  constant: ABOT_WORLD_0_5B_Q8_0,
+  type: 'sdcpp-generation',
+  config: {
+    mode: 'world',
+    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
+    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
+    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
+    world: { seed: 42, kvCache: true, frameJpegQuality: 85 }
   }
 })
 
@@ -681,8 +712,8 @@ export const executor = createExecutor({
     // download-resilience-*, and dispatch is first-match-wins.
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
-    new DelegatedInferenceExecutor(),
     new NodeDiffusionExecutor(resources),
+    new NodeWorldExecutor(resources),
     new AudioGenExecutor(resources, {
       resolveAudioAsset: (fileName) => path.resolve(process.cwd(), 'assets/audio', fileName)
     }),

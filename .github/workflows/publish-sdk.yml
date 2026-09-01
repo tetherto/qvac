@@ -10,24 +10,6 @@ on:
     paths:
       - "packages/inference/**"
       - "packages/sdk/**"
-      - "packages/bare-sdk/**"
-      - "packages/sdk-python/**"
-  pull_request_target:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - edited
-      - labeled
-    branches:
-      - release-*
-      - feature-*
-      - tmp-*
-      - main
-    paths:
-      - "packages/inference/**"
-      - "packages/sdk/**"
-      - "packages/bare-sdk/**"
       - "packages/sdk-python/**"
 
   workflow_dispatch:
@@ -90,6 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
         with:
@@ -119,32 +102,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
           fetch-depth: 0
 
-      - name: Fetch PR head commits
-        if: github.event_name == 'pull_request_target'
-        run: |
-          git fetch origin ${{ github.event.pull_request.head.sha }}
-
-      - name: Verify inference / sdk / bare-sdk / python version lockstep
+      - name: Verify inference / sdk / python version lockstep
         shell: bash
-        env:
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          # pull_request_target pins the working tree to base.sha; read manifests
-          # from the PR head SHA so a missed sdk / bare-sdk / python bump fails
-          # pre-merge (pr-checks-sdk-python.yml may not run on an engine-only bump).
-          #
-          # @qvac/inference is the sole version anchor: sdk, bare-sdk and
+          # @qvac/inference is the sole version anchor: sdk and
           # sdk-python must all match it. Run /qv-sdk-lockstep-sync to align.
           set -euo pipefail
-          REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
+          REF="${GITHUB_SHA}"
           INF_VER=$(git show "${REF}":packages/inference/package.json | jq -r .version)
           SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
-          BARE_VER=$(git show "${REF}":packages/bare-sdk/package.json | jq -r .version)
           PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
           if [ -z "$PY_VER" ]; then
             echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${REF}"
@@ -154,15 +126,11 @@ jobs:
             echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs anchor @qvac/inference@$INF_VER at ${REF}. sdk must match the inference anchor. Run /qv-sdk-lockstep-sync before release."
             exit 1
           fi
-          if [ "$BARE_VER" != "$INF_VER" ]; then
-            echo "::error title=Version mismatch::@qvac/bare-sdk@$BARE_VER vs anchor @qvac/inference@$INF_VER at ${REF}. bare-sdk must match the inference anchor. Run /qv-sdk-lockstep-sync before release."
-            exit 1
-          fi
           if [ "$PY_VER" != "$INF_VER" ]; then
             echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs anchor @qvac/inference@$INF_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
             exit 1
           fi
-          echo "OK: @qvac/inference, @qvac/sdk, @qvac/bare-sdk, and tetherto-qvac-sdk all at $INF_VER (verified at ${REF})"
+          echo "OK: @qvac/inference, @qvac/sdk, and tetherto-qvac-sdk all at $INF_VER (verified at ${REF})"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
@@ -204,6 +172,16 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+        working-directory: ${{ env.WORKDIR }}
+
+      # Compile the SDK against the in-repo @qvac/inference at this commit, not
+      # the previously-published npm release (which lags behind engine API the
+      # SDK already consumes). This only affects the dist built here; the
+      # published dependency is set per channel below — GPR is pinned to the
+      # co-published @tetherto/inference-mono (see publish-gpr), npm keeps its
+      # committed range (resolved to the inference released in the same run).
+      - name: Build against workspace @qvac/inference
+        run: bun run sdk-source:workspace
         working-directory: ${{ env.WORKDIR }}
 
       - name: Modify package name for branch-based builds
@@ -304,45 +282,6 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       branch: ${{ steps.version.outputs.branch }}
 
-  build-bare-sdk:
-    name: Build @qvac/bare-sdk (from sdk dist)
-    needs: [build]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      WORKDIR_BARE: packages/bare-sdk
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
-
-      - name: Download @qvac/sdk dist artifact
-        uses: ./.github/actions/download-release-artifact
-        with:
-          name: dist
-          path: packages/sdk/dist/
-
-      - name: Build bare-sdk (bundle from sdk + run guards)
-        shell: bash
-        working-directory: ${{ env.WORKDIR_BARE }}
-        run: bun run build
-
-      - name: Upload bare-sdk dist artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: dist-bare-sdk
-          path: ${{ env.WORKDIR_BARE }}/dist/
-          retention-days: 30
-
   build-inference:
     name: Build @qvac/inference
     needs: [build]
@@ -360,9 +299,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
@@ -419,21 +359,13 @@ jobs:
       run:
         working-directory: packages/sdk-python
     steps:
-      # pull_request_target: keep working tree on base.sha (do not execute PR head
-      # under this job's secrets). Contract/build smoke the base tree; PR contract
-      # coverage is pr-checks-sdk-python.yml. Lockstep reads head.sha like `build`.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Fetch PR head commits
-        if: github.event_name == 'pull_request_target'
-        working-directory: ${{ github.workspace }}
-        run: |
-          git fetch origin ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
@@ -454,13 +386,11 @@ jobs:
 
       - name: Verify version lockstep with @qvac/inference
         working-directory: ${{ github.workspace }}
-        env:
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           # @qvac/inference is the sole version anchor. This job can run
           # standalone (publish_pypi_only), so check python against the anchor.
           set -euo pipefail
-          REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
+          REF="${GITHUB_SHA}"
           INF_VER=$(git show "${REF}":packages/inference/package.json | jq -r .version)
           PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
           if [ -z "$PY_VER" ]; then
@@ -534,7 +464,7 @@ jobs:
 
   publish-gpr:
     name: Publish to GitHub Packages (GPR)
-    needs: [build, publish-logic]
+    needs: [build, publish-logic, publish-gpr-inference]
     if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -544,6 +474,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download build artifacts
         uses: ./.github/actions/download-release-artifact
@@ -590,6 +522,35 @@ jobs:
           MODIFIED_NAME=$(node -p "require('./package.json').name")
           echo "Package name: $ORIGINAL_NAME → $MODIFIED_NAME"
 
+      # The dist was compiled against the in-repo engine, so the published mono
+      # build must depend on the inference published in THIS run, not the stale
+      # public @qvac/inference. GPR uses ${version}-tmp.runid-${run_id}, and
+      # run_id is shared across jobs, so this pin matches the co-published
+      # @tetherto/inference-mono exactly. An npm alias keeps the SDK's own
+      # `import '@qvac/inference'` resolving to that package.
+      # Fail closed: only pin when the inference GPR publish actually succeeded.
+      # publish-gpr-inference is continue-on-error and its action writes
+      # gpr_published_version even on a failed publish, so a non-empty check
+      # alone could pin to a version that was never published (install -> 404).
+      # If inference didn't publish, leave the committed range — installable,
+      # just not this run's engine.
+      - name: Pin @qvac/inference to the co-published inference-mono
+        if: needs.publish-gpr-inference.result == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          INFERENCE_MONO_VERSION: ${{ needs.publish-gpr-inference.outputs.published_version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INFERENCE_MONO_VERSION}" ]; then
+            echo "::warning::inference-mono version unavailable; leaving @qvac/inference unchanged"
+            exit 0
+          fi
+          SPEC="npm:@tetherto/inference-mono@${INFERENCE_MONO_VERSION}"
+          echo "Pinning @qvac/inference -> ${SPEC}"
+          jq --arg spec "$SPEC" '.dependencies["@qvac/inference"] = $spec' package.json > package.json.tmp
+          mv package.json.tmp package.json
+          node -p "'@qvac/inference -> ' + require('./package.json').dependencies['@qvac/inference']"
+
       - name: Publish to GitHub Package Registry
         id: publish
         uses: ./.github/actions/publish-library-to-gpr
@@ -599,71 +560,14 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           name-suffix: "-mono"
 
-  publish-gpr-bare-sdk:
-    name: Publish @qvac/bare-sdk to GitHub Packages (GPR)
-    needs: [build-bare-sdk, publish-logic]
-    if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    permissions:
-      contents: read
-      packages: write
-    env:
-      WORKDIR_BARE: packages/bare-sdk
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Download bare-sdk dist artifact
-        uses: ./.github/actions/download-release-artifact
-        with:
-          name: dist-bare-sdk
-          path: ${{ env.WORKDIR_BARE }}/dist/
-
-      - name: Modify bare-sdk package name for branch-based test publishing
-        working-directory: ${{ env.WORKDIR_BARE }}
-        run: |
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-
-          case "$BRANCH_NAME" in
-            dev)
-              SUFFIX="dev"
-              ;;
-            fix-*|feature-*)
-              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | tr '[:upper:]' '[:lower:]')
-              ;;
-            *)
-              echo "Branch $BRANCH_NAME not configured for modified package name"
-              exit 0
-              ;;
-          esac
-
-          echo "Modifying bare-sdk package name for branch: $BRANCH_NAME → suffix: $SUFFIX"
-
-          ORIGINAL_NAME=$(node -p "require('./package.json').name")
-          NEW_NAME="${ORIGINAL_NAME}-${SUFFIX}"
-
-          jq ".name = \"${NEW_NAME}\"" package.json > package.json.tmp
-          mv package.json.tmp package.json
-
-          MODIFIED_NAME=$(node -p "require('./package.json').name")
-          echo "Package name: $ORIGINAL_NAME → $MODIFIED_NAME"
-
-      - name: Publish to GitHub Package Registry
-        id: publish
-        uses: ./.github/actions/publish-library-to-gpr
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || needs.publish-logic.outputs.gpr_tag || 'dev'}}
-          workdir: ${{ env.WORKDIR_BARE }}
-          name-suffix: "-mono"
-
   publish-gpr-inference:
     name: Publish @qvac/inference to GitHub Packages (GPR)
     needs: [build-inference, publish-logic]
     if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
+    outputs:
+      published_version: ${{ steps.publish.outputs.gpr_published_version }}
     permissions:
       contents: read
       packages: write
@@ -674,6 +578,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download inference dist artifact
         uses: ./.github/actions/download-release-artifact
@@ -751,6 +657,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download build artifacts
         uses: ./.github/actions/download-release-artifact
@@ -779,61 +687,6 @@ jobs:
         with:
           tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: ${{ env.WORKDIR }}
-
-  publish-npm-bare-sdk:
-    name: Publish @qvac/bare-sdk to NPM
-    needs:
-      - fork-approval
-      - build-bare-sdk
-      - publish-logic
-      - release-merge-guard
-    if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-      !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
-    runs-on: ubuntu-latest
-    environment: npm
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-    env:
-      WORKDIR_BARE: packages/bare-sdk
-    steps:
-      - name: Validate npm_tag input
-        if: inputs.npm_tag != ''
-        shell: bash
-        run: |
-          tag="${{ inputs.npm_tag }}"
-          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
-            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
-            exit 1
-          fi
-
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Download bare-sdk dist artifact
-        uses: ./.github/actions/download-release-artifact
-        with:
-          name: dist-bare-sdk
-          path: ${{ env.WORKDIR_BARE }}/dist/
-
-      - name: Determine dist-tag
-        id: dist-tag-2
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
-        with:
-          workdir: ${{ env.WORKDIR_BARE }}
-          tag: ${{ inputs.npm_tag }}
-
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
-        with:
-          tag: ${{ steps.dist-tag-2.outputs.tag }}
-          workdir: ${{ env.WORKDIR_BARE }}
 
   publish-npm-inference:
     name: Publish @qvac/inference to NPM
@@ -871,6 +724,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download inference dist artifact
         uses: ./.github/actions/download-release-artifact
@@ -901,7 +756,6 @@ jobs:
       - publish-logic
       - release-merge-guard
       - publish-npm
-      - publish-npm-bare-sdk
       - publish-npm-inference
     # Lockstep release after npm publishes. Escape hatch:
     # workflow_dispatch with publish_pypi_only=true (npm already shipped).
@@ -915,7 +769,6 @@ jobs:
           needs.publish-logic.outputs.publish_release == 'true' &&
           (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
           needs.publish-npm.result == 'success' &&
-          needs.publish-npm-bare-sdk.result == 'success' &&
           needs.publish-npm-inference.result == 'success'
         )
         ||
@@ -945,10 +798,9 @@ jobs:
   # Require all lockstep npm publishes before tagging sdk-v*.
   # PyPI is separate; recover with workflow_dispatch publish_pypi_only.
   publish-release:
-    needs: [publish-npm, publish-npm-bare-sdk, publish-npm-inference]
+    needs: [publish-npm, publish-npm-inference]
     if: >-
       needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
-      && needs.publish-npm-bare-sdk.result == 'success' && needs.publish-npm-bare-sdk.outputs.published_version != ''
       && needs.publish-npm-inference.result == 'success' && needs.publish-npm-inference.outputs.published_version != ''
     permissions:
       contents: write

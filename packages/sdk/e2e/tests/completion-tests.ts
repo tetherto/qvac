@@ -1,5 +1,5 @@
 // Completion test definitions
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 interface GenerationParams {
   temp?: number
@@ -50,7 +50,7 @@ interface CompletionTestOptions {
   estimatedDurationMs?: number
   suites?: string[]
   skip?: { reason: string }
-  dependency?: 'llm' | 'none'
+  dependency?: 'llm' | 'llm-batch' | 'none'
 }
 
 // Helper for creating completion tests with common structure
@@ -370,6 +370,22 @@ export const completionConcurrentRequests = createCompletionTest(
   { estimatedDurationMs: 15000, suites: ['smoke'] }
 )
 
+// Proves real concurrent decoding, not just eventual success: fires several
+// streamed completions at once on a parallel:4 model and asserts (in the
+// executor) that at least two decode intervals overlap. A serialized model
+// would run them one after another with zero overlap. See
+// CompletionExecutor.concurrentOverlap.
+export const completionConcurrentOverlap = createCompletionTest(
+  'completion-concurrent-overlap',
+  {
+    history: [{ role: 'user', content: 'Count from one to twenty using words.' }],
+    stream: true,
+    generationParams: { ...DETERMINISTIC, predict: 64 }
+  },
+  { validation: 'type', expectedType: 'string' },
+  { estimatedDurationMs: 20000, suites: ['smoke'], dependency: 'llm-batch' }
+)
+
 export const completionCountInWords = createCompletionTest(
   'completion-count-in-words',
   {
@@ -655,6 +671,7 @@ export const completionTests = [
   completionSeedReproducibility,
   completionStopSequencesMultiple,
   completionConcurrentRequests,
+  completionConcurrentOverlap,
   completionCountInWords,
   completionWithWhitespace,
   completionJsonFormat,

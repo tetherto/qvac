@@ -70,7 +70,7 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/vla-ggml@<ver> (published) or @tetherto/vla-ggml@<dev> (GPR) to force-install a specific build."
+        description: "Full NPM package spec to test. Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; set @qvac/vla-ggml@<ver> (published) or @tetherto/vla-ggml-mono@<dev> (GPR) to force-install a specific build."
         type: string
         required: false
         default: ""
@@ -100,6 +100,11 @@ concurrency:
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Defense-in-depth gate for workflow_dispatch. The repository's PR entry
   # point (on-pr-vla.yml) already runs authorize-pr before invoking this
   # workflow over workflow_call, so workflow_call runs are pre-authorized.
@@ -176,16 +181,19 @@ jobs:
     # workflow_call: validate-devices is skipped; its `skipped` result keeps
     # this job running exactly as before.
     # workflow_dispatch: a bad/empty device selection blocks this job.
-    needs: [authorize, authorize-dispatch, validate-devices]
+    needs: [runner_names, authorize, authorize-dispatch, validate-devices]
     if: |
       always() &&
+      needs.runner_names.result == 'success' &&
       (needs.authorize.result == 'success' || needs.authorize-dispatch.result == 'success') &&
       (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped')
     name: Build ${{ matrix.platform }} and Run E2E Tests
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2204_x64 }}
     environment: release
     timeout-minutes: 120
-    continue-on-error: true  # Don't block PR merges if tests fail
+    # No continue-on-error: a Device Farm test failure must fail this run on
+    # every trigger (workflow_dispatch, workflow_call, schedule). Re-adding it
+    # silently turns failed runs green.
     permissions:
       contents: read
       packages: read
@@ -195,7 +203,7 @@ jobs:
       fail-fast: false
       # On workflow_dispatch, run only the chosen platform (devices come from
       # the manual inputs). workflow_call runs both platforms as before.
-      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04"},{"platform":"iOS","os":"macos-14"}]}') }}
 
     steps:
       - name: Validate Dispatch Inputs
@@ -236,9 +244,12 @@ jobs:
           addon-npm-name: '@qvac/vla-ggml'
           prebuild-artifact-prefix: 'vla-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          # Manual dispatch (inputs.platform set): default (empty `package`) tests
-          # this branch's native prebuild; @qvac/vla-ggml@<ver> = published, @tetherto/vla-ggml@<dev>
-          # = this branch's GPR build). workflow_call is untouched (artifact-first).
+          # Manual dispatch (inputs.platform set). An empty `package` does NOT test
+          # this branch's native code: a standalone dispatch produces no prebuild
+          # artifacts, so the fallback resolves the published @qvac/vla-ggml@latest.
+          # @qvac/vla-ggml@<ver> = published; @tetherto/vla-ggml-mono@<dev> = a branch
+          # build from GitHub Packages, the only way to put unmerged native code on a
+          # device. See docs/ci/MOBILE-ON-DEMAND.md. workflow_call is untouched (artifact-first).
           package-version: ${{ inputs.platform != '' && inputs.package || '' }}
           force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
 
@@ -446,7 +457,7 @@ jobs:
       # VLA reuses the LLAMACPP_EMBED Device Farm project + pool secrets
       # (see env-block comment above). The composite auto-detects
       # test-groups.json under <addon-workdir>/test/mobile/; VLA ships one
-      # (smolvla/pi05/groot), so the test specs come from it.
+      # (smolvla/groot), so the test specs come from it.
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -536,3 +547,4 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+

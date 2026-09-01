@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "noEmitOnError": true,
+    "skipLibCheck": true,
+    "esModuleInterop": false,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@qvac/embed-llamacpp": ["../../index"],
+      "@qvac/embed-llamacpp/idMapIndex": ["../../idMapIndex"]
+    }
+  },
+  "files": ["consumer-cjs.test.ts"]
+}

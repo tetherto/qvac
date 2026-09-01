@@ -1,5 +1,5 @@
 name: General CI/CD (native addons, nx)
-# Consolidates the 14 on-merge-<pkg>.yml publish workflows (dorny selects the
+# Consolidates the 13 on-merge-<pkg>.yml publish workflows (dorny selects the
 # changed package, matrix publishes it, no nx-affected). Excludes model-fit.
 
 on:
@@ -20,7 +20,6 @@ on:
       - "packages/fabric/**"
       - "packages/llm-llamacpp/**"
       - "packages/ocr-ggml/**"
-      - "packages/onnx/**"
       - "packages/translation-nmtcpp/**"
       - "packages/tts-ggml/**"
       - "packages/vla-ggml/**"
@@ -41,7 +40,6 @@ on:
           - fabric
           - llm-llamacpp
           - ocr-ggml
-          - onnx
           - translation-nmtcpp
           - tts-ggml
           - vla-ggml
@@ -86,7 +84,6 @@ jobs:
             fabric: packages/fabric/**
             llm-llamacpp: packages/llm-llamacpp/**
             ocr-ggml: packages/ocr-ggml/**
-            onnx: packages/onnx/**
             translation-nmtcpp: packages/translation-nmtcpp/**
             tts-ggml: packages/tts-ggml/**
             vla-ggml: packages/vla-ggml/**

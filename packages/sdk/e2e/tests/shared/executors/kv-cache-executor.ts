@@ -1,5 +1,5 @@
 import { cancel, completion, deleteCache } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { kvCacheTests } from '../../kv-cache-tests.js'
 import { callWhenAddonIdle } from '../utils/addon-idle.js'
@@ -28,6 +28,13 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         return [test.testId, this.toolsSequentialSave.bind(this)]
       if (test.testId === 'kv-cache-cancel-then-new-prompt')
         return [test.testId, this.cancelThenNewPrompt.bind(this)]
+      if (
+        test.testId === 'kv-cache-concurrent-same-key' ||
+        test.testId === 'kv-cache-concurrent-same-key-auto'
+      )
+        return [test.testId, this.concurrentSameKey.bind(this)]
+      if (test.testId === 'kv-cache-auto-concurrency')
+        return [test.testId, this.autoCacheConcurrency.bind(this)]
       if (
         test.testId.startsWith('kv-cache-delete-') ||
         test.testId === 'kv-cache-hypercore-deletion'
@@ -107,6 +114,228 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `KV cache completion failed: ${errorMsg}` }
+    }
+  }
+
+  // Fires several completions sharing one kvCache key at once on a parallel>1
+  // model and proves the per-cache-path lock serializes them: their decode
+  // intervals must never overlap (peak overlap 1), and all must still succeed.
+  // Called directly (not via callWhenAddonIdle) so the requests race for real.
+  async concurrentSameKey(
+    params: {
+      history: ChatMessage[]
+      kvCache: string | boolean
+      generationParams?: Record<string, unknown>
+    },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm-batch')
+    const CONCURRENCY = 2
+
+    const fire = () => {
+      const run = completion({
+        modelId,
+        history: params.history,
+        stream: true,
+        kvCache: params.kvCache as never,
+        ...(params.generationParams ? { generationParams: params.generationParams as never } : {})
+      })
+      let start = 0
+      return (async () => {
+        let text = ''
+        for await (const token of run.tokenStream) {
+          if (start === 0) start = Date.now()
+          text += token
+        }
+        return { start, end: Date.now(), text }
+      })()
+    }
+
+    let intervals: Array<{ start: number; end: number; text: string }>
+    try {
+      intervals = await Promise.all(Array.from({ length: CONCURRENCY }, fire))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Concurrent same-key completion threw: ${msg}` }
+    }
+
+    const empty = intervals.filter((i) => i.text.length === 0).length
+    if (empty > 0) {
+      return {
+        passed: false,
+        output: `${empty}/${CONCURRENCY} same-key completions produced no output`
+      }
+    }
+
+    // Peak number of decode intervals live at once; ties resolve end-before-
+    // start so back-to-back turns don't read as overlap.
+    const events = intervals.flatMap(({ start, end }) => [
+      { t: start, delta: 1 },
+      { t: end, delta: -1 }
+    ])
+    events.sort((a, b) => a.t - b.t || a.delta - b.delta)
+    let live = 0
+    let peakOverlap = 0
+    for (const event of events) {
+      live += event.delta
+      if (live > peakOverlap) peakOverlap = live
+    }
+
+    if (peakOverlap > 1) {
+      return {
+        passed: false,
+        output:
+          `Same-key cached completions overlapped (peak ${peakOverlap}); the ` +
+          `per-cache-path lock did not serialize them`
+      }
+    }
+
+    const failed = intervals
+      .map((i) => ValidationHelpers.validate(i.text, expectation))
+      .find((result) => !result.passed)
+    if (failed) {
+      return { passed: false, output: `Same-key completion failed expectation: ${failed.output}` }
+    }
+
+    return {
+      passed: true,
+      output: `Same-key cached completions serialized (peak overlap ${peakOverlap}) and both succeeded`
+    }
+  }
+
+  // Auto-cache turns must decode concurrently at the engine level — both with
+  // each other (cached-vs-cached) and alongside plain completions without
+  // starving them. Gates on the engine's own avgConcurrentSeq metric.
+  async autoCacheConcurrency(
+    params: { generationParams?: Record<string, unknown> },
+    _expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm-batch')
+    const TOPICS = ['oceans', 'mountains', 'deserts', 'forests']
+
+    const fire = (content: string, useCache: boolean) => {
+      const run = completion({
+        modelId,
+        history: [{ role: 'user', content }],
+        stream: true,
+        ...(useCache ? { kvCache: true } : {}),
+        ...(params.generationParams ? { generationParams: params.generationParams as never } : {})
+      } as never) as { tokenStream: AsyncIterable<string>; stats: Promise<unknown> }
+      return (async () => {
+        let text = ''
+        let firstTokenAt = 0
+        // Record lastTokenAt per token (the last DECODED token), not after the
+        // stream closes: a cached stream closes only after its post-decode KV
+        // commit/rename, so a stream-close timestamp would stretch the decode
+        // window across the commit and falsely count commit-phase overlap as
+        // decode overlap.
+        let lastTokenAt = 0
+        for await (const t of run.tokenStream) {
+          const now = Date.now()
+          if (firstTokenAt === 0) firstTokenAt = now
+          lastTokenAt = now
+          text += t
+        }
+        const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
+        return {
+          text,
+          avgConcurrentSeq: stats?.avgConcurrentSeq,
+          useCache,
+          firstTokenAt,
+          lastTokenAt
+        }
+      })()
+    }
+
+    type Result = {
+      text: string
+      avgConcurrentSeq?: number
+      useCache: boolean
+      firstTokenAt: number
+      lastTokenAt: number
+    }
+    const maxSeq = (group: Result[]) =>
+      group.reduce<number>(
+        (m, r) =>
+          typeof r.avgConcurrentSeq === 'number' && r.avgConcurrentSeq > m ? r.avgConcurrentSeq : m,
+        0
+      )
+
+    // Phase 1 — cached-vs-cached native concurrency. Fire only different-history
+    // auto-cache turns (distinct cache paths, so distinct per-path locks). With
+    // no plain requests in flight, a cached response's engine avgConcurrentSeq
+    // can exceed 1 only by decoding alongside ANOTHER cached response — a direct
+    // native proof that cached turns don't serialize, which client-side token
+    // windows can't give (they stay open through post-decode commit/final).
+    let cachedOnly: Result[]
+    try {
+      cachedOnly = await Promise.all(TOPICS.map((t) => fire(`Tell me about ${t} in detail.`, true)))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Cached-only auto turns threw: ${msg}` }
+    }
+    const cachedEmpty = cachedOnly.filter((r) => r.text.length === 0).length
+    if (cachedEmpty > 0) {
+      return {
+        passed: false,
+        output: `${cachedEmpty}/${cachedOnly.length} cached-only turns produced no output`
+      }
+    }
+    const cachedOnlySeq = maxSeq(cachedOnly)
+    if (cachedOnlySeq <= 1) {
+      return {
+        passed: false,
+        output: `Different-history auto-cache turns serialized (engine avgConcurrentSeq ${cachedOnlySeq.toFixed(2)} <= 1 with no plain traffic)`
+      }
+    }
+
+    // Phase 2 — mixed starvation. Interleave cached and plain so both kinds land
+    // in the first `parallel` admission window; the plain turns must not starve
+    // behind the cached ones.
+    let results: Result[]
+    try {
+      results = await Promise.all(
+        TOPICS.flatMap((topic) => [
+          fire(`Tell me about ${topic} in detail.`, true),
+          fire(`Name one fact about ${topic}.`, false)
+        ])
+      )
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Mixed auto-cache + plain completions threw: ${msg}` }
+    }
+    const empty = results.filter((r) => r.text.length === 0).length
+    if (empty > 0) {
+      return {
+        passed: false,
+        output: `${empty}/${results.length} mixed completions produced no output`
+      }
+    }
+    const auto = results.filter((r) => r.useCache)
+    const plain = results.filter((r) => !r.useCache)
+    const plainSeq = maxSeq(plain)
+    if (plainSeq <= 1) {
+      return {
+        passed: false,
+        output: `Plain completions starved behind auto-cache turns (engine avgConcurrentSeq ${plainSeq.toFixed(2)} <= 1)`
+      }
+    }
+
+    // Per-request proof: a plain request produced tokens while an auto-cache
+    // request was still decoding, not after it released a serializing lock.
+    const overlaps = plain.some((p) =>
+      auto.some((a) => p.firstTokenAt < a.lastTokenAt && a.firstTokenAt < p.lastTokenAt)
+    )
+    if (!overlaps) {
+      return {
+        passed: false,
+        output: 'No plain completion produced tokens while an auto-cache turn was still decoding'
+      }
+    }
+
+    return {
+      passed: true,
+      output: `Auto-cache turns decode concurrently with each other (cached-only avgConcurrentSeq ${cachedOnlySeq.toFixed(2)}) and don't starve plain completions (plain avgConcurrentSeq ${plainSeq.toFixed(2)}, token windows overlap)`
     }
   }
 

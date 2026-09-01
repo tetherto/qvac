@@ -29,10 +29,24 @@ You should load two models:
 - a matching projection model (`mmproj-*.gguf`). Model file format: `*.gguf`.
 
 Recommended pairs:
-- SmolVLM2 + mmproj-*
+- VisionPsy Nano — one weights + `mmproj` pair per variant (choose the pair for the variant you want):
+  - Flash: `VISIONPSY_NANO_460M_MULTIMODAL_Q8_0` (or `..._Q4_K_M`) + `MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0`.
+  - Base: `VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1` (or `..._Q4_K_M_1`) + `MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1`.
+  - Note: the un-suffixed constants are Flash; the `_1`-suffixed constants are base.
 - Qwen2.5-Omni + mmproj-* (or Qwen3-VL + mmproj-*)
+- SmolVLM2 + mmproj-*
 
 For models available as constants, see [SDK — Models](/introduction#models).
+
+### VisionPsy Nano: base vs. Flash
+
+VisionPsy Nano ships in two variants — base and Flash — as separate weights + `mmproj` pairs (see the constants above). Pick a variant by loading its matching pair; the flag `modelConfig.image_no_upscale` supplies the preprocessing rule the two mmprojs cannot express through their (identical) metadata, so you must set it to match the pair you loaded:
+- Base pair: leave `image_no_upscale` unset (the field is optional; unset defers to the mmproj's own value).
+- Flash pair: set `image_no_upscale: 'on'`.
+
+Loading Flash weights with `image_no_upscale` unset — or base weights with `image_no_upscale: 'on'` — passes load validation (both mmprojs declare the same `preproc_image_size`), but silently uses the wrong preprocessing rule and degrades quality.
+
+`image_no_upscale` is read only by the idefics3-style preprocessor, and it takes effect only when the loaded `mmproj` declares `clip.vision.preproc_image_size`. In practice, that means the VisionPsy pairs above — on the other recommended pairs the flag either warns and is ignored (Qwen2.5-Omni / Qwen3-VL) or is accepted but inert (SmolVLM2, whose published `mmproj` declares no `preproc_image_size`). Treat `image_no_upscale` as a VisionPsy-only key.
 
 ## Example
 

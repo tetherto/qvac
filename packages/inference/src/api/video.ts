@@ -1,12 +1,8 @@
-import {
-  videoStreamResponseSchema,
-  type VideoStreamRequest,
-  type VideoClientParams,
-  type VideoStats
-} from '@/schemas/index'
+import { videoStreamResponseSchema, type VideoClientParams, type VideoStats } from '@/schemas/index'
+import { createVideoStreamRequest } from '@/api/video-request'
 import { stream as streamRpc } from '@/dispatch'
 import { generateRequestId } from '@/runtime/request-id'
-import { decodeBase64, encodeBase64 } from '@/utils/encoding'
+import { decodeBase64 } from '@/utils/encoding'
 
 export interface VideoProgressTick {
   step: number
@@ -32,8 +28,8 @@ export interface VideoResult {
  * `modelConfig.clipVisionModelSrc` set to `clip_vision_h.safetensors`; LTX-2
  * `img2vid` conditions on the first frame through its video VAE and needs no
  * CLIP vision weights (the same LTX-2 model loaded for txt2vid also does
- * img2vid). On React Native, prefer a `modelId` loaded with a `delegate` since
- * the bundled video diffusion models are too large for typical mobile devices.
+ * img2vid). On React Native, the bundled video diffusion models are too large
+ * for typical mobile devices.
  *
  * @example Basic txt2vid generation
  * ```typescript
@@ -87,6 +83,26 @@ export interface VideoResult {
  * });
  * ```
  *
+ * @example LTX Ingredients reference conditioning
+ * ```typescript
+ * const referenceSheet = fs.readFileSync("reference-sheet.png");
+ * const { outputs } = video({
+ *   modelId,
+ *   mode: "txt2vid",
+ *   prompt: "Reference sheet: a red-haired explorer. Generated video: the explorer crosses a snowy ridge.",
+ *   lora: "/absolute/path/to/ltx-2-ingredients.safetensors",
+ *   lora_strength: 1.37,
+ *   stg_scale: 1,
+ *   stg_block: 29,
+ *   reference_images: [referenceSheet],
+ *   reference_attention_strength: 1,
+ *   reference_downscale_factor: 1,
+ *   video_frames: 217,
+ *   scheduler: "ltx2",
+ * });
+ * const buffers = await outputs;
+ * ```
+ *
  * @example Cancellation via requestId
  * ```typescript
  * const { requestId, outputs } = video({ modelId, mode: "txt2vid", prompt: "..." });
@@ -96,19 +112,7 @@ export interface VideoResult {
  */
 export function video(params: VideoClientParams): VideoResult {
   const requestId = generateRequestId()
-
-  const { control_frames, init_image, ...rest } = params
-  const request: VideoStreamRequest = {
-    ...rest,
-    ...(control_frames !== undefined && {
-      control_frames: control_frames.map(encodeBase64)
-    }),
-    ...(init_image !== undefined && {
-      init_image: encodeBase64(init_image)
-    }),
-    type: 'videoStream',
-    requestId
-  }
+  const request = createVideoStreamRequest(params, requestId)
 
   let statsResolver: (value: VideoStats | undefined) => void = () => {}
   let statsRejecter: (error: unknown) => void = () => {}

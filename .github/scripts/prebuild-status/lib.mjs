@@ -18,7 +18,6 @@ export const PREBUILD_KEYS = [
   'llm-llamacpp',
   'model-fit',
   'ocr-ggml',
-  'onnx',
   'translation-nmtcpp',
   'tts-ggml',
   'vla',

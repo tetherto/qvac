@@ -7,8 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-28
+
 ### Added
 
+- CUDA GPU acceleration on linux x64: the prebuild now builds with
+  `ENABLE_CUDA=ON` and bundles the CUDA backend alongside Vulkan and the
+  per-arch CPU variants as runtime-loaded modules; `useGPU: true` prefers
+  CUDA on NVIDIA hosts (ACE-Step and MiniMax-Music3). CUDA engages where the
+  NVIDIA driver and CUDA 13 runtime libraries (cudart, cuBLAS) are present;
+  on every other host the CUDA module is skipped and the addon behaves as
+  before (Vulkan or CPU).
+- Export `AUDIOGEN_BACKEND_NAMES`, `audiogenBackendName()` and the
+  `AudiogenBackendName` type, so a consumer can name a `stats.backendId`
+  without copying the code table out of this README.
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-28, which brings in ggml-speech
+  2026-08-28. Unused IQ / Q1_0 / MXFP4 / NVFP4 and training Vulkan shader
+  payloads are replaced with tiny no-ops so the published natives stay
+  under the npm tarball size limit. CUDA fatbins keep Ampere and Ada
+  (`80-virtual;86-real;89-real`) and drop Turing sm75 and Blackwell
+  sm120/121.
+
+### Fixed
+
+- Vulkan device-loss and fence failures now return a graph-compute error
+  instead of aborting the process or continuing with an unusable device.
+  Pending compute state is unwound after the failure.
+
+## [0.3.0] - 2026-08-27
+
+### Added
+
+- Add desktop CPU support for MiniMax-Music3 through local LM and synthesis
+  GGUF files, with engine-specific validation, progress, cancellation, runtime
+  statistics, and a skippable model-backed integration regression.
+- Add desktop GPU support for MiniMax-Music3 via `config.useGPU`: the model
+  pair runs on the first usable ggml GPU backend (CUDA, Vulkan, Metal) with
+  CPU fallback, and `stats.backendDevice`/`backendId` report the backend
+  actually in use.
+- Opt-in CUDA GPU backend on Linux / Windows (NVIDIA). The new `ENABLE_CUDA`
+  CMake option appends the `cuda` manifest feature, which pulls
+  `speech-cpp[cuda]` and hence `ggml-speech[cuda]`. Off by default because it
+  needs `nvcc` on the build host; at runtime only the NVIDIA driver is needed.
+  CUDA is additive next to Vulkan, and the engine's validated-GPU preference
+  selects CUDA when both backends are compiled in. Apple and Android are
+  excluded, matching `speech-cpp`'s own `supports` expression, so every
+  existing build resolves exactly as before.
+
+### Changed
+
+- Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
+  `qvac-fabric-speech.cpp` in the package documentation, following the
+  upstream repository rename. Old GitHub links keep working via redirect.
+
+- Raise the `speech-cpp` floor to 2026-08-26, which brings in ggml-speech
+  2026-08-26. This is the engine half of the MiniMax-Music3 GPU support above:
+  MiniMax-Music3 now runs on Vulkan, and the Vulkan `im2col_3d` path handles
+  work-group counts past the y-dimension limit. ACE-Step Vulkan generation is
+  over 2x faster on AMD Strix Halo (RADV) through tiled `im2col`/`col2im`
+  pipelines and a large-tile transpose copy, and CUDA transposed copies now
+  cover every type and stay off strided destinations.
+- On CUDA the ACE-Step language model now runs on the GPU instead of the CPU,
+  by raising the `speech-cpp` floor further to 2026-08-26#1: the bundled ggml
+  computes explicit-f32-precision matmuls in true f32 on CUDA, which removes
+  the NaN risk for the LM's large activations and lifts its CPU-only
+  placement.
+
+### Fixed
+
+- MiniMax-Music3 produced tonal noise instead of music, and a cancellation
+  issued right at generation start could stall until the first progress
+  event. Both are fixed by requiring `speech-cpp` `2026-08-24#2`.
+- `cancel()` no longer hangs forever when the job it targets fails before
+  the native engine starts; it now settles as soon as the run settles.
+- Expose `binding.js` through the package `exports` map
+  (`@qvac/audiogen-ggml/binding.js`), so mobile bundlers that resolve the
+  native binding through exports can load the addon.
+
+## [0.2.4] - 2026-08-20
+
+### Changed
+
+- Keep `@qvac/registry-client` as a `^0.6.1` development dependency for registry
+  downloads. It is no longer an optional peer, so consumer installs are not
+  asked to satisfy a registry-client peer range.
+
+### Added
+
+- Optional `augmentCaptionWithMetadata` generation control. When enabled,
+  ACE-Step enriches its internal conditioning caption with BPM/tempo guidance,
+  time signature, and key while preserving the original user caption in result
+  metadata. The option defaults to `false`.
 - Ordered ACE-Step audio editing through `gen.edit(source)`. Operations run in
   chain order and can be mixed or repeated. The source is interleaved stereo PCM
   at 48 kHz (`Float32Array` samples in `[-1, 1]`, or addon-output `Int16Array`).

@@ -358,7 +358,6 @@ jobs:
           artifact-pattern: ${{ matrix.perfReportPattern }}-${{ github.run_number }}
           report-title: ${{ matrix.perfReportTitle }}
           exclude: ${{ matrix.perfReportExclude }}
-          extra-args: ${{ matrix.perfReportExtraArgs }}
 
   perf-report-rtf:
     name: perf-report-rtf (${{ matrix.package }})
