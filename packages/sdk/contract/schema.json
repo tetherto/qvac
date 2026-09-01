@@ -8483,7 +8483,7 @@
                   "title": "LoadModelSrcRequestLlamacppCompletionModelConfig"
                 }
               },
-              "required": ["type", "modelSrc", "modelType", "modelConfig"],
+              "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
               "title": "LoadModelSrcRequestLlamacppCompletion"
             },
@@ -8858,7 +8858,7 @@
                   "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfig"
                 }
               },
-              "required": ["type", "modelSrc", "modelType", "modelConfig"],
+              "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
               "title": "LoadModelSrcRequestWhispercppTranscription"
             },
@@ -9131,7 +9131,7 @@
                   "title": "LoadModelSrcRequestBciWhispercppTranscriptionModelConfig"
                 }
               },
-              "required": ["type", "modelSrc", "modelType", "modelConfig"],
+              "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
               "title": "LoadModelSrcRequestBciWhispercppTranscription"
             },
@@ -9440,7 +9440,7 @@
                   "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfig"
                 }
               },
-              "required": ["type", "modelSrc", "modelType", "modelConfig"],
+              "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
               "title": "LoadModelSrcRequestLlamacppEmbedding"
             },
@@ -12338,7 +12338,7 @@
                   "title": "LoadModelSrcRequestGgmlOcrModelConfig"
                 }
               },
-              "required": ["type", "modelSrc", "modelType", "modelConfig"],
+              "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
               "title": "LoadModelSrcRequestGgmlOcr"
             },
@@ -14762,7 +14762,8 @@
                   "minLength": 1
                 },
                 "modelType": {
-                  "type": "string"
+                  "type": "string",
+                  "pattern": "^(?!(?:llamacpp-completion|whispercpp-transcription|bci-whispercpp-transcription|llamacpp-embedding|nmtcpp-translation|onnx-tts|tts-ggml|parakeet-transcription|ggml-ocr|sdcpp-generation|audiogen-ggml|ggml-vla|ggml-classification|llm|whisper|bci|embeddings|nmt|parakeet|tts|ocr|diffusion|audiogen|vla|classification)$).+$"
                 },
                 "modelConfig": {
                   "type": "object",

@@ -54,6 +54,17 @@ import { audioGenConfigSchema } from '@/schemas/audio-gen'
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([...Object.values(ModelType), ...Object.keys(ModelTypeAliases)])
 
+// Structural exclusion of the built-in types (canonical + aliases) for the
+// custom-plugin catch-all. A regex, not a refine: a refine does not serialize
+// to JSON Schema, so the exported contract's catch-all arm would accept a
+// built-in modelType with arbitrary config and generated clients (Python)
+// would validate a rejected built-in request through it.
+const customPluginModelTypeSchema = z
+  .string()
+  .regex(new RegExp(`^(?!(?:${[...builtInModelTypes].join('|')})$).+$`), {
+    message: 'Built-in model types must use their specific schema'
+  })
+
 export function isBuiltInModelType(modelType: unknown): boolean {
   return typeof modelType === 'string' && builtInModelTypes.has(modelType)
 }
@@ -241,9 +252,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
 // Custom plugin catch-all: any modelType string EXCEPT built-ins.
 export const loadCustomPluginModelOptionsBaseSchema = z.object({
   ...loadModelCommonFields,
-  modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
-    message: 'Built-in model types must use their specific schema'
-  }),
+  modelType: customPluginModelTypeSchema,
   modelConfig: z.record(z.string(), z.unknown()).optional()
 })
 
@@ -499,9 +508,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
 export const loadCustomPluginToRequestSchema = z
   .object({
     ...loadModelRequestCommonFields,
-    modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
-      message: 'Built-in model types must use their specific schema'
-    }),
+    modelType: customPluginModelTypeSchema,
     modelConfig: z.record(z.string(), z.unknown()).optional()
   })
   .transform((data) => ({
@@ -559,6 +566,10 @@ const commonModelConfigSchema = z.object({
 
 // Request schemas for each model type (use canonical types since transforms normalize)
 // Use base schemas (no defaults) for client-side validation.
+// modelConfig optionality mirrors the options schemas: the server injects
+// device + schema defaults before this validation, so a config-less load is
+// valid on the wire for every type whose options accept one. The catch-all
+// arm excludes built-in types, so these arms are the only route for them.
 // Server applies device defaults, then full schema defaults.
 export const loadLlmModelRequestSchema = commonModelConfigSchema
   .extend({
@@ -568,21 +579,21 @@ export const loadLlmModelRequestSchema = commonModelConfigSchema
     // and silently changing behaviour. Also what marks the contract's
     // modelConfig `additionalProperties: false`, which the Python
     // generator turns into `extra="forbid"`.
-    modelConfig: llmConfigBaseSchema.strict()
+    modelConfig: llmConfigBaseSchema.strict().optional()
   })
   .strict()
 
 export const loadWhisperModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.whispercppTranscription),
-    modelConfig: whisperConfigSchema
+    modelConfig: whisperConfigSchema.optional()
   })
   .strict()
 
 export const loadBciModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.bciWhispercppTranscription),
-    modelConfig: bciConfigSchema
+    modelConfig: bciConfigSchema.optional()
   })
   .strict()
 
@@ -596,7 +607,7 @@ export const loadParakeetModelRequestSchema = commonModelConfigSchema
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppEmbedding),
-    modelConfig: embedConfigBaseSchema
+    modelConfig: embedConfigBaseSchema.optional()
   })
   .strict()
 
@@ -617,7 +628,7 @@ export const loadTtsModelRequestSchema = commonModelConfigSchema
 export const loadOcrModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.ggmlOcr),
-    modelConfig: ocrConfigSchema
+    modelConfig: ocrConfigSchema.optional()
   })
   .strict()
 
@@ -652,9 +663,7 @@ export const loadClassificationModelRequestSchema = commonModelConfigSchema
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
 export const loadCustomPluginModelRequestSchema = commonModelConfigSchema
   .extend({
-    modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
-      message: 'Built-in model types must use their specific schema'
-    }),
+    modelType: customPluginModelTypeSchema,
     modelConfig: z.record(z.string(), z.unknown()).optional()
   })
   .meta({ title: 'LoadModelCustomPluginRequest' })

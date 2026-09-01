@@ -8,8 +8,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
 from tetherto.qvac_sdk import _api as api
+from tetherto.qvac_sdk.schemas import LoadModelRequest
 from tetherto.qvac_sdk.errors import (
     ModelLoadFailedError,
     ModelSrcTypeMismatchError,
@@ -101,6 +103,48 @@ async def test_load_model_requires_type_for_plain_string_src():
     transport = FakeTransport(response=OK)
     with pytest.raises(ModelTypeRequiredError):
         await api.load_model(transport, model_src="/models/x.gguf")
+
+
+async def test_load_model_rejects_retired_n_discarded_before_sending():
+    # The strict LLM union arm rejects the retired key, and the custom-plugin
+    # catch-all excludes built-in model types, so the union has no arm left —
+    # the request must fail validation and never reach the transport.
+    transport = FakeTransport(response=OK)
+    with pytest.raises(PydanticValidationError):
+        await api.load_model(
+            transport,
+            model_src="/models/x.gguf",
+            model_type="llamacpp-completion",
+            model_config={"ctx_size": 2048, "n_discarded": 256},
+        )
+    assert transport.sent is None
+
+
+def test_load_model_request_union_rejects_builtin_type_with_retired_key():
+    # Direct generated-client users hit the same wall: the custom-plugin arm's
+    # modelType pattern excludes built-ins, so a built-in type cannot smuggle
+    # unknown config through the permissive catch-all.
+    with pytest.raises(PydanticValidationError):
+        LoadModelRequest.model_validate(
+            {
+                "type": "loadModel",
+                "modelType": "llamacpp-completion",
+                "modelSrc": "/models/x.gguf",
+                "modelConfig": {"ctx_size": 2048, "n_discarded": 256},
+            }
+        )
+
+
+def test_load_model_request_union_still_accepts_custom_plugin_types():
+    request = LoadModelRequest.model_validate(
+        {
+            "type": "loadModel",
+            "modelType": "my-custom-plugin",
+            "modelSrc": "/models/x.bin",
+            "modelConfig": {"anything": True},
+        }
+    )
+    assert request.root.root.model_type == "my-custom-plugin"
 
 
 async def test_load_model_alias_warns_and_normalizes():

@@ -38,7 +38,6 @@ from tetherto.qvac_sdk.schemas import (
     CompletionStreamRequest,
     HeartbeatRequest,
     LoadModelRequest,
-    ModelType,
     TextToSpeechStreamRequest,
     TranscribeStreamRequest,
 )
@@ -127,7 +126,7 @@ async def test_load_model_and_tts_stream_duplex(transport) -> None:
         {
             "type": "loadModel",
             "modelSrc": TTS_EN_SUPERTONIC_Q4_0.src,
-            "modelType": ModelType.tts_ggml,
+            "modelType": "tts-ggml",
             "modelConfig": {"ttsEngine": "supertonic", "language": "en"},
         }
     )
@@ -181,7 +180,7 @@ async def test_transcribe_stream_duplex(transport) -> None:
         {
             "type": "loadModel",
             "modelSrc": PARAKEET_CTC_0_6B_Q4_0.src,
-            "modelType": ModelType.parakeet_transcription,
+            "modelType": "parakeet-transcription",
             "modelConfig": {},
         }
     )
@@ -245,7 +244,7 @@ async def test_bci_transcribe_stream_duplex(transport) -> None:
         {
             "type": "loadModel",
             "modelSrc": BCI_WINDOWED.src,
-            "modelType": ModelType.bci_whispercpp_transcription,
+            "modelType": "bci-whispercpp-transcription",
             "modelConfig": {
                 "whisperConfig": {"language": "en", "temperature": 0.0},
                 "miscConfig": {"caption_enabled": False},

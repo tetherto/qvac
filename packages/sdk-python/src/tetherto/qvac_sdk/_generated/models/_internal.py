@@ -7159,12 +7159,12 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
         "llamacpp-completion"
     )
     model_config_: Annotated[
-        LoadModelSrcRequestLlamacppCompletionModelConfig,
+        LoadModelSrcRequestLlamacppCompletionModelConfig | None,
         Field(
             alias="modelConfig",
             title="LoadModelSrcRequestLlamacppCompletionModelConfig",
         ),
-    ]
+    ] = None
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy(Enum):
@@ -7628,12 +7628,12 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
         Literal["whispercpp-transcription"], Field(alias="modelType")
     ] = "whispercpp-transcription"
     model_config_: Annotated[
-        LoadModelSrcRequestWhispercppTranscriptionModelConfig,
+        LoadModelSrcRequestWhispercppTranscriptionModelConfig | None,
         Field(
             alias="modelConfig",
             title="LoadModelSrcRequestWhispercppTranscriptionModelConfig",
         ),
-    ]
+    ] = None
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
@@ -7977,12 +7977,12 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
         Literal["bci-whispercpp-transcription"], Field(alias="modelType")
     ] = "bci-whispercpp-transcription"
     model_config_: Annotated[
-        LoadModelSrcRequestBciWhispercppTranscriptionModelConfig,
+        LoadModelSrcRequestBciWhispercppTranscriptionModelConfig | None,
         Field(
             alias="modelConfig",
             title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfig",
         ),
-    ]
+    ] = None
 
 
 class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
@@ -8433,11 +8433,11 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
         "llamacpp-embedding"
     )
     model_config_: Annotated[
-        LoadModelSrcRequestLlamacppEmbeddingModelConfig,
+        LoadModelSrcRequestLlamacppEmbeddingModelConfig | None,
         Field(
             alias="modelConfig", title="LoadModelSrcRequestLlamacppEmbeddingModelConfig"
         ),
-    ]
+    ] = None
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode(Enum):
@@ -12000,9 +12000,9 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
     ] = None
     model_type: Annotated[Literal["ggml-ocr"], Field(alias="modelType")] = "ggml-ocr"
     model_config_: Annotated[
-        LoadModelSrcRequestGgmlOcrModelConfig,
+        LoadModelSrcRequestGgmlOcrModelConfig | None,
         Field(alias="modelConfig", title="LoadModelSrcRequestGgmlOcrModelConfig"),
-    ]
+    ] = None
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigMode(Enum):
@@ -14923,6 +14923,9 @@ class LoadModelCustomPluginRequestModelConfig(RootModel[dict[str, Any]]):
 
 
 class LoadModelCustomPluginRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        regex_engine="python-re",
+    )
     type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[
         str,
@@ -14963,7 +14966,13 @@ class LoadModelCustomPluginRequest(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[str, Field(alias="modelType")]
+    model_type: Annotated[
+        str,
+        Field(
+            alias="modelType",
+            pattern="^(?!(?:llamacpp-completion|whispercpp-transcription|bci-whispercpp-transcription|llamacpp-embedding|nmtcpp-translation|onnx-tts|tts-ggml|parakeet-transcription|ggml-ocr|sdcpp-generation|audiogen-ggml|ggml-vla|ggml-classification|llm|whisper|bci|embeddings|nmt|parakeet|tts|ocr|diffusion|audiogen|vla|classification)$).+$",
+        ),
+    ]
     model_config_: Annotated[
         LoadModelCustomPluginRequestModelConfig | None,
         Field(alias="modelConfig", title="LoadModelCustomPluginRequestModelConfig"),
