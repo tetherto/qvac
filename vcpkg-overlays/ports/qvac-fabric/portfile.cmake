@@ -162,13 +162,28 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # CMAKE_CUDA_COMPILER could be found" whenever nvcc is off PATH — routine
   # under vcpkg, which does not inherit an interactive shell. Locate nvcc and
   # pass it explicitly, the same way ports/ggml-speech does.
-  find_program(NVCC_EXECUTABLE nvcc PATHS /usr/local/cuda/bin NO_DEFAULT_PATH)
+  # Order matters. An explicitly provisioned toolkit wins over whatever the host
+  # happens to have at /usr/local/cuda: CI's setup-cuda assembles a pinned
+  # 13.2.0 and exports CUDACXX and CUDA_PATH, and `120a-real` below needs CUDA
+  # 13, so a GPU runner or dev box carrying an older system toolkit must not
+  # silently shadow the pin. Searching /usr/local/cuda/bin first with
+  # NO_DEFAULT_PATH did exactly that.
+  if(DEFINED ENV{CUDACXX} AND EXISTS "$ENV{CUDACXX}")
+    set(NVCC_EXECUTABLE "$ENV{CUDACXX}")
+  endif()
+  if(NOT NVCC_EXECUTABLE AND DEFINED ENV{CUDA_PATH})
+    find_program(NVCC_EXECUTABLE nvcc PATHS "$ENV{CUDA_PATH}/bin" NO_DEFAULT_PATH)
+  endif()
   if(NOT NVCC_EXECUTABLE)
     find_program(NVCC_EXECUTABLE nvcc)
   endif()
   if(NOT NVCC_EXECUTABLE)
-    message(FATAL_ERROR "qvac-fabric: cuda-backend feature requires a CUDA toolkit — install one providing nvcc (checked /usr/local/cuda/bin and PATH). Do not request cuda-backend on a host without nvcc.")
+    find_program(NVCC_EXECUTABLE nvcc PATHS /usr/local/cuda/bin NO_DEFAULT_PATH)
   endif()
+  if(NOT NVCC_EXECUTABLE)
+    message(FATAL_ERROR "qvac-fabric: cuda-backend feature requires a CUDA toolkit — install one providing nvcc (checked CUDACXX, CUDA_PATH/bin, PATH and /usr/local/cuda/bin). Do not request cuda-backend on a host without nvcc.")
+  endif()
+  message(STATUS "qvac-fabric: cuda-backend using nvcc at ${NVCC_EXECUTABLE}")
 
   # CMAKE_CUDA_ARCHITECTURES is pinned to what we actually ship to. ggml picks
   # its own list when the variable is undefined, but that list is much wider

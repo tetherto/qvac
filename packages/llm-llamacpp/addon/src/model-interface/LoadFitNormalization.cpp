@@ -850,11 +850,11 @@ NormalizedLoad normalizeLoadForFit(
         QLOG_IF(
             Priority::INFO,
             string_format(
-                "[LlamaModel] split-mode: restricting --device to the %s "
-                "backend's own devices (%s); this host registers GPUs under "
+                "[LlamaModel] split-mode: naming each discrete GPU once in "
+                "--device (%s), preferring %s where a card is registered under "
                 "more than one backend\n",
-                selected.name.c_str(),
-                deviceList.c_str()));
+                deviceList.c_str(),
+                selected.name.c_str()));
         configVector.emplace_back("--device");
         configVector.emplace_back(std::move(deviceList));
         // QVAC-23763: --main-gpu indexes the list llama.cpp is handed, which is
