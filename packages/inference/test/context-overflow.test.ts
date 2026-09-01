@@ -159,12 +159,37 @@ test('parseContextOverflowMessage: covers every current addon guard', (t) => {
   )
 })
 
+// The multimodal guards trip on EITHER positions or KV cells, so the parser
+// takes the larger measure — a positions-dominant overflow must still report
+// a requiredTokens no smaller than the window.
+test('parseContextOverflowMessage: positions-dominant multimodal overflows keep the invariant', (t) => {
+  t.alike(
+    parseContextOverflowMessage(
+      '[MtmdLlm] context overflow at prefill step: cached 8100 positions / 1000 KV cells plus 200 positions / 50 KV cells of prompt exceed the max context tokens 8192\n'
+    ),
+    { cachedTokens: 8100, requiredTokens: 8300, ctxSize: 8192 }
+  )
+  t.alike(
+    parseContextOverflowMessage(
+      '[MtmdLlm] context overflow at batch prefill step: prompt spans 8300 positions / 300 KV cells, max context tokens 8192\n'
+    ),
+    { requiredTokens: 8300, ctxSize: 8192 }
+  )
+  t.alike(
+    parseContextOverflowMessage(
+      '[MtmdLlm] context overflow at prefill step (300 tokens, 8300 positions, max 8192)\n'
+    ),
+    { promptTokens: 300, requiredTokens: 8300, ctxSize: 8192 }
+  )
+})
+
 // The failing requirement can never sit below the window; the guards trigger
 // on >=, so equality is emittable and the floor is >=, not >.
 test('parseContextOverflowMessage: cached overflow requires no less than the window', (t) => {
   const cases = [
     '[TextLlm] context overflow at batch prefill step: cached tokens 8170 plus prompt tokens 31 exceed the max context tokens 8192\n',
-    '[MtmdLlm] context overflow at prefill step: cached 5364 positions / 8172 KV cells plus 24 positions / 31 KV cells of prompt exceed the max context tokens 8192\n'
+    '[MtmdLlm] context overflow at prefill step: cached 5364 positions / 8172 KV cells plus 24 positions / 31 KV cells of prompt exceed the max context tokens 8192\n',
+    '[MtmdLlm] context overflow at prefill step: cached 8100 positions / 1000 KV cells plus 200 positions / 50 KV cells of prompt exceed the max context tokens 8192\n'
   ]
   for (const message of cases) {
     const { requiredTokens, ctxSize } = parseContextOverflowMessage(message)

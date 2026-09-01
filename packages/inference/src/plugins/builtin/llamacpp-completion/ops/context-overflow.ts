@@ -54,10 +54,11 @@ type PatternEntry = {
 }
 
 // One entry per guard that formats numbers, most specific first. Separators
-// are horizontal whitespace only, so numbers cannot pair across lines. Where
-// a guard reports positions and KV cells, the cells are captured (ctx_size
-// counts cells). Keep in step with TextLlmContext.cpp / MtmdLlmContext.cpp —
-// a drifted wording silently returns no fields.
+// are horizontal whitespace only, so numbers cannot pair across lines. The
+// multimodal guards trip on EITHER positions or KV cells against the same
+// ceiling, so where both are reported the larger measure is what failed.
+// Keep in step with TextLlmContext.cpp / MtmdLlmContext.cpp — a drifted
+// wording silently returns no fields.
 const MESSAGE_PATTERNS: PatternEntry[] = [
   {
     // "cached tokens C plus prompt tokens N exceed the max context tokens M"
@@ -71,13 +72,13 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
   },
   {
     // "cached P positions / C KV cells plus P2 positions / N KV cells of
-    //  prompt exceed the max context tokens M" — the prompt figure is KV
-    // cells, not tokens, so promptTokens stays unset.
+    //  prompt exceed the max context tokens M" — not tokens, so promptTokens
+    // stays unset.
     pattern:
-      /cached \d+ positions \/ (\d+) KV cells plus \d+ positions \/ (\d+) KV cells of prompt exceeds? the max context tokens (\d+)/i,
-    map: ([cached, prompt, ctx]) => ({
-      cachedTokens: cached!,
-      requiredTokens: cached! + prompt!,
+      /cached (\d+) positions \/ (\d+) KV cells plus (\d+) positions \/ (\d+) KV cells of prompt exceeds? the max context tokens (\d+)/i,
+    map: ([cPos, cCells, pPos, pCells, ctx]) => ({
+      cachedTokens: Math.max(cPos!, cCells!),
+      requiredTokens: Math.max(cPos! + pPos!, cCells! + pCells!),
       ctxSize: ctx!
     })
   },
@@ -88,14 +89,18 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
   },
   {
     // "prompt spans P positions / N KV cells, max context tokens M" —
-    // KV cells again, so promptTokens stays unset.
-    pattern: /prompt spans \d+ positions \/ (\d+) KV cells,[ \t]*max context tokens (\d+)/i,
-    map: ([prompt, ctx]) => ({ requiredTokens: prompt!, ctxSize: ctx! })
+    // not tokens, so promptTokens stays unset.
+    pattern: /prompt spans (\d+) positions \/ (\d+) KV cells,[ \t]*max context tokens (\d+)/i,
+    map: ([pos, cells, ctx]) => ({ requiredTokens: Math.max(pos!, cells!), ctxSize: ctx! })
   },
   {
     // "(N tokens, P positions, max M)"
-    pattern: /\((\d+)[ \t]+tokens,[ \t]*\d+[ \t]+positions,[ \t]*max[ \t]+(\d+)\)/i,
-    map: ([prompt, ctx]) => ({ promptTokens: prompt!, requiredTokens: prompt!, ctxSize: ctx! })
+    pattern: /\((\d+)[ \t]+tokens,[ \t]*(\d+)[ \t]+positions,[ \t]*max[ \t]+(\d+)\)/i,
+    map: ([tokens, pos, ctx]) => ({
+      promptTokens: tokens!,
+      requiredTokens: Math.max(tokens!, pos!),
+      ctxSize: ctx!
+    })
   },
   {
     // "(N tokens, max M)", the retired short form. Both of its emitters
