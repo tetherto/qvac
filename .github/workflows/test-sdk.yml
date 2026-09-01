@@ -607,8 +607,16 @@ jobs:
     secrets: inherit
 
   # Deliberately not a workflow_call input: the PR label path must never trigger
-  # seven model loads per platform. Needs exclusive use of the runner — the
-  # harness peaks over 25 ms RSS samples, so anything co-scheduled pollutes it.
+  # seven model loads per platform.
+  #
+  # Measurement wants a quiet host. The harness reads its own process RSS, so a
+  # co-scheduled job does not inflate the numbers — but it can create memory
+  # pressure that evicts this process's mapped pages and DEFLATES the persistent
+  # deltas, which is the dangerous direction for an upper bound. These labels
+  # are currently served by more than one agent (some sharing a host), so
+  # exclusivity is not guaranteed; until calibration gets a single-agent label,
+  # prefer dispatching when the runners are idle, and treat a fixture whose
+  # numbers look thin against a prior run as suspect.
   calibration:
     if: github.event_name == 'workflow_dispatch' && inputs.calibration
     strategy:
