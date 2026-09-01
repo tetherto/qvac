@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Report why a `useGPU: true` run resolved to the CPU. `stats.gpuFallbackReason`
   carries the engine's reason code for both ACE-Step and MiniMax, with
   `AUDIOGEN_GPU_FALLBACK_REASONS` and `audiogenGpuFallbackReason()` to name it.
+- Simple Mode: `simpleMode: true` treats the caption as a short
+  natural-language query and the LM composes the complete request before
+  synthesis — a detailed caption, full lyrics, and every metadata field left
+  unset. Leave `lyrics` unset for LM-written vocals or pass `'[Instrumental]'`
+  for an instrumental song.
+- `normalizeLoudness` generation control (default `true`): percentile loudness
+  normalization of the generated audio matching the reference implementation;
+  audio edits are never normalized.
+
+### Changed
+
+- Require `speech-cpp` port revision `2026-09-01`, which adds the engine's
+  Simple Mode pipeline, LM progress and cancellation for both phases, and the
+  output loudness normalization.
 
 ### Fixed
 

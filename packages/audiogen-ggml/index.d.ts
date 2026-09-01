@@ -91,6 +91,22 @@ export interface GenerateOptions {
     lmCfgScale?: number;
     /** Allow the LM to infer missing metadata before semantic-code generation. */
     lmPhase1?: boolean;
+    /**
+     * Simple Mode: treat the caption as a short natural-language query and let
+     * the LM compose the full request before synthesis — a detailed caption,
+     * lyrics, and any metadata left unset (bpm, keyscale, timesignature,
+     * vocalLanguage, and duration when 0). Options you set are kept. Requires
+     * `text2music` with no `audioCodes`; leave `lyrics` unset for LM-written
+     * vocals or pass `'[Instrumental]'` for an instrumental song.
+     */
+    simpleMode?: boolean;
+    /**
+     * Percentile loudness normalization on the generated audio (default true):
+     * the 99.999th-percentile sample scales to full scale and the tiny tail
+     * above it clips, matching the reference loudness. Set false for the raw
+     * engine output. Audio edits are never normalized.
+     */
+    normalizeLoudness?: boolean;
     /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
     dcwEnabled?: boolean;
     /** DCW low-frequency correction strength (official default: 0.05). */

@@ -105,6 +105,72 @@ test('AudioGen.run rejects MiniMax-only controls for ACE-Step', async (t) => {
   await t.exception(() => gen.run('test', { maxFrames: 10 }), /ACE-Step does not accept maxFrames/)
 })
 
+test('AudioGen.run forwards simpleMode with LM-written lyrics', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('a romantic modern salsa for a wedding', { simpleMode: true })
+  await response.await()
+
+  const job = received()
+  t.is(job.simpleMode, true)
+  t.is(job.lyrics, '')
+})
+
+test('AudioGen.run forwards simpleMode with the instrumental hint', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('a lo-fi instrumental groove', {
+    simpleMode: true,
+    lyrics: '[Instrumental]'
+  })
+  await response.await()
+
+  const job = received()
+  t.is(job.simpleMode, true)
+  t.is(job.lyrics, '[Instrumental]')
+})
+
+test('AudioGen.run keeps the instrumental default without simpleMode', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('a plain caption')
+  await response.await()
+
+  const job = received()
+  t.is(job.simpleMode, undefined)
+  t.is(job.lyrics, '[Instrumental]')
+})
+
+test('AudioGen.run forwards normalizeLoudness', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('raw output please', { normalizeLoudness: false })
+  await response.await()
+
+  t.is(received().normalizeLoudness, false)
+})
+
+test('AudioGen.run rejects invalid simpleMode combinations', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  await rejectRunOptions(t, { simpleMode: 'yes' }, /simpleMode must be a boolean/)
+  await rejectRunOptions(
+    t,
+    { simpleMode: true, taskType: 'cover-nofsq', sourceAudio },
+    /simpleMode supports only taskType 'text2music'/
+  )
+  await rejectRunOptions(
+    t,
+    { simpleMode: true, audioCodes: new Int32Array([1, 2]) },
+    /simpleMode cannot take pre-supplied audioCodes/
+  )
+  await rejectRunOptions(
+    t,
+    { simpleMode: true, lyrics: '[verse]\nwords' },
+    /simpleMode lyrics must be omitted/
+  )
+  await rejectRunOptions(t, { simpleMode: true, lmPhase1: false }, /simpleMode requires lmPhase1/)
+})
+
 test('AudioGen.run forwards reference/source audio, taskType and cover strengths', async (t) => {
   const { gen, received } = createHarness()
   const referenceAudio = new Float32Array([0.1, -0.1, 0.2, -0.2])

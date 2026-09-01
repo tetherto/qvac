@@ -142,6 +142,22 @@ export interface GenerateOptions {
   lmCfgScale?: number
   /** Allow the LM to infer missing metadata before semantic-code generation. */
   lmPhase1?: boolean
+  /**
+   * Simple Mode: treat the caption as a short natural-language query and let
+   * the LM compose the full request before synthesis — a detailed caption,
+   * lyrics, and any metadata left unset (bpm, keyscale, timesignature,
+   * vocalLanguage, and duration when 0). Options you set are kept. Requires
+   * `text2music` with no `audioCodes`; leave `lyrics` unset for LM-written
+   * vocals or pass `'[Instrumental]'` for an instrumental song.
+   */
+  simpleMode?: boolean
+  /**
+   * Percentile loudness normalization on the generated audio (default true):
+   * the 99.999th-percentile sample scales to full scale and the tiny tail
+   * above it clips, matching the reference loudness. Set false for the raw
+   * engine output. Audio edits are never normalized.
+   */
+  normalizeLoudness?: boolean
   /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
   dcwEnabled?: boolean
   /** DCW low-frequency correction strength (official default: 0.05). */
@@ -1075,10 +1091,32 @@ export class AudioGen {
     if (isCoverTask(taskType) && (sourceAudio === undefined || sourceAudio.length === 0)) {
       throw invalidInput(`taskType '${taskType}' requires sourceAudio`)
     }
+    if (opts.simpleMode !== undefined && typeof opts.simpleMode !== 'boolean') {
+      throw invalidInput('simpleMode must be a boolean')
+    }
+    if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
+      throw invalidInput('normalizeLoudness must be a boolean')
+    }
+    if (opts.simpleMode === true) {
+      if (taskType !== undefined && taskType !== 'text2music') {
+        throw invalidInput("simpleMode supports only taskType 'text2music'")
+      }
+      if (opts.audioCodes !== undefined) {
+        throw invalidInput('simpleMode cannot take pre-supplied audioCodes')
+      }
+      if (opts.lyrics !== undefined && opts.lyrics !== '' && opts.lyrics !== '[Instrumental]') {
+        throw invalidInput("simpleMode lyrics must be omitted (the LM writes them) or '[Instrumental]'")
+      }
+      if (opts.lmPhase1 === false) {
+        throw invalidInput('simpleMode requires lmPhase1')
+      }
+    }
     return {
       type: 'text',
       input: caption,
-      lyrics: opts.lyrics ?? '[Instrumental]',
+      lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
+      simpleMode: opts.simpleMode,
+      normalizeLoudness: opts.normalizeLoudness,
       seed: optionalFiniteNumber(opts.seed, 'seed', true),
       vocalLanguage: opts.vocalLanguage,
       bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
