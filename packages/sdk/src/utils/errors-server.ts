@@ -223,6 +223,37 @@ export class CompletionFailedError extends QvacErrorBase {
  * `client/rpc/rpc-error.ts`, so `err instanceof ContextOverflowError`
  * works on the consumer side.
  */
+/** The overflow sizes as one record; fields admit explicit `undefined` so a parser result assigns directly. */
+export type ContextOverflowErrorSizes = {
+  promptTokens?: number | undefined
+  cachedTokens?: number | undefined
+  requiredTokens?: number | undefined
+  ctxSize?: number | undefined
+}
+
+function normalizeContextOverflowArgs(
+  sizesOrPromptTokens?: ContextOverflowErrorSizes | number,
+  modelIdOrCtxSize?: string | number,
+  causeOrModelId?: unknown,
+  cause?: unknown,
+  extraSizes?: { cachedTokens?: number | undefined; requiredTokens?: number | undefined }
+): ContextOverflowErrorSizes & { modelId?: string | undefined; cause?: unknown } {
+  if (typeof sizesOrPromptTokens === 'object' && sizesOrPromptTokens !== null) {
+    return {
+      ...sizesOrPromptTokens,
+      modelId: modelIdOrCtxSize as string | undefined,
+      cause: causeOrModelId
+    }
+  }
+  return {
+    promptTokens: sizesOrPromptTokens,
+    ctxSize: modelIdOrCtxSize as number | undefined,
+    modelId: causeOrModelId as string | undefined,
+    cause,
+    ...extraSizes
+  }
+}
+
 export class ContextOverflowError extends QvacErrorBase {
   /** The prompt alone, in tokens; unset when the source reported KV cells. */
   readonly promptTokens?: number
@@ -234,31 +265,50 @@ export class ContextOverflowError extends QvacErrorBase {
   readonly ctxSize?: number
   readonly modelId?: string
 
+  /** Canonical form: the parsed sizes as one record. */
+  // lunte-disable-next-line constructor-super -- overload declaration, no body; the implementation calls super
+  constructor(contextSizes: ContextOverflowErrorSizes, modelId?: string, cause?: unknown)
+  /** @deprecated Positional form kept for existing callers; prefer the sizes-record form. */
+  // lunte-disable-next-line constructor-super -- overload declaration, no body; the implementation calls super
   constructor(
     promptTokens?: number,
     ctxSize?: number,
     modelId?: string,
     cause?: unknown,
     extraSizes?: { cachedTokens?: number | undefined; requiredTokens?: number | undefined }
+  )
+  constructor(
+    sizesOrPromptTokens?: ContextOverflowErrorSizes | number,
+    modelIdOrCtxSize?: string | number,
+    causeOrModelId?: unknown,
+    cause?: unknown,
+    extraSizes?: { cachedTokens?: number | undefined; requiredTokens?: number | undefined }
   ) {
+    const n = normalizeContextOverflowArgs(
+      sizesOrPromptTokens,
+      modelIdOrCtxSize,
+      causeOrModelId,
+      cause,
+      extraSizes
+    )
     super(
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW,
         [
-          promptTokens !== undefined ? String(promptTokens) : '',
-          ctxSize !== undefined ? String(ctxSize) : '',
-          modelId ?? '',
-          extraSizes?.cachedTokens !== undefined ? String(extraSizes.cachedTokens) : '',
-          extraSizes?.requiredTokens !== undefined ? String(extraSizes.requiredTokens) : ''
+          n.promptTokens !== undefined ? String(n.promptTokens) : '',
+          n.ctxSize !== undefined ? String(n.ctxSize) : '',
+          n.modelId ?? '',
+          n.cachedTokens !== undefined ? String(n.cachedTokens) : '',
+          n.requiredTokens !== undefined ? String(n.requiredTokens) : ''
         ],
-        cause
+        n.cause
       )
     )
-    if (promptTokens !== undefined) this.promptTokens = promptTokens
-    if (ctxSize !== undefined) this.ctxSize = ctxSize
-    if (modelId !== undefined) this.modelId = modelId
-    if (extraSizes?.cachedTokens !== undefined) this.cachedTokens = extraSizes.cachedTokens
-    if (extraSizes?.requiredTokens !== undefined) this.requiredTokens = extraSizes.requiredTokens
+    if (n.promptTokens !== undefined) this.promptTokens = n.promptTokens
+    if (n.ctxSize !== undefined) this.ctxSize = n.ctxSize
+    if (n.modelId !== undefined) this.modelId = n.modelId
+    if (n.cachedTokens !== undefined) this.cachedTokens = n.cachedTokens
+    if (n.requiredTokens !== undefined) this.requiredTokens = n.requiredTokens
   }
 
   toErrorResponseFields(): Record<string, unknown> {

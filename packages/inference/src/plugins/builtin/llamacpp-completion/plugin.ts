@@ -285,12 +285,11 @@ export const llmPlugin = definePlugin({
           )
         } catch (err) {
           if (isAddonContextOverflowError(err)) {
-            const { promptTokens, ctxSize, cachedTokens, requiredTokens } =
-              parseContextOverflowMessage(err instanceof Error ? err.message : '')
-            throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err, {
-              cachedTokens,
-              requiredTokens
-            })
+            throw new ContextOverflowError(
+              parseContextOverflowMessage(err instanceof Error ? err.message : ''),
+              request.modelId,
+              err
+            )
           }
           // Once the registry accepts cancellation, the request signal owns the
           // terminal outcome. The addon may reject with different shapes
@@ -463,12 +462,11 @@ export const llmPlugin = definePlugin({
           // ContextOverflowError.
 
           if (isAddonContextOverflowError(err)) {
-            const { promptTokens, ctxSize, cachedTokens, requiredTokens } =
-              parseContextOverflowMessage(err instanceof Error ? err.message : '')
-            throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err, {
-              cachedTokens,
-              requiredTokens
-            })
+            throw new ContextOverflowError(
+              parseContextOverflowMessage(err instanceof Error ? err.message : ''),
+              request.modelId,
+              err
+            )
           }
           // Context overflow is classified above. For every other error after
           // accepted cancellation, the request signal owns the terminal outcome
@@ -545,12 +543,11 @@ export const llmPlugin = definePlugin({
           // Same addon, same overflow path as `completionStream`. Wrap so
           // translate consumers can `instanceof ContextOverflowError` too.
           if (isAddonContextOverflowError(err)) {
-            const { promptTokens, ctxSize, cachedTokens, requiredTokens } =
-              parseContextOverflowMessage(err instanceof Error ? err.message : '')
-            throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err, {
-              cachedTokens,
-              requiredTokens
-            })
+            throw new ContextOverflowError(
+              parseContextOverflowMessage(err instanceof Error ? err.message : ''),
+              request.modelId,
+              err
+            )
           }
           throw err
         } finally {

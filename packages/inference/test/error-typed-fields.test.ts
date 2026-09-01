@@ -62,6 +62,23 @@ test('createErrorResponse: ContextOverflowError carries overflow fields on typed
   })
 })
 
+// The canonical sizes-record form: one record in, all fields out.
+test('createErrorResponse: ContextOverflowError sizes-record form carries every field', (t) => {
+  const err = new ContextOverflowError(
+    { promptTokens: 31, cachedTokens: 8170, requiredTokens: 8201, ctxSize: 8192 },
+    'model-1'
+  )
+  t.alike(err.message.includes('8201'), true, 'the message factory sees the record fields')
+  t.alike(createErrorResponse(err).typedFields, {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192,
+    modelId: 'model-1'
+  })
+})
+
+// The positional form is deprecated but must keep working for existing callers.
 test('createErrorResponse: ContextOverflowError carries warm-cache fields on typedFields', (t) => {
   const err = new ContextOverflowError(31, 8192, 'model-1', undefined, {
     cachedTokens: 8170,

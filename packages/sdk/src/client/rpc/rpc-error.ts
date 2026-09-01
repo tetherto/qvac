@@ -151,14 +151,14 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
   },
   CONTEXT_OVERFLOW: (response) => {
     return new ContextOverflowError(
-      readOptionalNumberField(response.typedFields, 'promptTokens'),
-      readOptionalNumberField(response.typedFields, 'ctxSize'),
-      readOptionalStringField(response.typedFields, 'modelId'),
-      response.cause,
       {
+        promptTokens: readOptionalNumberField(response.typedFields, 'promptTokens'),
         cachedTokens: readOptionalNumberField(response.typedFields, 'cachedTokens'),
-        requiredTokens: readOptionalNumberField(response.typedFields, 'requiredTokens')
-      }
+        requiredTokens: readOptionalNumberField(response.typedFields, 'requiredTokens'),
+        ctxSize: readOptionalNumberField(response.typedFields, 'ctxSize')
+      },
+      readOptionalStringField(response.typedFields, 'modelId'),
+      response.cause
     )
   },
   // Source-language autodetect now fails server-side (translate detection moved
