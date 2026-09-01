@@ -82,9 +82,13 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
         }
       }
 
+      // Report the resolved backend: the same generation costs ~3s on macOS and
+      // ~600s on the Ubuntu GPU runner, which no amount of contention explains.
+      const backend = `backend=${stats?.backendId ?? '?'}/${stats?.backendDevice ?? '?'}`
+      const timing = `rtf=${stats?.realTimeFactor ?? '?'} totalMs=${stats?.totalTimeMs ?? '?'}`
       return ValidationHelpers.validate(
         `generated ${sampleCount} samples at ${audio.sampleRate} Hz with ` +
-          `${progress.length} progress ticks and stats`,
+          `${progress.length} progress ticks and stats [${backend} ${timing}]`,
         expectation
       )
     } catch (error) {
