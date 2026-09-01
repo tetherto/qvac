@@ -120,6 +120,9 @@ struct Candidate {
   std::string name;
   std::string registry;
   DeviceFamily family = DeviceFamily::Gpu;
+  /// Kept so a capability probe can be run against the device itself rather
+  /// than inferred from its name.
+  ggml_backend_dev_t dev = nullptr;
   backend_selection::ExclusionReason excluded =
       backend_selection::ExclusionReason::None;
 };
@@ -132,8 +135,8 @@ struct Enumeration {
 };
 
 void emplaceIfValidDevice(
-    const BackendInterface& bckI, Enumeration& out, const ggml_backend_reg_t reg,
-    const DeviceDescription& devDescr,
+    const BackendInterface& bckI, Enumeration& out, const ggml_backend_dev_t dev,
+    const ggml_backend_reg_t reg, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   if (bckI.ggml_backend_reg_name(reg) == std::string("RPC")) {
     return;
@@ -198,6 +201,7 @@ void emplaceIfValidDevice(
       devDescr.gpuBackend,
       bckI.ggml_backend_reg_name(reg),
       family.value(),
+      dev,
       backend_selection::ExclusionReason::None});
 }
 
@@ -230,7 +234,7 @@ void tryEmplaceDevice(
 #ifndef NDEBUG
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "New GPU device", nullptr);
 #endif
-    ::emplaceIfValidDevice(bckI, out, reg, devDescr, backendTypeEnum);
+    ::emplaceIfValidDevice(bckI, out, dev, reg, devDescr, backendTypeEnum);
   } else {
 #ifndef NDEBUG
     bckI.llamaLogCallback(
@@ -348,6 +352,34 @@ void applyExclusions(
           "BitNet TQ on Adreno 800+: preferring Vulkan over OpenCL",
           nullptr);
       excludeOpenClAdreno(ExclusionReason::BitnetAdreno800Plus);
+    }
+  }
+
+  // QVAC-23763: a device whose backend cannot run the requested KV-cache type
+  // is passed over here, before the cascade picks, rather than the load being
+  // refused after it. On a host with another GPU that can run it, that turns a
+  // failed load into a working one on the next backend down.
+  //
+  // Runs after the guards above so a device already excluded keeps its original
+  // reason, which is the more useful one to report.
+  if (bckI.deviceSupportsKvCacheType == nullptr ||
+      req.constraints.kvCacheTypes.empty()) {
+    return;
+  }
+  for (Candidate& c : enumeration.candidates) {
+    if (c.excluded != ExclusionReason::None) {
+      continue;
+    }
+    for (const enum ggml_type kvType : req.constraints.kvCacheTypes) {
+      if (!bckI.deviceSupportsKvCacheType(c.dev, kvType)) {
+        std::string text = string_format(
+            "%s cannot run KV-cache type %s; passing it over",
+            c.name.c_str(),
+            ggml_type_name(kvType));
+        bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
+        c.excluded = ExclusionReason::KvCacheTypeUnsupported;
+        break;
+      }
     }
   }
 }
@@ -626,9 +658,14 @@ backend_selection::kindOf(const ExclusionReason reason) {
   case ExclusionReason::FinetuneAdreno800Plus:
   case ExclusionReason::BitnetAdrenoBelow800:
   case ExclusionReason::BitnetAdreno800Plus:
-    // Every guard so far actively wants another backend, and CPU is a
-    // legitimate destination for all of them.
+    // These guards actively want another backend, and CPU is a legitimate
+    // destination for all of them - it is where they already land today.
     return ExclusionKind::PreferOther;
+  case ExclusionReason::KvCacheTypeUnsupported:
+    // Not a preference: the device genuinely cannot run this load. If nothing
+    // else can either, that is worth failing rather than silently running an
+    // order of magnitude slower than the caller asked for.
+    return ExclusionKind::Incapable;
   }
   return ExclusionKind::PreferOther;
 }
@@ -711,9 +748,65 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     }
   }
 
+  // QVAC-23763: nothing survived. If any candidate was ruled Incapable rather
+  // than merely deprioritised, the caller asked for a GPU load this host cannot
+  // run, and quietly dropping to CPU would be an order of magnitude slower than
+  // what they asked for. Say what was filtered and why.
+  //
+  // The PreferOther guards deliberately do not reach here as an error: landing
+  // on CPU is what BitNet-on-Adreno<800 and finetuning-on-Adreno<800 are for.
+  if (request.preferred == BackendType::GPU) {
+    std::string incapable;
+    for (const Candidate& c : enumeration.candidates) {
+      if (c.excluded == ExclusionReason::None ||
+          kindOf(c.excluded) != ExclusionKind::Incapable) {
+        continue;
+      }
+      if (!incapable.empty()) {
+        incapable += ", ";
+      }
+      incapable += c.name + " (" + c.registry + ")";
+    }
+    if (!incapable.empty()) {
+      std::string kvTypes;
+      for (const enum ggml_type kvType : request.constraints.kvCacheTypes) {
+        if (!kvTypes.empty()) {
+          kvTypes += "/";
+        }
+        kvTypes += ggml_type_name(kvType);
+      }
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "No available GPU can run KV-cache type %s. Passed over: %s. "
+              "Either pick a different cache type "
+              "(f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl) or set "
+              "device to cpu.\n",
+              kvTypes.c_str(),
+              incapable.c_str()));
+    }
+  }
+
   bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
   choice.trace.path = SelectionPath::Cpu;
   return choice;
+}
+
+backend_selection::BackendChoice backend_selection::chooseBackend(
+    const BackendRequest& request, llamaLogCallbackF llamaLogcallback) {
+  BackendInterface bckI{
+      ggml_backend_dev_count,
+      ggml_backend_dev_backend_reg,
+      ggml_backend_dev_get,
+      ggml_backend_reg_name,
+      ggml_backend_dev_description,
+      ggml_backend_dev_name,
+      ggml_backend_dev_type,
+      ggml_backend_reg_get_proc_address,
+      ggml_backend_dev_get_props,
+      llamaLogcallback,
+      ::productionSupportsKvCacheType};
+  return chooseBackend(request, bckI);
 }
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(

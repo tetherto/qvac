@@ -412,22 +412,25 @@ void tuneLoadConfigMap(
                 it->second.c_str(),
                 side));
       }
-      // QVAC-23763: CUDA has no TurboQuant/PolarQuant kernels at all. Unlike
-      // the OpenCL case above, standard quantized types are fine, so only
-      // TBQ/PQ is rejected, exactly like Metal. CPU is deliberately still
-      // allowed: ggml-tbq-quants is a core (CPU) implementation and the
-      // existing OpenCL/Metal messages already point users there.
+      // QVAC-23763: CUDA has no TurboQuant/PolarQuant kernels. This used to
+      // reject the load here, after chooseBackend had already settled on CUDA -
+      // which spent a fallback opportunity as an error on every host that also
+      // had Vulkan.
+      //
+      // Selection now passes such a device over before the cascade picks, so
+      // reaching this point means either the filter did not run or it disagreed
+      // with this rule. Kept as an assertion rather than deleted: it is the
+      // second line of defence, and an InternalError says plainly that the
+      // invariant broke rather than blaming the caller's config.
       if (isCuda) {
         if (!isTurboQuantKvType(it->second))
           return;
         throw qvac_errors::StatusError(
-            qvac_errors::general_error::InvalidArgument,
+            qvac_errors::general_error::InternalError,
             string_format(
-                "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant "
-                "KV-cache type and is not supported on the CUDA backend. "
-                "Either pick a different cache type "
-                "(f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl) or switch "
-                "device to a Vulkan GPU or CPU.\n",
+                "[LlamaModel] internal: cache-type-%s=%s reached CUDA after "
+                "capability filtering, which should have passed that device "
+                "over. Please report this.\n",
                 side,
                 it->second.c_str()));
       }
@@ -489,28 +492,14 @@ NormalizationDependencies
 productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
   return {
       .resolveBackend =
-          [logCallback](
-              backend_selection::BackendType preferred,
-              const std::optional<backend_selection::MainGpu>& mainGpu,
-              const ModelMetaData& metadata,
-              bool isFinetuning,
-              const std::vector<std::string>& backendOverride) {
-            std::optional<int> adrenoVersion;
-            bool isMaliGpu = false;
-            auto [type, name] = backend_selection::chooseBackend(
-                preferred,
-                logCallback,
-                mainGpu,
-                &metadata,
-                &adrenoVersion,
-                isFinetuning,
-                &isMaliGpu,
-                backendOverride);
+          [logCallback](const backend_selection::BackendRequest& request) {
+            backend_selection::BackendChoice choice =
+                backend_selection::chooseBackend(request, logCallback);
             return SelectedBackend{
-                .type = type,
-                .name = std::move(name),
-                .adrenoVersion = adrenoVersion,
-                .isMaliGpu = isMaliGpu};
+                .type = choice.type,
+                .name = std::move(choice.name),
+                .adrenoVersion = choice.adrenoVersion,
+                .isMaliGpu = choice.isMaliGpu};
           },
       .gpuBackendSupportsRowSplit =
           []() { return backend_selection::gpuBackendSupportsRowSplit(); },
@@ -681,12 +670,37 @@ NormalizedLoad normalizeLoadForFit(
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
 
-    const SelectedBackend selected = dependencies.resolveBackend(
-        preferredBackend,
-        mainGpu,
-        metadata,
-        finetuneOverrides.active,
-        backendOverride);
+    // QVAC-23763: the KV-cache types the load asks for, so selection can pass
+    // over a device that cannot run them instead of the load being refused
+    // after one was already chosen.
+    //
+    // Read, NOT erased: unlike main-gpu and backend, these keys are meant to
+    // reach llama.cpp's parser through the passthrough loop below. Erasing them
+    // would silently downgrade every quantized-KV load to f16.
+    LoadConstraints constraints;
+    for (const char* key :
+         {"cache-type-k", "cache_type_k", "cache-type-v", "cache_type_v"}) {
+      const auto it = configFilemap.find(key);
+      if (it == configFilemap.end()) {
+        continue;
+      }
+      const enum ggml_type kvType = kvCacheTypeFromString(it->second);
+      // An unrecognised value is left to tuneLoadConfigMap, which owns
+      // validating it and has the better message.
+      if (kvType != GGML_TYPE_COUNT) {
+        constraints.kvCacheTypes.push_back(kvType);
+      }
+    }
+
+    BackendRequest request;
+    request.preferred = preferredBackend;
+    request.metadata = &metadata;
+    request.mainGpu = mainGpu;
+    request.isFinetuning = finetuneOverrides.active;
+    request.backendOverride = backendOverride;
+    request.constraints = std::move(constraints);
+
+    const SelectedBackend selected = dependencies.resolveBackend(request);
     result.adrenoVersion = selected.adrenoVersion;
 
     // QVAC-21257: optional runtime override for the multimodal projector

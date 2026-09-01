@@ -97,6 +97,8 @@ enum class ExclusionReason : std::uint8_t {
   FinetuneAdreno800Plus,
   BitnetAdrenoBelow800,
   BitnetAdreno800Plus,
+  /// The device's backend cannot run the requested KV-cache type.
+  KvCacheTypeUnsupported,
 };
 
 /// @brief Whether landing on CPU because every GPU carries this reason is an
@@ -118,8 +120,9 @@ ExclusionKind kindOf(ExclusionReason reason);
 /// Default-constructed means no extra constraint, which is every pre-QVAC-23763
 /// caller.
 struct LoadConstraints {
-  /// Reserved for the KV-cache-type capability filter. Empty today.
-  std::vector<ggml_type> kvCacheTypes;
+  /// KV-cache types the device must be able to write with SET_ROWS from F32.
+  /// Empty when the caller set no cache-type, or set one that is not quantized.
+  std::vector<enum ggml_type> kvCacheTypes;
 };
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
@@ -157,6 +160,10 @@ struct BackendChoice {
 
 BackendChoice chooseBackend(
     const BackendRequest& request, const BackendInterface& bckI);
+
+/// @brief `chooseBackend()` against the real ggml backend registry.
+BackendChoice
+chooseBackend(const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
 
 /// @brief Adapter for the positional form. Retained so existing callers and
 /// tests are unaffected by the request/choice split; prefer the overload above
