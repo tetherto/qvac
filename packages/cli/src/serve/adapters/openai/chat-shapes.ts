@@ -1,10 +1,10 @@
 import type { ToolCall } from '@qvac/sdk'
-import type { OpenAiFinishReason } from './completion-result.js'
+import type { OpenAiFinishReason } from '@/serve/adapters/openai/completion-result'
 import {
   sdkToolCallsToOpenai,
   type OpenAIToolCall,
   type OpenAIToolCallDelta
-} from './tool-calls.js'
+} from '@/serve/adapters/openai/tool-calls'
 
 interface ChatCompletionResponseParams {
   id: string
