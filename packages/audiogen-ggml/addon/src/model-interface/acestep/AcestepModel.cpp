@@ -217,6 +217,8 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.reference_audio = in.referenceAudio;
   params.source_audio = in.sourceAudio;
   params.task_type = in.taskType;
+  params.track = in.track;
+  params.guidance_scale = in.guidanceScale;
   params.audio_cover_strength = in.audioCoverStrength;
   params.cover_noise_strength = in.coverNoiseStrength;
   params.edit_plan.reserve(in.editOperations.size());

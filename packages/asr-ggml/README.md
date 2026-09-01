@@ -526,13 +526,13 @@ CUDA when a supported device is present and falls back to Vulkan otherwise.
 Both engines report the winner through `getBackendInfo()` as `backendId: 2`
 (`BackendId.CUDA`).
 
-The prebuilt CUDA module targets **compute capability 8.0 and newer**. It
-carries native code for 8.6 (RTX 30xx, A40) and 8.9 (RTX 40xx, L40) and
-JIT-compiles from 8.0 PTX for anything newer (Hopper, Blackwell / RTX 50xx),
-which costs a one-off compile on first use that the driver then caches. Cards
-below 8.0 — Turing (RTX 20xx, GTX 16xx, T4), Volta and Pascal — have no CUDA
-code path in the prebuild and should run on Vulkan; build from source with a
-wider `CMAKE_CUDA_ARCHITECTURES` if you need CUDA on them.
+The prebuilt CUDA module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
+Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
+Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
+path here: the backend skips such devices at registration and the addon falls
+back to Vulkan or CPU.
 
 The addon takes no direct CUDA linkage — the CUDA module carries its own CUDA
 `DT_NEEDED` entries, which is what makes the graceful fallback possible — and
