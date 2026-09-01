@@ -815,7 +815,7 @@ TEST_F(LoadFitNormalizationTest, TensorSplitCpuFallbackClearsToNone) {
 // named for what it does: it pins that each listed architecture is rejected,
 // with the architecture named in the error. Re-deriving the list from
 // LLM_ARCH_NAMES on a fabric bump remains a manual step.
-// Verified by hand against qvac-fabric v10297.1.0 (27 entries).
+// Verified by hand against qvac-fabric v10297.1.1 (27 entries).
 TEST_F(LoadFitNormalizationTest, TensorSplitArchDenylistCoversFabric) {
   static constexpr const char* kUnsupported[] = {
       "grok",          "mpt",

@@ -16,7 +16,7 @@
     explicitly for large models** or the load can OOM. The override is applied after argument
     parsing, so an explicit `fit: 'on'` cannot silently re-enable it. Logged at WARNING.
   - Unavailable for some architectures (Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2,
-    MiniMax, Qwen3-Next and others as of qvac-fabric v10297.1.0); rejected before loading with
+    MiniMax, Qwen3-Next and others as of qvac-fabric v10297.1.1); rejected before loading with
     the architecture named. `deepseek4`, `qwen35` and `qwen35moe` were unsupported at v10297.0.0
     and are supported from v10297.1.0.
 
@@ -40,7 +40,7 @@
 
 ### Changed
 
-- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.0` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting).
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader).
 
 ## [0.48.0] - 2026-08-31
 

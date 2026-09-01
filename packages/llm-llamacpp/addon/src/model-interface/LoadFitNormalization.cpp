@@ -84,7 +84,9 @@ uint32_t trainedContext(const ModelMetaData& metadata) {
 // enforces it. LoadFitNormalizationTest.TensorSplitArchDenylistCoversFabric
 // exercises this list but reads nothing from fabric, so it cannot detect
 // drift; it only pins the addon against its own copy. Verified by hand
-// against qvac-fabric v10297.1.0 (27 entries).
+// against qvac-fabric v10297.1.1 (27 entries). v10297.1.1 leaves
+// src/llama-arch.cpp untouched relative to v10297.1.0, so the list is
+// unchanged across that bump.
 //
 // The bump from v10297.0.0 to v10297.1.0 REMOVED three entries — fabric now
 // supports tensor split for deepseek4, qwen35 and qwen35moe. Leaving them here
