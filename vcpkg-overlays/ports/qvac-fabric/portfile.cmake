@@ -198,12 +198,16 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   #
   #   86-real     RTX 3090, the qvac-ubuntu*-x64-gpu CI runners
   #   120a-real   RTX 5090
-  #   80-virtual  PTX, JITs onto sm_87 (Nvidia Jetson Orin, our only arm64
-  #               target) and onto anything newer we have not pinned
+  #   80-virtual  PTX, JITs onto sm_87 (Nvidia Jetson Orin) and onto anything
+  #               newer that is not pinned above
   #
-  # Dropped versus the default: 75 (Turing), 89 (Ada), 90 (Hopper) and 121a. We
-  # ship to none of them. Note the QVAC-23763 dev box is a Turing T4, so local
-  # builds there want -DCMAKE_CUDA_ARCHITECTURES=75 as an override.
+  # Not built: 75 (Turing), 89 (Ada), 90 (Hopper), 121a. Ada and Hopper still
+  # reach the kernels by JIT from the 80-virtual PTX. Turing and anything below
+  # 8.0 do NOT, because PTX only JITs upward: those cards enumerate, get
+  # selected, and then fail at the first kernel launch instead of falling back.
+  # Which architectures we ship to is a product decision and is still open, so
+  # this list is not a statement that the missing ones are unsupported. A local
+  # build on a Turing box needs -DCMAKE_CUDA_ARCHITECTURES=75 as an override.
   #
   # The semicolons MUST stay backslash-escaped. vcpkg_cmake_configure(OPTIONS)
   # treats its argument as a CMake list, so an unescaped value splits and the
