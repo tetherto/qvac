@@ -119,7 +119,7 @@ on:
         type: string
         default: '["qvac-ubuntu2204-x64-gpu"]'
       calibration:
-        description: "Run the assessModelFit calibration harness (slow: seven model loads per platform)"
+        description: "Run the assessModelFit calibration harness (~30 min per platform warm; first run also downloads ~7.5 GiB of models)"
         type: boolean
         default: false
       calibration-platforms:
@@ -616,6 +616,10 @@ jobs:
       matrix:
         platform: ${{ fromJSON(inputs.calibration-platforms || '["qvac-macos26-arm64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-win25-x64-gpu"]') }}
     runs-on: ${{ matrix.platform }}
+    # Expected completion: ~30 min warm (validated darwin-arm64 runs measured
+    # ~15 min for the 21 loads, plus install and build) — the first run on a
+    # runner also downloads ~7.5 GiB of models from the registry, so the
+    # ceiling budgets for a cold run on a slow connection.
     timeout-minutes: 180
     environment: release
     permissions:
