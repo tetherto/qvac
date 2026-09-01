@@ -472,12 +472,12 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
 
 
-class AudioGenStreamResponseDiagnosticsSelectedDevice(Enum):
+class AudioGenStreamResponseDiagnosticsSelectedDevice(str, Enum):
     cpu = "cpu"
     gpu = "gpu"
 
 
-class AudioGenStreamResponseDiagnosticsGraphicsApi(Enum):
+class AudioGenStreamResponseDiagnosticsGraphicsApi(str, Enum):
     vulkan = "vulkan"
     opencl = "opencl"
     opengl = "opengl"
@@ -498,7 +498,7 @@ class AudioGenStreamResponseDiagnosticsDriver(GeneratedBaseModel):
     version: Annotated[str | None, Field(min_length=1)] = None
 
 
-class AudioGenStreamResponseDiagnosticsFallbackRequestedDevice(Enum):
+class AudioGenStreamResponseDiagnosticsFallbackRequestedDevice(str, Enum):
     cpu = "cpu"
     gpu = "gpu"
 
@@ -520,7 +520,7 @@ class AudioGenStreamResponseDiagnosticsFallback(GeneratedBaseModel):
     reason: Annotated[str, Field(min_length=1)]
 
 
-class AudioGenStreamResponseDiagnosticsProbeStatus(Enum):
+class AudioGenStreamResponseDiagnosticsProbeStatus(str, Enum):
     compatible = "compatible"
     incompatible = "incompatible"
     unknown = "unknown"
