@@ -4,10 +4,10 @@ The SDK test suite is split into two clearly separated buckets. Each bucket has 
 
 ## Buckets
 
-| Bucket                | Runtime                                 | Framework             | Location | Command                                     |
-| --------------------- | --------------------------------------- | --------------------- | -------- | ------------------------------------------- |
-| **Unit**              | Bun / Node                              | brittle               | `test/`  | `bun run test:unit`                         |
-| **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @qvac/qvac-test-suite | `e2e/`   | See [below](#e2e--clientconsumer-e2e-tests) |
+| Bucket                | Runtime                                 | Framework        | Location | Command                                     |
+| --------------------- | --------------------------------------- | ---------------- | -------- | ------------------------------------------- |
+| **Unit**              | Bun / Node                              | brittle          | `test/`  | `bun run test:unit`                         |
+| **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @qvac/test-suite | `e2e/`   | See [below](#e2e--clientconsumer-e2e-tests) |
 
 The Bare-runtime engine and its server-side tests live in `@qvac/inference`; the SDK consumes that package and no longer hosts an in-process engine test bucket.
 
@@ -32,7 +32,7 @@ Tests that exercise **shared schemas, client logic, utilities, and the SDK's own
 
 Tests that exercise the **full SDK from the consumer perspective** — loadModel, completion, transcription, etc.
 These run on desktop Node, packaged Electron apps, and real devices (iOS, Android) via the
-`@qvac/qvac-test-suite` framework.
+`@qvac/test-suite` framework.
 
 **Belongs here if:**
 

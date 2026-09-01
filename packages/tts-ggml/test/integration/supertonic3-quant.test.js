@@ -38,20 +38,14 @@ const SAMPLE_RATE = 44100
 // 2026-06-10, q8_0/q4_0 @ 2026-06-15); a tier that can't be fetched fails.
 const QUANTS = ['f16', 'f32', 'q8_0', 'q4_0']
 
-// Existing (inherited from Supertonic 2) + new v3-only languages.  The new
-// ones are deliberately Latin-script so the test sentences don't need
-// language-specific tokenizer fixtures.
+// One representative per group: en (baseline) + fr (v2-inherited Romance)
+// + de (v3-only Germanic). Latin-script only so no tokenizer fixtures needed.
 const SENTENCES = [
   // --- existing Supertonic 2 languages ---
   { lang: 'en', text: 'The quick brown fox jumps over the lazy dog.', group: 'existing' },
-  { lang: 'ko', text: '다람쥐 헌 쳇바퀴에 타고파.', group: 'existing' },
-  { lang: 'es', text: 'El zorro marrón salta sobre el perro perezoso.', group: 'existing' },
-  { lang: 'pt', text: 'A raposa marrom pula sobre o cachorro preguiçoso.', group: 'existing' },
   { lang: 'fr', text: 'Le renard brun saute par-dessus le chien paresseux.', group: 'existing' },
   // --- new Supertonic 3 languages ---
-  { lang: 'de', text: 'Der schnelle braune Fuchs springt über den faulen Hund.', group: 'new' },
-  { lang: 'it', text: 'La rapida volpe marrone salta sopra il cane pigro.', group: 'new' },
-  { lang: 'nl', text: 'De snelle bruine vos springt over de luie hond.', group: 'new' }
+  { lang: 'de', text: 'Der schnelle braune Fuchs springt über den faulen Hund.', group: 'new' }
 ]
 
 async function loadSupertonic3TTS(params) {

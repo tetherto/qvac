@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.2.4",
+  "version": "0.3.2",
   "description": "Audio generation (music) addon for qvac",
   "addon": true,
   "engines": {
@@ -12,7 +12,9 @@
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
+    "example:minimax": "bare examples/generate-music-minimax.js",
     "example:cover": "bare examples/generate-cover.js",
+    "example:lego": "bare examples/generate-lego.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "node scripts/check-generated.mjs",
     "test:dts": "tsc --noEmit -p tsconfig.dts.json",
@@ -36,6 +38,7 @@
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
+    "./binding.js": "./binding.js",
     "./models": "./models.js",
     "./test/benchmark-runner": "./test/utils/benchmark-runner.js"
   },
@@ -63,9 +66,11 @@
     "test/utils/device-env.js",
     "test/utils/memory-usage.js",
     "benchmarks/RTF-BENCHMARKS.md",
+    "examples/generate-music-minimax.js",
     "scripts/download-audiogen-ggml-models.js",
     "README.md",
     "CHANGELOG.md",
+    "NOTICE",
     "LICENSE"
   ],
   "license": "Apache-2.0",
@@ -81,10 +86,12 @@
     "audiogen",
     "music-generation",
     "acestep",
+    "minimax-music3",
     "ggml"
   ],
   "devDependencies": {
     "@qvac/registry-client": "^0.6.1",
+    "bare-pack": "^1.4.7",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",

@@ -1,10 +1,10 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { categorize, summarizeUnknownLabels } from './categorize.js'
-import { QVAC_EXTENSION_ENDPOINTS } from './extensions.js'
-import { parseRouter } from './parse-router.js'
-import { parseSpec } from './parse-spec.js'
-import { CONSUMER_PRIMARY_ENDPOINTS } from './primary.js'
+import { categorize, summarizeUnknownLabels } from '@/openai/coverage/categorize'
+import { QVAC_EXTENSION_ENDPOINTS } from '@/openai/coverage/extensions'
+import { parseRouter } from '@/openai/coverage/parse-router'
+import { parseSpec } from '@/openai/coverage/parse-spec'
+import { CONSUMER_PRIMARY_ENDPOINTS } from '@/openai/coverage/primary'
 import type {
   CategorySummary,
   CoverageCategory,
@@ -12,7 +12,7 @@ import type {
   CoverageRow,
   CoverageSummary,
   SpecEntry
-} from './types.js'
+} from '@/openai/coverage/types'
 
 const COVERAGE_DIR = dirname(fileURLToPath(import.meta.url))
 export const DEFAULT_ROUTER = join(COVERAGE_DIR, '..', '..', 'serve', 'routes')

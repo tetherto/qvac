@@ -6,9 +6,9 @@ GGML library.  Wraps multiple engines under one package: **Chatterbox**
 v1/v2 still loadable), **Parler** (mini/large English + indic 21-language,
 description-conditioned with voice/emotion templates), **CosyVoice3**
 (Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU with opt-in
-Metal on Apple, Vulkan on Linux/Windows, and OpenCL/Adreno GPU offload
-on Android), and **Audio8**
-(DualAR + neural codec, in-process voice cloning, desktop Vulkan), plus optional
+Metal on Apple, CUDA/Vulkan on Linux, Vulkan on Windows, and OpenCL/Adreno
+GPU offload on Android), and **Audio8**
+(DualAR + neural codec, in-process voice cloning, desktop GPU), plus optional
 LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
 which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
 
@@ -16,16 +16,17 @@ which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
 preload, the ggml backend, and any voice-conditioning tensors are
 loaded once and reused across every synthesis call.  GPU acceleration
-(Metal on macOS/iOS, Vulkan on Linux/Windows, Vulkan / OpenCL on Android)
-is **opt-in** via `config: { useGPU: true }`; the default is CPU.  On
+(Metal on macOS/iOS, CUDA or Vulkan on Linux, Vulkan on Windows,
+Vulkan / OpenCL on Android) is **opt-in** via `config: { useGPU: true }`;
+the default is CPU.  On
 Android `useGPU` flows through to `tts-cpp`, which picks the GPU
 backend per its own per-vendor allowlist (Adreno → OpenCL,
-Xclipse/Mali → Vulkan). Parler supports Apple/Metal and the validated
-Android paths, including Vulkan on ARM Mali (see
+Xclipse/Mali → Vulkan). Parler supports Apple/Metal, linux CUDA, and the
+validated Android paths, including Vulkan on ARM Mali (see
 [Backends & GPU acceleration](#backends--gpu-acceleration)). Audio8 supports
-Vulkan offload on Linux and Windows.
+CUDA/Vulkan offload on Linux and Vulkan on Windows.
 
-[qvac-tts-cpp]: https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp
+[qvac-tts-cpp]: https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/tts
 
 ## Features
 
@@ -197,7 +198,7 @@ npm run convert-models
 ```
 
 The Audio8 GGUFs are produced by the converters in
-qvac-ext-lib-whisper.cpp (`engines/tts/scripts/convert-audio8-lm-to-gguf.py`
+qvac-fabric-speech.cpp (`engines/tts/scripts/convert-audio8-lm-to-gguf.py`
 and `convert-audio8-codec-to-gguf.py`) until they are published to the model
 registry alongside the other engines.
 
@@ -523,7 +524,7 @@ const model = new TTSGgml({
 
 Convert the GGUF from the public [LavaSRcpp](https://github.com/Topping1/LavaSRcpp)
 ONNX release using the `convert-lavasr-denoiser-to-gguf.py` script shipped in the
-[`qvac-ext-lib-whisper.cpp/tts-cpp`][qvac-tts-cpp] repo (this package ships only
+[`qvac-fabric-speech.cpp/engines/tts`][qvac-tts-cpp] repo (this package ships only
 the enhancer converter under `scripts/`):
 
 ```bash
@@ -541,7 +542,7 @@ Notes:
   front for every engine — a stateful streaming denoiser is the follow-up. Use
   batch synthesis, or drop the denoiser for streaming.
 - The tts-cpp UL-UNAS forward is implemented in
-  [qvac-ext-lib-whisper.cpp#78](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/78)
+  [qvac-fabric-speech.cpp#78](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/78)
   (scalar CPU port, validated bit-close to the ONNX reference); it requires a
   `tts-cpp` build that includes that port — see the pinned version in `vcpkg.json`.
 
@@ -555,29 +556,49 @@ host's policy:
 | Platform                | Default backend when `useGPU: true`          |
 |-------------------------|----------------------------------------------|
 | macOS / iOS             | Metal                                        |
-| Linux / Windows         | Vulkan                                       |
+| Linux x64 — NVIDIA      | CUDA (the linux-x64 prebuild bundles CUDA and Vulkan; CUDA wins the cascade) |
+| Linux — other / Windows | Vulkan                                       |
 | Android — Adreno 700+   | OpenCL                                       |
 | Android — Mali / others | Vulkan                                       |
 | Everything else / CPU-only build | CPU                                 |
+
+On hosts where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
+(`cuda` | `vulkan` | `metal` | `opencl`) pins the cascade to one backend
+and fails loudly when that backend cannot be resolved; unset (or empty)
+keeps the automatic preference above.
+
+The linux-x64 CUDA backend ships as a runtime-loaded module: engaging it
+requires the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
+cuBLAS, from a CUDA toolkit install) resolvable at load time. On hosts
+without them — including CPU-only and non-NVIDIA machines — the module is
+skipped and the addon behaves exactly as before (Vulkan or CPU).
+
+The module targets **compute capability 7.5 and newer**: native code for
+Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6), Ada (8.9), Hopper
+(9.0) and Blackwell (12.0, 12.1), and a JIT compile from the bundled 8.0 PTX
+for anything newer that the driver caches after first use. Volta and Pascal
+fall outside CUDA 13's support entirely, so they have no code path here: the
+backend skips such devices at registration and the addon falls back to Vulkan
+or CPU.
 
 > Both Chatterbox and Supertonic run on ARM Mali via Vulkan: `tts-cpp` sets
 > `allow_arm_mali=true` for both graphs. (Earlier `tts-cpp` builds declined
 > Mali for the Chatterbox / S3Gen graph and fell back to CPU there.)
 >
 > Parler also opts into ARM Mali Vulkan on Android. Its GPU smoke test is
-> strict on Apple and Android; desktop Vulkan remains outside that test until
-> dedicated Linux and Windows validation is available.
+> strict on Apple, Android, and the linux CUDA lane; desktop Vulkan remains
+> outside that test until dedicated Linux and Windows validation is available.
 >
-> CosyVoice3's GPU path covers Metal (macOS / iOS), Vulkan on desktop
-> Linux / Windows, and OpenCL/Adreno (Android). `useGPU: true` /
+> CosyVoice3's GPU path covers Metal (macOS / iOS), CUDA and Vulkan on desktop
+> Linux, Vulkan on Windows, and OpenCL/Adreno (Android). `useGPU: true` /
 > `nGpuLayers > 0` offloads there — on Android, pair it with
 > `openclCacheDir` to persist the compiled kernels. On Android the engine
 > keeps its Metal-or-OpenCL requirement, so Vulkan-only mobile GPUs
 > (Mali, Xclipse) fall back to CPU rather than running a backend its
 > per-stage parity gates have not covered.
 >
-> Audio8's GPU path covers Metal (macOS / iOS), Vulkan on desktop
-> Linux / Windows, and OpenCL/Adreno (Android). `useGPU: true` /
+> Audio8's GPU path covers Metal (macOS / iOS), CUDA and Vulkan on desktop
+> Linux, Vulkan on Windows, and OpenCL/Adreno (Android). `useGPU: true` /
 > `nGpuLayers > 0` offloads there — on Android, pair it with
 > `openclCacheDir` to persist the compiled kernels. A GPU request on a
 > platform or in a build without one of those backends falls back to CPU
@@ -748,8 +769,8 @@ falls into.  `greedy: true` takes the argmax instead and ignores
 `maxFrames` caps generation in codec frames (~21.5/s of audio).
 
 Audio8 runs on CPU by default. Set `config.useGPU: true` or `nGpuLayers: 99`
-to offload the language model and codec graphs to Metal (macOS / iOS), Vulkan
-(desktop Linux / Windows) or OpenCL (Android / Adreno). If none of those is
+to offload the language model and codec graphs to Metal (macOS / iOS), CUDA or
+Vulkan (desktop Linux), Vulkan (Windows) or OpenCL (Android / Adreno). If none of those is
 available, the engine falls back to CPU and sets
 `response.stats.gpuUnsupported`. Voice cloning uses the same backend and adds
 a one-off encode when a new reference recording is supplied.
@@ -807,7 +828,7 @@ a one-off encode when a new reference recording is supplied.
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan; CosyVoice3 offloads on Apple/Metal, desktop Linux/Windows Vulkan, and Android OpenCL/Adreno; Audio8 uses desktop Vulkan on Linux/Windows. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / CUDA / Vulkan / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal, linux CUDA, and Android/ARM Mali Vulkan; CosyVoice3 and Audio8 offload on Apple/Metal, desktop linux CUDA/Vulkan, Windows Vulkan, and Android OpenCL/Adreno. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
 | `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic / Parler / Audio8 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
@@ -923,7 +944,7 @@ Runnable demos under `examples/`:
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
 | `cosyvoice-tts.js` | CosyVoice3 batch synth with the cross-engine emotion option (24 kHz; CPU by default, `--gpu` opts into Metal / desktop Vulkan / Android GPU). `bare examples/cosyvoice-tts.js --gpu "Hello" happy` |
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
-| `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for desktop Vulkan. `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
+| `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for the desktop GPU backend (CUDA or Vulkan on linux, Vulkan on Windows). `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
 
 The two streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
@@ -980,9 +1001,11 @@ The vcpkg port is hosted in
 [`vcpkg-configuration.json`](./vcpkg-configuration.json) for the
 baseline commit.
 
-GPU backends are controlled by the `tts-cpp` port's vcpkg features:
+GPU backends are controlled by the `speech-cpp` port's vcpkg features:
 `metal` (default on osx/ios), `vulkan` (default on
-linux/windows/android), `opencl` (default on android).
+linux/windows/android), `opencl` (default on android), and `cuda`
+(opt-in via the addon's `ENABLE_CUDA` cmake option; the published
+linux-x64 prebuilds enable it).
 On Android the port is configured with
 `GGML_BACKEND_DL=ON` + `GGML_CPU_ALL_VARIANTS=ON`, so the build
 produces per-arch CPU + Vulkan + OpenCL `.so` files alongside the

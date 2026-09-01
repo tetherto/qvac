@@ -11,7 +11,7 @@ import {
   logMqttConnectionSecurity,
   startNodeMemoryPoller,
   type TestDefinition
-} from '@qvac/qvac-test-suite'
+} from '@qvac/test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -43,6 +43,7 @@ import {
   TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_UNIFIED_0_6B_Q4_0,
   PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
@@ -403,6 +404,12 @@ resources.define('parakeet-ctc', {
   config: {}
 })
 
+resources.define('parakeet-unified', {
+  constant: PARAKEET_UNIFIED_0_6B_Q4_0,
+  type: 'parakeet-transcription',
+  config: {}
+})
+
 resources.define('parakeet-indic-conformer', {
   constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   type: 'parakeet-transcription',
@@ -538,12 +545,12 @@ export const executor = createExecutor({
       'Electron skips diffusion tests because image generation takes too long for the stable Electron pass'
     ),
     new SkipExecutor(
-      /^audio-gen-/,
-      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
+      /^world-/,
+      'Electron skips ABot-World: a walk session needs a dedicated GPU and the 13.3 GB model set is far beyond the stable Electron pass'
     ),
     new SkipExecutor(
-      /^delegated-/,
-      'Electron skips delegated inference tests because provider startup and peer connectivity need separate packaged-app coverage'
+      /^audio-gen-/,
+      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
     ),
     new SkipExecutor(
       /^finetune-/,

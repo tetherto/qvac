@@ -76,7 +76,6 @@ try {
   if (resourceEvent?.resources) {
     const resources = resourceEvent.resources
     console.log('  op:', resourceEvent.op)
-    console.log('  origin:', resources.origin)
     console.log(
       '  cpu:',
       resources.cpu.status === 'supported'

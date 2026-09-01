@@ -244,6 +244,56 @@ test('HyperDBAdapter - Error when documents have different embeddingModelIds', a
   await adapter.close()
 })
 
+test('HyperDBAdapter - Mixed embedding dimensions write nothing', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(tmpDir)
+  const adapter = new HyperDBAdapter({
+    store,
+    dbName: 'test-mixed-dimensions-db'
+  })
+
+  await adapter.ready()
+
+  const embeddedDocs = [
+    {
+      id: 'doc1',
+      content: 'Test document 1',
+      embeddingModelId: 'model-abc123',
+      embedding: Array(384).fill(0.1)
+    },
+    {
+      id: 'doc2',
+      content: 'Test document 2',
+      embeddingModelId: 'model-abc123',
+      embedding: Array(512).fill(0.2)
+    }
+  ]
+
+  try {
+    await adapter.saveEmbeddings(embeddedDocs)
+    t.fail('Should have thrown EMBEDDING_DIMENSION_MISMATCH')
+  } catch (error) {
+    t.ok(error instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
+    if (error instanceof QvacErrorRAG) {
+      t.is(
+        error.code,
+        ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
+        'Error code should be EMBEDDING_DIMENSION_MISMATCH'
+      )
+    }
+  }
+
+  t.is(await adapter.getConfig(), null, 'Config should not be persisted')
+  const snapshot = adapter.db!.snapshot()
+  const documents = await snapshot.find('@rag/documents').toArray()
+  const vectors = await snapshot.find('@rag/vectors').toArray()
+  await snapshot.close()
+  t.is(documents.length, 0, 'Documents should not be written')
+  t.is(vectors.length, 0, 'Vectors should not be written')
+
+  await adapter.close()
+})
+
 test('HyperDBAdapter - getConfig returns null for unconfigured workspace', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(tmpDir)

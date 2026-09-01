@@ -384,6 +384,8 @@ qvac serve openai [options]
 | `--no-cancel-load-on-disconnect` | Keep loading a model even if the client that triggered the load disconnects.                                                        |
 | `-v, --verbose`                  | Detailed output.                                                                                                                    |
 
+With lazy loading on (the default), the server starts even when some preload models fail; a failed model still loads lazily on the next request. With `--no-lazy-load`, preloaded models are the only ones that can serve, so if every preload model fails the server exits non-zero instead of listening — under a supervisor (systemd, Docker) that surfaces the failure rather than a running-but-empty server. The worker stderr behind the failure (for example a missing addon) is logged either way.
+
 `serve.cors.origins` in `qvac.config.*` and repeatable `--cors-origin` flags are combined. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. `--cors` is only a compatibility validation switch and does not enable CORS itself. It fails without an explicit CLI/config origin, including with `--docs`. Existing `--cors` scripts must add every trusted origin explicitly:
 
 ```bash

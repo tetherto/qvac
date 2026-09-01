@@ -6,7 +6,7 @@
 # and MODEL_S3_BUCKET.
 #
 # Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
-# llm-llamacpp, nmtcpp, onnx, parakeet, tts-ggml,
+# llm-llamacpp, nmtcpp, parakeet, tts-ggml,
 # whispercpp. All prebuild workflows in the monorepo
 # now route through this reusable.
 name: "Prebuilds (reusable)"
@@ -59,10 +59,38 @@ on:
         required: false
         default: false
       rocm-version:
-        description: "TheRock ROCm dist tarball version used when include-rocm is set"
+        description: >-
+          TheRock ROCm dist tarball version used when include-rocm is set.
+          Must be updated together with rocm-gfx and rocm-sha256 so the pin
+          matches setup-rocm's defaults and /opt/rocm/.qvac-rocm on self-hosted
+          linux-x64 images. Passing version alone would keep the action's
+          default sha256 and miss the host-baked stamp.
         type: string
         required: false
         default: "7.13.0"
+      rocm-gfx:
+        description: "AMD GPU arch target forwarded to setup-rocm when include-rocm is set"
+        type: string
+        required: false
+        default: "gfx1151"
+      rocm-sha256:
+        description: >-
+          Expected SHA-256 of the TheRock dist tarball, forwarded to setup-rocm.
+          Must match rocm-version/rocm-gfx. Leave unset to use this default;
+          do not pass an empty string (that skips integrity verification).
+        type: string
+        required: false
+        default: "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
+      include-cuda:
+        description: >-
+          Install a pinned CUDA toolkit on the linux-x64 build so a consumer's
+          speech-cpp cuda feature compiles the ggml CUDA backend. No NVIDIA GPU
+          is needed on the runner (compile-only). Only affects the linux-x64
+          job; everything else is unchanged. Enable the consumer's CUDA cmake
+          option via platform-cmake-defines (e.g. `linux-x64: -D ENABLE_CUDA=ON`).
+        type: boolean
+        required: false
+        default: false
       extra-cmake-defines:
         description: >-
           Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
@@ -71,7 +99,7 @@ on:
         default: ""
       platform-cmake-defines:
         description: >-
-          Platform-conditional cmake defines, one entry per line in `<platform>: <defines>` form. The matched platform's defines are appended after `extra-cmake-defines`, so they can override common defines if needed. Platforms without an entry contribute nothing. Example: #magic___^_^___line
+          Platform-conditional cmake defines, one entry per line in `<platform>: <defines>` or `<platform>-<arch>: <defines>` form. The matched platform's defines are appended after `extra-cmake-defines`, then the matched platform-arch defines after those, so more specific entries can override broader ones. Platforms without an entry contribute nothing. Example: #magic___^_^___line
             platform-cmake-defines: |
               darwin: -D WHISPER_USE_METAL=ON
               ios: -D WHISPER_USE_METAL=ON
@@ -105,7 +133,13 @@ permissions:
   contents: read
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   prebuild:
+    needs: runner_names
     permissions:
       contents: write
       pull-requests: write
@@ -117,36 +151,43 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
           - os: ubuntu-22.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
             platform: linux
             arch: arm64
           - os: ubuntu-24.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404 }}
             platform: android
             arch: arm64
           - os: macos-15
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
             platform: ios
             arch: arm64
           - os: macos-15
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator
           - os: macos-15
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
             platform: ios
             arch: x64
             tags: -simulator
             flags: --simulator
           - os: macos-15
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
             platform: darwin
             arch: arm64
           - os: macos-15-intel
+            runner: ${{ needs.runner_names.outputs.macos_15_intel }}
             platform: darwin
             arch: x64
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
@@ -204,7 +245,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -259,8 +300,17 @@ jobs:
       - if: ${{ inputs.include-rocm && matrix.platform == 'linux' && matrix.arch == 'x64' }}
         name: Setup ROCm SDK for HIP cross-compile
         uses: ./.github/actions/setup-rocm
+        # Forward the full pin. setup-rocm matches /opt/rocm/.qvac-rocm against
+        # gfx + version + sha256 together; a partial `with:` would override only
+        # some defaults and miss the host-baked SDK (or skip sha256 verify).
         with:
           rocm-version: ${{ inputs.rocm-version }}
+          gfx: ${{ inputs.rocm-gfx }}
+          sha256: ${{ inputs.rocm-sha256 }}
+
+      - if: ${{ inputs.include-cuda && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Setup CUDA toolkit for nvcc compile
+        uses: ./.github/actions/setup-cuda
 
       - if: ${{ inputs.include-vulkan-sdk && matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path (Windows)
@@ -309,18 +359,13 @@ jobs:
         shell: bash
         env:
           MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
           EXTRA_DEFINES: ${{ inputs.extra-cmake-defines }}
           PLATFORM_DEFINES_MAP: ${{ inputs.platform-cmake-defines }}
         run: |
-          DEFINES="-D BUILD_TESTING=OFF"
-          if [ "$MATRIX_PLATFORM" = "android" ]; then
-            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
-          fi
-          if [ -n "$EXTRA_DEFINES" ]; then
-            DEFINES="$DEFINES $EXTRA_DEFINES"
-          fi
-          if [ -n "$PLATFORM_DEFINES_MAP" ]; then
-            LINE=$(echo "$PLATFORM_DEFINES_MAP" | grep -E "^[[:space:]]*${MATRIX_PLATFORM}[[:space:]]*:" || true)
+          append_mapped_defines() {
+            KEY="$1"
+            LINE=$(echo "$PLATFORM_DEFINES_MAP" | grep -E "^[[:space:]]*${KEY}[[:space:]]*:" || true)
             if [ -n "$LINE" ]; then
               VALUE="${LINE#*:}"
               VALUE="${VALUE#"${VALUE%%[![:space:]]*}"}"
@@ -329,6 +374,17 @@ jobs:
                 DEFINES="$DEFINES $VALUE"
               fi
             fi
+          }
+          DEFINES="-D BUILD_TESTING=OFF"
+          if [ "$MATRIX_PLATFORM" = "android" ]; then
+            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
+          fi
+          if [ -n "$EXTRA_DEFINES" ]; then
+            DEFINES="$DEFINES $EXTRA_DEFINES"
+          fi
+          if [ -n "$PLATFORM_DEFINES_MAP" ]; then
+            append_mapped_defines "$MATRIX_PLATFORM"
+            append_mapped_defines "$MATRIX_PLATFORM-$MATRIX_ARCH"
           fi
           echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
 
@@ -545,3 +601,4 @@ jobs:
         with:
           name: prebuilds
           path: prebuilds
+

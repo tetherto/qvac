@@ -6,8 +6,6 @@ export {
   loadModel,
   downloadAsset,
   heartbeat,
-  startQVACProvider,
-  stopQVACProvider,
   unloadModel,
   transcribe,
   transcribeStream,
@@ -31,6 +29,7 @@ export {
   getModelInfo,
   getLoadedModelInfo,
   getSystemResources,
+  assessModelFit,
   loggingStream,
   subscribeServerLogs,
   type ServerLogHandler,
@@ -43,6 +42,12 @@ export {
   video,
   type VideoProgressTick,
   upscale,
+  worldCreateScene,
+  worldStep,
+  type WorldStepResult,
+  type WorldStepProgressTick,
+  type WorldSceneResult,
+  type WorldSceneResultWithPack,
   modelRegistryList,
   modelRegistrySearch,
   modelRegistryGetModel,
@@ -153,6 +158,8 @@ export {
   type GPUResourceSample,
   type SystemResourceSample,
   type SystemResources,
+  type AssessModelFitInput,
+  type AssessModelFitResult,
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
@@ -166,10 +173,12 @@ export {
   type DiffusionClientParams,
   type DiffusionStreamResponse,
   type DiffusionStats,
+  AUDIOGEN_ENGINES,
   AUDIOGEN_TASK_TYPES,
   AUDIOGEN_INPUT_SAMPLE_RATE,
   AUDIOGEN_INPUT_CHANNELS,
   AUDIOGEN_INPUT_MAX_SECONDS,
+  type AudioGenEngine,
   type AudioGenTaskType,
   type AudioGenAudioInput,
   type AudioGenClientParams,
@@ -186,6 +195,14 @@ export {
   type UpscaleClientParams,
   type UpscaleStreamResponse,
   type UpscaleStats,
+  type WalkKey,
+  type WalkKeysInput,
+  type WorldStepClientParams,
+  type WorldStepStreamResponse,
+  type WorldStepStats,
+  type WorldSceneClientParams,
+  type WorldSceneStreamResponse,
+  type WorldSceneStats,
   type VlaConfig,
   type VlaClientRunParams,
   type VlaClientRunResult,
@@ -284,11 +301,15 @@ export {
 // spawn because the platform's `bare-runtime-<platform>-<arch>` package is
 // missing (common under pnpm). Exported so consumers can pattern-match with
 // `instanceof`.
+// `StreamEndedError` is raised by the streaming result helpers (upscale, world)
+// when the RPC stream closes without a terminal `done` frame. Exported for the
+// same reason as the rest of this block: matching on it requires the class.
 export {
   BareRuntimeBinaryNotFoundError,
   WorkerCrashedError,
   WorkerShutdownError,
-  RequestValidationFailedError
+  RequestValidationFailedError,
+  StreamEndedError
 } from './utils/errors-client'
 
 // Logging exports

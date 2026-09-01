@@ -77,13 +77,19 @@ export function loadModel<S extends ModelDescriptor>(
  *
  * @overloadLabel "Load new model"
  * @param options - An object that defines all configuration parameters required for loading the model, including:
- *   - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL)
+ *   - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL).
+ *     Hugging Face URLs (huggingface.co / hf.co) are verified against the Hub's SHA-256, and their transport is
+ *     hardened (plaintext http:// and https://→http:// downgrades rejected, loopback excepted). Other HTTP(S) URLs
+ *     are downloaded as-is and unverified (bring-your-own — plaintext on any host is allowed). Set
+ *     `requireHttpChecksum` in the SDK config to reject Hugging Face downloads that expose no usable checksum.
  *   - modelType: The canonical type of model ("llamacpp-completion",
  *     "whispercpp-transcription", "llamacpp-embedding", "nmtcpp-translation",
  *     "tts-ggml", ...). May be omitted when `modelSrc` is a registry descriptor
  *     that already carries the engine.
  *   - modelConfig: Model-specific configuration options (companion sources, model parameters, etc.)
  *   - fallbackSrc: For a built-in catalog model, an HTTP URL or local file path to load from when the registry is unreachable (validated against the model checksum)
+ *   - requireHttpChecksum: Per-call override — reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Defaults to the engine config (false).
+ *   - requireSecureTransport: Per-call override — reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source (loopback exempt); when unset, only Hugging Face transport is hardened. Defaults to the engine config (false).
  *   - onProgress: Callback for download progress updates
  *   - logger: Logger instance for model operation logs
  * @param rpcOptions - Optional RPC options including per-call profiling configuration
@@ -292,7 +298,6 @@ async function runLoadModel(
       isReactNativeRuntime() &&
       canonicalModelType === ModelType.sdcppGeneration &&
       modelConfig?.mode === 'video' &&
-      resolvedOptions['delegate'] === undefined &&
       !warnedLocalVideoModelLoad
     ) {
       warnedLocalVideoModelLoad = true
@@ -300,8 +305,7 @@ async function runLoadModel(
         'QVAC video generation works on React Native, but loading the video ' +
         'model on-device will usually fail or take several minutes — the video ' +
         'diffusion models currently shipped by the SDK are too large to load ' +
-        'on typical mobile devices. Pass a `delegate` to `loadModel(...)` to ' +
-        'run generation on a desktop peer instead.'
+        'on typical mobile devices.'
       logger.warn(message)
     }
   }

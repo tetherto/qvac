@@ -1,4 +1,4 @@
-import type { CoverageCategory, CoverageReport, CoverageRow } from './types.js'
+import type { CoverageCategory, CoverageReport, CoverageRow } from '@/openai/coverage/types'
 
 function tagLabel(row: CoverageRow): string {
   const parts = [...row.tags]

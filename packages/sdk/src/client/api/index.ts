@@ -13,8 +13,6 @@ export { embed } from './embed'
 export { finetune, type FinetuneHandle } from './finetune'
 export { translate } from './translate'
 export { cancel } from './cancel'
-export { startQVACProvider } from './provide'
-export { stopQVACProvider } from './stop-provider'
 export {
   ragChunk,
   ragIngest,
@@ -30,12 +28,20 @@ export { textToSpeech, textToSpeechStream } from './text-to-speech'
 export { getModelInfo } from './get-model-info'
 export { getLoadedModelInfo } from './get-loaded-model-info'
 export { getSystemResources } from './get-system-resources'
+export { assessModelFit } from './assess-model-fit'
 export { ocr } from './ocr'
 export { invokePlugin, invokePluginStream } from './invoke-plugin'
 export { diffusion, type DiffusionProgressTick } from './diffusion'
 export { classify } from './classify'
 export { video, type VideoProgressTick } from './video'
 export { upscale } from './upscale'
+export { worldCreateScene, worldStep } from './world'
+export {
+  type WorldStepResult,
+  type WorldStepProgressTick,
+  type WorldSceneResult,
+  type WorldSceneResultWithPack
+} from './world-result'
 export {
   modelRegistryList,
   modelRegistrySearch,

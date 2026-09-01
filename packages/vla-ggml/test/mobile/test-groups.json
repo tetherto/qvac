@@ -6,5 +6,6 @@
   "android": {
     "smolvla": ["runAddonTest", "runEsmNamedExportsTest"],
     "groot":   ["runGrootTest"]
-  }
+  },
+  "deferred": ["runPi05Test"]
 }

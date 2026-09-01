@@ -16,7 +16,7 @@ const {
   NO_GPU,
   INTEGRATION_TIMEOUT_MS
 } = require('../utils/runAudioGen')
-const { AudioGen, RepaintMode } = require('@qvac/audiogen-ggml')
+const { AudioGen, ERR_CODES, RepaintMode } = require('@qvac/audiogen-ggml')
 
 const VARIANT = 'turbo-q4'
 const COVER_SAMPLE_RATE = 48000
@@ -313,6 +313,47 @@ test(
     t.ok(data.stages.length > 0, `streamed progress stages (${data.stages.join(', ')})`)
     t.ok(data.stats && typeof data.stats.totalTimeMs === 'number', 'stats.totalTimeMs present')
     t.ok(typeof data.stats.realTimeFactor === 'number', 'stats.realTimeFactor present')
+  }
+)
+
+test(
+  'AudioGen (ggml): immediate ACE-Step cancellation is terminal',
+  { timeout: INTEGRATION_TIMEOUT_MS },
+  async (t) => {
+    const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
+    if (!download.success) {
+      t.fail('ACE-Step models unavailable')
+      return
+    }
+
+    const gen = await loadAudioGen({
+      modelDir: download.modelDir,
+      ditVariant: VARIANT,
+      useGPU: !NO_GPU
+    })
+    t.teardown(() => gen.destroy())
+
+    const response = await gen.run('A long orchestral build.', {
+      duration: 30,
+      seed: 17
+    })
+    await gen.cancel()
+
+    try {
+      await response.await()
+      t.fail('ACE-Step cancellation must reject the response')
+    } catch (error) {
+      t.is(error.code, ERR_CODES.CANCELLED, 'ACE-Step cancellation is terminal')
+    }
+
+    const recovered = await runAudioGen(gen, {
+      caption: 'A short piano recovery note.',
+      opts: {
+        audioCodes: FROZEN_AUDIO_CODES,
+        seed: 19
+      }
+    })
+    t.ok(recovered.data.sampleCount > 0, 'ACE-Step runs after cancellation')
   }
 )
 

@@ -84,10 +84,18 @@ jobs:
       ref: ${{ github.ref }}
       workdir: "packages/tts-ggml"
 
+  verify-generated:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-generated-wrappers.yml
+    with:
+      workdir: packages/tts-ggml
+
   publish-gpr:
-    needs: [build, publish-logic]
+    needs: [build, publish-logic, verify-generated]
     if: >-
-      needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'
+      needs.verify-generated.result == 'success' &&
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     continue-on-error: true
     runs-on: ubuntu-latest
     outputs:
@@ -111,14 +119,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Install dependencies
-        working-directory: packages/tts-ggml
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Build TypeScript wrapper
-        working-directory: packages/tts-ggml
-        run: npm run build:ts
 
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
         working-directory: packages/tts-ggml
@@ -163,8 +163,10 @@ jobs:
       - build
       - publish-logic
       - release-merge-guard
+      - verify-generated
     if: >-
-      (!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      needs.verify-generated.result == 'success' &&
+      ((!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')))
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -199,14 +201,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Install dependencies
-        working-directory: packages/tts-ggml
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Build TypeScript wrapper
-        working-directory: packages/tts-ggml
-        run: npm run build:ts
 
       - name: Determine dist-tag
         id: dist-tag

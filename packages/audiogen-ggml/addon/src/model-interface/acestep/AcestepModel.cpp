@@ -14,11 +14,24 @@
 namespace qvac::audiogenggml::acestep {
 
 namespace {
+class CancellationReset {
+public:
+  explicit CancellationReset(std::atomic_bool& requested)
+      : requested_(requested) {}
+
+  ~CancellationReset() { requested_.store(false); }
+
+private:
+  std::atomic_bool& requested_;
+};
+
 int16_t f32ToI16(float x, bool preserveInt16Scale = false) {
   const float scale = preserveInt16Scale && x < 0.0F ? 32768.0F : 32767.0F;
   float v = x * scale;
-  if (v > 32767.0F) v = 32767.0F;
-  if (v < -32768.0F) v = -32768.0F;
+  if (v > 32767.0F)
+    v = 32767.0F;
+  if (v < -32768.0F)
+    v = -32768.0F;
   return static_cast<int16_t>(std::lrint(v));
 }
 
@@ -44,7 +57,24 @@ int64_t backendIdFromName(const std::string& name) {
 int64_t backendDeviceFromName(const std::string& name) {
   return name == "CPU" ? BACKEND_DEVICE_CPU : BACKEND_DEVICE_GPU;
 }
-}  // namespace
+
+// Wire codes for AudiogenStats.gpuFallbackReason. Mapped explicitly rather than
+// cast from the enum so reordering it upstream cannot silently remap them.
+int64_t gpuFallbackReasonCode(tts_cpp::GpuFallbackReason reason) {
+  switch (reason) {
+  case tts_cpp::GpuFallbackReason::none:
+    return 0;
+  case tts_cpp::GpuFallbackReason::not_requested:
+    return 1;
+  case tts_cpp::GpuFallbackReason::no_devices:
+    return 2;
+  case tts_cpp::GpuFallbackReason::init_failed:
+    return 3;
+  }
+  return 99;
+}
+
+} // namespace
 
 AcestepModel::AcestepModel(AcestepConfig config) : cfg_(std::move(config)) {
   validateConfig(cfg_);
@@ -60,8 +90,9 @@ AcestepModel::~AcestepModel() noexcept {
 
 void AcestepModel::validateConfig(const AcestepConfig& cfg) {
   const bool hasDir = !cfg.modelDir.empty();
-  const bool hasExplicit = !cfg.lmModelPath.empty() && !cfg.ditModelPath.empty() &&
-                           !cfg.textEncModelPath.empty() && !cfg.vaeModelPath.empty();
+  const bool hasExplicit =
+      !cfg.lmModelPath.empty() && !cfg.ditModelPath.empty() &&
+      !cfg.textEncModelPath.empty() && !cfg.vaeModelPath.empty();
   if (!hasDir && !hasExplicit) {
     throw std::invalid_argument(
         "AcestepModel: set `modelDir` or all four explicit stage GGUF paths "
@@ -75,7 +106,8 @@ void AcestepModel::load() {
 }
 
 void AcestepModel::loadLocked() {
-  if (engine_) return;
+  if (engine_)
+    return;
 
   tts_cpp::acestep::EngineOptions opts;
   opts.models_dir = cfg_.modelDir;
@@ -87,8 +119,10 @@ void AcestepModel::loadLocked() {
   // useGpu gates offloading: when off, no layers go to the GPU regardless of
   // nGpuLayers. JS supplies both values (no C++ default).
   opts.n_gpu_layers = cfg_.useGpu ? cfg_.nGpuLayers : 0;
-  if (const char * vb = std::getenv("AUDIOGEN_VERBOSE")) {
-    opts.verbose = (vb[0] == '1' || vb[0] == 't' || vb[0] == 'T' || vb[0] == 'y' || vb[0] == 'Y');
+  if (const char* vb = std::getenv("AUDIOGEN_VERBOSE")) {
+    opts.verbose =
+        (vb[0] == '1' || vb[0] == 't' || vb[0] == 'T' || vb[0] == 'y' ||
+         vb[0] == 'Y');
   }
 
   // Compose the backends-scan directory from the host-provided prebuilds root
@@ -114,6 +148,7 @@ void AcestepModel::loadLocked() {
   }
   sampleRate_ = engine_->sample_rate();
   backendName_ = engine_->backend_name();
+  gpuFallbackReason_ = engine_->gpu_fallback_reason();
 }
 
 void AcestepModel::unload() {
@@ -132,7 +167,8 @@ void AcestepModel::reload() {
 void AcestepModel::cancel() const {
   cancelRequested_.store(true);
   std::lock_guard lk(engineMu_);
-  if (engine_) engine_->cancel();
+  if (engine_)
+    engine_->cancel();
 }
 
 std::any AcestepModel::process(const std::any& input) {
@@ -141,14 +177,17 @@ std::any AcestepModel::process(const std::any& input) {
 }
 
 AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
-  cancelRequested_.store(false);
-  jobInProgress_.store(true);
+  CancellationReset cancellationReset(cancelRequested_);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step generation cancelled");
+  }
   const auto t0 = std::chrono::steady_clock::now();
 
   std::shared_ptr<tts_cpp::acestep::Engine> engine;
   {
     std::lock_guard lk(engineMu_);
-    if (!engine_) loadLocked();
+    if (!engine_)
+      loadLocked();
     engine = engine_;
   }
 
@@ -176,6 +215,8 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.reference_audio = in.referenceAudio;
   params.source_audio = in.sourceAudio;
   params.task_type = in.taskType;
+  params.track = in.track;
+  params.guidance_scale = in.guidanceScale;
   params.audio_cover_strength = in.audioCoverStrength;
   params.cover_noise_strength = in.coverNoiseStrength;
   params.edit_plan.reserve(in.editOperations.size());
@@ -218,12 +259,17 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.inference_steps = cfg_.inferenceSteps;
   params.shift = cfg_.shift;
 
-  auto progress = [this](const std::string& stage, int step, int total) -> bool {
-    if (progressSink_) progressSink_(AcestepProgress{stage, step, total});
+  auto progress =
+      [this](const std::string& stage, int step, int total) -> bool {
+    if (progressSink_)
+      progressSink_(AudioGenProgress{stage, step, total});
     return !cancelRequested_.load();
   };
 
   tts_cpp::acestep::GenerateResult result = engine->generate(params, progress);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step generation cancelled");
+  }
 
   // Peak-normalise before the int16 quantisation, exactly like the music CLI's
   // wav_write (gain = 0.9 / peak). The Oobleck VAE routinely outputs float
@@ -241,7 +287,8 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   // ~-0.9 dBFS blast. kMinNormPeak ~= -60 dBFS.
   constexpr float kMinNormPeak = 1e-3F;
   float peak = 0.0F;
-  for (float s : result.pcm) peak = std::fmax(peak, std::fabs(s));
+  for (float s : result.pcm)
+    peak = std::fmax(peak, std::fabs(s));
   // Edit plans promise exact preservation outside Repaint regions. Applying
   // whole-track peak normalization here would modify every preserved sample.
   const float gain =
@@ -259,11 +306,12 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   channels_ = result.channels;
   audioDurationMs_ =
       (sampleRate_ > 0 && channels_ > 0)
-          ? (static_cast<double>(totalSamples_) / channels_ / sampleRate_) * 1000.0
+          ? (static_cast<double>(totalSamples_) / channels_ / sampleRate_) *
+                1000.0
           : 0.0;
-  realTimeFactor_ = audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
+  realTimeFactor_ =
+      audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
 
-  jobInProgress_.store(false);
   return pcm;
 }
 
@@ -278,7 +326,9 @@ qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
   // CPU is visible to callers (gpu-smoke.test.js asserts on these).
   stats.emplace_back("backendDevice", backendDeviceFromName(backendName_));
   stats.emplace_back("backendId", backendIdFromName(backendName_));
+  stats.emplace_back(
+      "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
   return stats;
 }
 
-}  // namespace qvac::audiogenggml::acestep
+} // namespace qvac::audiogenggml::acestep

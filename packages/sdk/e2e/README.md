@@ -1,6 +1,7 @@
 # SDK Tests
 
-SDK dogfooding tests built on [`@qvac/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
+SDK dogfooding tests built on [`@qvac/test-suite`](../../test-suite), the test-orchestration framework
+that lives in this monorepo at `packages/test-suite`.
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
 (packaged Electron main process), strict Snap, or mobile (Bare + React Native).
 
@@ -75,10 +76,10 @@ npx qvac-test run:local:electron --filter completion-
 The Electron consumer registers the desktop/shared executor set, so standard filters such as `completion-`,
 `embedding-`, `translation-`, or `model-` route through the same test definitions used by desktop.
 
-The full Electron pass intentionally skips `diffusion-`, `finetune-`, `delegated-`, `no-lingering-bare-`, and
+The full Electron pass intentionally skips `diffusion-`, `finetune-`, `no-lingering-bare-`, and
 `vla-` tests. These suites are resource-heavy or depend on process/lifecycle behavior that is not stable inside
 the packaged Electron worker model: diffusion and VLA require heavyweight model execution, finetune can monopolize
-the worker during long-running operations, delegated inference depends on peer/provider startup semantics, and
+the worker during long-running operations, and
 no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with Electron's
 packaged worker lock.
 
