@@ -10,7 +10,6 @@ from typing import Any
 import pytest
 
 from tetherto.qvac_sdk import _api as api
-from tetherto.qvac_sdk._generated.models import LoadModelSrcRequest, ModelType
 from tetherto.qvac_sdk.errors import (
     ModelLoadFailedError,
     ModelSrcTypeMismatchError,
@@ -24,7 +23,6 @@ from tetherto.qvac_sdk.model_types import (
     resolve_canonical_engine,
 )
 from tetherto.qvac_sdk.models import QWEN3_600M_INST_Q4
-from tetherto.qvac_sdk.schemas import LoadModelRequest
 
 OK = {"type": "loadModel", "success": True, "modelId": "m-1"}
 
@@ -103,45 +101,6 @@ async def test_load_model_requires_type_for_plain_string_src():
     transport = FakeTransport(response=OK)
     with pytest.raises(ModelTypeRequiredError):
         await api.load_model(transport, model_src="/models/x.gguf")
-
-
-def test_load_model_request_union_accepts_the_model_type_enum_directly():
-    # Enums subclass str, so a member routes through its own Literal arm —
-    # direct generated-client construction works without stringifying.
-    request = LoadModelRequest.model_validate(
-        {
-            "type": "loadModel",
-            "modelType": ModelType.llamacpp_completion,
-            "modelSrc": "/models/x.gguf",
-            "modelConfig": {"ctx_size": 2048},
-        }
-    )
-    assert isinstance(request.root, LoadModelSrcRequest)
-    assert request.root.root.model_type == "llamacpp-completion"
-
-
-def test_load_model_request_union_still_accepts_custom_plugin_types():
-    request = LoadModelRequest.model_validate(
-        {
-            "type": "loadModel",
-            "modelType": "my-custom-plugin",
-            "modelSrc": "/models/x.bin",
-            "modelConfig": {"anything": True},
-        }
-    )
-    assert isinstance(request.root, LoadModelSrcRequest)
-    assert request.root.root.model_type == "my-custom-plugin"
-
-
-async def test_load_model_accepts_the_generated_model_type_enum():
-    # The enum only ever validated through the leaky catch-all arm; with that
-    # closed, the API coerces it to its wire string.
-    transport = FakeTransport(response=OK)
-    model_id = await api.load_model(
-        transport, model_src="/models/x.gguf", model_type=ModelType.llamacpp_completion
-    )
-    assert model_id == "m-1"
-    assert transport.sent["modelType"] == "llamacpp-completion"
 
 
 async def test_load_model_alias_warns_and_normalizes():

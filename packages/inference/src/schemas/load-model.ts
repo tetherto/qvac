@@ -54,14 +54,6 @@ import { audioGenConfigSchema } from '@/schemas/audio-gen'
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([...Object.values(ModelType), ...Object.keys(ModelTypeAliases)])
 
-// Structural (regex, not refine) exclusion of built-in types: a refine does
-// not serialize, so generated clients would accept built-ins through this arm.
-const customPluginModelTypeSchema = z
-  .string()
-  .regex(new RegExp(`^(?!(?:${[...builtInModelTypes].join('|')})$).+$`), {
-    message: 'Built-in model types must use their specific schema'
-  })
-
 export function isBuiltInModelType(modelType: unknown): boolean {
   return typeof modelType === 'string' && builtInModelTypes.has(modelType)
 }
@@ -249,7 +241,9 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
 // Custom plugin catch-all: any modelType string EXCEPT built-ins.
 export const loadCustomPluginModelOptionsBaseSchema = z.object({
   ...loadModelCommonFields,
-  modelType: customPluginModelTypeSchema,
+  modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
+    message: 'Built-in model types must use their specific schema'
+  }),
   modelConfig: z.record(z.string(), z.unknown()).optional()
 })
 
@@ -505,7 +499,9 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
 export const loadCustomPluginToRequestSchema = z
   .object({
     ...loadModelRequestCommonFields,
-    modelType: customPluginModelTypeSchema,
+    modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
+      message: 'Built-in model types must use their specific schema'
+    }),
     modelConfig: z.record(z.string(), z.unknown()).optional()
   })
   .transform((data) => ({
@@ -563,27 +559,25 @@ const commonModelConfigSchema = z.object({
 
 // Request schemas for each model type (use canonical types since transforms normalize)
 // Use base schemas (no defaults) for client-side validation.
-// modelConfig optionality mirrors the options schemas — the server injects
-// defaults — and the catch-all excludes built-ins, so these arms are their only route.
 // Server applies device defaults, then full schema defaults.
 export const loadLlmModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppCompletion),
-    modelConfig: llmConfigBaseSchema.optional()
+    modelConfig: llmConfigBaseSchema
   })
   .strict()
 
 export const loadWhisperModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.whispercppTranscription),
-    modelConfig: whisperConfigSchema.optional()
+    modelConfig: whisperConfigSchema
   })
   .strict()
 
 export const loadBciModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.bciWhispercppTranscription),
-    modelConfig: bciConfigSchema.optional()
+    modelConfig: bciConfigSchema
   })
   .strict()
 
@@ -597,7 +591,7 @@ export const loadParakeetModelRequestSchema = commonModelConfigSchema
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppEmbedding),
-    modelConfig: embedConfigBaseSchema.optional()
+    modelConfig: embedConfigBaseSchema
   })
   .strict()
 
@@ -618,7 +612,7 @@ export const loadTtsModelRequestSchema = commonModelConfigSchema
 export const loadOcrModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.ggmlOcr),
-    modelConfig: ocrConfigSchema.optional()
+    modelConfig: ocrConfigSchema
   })
   .strict()
 
@@ -653,7 +647,9 @@ export const loadClassificationModelRequestSchema = commonModelConfigSchema
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
 export const loadCustomPluginModelRequestSchema = commonModelConfigSchema
   .extend({
-    modelType: customPluginModelTypeSchema,
+    modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
+      message: 'Built-in model types must use their specific schema'
+    }),
     modelConfig: z.record(z.string(), z.unknown()).optional()
   })
   .meta({ title: 'LoadModelCustomPluginRequest' })
