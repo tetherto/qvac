@@ -565,7 +565,11 @@ function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boo
 
 function validateEngineType(engine: string | undefined): void {
   if (engine !== undefined && engine !== ENGINE_ACESTEP && engine !== ENGINE_MINIMAX) {
-    throw invalidInput(`engine must be '${ENGINE_ACESTEP}' or '${ENGINE_MINIMAX}'`)
+    // Concatenation, not a template literal: tsc rewrites exported consts to
+    // `exports.X`, and interpolating that form in a template literal breaks
+    // bare-module-lexer, so bare-pack drops every later require in the file
+    // (this is how ./binding went missing from the mobile bundle).
+    throw invalidInput("engine must be '" + ENGINE_ACESTEP + "' or '" + ENGINE_MINIMAX + "'")
   }
 }
 

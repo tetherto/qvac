@@ -249,7 +249,11 @@ function hasAnyFile(files, keys) {
 }
 function validateEngineType(engine) {
     if (engine !== undefined && engine !== exports.ENGINE_ACESTEP && engine !== exports.ENGINE_MINIMAX) {
-        throw invalidInput(`engine must be '${exports.ENGINE_ACESTEP}' or '${exports.ENGINE_MINIMAX}'`);
+        // Concatenation, not a template literal: tsc rewrites exported consts to
+        // `exports.X`, and interpolating that form in a template literal breaks
+        // bare-module-lexer, so bare-pack drops every later require in the file
+        // (this is how ./binding went missing from the mobile bundle).
+        throw invalidInput("engine must be '" + exports.ENGINE_ACESTEP + "' or '" + exports.ENGINE_MINIMAX + "'");
     }
 }
 function detectEngineType(files = {}, explicitEngine) {

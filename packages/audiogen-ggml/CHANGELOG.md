@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The mobile (bare-pack) bundle no longer loses `binding.js`, which made
+  loading the addon on device fail with `MODULE_NOT_FOUND: Cannot find module
+  './binding'`. Interpolating exported consts in template literals compiles to
+  a form that derails `bare-module-lexer`, silently dropping every later
+  `require()` in the compiled file; the two occurrences are now plain string
+  concatenations.
+
 ## [0.3.1] - 2026-08-28
 
 ### Added

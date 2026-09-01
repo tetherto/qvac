@@ -111,6 +111,27 @@ function assertDeclaredImports(t, packageRoot, entries, packageJson) {
   })
 }
 
+// `exports.<name>` anywhere inside a template-literal substitution derails
+// bare-module-lexer: every require() later in that file is dropped from the
+// bare-pack mobile bundle (this is how ./binding went missing on Device Farm).
+// tsc rewrites references to exported consts into that form, so interpolating
+// them is the pattern to ban. The scan stops at the substitution's first `}`,
+// which covers every shape tsc emits for a const reference.
+const LEXER_BREAKING_PATTERN = /\$\{[^}]*\bexports\./
+
+function assertMobileBundlerLexable(t, packageRoot, entries) {
+  const scriptEntries = entries.filter(
+    (entry) => entry.startsWith('package/') && /\.(?:c?js|mjs)$/.test(entry)
+  )
+  scriptEntries.forEach((entry) => {
+    const source = fs.readFileSync(path.join(packageRoot, entry.slice('package/'.length)), 'utf8')
+    t.absent(
+      LEXER_BREAKING_PATTERN.test(source),
+      `${entry} avoids \${exports.*} template substitutions (breaks bare-module-lexer)`
+    )
+  })
+}
+
 function assertRuntimePathsResolve(t, consumerRoot) {
   const probe = `
 require.resolve('@qvac/audiogen-ggml')
@@ -215,6 +236,7 @@ test('published package contains only consumer contract files', (t) => {
     'package installs the benchmark process runtime'
   )
   assertDeclaredImports(t, packedPackageRoot, entries, packedPackage)
+  assertMobileBundlerLexable(t, packedPackageRoot, entries)
   const consumerRoot = path.join(temporaryDirectory, 'consumer')
   installTarball(consumerRoot, tarballPath)
   assertRuntimePathsResolve(t, consumerRoot)
