@@ -62,6 +62,7 @@ jobs:
       prebuild-rows: ${{ steps.rows.outputs.prebuild-rows }}
       pre-publish-rows: ${{ steps.rows.outputs.pre-publish-rows }}
       post-integration-rows: ${{ steps.rows.outputs.post-integration-rows }}
+      verify-generated-rows: ${{ steps.rows.outputs.verify-generated-rows }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
@@ -148,12 +149,14 @@ jobs:
           prebuild_rows=$(echo "$rows" | jq -c '[.[] | select(.hasPrebuilds == true)]')
           pre_publish_rows=$(echo "$rows" | jq -c '[.[] | select((.testGateMode // "") | startswith("pre-publish"))]')
           post_integration_rows=$(echo "$rows" | jq -c '[.[] | select(.testGateMode == "post-publish-integration")]')
+          verify_generated_rows=$(echo "$rows" | jq -c '[.[] | select(.verifyGenerated == true)]')
 
           echo "any=$any" >> "$GITHUB_OUTPUT"
           echo "matrix=$rows" >> "$GITHUB_OUTPUT"
           echo "prebuild-rows=$prebuild_rows" >> "$GITHUB_OUTPUT"
           echo "pre-publish-rows=$pre_publish_rows" >> "$GITHUB_OUTPUT"
           echo "post-integration-rows=$post_integration_rows" >> "$GITHUB_OUTPUT"
+          echo "verify-generated-rows=$verify_generated_rows" >> "$GITHUB_OUTPUT"
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -239,6 +242,25 @@ jobs:
       packages: ${{ format('["{0}"]', matrix.package) }}
     secrets: inherit
 
+  # Wrapper drift gate. Publish no longer rebuilds the TypeScript wrappers (every
+  # gated package sets buildStep: none), so this is what proves the committed
+  # .js/.d.ts still match src. It stays a separate job on purpose: it installs and
+  # runs untrusted third-party code, and must not do that inside publish-gpr /
+  # publish-npm, which hold contents write, packages write and id-token write.
+  verify-generated:
+    name: Verify generated wrappers (${{ matrix.package }})
+    needs: detect
+    if: needs.detect.outputs.verify-generated-rows != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.verify-generated-rows) }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-generated-wrappers.yml
+    with:
+      workdir: ${{ matrix.workdir }}
+
   publish-gpr:
     name: Publish GPR (${{ matrix.package }})
     needs:
@@ -246,11 +268,19 @@ jobs:
       - publish-logic
       - prebuild
       - pre-publish-integration
-    # Gates are per-package in the steps below, not here: needs.<job>.result is the
-    # matrix-wide aggregate, and `matrix` is unavailable in a job-level `if:`.
+      - verify-generated
+    # Test gates are per-package in the steps below, not here: needs.<job>.result is
+    # the matrix-wide aggregate, and `matrix` is unavailable in a job-level `if:`.
+    #
+    # verify-generated is the exception and is enforced here, aggregate and all.
+    # It is skipped only when this run selected no gated package (rows == '[]'),
+    # so `skipped` cannot mask a gated package's result. A failure blocks every
+    # package in the run rather than just the offender, which is fail-closed and
+    # near-free: dorny normally selects one changed package per run.
     if: >-
-      always() && !cancelled() &&
-      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
+      needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
+      (always() && !cancelled() &&
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
     runs-on: ubuntu-latest
     environment: release
     strategy:
@@ -345,12 +375,15 @@ jobs:
       - release-merge-guard
       - prebuild
       - pre-publish-integration
-    # Gates are per-package in the steps below (see publish-gpr's `if:`). merge-guard
-    # stays here: detect's identity gate ensures its aggregate == the one package.
+      - verify-generated
+    # Test gates are per-package in the steps below (see publish-gpr's `if:`).
+    # merge-guard stays here: detect's identity gate ensures its aggregate == the
+    # one package. verify-generated is enforced here too, same reasoning as publish-gpr.
     if: >-
-      always() && !cancelled() &&
+      needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
+      (always() && !cancelled() &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-      needs.publish-logic.outputs.publish_release == 'true'
+      needs.publish-logic.outputs.publish_release == 'true')
     runs-on: ubuntu-latest
     environment: npm
     strategy:
