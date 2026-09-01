@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.48.1] - 2026-09-01
+
+### Fixed
+
+- Model load inside a bundled application no longer fails with a misleading
+  `failed to fit params to free device memory`. The backends directory was
+  derived from `__dirname`, which in a `bare-build --standalone` or `bare-pack`
+  bundle is a path inside the bundle (`/app.bundle/...`) and not a real
+  directory. ggml skipped enumeration of that path, fell back to probing the
+  plain name `libqvac-ggml-cpu.so` -- which is never built, because
+  `GGML_CPU_ALL_VARIANTS` produces only microarch-tagged variants -- and
+  registered no CPU backend at all. `llama.cpp` needs a CPU device for host
+  buffers even when every layer is offloaded, so the load failed.
+
+  The directory is now derived from `require.addon.resolve()`, which reports the
+  addon's real on-disk location in both dev and bundled builds. Affects
+  `linux-*` and `android-*`, where ggml backends ship as sibling `.so` files;
+  Apple and Windows targets link them in and were never affected. In an
+  unbundled tree the resolved path is identical to the previous value, so there
+  is no behavioural change for existing deployments.
+
 ## [0.48.0] - 2026-08-31
 
 ### Removed

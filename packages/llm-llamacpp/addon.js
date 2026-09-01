@@ -4,6 +4,7 @@ exports.LlamaInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const path = require("bare-path");
+const fs = require("bare-fs");
 // Index-matched to the C++ GenerationStopReason enum (SequenceDriver.hpp).
 const STOP_REASONS = [
     "none",
@@ -70,6 +71,50 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
     return { type: type, data: rawData, error: rawError };
 }
 /**
+ * Resolve the directory holding this platform's prebuilt ggml backends.
+ *
+ * `__dirname` is not usable here. In a bundled app -- `bare-build --standalone`
+ * or any `bare-pack` bundle -- it is a path *inside* the bundle
+ * (`/app.bundle/node_modules/@qvac/llm-llamacpp`, or `<bundle-file>/...`),
+ * which is not a real directory. ggml's `fs::exists()` check on it then fails,
+ * `ggml_backend_load_all_from_path()` skips enumeration entirely, and no CPU
+ * backend is ever registered -- surfacing as a misleading
+ * "failed to fit params to free device memory" from common/fit.cpp.
+ *
+ * `require.addon.resolve()` reports the addon's real on-disk location in both
+ * dev and bundled builds, so derive the directory from that instead. In an
+ * unbundled tree it yields exactly what `path.join(__dirname, "prebuilds")`
+ * did, so this is a no-op for existing deployments.
+ *
+ * Returns undefined when nothing usable is found, so the caller can leave
+ * `backendsDir` unset and let ggml fall back to its own executable-dir/cwd
+ * search (LlamaLazyInitializeBackend.cpp calls plain `ggml_backend_load_all()`
+ * when backendsDir is empty). Passing a known-bad path is strictly worse than
+ * passing none, because a non-null dir_path replaces those defaults.
+ */
+function resolveBackendsDir() {
+    try {
+        // IMPORTANT: keep this as a literal `require.addon.resolve(".")` call.
+        // bare-pack resolves addons by *statically* traversing this expression at
+        // pack time and recording an entry for the referring module. Hoisting it
+        // into a variable or calling it indirectly makes the traversal miss it, and
+        // the call then throws ADDON_NOT_FOUND at runtime inside a bundle -- which
+        // silently reintroduces exactly the bug this function exists to fix.
+        // `resolve` is typed `unknown` (see src/bare-modules.d.ts); the guard below
+        // is what makes it a string.
+        // <...>/prebuilds/<host>/<module>.bare  ->  <...>/prebuilds
+        const resolved = require.addon.resolve(".");
+        if (typeof resolved === "string" && resolved.length > 0) {
+            return path.dirname(path.dirname(resolved));
+        }
+    }
+    catch {
+        // No addon resolvable for this host; fall through to the __dirname guess.
+    }
+    const fromDirname = path.join(__dirname, "prebuilds");
+    return fs.existsSync(fromDirname) ? fromDirname : undefined;
+}
+/**
  * An interface between Bare addon in C++ and JS runtime.
  */
 class LlamaInterface {
@@ -81,7 +126,10 @@ class LlamaInterface {
             configurationParams.config = {};
         }
         if (!configurationParams.config.backendsDir) {
-            configurationParams.config.backendsDir = path.join(__dirname, "prebuilds");
+            const backendsDir = resolveBackendsDir();
+            if (backendsDir !== undefined) {
+                configurationParams.config.backendsDir = backendsDir;
+            }
         }
         this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
     }
