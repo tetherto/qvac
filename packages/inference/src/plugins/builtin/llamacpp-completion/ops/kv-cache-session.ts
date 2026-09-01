@@ -42,7 +42,9 @@ const moduleLogger = getEngineLogger()
  * 5. `.auto-cache-<key>` markers — engine-generated cache ownership.
  *
  * Every turn must finish through `commitTurn`, `rollback`, or the
- * non-destructive `releaseTurn` so all inference state stays aligned.
+ * non-destructive `releaseTurn` so all inference state stays aligned,
+ * the active-path ref is released, and marker metadata follows the
+ * cache directory lifecycle.
  */
 
 // ----- module-scoped state. The session is the single mutation point

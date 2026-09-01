@@ -7,7 +7,8 @@ import { PathTraversalError } from '@/errors'
 // The session is the single owner of the KV-cache bookkeeping layers
 // (on-disk `.bin`, `initializedCaches` set, `cachedPrefixes` map, path
 // refs, auto-cache markers). Without a single owner the completion
-// handler would have to touch every layer on each error branch and drift.
+// handler would have to touch every layer on every cancel / error branch
+// and quickly drift out of sync.
 // The functional-equivalence assertions below pin the contract:
 //
 //   1. `beginTurn` primes the cache (calls the injected closure) the

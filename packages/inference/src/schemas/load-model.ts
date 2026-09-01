@@ -162,7 +162,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
     .object({
       ...loadModelCommonFields,
       modelType: llmModelTypeSchema,
-      modelConfig: llmConfigBaseSchema.optional()
+      modelConfig: llmConfigBaseSchema.strict().optional()
     })
     .strict(),
   z
@@ -289,7 +289,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
     .object({
       ...loadModelRequestCommonFields,
       modelType: llmModelTypeSchema,
-      modelConfig: llmConfigBaseSchema.optional()
+      modelConfig: llmConfigBaseSchema.strict().optional()
     })
     .strict()
     .transform((data) => ({
