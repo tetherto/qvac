@@ -107,7 +107,8 @@ async function writeCacheFile(cachePath: string): Promise<void> {
 function registerRecordingModel(
   modelId: string,
   calls: RecordedCall[],
-  config: Record<string, unknown> = { tools: true }
+  config: Record<string, unknown> = { tools: true },
+  cachePaths?: string[]
 ): void {
   registerModel(modelId, {
     model: {
@@ -119,6 +120,7 @@ function registerRecordingModel(
           messages: prompt as RecordedCall['messages'],
           prefill: opts?.prefill === true
         })
+        if (cachePaths && opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         const written =
           opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
             ? writeCacheFile(opts.cacheKey)
@@ -424,10 +426,13 @@ async function runRefusalScenario(
     refusal = error
   }
   // Bookkeeping surviving is not enough — the committed bytes must still be
-  // on disk between the refusal and the retry.
+  // on disk, unmodified, between the refusal and the retry.
   const fs = await import('bare-fs')
+  const committedPath = cachePaths[cachePaths.length - 1]
   const fileSurvivedRefusal =
-    cachePaths.length > 0 && fs.existsSync(cachePaths[cachePaths.length - 1]!)
+    committedPath !== undefined &&
+    fs.existsSync(committedPath) &&
+    fs.readFileSync(committedPath, 'utf8') === 'primed'
   await complete(grown)
   return { refusal, fileSurvivedRefusal, turnCalls: calls.filter((call) => !call.prefill) }
 }
@@ -552,6 +557,55 @@ test('completion: kv-cache rolls back on an unrecognised addon failure between t
   t.ok(refusal instanceof Error && /exploded mid-decode/.test(refusal.message), 'turn two fails')
   t.is(turnCalls.length, 3, 'all three turns reached the model')
   t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A missing attachment is caller input the SDK rejects before the addon
+// runs, so the committed warm cache must survive and the retry stays warm.
+test('completion: kv-cache survives a missing-attachment rejection between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-attachment-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerRecordingModel(modelId, calls, { tools: true }, cachePaths)
+  const complete = completer(modelId, 'attachment-preserves-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  await complete([first])
+
+  const badTurn = [
+    first,
+    assistant('25.'),
+    {
+      role: 'user',
+      content: 'see attachment',
+      attachments: [{ path: '/nonexistent/attachment.png' }]
+    }
+  ]
+  let refusal: unknown
+  try {
+    await complete(badTurn as HistoryEntry[])
+  } catch (error) {
+    refusal = error
+  }
+  const fs = await import('bare-fs')
+  const committedPath = cachePaths[cachePaths.length - 1]!
+  t.ok(
+    fs.existsSync(committedPath) && fs.readFileSync(committedPath, 'utf8') === 'primed',
+    'the committed cache bytes survive the rejection'
+  )
+  t.ok(
+    refusal instanceof Error && refusal.name === 'ATTACHMENT_NOT_FOUND',
+    'the caller gets the typed attachment error'
+  )
+
+  await complete([first, assistant('25.'), user('And base 4 height 3?')])
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 2, 'the rejected turn never reached the model')
+  t.is(turnCalls[1]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
 
   unregisterModel(modelId)
   clearRegistry()

@@ -13,27 +13,27 @@
  * + extraction logic without a real model load.
  */
 
+// The guards' emitted starts; the numeric tails vary across addon
+// generations, so the forms are start-anchored and single-line.
+const CONTEXT_OVERFLOW_FORMS = [
+  /^\[TextLlm\] context overflow at (?:batch )?prefill step[^\n]*$/,
+  /^\[MtmdLlm\] context overflow at (?:batch )?prefill step[^\n]*$/,
+  /^processPromptImpl: context overflow$/
+]
+
 export function isAddonContextOverflowError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
+  // The complete codeString shape, on the rare path that keeps a code.
   const code = (err as { code?: unknown }).code
-  // Anchor to the codeString tail (`[ <addonId> :: ContextOverflow ]`)
-  // so we don't false-positive on a hypothetical sibling like
-  // `ContextOverflowRecovered` or `PostContextOverflow` after an
-  // addon-side rename.
-  if (typeof code === 'string' && /::\s*ContextOverflow\s*\]/.test(code)) {
+  if (typeof code === 'string' && /^\[\s*[\w.-]+\s*::\s*ContextOverflow\s*\]$/.test(code)) {
     return true
   }
-  // Message-substring fallback for the bare `LlamaModel::processPromptImpl`
-  // path, which doesn't go through `StatusError::codeString()`. Match the
-  // two known C++-emitted formats only — broader substring would catch
-  // wrapper / cause-chain text that mentions overflow without being one.
+  // The production path: the async transport strips status metadata from
+  // every run error, so the message alone identifies the overflow guards.
   const message = (err as { message?: unknown }).message
-  return (
-    typeof message === 'string' &&
-    /(?:context overflow at (?:batch )?prefill step|processPromptImpl: context overflow)/i.test(
-      message
-    )
-  )
+  if (typeof message !== 'string') return false
+  const trimmed = message.trim()
+  return CONTEXT_OVERFLOW_FORMS.some((form) => form.test(trimmed))
 }
 
 // Refusals thrown before any decode or disk save; the async transport delivers
@@ -42,9 +42,9 @@ const PRE_MUTATION_REFUSAL_FORMS = [
   /^ContinuousBatchScheduler::submit: prompt of \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: prompt of \d+ tokens leaves no room under per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: prefill prompt of \d+ tokens exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
-  /^ContinuousBatchScheduler::submit: n_predict \d+ \+ prompt \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
+  /^ContinuousBatchScheduler::submit: n_predict [1-9]\d* \+ prompt \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: failed to add to batch \(MultiRequestBatcher::AddStatus=[1-4]\)$/,
-  /^invalid generationParams\.json_schema: [^\n]*$/,
+  /^invalid generationParams\.json_schema: [^\r\n]*$/,
   /^failed to initialise sampler with per-request generationParams \(invalid grammar or json_schema\?\)$/
 ]
 
@@ -53,7 +53,10 @@ export function isAddonPreMutationRefusal(err: unknown): boolean {
   // A status code only exists on the synchronous throw path; when present it
   // must be InvalidArgument, and its absence (the async transport) is fine.
   const code = (err as { code?: unknown }).code
-  if (code !== undefined && (typeof code !== 'string' || !/::\s*InvalidArgument\s*\]/.test(code))) {
+  if (
+    code !== undefined &&
+    (typeof code !== 'string' || !/^\[\s*[\w.-]+\s*::\s*InvalidArgument\s*\]$/.test(code))
+  ) {
     return false
   }
   const message = (err as { message?: unknown }).message

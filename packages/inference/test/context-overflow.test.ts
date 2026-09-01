@@ -19,7 +19,7 @@ test("isAddonContextOverflowError: detects addon's structured codeString", (t) =
 test('isAddonContextOverflowError: detects message-only fallback path', (t) => {
   // `LlamaModel::processPromptImpl` emits `"<func>: context overflow\n"`
   // with neither a structured code on the Error nor numbers in the
-  // message. The detector must still fire on the message substring so
+  // message. The detector must still fire on the message alone so
   // the consumer gets a typed error instead of a generic
   // `CompletionFailedError`.
   const bareForm = new Error('processPromptImpl: context overflow\n')
@@ -66,26 +66,31 @@ test("isAddonContextOverflowError: codeString anchored — sibling names don't m
   )
 })
 
-test('isAddonContextOverflowError: message fallback is anchored to known C++ formats', (t) => {
-  // Permissive matching on `/context overflow/i` would fire on
-  // wrapper / log lines like "recovering from context overflow"
-  // — anchor to the two literal C++ emitted strings.
-  t.is(isAddonContextOverflowError(new Error('recovering from context overflow upstream')), false)
-  t.is(
-    isAddonContextOverflowError(new Error('context overflow at prefill step (5 tokens, max 4)')),
-    true
-  )
-  // The batch guards carry the status code (the code branch detects them);
-  // the message fallback is kept aligned in case a guard loses its code.
-  t.is(
-    isAddonContextOverflowError(
-      new Error(
-        '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
-      )
-    ),
-    true
-  )
-  t.is(isAddonContextOverflowError(new Error('processPromptImpl: context overflow\n')), true)
+test('isAddonContextOverflowError: message fallback is anchored to the emitted starts', (t) => {
+  // Every real emitter, current and retired, starts with its context tag —
+  // this detector selects cache preservation, so wrapper text must not match.
+  const accepted = [
+    '[MtmdLlm] context overflow at prefill step (5 tokens, max 4)',
+    '[MtmdLlm] context overflow at prefill step: cached 3 positions / 6 KV cells plus 2 positions / 3 KV cells of prompt exceed the max context tokens 8',
+    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4',
+    'processPromptImpl: context overflow\n'
+  ]
+  for (const wording of accepted) {
+    t.is(isAddonContextOverflowError(new Error(wording)), true, `accepted: ${wording.slice(0, 60)}`)
+  }
+  const rejected = [
+    'recovering from context overflow upstream',
+    'context overflow at prefill step (5 tokens, max 4)',
+    'post-write failure while handling context overflow at prefill step from a prior cause',
+    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4\npost-write failure'
+  ]
+  for (const wording of rejected) {
+    t.is(
+      isAddonContextOverflowError(new Error(wording)),
+      false,
+      `rejected: ${wording.slice(0, 60)}`
+    )
+  }
 })
 
 // Production errors arrive through the async transport as exception.what()
@@ -126,6 +131,7 @@ test('isAddonPreMutationRefusal: recognises the enumerated refusal forms', (t) =
     `${wordings[0]!}\npost-persistence save failed`,
     'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=0)',
     'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=-1)',
+    'ContinuousBatchScheduler::submit: n_predict 0 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=9)',
     'ContinuousBatchScheduler::submit: n_predict -1 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: prefill prompt of 5 KV cells leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',

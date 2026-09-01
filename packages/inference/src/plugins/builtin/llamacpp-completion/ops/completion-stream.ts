@@ -539,13 +539,21 @@ export async function* completion(
   // `cacheExists` is implied by `beginTurn` — the session either found
   // an existing cache or just primed one. Pass `true` to the message
   // selector so the slicing branches engage.
-  const payload = prepareMessagesForCache(
-    session,
-    turn,
-    /* cacheExists */ true,
-    history,
-    toolsActive ? tools : undefined
-  )
+  let payload: ReturnType<typeof prepareMessagesForCache>
+  try {
+    payload = prepareMessagesForCache(
+      session,
+      turn,
+      /* cacheExists */ true,
+      history,
+      toolsActive ? tools : undefined
+    )
+  } catch (error) {
+    // A missing attachment is caller input rejected before the addon runs,
+    // so the committed cache is untouched and must survive.
+    preserveCacheOnUnwind = error instanceof AttachmentNotFoundError
+    throw error
+  }
   const messagesToSend = payload.messages
   logMessagesToAddon(messagesToSend, 'PROMPT_SEND')
 
