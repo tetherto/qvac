@@ -370,7 +370,8 @@ function registerSecondTurnThrowingModel(
   modelId: string,
   calls: RecordedCall[],
   cachePaths: string[],
-  thrown: Error
+  thrown: Error,
+  throwOnRun = 2
 ): void {
   let runCount = 0
   registerModel(modelId, {
@@ -386,7 +387,7 @@ function registerSecondTurnThrowingModel(
         if (opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         if (!opts?.prefill) {
           runCount += 1
-          if (runCount === 2) throw thrown
+          if (runCount === throwOnRun) throw thrown
         }
         const written =
           opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
@@ -528,6 +529,47 @@ test('completion: kv-cache survives a scheduler admission rejection between turn
   t.ok(refusal instanceof Error && /per-sequence cap/.test(refusal.message), 'turn two is refused')
   t.is(turnCalls.length, 3, 'all three turns reached the model')
   t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A recognised refusal on the FIRST turn has no committed cache to keep —
+// the fresh prime is rolled back and the retry re-primes from scratch.
+test('completion: kv-cache drops the fresh prime when the first turn is refused', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-cold-refusal-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    new Error(
+      '[TextLlm] context overflow at batch prefill step: cached tokens 0 plus prompt tokens 600 exceed the max context tokens 512'
+    ),
+    1
+  )
+  const complete = completer(modelId, 'cold-refusal-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  let refusal: unknown
+  try {
+    await complete([first])
+  } catch (error) {
+    refusal = error
+  }
+  const fs = await import('bare-fs')
+  t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'the first turn is refused')
+  t.ok(
+    cachePaths.length > 0 && !fs.existsSync(cachePaths[cachePaths.length - 1]!),
+    'the fresh prime is not left behind'
+  )
+
+  await complete([first])
+  t.is(calls.filter((call) => call.prefill).length, 2, 'the retry re-primes from scratch')
+  t.is(calls.filter((call) => !call.prefill).length, 2, 'the retry turn reaches the model')
 
   unregisterModel(modelId)
   clearRegistry()

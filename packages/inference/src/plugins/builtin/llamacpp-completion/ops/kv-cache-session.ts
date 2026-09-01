@@ -398,6 +398,7 @@ export interface KvCacheSession {
   /**
    * Non-destructive counterpart of `rollback`: releases locks and refs but
    * keeps the committed disk cache and its recorded prefix valid for a retry.
+   * A cache freshly primed by this same turn rolls back instead.
    */
   releaseTurn(turn: TurnHandle): Promise<void>
 
@@ -422,6 +423,8 @@ interface InternalTurnState {
   committed: boolean
   /** Flipped at the end of `rollback`; protects against double-rollback. */
   rolledBack: boolean
+  /** True when this turn primed the cache (nothing committed exists to keep). */
+  freshlyPrimed: boolean
 }
 
 // ----- factory -----
@@ -460,7 +463,8 @@ export function createKvCacheSession(
       ...(signal !== undefined && { signal }),
       releaseWriteLock,
       committed: false,
-      rolledBack: false
+      rolledBack: false,
+      freshlyPrimed: false
     })
     markCachePathActive(cachePath)
     return handle
@@ -519,6 +523,7 @@ export function createKvCacheSession(
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
         initializedCaches.add(cachePath)
+        turnState.get(handle)!.freshlyPrimed = true
       }
 
       return handle
@@ -606,6 +611,7 @@ export function createKvCacheSession(
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
         initializedCaches.add(cachePath)
+        turnState.get(handle)!.freshlyPrimed = true
       }
 
       return handle
@@ -748,6 +754,12 @@ export function createKvCacheSession(
     const state = turnState.get(turn)
     if (!state) return
     if (state.committed || state.rolledBack) return
+    // A cache this same turn primed has no committed state to keep — a failed
+    // first turn must not leave its own prime behind.
+    if (state.freshlyPrimed) {
+      await runRollback(state)
+      return
+    }
     releaseCachePath(state.cachePath)
     state.rolledBack = true
     state.releaseWriteLock()

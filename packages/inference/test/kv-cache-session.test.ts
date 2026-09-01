@@ -1467,6 +1467,34 @@ test('kv-cache-session: auto-rename commit releases the target active-ref when s
   }
 })
 
+// A failed first turn must not leave its own prime behind: releaseTurn on a
+// freshly primed cache takes the destructive path instead.
+test('kv-cache-session: releaseTurn rolls back a cache the same turn primed', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
+    const turn = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'release-fresh',
+      configHash,
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+    await session.releaseTurn(turn)
+
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'release-fresh')
+    t.is(fs.existsSync(cachePath), false, 'the fresh prime is unlinked')
+    t.absent(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath),
+      'the init flag is cleared with it'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
 // `releaseTurn` is the non-destructive exit: committed file, saved prefix,
 // and init flag must all survive, and a same-key waiter must get the lock.
 test('kv-cache-session: releaseTurn preserves the committed cache and admits a waiter', async (t) => {
