@@ -172,6 +172,71 @@ test('AudioGen.run rejects empty sourceAudio for cover', async (t) => {
   )
 })
 
+test('AudioGen.run forwards lego track and guidance scale', async (t) => {
+  const { gen, received } = createHarness()
+  const sourceAudio = new Float32Array([0.3, -0.3, 0.4, -0.4])
+
+  const response = await gen.run('guitar layer', {
+    taskType: 'lego',
+    track: 'guitar',
+    guidanceScale: 7,
+    sourceAudio
+  })
+  await response.await()
+
+  const job = received()
+  t.is(job.taskType, 'lego')
+  t.is(job.track, 'guitar')
+  t.is(job.guidanceScale, 7)
+  t.is(job.sourceAudio, sourceAudio)
+})
+
+test('AudioGen.run requires sourceAudio for lego', async (t) => {
+  await rejectRunOptions(
+    t,
+    { taskType: 'lego', track: 'guitar' },
+    /taskType 'lego' requires sourceAudio/
+  )
+})
+
+test('AudioGen.run requires a known lego track', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  await rejectRunOptions(t, { taskType: 'lego', sourceAudio }, /taskType 'lego' requires track/)
+  await rejectRunOptions(
+    t,
+    { taskType: 'lego', track: 'accordion', sourceAudio },
+    /taskType 'lego' requires track/
+  )
+})
+
+test('AudioGen.run rejects non-finite guidanceScale', async (t) => {
+  await rejectRunOptions(t, { guidanceScale: Number.NaN }, /guidanceScale/)
+  await rejectRunOptions(t, { guidanceScale: Number.POSITIVE_INFINITY }, /guidanceScale/)
+})
+
+test('AudioGen.run rejects a negative guidanceScale', async (t) => {
+  await rejectRunOptions(t, { guidanceScale: -2 }, /guidanceScale must be >= 0/)
+})
+
+test('AudioGen.run forwards an explicit zero guidanceScale', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('auto guidance', { guidanceScale: 0 })
+  await response.await()
+
+  t.is(received().guidanceScale, 0)
+})
+
+test('AudioGen.run rejects track outside the lego task', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  await rejectRunOptions(t, { track: 'guitar' }, /track is only valid with taskType 'lego'/)
+  await rejectRunOptions(
+    t,
+    { taskType: 'cover-nofsq', track: 'guitar', sourceAudio },
+    /track is only valid with taskType 'lego'/
+  )
+})
+
 test('AudioGen.run requires Float32Array referenceAudio', async (t) => {
   await rejectRunOptions(
     t,

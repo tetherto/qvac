@@ -57,6 +57,23 @@ int64_t backendIdFromName(const std::string& name) {
 int64_t backendDeviceFromName(const std::string& name) {
   return name == "CPU" ? BACKEND_DEVICE_CPU : BACKEND_DEVICE_GPU;
 }
+
+// Wire codes for AudiogenStats.gpuFallbackReason. Mapped explicitly rather than
+// cast from the enum so reordering it upstream cannot silently remap them.
+int64_t gpuFallbackReasonCode(tts_cpp::GpuFallbackReason reason) {
+  switch (reason) {
+  case tts_cpp::GpuFallbackReason::none:
+    return 0;
+  case tts_cpp::GpuFallbackReason::not_requested:
+    return 1;
+  case tts_cpp::GpuFallbackReason::no_devices:
+    return 2;
+  case tts_cpp::GpuFallbackReason::init_failed:
+    return 3;
+  }
+  return 99;
+}
+
 } // namespace
 
 AcestepModel::AcestepModel(AcestepConfig config) : cfg_(std::move(config)) {
@@ -131,6 +148,7 @@ void AcestepModel::loadLocked() {
   }
   sampleRate_ = engine_->sample_rate();
   backendName_ = engine_->backend_name();
+  gpuFallbackReason_ = engine_->gpu_fallback_reason();
 }
 
 void AcestepModel::unload() {
@@ -197,6 +215,8 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.reference_audio = in.referenceAudio;
   params.source_audio = in.sourceAudio;
   params.task_type = in.taskType;
+  params.track = in.track;
+  params.guidance_scale = in.guidanceScale;
   params.audio_cover_strength = in.audioCoverStrength;
   params.cover_noise_strength = in.coverNoiseStrength;
   params.edit_plan.reserve(in.editOperations.size());
@@ -306,6 +326,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
   // CPU is visible to callers (gpu-smoke.test.js asserts on these).
   stats.emplace_back("backendDevice", backendDeviceFromName(backendName_));
   stats.emplace_back("backendId", backendIdFromName(backendName_));
+  stats.emplace_back(
+      "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
   return stats;
 }
 

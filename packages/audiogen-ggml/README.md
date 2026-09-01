@@ -134,9 +134,11 @@ for await (const item of response.iterate()) {
   }
 }
 const stats = await response.await()
-// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId }
-// backendDevice: 0 = CPU, 1 = GPU
-// backendId:     0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId,
+//   gpuFallbackReason }
+// backendDevice:     0 = CPU, 1 = GPU
+// backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+// gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
 
 await gen.destroy()
 ```
@@ -148,6 +150,10 @@ await gen.destroy()
 > so a `useGPU: true` run that fell back to the CPU is detectable. Use
 > `audiogenBackendName(stats.backendId)` rather than copying the code table
 > above; it returns `undefined` for an id this version does not know.
+> When a `useGPU: true` run resolves to the CPU, `gpuFallbackReason` says which
+> half of the acquisition failed - no GPU device was enumerated, or one was and
+> every attempt to initialise it failed. Name it with
+> `audiogenGpuFallbackReason(stats.gpuFallbackReason)`.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
 
 ### 2. A song with lyrics + rhythm
@@ -214,6 +220,38 @@ the conventional `[-1, 1]` range. `sourceAudio` is required for cover tasks.
 `cover-nofsq` currently requires `audioCoverStrength: 1`;
 `coverNoiseStrength` controls the source/noise blend from `0` to `1`. The
 full FSQ-based `cover` task is reserved but not implemented.
+
+Use `lego` to generate a new isolated instrument layer that follows the
+source (tempo, key, groove). The result is only the new stem, ready to mix
+over the source. Lego requires the base DiT variant (turbo and sft are
+rejected) and a `track` name:
+
+```js
+const response = await gen.run('clean electric guitar with syncopated fills', {
+  lyrics: '[Instrumental]',
+  taskType: 'lego',
+  track: 'guitar',
+  sourceAudio
+})
+```
+
+Valid `track` names: `vocals`, `backing_vocals`, `drums`, `bass`, `guitar`,
+`keyboard`, `percussion`, `strings`, `synth`, `fx`, `brass`, `woodwinds`.
+Output length locks to the source length. Takes vary per seed; generate a few
+and keep the best. The base DiT is not in the registry `ditVariant` set yet,
+so pass it as an explicit `files.ditModel` path next to `modelDir` (which
+still resolves the three fixed stages).
+
+See [`examples/generate-lego.js`](examples/generate-lego.js) for a runnable
+stem example using raw stereo 48 kHz float PCM input:
+
+```bash
+ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  AUDIOGEN_BASE_DIT_MODEL=/path/to/acestep-v15-base-Q8_0.gguf \
+  AUDIOGEN_SOURCE_PCM=source.f32le \
+  npm run example:lego
+```
 
 See [`examples/generate-cover.js`](examples/generate-cover.js) for a runnable
 cover example using raw stereo 48 kHz float PCM input.
@@ -391,8 +429,10 @@ wrapped by a level-gated `QvacLogger`.
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |
-| `sourceAudio` | Source PCM in the same format; required by cover tasks. |
-| `taskType` | `text2music` (default), `cover-nofsq`, or reserved `cover`. |
+| `sourceAudio` | Source PCM in the same format; required by cover and lego tasks. |
+| `taskType` | `text2music` (default), `cover-nofsq`, `lego`, or reserved `cover`. |
+| `track` | Lego target layer; required when `taskType` is `lego`. |
+| `guidanceScale` | DiT classifier-free guidance; `0` (default) auto-resolves to `1.0` on turbo and `7.0` on base/sft. |
 | `audioCoverStrength` | Source-context strength from `0` to `1`; currently must be `1` for `cover-nofsq`. |
 | `coverNoiseStrength` | Initial source/noise blend from `0` to `1`. |
 

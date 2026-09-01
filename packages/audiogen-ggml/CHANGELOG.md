@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Multi-Track (lego) generation: `taskType: 'lego'` with a `track` option
+  (one of the 12 ACE-Step layer names) generates a new isolated instrument
+  layer that follows `sourceAudio` and returns only that stem. Requires the
+  base DiT model.
+- Optional `guidanceScale` generation control for DiT classifier-free
+  guidance; `0` (the default) picks the loaded model's preset automatically.
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-31, which brings in the ACE-Step
+  Multi-Track (lego) task and base-model guided sampling.
+
+## [0.3.2] - 2026-09-01
+
+### Added
+
+- Report why a `useGPU: true` run resolved to the CPU. `stats.gpuFallbackReason`
+  carries the engine's reason code for both ACE-Step and MiniMax, with
+  `AUDIOGEN_GPU_FALLBACK_REASONS` and `audiogenGpuFallbackReason()` to name it.
+
+### Fixed
+
+- Restore mobile (Android / iOS) support. The generated `index.js` carried
+  `${exports.…}` interpolations that desynchronise `bare-module-lexer`, so
+  `bare-pack` stopped discovering imports partway through the file and left
+  `binding.js` out of the app bundle. Every on-device model load then failed
+  with `MODULE_NOT_FOUND: Cannot find module './binding'`, even though the
+  file ships in the tarball. The engine validation message and the registry
+  path in `models.js` are now assembled without that construct, and package
+  tests assert every relative `require` in the generated scripts stays
+  visible to the bundler and that the construct never reappears.
+
 ## [0.3.1] - 2026-08-28
 
 ### Added
@@ -245,6 +279,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-08-03
 
 ### Changed
+
 - Update `ggml-speech` dependency version to align with other packages that also depend on it.
 
 ## [0.1.0] - 2026-07-30
