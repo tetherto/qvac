@@ -56,6 +56,11 @@ permissions:
   contents: read
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   matrix:
     name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
@@ -104,12 +109,12 @@ jobs:
 
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
-    needs: matrix
+    needs: [matrix, runner_names]
     if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
     strategy:
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
-    runs-on: qvac-ubuntu2404-x64-gpu
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
     environment: release
     permissions:
       contents: read

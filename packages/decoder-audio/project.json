@@ -56,7 +56,8 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/decoder-audio",
         "ci": {
-          "buildStep": "check:generated",
+          "buildStep": "none",
+          "verifyGenerated": true,
           "nameTransform": "none",
           "repoName": "decoder-audio",
           "testGateMode": "pre-publish-integration"
