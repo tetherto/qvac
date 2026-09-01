@@ -28,6 +28,7 @@ from ._generated.models import (
     ModelRegistryGetModelResponseModel,
     ModelRegistryListResponseModelsItem,
     ModelRegistrySearchResponseModelsItem,
+    ModelType,
 )
 from ._transport import Transport
 
@@ -107,7 +108,7 @@ async def load_model(
     transport: Transport,
     *,
     model_src: Any = None,
-    model_type: str | None = None,
+    model_type: str | ModelType | None = None,
     model_config: dict[str, Any] | None = None,
     model_name: str | None = None,
     model_id: str | None = None,
@@ -138,6 +139,11 @@ async def load_model(
       startLoggingStreamForModel side effect; `unload_model` stops it.
     """
     is_reload_config = model_id is not None and model_src is None
+
+    # Accept the generated ModelType enum: its members are not str, so the
+    # wire schemas would reject them now that the catch-all excludes built-ins.
+    if isinstance(model_type, ModelType):
+        model_type = model_type.value
 
     resolved_type = model_type
     if not is_reload_config:

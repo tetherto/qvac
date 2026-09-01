@@ -11,7 +11,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from tetherto.qvac_sdk import _api as api
-from tetherto.qvac_sdk._generated.models import LoadModelSrcRequest
+from tetherto.qvac_sdk._generated.models import LoadModelSrcRequest, ModelType
 from tetherto.qvac_sdk.errors import (
     ModelLoadFailedError,
     ModelSrcTypeMismatchError,
@@ -145,6 +145,17 @@ def test_load_model_request_union_still_accepts_custom_plugin_types():
     )
     assert isinstance(request.root, LoadModelSrcRequest)
     assert request.root.root.model_type == "my-custom-plugin"
+
+
+async def test_load_model_accepts_the_generated_model_type_enum():
+    # The enum only ever validated through the leaky catch-all arm; with that
+    # closed, the API coerces it to its wire string.
+    transport = FakeTransport(response=OK)
+    model_id = await api.load_model(
+        transport, model_src="/models/x.gguf", model_type=ModelType.llamacpp_completion
+    )
+    assert model_id == "m-1"
+    assert transport.sent["modelType"] == "llamacpp-completion"
 
 
 async def test_load_model_alias_warns_and_normalizes():
