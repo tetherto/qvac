@@ -15,7 +15,7 @@ import {
   type GenerationParams,
   type ResponseFormat,
   type MessageContentPart
-} from './common.js'
+} from '@/serve/schemas/common'
 
 export const chatCompletionsBody = z
   .object({

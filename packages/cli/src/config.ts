@@ -1,7 +1,7 @@
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { ConfigNotFoundError, ConfigLoadError } from './errors.js'
+import { ConfigNotFoundError, ConfigLoadError } from '@/errors'
 
 const require = createRequire(import.meta.url)
 

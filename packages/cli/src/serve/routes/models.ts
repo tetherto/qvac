@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { z } from 'zod'
-import { HttpError } from '../lib/http-error.js'
-import { unloadModel } from '../core/lifecycle.js'
-import type { ModelState } from '../core/model-registry.js'
+import { HttpError } from '@/serve/lib/http-error'
+import { unloadModel } from '@/serve/core/lifecycle'
+import type { ModelState } from '@/serve/core/model-registry'
 
 const modelIdParams = z.object({ id: z.string().min(1) })
 
