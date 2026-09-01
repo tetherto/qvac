@@ -16,17 +16,18 @@
 // The guards' emitted starts; the numeric tails vary across addon
 // generations, so the forms are start-anchored and single-line.
 const CONTEXT_OVERFLOW_FORMS = [
-  /^\[TextLlm\] context overflow at (?:batch )?prefill step[^\n]*$/,
-  /^\[MtmdLlm\] context overflow at (?:batch )?prefill step[^\n]*$/,
+  /^\[TextLlm\] context overflow at (?:batch )?prefill step[^\r\n]*$/,
+  /^\[MtmdLlm\] context overflow at (?:batch )?prefill step[^\r\n]*$/,
   /^processPromptImpl: context overflow$/
 ]
 
 export function isAddonContextOverflowError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
-  // The complete codeString shape, on the rare path that keeps a code.
+  // A present status code is authoritative: exact ContextOverflow accepts,
+  // any other code rejects with no message fallback.
   const code = (err as { code?: unknown }).code
-  if (typeof code === 'string' && /^\[\s*[\w.-]+\s*::\s*ContextOverflow\s*\]$/.test(code)) {
-    return true
+  if (typeof code === 'string') {
+    return /^\[\s*[\w.-]+\s*::\s*ContextOverflow\s*\]$/.test(code)
   }
   // The production path: the async transport strips status metadata from
   // every run error, so the message alone identifies the overflow guards.

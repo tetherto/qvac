@@ -531,8 +531,8 @@ export async function* completion(
   // flips the turn's internal `committed` flag so this becomes a no-op
   // on the happy path. Scope unwinding is LIFO — registered after the
   // `removeEventListener` defer above so rollback runs before the
-  // listener detach. A thrown overflow or pre-mutation refusal never
-  // persists the in-flight turn, so the committed cache stays valid.
+  // listener detach. A thrown overflow, pre-mutation refusal, or pre-addon
+  // attachment failure never persists the turn; the committed cache stays valid.
   let preserveCacheOnUnwind = false
   scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 

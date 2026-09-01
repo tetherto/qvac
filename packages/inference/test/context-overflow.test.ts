@@ -82,7 +82,8 @@ test('isAddonContextOverflowError: message fallback is anchored to the emitted s
     'recovering from context overflow upstream',
     'context overflow at prefill step (5 tokens, max 4)',
     'post-write failure while handling context overflow at prefill step from a prior cause',
-    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4\npost-write failure'
+    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4\npost-write failure',
+    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4\rpost-write failure'
   ]
   for (const wording of rejected) {
     t.is(
@@ -91,6 +92,19 @@ test('isAddonContextOverflowError: message fallback is anchored to the emitted s
       `rejected: ${wording.slice(0, 60)}`
     )
   }
+  // A present status code is authoritative — a contradictory code rejects
+  // even when the message alone would match.
+  t.is(
+    isAddonContextOverflowError(
+      Object.assign(
+        new Error(
+          '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
+        ),
+        { code: '[ LLM :: UnableToSaveSessionFile ]' }
+      )
+    ),
+    false
+  )
 })
 
 // Production errors arrive through the async transport as exception.what()

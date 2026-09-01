@@ -107,8 +107,8 @@ Named string-key caches are not inferred from their directory names and remain c
 
 | File | Purpose |
 |------|---------|
-| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedPrefixes`, per-path write locks/active refs, auto-cache markers). Exposes `beginTurn` / `commitTurn` / `rollback` / `releaseTurn` (non-destructive: a thrown overflow or enumerated pre-mutation refusal never persists the turn, so the committed cache stays valid) / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
-| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers one deferred cleanup (rollback, or the non-destructive `releaseTurn` on a thrown addon overflow or enumerated pre-mutation refusal), and calls `session.commitTurn(...)` on the happy path (which suppresses it). No direct references to the session's layers. |
+| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedPrefixes`, per-path write locks/active refs, auto-cache markers). Exposes `beginTurn` / `commitTurn` / `rollback` / `releaseTurn` (non-destructive: a thrown overflow, an enumerated pre-mutation refusal, or a pre-addon missing-attachment rejection never persists the turn, so the committed cache stays valid) / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
+| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers one deferred cleanup (rollback, or the non-destructive `releaseTurn` on a thrown addon overflow, an enumerated pre-mutation refusal, or a pre-addon missing-attachment rejection), and calls `session.commitTurn(...)` on the happy path (which suppresses it). No direct references to the session's layers. |
 | `packages/inference/src/plugins/builtin/llamacpp-completion/ops/kv-cache-state.ts` | Pure `decideCachedHistorySlice(...)` helper used by the session — slice decision for the next addon call. No state. |
 | `packages/inference/src/plugins/ops/kv-cache-retention.ts` | Plans idle and quota-based auto-cache evictions while excluding active turn paths. |
 | `packages/inference/src/plugins/ops/kv-cache-utils.ts` | Path / hash / fs utilities: `getCacheFilePath`, `generateConfigHash`, `findMatchingCache`, `getCurrentCacheInfo`, `renameCacheFile`, `deleteCache`. No in-memory state. |
@@ -134,14 +134,14 @@ Three near-identical cleanup blocks in `completion-stream.ts` had to touch all t
 ```typescript
 const session = createKvCacheSession(modelId);
 const turn = await session.beginTurn({ ... });          // primes cache if missing, returns handle
-let preserveCacheOnUnwind = false;                      // set when a recognised pre-mutation refusal is thrown
+let preserveCacheOnUnwind = false;                      // set on a recognised pre-addon or pre-mutation failure
 scope.defer(() =>                                       // ONE cleanup hook for every exit path
   preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn));
 // ... run model ...
 if (shouldCommit) await session.commitTurn(turn, ...);  // suppresses the deferred cleanup
 ```
 
-`commitTurn` flips an internal flag on the turn handle; `rollback` reads the flag and short-circuits. The happy path commits and the deferred rollback becomes a no-op. Every other exit path (cancel, zero-token, addon error, rename failure, tool-call turn) lets `scope[Symbol.asyncDispose]` run the deferred cleanup: `rollback` unlinks the `.bin` file and clears the `initializedCaches`/`cachedPrefixes` entries, while a thrown addon overflow or enumerated pre-mutation refusal (scheduler submit guards, generationParams validation) takes `releaseTurn`, which frees locks and refs but keeps the committed file and prefix valid for a retry.
+`commitTurn` flips an internal flag on the turn handle; `rollback` reads the flag and short-circuits. The happy path commits and the deferred rollback becomes a no-op. Every other exit path (cancel, zero-token, addon error, rename failure, tool-call turn) lets `scope[Symbol.asyncDispose]` run the deferred cleanup: `rollback` unlinks the `.bin` file and clears the `initializedCaches`/`cachedPrefixes` entries, while a thrown addon overflow, an enumerated pre-mutation refusal (scheduler submit guards, generationParams validation), or a pre-addon missing-attachment rejection takes `releaseTurn`, which frees locks and refs but keeps the committed file and prefix valid for a retry.
 
 **Late-commit vs cancel is intentional, not a race.** A commit only proceeds past its abort re-check for a turn that fully generated and whose file passed `verifySaveAndRecord`. If a cancel lands during the async commit (after that check, during rename/verify), the commit finishes: a **complete, verified** turn is persisted while the operation reports cancelled. This is by design — the persisted cache matches the tokens the client already received, and committing fully-generated verified work beats discarding it. A strict "cancel wins" rollback here would need target-aware cleanup and risks deleting valid completed state, so it is not done.
 

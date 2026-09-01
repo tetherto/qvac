@@ -1,4 +1,5 @@
 import test from 'brittle'
+import { AttachmentNotFoundError } from '@/errors/index'
 import { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 import {
   clearRegistry,
@@ -597,15 +598,53 @@ test('completion: kv-cache survives a missing-attachment rejection between turns
     fs.existsSync(committedPath) && fs.readFileSync(committedPath, 'utf8') === 'primed',
     'the committed cache bytes survive the rejection'
   )
-  t.ok(
-    refusal instanceof Error && refusal.name === 'ATTACHMENT_NOT_FOUND',
-    'the caller gets the typed attachment error'
-  )
+  t.ok(refusal instanceof AttachmentNotFoundError, 'the caller gets the typed attachment error')
 
   await complete([first, assistant('25.'), user('And base 4 height 3?')])
   const turnCalls = calls.filter((call) => !call.prefill)
   t.is(turnCalls.length, 2, 'the rejected turn never reached the model')
   t.is(turnCalls[1]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// An attachment already inside the committed prefix is never re-read from
+// disk — the warm delta skips it, so its later deletion must not fail the turn.
+test('completion: kv-cache tolerates a cached attachment vanishing from disk', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const fs = await import('bare-fs')
+  const os = await import('bare-os')
+  const path = await import('bare-path')
+  const attachmentPath = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-attachment-')),
+    'diagram.png'
+  )
+  fs.writeFileSync(attachmentPath, 'image-bytes')
+
+  const modelId = `kvcache-attachment-vanishes-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+  const complete = completer(modelId, 'attachment-vanishes-key')
+  const first = {
+    role: 'user',
+    content: 'Area of the triangle in the attachment?',
+    attachments: [{ path: attachmentPath }]
+  }
+  await complete([first] as HistoryEntry[])
+
+  fs.unlinkSync(attachmentPath)
+  await complete([first, assistant('25.'), user('And base 4 height 3?')] as HistoryEntry[])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 2, 'both turns reached the model')
+  t.is(
+    turnCalls[1]!.messages.length,
+    1,
+    'the second turn is warm — the cached attachment is skipped'
+  )
 
   unregisterModel(modelId)
   clearRegistry()
