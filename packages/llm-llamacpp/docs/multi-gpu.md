@@ -40,7 +40,7 @@ This applies to both inference and finetuning. Only pipeline (layer) parallelism
 | Backend | `'layer'` | `'row'` |
 |---------|-----------|---------|
 | SYCL (not shipped) | Layer parallelism | True tensor parallelism (split buffers) |
-| CUDA (not shipped) | Layer parallelism | Degraded to layer parallelism — split buffers dropped at v10069 |
+| CUDA (linux x64) | Layer parallelism | Degraded to layer parallelism — split buffers dropped at v10069 |
 | Vulkan  | Layer parallelism | Degraded to layer parallelism |
 | Metal   | Layer parallelism | Degraded to layer parallelism |
 | OpenCL  | Layer parallelism | Degraded to layer parallelism |
@@ -105,7 +105,10 @@ device ─── 'cpu' ──> All GPU params ignored, CPU inference
                         │   tensor-split has no effect
                         │
                         └── split-mode = 'layer' | 'row'
-                            --device is NOT passed (so qvac-fabric sees all GPUs)
+                            one GPU backend:  --device is NOT passed
+                                              (so qvac-fabric sees all GPUs)
+                            two or more:      --device lists every discrete GPU,
+                                              deduplicated by PCI bus id
                             tensor-split proportions forwarded as --tensor-split
                             main-gpu (integer only) forwarded as --main-gpu
                               row: selects GPU for intermediate results and KV
