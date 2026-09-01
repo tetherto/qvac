@@ -64,7 +64,14 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
   // the override block is skipped outright for a CPU load. Without this the
   // pin is advisory, and the four Qwen3.5 tests that depend on it would fall
   // back to CUDA and report their old flakiness as a genuine failure.
-  if (config.backend && config.device === 'gpu') {
+  //
+  // Call this AFTER the first completion, never straight after load(): backend
+  // selection is lazy, so the log lands a tick later and an immediate check
+  // reads an empty buffer and fails on a pin that did bind.
+  function assertBackendPin() {
+    if (!config.backend || config.device !== 'gpu') {
+      return
+    }
     t.ok(
       specLogger.logs.some((l) => /backend override/.test(l)),
       `${config.backend} backend pin took effect`
@@ -80,7 +87,7 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
     }
   })
 
-  return { inference }
+  return { inference, assertBackendPin }
 }
 
 // Shared helper: Run a completion and collect response
@@ -761,7 +768,7 @@ safeTest(
     timeout: 900_000
   },
   async (t) => {
-    const { inference } = await setupReasoningModel(t, false, {
+    const { inference, assertBackendPin } = await setupReasoningModel(t, false, {
       modelDef: QWEN35_MODEL,
       configOverrides: QWEN35_REASONING_CONFIG
     })
@@ -769,6 +776,7 @@ safeTest(
     const messages = createInitialMessages()
 
     const { response, stats } = await runCompletionWithStats(inference, messages)
+    assertBackendPin()
     t.comment(`response (len=${response.length}): ${response.slice(0, 200)}...`)
     t.comment(`stats: ${JSON.stringify(stats)}`)
 
@@ -807,7 +815,7 @@ safeTest(
       } catch {}
     })
 
-    const { inference } = await setupReasoningModel(t, false, {
+    const { inference, assertBackendPin } = await setupReasoningModel(t, false, {
       modelDef: QWEN35_MODEL,
       configOverrides: QWEN35_REASONING_CONFIG
     })
@@ -818,6 +826,7 @@ safeTest(
       cacheKey: sessionPath,
       generationParams: { remove_thinking_from_context: true }
     })
+    assertBackendPin()
     t.comment(`turn 1 stats: ${JSON.stringify(t1.stats)}`)
     t.ok(
       toNumber(t1.stats.thinkingBlockDiscards) >= 1,

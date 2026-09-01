@@ -187,7 +187,9 @@ async function runBenchmark(cfg, modelInfo) {
       // chooseBackend() logs this only on the override path. A `backend` that
       // matches no device falls through to the default cascade with a warning,
       // so without this the pin below is advisory and a silent fallback to
-      // CUDA would look identical to a run that honoured it.
+      // CUDA would look identical to a run that honoured it. Read here, after
+      // the run: backend selection is lazy, so the log is not in the buffer yet
+      // when load() returns.
       backendOverrideApplied: specLogger.logs.some((l) => /backend override/.test(l))
     }
   } finally {
