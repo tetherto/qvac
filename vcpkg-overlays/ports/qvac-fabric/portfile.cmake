@@ -32,6 +32,7 @@ vcpkg_check_features(
     openmp BUILD_OPENMP
     hip-backend BUILD_HIP_BACKEND
     rpc-server BUILD_RPC_SERVER
+    rpc-rdma BUILD_RPC_RDMA
 )
 
 # gpu-backends is default-on via default-features in vcpkg.json. CPU-only
@@ -201,6 +202,29 @@ if(BUILD_RPC_SERVER)
   endif()
 endif()
 
+set(BUILD_RPC_RDMA_TRANSPORT OFF)
+if(BUILD_RPC_RDMA)
+  if(NOT VCPKG_TARGET_IS_LINUX)
+    message(FATAL_ERROR "qvac-fabric: rpc-rdma feature is supported only on Linux because qvac-fabric RDMA uses libibverbs.")
+  endif()
+
+  find_path(IBVERBS_INCLUDE_DIR NAMES infiniband/verbs.h)
+  find_library(IBVERBS_LIBRARY NAMES ibverbs)
+  if(NOT IBVERBS_INCLUDE_DIR OR NOT IBVERBS_LIBRARY)
+    message(FATAL_ERROR "qvac-fabric: rpc-rdma feature requires libibverbs headers and library from rdma-core. Install the rdma-core development package on the build host or do not request rpc-rdma.")
+  endif()
+
+  message(STATUS "qvac-fabric: rpc-rdma feature ON — building GGML_RPC_RDMA with libibverbs")
+  set(BUILD_RPC_RDMA_TRANSPORT ON)
+  list(APPEND PLATFORM_OPTIONS -DIBVERBS_LIB=${IBVERBS_LIBRARY})
+  if(NOT IBVERBS_INCLUDE_DIR STREQUAL "/usr/include")
+    string(APPEND VCPKG_C_FLAGS " -isystem ${IBVERBS_INCLUDE_DIR}")
+    string(APPEND VCPKG_CXX_FLAGS " -isystem ${IBVERBS_INCLUDE_DIR}")
+  endif()
+else()
+  message(STATUS "qvac-fabric: rpc-rdma feature OFF — building RPC over TCP only")
+endif()
+
 vcpkg_cmake_configure(
   SOURCE_PATH "${SOURCE_PATH}"
   DISABLE_PARALLEL_CONFIGURE
@@ -212,6 +236,7 @@ vcpkg_cmake_configure(
     # attach remote devices. The rpc-server feature below builds the matching
     # standalone worker from this same pinned source tree.
     -DGGML_RPC=ON
+    -DGGML_RPC_RDMA=${BUILD_RPC_RDMA_TRANSPORT}
     -DLLAMA_CURL=OFF
     -DLLAMA_BUILD_TESTS=OFF
     -DLLAMA_BUILD_TOOLS=${BUILD_RPC_SERVER_TOOL}

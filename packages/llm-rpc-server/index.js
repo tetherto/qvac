@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RpcServerStartTimeoutError =
+exports.RpcServerRdmaUnavailableError =
+  exports.RpcServerStartTimeoutError =
   exports.RpcServerExitedError =
   exports.RpcServerSpawnError =
   exports.RpcServerNonLoopbackHostError =
@@ -14,6 +15,7 @@ exports.RpcServerStartTimeoutError =
     void 0;
 exports.resolveRpcServerBinaryPath = resolveRpcServerBinaryPath;
 exports.allocateFreePort = allocateFreePort;
+exports.rpcServerLogsIndicateRdmaSupport = rpcServerLogsIndicateRdmaSupport;
 exports.startRpcServer = startRpcServer;
 const node_child_process_1 = require("node:child_process");
 const node_fs_1 = require("node:fs");
@@ -97,6 +99,17 @@ class RpcServerStartTimeoutError extends Error {
   }
 }
 exports.RpcServerStartTimeoutError = RpcServerStartTimeoutError;
+class RpcServerRdmaUnavailableError extends Error {
+  output;
+  constructor(output) {
+    super(
+      "ggml-rpc-server was expected to support RDMA, but startup logs did not report RDMA auto-negotiation support",
+    );
+    this.name = "RpcServerRdmaUnavailableError";
+    this.output = output;
+  }
+}
+exports.RpcServerRdmaUnavailableError = RpcServerRdmaUnavailableError;
 function prebuildTarget(
   runtimePlatform = node_process_1.platform,
   runtimeArch = node_process_1.arch,
@@ -154,6 +167,9 @@ function allocateFreePort(host = exports.DEFAULT_RPC_SERVER_HOST) {
       server.close(() => resolve(address.port));
     });
   });
+}
+function rpcServerLogsIndicateRdmaSupport(logs) {
+  return logs.includes("RDMA auto-negotiate enabled");
 }
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -322,12 +338,16 @@ async function startRpcServer(options = {}) {
       timeoutMs: startTimeoutMs,
       getTail,
     });
+    if (options.expectRdma === true && !rpcServerLogsIndicateRdmaSupport(getTail())) {
+      throw new RpcServerRdmaUnavailableError(getTail());
+    }
   } catch (err) {
     detachExitCleanup();
     await stopProcess(child, shutdownGraceMs).catch(() => {});
     throw err;
   }
   child.once("exit", detachExitCleanup);
+  const rdmaCapable = rpcServerLogsIndicateRdmaSupport(getTail());
   return {
     child,
     pid: child.pid,
@@ -335,6 +355,7 @@ async function startRpcServer(options = {}) {
     port,
     url: `${host}:${port}`,
     device,
+    rdmaCapable,
     logs: getTail,
     stop: async () => {
       detachExitCleanup();

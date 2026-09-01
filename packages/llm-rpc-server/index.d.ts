@@ -31,6 +31,10 @@ export declare class RpcServerStartTimeoutError extends Error {
     readonly output: string;
     constructor(host: string, port: number, timeoutMs: number, output: string);
 }
+export declare class RpcServerRdmaUnavailableError extends Error {
+    readonly output: string;
+    constructor(output: string);
+}
 export interface StartRpcServerOptions {
     readonly device?: string | readonly string[];
     readonly host?: string;
@@ -41,6 +45,7 @@ export interface StartRpcServerOptions {
     readonly shutdownGraceMs?: number;
     readonly env?: NodeJS.ProcessEnv;
     readonly cleanupOnExit?: boolean;
+    readonly expectRdma?: boolean;
 }
 export interface RpcServerProcess {
     readonly child: ChildProcess;
@@ -49,9 +54,11 @@ export interface RpcServerProcess {
     readonly port: number;
     readonly url: string;
     readonly device?: string;
+    readonly rdmaCapable: boolean;
     logs(): string;
     stop(): Promise<void>;
 }
 export declare function resolveRpcServerBinaryPath(): string;
 export declare function allocateFreePort(host?: string): Promise<number>;
+export declare function rpcServerLogsIndicateRdmaSupport(logs: string): boolean;
 export declare function startRpcServer(options?: StartRpcServerOptions): Promise<RpcServerProcess>;

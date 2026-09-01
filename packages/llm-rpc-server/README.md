@@ -14,6 +14,7 @@ const server = await startRpcServer({ device: 'Vulkan0' })
 
 try {
   console.log(server.url)
+  console.log(server.rdmaCapable)
 } finally {
   await server.stop()
 }
@@ -22,3 +23,24 @@ try {
 The default host is `127.0.0.1`. Non-loopback hosts are rejected in this
 initial package because the underlying RPC listener does not provide
 authentication.
+
+## RDMA-capable builds
+
+RDMA uses `qvac-fabric`'s existing `GGML_RPC_RDMA` support. It is opt-in at
+build time with the `rpc-rdma` vcpkg feature and requires `libibverbs` from
+rdma-core on Linux. Both the client-side `@qvac/llm-llamacpp` build and this
+server package must be built with RDMA support; a server-only RDMA build will
+fall back to TCP when the client is TCP-only.
+
+The endpoint syntax does not change. Fabric auto-negotiates RDMA over the
+existing RPC connection when both sides support it. To fail closed when the
+managed server binary is expected to be RDMA-capable, pass `expectRdma: true`:
+
+```js
+const server = await startRpcServer({
+  device: 'Vulkan0',
+  expectRdma: true
+})
+
+console.log(server.rdmaCapable)
+```

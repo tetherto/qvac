@@ -12,13 +12,16 @@ const {
   DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS,
   RPC_SERVER_HEALTH_POLL_INTERVAL_MS,
   RpcServerNonLoopbackHostError,
+  RpcServerRdmaUnavailableError,
   allocateFreePort,
+  rpcServerLogsIndicateRdmaSupport,
   startRpcServer,
 } = require("../../index.js");
 
-function createFakeRpcServerBinary() {
+function createFakeRpcServerBinary(options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "qvac-rpc-server-test-"));
   const binaryPath = join(dir, "fake-rpc-server.js");
+  const startupLog = options.startupLog || "";
   writeFileSync(
     binaryPath,
     `#!/usr/bin/env node
@@ -30,6 +33,7 @@ const port = Number(args[args.indexOf('--port') + 1])
 const server = net.createServer((socket) => socket.end())
 
 server.listen({ host, port }, () => {
+  process.stdout.write(${JSON.stringify(startupLog)})
   process.stdout.write('ready\\n')
 })
 
@@ -82,10 +86,53 @@ test("starts and stops a managed server process", async () => {
     assert.equal(process.listenerCount("exit"), exitListenersBefore + 1);
     assert.equal(server.host, DEFAULT_RPC_SERVER_HOST);
     assert.match(server.url, /^127\.0\.0\.1:\d+$/);
+    assert.equal(server.rdmaCapable, false);
     assert.equal(server.child.exitCode, null);
     await server.stop();
     assert.notEqual(server.child.exitCode, null);
     assert.equal(process.listenerCount("exit"), exitListenersBefore);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("detects RDMA-capable startup logs", async () => {
+  assert.equal(
+    rpcServerLogsIndicateRdmaSupport("transport      : TCP (RDMA auto-negotiate enabled)"),
+    true,
+  );
+  assert.equal(rpcServerLogsIndicateRdmaSupport("transport      : TCP"), false);
+
+  const fixture = createFakeRpcServerBinary({
+    startupLog: "transport      : TCP (RDMA auto-negotiate enabled)\\n",
+  });
+
+  try {
+    const server = await startRpcServer({
+      binaryPath: fixture.binaryPath,
+      expectRdma: true,
+      startTimeoutMs: 5000,
+    });
+    assert.equal(server.rdmaCapable, true);
+    await server.stop();
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("fails closed when RDMA support is expected but not reported", async () => {
+  const fixture = createFakeRpcServerBinary();
+
+  try {
+    await assert.rejects(
+      () =>
+        startRpcServer({
+          binaryPath: fixture.binaryPath,
+          expectRdma: true,
+          startTimeoutMs: 5000,
+        }),
+      RpcServerRdmaUnavailableError,
+    );
   } finally {
     fixture.cleanup();
   }

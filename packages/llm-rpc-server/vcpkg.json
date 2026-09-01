@@ -11,5 +11,20 @@
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#3"
     }
-  ]
+  ],
+  "features": {
+    "rpc-rdma": {
+      "description": "Build the managed ggml-rpc-server package with libibverbs/RDMA auto-negotiation support on Linux.",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "version>=": "10297.0.0",
+          "features": [
+            "rpc-rdma"
+          ],
+          "platform": "linux"
+        }
+      ]
+    }
+  }
 }

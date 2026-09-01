@@ -57,6 +57,9 @@
     "rpc-server": {
       "description": "Build and install the ggml-rpc-server tool from the same qvac-fabric revision."
     },
+    "rpc-rdma": {
+      "description": "Enable libibverbs/RDMA auto-negotiation for ggml RPC on Linux builds."
+    },
     "vector-index": {
       "description": "Build and install the ggml vector index library."
     }

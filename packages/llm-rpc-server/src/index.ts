@@ -78,6 +78,16 @@ export class RpcServerStartTimeoutError extends Error {
   }
 }
 
+export class RpcServerRdmaUnavailableError extends Error {
+  readonly output: string
+
+  constructor(output: string) {
+    super('ggml-rpc-server was expected to support RDMA, but startup logs did not report RDMA auto-negotiation support')
+    this.name = 'RpcServerRdmaUnavailableError'
+    this.output = output
+  }
+}
+
 export interface StartRpcServerOptions {
   readonly device?: string | readonly string[]
   readonly host?: string
@@ -88,6 +98,7 @@ export interface StartRpcServerOptions {
   readonly shutdownGraceMs?: number
   readonly env?: NodeJS.ProcessEnv
   readonly cleanupOnExit?: boolean
+  readonly expectRdma?: boolean
 }
 
 export interface RpcServerProcess {
@@ -97,6 +108,7 @@ export interface RpcServerProcess {
   readonly port: number
   readonly url: string
   readonly device?: string
+  readonly rdmaCapable: boolean
   logs(): string
   stop(): Promise<void>
 }
@@ -154,6 +166,10 @@ export function allocateFreePort(host = DEFAULT_RPC_SERVER_HOST): Promise<number
       server.close(() => resolve(address.port))
     })
   })
+}
+
+export function rpcServerLogsIndicateRdmaSupport(logs: string): boolean {
+  return logs.includes('RDMA auto-negotiate enabled')
 }
 
 function delay(ms: number): Promise<void> {
@@ -328,6 +344,9 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
 
   try {
     await waitForListening({ child, host, port, timeoutMs: startTimeoutMs, getTail })
+    if (options.expectRdma === true && !rpcServerLogsIndicateRdmaSupport(getTail())) {
+      throw new RpcServerRdmaUnavailableError(getTail())
+    }
   } catch (err) {
     detachExitCleanup()
     await stopProcess(child, shutdownGraceMs).catch(() => {})
@@ -335,6 +354,7 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
   }
 
   child.once('exit', detachExitCleanup)
+  const rdmaCapable = rpcServerLogsIndicateRdmaSupport(getTail())
 
   return {
     child,
@@ -343,6 +363,7 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     port,
     url: `${host}:${port}`,
     device,
+    rdmaCapable,
     logs: getTail,
     stop: async () => {
       detachExitCleanup()

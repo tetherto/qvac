@@ -175,6 +175,11 @@ CPU. Set `devices` in that case (e.g. `'RPC0,RPC1'`).
 - **Matching builds.** The RPC wire protocol is versioned. Client and every
   server must be built from the same qvac-fabric revision; mismatched builds
   refuse to connect.
+- **RDMA-capable builds.** RDMA uses qvac-fabric's `GGML_RPC_RDMA` path and
+  auto-negotiates over the existing RPC endpoint when both sides support it.
+  Build both `@qvac/llm-llamacpp` and `@qvac/ggml-rpc-server` with the
+  `rpc-rdma` vcpkg feature; a server-only RDMA build still falls back to TCP
+  with a TCP-only client.
 - **Model file.** Needed only on the machine loading it. Weights are pushed to
   the remote devices.
 - **Reachability at load.** Every endpoint must be reachable when the model
