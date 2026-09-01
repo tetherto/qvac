@@ -15,6 +15,37 @@ const STOP_REASONS = [
 
 export type StopReason = (typeof STOP_REASONS)[number];
 
+// QVAC-23763. Index-matched to the C++ BackendFamilyCode enum
+// (utils/BackendSelection.hpp). `backendDevice` only says cpu/gpu, so a load
+// that silently moved from one GPU backend to another is invisible without
+// this. Append when the enum grows; never renumber.
+const BACKEND_FAMILIES = [
+  "none",
+  "cpu",
+  "vulkan",
+  "cuda",
+  "metal",
+  "opencl",
+  "rocm",
+  "sycl",
+  "other",
+] as const;
+
+export type BackendFamily = (typeof BACKEND_FAMILIES)[number];
+
+// Index-matched to the C++ ExclusionReason enum. Why a higher-priority backend
+// was passed over, or "none" when nothing was.
+const BACKEND_SKIP_REASONS = [
+  "none",
+  "finetuning-on-adreno-below-800",
+  "finetuning-on-adreno-800-plus",
+  "bitnet-on-adreno-below-800",
+  "bitnet-on-adreno-800-plus",
+  "kv-cache-type-unsupported",
+] as const;
+
+export type BackendSkipReason = (typeof BACKEND_SKIP_REASONS)[number];
+
 export interface AddonMessage {
   type: "text";
   input: string;
@@ -139,6 +170,13 @@ export function mapAddonEvent(
       stats.backendDevice = "cpu";
     } else if (stats.backendDevice === 1) {
       stats.backendDevice = "gpu";
+    }
+    if (typeof stats.backendFamily === "number") {
+      stats.backendFamily = BACKEND_FAMILIES[stats.backendFamily] || "other";
+    }
+    if (typeof stats.backendSkipReason === "number") {
+      stats.backendSkipReason =
+        BACKEND_SKIP_REASONS[stats.backendSkipReason] || "none";
     }
     if (typeof stats.stopReason === "number") {
       stats.stopReason = STOP_REASONS[stats.stopReason] || "none";

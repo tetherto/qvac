@@ -871,6 +871,42 @@ enum ggml_type backend_selection::kvCacheTypeFromString(const std::string& name)
   return GGML_TYPE_COUNT;
 }
 
+backend_selection::BackendFamilyCode backend_selection::backendFamilyCodeOf(
+    const BackendType type, const std::string& deviceName) {
+  if (type == BackendType::CPU) {
+    return BackendFamilyCode::Cpu;
+  }
+  if (deviceName.empty() || deviceName == "none") {
+    return BackendFamilyCode::None;
+  }
+  // Same substring matching the `backend` override uses, so a device that an
+  // override can name is reported under the family that named it. Order
+  // matters only for rocm/hip, which are the same family under two spellings.
+  if (::backendNameMatchesFamily(deviceName, "cuda")) {
+    return BackendFamilyCode::Cuda;
+  }
+  if (::backendNameMatchesFamily(deviceName, "rocm") ||
+      ::backendNameMatchesFamily(deviceName, "hip")) {
+    return BackendFamilyCode::Rocm;
+  }
+  if (::backendNameMatchesFamily(deviceName, "vulkan")) {
+    return BackendFamilyCode::Vulkan;
+  }
+  if (::backendNameMatchesFamily(deviceName, "opencl")) {
+    return BackendFamilyCode::OpenCl;
+  }
+  if (::backendNameMatchesFamily(deviceName, "metal")) {
+    return BackendFamilyCode::Metal;
+  }
+  if (::backendNameMatchesFamily(deviceName, "sycl")) {
+    return BackendFamilyCode::Sycl;
+  }
+  // A GPU from a backend this build does not know by name. Reported rather
+  // than folded into None, so "ran on something unrecognised" stays
+  // distinguishable from "ran on nothing".
+  return BackendFamilyCode::Other;
+}
+
 backend_selection::ExclusionKind
 backend_selection::kindOf(const ExclusionReason reason) {
   // No default: a new reason must be classified here before this compiles.

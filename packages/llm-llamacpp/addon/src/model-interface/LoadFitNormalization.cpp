@@ -499,7 +499,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .type = choice.type,
                 .name = std::move(choice.name),
                 .adrenoVersion = choice.adrenoVersion,
-                .isMaliGpu = choice.isMaliGpu};
+                .isMaliGpu = choice.isMaliGpu,
+                .trace = std::move(choice.trace)};
           },
       .gpuBackendSupportsRowSplit =
           []() { return backend_selection::gpuBackendSupportsRowSplit(); },
@@ -710,6 +711,15 @@ NormalizedLoad normalizeLoadForFit(
 
     const SelectedBackend selected = dependencies.resolveBackend(request);
     result.adrenoVersion = selected.adrenoVersion;
+
+    // QVAC-23763: carry the selection verdict out to the runtime stats.
+    // `runtimeBackendDevice` below is only cpu/gpu, so without these a load
+    // that silently moved from one GPU backend to another looks identical to
+    // one that got what it asked for.
+    result.runtimeBackendFamily = static_cast<int64_t>(
+        backendFamilyCodeOf(selected.type, selected.name));
+    result.runtimeBackendSkipReason =
+        static_cast<int64_t>(selected.trace.skippedReason);
 
     // QVAC-21257: optional runtime override for the multimodal projector
     // (mmproj / vision encoder) backend. The default is auto-selected per

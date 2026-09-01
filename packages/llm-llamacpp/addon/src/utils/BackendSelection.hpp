@@ -164,6 +164,36 @@ struct LoadConstraints {
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
 
+/// @brief The backend family a load actually ran on, as a stable numeric code.
+///
+/// QVAC-23763: `backendDevice` reports only cpu/gpu, so a silent fallback from
+/// one GPU backend to another is invisible in the stats.
+///
+/// Numeric because RuntimeStats carries `variant<double, int64_t>` and marshals
+/// every value through `js::Number::create`; a string would need
+/// inference-addon-cpp widened, which is separately published with several
+/// consumers. The device *name* therefore stays in the structured log.
+///
+/// The values are contractual - the JS side maps them back - so append here,
+/// never renumber.
+enum class BackendFamilyCode : std::uint8_t {
+  None = 0,
+  Cpu = 1,
+  Vulkan = 2,
+  Cuda = 3,
+  Metal = 4,
+  OpenCl = 5,
+  Rocm = 6,
+  Sycl = 7,
+  Other = 8,
+};
+
+/// @brief Classify a chosen backend into a @c BackendFamilyCode.
+/// @p deviceName is the lowercased ggml device name, as @c BackendChoice::name
+/// carries it.
+BackendFamilyCode
+backendFamilyCodeOf(BackendType type, const std::string& deviceName);
+
 /// @brief How the choice was reached, and what it beat.
 struct SelectionTrace {
   std::string selectedName;

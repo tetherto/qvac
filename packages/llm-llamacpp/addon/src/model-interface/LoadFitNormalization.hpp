@@ -74,6 +74,9 @@ struct SelectedBackend {
   std::string name = "none";
   std::optional<int> adrenoVersion;
   bool isMaliGpu = false;
+  /// How the choice was reached and what it beat. QVAC-23763: previously
+  /// dropped here, which is why nothing downstream could report it.
+  backend_selection::SelectionTrace trace;
 };
 
 /// QVAC-23763: takes the whole request rather than a growing argument list. The
@@ -98,6 +101,13 @@ struct NormalizedLoad {
   NormalizedFitSnapshot fitSnapshot;
   std::optional<int> adrenoVersion;
   int64_t runtimeBackendDevice = 0;
+  /// QVAC-23763: which GPU backend family actually ran, and why a
+  /// higher-priority one did not. `runtimeBackendDevice` above is only cpu/gpu,
+  /// so a silent fallback between GPU backends is invisible without these.
+  /// Numeric `BackendFamilyCode` / `ExclusionReason`; see the note on
+  /// BackendFamilyCode for why they are not strings.
+  int64_t runtimeBackendFamily = 0;
+  int64_t runtimeBackendSkipReason = 0;
 };
 
 NormalizationDependencies

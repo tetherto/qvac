@@ -2187,3 +2187,94 @@ TEST_F(
       splitDevicesFor(mockBackend, "vulkan0"),
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
+
+// ---- selection trace and reporting (QVAC-23763 R12) ----
+
+TEST_F(BackendSelectionTest, BackendFamilyCodeOfClassifiesEachFamily) {
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::GPU, "cuda0"), BackendFamilyCode::Cuda);
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::GPU, "vulkan1"),
+      BackendFamilyCode::Vulkan);
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::GPU, "gpuopencl"),
+      BackendFamilyCode::OpenCl);
+  // ggml-hip reports "ROCm%d"; both spellings land on the same family.
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::GPU, "rocm0"), BackendFamilyCode::Rocm);
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::GPU, "metal"), BackendFamilyCode::Metal);
+  // some builds report "mtl..." rather than "Metal"
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::GPU, "mtl0"), BackendFamilyCode::Metal);
+}
+
+TEST_F(BackendSelectionTest, BackendFamilyCodeOfHandlesCpuAndUnknown) {
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::CPU, "none"), BackendFamilyCode::Cpu);
+  // a CPU load reports cpu whatever the name says
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::CPU, "cuda0"), BackendFamilyCode::Cpu);
+  // a GPU with no name at all is None; one this build cannot name is Other, so
+  // "ran on something unrecognised" stays distinguishable from "ran on nothing"
+  EXPECT_EQ(backendFamilyCodeOf(BackendType::GPU, ""), BackendFamilyCode::None);
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::GPU, "none"), BackendFamilyCode::None);
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::GPU, "webgpu0"),
+      BackendFamilyCode::Other);
+}
+
+// ROCm must not be read as CUDA. The names are close enough that a substring
+// check in the wrong order would conflate them, and that would report an AMD
+// card as NVIDIA in the stats.
+TEST_F(BackendSelectionTest, BackendFamilyCodeOfDoesNotConfuseRocmWithCuda) {
+  EXPECT_NE(
+      backendFamilyCodeOf(BackendType::GPU, "rocm0"), BackendFamilyCode::Cuda);
+  EXPECT_NE(
+      backendFamilyCodeOf(BackendType::GPU, "cuda0"), BackendFamilyCode::Rocm);
+}
+
+TEST_F(BackendSelectionTest, TracePopulatedOnCascade) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  const BackendChoice choice = chooseBackend(request, bckI);
+  EXPECT_EQ(choice.trace.selectedName, "cuda0");
+  EXPECT_EQ(choice.trace.path, SelectionPath::Cascade);
+  EXPECT_TRUE(choice.trace.skippedName.empty());
+  EXPECT_EQ(choice.trace.skippedReason, ExclusionReason::None);
+}
+
+TEST_F(BackendSelectionTest, TracePopulatedOnOverride) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  const BackendChoice choice = chooseWithRequired(mockBackend, {"vulkan"}, false);
+  EXPECT_EQ(choice.trace.selectedName, "vulkan0");
+  EXPECT_EQ(choice.trace.path, SelectionPath::Override);
+}
+
+TEST_F(BackendSelectionTest, TraceOnCpu) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::CPU;
+  const BackendChoice choice = chooseBackend(request, bckI);
+  EXPECT_EQ(choice.trace.path, SelectionPath::Cpu);
+  EXPECT_TRUE(choice.trace.selectedName.empty());
+}
+
+// The reason a higher-priority candidate lost is the half of the trace that
+// `backendDevice` could never express.
+TEST_F(BackendSelectionTest, TraceNamesTheSkippedCandidateAndReason) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.trace.selectedName, "vulkan0");
+  EXPECT_EQ(choice.trace.skippedName, "cuda0");
+  EXPECT_EQ(choice.trace.skippedReason, ExclusionReason::KvCacheTypeUnsupported);
+  // and the family code reports what actually ran, not what was asked for
+  EXPECT_EQ(
+      backendFamilyCodeOf(choice.type, choice.name), BackendFamilyCode::Vulkan);
+}

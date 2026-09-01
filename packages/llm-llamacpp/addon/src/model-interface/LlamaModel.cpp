@@ -202,6 +202,8 @@ void LlamaModel::init(bool acquireLock) {
           LlamaModel::llamaLogCallback));
   snap->normalizedFitSnapshot_ = normalized.fitSnapshot;
   runtimeBackendDevice_ = normalized.runtimeBackendDevice;
+  runtimeBackendFamily_ = normalized.runtimeBackendFamily;
+  runtimeBackendSkipReason_ = normalized.runtimeBackendSkipReason;
   common_params params = std::move(normalized.params);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
@@ -881,7 +883,9 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       // batchRuntimeStatsLocked: concurrent prompts share the one
       // per-context accumulator, so a per-job value would be misattributed.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
-      {"backendDevice", runtimeBackendDevice_}};
+      {"backendDevice", runtimeBackendDevice_},
+      {"backendFamily", runtimeBackendFamily_},
+      {"backendSkipReason", runtimeBackendSkipReason_}};
   // Unlike the vision counters, the stop reason IS per-sequence, so a job can
   // report its own without misattribution — a single concurrent prompt would
   // otherwise silently lose the stat the sequential path emits. Present only
@@ -1339,7 +1343,9 @@ LlamaModel::batchRuntimeStatsLocked() const {
       // prompts share the one per-context accumulator (reset per prompt), so a
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
-      {"backendDevice", runtimeBackendDevice_}};
+      {"backendDevice", runtimeBackendDevice_},
+      {"backendFamily", runtimeBackendFamily_},
+      {"backendSkipReason", runtimeBackendSkipReason_}};
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats
@@ -1414,7 +1420,9 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"visionEncodeTiles",
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
-      {"backendDevice", runtimeBackendDevice_}};
+      {"backendDevice", runtimeBackendDevice_},
+      {"backendFamily", runtimeBackendFamily_},
+      {"backendSkipReason", runtimeBackendSkipReason_}};
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)

@@ -1397,6 +1397,20 @@ namespace LlmLlamacpp {
     avgConcurrentSeq: number;
     backendDevice: "cpu" | "gpu";
     /**
+     * Which GPU backend family the load actually ran on. `backendDevice` above
+     * only distinguishes cpu from gpu, so a load that silently fell back from
+     * one GPU backend to another — CUDA to Vulkan, say — is invisible without
+     * it. QVAC-23763.
+     */
+    backendFamily: AddonModule.BackendFamily;
+    /**
+     * Why a higher-priority backend was passed over, or `"none"` when nothing
+     * was. `"kv-cache-type-unsupported"` means the device could not run the
+     * requested KV-cache type and selection stepped down to one that could.
+     * QVAC-23763.
+     */
+    backendSkipReason: AddonModule.BackendSkipReason;
+    /**
      * Why generation stopped. Per-sequence, so it is reported for a single
      * request on either path (sequential or one prompt on a parallel model).
      *
