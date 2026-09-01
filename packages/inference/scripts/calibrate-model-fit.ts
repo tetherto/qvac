@@ -371,9 +371,7 @@ async function main() {
     console.log('\nre-run with --write to update the fixture')
   }
 
-  // A failed gate exits non-zero so a CI job cannot rot green: the fixture (if
-  // written) still carries validated: false and is auditable, but green must
-  // mean "these coefficients are defensible".
+  // Non-zero so the CI job cannot rot green on a failed gate.
   if (!holds) Bare.exit(1)
 }
 
