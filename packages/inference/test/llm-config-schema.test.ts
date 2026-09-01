@@ -6,6 +6,7 @@ import {
 } from '@/schemas/llamacpp-config'
 import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
 import { ModelType, deviceConfigDefaultsSchema } from '@/schemas'
+import { ModelTypeAliases } from '@/schemas/model-types'
 
 const LLM_BASE = {
   modelType: ModelType.llamacppCompletion,
@@ -68,6 +69,14 @@ test('loadModelSrcRequestSchema: rejects retired n_discarded for LLM', (t) => {
     }).success,
     false
   )
+})
+
+// The custom-plugin exclusion regex interpolates these names unescaped, so a
+// built-in containing a regex metacharacter would silently widen the contract.
+test('built-in model types and aliases stay regex-safe identifiers', (t) => {
+  for (const name of [...Object.values(ModelType), ...Object.keys(ModelTypeAliases)]) {
+    t.ok(/^[a-z0-9-]+$/.test(name), `${name} is a plain kebab identifier`)
+  }
 })
 
 // Same for a stale deployment config: deviceDefaults carrying the retired
