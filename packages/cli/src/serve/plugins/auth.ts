@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin'
 import type { FastifyPluginAsync } from 'fastify'
-import { HttpError } from '../lib/http-error.js'
+import { HttpError } from '@/serve/lib/http-error'
 
 const PUBLIC_PATHS = new Set(['/openapi.json', '/docs', '/docs/'])
 

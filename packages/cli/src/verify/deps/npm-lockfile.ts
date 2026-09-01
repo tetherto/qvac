@@ -1,5 +1,9 @@
 import path from 'node:path'
-import { LockfileReadError, readLockfileTextAtRef, type LockfilePackage } from './lockfile.js'
+import {
+  LockfileReadError,
+  readLockfileTextAtRef,
+  type LockfilePackage
+} from '@/verify/deps/lockfile'
 
 export const NPM_LOCKFILE = 'package-lock.json'
 

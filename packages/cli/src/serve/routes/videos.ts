@@ -2,9 +2,9 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply } from 'fastify'
 import { video, cancel } from '@qvac/sdk'
 import type { VideoClientParams } from '@qvac/sdk'
-import { HttpError } from '../lib/http-error.js'
-import { multipartToBodyOptional } from '../lib/multipart.js'
-import { requireModel } from '../plugins/require-model.js'
+import { HttpError } from '@/serve/lib/http-error'
+import { multipartToBodyOptional } from '@/serve/lib/multipart'
+import { requireModel } from '@/serve/plugins/require-model'
 import {
   videosCreateBody,
   videoResource,
@@ -15,15 +15,15 @@ import {
   videoContentQuery,
   extractVideoCreateParams,
   InvalidVideoStrengthError
-} from '../schemas/videos.js'
-import type { VideoJob } from '../core/video-jobs-store.js'
-import { videoJobResource } from '../core/video-jobs-store.js'
+} from '@/serve/schemas/videos'
+import type { VideoJob } from '@/serve/core/video-jobs-store'
+import { videoJobResource } from '@/serve/core/video-jobs-store'
 import {
   transcodeAviToMp4,
   TranscodeFailedError,
   TranscodeTimeoutError
-} from '../lib/video-transcode.js'
-import type { QvacContext } from '../lib/types.js'
+} from '@/serve/lib/video-transcode'
+import type { QvacContext } from '@/serve/lib/types'
 
 const descriptions = {
   create: `

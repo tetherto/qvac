@@ -1,13 +1,13 @@
-import type { ModelRegistry, ServeConfig, ModelEntry } from '../core/model-registry.js'
-import type { LoadManager, LoadModelFn } from '../core/load-manager.js'
-import type { Logger } from '../../logger.js'
-import type { VectorStoresStore } from '../adapters/openai/vector-stores-store.js'
-import type { EphemeralFilesStore } from '../adapters/openai/ephemeral-files-store.js'
-import type { ChunkAttributionStore } from '../adapters/openai/chunk-attribution-store.js'
-import type { ResponsesStore } from '../adapters/openai/responses-store.js'
-import type { VideoJobsStore } from '../core/video-jobs-store.js'
+import type { ModelRegistry, ServeConfig, ModelEntry } from '@/serve/core/model-registry'
+import type { LoadManager, LoadModelFn } from '@/serve/core/load-manager'
+import type { Logger } from '@/logger'
+import type { VectorStoresStore } from '@/serve/adapters/openai/vector-stores-store'
+import type { EphemeralFilesStore } from '@/serve/adapters/openai/ephemeral-files-store'
+import type { ChunkAttributionStore } from '@/serve/adapters/openai/chunk-attribution-store'
+import type { ResponsesStore } from '@/serve/adapters/openai/responses-store'
+import type { VideoJobsStore } from '@/serve/core/video-jobs-store'
 import type * as sdk from '@qvac/sdk'
-import type { ParsedFile } from './multipart.js'
+import type { ParsedFile } from '@/serve/lib/multipart'
 
 export interface QvacContext {
   registry: ModelRegistry

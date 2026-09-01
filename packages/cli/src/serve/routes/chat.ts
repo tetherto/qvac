@@ -2,11 +2,11 @@ import { unlink } from 'node:fs/promises'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion, type CompletionStats } from '@qvac/sdk'
-import { HttpError } from '../lib/http-error.js'
-import { initSSE, sendSSE, endSSE } from '../lib/sse.js'
-import { drainCompletion, type OpenAiFinishReason } from '../adapters/openai/completion-result.js'
-import { requireModel } from '../plugins/require-model.js'
-import { logUnsupported } from '../plugins/log-unsupported.js'
+import { HttpError } from '@/serve/lib/http-error'
+import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
+import { drainCompletion, type OpenAiFinishReason } from '@/serve/adapters/openai/completion-result'
+import { requireModel } from '@/serve/plugins/require-model'
+import { logUnsupported } from '@/serve/plugins/log-unsupported'
 import {
   chatCompletionsBody,
   CHAT_UNSUPPORTED_PARAMS,
@@ -14,17 +14,17 @@ import {
   toSdkChatArgs,
   writeChatImages,
   type SdkChatArgs
-} from '../schemas/chat.js'
-import { resolveToolDialect } from '../lib/tool-dialect.js'
-import { InvalidResponseFormatError, UnsupportedImageContentError } from '../schemas/common.js'
-import { sdkToolCallsToOpenaiDeltas } from '../adapters/openai/tool-calls.js'
+} from '@/serve/schemas/chat'
+import { resolveToolDialect } from '@/serve/lib/tool-dialect'
+import { InvalidResponseFormatError, UnsupportedImageContentError } from '@/serve/schemas/common'
+import { sdkToolCallsToOpenaiDeltas } from '@/serve/adapters/openai/tool-calls'
 import {
   buildUsage,
   chatCompletionChunk,
   chatCompletionResponse,
   chatCompletionUsageChunk,
   type ChatCompletionDelta
-} from '../adapters/openai/chat-shapes.js'
+} from '@/serve/adapters/openai/chat-shapes'
 
 interface PreparedRequest extends SdkChatArgs {
   sdkModelId: string
