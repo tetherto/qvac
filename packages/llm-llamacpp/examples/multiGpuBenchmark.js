@@ -154,7 +154,7 @@ function printSummary (results) {
 
 async function main () {
   console.log('Multi-GPU Split Mode Benchmark')
-  console.log('Compares: single GPU vs layer parallelism vs tensor parallelism')
+  console.log('Compares: single GPU vs layer parallelism vs row (legacy) vs tensor parallelism')
   console.log('')
   console.log('Usage: bare examples/multiGpuBenchmark.js [options]')
   console.log('Options:')
@@ -199,8 +199,15 @@ async function main () {
       config: { ...baseConfig, 'split-mode': 'layer', 'tensor-split': tensorSplit }
     },
     {
-      label: 'Tensor parallelism (row)',
+      label: 'Tensor parallelism (row, legacy)',
       config: { ...baseConfig, 'split-mode': 'row', 'tensor-split': tensorSplit }
+    },
+    {
+      // ctx_size is already pinned in baseConfig, which matters here: auto-fit
+      // is disabled in tensor mode, so an unset ctx_size would default to the
+      // model's full trained context and skew the comparison (or OOM).
+      label: 'Tensor parallelism (tensor, meta device)',
+      config: { ...baseConfig, 'split-mode': 'tensor', 'tensor-split': tensorSplit }
     }
   ]
 
