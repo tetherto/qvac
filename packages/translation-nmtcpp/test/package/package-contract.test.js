@@ -30,6 +30,7 @@ const REQUIRED_FILES = [
   'test/mobile/integration-runtime.cjs'
 ]
 const OPTIONAL_MODULES = ['bare-fetch', '@qvac/registry-client']
+const LAZY_DEV_OPTIONAL_MODULES = new Set(['@qvac/registry-client'])
 const TRANSITIVE_MISSING_MODULE = 'translation-nmtcpp-transitive-missing'
 const NODE_BARE_MODULE_SHIM = `
 const Module = require('node:module')
@@ -106,6 +107,7 @@ function assertFileImportsDeclared(packageRoot, filePath, declaredModules) {
     .filter(isExternalModule)
     .forEach((specifier) => {
       const moduleName = packageNameFromSpecifier(specifier)
+      if (LAZY_DEV_OPTIONAL_MODULES.has(moduleName)) return
       assert.ok(declaredModules.has(moduleName), `${filePath} declares ${moduleName}`)
     })
 }
@@ -295,9 +297,11 @@ test('packed tarball preserves the public package contract', () => {
     assert.equal(packageJson.devDependencies['bare-process'], undefined)
     assert.equal(packageJson.devDependencies.brittle, undefined)
     assert.equal(packageJson.peerDependencies['bare-fetch'], '^3.0.1')
-    assert.equal(packageJson.peerDependencies['@qvac/registry-client'], '^0.4.0')
+    assert.equal(packageJson.peerDependencies['@qvac/registry-client'], undefined)
+    assert.equal(packageJson.dependencies['@qvac/registry-client'], undefined)
+    assert.equal(packageJson.devDependencies['@qvac/registry-client'], '^0.6.1')
     assert.equal(packageJson.peerDependenciesMeta['bare-fetch'].optional, true)
-    assert.equal(packageJson.peerDependenciesMeta['@qvac/registry-client'].optional, true)
+    assert.equal(packageJson.peerDependenciesMeta['@qvac/registry-client'], undefined)
     assertDeclaredImports(installedRoot, packageJson, packedFiles)
     assertRuntimeProbe(consumerRoot, installedRoot)
     assertOptionalDependencyErrors(consumerRoot)

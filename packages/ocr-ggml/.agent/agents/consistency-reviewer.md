@@ -40,7 +40,7 @@ cat packages/translation-nmtcpp/index.js
 
 Also check `package.json` scripts and structure of both reference packages.
 
-If the changed package is a different type (SDK/TypeScript vs addon/C++), read the appropriate reference instead (e.g., `packages/qvac-sdk` for TypeScript packages).
+If the changed package is a different type (SDK/TypeScript vs addon/C++), read the appropriate reference instead (e.g., `packages/sdk` for TypeScript packages).
 
 ### Step 4: Consistency review checklist
 

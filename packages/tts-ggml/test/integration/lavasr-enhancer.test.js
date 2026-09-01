@@ -40,6 +40,12 @@ const isMobile = platform === 'ios' || platform === 'android'
 // fallback from a failure to a warning (e.g. a Linux host with no Vulkan SDK).
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 const RELAX = proc.env && proc.env.QVAC_TTS_GPU_SMOKE_RELAX === '1'
+const GPU_BACKEND_IDS = { metal: 1, cuda: 2, vulkan: 3, opencl: 4 }
+// CI rows whose prebuild bundles more than one usable GPU backend (the linux
+// runners carry CUDA and Vulkan) pin the engine cascade through
+// TTS_CPP_GPU_BACKEND; the enhancer assertion expects whatever the row pinned
+// and falls back to the platform's cascade default when unset.
+const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 
 const ENHANCED_RATE = 48000
 const PARLER_NATIVE_RATE = 44100
@@ -71,8 +77,9 @@ function backendIdToName(id) {
   }
 }
 
-// Platforms that wire a GPU backend into tts-cpp's vcpkg port (default-features):
-// darwin/ios -> metal; linux/win32 -> vulkan; android -> vulkan + opencl.
+// Platforms that wire a GPU backend into tts-cpp's vcpkg port:
+// darwin/ios -> metal; linux/win32 -> vulkan (linux-x64 prebuilds also bundle
+// cuda); android -> vulkan + opencl.
 function expectsGpu() {
   return (
     platform === 'darwin' ||
@@ -81,6 +88,10 @@ function expectsGpu() {
     platform === 'win32' ||
     platform === 'android'
   )
+}
+
+function expectedDesktopEnhancerBackendId() {
+  return GPU_BACKEND_IDS[PINNED_GPU_BACKEND] || GPU_BACKEND_IDS.vulkan
 }
 
 // Strict check that the LavaSR *enhancer* network engaged the GPU. Reads the
@@ -121,7 +132,12 @@ function assertEnhancerGpuBackend(t, stats) {
   if (platform === 'darwin' || platform === 'ios') {
     t.is(id, 1, `enhancer/${platform}: expected Metal backendId=1, got ${backendIdToName(id)}`)
   } else if (platform === 'linux' || platform === 'win32') {
-    t.is(id, 3, `enhancer/${platform}: expected Vulkan backendId=3, got ${backendIdToName(id)}`)
+    const expectedId = expectedDesktopEnhancerBackendId()
+    t.is(
+      id,
+      expectedId,
+      `enhancer/${platform}: expected ${backendIdToName(expectedId)} backendId=${expectedId}, got ${backendIdToName(id)}`
+    )
   } else if (platform === 'android') {
     t.ok(
       id === 3 || id === 4,

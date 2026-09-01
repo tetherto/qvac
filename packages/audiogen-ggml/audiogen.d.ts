@@ -1,14 +1,9 @@
-/**
- * Flat native configuration object, read 1:1 by the C++ JSAdapter
- * (buildAcestepConfig). Either `modelDir` (auto-classify the four GGUFs) or the
- * explicit per-stage paths are set. The numeric/bool fields are REQUIRED by the
- * native side (it carries no defaults); the high-level class fills them in.
- */
 export interface AudioGenConfigurationParams {
     engineType?: string;
     modelDir?: string;
     textEncModelPath?: string;
     lmModelPath?: string;
+    synthModelPath?: string;
     ditModelPath?: string;
     vaeModelPath?: string;
     inferenceSteps?: number;
@@ -59,6 +54,7 @@ export interface AudioGenJobData {
     bpm?: number;
     keyscale?: string;
     timesignature?: string;
+    augmentCaptionWithMetadata?: boolean;
     duration?: number;
     lmTemperature?: number;
     lmTopP?: number;
@@ -74,6 +70,9 @@ export interface AudioGenJobData {
     taskType?: string;
     audioCoverStrength?: number;
     coverNoiseStrength?: number;
+    maxFrames?: number;
+    inferenceSteps?: number;
+    cfgScale?: number;
     editOperations?: AudioEditOperationJobData[];
 }
 /** Native output event: (handle, event, data, error). */

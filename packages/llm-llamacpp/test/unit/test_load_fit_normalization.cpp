@@ -58,8 +58,9 @@ TEST(LoadFitSnapshotTest, CapturesEveryFitAffectingCommonParam) {
   params.cache_type_k = GGML_TYPE_Q8_0;
   params.cache_type_v = GGML_TYPE_Q4_0;
   params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
-  params.use_mmap = false;
-  params.use_mlock = true;
+  // mlock without mmap: exercises both snapshot mappings at once
+  // (useMmap = false, useMlock = true).
+  params.load_mode = LLAMA_LOAD_MODE_MLOCK;
   params.no_kv_offload = true;
   params.no_op_offload = true;
   params.swa_full = true;
@@ -467,9 +468,8 @@ TEST_F(
   EXPECT_EQ(result.fitSnapshot.typeV, static_cast<int32_t>(GGML_TYPE_Q8_0));
 }
 
-TEST_F(LoadFitNormalizationTest, FinetuneAndDiscardOutputsRemainExplicit) {
+TEST_F(LoadFitNormalizationTest, FinetuneOutputsRemainExplicit) {
   auto config = baseConfig();
-  config["n_discarded"] = "64";
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf",
       std::move(config),
@@ -484,7 +484,6 @@ TEST_F(LoadFitNormalizationTest, FinetuneAndDiscardOutputsRemainExplicit) {
   EXPECT_EQ(result.params.n_ctx, 256);
   EXPECT_EQ(result.params.n_batch, 64);
   EXPECT_EQ(result.params.n_ubatch, 16);
-  EXPECT_EQ(result.configuredNDiscarded, 64);
 }
 
 TEST_F(LoadFitNormalizationTest, MissingDeviceKeepsLegacyErrorMapping) {
@@ -504,9 +503,9 @@ TEST_F(LoadFitNormalizationTest, MissingDeviceKeepsLegacyErrorMapping) {
   }
 }
 
-TEST_F(LoadFitNormalizationTest, InvalidDiscardKeepsLegacyErrorMapping) {
+TEST_F(LoadFitNormalizationTest, RetiredDiscardKeyIsRejectedAsUnknownArgument) {
   auto config = baseConfig();
-  config["n_discarded"] = "not-a-number";
+  config["n_discarded"] = "64";
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
         "/tmp/model.gguf",
@@ -514,11 +513,11 @@ TEST_F(LoadFitNormalizationTest, InvalidDiscardKeepsLegacyErrorMapping) {
         metadata_,
         {},
         backend({.type = backend_selection::CPU, .name = "none"})));
-    FAIL() << "invalid n_discarded must throw";
+    FAIL() << "retired n_discarded key must throw";
   } catch (const qvac_errors::StatusError& error) {
     EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
-    EXPECT_THAT(
-        error.what(), ::testing::HasSubstr("invalid n_discarded value"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("n-discarded"));
   }
 }
 

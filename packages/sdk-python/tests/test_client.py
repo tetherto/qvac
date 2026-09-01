@@ -83,7 +83,7 @@ def test_resolve_command_derives_from_sdk_dir(monkeypatch) -> None:
     monkeypatch.delenv("QVAC_WORKER_PATH", raising=False)
     monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
     bare, worker = _resolve_command(None, None, "/sdk")
-    assert Path(worker) == Path("/sdk/dist/server/worker.js")
+    assert Path(worker) == Path("/sdk/dist/src/worker/index.js")
     assert Path(bare) == Path(
         f"/sdk/node_modules/bare-runtime-{_bare_runtime_package_suffix()}/bin/"
         f"{_bare_executable_name()}"
@@ -95,7 +95,7 @@ def test_resolve_command_sdk_dir_env_var(monkeypatch) -> None:
     monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
     monkeypatch.setenv("QVAC_SDK_DIR", "/env-sdk")
     bare, worker = _resolve_command(None, None, None)
-    assert Path(worker) == Path("/env-sdk/dist/server/worker.js")
+    assert Path(worker) == Path("/env-sdk/dist/src/worker/index.js")
 
 
 def test_resolve_command_uses_bundled_wheel(monkeypatch, tmp_path) -> None:
@@ -104,7 +104,9 @@ def test_resolve_command_uses_bundled_wheel(monkeypatch, tmp_path) -> None:
     # client __file__ and assert it wins even when an sdk_dir is also passed.
     monkeypatch.delenv("QVAC_WORKER_PATH", raising=False)
     monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
-    bundled_worker = tmp_path / "_bundle" / "worker" / "dist" / "server" / "worker.js"
+    bundled_worker = (
+        tmp_path / "_bundle" / "worker" / "dist" / "src" / "worker" / "index.js"
+    )
     bundled_bare = tmp_path / "_bundle" / "runtime" / _bare_executable_name()
     bundled_worker.parent.mkdir(parents=True)
     bundled_worker.write_text("")
@@ -128,7 +130,9 @@ def test_resolve_command_uses_bundled_bare_exe_on_windows(
     )
     monkeypatch.delenv("QVAC_WORKER_PATH", raising=False)
     monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
-    bundled_worker = tmp_path / "_bundle" / "worker" / "dist" / "server" / "worker.js"
+    bundled_worker = (
+        tmp_path / "_bundle" / "worker" / "dist" / "src" / "worker" / "index.js"
+    )
     bundled_bare = tmp_path / "_bundle" / "runtime" / "bare.exe"
     bundled_worker.parent.mkdir(parents=True)
     bundled_worker.write_text("")
@@ -160,10 +164,10 @@ def test_resolve_command_uses_managed_worker_cache(monkeypatch, tmp_path) -> Non
     monkeypatch.delenv("QVAC_SDK_DIR", raising=False)
     monkeypatch.setenv("QVAC_WORKER_HOME", str(tmp_path))
     root = tmp_path / SDK_VERSION / "node_modules" / "@qvac" / "sdk"
-    (root / "dist" / "server").mkdir(parents=True)
-    (root / "dist" / "server" / "worker.js").write_text("")
+    (root / "dist" / "src" / "worker").mkdir(parents=True)
+    (root / "dist" / "src" / "worker" / "index.js").write_text("")
     bare, worker = _resolve_command(None, None, None)
-    assert worker == str(root / "dist" / "server" / "worker.js")
+    assert worker == str(root / "dist" / "src" / "worker" / "index.js")
     # as_posix() so the tail check is separator-agnostic (backslashes on Windows).
     assert (
         Path(bare)
@@ -180,14 +184,14 @@ def test_resolve_command_uses_global_npm_when_present(monkeypatch, tmp_path) -> 
     monkeypatch.delenv("QVAC_SDK_DIR", raising=False)
     monkeypatch.setenv("QVAC_WORKER_HOME", str(tmp_path / "empty-cache"))
     global_root = tmp_path / "global" / "@qvac" / "sdk"
-    (global_root / "dist" / "server").mkdir(parents=True)
-    (global_root / "dist" / "server" / "worker.js").write_text("")
+    (global_root / "dist" / "src" / "worker").mkdir(parents=True)
+    (global_root / "dist" / "src" / "worker" / "index.js").write_text("")
     (global_root / "package.json").write_text(f'{{"version": "{SDK_VERSION}"}}')
     monkeypatch.setattr(
         "tetherto.qvac_sdk.client._npm_global_sdk_root", lambda: global_root
     )
     _, worker = _resolve_command(None, None, None)
-    assert worker == str(global_root / "dist" / "server" / "worker.js")
+    assert worker == str(global_root / "dist" / "src" / "worker" / "index.js")
 
 
 def test_install_worker_runs_npm_with_pinned_spec(monkeypatch, tmp_path) -> None:

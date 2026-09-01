@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 const SHARDED_URL =
   'https://huggingface.co/opaninakuffo/gte-large-fp16-sharded/resolve/main/gte-large_fp16-00003-of-00005.gguf'

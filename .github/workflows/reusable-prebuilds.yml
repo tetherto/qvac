@@ -6,7 +6,7 @@
 # and MODEL_S3_BUCKET.
 #
 # Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
-# llm-llamacpp, nmtcpp, onnx, parakeet, tts-ggml,
+# llm-llamacpp, nmtcpp, parakeet, tts-ggml,
 # whispercpp. All prebuild workflows in the monorepo
 # now route through this reusable.
 name: "Prebuilds (reusable)"
@@ -27,8 +27,13 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      # Artifact identity is DERIVED from the package (basename of `workdir`),
-      # never passed in: the old prefix table collided and yielded ambiguous downloads.
+      # Artifact identity is otherwise DERIVED from the package (basename of workdir);
+      # this optional prefix is retained for legacy consumers that still pass it.
+      artifact-name-prefix:
+        description: "Optional prefix for legacy per-matrix artifact globbing. Empty = derived per-package names."
+        type: string
+        required: false
+        default: ""
       linux-extra-packages:
         description: "Extra apt packages to install on linux runners"
         type: string
@@ -55,10 +60,38 @@ on:
         required: false
         default: false
       rocm-version:
-        description: "TheRock ROCm dist tarball version used when include-rocm is set"
+        description: >-
+          TheRock ROCm dist tarball version used when include-rocm is set.
+          Must be updated together with rocm-gfx and rocm-sha256 so the pin
+          matches setup-rocm's defaults and /opt/rocm/.qvac-rocm on self-hosted
+          linux-x64 images. Passing version alone would keep the action's
+          default sha256 and miss the host-baked stamp.
         type: string
         required: false
         default: "7.13.0"
+      rocm-gfx:
+        description: "AMD GPU arch target forwarded to setup-rocm when include-rocm is set"
+        type: string
+        required: false
+        default: "gfx1151"
+      rocm-sha256:
+        description: >-
+          Expected SHA-256 of the TheRock dist tarball, forwarded to setup-rocm.
+          Must match rocm-version/rocm-gfx. Leave unset to use this default;
+          do not pass an empty string (that skips integrity verification).
+        type: string
+        required: false
+        default: "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
+      include-cuda:
+        description: >-
+          Install a pinned CUDA toolkit on the linux-x64 build so a consumer's
+          speech-cpp cuda feature compiles the ggml CUDA backend. No NVIDIA GPU
+          is needed on the runner (compile-only). Only affects the linux-x64
+          job; everything else is unchanged. Enable the consumer's CUDA cmake
+          option via platform-cmake-defines (e.g. `linux-x64: -D ENABLE_CUDA=ON`).
+        type: boolean
+        required: false
+        default: false
       extra-cmake-defines:
         description: >-
           Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
@@ -67,7 +100,7 @@ on:
         default: ""
       platform-cmake-defines:
         description: >-
-          Platform-conditional cmake defines, one entry per line in `<platform>: <defines>` form. The matched platform's defines are appended after `extra-cmake-defines`, so they can override common defines if needed. Platforms without an entry contribute nothing. Example: #magic___^_^___line
+          Platform-conditional cmake defines, one entry per line in `<platform>: <defines>` or `<platform>-<arch>: <defines>` form. The matched platform's defines are appended after `extra-cmake-defines`, then the matched platform-arch defines after those, so more specific entries can override broader ones. Platforms without an entry contribute nothing. Example: #magic___^_^___line
             platform-cmake-defines: |
               darwin: -D WHISPER_USE_METAL=ON
               ios: -D WHISPER_USE_METAL=ON
@@ -93,11 +126,24 @@ on:
         type: string
         required: false
         default: ""
+      fabric-overlay-artifact:
+        description: >-
+          When set, download this workflow-run artifact after npm install and overlay
+          its contents into node_modules/@qvac/fabric before bare-make generate.
+          Used by npm-runtime consumers on fabric-stack PRs.
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Cross-run reuse gate (reuse-workflow-file): if this PR push didn't touch the
   # package's native tree, re-publish its prior prebuilds-<pkg> and skip the build.
   detect-reuse:
@@ -142,7 +188,7 @@ jobs:
           artifact-name: prebuilds-${{ steps.pkg.outputs.name }}
 
   prebuild:
-    needs: detect-reuse
+    needs: [detect-reuse, runner_names]
     if: needs.detect-reuse.outputs.reuse_hit != 'true'
     # Backstop so a hung leg can't hold the matrix up to GitHub's 6h cap, which
     # would block every downstream `needs: prebuild` job. Real legs finish well under.
@@ -158,36 +204,43 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
           - os: ubuntu-22.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
             platform: linux
             arch: arm64
           - os: ubuntu-24.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404 }}
             platform: android
             arch: arm64
           - os: macos-15
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
             platform: ios
             arch: arm64
           - os: macos-15
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator
           - os: macos-15
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
             platform: ios
             arch: x64
             tags: -simulator
             flags: --simulator
           - os: macos-15
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
             platform: darwin
             arch: arm64
           - os: macos-15-intel
+            runner: ${{ needs.runner_names.outputs.macos_15_intel }}
             platform: darwin
             arch: x64
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
@@ -318,8 +371,17 @@ jobs:
       - if: ${{ inputs.include-rocm && matrix.platform == 'linux' && matrix.arch == 'x64' }}
         name: Setup ROCm SDK for HIP cross-compile
         uses: ./.github/actions/setup-rocm
+        # Forward the full pin. setup-rocm matches /opt/rocm/.qvac-rocm against
+        # gfx + version + sha256 together; a partial `with:` would override only
+        # some defaults and miss the host-baked SDK (or skip sha256 verify).
         with:
           rocm-version: ${{ inputs.rocm-version }}
+          gfx: ${{ inputs.rocm-gfx }}
+          sha256: ${{ inputs.rocm-sha256 }}
+
+      - if: ${{ inputs.include-cuda && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Setup CUDA toolkit for nvcc compile
+        uses: ./.github/actions/setup-cuda
 
       - if: ${{ inputs.include-vulkan-sdk && matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path (Windows)
@@ -340,6 +402,23 @@ jobs:
         shell: bash
         run: npm install
 
+      - if: ${{ inputs.fabric-overlay-artifact != '' }}
+        name: Download fabric-prebuilds for overlay
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - if: ${{ inputs.fabric-overlay-artifact != '' }}
+        name: Overlay PR @qvac/fabric prebuilds
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          tags: ${{ matrix.tags || '' }}
+
       - if: ${{ inputs.setup-rust-toolchain }}
         name: Setup Rust toolchain
         uses: tetherto/qvac/.github/actions/setup-rust-prebuild@1225268a5953ea733a30dad7d3d9581073fb03da
@@ -351,18 +430,13 @@ jobs:
         shell: bash
         env:
           MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
           EXTRA_DEFINES: ${{ inputs.extra-cmake-defines }}
           PLATFORM_DEFINES_MAP: ${{ inputs.platform-cmake-defines }}
         run: |
-          DEFINES="-D BUILD_TESTING=OFF"
-          if [ "$MATRIX_PLATFORM" = "android" ]; then
-            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
-          fi
-          if [ -n "$EXTRA_DEFINES" ]; then
-            DEFINES="$DEFINES $EXTRA_DEFINES"
-          fi
-          if [ -n "$PLATFORM_DEFINES_MAP" ]; then
-            LINE=$(echo "$PLATFORM_DEFINES_MAP" | grep -E "^[[:space:]]*${MATRIX_PLATFORM}[[:space:]]*:" || true)
+          append_mapped_defines() {
+            KEY="$1"
+            LINE=$(echo "$PLATFORM_DEFINES_MAP" | grep -E "^[[:space:]]*${KEY}[[:space:]]*:" || true)
             if [ -n "$LINE" ]; then
               VALUE="${LINE#*:}"
               VALUE="${VALUE#"${VALUE%%[![:space:]]*}"}"
@@ -371,6 +445,17 @@ jobs:
                 DEFINES="$DEFINES $VALUE"
               fi
             fi
+          }
+          DEFINES="-D BUILD_TESTING=OFF"
+          if [ "$MATRIX_PLATFORM" = "android" ]; then
+            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
+          fi
+          if [ -n "$EXTRA_DEFINES" ]; then
+            DEFINES="$DEFINES $EXTRA_DEFINES"
+          fi
+          if [ -n "$PLATFORM_DEFINES_MAP" ]; then
+            append_mapped_defines "$MATRIX_PLATFORM"
+            append_mapped_defines "$MATRIX_PLATFORM-$MATRIX_ARCH"
           fi
           echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
 
@@ -585,8 +670,8 @@ jobs:
           fi
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
-      # Pattern-scoped to THIS package's legs. Downloading everything raced in a
-      # multi-package run, folding in another package's artifacts.
+      # Pattern-scoped to THIS package's derived legs. A prefix-named or
+      # fabric-overlay artifact won't match, so it is never folded into the bundle.
       - name: Download this package's build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:

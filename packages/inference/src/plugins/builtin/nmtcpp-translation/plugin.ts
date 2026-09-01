@@ -66,7 +66,6 @@ function createNmtModel(
   registerAddonLogger(modelId, ModelType.nmtcppTranslation, logger)
 
   const {
-    mode,
     from,
     to,
     engine,
@@ -120,7 +119,7 @@ function createNmtModel(
 
   const model = new TranslationNmtcpp({
     files,
-    params: { mode, srcLang: from, dstLang: to },
+    params: { srcLang: from, dstLang: to },
     config,
     logger,
     opts: { stats: true }
@@ -186,9 +185,10 @@ export const nmtPlugin = definePlugin({
       requestSchema: translateRequestSchema,
       responseSchema: translateResponseSchema,
       streaming: true,
-      // nmtcpp does not expose a cancel surface today — we fall
-      // back to soft-cancel (stop yielding, drop result, skip
-      // post-processing; the C++ work runs to completion).
+      // nmtcpp 0.7.0 exposes response.cancel(), but the translate op is not
+      // wired for addon-level cancellation yet — we keep soft-cancel (stop
+      // yielding, drop result, skip post-processing; the C++ work may run to
+      // completion).
       cancel: { scope: 'none' },
 
       handler: async function* (request) {

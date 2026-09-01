@@ -480,7 +480,6 @@ test('authorize-pr: drafts are denied before internal or fork trust checks', () 
 // on fork-approval (fork-ci) + authorize-pr with pod-specific label inputs.
 const sdkE2eWorkflows = [
   '.github/workflows/on-pr-test-sdk.yml',
-  '.github/workflows/on-pr-bare-sdk-e2e.yml',
 ]
 
 test('sdk e2e: run gate uses fork-approval + authorize-pr, never hardcoded verified', () => {
@@ -633,7 +632,6 @@ test('all ci-router callers re-run when a draft becomes ready', () => {
     'on-pr-llm-llamacpp.yml',
     'on-pr-model-fit.yml',
     'on-pr-ocr-ggml.yml',
-    'on-pr-onnx.yml',
     'on-pr-translation-nmtcpp.yml',
     'on-pr-tts-ggml.yml',
     'on-pr-vla.yml',
@@ -2066,4 +2064,50 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
     workflow,
     /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
   )
+})
+
+// --- SDK-only GitHub Releases policy ----------------------------------------
+// Only the SDK cuts GitHub Releases; every other package cuts a plain version
+// tag via create-release-tag.yml, keeping the Releases page SDK-focused. Adding
+// a caller here is a deliberate policy decision, not a drive-by edit.
+const GITHUB_RELEASE_REUSABLE = './.github/workflows/create-github-release.yml'
+const ALLOWED_RELEASE_CALLERS = ['.github/workflows/publish-sdk.yml']
+
+test('release policy: only the SDK workflow calls create-github-release.yml', () => {
+  const callers = [
+    ...new Set(callersOf(GITHUB_RELEASE_REUSABLE).map(({ path }) => path)),
+  ]
+  assert.deepEqual(
+    callers.sort(),
+    [...ALLOWED_RELEASE_CALLERS].sort(),
+    'non-SDK packages must use create-release-tag.yml (tag only, no GitHub Release)',
+  )
+})
+
+// Workflows allowed to touch GitHub Releases directly, each SDK-owned so the
+// Releases page stays SDK-only. Adding an entry is a deliberate policy decision.
+//  - create-github-release.yml: the reusable itself (softprops path); its sole
+//    caller is asserted above.
+//  - build-sdk-python-fat-wheels.yml: attaches the Python SDK fat wheels as
+//    assets to the SDK's own sdk-v<version> release, and (manual backfill only)
+//    drafts that sdk-v* tag if missing. Invoked by publish-sdk.yml.
+const RELEASE_WRITE_EXEMPT = new Set([
+  '.github/workflows/create-github-release.yml',
+  '.github/workflows/build-sdk-python-fat-wheels.yml',
+])
+
+test('release policy: no workflow cuts a GitHub Release outside the SDK surface', () => {
+  const offenders = []
+  for (const path of workflowPaths()) {
+    if (RELEASE_WRITE_EXEMPT.has(path)) continue
+    // Strip comments so prose like "no GitHub Release" cannot false-positive.
+    const code = withoutComments(read(path))
+    if (/softprops\/action-gh-release@/.test(code)) {
+      offenders.push(`${path}: uses softprops/action-gh-release directly`)
+    }
+    if (/gh release create\b/.test(code)) {
+      offenders.push(`${path}: calls 'gh release create'`)
+    }
+  }
+  assert.deepEqual(offenders, [])
 })

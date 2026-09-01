@@ -1,26 +1,19 @@
 import { type Request } from '@/schemas/index'
 import { dispatchPluginReply, dispatchPluginStream } from '@/handlers/plugin-dispatch'
-import { getModelEntry } from '@/runtime/model-registry'
 import { handleLoadModel } from '@/handlers/load-model/index'
-import { handleLoadModelDelegated } from '@/p2p/load-model-delegated'
-import { handleCompletionStreamDelegated } from '@/p2p/completion-stream-delegated'
 import { handleUnloadModel } from '@/handlers/unload-model'
-import { handleUnloadModelDelegated } from '@/p2p/unload-model-delegated'
 import { handleLoggingStream } from '@/handlers/logging-stream'
 import { cancelHandler } from '@/handlers/cancelHandler'
-import { provideHandler } from '@/p2p/provideHandler'
-import { stopProvideHandler } from '@/p2p/stopProvideHandler'
 import { handleRag } from '@/rag/handler'
 import { handleDeleteCache } from '@/handlers/delete-cache'
 import { handleDownloadAsset } from '@/handlers/download-asset'
 import { handleGetModelInfo } from '@/handlers/get-model-info'
 import { handleGetLoadedModelInfo } from '@/handlers/get-loaded-model-info'
 import { handleGetSystemResources } from '@/handlers/get-system-resources'
+import { handleAssessModelFit } from '@/handlers/assess-model-fit'
 import { handleHeartbeat } from '@/handlers/heartbeat'
-import { handleHeartbeatDelegated } from '@/p2p/heartbeat-delegated'
 import { handleFinetune } from '@/handlers/finetune'
 import { handleCompletionOrchestrate } from '@/handlers/completion-orchestrate'
-import { handleCancelDelegated } from '@/p2p/cancel-delegated'
 import { handlePluginInvoke, handlePluginInvokeStream } from '@/handlers/plugin-invoke'
 import {
   handleModelRegistryList,
@@ -63,63 +56,26 @@ function finetuneSupportsProgress(request: Request): boolean {
   return ['start', 'resume', undefined].includes(request.operation)
 }
 
-function isModelDelegated(request: Request): boolean {
-  if (!('modelId' in request)) return false
-  const entry = getModelEntry(request.modelId as string)
-  return entry?.isDelegated ?? false
-}
-
-/**
- * Should the cancel be forwarded to a delegated provider?
- *
- * The cancel envelope has two operations:
- *
- *  - `request` — targeted cancel by `requestId`. Always handled locally: the
- *    process-singleton `RequestRegistry` is the source of truth for active
- *    requests (delegated handlers register their own requests on it the same
- *    way local ones do), so a `requestId` cancel always lands on the right
- *    place without a hop through the provider. Returning `false` keeps it on
- *    the local cancel handler, which routes through the registry and (for
- *    downloads) the `markClearCacheForRequest` helper.
- *
- *  - `broad` — abort every in-flight request on a model. Forwarded to the
- *    delegated provider iff the targeted model itself is delegated; the
- *    provider then runs the same broad-cancel sweep on its side. Broad cancels
- *    for non-delegated models stay local.
- */
-function isCancelDelegated(request: Request): boolean {
-  if (request.type !== 'cancel') return false
-  if (request.operation !== 'broad') return false
-  return isModelDelegated(request)
-}
-
 export const registry: Record<string, HandlerEntry> = {
   // Reply
   heartbeat: {
     type: 'reply',
-    handler: handleHeartbeat,
-    delegatedHandler: handleHeartbeatDelegated,
-    isDelegated: (r) => r.type === 'heartbeat' && !!r.delegate
+    handler: handleHeartbeat
   },
   unloadModel: {
     type: 'reply',
-    handler: handleUnloadModel,
-    delegatedHandler: handleUnloadModelDelegated,
-    isDelegated: isModelDelegated
+    handler: handleUnloadModel
   },
   embed: { type: 'reply', pluginOp: true, handler: pluginReply('embed') },
   cancel: {
     type: 'reply',
-    handler: cancelHandler,
-    delegatedHandler: handleCancelDelegated,
-    isDelegated: isCancelDelegated
+    handler: cancelHandler
   },
-  provide: { type: 'reply', handler: provideHandler },
-  stopProvide: { type: 'reply', handler: stopProvideHandler },
   deleteCache: { type: 'reply', handler: handleDeleteCache },
   getModelInfo: { type: 'reply', handler: handleGetModelInfo },
   getLoadedModelInfo: { type: 'reply', handler: handleGetLoadedModelInfo },
   getSystemResources: { type: 'reply', handler: handleGetSystemResources },
+  assessModelFit: { type: 'reply', handler: handleAssessModelFit },
   pluginInvoke: { type: 'reply', handler: handlePluginInvoke },
   modelRegistryList: { type: 'reply', handler: handleModelRegistryList },
   modelRegistrySearch: { type: 'reply', handler: handleModelRegistrySearch },
@@ -130,8 +86,6 @@ export const registry: Record<string, HandlerEntry> = {
   loadModel: {
     type: 'reply',
     handler: handleLoadModel,
-    delegatedHandler: handleLoadModelDelegated,
-    isDelegated: (r) => r.type === 'loadModel' && !!r.delegate,
     supportsProgress: true
   },
   downloadAsset: { type: 'reply', handler: handleDownloadAsset, supportsProgress: true },
@@ -142,14 +96,9 @@ export const registry: Record<string, HandlerEntry> = {
   completionStream: {
     type: 'stream',
     pluginOp: true,
-    handler: pluginStream('completionStream'),
-    delegatedHandler: handleCompletionStreamDelegated,
-    isDelegated: isModelDelegated
+    handler: pluginStream('completionStream')
   },
 
-  // Deliberately no delegated handler: tool callbacks execute code on the
-  // client machine, so only the user's own local worker may orchestrate
-  // (see completionOrchestrateResponseSchema's contract note).
   completionOrchestrate: { type: 'duplex', handler: handleCompletionOrchestrate },
 
   batchCompletionStream: {
@@ -166,6 +115,8 @@ export const registry: Record<string, HandlerEntry> = {
   audioGenStream: { type: 'stream', pluginOp: true, handler: pluginStream('audioGenStream') },
   videoStream: { type: 'stream', pluginOp: true, handler: pluginStream('videoStream') },
   upscaleStream: { type: 'stream', pluginOp: true, handler: pluginStream('upscaleStream') },
+  worldStepStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldStepStream') },
+  worldSceneStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldSceneStream') },
   classify: { type: 'stream', pluginOp: true, handler: pluginStream('classify') },
   loggingStream: { type: 'stream', handler: handleLoggingStream },
   pluginInvokeStream: { type: 'stream', handler: handlePluginInvokeStream },

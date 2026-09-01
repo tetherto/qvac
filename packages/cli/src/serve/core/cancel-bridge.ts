@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ServerResponse } from 'node:http'
 import { cancel } from '@qvac/sdk'
 import type { Logger } from '../../logger.js'
 
@@ -7,7 +7,11 @@ import type { Logger } from '../../logger.js'
  * disconnect (browser tab closed, `fetch().abort()`, network drop)
  * cancels the underlying SDK call promptly.
  *
- * The bridge listens for the `close` event on the incoming request:
+ * The bridge listens for the `close` event on the response stream. Fastify
+ * consumes the request body before a route handler runs, so by the time this
+ * binds, `req` has already emitted `close` and a listener added then never
+ * fires.
+ *
  *  - If the response has already finished (`res.writableEnded`), the
  *    request completed naturally and we skip the cancel — firing one
  *    would log a spurious "no in-flight request matched" line on the
@@ -16,7 +20,7 @@ import type { Logger } from '../../logger.js'
  *    targeted `cancel({ requestId })` so the SDK handler stops
  *    yielding tokens / running inference / fetching bytes.
  *
- * Fire-and-forget by design. `req.on('close')` is synchronous and
+ * Fire-and-forget by design. `res.on('close')` is synchronous and
  * `cancel(...)` runs over RPC; awaiting it inside the listener
  * would block the Node event loop on every disconnect. The `.catch`
  * swallows cancel-after-end races — by the time `close` fires the
@@ -37,7 +41,6 @@ import type { Logger } from '../../logger.js'
  * point through keeps the test fast and free of module-mock plumbing.
  */
 export function bindClientDisconnectCancel(
-  req: IncomingMessage,
   res: ServerResponse,
   requestId: string,
   logger: Logger,
@@ -50,5 +53,5 @@ export function bindClientDisconnectCancel(
       logger.debug(`  cancel-on-disconnect failed for requestId=${requestId}: ${message}`)
     })
   }
-  req.once('close', onClose)
+  res.once('close', onClose)
 }

@@ -44,8 +44,6 @@ In-flight operations started **before** `suspend()` follow the matrix below:
 | P2P / Hyperdrive download | Stalls cleanly | Continues automatically |
 | HTTP download | Bypass — bytes keep flowing | (Already flowing) |
 | Local native inference (e.g. `completion()`) | Runs to completion | n/a |
-| Delegated reply RPC | Stalls | Auto-recovers (subject to delegate `timeout`) |
-| Delegated stream RPC | Severed; consumer iterator hangs silently | Not recovered — re-issue after `resume()` |
 | New operation (e.g. `completion()`, `loadModel()`) | Throws `LIFECYCLE_OPERATION_BLOCKED` | Accepted |
 
 ## Example

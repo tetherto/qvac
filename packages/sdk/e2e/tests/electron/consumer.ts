@@ -11,7 +11,7 @@ import {
   logMqttConnectionSecurity,
   startNodeMemoryPoller,
   type TestDefinition
-} from '@qvac/qvac-test-suite'
+} from '@qvac/test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -46,8 +46,8 @@ import {
   PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
-  SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED
@@ -434,21 +434,33 @@ resources.define('bci', {
 })
 
 resources.define('vision', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
-    ctx_size: 1024,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    ctx_size: 4096,
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
 resources.define('vision-batch', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
     ctx_size: 2048,
     parallel: 2,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+  }
+})
+
+resources.define('vision-upscale', {
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 4096,
+    image_no_upscale: 'off',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
@@ -526,12 +538,12 @@ export const executor = createExecutor({
       'Electron skips diffusion tests because image generation takes too long for the stable Electron pass'
     ),
     new SkipExecutor(
-      /^audio-gen-/,
-      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
+      /^world-/,
+      'Electron skips ABot-World: a walk session needs a dedicated GPU and the 13.3 GB model set is far beyond the stable Electron pass'
     ),
     new SkipExecutor(
-      /^delegated-/,
-      'Electron skips delegated inference tests because provider startup and peer connectivity need separate packaged-app coverage'
+      /^audio-gen-/,
+      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
     ),
     new SkipExecutor(
       /^finetune-/,

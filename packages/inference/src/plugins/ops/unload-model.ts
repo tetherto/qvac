@@ -1,6 +1,7 @@
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { unregisterModel } from '@/runtime/model-registry'
+import { getRequestRegistry } from '@/runtime/index'
 import { unregisterAllLoggingStreams } from '@/runtime/logging-stream-registry'
 import { clearFinetuneRuntimeState } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
 import { unregisterAddonLogger, getEngineLogger } from '@/logging/index'
@@ -19,9 +20,12 @@ export async function unloadModel(params: UnloadModelParams) {
     throw new ModelNotLoadedError(modelId)
   }
 
-  clearFinetuneRuntimeState(modelId)
+  // Cancel and drain the model's requests, then tear down under the admission
+  // barrier so nothing goes active against a model being freed. The barrier is
+  // lifted for us when this resolves.
+  await getRequestRegistry().withModelDraining(modelId, async () => {
+    clearFinetuneRuntimeState(modelId)
 
-  if (!entry.isDelegated) {
     if (entry.local.model.unload) {
       await entry.local.model.unload()
     }
@@ -44,10 +48,10 @@ export async function unloadModel(params: UnloadModelParams) {
         logger.info(`Model storage cleared (${target.kind}): ${target.path}`)
       }
     }
-  }
 
-  unregisterAddonLogger(modelId)
-  unregisterAllLoggingStreams(modelId)
+    unregisterAddonLogger(modelId)
+    unregisterAllLoggingStreams(modelId)
 
-  logger.info(`Model ${modelId} unloaded`)
+    logger.info(`Model ${modelId} unloaded`)
+  })
 }

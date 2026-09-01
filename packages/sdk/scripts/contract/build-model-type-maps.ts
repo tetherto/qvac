@@ -1,5 +1,8 @@
-import { ModelTypeAliases } from '@/schemas/model-types'
-import { ENGINE_TO_ADDON, LEGACY_ENGINE_TO_CANONICAL } from '@/schemas/engine-addon-map'
+import {
+  ModelTypeAliases,
+  ENGINE_TO_ADDON,
+  LEGACY_ENGINE_TO_CANONICAL
+} from '@qvac/inference/surface'
 
 /**
  * JSON export of the model-type resolution maps that `loadModel`'s

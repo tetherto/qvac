@@ -1,11 +1,19 @@
 import { z } from 'zod'
 import type { AbortController } from 'bare-abort-controller'
 import type { ModelProgressUpdate } from '@/schemas/load-model'
-import { modelSrcInputSchema, modelInputToSrcSchema } from '@/schemas/model-src-utils'
+import {
+  modelSrcInputSchema,
+  modelInputToSrcSchema,
+  MODEL_SOURCE_URI_HINT
+} from '@/schemas/model-src-utils'
+
+const ASSET_SRC_DESCRIPTION = `The asset to download and cache: ${MODEL_SOURCE_URI_HINT}.`
 
 const downloadAssetOptionsBaseSchema = z.object({
-  assetSrc: modelSrcInputSchema,
-  seed: z.boolean().optional()
+  assetSrc: modelSrcInputSchema.describe(ASSET_SRC_DESCRIPTION),
+  seed: z.boolean().optional(),
+  requireHttpChecksum: z.boolean().optional(),
+  requireSecureTransport: z.boolean().optional()
 })
 
 export const downloadAssetOptionsSchema = downloadAssetOptionsBaseSchema.transform((data) => ({
@@ -26,6 +34,8 @@ export const downloadAssetOptionsToRequestSchema = downloadAssetOptionsBaseSchem
       withProgress: boolean
       seed: boolean
       requestId?: string
+      requireHttpChecksum?: boolean
+      requireSecureTransport?: boolean
     } = {
       type: 'downloadAsset' as const,
       assetSrc: modelInputToSrcSchema.parse(data.assetSrc),
@@ -33,15 +43,31 @@ export const downloadAssetOptionsToRequestSchema = downloadAssetOptionsBaseSchem
       seed: data.seed ?? false
     }
     if (data.requestId !== undefined) out.requestId = data.requestId
+    if (data.requireHttpChecksum !== undefined) out.requireHttpChecksum = data.requireHttpChecksum
+    if (data.requireSecureTransport !== undefined) {
+      out.requireSecureTransport = data.requireSecureTransport
+    }
     return out
   })
 
 export const downloadAssetRequestSchema = z
   .object({
     type: z.literal('downloadAsset'),
-    assetSrc: z.string(),
+    assetSrc: z.string().describe(ASSET_SRC_DESCRIPTION),
     withProgress: z.boolean().optional(),
     seed: z.boolean().optional(),
+    requireHttpChecksum: z
+      .boolean()
+      .optional()
+      .describe(
+        'Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).'
+      ),
+    requireSecureTransport: z
+      .boolean()
+      .optional()
+      .describe(
+        'Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).'
+      ),
     requestId: z
       .string()
       .min(1)

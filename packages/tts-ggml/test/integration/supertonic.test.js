@@ -94,65 +94,29 @@ test(
         )
         t.ok(typeof result.data.stats.backendId === 'number', 'supertonic stats include backendId')
       }
-    } finally {
-      try {
-        await model.unload()
-      } catch (_e) {}
-    }
-  }
-)
 
-// Coverage note: this exercises the AbortSignal plumbing, not the native
-// mid-flight cancel path. An already-aborted signal makes `run()` short-circuit
-// before `addon.runJob` (the model loads but never synthesizes), so
-// `response.cancel()` interrupting an in-flight native Supertonic job is
-// intentionally NOT covered here. That native teardown leak (cancelling
-// mid-synthesis wedges macOS process exit) is the underlying bug and is tracked
-// as a separate follow-up (see the PR description); restore native cancel
-// coverage once it is fixed.
-test(
-  'Supertonic TTS (ggml): aborting the run via signal rejects the response',
-  { timeout: 600000 },
-  async (t) => {
-    const baseDir = getBaseDir()
-    const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-    if (!download.success) {
-      t.fail(
-        'Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
-      )
-      return
-    }
-
-    const model = await loadSupertonicTTS({
-      supertonicModelPath: download.path,
-      voice: 'F1',
-      language: 'en',
-      useGPU: false
-    })
-    try {
-      // Cancel via an AbortSignal rather than a fixed-delay `response.cancel()`.
-      // The old timer raced synthesis: on fast runners (e.g. the M4 Max GPU
-      // runner) the short clip finished before the 50 ms cancel fired, so the
-      // response resolved and the assertion failed; on slower runners the cancel
-      // landed mid-flight and the native interrupt wedged macOS process teardown.
-      // An already-aborted signal makes QvacResponse reject synchronously
+      // AbortSignal plumbing (previously a standalone test with its own model
+      // load). An already-aborted signal makes QvacResponse reject synchronously
       // (_markAbortPending) with no engine dispatch and no native interrupt, so
-      // this is deterministic regardless of hardware speed.
+      // this is deterministic regardless of hardware speed. Runs AFTER the
+      // successful synth above and MUST be the last engine call — the native
+      // mid-flight cancel-teardown path (that wedges macOS process exit) is
+      // intentionally NOT covered here; restore native cancel coverage once that
+      // bug is fixed.
       const signal = makeAbortedSignal(new Error('cancelled by test'))
-      const response = await model.run({
+      const abortResponse = await model.run({
         type: 'text',
         input: 'Cancel this synthesis call before it completes.',
         signal
       })
-
-      let failed = false
+      let abortFailed = false
       try {
-        await response.await()
+        await abortResponse.await()
       } catch (e) {
-        failed = true
+        abortFailed = true
         console.log('  cancel rejected with: ' + e.message)
       }
-      t.ok(failed, 'aborted supertonic response should reject')
+      t.ok(abortFailed, 'aborted supertonic response should reject')
     } finally {
       try {
         await model.unload()
