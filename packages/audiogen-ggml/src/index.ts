@@ -157,15 +157,29 @@ export interface GenerateOptions {
   referenceAudio?: Float32Array
   /**
    * Source / cover audio (same layout as `referenceAudio`). Required when
-   * `taskType` is `"cover"` or `"cover-nofsq"`.
+   * `taskType` is `"cover"`, `"cover-nofsq"`, or `"lego"`.
    */
   sourceAudio?: Float32Array
   /**
    * Task discriminator. Supported today: `"text2music"` (default) |
-   * `"cover-nofsq"`. `"cover"` (FSQ roundtrip) is accepted but not implemented
-   * in the engine yet.
+   * `"cover-nofsq"` | `"lego"`. `"cover"` (FSQ roundtrip) is accepted but not
+   * implemented in the engine yet. `"lego"` generates a new instrument layer
+   * that follows `sourceAudio` and returns only that layer; it requires the
+   * base DiT variant (turbo and sft are rejected by the engine).
    */
-  taskType?: 'text2music' | 'cover' | 'cover-nofsq'
+  taskType?: 'text2music' | 'cover' | 'cover-nofsq' | 'lego'
+  /**
+   * Lego target layer. Required when `taskType` is `"lego"`; one of
+   * vocals|backing_vocals|drums|bass|guitar|keyboard|percussion|strings|
+   * synth|fx|brass|woodwinds.
+   */
+  track?: string
+  /**
+   * DiT classifier-free guidance scale. 0 (default) resolves automatically:
+   * 1.0 on turbo variants (CFG disabled), 7.0 on base/sft. Values > 1 run
+   * CFG via APG and double the DiT cost per step.
+   */
+  guidanceScale?: number
   /**
    * Fraction of DiT steps that keep the source context (0..1). Default 1.0.
    * Values < 1 are rejected by the engine until context switching lands.
@@ -298,18 +312,10 @@ export interface AudiogenStats {
 }
 
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
-export type AudiogenBackendName =
-  | 'cpu'
-  | 'metal'
-  | 'cuda'
-  | 'vulkan'
-  | 'opencl'
-  | 'other'
+export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'other'
 
 /** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
-export const AUDIOGEN_BACKEND_NAMES: Readonly<
-  Record<number, AudiogenBackendName>
-> = {
+export const AUDIOGEN_BACKEND_NAMES: Readonly<Record<number, AudiogenBackendName>> = {
   0: 'cpu',
   1: 'metal',
   2: 'cuda',
@@ -327,19 +333,13 @@ export function audiogenBackendName(
 }
 
 /** Why a GPU-requested run resolved to the CPU. */
-export type AudiogenGpuFallbackReason =
-  | 'none'
-  | 'not-requested'
-  | 'no-devices'
-  | 'init-failed'
+export type AudiogenGpuFallbackReason = 'none' | 'not-requested' | 'no-devices' | 'init-failed'
 
 /**
  * `AudiogenStats.gpuFallbackReason` codes, named. Codes match
  * `tts_cpp::GpuFallbackReason` in the engine.
  */
-export const AUDIOGEN_GPU_FALLBACK_REASONS: Readonly<
-  Record<number, AudiogenGpuFallbackReason>
-> = {
+export const AUDIOGEN_GPU_FALLBACK_REASONS: Readonly<Record<number, AudiogenGpuFallbackReason>> = {
   0: 'none',
   1: 'not-requested',
   2: 'no-devices',
@@ -432,7 +432,21 @@ function requireMinimaxCfgScale(value: number): number {
   return scale
 }
 
-const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq'])
+const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq', 'lego'])
+const LEGO_TRACKS = new Set([
+  'vocals',
+  'backing_vocals',
+  'drums',
+  'bass',
+  'guitar',
+  'keyboard',
+  'percussion',
+  'strings',
+  'synth',
+  'fx',
+  'brass',
+  'woodwinds'
+])
 const AUDIO_LATENT_RATE = 25
 const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE
 const REPAINT_RANGE_EPSILON_SECONDS = 1e-5
@@ -441,7 +455,7 @@ const FLOW_EDIT_TURBO_VARIANTS = 'turbo-q4, turbo-q8'
 function optionalTaskType(value: string | undefined): string | undefined {
   if (value === undefined) return undefined
   if (typeof value !== 'string' || !GENERATE_TASK_TYPES.has(value)) {
-    throw invalidInput('taskType must be one of text2music|cover|cover-nofsq')
+    throw invalidInput('taskType must be one of text2music|cover|cover-nofsq|lego')
   }
   return value
 }
@@ -554,6 +568,10 @@ function isCoverTask(taskType: string | undefined): boolean {
   return taskType === 'cover' || taskType === 'cover-nofsq'
 }
 
+function taskRequiresSourceAudio(taskType: string | undefined): boolean {
+  return isCoverTask(taskType) || taskType === 'lego'
+}
+
 function invalidInput(message: string): QvacErrorAudioGen {
   return new QvacErrorAudioGen({ code: ERR_CODES.INVALID_INPUT, adds: message })
 }
@@ -587,6 +605,8 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'referenceAudio',
   'sourceAudio',
   'taskType',
+  'track',
+  'guidanceScale',
   'audioCoverStrength',
   'coverNoiseStrength'
 ]
@@ -1072,8 +1092,21 @@ export class AudioGen {
     const taskType = optionalTaskType(opts.taskType)
     const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio')
     const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio')
-    if (isCoverTask(taskType) && (sourceAudio === undefined || sourceAudio.length === 0)) {
+    if (
+      taskRequiresSourceAudio(taskType) &&
+      (sourceAudio === undefined || sourceAudio.length === 0)
+    ) {
       throw invalidInput(`taskType '${taskType}' requires sourceAudio`)
+    }
+    if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
+      throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`)
+    }
+    if (opts.track !== undefined && taskType !== 'lego') {
+      throw invalidInput("track is only valid with taskType 'lego'")
+    }
+    const guidanceScale = optionalFiniteNumber(opts.guidanceScale, 'guidanceScale')
+    if (guidanceScale !== undefined && guidanceScale < 0) {
+      throw invalidInput('guidanceScale must be >= 0 (0 = engine default)')
     }
     return {
       type: 'text',
@@ -1098,6 +1131,8 @@ export class AudioGen {
       referenceAudio,
       sourceAudio,
       taskType,
+      track: opts.track,
+      guidanceScale,
       audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
       coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
     }
