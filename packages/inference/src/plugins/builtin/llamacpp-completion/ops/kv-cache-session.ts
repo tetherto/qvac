@@ -395,10 +395,10 @@ export interface KvCacheSession {
    */
   rollback(turn: TurnHandle): Promise<void>
   /**
-   * Non-destructive counterpart of `rollback` for a pre-mutation failure:
-   * the addon's prefill guards reject before any decode or save, so the
-   * disk cache and its recorded prefix stay valid for the next turn. Only
-   * locks and active-refs are released.
+   * Non-destructive counterpart of `rollback`: a thrown addon overflow or
+   * admission refusal never persists the in-flight turn, so the last
+   * committed disk cache and its recorded prefix stay valid for the next
+   * turn. Releases locks, active-refs, and the deferred retention sweep.
    */
   releaseTurn(turn: TurnHandle): Promise<void>
 
@@ -752,6 +752,7 @@ export function createKvCacheSession(
     releaseCachePath(state.cachePath)
     state.rolledBack = true
     state.releaseWriteLock()
+    if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
   }
 
   async function runRollback(state: InternalTurnState): Promise<void> {

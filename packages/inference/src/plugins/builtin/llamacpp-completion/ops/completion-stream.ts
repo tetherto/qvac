@@ -16,7 +16,10 @@ import {
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
 import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
-import { isAddonContextOverflowError } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
+import {
+  isAddonAdmissionCapRejection,
+  isAddonContextOverflowError
+} from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import {
   decideCachedHistorySlice,
@@ -530,9 +533,9 @@ export async function* completion(
   // flips the turn's internal `committed` flag so this becomes a no-op
   // on the happy path. Scope unwinding is LIFO — registered after the
   // `removeEventListener` defer above so rollback runs before the
-  // listener detach. A pre-mutation overflow keeps the last committed
-  // cache: the prefill guards reject before any decode or save, so
-  // destroying the file would turn a retryable refusal into a cold restart.
+  // listener detach. A thrown addon overflow or admission refusal never
+  // persists the in-flight turn, so the last committed cache is still
+  // valid — destroying it would turn a retryable refusal into a cold restart.
   let preserveCacheOnUnwind = false
   scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
@@ -561,7 +564,8 @@ export async function* completion(
       setActiveResponse
     )
   } catch (error) {
-    preserveCacheOnUnwind = isAddonContextOverflowError(error)
+    preserveCacheOnUnwind =
+      isAddonContextOverflowError(error) || isAddonAdmissionCapRejection(error)
     throw error
   }
   const shouldCommitTurn = shouldCommitCachedTurn({

@@ -36,6 +36,20 @@ export function isAddonContextOverflowError(err: unknown): boolean {
   )
 }
 
+// The continuous scheduler's admission guards (per-sequence cap on KV cells,
+// tokens, or a positive n_predict reservation) reject before any decode or
+// save, but throw the generic InvalidArgument status — recognisable only by
+// their wording. Callers use this to release a turn non-destructively; it is
+// deliberately NOT part of ContextOverflowError classification.
+export function isAddonAdmissionCapRejection(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false
+  const message = (err as { message?: unknown }).message
+  return (
+    typeof message === 'string' &&
+    /ContinuousBatchScheduler::submit: .*per-sequence cap/.test(message)
+  )
+}
+
 export type ContextOverflowSizes = {
   /** The prompt alone, in tokens; unset when the guard reports KV cells. */
   promptTokens?: number

@@ -361,14 +361,13 @@ test('completion: kv-cache still skips the tool block when a retired slide key i
   clearRegistry()
 })
 
-// A prefill-guard overflow rejects before any decode or save, so it must not
-// destroy the last committed cache — the next turn stays warm.
-test('completion: kv-cache survives an overflow rejection between turns', async (t) => {
-  await setIsolatedHome()
-  clearRegistry()
-
-  const modelId = `kvcache-overflow-preserves-${Date.now()}`
-  const calls: RecordedCall[] = []
+// The fake throws on the second non-prefill run, so a refusal between two
+// committed turns can be pinned against the cache bookkeeping.
+function registerSecondTurnThrowingModel(
+  modelId: string,
+  calls: RecordedCall[],
+  thrown: Error
+): void {
   let runCount = 0
   registerModel(modelId, {
     model: {
@@ -382,14 +381,7 @@ test('completion: kv-cache survives an overflow rejection between turns', async 
         })
         if (!opts?.prefill) {
           runCount += 1
-          if (runCount === 2) {
-            throw Object.assign(
-              new Error(
-                '[TextLlm] context overflow at batch prefill step: cached tokens 400 plus prompt tokens 200 exceed the max context tokens 512'
-              ),
-              { code: '[ TextLlmAddon :: ContextOverflow ]' }
-            )
-          }
+          if (runCount === 2) throw thrown
         }
         const written =
           opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
@@ -409,21 +401,75 @@ test('completion: kv-cache survives an overflow rejection between turns', async 
     config: {},
     modelType: ModelType.llamacppCompletion
   })
+}
 
-  const complete = completer(modelId, 'overflow-preserves-key')
+// Turn one commits, turn two is refused by the fake, turn three retries the
+// same history. Returns the refusal and the non-prefill calls for assertion.
+async function runRefusalScenario(modelId: string, calls: RecordedCall[], kvCacheKey: string) {
+  const complete = completer(modelId, kvCacheKey)
   const first = user('Area of a triangle, base 10 height 5?')
   await complete([first])
   const grown = [first, assistant('25.'), user('And base 4 height 3?')]
-  await t.exception(() => complete(grown), /CONTEXT_OVERFLOW/, 'turn two is refused')
+  let refusal: unknown
+  try {
+    await complete(grown)
+  } catch (error) {
+    refusal = error
+  }
   await complete(grown)
+  return { refusal, turnCalls: calls.filter((call) => !call.prefill) }
+}
 
-  const turnCalls = calls.filter((call) => !call.prefill)
-  t.is(turnCalls.length, 3, 'all three turns reached the model')
-  t.is(
-    turnCalls[2]!.messages.length,
-    1,
-    'the retry is warm — it sends the delta, not a re-primed full history'
+// A prefill-guard overflow rejects before any decode or save, so it must not
+// destroy the last committed cache — the next turn stays warm.
+test('completion: kv-cache survives an overflow rejection between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-overflow-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    Object.assign(
+      new Error(
+        '[TextLlm] context overflow at batch prefill step: cached tokens 400 plus prompt tokens 200 exceed the max context tokens 512'
+      ),
+      { code: '[ TextLlmAddon :: ContextOverflow ]' }
+    )
   )
+  const { refusal, turnCalls } = await runRefusalScenario(modelId, calls, 'overflow-preserves-key')
+  t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The scheduler's per-sequence-cap admission refusals (parallel >= 2) are
+// equally pre-mutation but carry the generic InvalidArgument status — they
+// must not destroy the committed cache either.
+test('completion: kv-cache survives a scheduler admission rejection between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-admission-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    Object.assign(
+      new Error(
+        'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
+      ),
+      { code: '[ TextLlmAddon :: InvalidArgument ]' }
+    )
+  )
+  const { refusal, turnCalls } = await runRefusalScenario(modelId, calls, 'admission-preserves-key')
+  t.ok(refusal instanceof Error && /per-sequence cap/.test(refusal.message), 'turn two is refused')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
 
   unregisterModel(modelId)
   clearRegistry()

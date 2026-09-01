@@ -1,5 +1,6 @@
 import test from 'brittle'
 import {
+  isAddonAdmissionCapRejection,
   isAddonContextOverflowError,
   parseContextOverflowMessage
 } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
@@ -85,6 +86,34 @@ test('isAddonContextOverflowError: message fallback is anchored to known C++ for
     true
   )
   t.is(isAddonContextOverflowError(new Error('processPromptImpl: context overflow\n')), true)
+})
+
+// The scheduler's admission guards reject pre-mutation but throw the generic
+// InvalidArgument status; the wording is the only handle for non-destructive
+// turn release. One case per emitted form.
+test('isAddonAdmissionCapRejection: recognises every scheduler admission wording', (t) => {
+  const wordings = [
+    'ContinuousBatchScheduler::submit: prompt of 600 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
+    'ContinuousBatchScheduler::submit: prompt of 512 tokens leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',
+    'ContinuousBatchScheduler::submit: prefill prompt of 600 tokens exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
+    'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
+  ]
+  for (const wording of wordings) {
+    t.is(isAddonAdmissionCapRejection(new Error(wording)), true, wording)
+  }
+  t.is(
+    isAddonAdmissionCapRejection(new Error('some other InvalidArgument from the scheduler')),
+    false
+  )
+  t.is(
+    isAddonAdmissionCapRejection(
+      new Error(
+        '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
+      )
+    ),
+    false,
+    'overflow wordings stay with their own detector'
+  )
 })
 
 test('parseContextOverflowMessage: extracts from long-form TextLlm message', (t) => {

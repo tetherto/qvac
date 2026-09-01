@@ -1465,3 +1465,64 @@ test('kv-cache-session: auto-rename commit releases the target active-ref when s
     cleanup()
   }
 })
+
+// `releaseTurn` is the non-destructive exit for a thrown addon overflow or
+// admission refusal: the last committed file, its saved prefix, and the init
+// flag must all survive, and a same-key waiter must get the lock.
+test('kv-cache-session: releaseTurn preserves the committed cache and admits a waiter', async (t) => {
+  const { mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
+    let primeCallCount = 0
+    const primeIfMissing = async (cachePath: string) => {
+      primeCallCount++
+      writeFakeCache(cachePath)
+    }
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'release-a',
+      configHash,
+      primeIfMissing
+    })
+    await session.commitTurn(first, { kind: 'static', messageCount: 3, toolBlockCached: false })
+
+    const second = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'release-a',
+      configHash,
+      primeIfMissing
+    })
+    t.is(second.savedCount, 3, 'the second turn starts warm')
+    await session.releaseTurn(second)
+
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'release-a')
+    t.ok(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath),
+      'the init flag survives the release'
+    )
+    t.is(
+      mod.__kvCacheSessionTestHooks.getSavedCount(cachePath),
+      3,
+      'the committed saved prefix survives the release'
+    )
+    t.is(
+      mod.__kvCacheSessionTestHooks.getActivePathCountForTest(cachePath),
+      0,
+      'the active-ref is released'
+    )
+
+    const third = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'release-a',
+      configHash,
+      primeIfMissing
+    })
+    t.is(primeCallCount, 1, 'no re-prime — the disk cache is still there')
+    t.is(third.savedCount, 3, 'the waiter admits with the committed prefix intact')
+    await session.rollback(third)
+  } finally {
+    cleanup()
+  }
+})
