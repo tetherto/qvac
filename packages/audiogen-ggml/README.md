@@ -280,8 +280,12 @@ const response = await gen.run(
 )
 ```
 
-The composed caption, lyrics and metadata come back in the run stats metadata,
-so the UI can show what the LM wrote.
+Or end to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:simple
+```
 
 ### Ordered audio editing
 
