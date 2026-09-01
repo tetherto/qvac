@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin'
 import type { FastifyPluginAsync } from 'fastify'
-import type { QvacContext } from '../lib/types.js'
+import type { QvacContext } from '@/serve/lib/types'
 
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsync<{ context: QvacContext }> = async (app, opts) => {

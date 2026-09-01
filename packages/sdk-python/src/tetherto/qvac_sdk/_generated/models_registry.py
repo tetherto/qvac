@@ -4511,6 +4511,60 @@ PARAKEET_TDT_0_6B_V3_Q8_0 = ModelConstant(
     params="0.6B",
 )
 
+PARAKEET_UNIFIED_0_6B_F16 = ModelConstant(
+    name="PARAKEET_UNIFIED_0_6B_F16",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=6357702,
+    blob_block_length=21220,
+    blob_byte_offset=416645480362,
+    model_id="parakeet-unified-en-0.6b.f16.gguf",
+    expected_size=1390644608,
+    sha256_checksum="a9b228101e8c3eeabeb5a38f1948f2a0a1ced9262e3261fcb301a935e38c4f28",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="f16",
+    params="0.6B",
+)
+
+PARAKEET_UNIFIED_0_6B_Q4_0 = ModelConstant(
+    name="PARAKEET_UNIFIED_0_6B_Q4_0",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=6378922,
+    blob_block_length=6028,
+    blob_byte_offset=418036124970,
+    model_id="parakeet-unified-en-0.6b.q4_0.gguf",
+    expected_size=395029120,
+    sha256_checksum="98651c49ef4e3dbc2606f91bbc870431b84fdad739e9ff491e958d0f61c89a97",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q4_0",
+    params="0.6B",
+)
+
+PARAKEET_UNIFIED_0_6B_Q8_0 = ModelConstant(
+    name="PARAKEET_UNIFIED_0_6B_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=6384950,
+    blob_block_length=11312,
+    blob_byte_offset=418431154090,
+    model_id="parakeet-unified-en-0.6b.q8_0.gguf",
+    expected_size=741330176,
+    sha256_checksum="48102e55d61aaa827b89af03d772106e37de6ee12e8746f278f6315e71d980ad",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="0.6B",
+)
+
 PI05_BASE_Q_AGGRESSIVE = ModelConstant(
     name="PI05_BASE_Q_AGGRESSIVE",
     src="registry://s3/qvac_models_compiled/vla/pi05-base/2026-05-21/pi05-base-q-aggressive.gguf",
@@ -7570,6 +7624,9 @@ __all__ = [
     "PARAKEET_TDT_0_6B_V3_F16",
     "PARAKEET_TDT_0_6B_V3_Q4_0",
     "PARAKEET_TDT_0_6B_V3_Q8_0",
+    "PARAKEET_UNIFIED_0_6B_F16",
+    "PARAKEET_UNIFIED_0_6B_Q4_0",
+    "PARAKEET_UNIFIED_0_6B_Q8_0",
     "PI05_BASE_Q_AGGRESSIVE",
     "QWEN3VL_2B_MULTIMODAL_Q4_K",
     "QWEN3_1_7B_INST_Q4",
