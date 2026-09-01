@@ -91,6 +91,16 @@ on:
         type: boolean
         required: false
         default: false
+      include-cuda-arm64:
+        description: >-
+          Extend `include-cuda` to the linux-arm64 job, using the sbsa toolkit.
+          Opt-in and off by default on purpose: several addons already pass
+          `include-cuda: true` for their x64 build, and switching their arm64
+          build to compile CUDA as a side effect of this action gaining sbsa
+          support would change builds their owners did not ask to change.
+        type: boolean
+        required: false
+        default: false
       extra-cmake-defines:
         description: >-
           Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
@@ -308,7 +318,12 @@ jobs:
           gfx: ${{ inputs.rocm-gfx }}
           sha256: ${{ inputs.rocm-sha256 }}
 
-      - if: ${{ inputs.include-cuda && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+      # QVAC-23763: arm64 needs its own opt-in rather than riding include-cuda,
+      # so an addon that enabled CUDA for x64 does not silently start compiling
+      # it for arm64 too. The arm64 leg runs on a github-hosted runner with no
+      # GPU, which is fine: the toolkit is compile-only and the CUDA backend is
+      # a runtime-loaded module that does not engage without a device.
+      - if: ${{ inputs.include-cuda && matrix.platform == 'linux' && (matrix.arch == 'x64' || inputs.include-cuda-arm64) }}
         name: Setup CUDA toolkit for nvcc compile
         uses: ./.github/actions/setup-cuda
 
