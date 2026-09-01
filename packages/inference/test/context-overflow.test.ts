@@ -1,6 +1,6 @@
 import test from 'brittle'
 import {
-  isAddonAdmissionCapRejection,
+  isAddonPreMutationRefusal,
   isAddonContextOverflowError,
   parseContextOverflowMessage
 } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
@@ -91,27 +91,29 @@ test('isAddonContextOverflowError: message fallback is anchored to known C++ for
 // The scheduler's submit-time refusals reject pre-mutation but throw the
 // generic InvalidArgument status; the real code AND an enumerated wording
 // are both required. One positive case per emitted form, plus near-misses.
-test('isAddonAdmissionCapRejection: recognises every scheduler submit refusal', (t) => {
+test('isAddonPreMutationRefusal: recognises every pre-mutation refusal wording', (t) => {
   const ARG_CODE = '[ LLM :: InvalidArgument ]'
   const wordings = [
     'ContinuousBatchScheduler::submit: prompt of 600 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: prompt of 512 tokens leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: prefill prompt of 600 tokens exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=2)'
+    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=2)',
+    "invalid generationParams.json_schema: [json.exception.parse_error.101] parse error at line 1, column 2: syntax error while parsing value - invalid literal; last read: 'no'",
+    'failed to initialise sampler with per-request generationParams (invalid grammar or json_schema?)'
   ]
   for (const wording of wordings) {
     t.is(
-      isAddonAdmissionCapRejection(Object.assign(new Error(wording), { code: ARG_CODE })),
+      isAddonPreMutationRefusal(Object.assign(new Error(wording), { code: ARG_CODE })),
       true,
       wording
     )
   }
   // Near-misses: right wording without the status code, right code with an
   // unlisted wording, and a wording buried behind wrapper text.
-  t.is(isAddonAdmissionCapRejection(new Error(wordings[0]!)), false, 'code is required')
+  t.is(isAddonPreMutationRefusal(new Error(wordings[0]!)), false, 'code is required')
   t.is(
-    isAddonAdmissionCapRejection(
+    isAddonPreMutationRefusal(
       Object.assign(new Error('some other InvalidArgument from the scheduler'), {
         code: ARG_CODE
       })
@@ -120,14 +122,14 @@ test('isAddonAdmissionCapRejection: recognises every scheduler submit refusal', 
     'unlisted wordings do not qualify'
   )
   t.is(
-    isAddonAdmissionCapRejection(
+    isAddonPreMutationRefusal(
       Object.assign(new Error(`wrapped: ${wordings[0]!}`), { code: ARG_CODE })
     ),
     false,
     'the wording must start the message'
   )
   t.is(
-    isAddonAdmissionCapRejection(
+    isAddonPreMutationRefusal(
       Object.assign(
         new Error(
           '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
@@ -187,13 +189,14 @@ test('parseContextOverflowMessage: covers every current addon guard', (t) => {
     ),
     { promptTokens: 31, cachedTokens: 8170, requiredTokens: 8201, ctxSize: 8192 }
   )
-  // MtmdLlmContext.cpp, single-prompt guard: the addon denominates this
-  // figure in tokens.
+  // MtmdLlmContext.cpp, single-prompt guard: its "tokens" figure is KV
+  // cells (the cached guard labels the same quantity), so promptTokens
+  // stays unset.
   t.alike(
     parseContextOverflowMessage(
       '[MtmdLlm] context overflow at prefill step (31 tokens, 24 positions, max 8192)\n'
     ),
-    { promptTokens: 31, requiredTokens: 31, ctxSize: 8192 }
+    { requiredTokens: 31, ctxSize: 8192 }
   )
   // MtmdLlmContext.cpp, cached-plus-prompt guard: the prompt figure is KV
   // cells, so promptTokens stays unset.
@@ -233,7 +236,7 @@ test('parseContextOverflowMessage: positions-dominant probes keep the invariant 
     parseContextOverflowMessage(
       '[MtmdLlm] context overflow at prefill step (300 tokens, 8300 positions, max 8192)\n'
     ),
-    { promptTokens: 300, requiredTokens: 8300, ctxSize: 8192 }
+    { requiredTokens: 8300, ctxSize: 8192 }
   )
 })
 

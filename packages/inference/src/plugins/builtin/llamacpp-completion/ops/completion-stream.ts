@@ -17,7 +17,7 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
 import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
 import {
-  isAddonAdmissionCapRejection,
+  isAddonPreMutationRefusal,
   isAddonContextOverflowError
 } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
@@ -564,8 +564,7 @@ export async function* completion(
       setActiveResponse
     )
   } catch (error) {
-    preserveCacheOnUnwind =
-      isAddonContextOverflowError(error) || isAddonAdmissionCapRejection(error)
+    preserveCacheOnUnwind = isAddonContextOverflowError(error) || isAddonPreMutationRefusal(error)
     throw error
   }
   const shouldCommitTurn = shouldCommitCachedTurn({

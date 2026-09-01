@@ -36,22 +36,23 @@ export function isAddonContextOverflowError(err: unknown): boolean {
   )
 }
 
-// The continuous scheduler's submit-time refusals (per-sequence caps, the
-// positive n_predict reservation, and the batcher's AddStatus rejections)
-// all reject before any decode or save, but throw the generic
-// InvalidArgument status. The addon's real status code AND one of the
-// enumerated wordings are both required, since this picks preserve over
-// delete for the committed cache. Deliberately NOT part of
+// Refusals the addon throws before any decode or save — the scheduler's
+// submit guards (per-sequence caps, the positive n_predict reservation,
+// the batcher's AddStatus rejections) and the generationParams apply step,
+// which validates against local copies before touching live state. All
+// carry the generic InvalidArgument status, so the addon's real status
+// code AND one of the enumerated wordings are both required: this picks
+// preserve over delete for the committed cache. Deliberately NOT part of
 // ContextOverflowError classification.
-const ADMISSION_REFUSAL_FORMS =
-  /^ContinuousBatchScheduler::submit: (?:(?:prefill )?prompt of \d+ (?:KV cells|tokens) (?:exceeds|leaves no room under) per-sequence cap \d+|n_predict -?\d+ \+ prompt \d+ KV cells exceeds per-sequence cap \d+|failed to add to batch \(MultiRequestBatcher::AddStatus=-?\d+\))/
+const PRE_MUTATION_REFUSAL_FORMS =
+  /^(?:ContinuousBatchScheduler::submit: (?:(?:prefill )?prompt of \d+ (?:KV cells|tokens) (?:exceeds|leaves no room under) per-sequence cap \d+|n_predict -?\d+ \+ prompt \d+ KV cells exceeds per-sequence cap \d+|failed to add to batch \(MultiRequestBatcher::AddStatus=-?\d+\))|invalid generationParams\.json_schema: |failed to initialise sampler with per-request generationParams \(invalid grammar or json_schema\?\))/
 
-export function isAddonAdmissionCapRejection(err: unknown): boolean {
+export function isAddonPreMutationRefusal(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
   const code = (err as { code?: unknown }).code
   if (typeof code !== 'string' || !/::\s*InvalidArgument\s*\]/.test(code)) return false
   const message = (err as { message?: unknown }).message
-  return typeof message === 'string' && ADMISSION_REFUSAL_FORMS.test(message)
+  return typeof message === 'string' && PRE_MUTATION_REFUSAL_FORMS.test(message)
 }
 
 export type ContextOverflowSizes = {
@@ -113,11 +114,12 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
     map: ([pos, cells, ctx]) => ({ requiredTokens: Math.max(pos!, cells!), ctxSize: ctx! })
   },
   {
-    // "(N tokens, P positions, max M)"
+    // "(N tokens, P positions, max M)" — the "tokens" figure is
+    // mtmd_helper_get_n_tokens, i.e. KV cells (the sibling cached guard
+    // labels the same quantity "KV cells"), so promptTokens stays unset.
     pattern: /\((\d+)[ \t]+tokens,[ \t]*(\d+)[ \t]+positions,[ \t]*max[ \t]+(\d+)\)/i,
-    map: ([tokens, pos, ctx]) => ({
-      promptTokens: tokens!,
-      requiredTokens: Math.max(tokens!, pos!),
+    map: ([cells, pos, ctx]) => ({
+      requiredTokens: Math.max(cells!, pos!),
       ctxSize: ctx!
     })
   },

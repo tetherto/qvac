@@ -467,6 +467,42 @@ test('completion: kv-cache survives an overflow rejection between turns', async 
   clearRegistry()
 })
 
+// The generationParams apply step validates against local copies before
+// touching live state — reachable at parallel = 1 via responseFormat — and
+// must not destroy the committed cache either.
+test('completion: kv-cache survives a generationParams rejection between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-genparams-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    Object.assign(
+      new Error(
+        'invalid generationParams.json_schema: [json.exception.parse_error.101] parse error'
+      ),
+      { code: '[ LLM :: InvalidArgument ]' }
+    )
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'genparams-preserves-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
+  t.ok(refusal instanceof Error && /json_schema/.test(refusal.message), 'turn two is refused')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
 // The scheduler's per-sequence-cap admission refusals (parallel >= 2) are
 // equally pre-mutation but carry the generic InvalidArgument status — they
 // must not destroy the committed cache either.
