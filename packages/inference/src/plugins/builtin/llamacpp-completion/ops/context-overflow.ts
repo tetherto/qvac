@@ -58,7 +58,11 @@ export type ContextOverflowSizes = {
    * exceed it.
    */
   requiredTokens?: number
-  /** The model's context window (`ctx_size`), which counts KV cells. */
+  /**
+   * The effective context ceiling for this request, in KV cells: the
+   * addon reports its per-sequence ceiling, which is `ctx_size` divided
+   * across slots when `parallel > 1`, not always the configured total.
+   */
   ctxSize?: number
 }
 
@@ -71,9 +75,9 @@ type PatternEntry = {
 /**
  * One entry per guard that formats numbers into a `ContextOverflow`
  * message, ordered most specific first. Each pattern keeps its numbers
- * inside a single clause (no `[^]*?` cross-newline walk) so a wrapper
- * that pastes overflow text alongside unrelated numbers cannot produce a
- * mismatched set.
+ * inside a single emitted line — separators are horizontal whitespace
+ * only — so a wrapper that pastes overflow text alongside unrelated
+ * numbers on adjacent lines cannot produce a mismatched set.
  *
  * Where a guard reports both positions and KV cells, the cells are
  * captured: they are the binding measure, and `ctx_size` counts cells,
@@ -109,24 +113,24 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
   },
   {
     // "prompt tokens N, max context tokens M"
-    pattern: /prompt tokens (\d+)[,\s]+max context tokens (\d+)/i,
+    pattern: /prompt tokens (\d+)[, \t]+max context tokens (\d+)/i,
     map: ([prompt, ctx]) => ({ promptTokens: prompt!, requiredTokens: prompt!, ctxSize: ctx! })
   },
   {
     // "prompt spans P positions / N KV cells, max context tokens M" —
     // KV cells again, so promptTokens stays unset.
-    pattern: /prompt spans \d+ positions \/ (\d+) KV cells,\s*max context tokens (\d+)/i,
+    pattern: /prompt spans \d+ positions \/ (\d+) KV cells,[ \t]*max context tokens (\d+)/i,
     map: ([prompt, ctx]) => ({ requiredTokens: prompt!, ctxSize: ctx! })
   },
   {
     // "(N tokens, P positions, max M)"
-    pattern: /\((\d+)\s+tokens,\s*\d+\s+positions,\s*max\s+(\d+)\)/i,
+    pattern: /\((\d+)[ \t]+tokens,[ \t]*\d+[ \t]+positions,[ \t]*max[ \t]+(\d+)\)/i,
     map: ([prompt, ctx]) => ({ promptTokens: prompt!, requiredTokens: prompt!, ctxSize: ctx! })
   },
   {
     // "(N tokens, max M)", the retired short form. Both of its emitters
     // format a cached total, not the prompt alone — promptTokens stays unset.
-    pattern: /\((\d+)\s+tokens,\s*max\s+(\d+)\)/i,
+    pattern: /\((\d+)[ \t]+tokens,[ \t]*max[ \t]+(\d+)\)/i,
     map: ([total, ctx]) => ({ requiredTokens: total!, ctxSize: ctx! })
   }
 ]

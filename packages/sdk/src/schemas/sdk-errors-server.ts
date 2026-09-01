@@ -315,12 +315,13 @@ const serverErrorDefinitions: ErrorCodesMap = {
       if (requiredTokens && cachedTokens) {
         return `Conversation needs ${requiredTokens} context tokens (${cachedTokens} already cached) and no longer fits ${window}${model}. Start a new conversation or raise ctx_size.`
       }
-      // Multimodal guards denominate the prompt in KV cells, not tokens.
-      const prompt = promptTokens
-        ? `${promptTokens} prompt tokens`
-        : requiredTokens
-          ? `prompt spanning ${requiredTokens} KV cells`
-          : 'prompt'
+      // A lone requiredTokens can be a cold multimodal prompt (KV cells) or
+      // the retired short form's cached total (tokens) — stay neutral on
+      // both the source and the unit.
+      if (requiredTokens) {
+        return `Request needs ${requiredTokens} context tokens and no longer fits ${window}${model}. Reduce the prompt size, start a new conversation, or raise ctx_size.`
+      }
+      const prompt = promptTokens ? `${promptTokens} prompt tokens` : 'prompt'
       return `${prompt} exceeds ${window}${model}. Reduce the prompt size or start a new conversation.`
     }
   },

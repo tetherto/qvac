@@ -299,6 +299,10 @@ export class ContextOverflowError extends QvacErrorBase {
    * the window: the guards trigger on `>=` for a generating request.
    */
   readonly requiredTokens?: number
+  /**
+   * The effective context ceiling for this request: `ctx_size`, divided
+   * across slots when `parallel > 1` — not always the configured total.
+   */
   readonly ctxSize?: number
   readonly modelId?: string
 

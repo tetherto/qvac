@@ -178,7 +178,9 @@ class ContextOverflowError(QvacError):
     overflow reported, and `required_tokens` is the total context the request
     needs — the figure that failed the guard — both in the same units as
     `ctx_size` (KV cells; equal to tokens for text). `required_tokens` can
-    equal the window: the guards trigger on `>=` for a generating request."""
+    equal the window: the guards trigger on `>=` for a generating request.
+    `ctx_size` is the effective ceiling for this request — the configured
+    total divided across slots when `parallel > 1`."""
 
     def __init__(
         self,

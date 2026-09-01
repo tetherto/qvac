@@ -79,6 +79,27 @@ test('createErrorResponse: ContextOverflowError carries warm-cache fields on typ
   })
 })
 
+test('ContextOverflowError message names both halves on a warm cache', (t) => {
+  const err = new ContextOverflowError(31, 8192, 'model-1', undefined, {
+    cachedTokens: 8170,
+    requiredTokens: 8201
+  })
+  t.ok(err.message.includes('needs 8201 context tokens'), 'leads with the failing total')
+  t.ok(err.message.includes('8170 already cached'), 'names the cached half')
+})
+
+// A lone requiredTokens comes from the retired short form (a cached total)
+// or a cold multimodal prompt (KV cells) — the message must not blame a
+// "prompt" of that size or claim a unit.
+test('ContextOverflowError message stays neutral when only requiredTokens is known', (t) => {
+  const err = new ContextOverflowError(undefined, 512, 'model-1', undefined, {
+    requiredTokens: 600
+  })
+  t.ok(err.message.includes('Request needs 600 context tokens'), 'neutral phrasing')
+  t.absent(err.message.includes('prompt spanning'), 'no prompt-of-that-size claim')
+  t.absent(err.message.includes('600 prompt tokens'), 'the total is not labelled a prompt')
+})
+
 test('createErrorResponse: ContextOverflowError omits absent fields from typedFields', (t) => {
   // The bare `LlamaModel::processPromptImpl` overflow path emits a
   // message without prompt/ctx numbers — the addon-wrap throws

@@ -222,7 +222,9 @@ to `"length"` (with `predict: -1` there is no cutoff, so `"length"` can only
 mean the boundary).
 
 **Config for long conversations:** size `ctx_size` for the whole conversation you
-intend to hold.
+intend to hold. With `parallel > 1` the window is split across slots, so each
+request's effective ceiling — and the `ctxSize` an overflow error reports — is
+`ctx_size / parallel`, not the configured total.
 
 ```typescript
 const modelId = await loadModel({
