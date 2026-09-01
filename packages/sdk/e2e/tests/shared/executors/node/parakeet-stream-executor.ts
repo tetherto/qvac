@@ -21,6 +21,7 @@ export class ParakeetStreamExecutor extends AbstractModelExecutor<typeof parakee
 
   protected handlers = {
     'parakeet-stream-happy': this.runHappy.bind(this),
+    'parakeet-stream-unified-happy': this.runUnifiedHappy.bind(this),
     'parakeet-stream-metadata-rejected': this.runMetadataRejected.bind(this),
     'parakeet-stream-eou': this.runEou.bind(this),
     'parakeet-stream-destroy-mid-utterance': this.runDestroyMidUtterance.bind(this),
@@ -36,6 +37,13 @@ export class ParakeetStreamExecutor extends AbstractModelExecutor<typeof parakee
   async runHappy(params: unknown): Promise<TestResult> {
     const p = params as BaseParams
     const modelId = await this.resources.ensureLoaded('parakeet-tdt')
+    const bytes = await this.loadAudioBytes(p.audioFileName)
+    return runParakeetStreamHappy(modelId, bytes, p)
+  }
+
+  async runUnifiedHappy(params: unknown): Promise<TestResult> {
+    const p = params as BaseParams
+    const modelId = await this.resources.ensureLoaded('parakeet-unified')
     const bytes = await this.loadAudioBytes(p.audioFileName)
     return runParakeetStreamHappy(modelId, bytes, p)
   }

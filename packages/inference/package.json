@@ -190,7 +190,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@qvac/asr-ggml": "^0.3.0",
+    "@qvac/asr-ggml": "^0.3.1",
     "@qvac/audiogen-ggml": "^0.3.0",
     "@qvac/bci-whispercpp": "^0.8.0",
     "@qvac/classification-ggml": "^0.22.0",
@@ -246,7 +246,7 @@
     }
   },
   "devDependencies": {
-    "@qvac/asr-ggml": "^0.3.0",
+    "@qvac/asr-ggml": "^0.3.1",
     "@qvac/audiogen-ggml": "^0.3.0",
     "@qvac/bci-whispercpp": "^0.8.0",
     "@qvac/classification-ggml": "^0.22.0",
