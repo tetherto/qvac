@@ -45,6 +45,16 @@ backend loading.
   environment has the same effect without touching the load config.
 - `main-gpu` as an integer indexes ggml's full device list, so adding CUDA shifts the indices an
   existing config was written against.
+- The shipped CUDA module covers **compute capability 8.0 and above**: native code for 8.6 and
+  12.0a, and PTX for 8.0 that the driver JIT-compiles forward onto anything newer. **A card below
+  8.0 — Turing, Volta, Pascal and older — currently still enumerates, is selected over Vulkan, and
+  then fails at the first kernel launch instead of falling back.** Set `backend: "vulkan"` or
+  `CUDA_VISIBLE_DEVICES=-1` on those machines. From `qvac-fabric` v10297.2.0 such a card is refused
+  at registration and the load falls through to Vulkan, then CPU, with no configuration needed; see
+  [qvac#4171](https://github.com/tetherto/qvac/issues/4171).
+- The driver caches the PTX JIT result under `$HOME/.nv/ComputeCache`. If `$HOME` is absent or
+  read-only, as in many containers, that cache is disabled and the JIT cost is paid on every
+  process start rather than once. Set `CUDA_CACHE_PATH` to a writable directory to avoid that.
 
 **Dependencies:**
 - inference-addon-cpp (≥1.1.2): C++ addon framework
