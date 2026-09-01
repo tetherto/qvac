@@ -150,16 +150,14 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
     )
   },
   CONTEXT_OVERFLOW: (response) => {
-    const cachedTokens = readOptionalNumberField(response.typedFields, 'cachedTokens')
-    const requiredTokens = readOptionalNumberField(response.typedFields, 'requiredTokens')
     return new ContextOverflowError(
       readOptionalNumberField(response.typedFields, 'promptTokens'),
       readOptionalNumberField(response.typedFields, 'ctxSize'),
       readOptionalStringField(response.typedFields, 'modelId'),
       response.cause,
       {
-        ...(cachedTokens !== undefined && { cachedTokens }),
-        ...(requiredTokens !== undefined && { requiredTokens })
+        cachedTokens: readOptionalNumberField(response.typedFields, 'cachedTokens'),
+        requiredTokens: readOptionalNumberField(response.typedFields, 'requiredTokens')
       }
     )
   },

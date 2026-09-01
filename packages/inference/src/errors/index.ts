@@ -301,7 +301,7 @@ export class ContextOverflowError extends QvacErrorBase {
     ctxSize?: number,
     modelId?: string,
     cause?: unknown,
-    sizes?: { cachedTokens?: number; requiredTokens?: number }
+    extraSizes?: { cachedTokens?: number | undefined; requiredTokens?: number | undefined }
   ) {
     super(
       createErrorOptions(
@@ -310,8 +310,8 @@ export class ContextOverflowError extends QvacErrorBase {
           promptTokens !== undefined ? String(promptTokens) : '',
           ctxSize !== undefined ? String(ctxSize) : '',
           modelId ?? '',
-          sizes?.cachedTokens !== undefined ? String(sizes.cachedTokens) : '',
-          sizes?.requiredTokens !== undefined ? String(sizes.requiredTokens) : ''
+          extraSizes?.cachedTokens !== undefined ? String(extraSizes.cachedTokens) : '',
+          extraSizes?.requiredTokens !== undefined ? String(extraSizes.requiredTokens) : ''
         ],
         cause
       )
@@ -319,8 +319,8 @@ export class ContextOverflowError extends QvacErrorBase {
     if (promptTokens !== undefined) this.promptTokens = promptTokens
     if (ctxSize !== undefined) this.ctxSize = ctxSize
     if (modelId !== undefined) this.modelId = modelId
-    if (sizes?.cachedTokens !== undefined) this.cachedTokens = sizes.cachedTokens
-    if (sizes?.requiredTokens !== undefined) this.requiredTokens = sizes.requiredTokens
+    if (extraSizes?.cachedTokens !== undefined) this.cachedTokens = extraSizes.cachedTokens
+    if (extraSizes?.requiredTokens !== undefined) this.requiredTokens = extraSizes.requiredTokens
   }
 
   toErrorResponseFields(): Record<string, unknown> {

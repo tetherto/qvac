@@ -285,14 +285,12 @@ export const llmPlugin = definePlugin({
           )
         } catch (err) {
           if (isAddonContextOverflowError(err)) {
-            const sizes = parseContextOverflowMessage(err instanceof Error ? err.message : '')
-            throw new ContextOverflowError(
-              sizes.promptTokens,
-              sizes.ctxSize,
-              request.modelId,
-              err,
-              sizes
-            )
+            const { promptTokens, ctxSize, cachedTokens, requiredTokens } =
+              parseContextOverflowMessage(err instanceof Error ? err.message : '')
+            throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err, {
+              cachedTokens,
+              requiredTokens
+            })
           }
           // Once the registry accepts cancellation, the request signal owns the
           // terminal outcome. The addon may reject with different shapes
@@ -465,14 +463,12 @@ export const llmPlugin = definePlugin({
           // ContextOverflowError.
 
           if (isAddonContextOverflowError(err)) {
-            const sizes = parseContextOverflowMessage(err instanceof Error ? err.message : '')
-            throw new ContextOverflowError(
-              sizes.promptTokens,
-              sizes.ctxSize,
-              request.modelId,
-              err,
-              sizes
-            )
+            const { promptTokens, ctxSize, cachedTokens, requiredTokens } =
+              parseContextOverflowMessage(err instanceof Error ? err.message : '')
+            throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err, {
+              cachedTokens,
+              requiredTokens
+            })
           }
           // Context overflow is classified above. For every other error after
           // accepted cancellation, the request signal owns the terminal outcome
@@ -549,14 +545,12 @@ export const llmPlugin = definePlugin({
           // Same addon, same overflow path as `completionStream`. Wrap so
           // translate consumers can `instanceof ContextOverflowError` too.
           if (isAddonContextOverflowError(err)) {
-            const sizes = parseContextOverflowMessage(err instanceof Error ? err.message : '')
-            throw new ContextOverflowError(
-              sizes.promptTokens,
-              sizes.ctxSize,
-              request.modelId,
-              err,
-              sizes
-            )
+            const { promptTokens, ctxSize, cachedTokens, requiredTokens } =
+              parseContextOverflowMessage(err instanceof Error ? err.message : '')
+            throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err, {
+              cachedTokens,
+              requiredTokens
+            })
           }
           throw err
         } finally {
