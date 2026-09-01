@@ -41,6 +41,19 @@ between the `android`/`ios` and `androidWeekly`/`iosWeekly` sections — no
 workflow edits required. The weekend run posts a pass/fail report to a
 `weekly-mobile-report`-labelled GitHub issue and to the run's Summary page.
 
+Every generated runner must appear in some group, and every group must name a
+runner that exists. Coverage is pooled per OS family — `ios` + `iosWeekly` count
+as one set — so a test moved to the weekend cadence is still covered. The
+`runBenchmarkPerf*` shards and `runFinetuningMoeTest` are exempt: their own
+workflows schedule them through an explicit `test_groups` override.
+
+The rules live in `scripts/lib/validate-test-groups.js` and are enforced by
+`npm run test:mobile:validate`, which `npm run test:unit` runs. They are
+deliberately **not** in `scripts/generate-mobile-integration-tests.js`: that
+generator runs inside `npm run test:integration`, so checking a Device Farm
+scheduling file there let a scheduling-only edit abort the desktop suite on
+every platform (PR #4006).
+
 ## Model Pre-Staging (`model-manifest.json`)
 
 Android Device Farm runs never let the phone download weights. The host

@@ -4,9 +4,18 @@
 const fs = require('fs')
 const path = require('path')
 
+const { validateTestGroups, generatedRunnerNames } = require('./lib/validate-test-groups.js')
+
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileAutoFile = path.join(repoRoot, 'test', 'mobile', 'integration.auto.cjs')
+const groupsFile = path.join(repoRoot, 'test', 'mobile', 'test-groups.json')
+
+// The OS families that must schedule every generated runner. Pinned rather than
+// inferred from the file's shape: test-groups.json also holds top-level
+// `iosWeekly`/`androidWeekly` maps, which are schedules pooled into their family
+// (see lib/validate-test-groups.js), not platforms owing coverage of their own.
+const REQUIRED_PLATFORMS = ['ios', 'android']
 
 function getIntegrationTestFiles() {
   if (!fs.existsSync(integrationDir)) {
@@ -73,7 +82,27 @@ try {
     process.exit(0)
   }
 
-  console.log('✅ Mobile integration tests are up to date')
+  // Device Farm shard coverage. This lives here rather than in the generator so
+  // that a mobile scheduling mistake can never abort `npm run test:integration`
+  // and take desktop CI down with it.
+  if (!fs.existsSync(groupsFile)) {
+    console.log('✅ Mobile integration tests are up to date (no test-groups.json — single-spec)')
+    process.exit(0)
+  }
+
+  const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf8'))
+  const runners = generatedRunnerNames(mobileAutoContent)
+  const problems = validateTestGroups(groups, runners, { platforms: REQUIRED_PLATFORMS })
+
+  if (problems.length > 0) {
+    console.error('❌ test-groups.json does not cover every mobile runner\n')
+    problems.forEach((problem) => console.error(`   ${problem}\n`))
+    process.exit(1)
+  }
+
+  console.log(
+    `✅ Mobile integration tests are up to date (${runners.length} runner(s), group coverage OK)`
+  )
   process.exit(0)
 } catch (error) {
   console.error('Error validating mobile tests:', error.message)
