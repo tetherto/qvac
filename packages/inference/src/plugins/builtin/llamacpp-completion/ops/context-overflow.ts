@@ -56,9 +56,10 @@ type PatternEntry = {
 // One entry per guard that formats numbers, most specific first. Separators
 // are horizontal whitespace only, so numbers cannot pair across lines. The
 // multimodal guards trip on EITHER positions or KV cells against the same
-// ceiling, so where both are reported the larger measure is what failed.
-// Keep in step with TextLlmContext.cpp / MtmdLlmContext.cpp — a drifted
-// wording silently returns no fields.
+// ceiling; valid addon state keeps cells >= positions, so taking the larger
+// measure is defensive rather than load-bearing. Keep in step with
+// TextLlmContext.cpp / MtmdLlmContext.cpp — a drifted wording silently
+// returns no fields.
 const MESSAGE_PATTERNS: PatternEntry[] = [
   {
     // "cached tokens C plus prompt tokens N exceed the max context tokens M"

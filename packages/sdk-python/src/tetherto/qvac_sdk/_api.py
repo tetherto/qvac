@@ -140,8 +140,8 @@ async def load_model(
     """
     is_reload_config = model_id is not None and model_src is None
 
-    # Accept the generated ModelType enum: its members are not str, so the
-    # wire schemas would reject them now that the catch-all excludes built-ins.
+    # Members are str subclasses now, but normalize to the plain wire string
+    # so payloads and comparisons stay canonical.
     if isinstance(model_type, ModelType):
         model_type = model_type.value
 

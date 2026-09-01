@@ -159,10 +159,11 @@ test('parseContextOverflowMessage: covers every current addon guard', (t) => {
   )
 })
 
-// The multimodal guards trip on EITHER positions or KV cells, so the parser
-// takes the larger measure — a positions-dominant overflow must still report
-// a requiredTokens no smaller than the window.
-test('parseContextOverflowMessage: positions-dominant multimodal overflows keep the invariant', (t) => {
+// Valid addon state keeps KV cells >= positions, so these positions-dominant
+// messages are synthetic malformed-input probes: the defensive max must still
+// keep requiredTokens no smaller than the window if a future addon inverts
+// the relation.
+test('parseContextOverflowMessage: positions-dominant probes keep the invariant defensively', (t) => {
   t.alike(
     parseContextOverflowMessage(
       '[MtmdLlm] context overflow at prefill step: cached 8100 positions / 1000 KV cells plus 200 positions / 50 KV cells of prompt exceed the max context tokens 8192\n'
