@@ -7,6 +7,9 @@ internal module datamodel-code-generator placed it in.
 from __future__ import annotations
 
 from .models import (
+    AssessModelFitRequest,
+    AssessModelFitResponse,
+    AudioGenEngine,
     AudioGenStreamRequest,
     AudioGenStreamResponse,
     AudioGenTaskType,
@@ -101,6 +104,9 @@ from .models.rag import Response as RagResponse
 from .models.translate import Request as TranslateRequest
 
 __all__ = [
+    "AssessModelFitRequest",
+    "AssessModelFitResponse",
+    "AudioGenEngine",
     "AudioGenStreamRequest",
     "AudioGenStreamResponse",
     "AudioGenTaskType",

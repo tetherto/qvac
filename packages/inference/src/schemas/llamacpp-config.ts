@@ -66,7 +66,12 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`"
     ),
-  no_mmap: z.boolean().optional().describe('Disable memory-mapped model loading. Default false.'),
+  load_mode: z
+    .enum(['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'])
+    .optional()
+    .describe(
+      "Model loading mode: `'none'`, `'mmap'`, `'mlock'`, `'mmap+mlock'`, or `'dio'`. Unset uses the addon's default (`'mmap'`)."
+    ),
   verbosity: verbositySchema
     .optional()
     .describe('Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.'),

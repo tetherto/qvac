@@ -1,5 +1,5 @@
 import { transcribe } from '@qvac/sdk'
-import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/test-suite'
 import { decodeWavToMonoF32, f32ToLeBytes, type DecodedPcm } from './wav-pcm.js'
 
 const WHISPER_SAMPLE_RATE = 16000

@@ -3,14 +3,17 @@ cmake_minimum_required(VERSION 3.25)
 option(BUILD_TESTING "Build tests" OFF)
 
 # Vulkan / Metal / OpenCL are wired per-platform by the unconditional
-# speech-cpp dependencies in vcpkg.json. CUDA stays opt-in because it needs
-# nvcc on the build host, which the prebuild runners do not carry; the
-# runtime needs only the NVIDIA driver. On linux-x64 the cuda feature flips
-# the ggml-speech port into hybrid GGML_BACKEND_DL mode: every backend
-# (CPU variants, Vulkan, CUDA) arrives as a dlopen-able MODULE .so that the
-# loose-file pickup below stages next to the .bare, and only the CUDA module
-# carries CUDA DT_NEEDED entries, so hosts without the driver skip it and
-# fall back to Vulkan or CPU. No direct CUDA linkage here (mirrors tts-ggml).
+# speech-cpp dependencies in vcpkg.json. CUDA is opt-in because it needs
+# nvcc on the build host; the linux-x64 prebuild turns it on (the prebuild
+# workflow installs the toolkit) and the runtime needs only the NVIDIA
+# driver plus resolvable CUDA runtime libraries. On linux-x64 the cuda
+# feature flips the ggml-speech port into hybrid GGML_BACKEND_DL mode:
+# every backend (CPU variants, Vulkan, CUDA) arrives as a dlopen-able
+# MODULE .so that the loose-file pickup below stages next to the .bare,
+# and only the CUDA module carries CUDA DT_NEEDED entries, so hosts that
+# cannot resolve them skip it and fall back to Vulkan or CPU. No direct
+# CUDA linkage here (mirrors tts-ggml); nvcc's clang host-compiler setup
+# lives in vcpkg-overlays/toolchains/linux-clang.cmake.
 option(ENABLE_CUDA "Enable the CUDA GPU backend (requires nvcc on the build host)" OFF)
 
 if(BUILD_TESTING)
