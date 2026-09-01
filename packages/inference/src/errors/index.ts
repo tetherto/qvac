@@ -305,8 +305,19 @@ function normalizeContextOverflowArgs(
 }
 
 /**
- * Thrown when a request no longer fits the model's effective context capacity.
- * All size fields are optional: whatever the failing addon guard reported.
+ * Thrown when a request no longer fits the model's effective context
+ * capacity — distinct from a generic `CompletionFailedError` so consumers
+ * can drive UX (truncate, summarize, or surface a "increase ctx_size /
+ * start a new thread" CTA) instead of treating it as an opaque failure.
+ *
+ * All size fields are optional: they carry whatever the addon guard
+ * reported (a cold prompt, a warm cached-plus-prompt split, or a bare
+ * overflow with no numbers). `modelId` is supplied by the handler that
+ * wraps the addon error.
+ *
+ * Serializes its typed fields (`toErrorResponseFields`) so a receiver can
+ * rebuild it after the error crosses a serialization boundary (an RPC
+ * response).
  */
 export class ContextOverflowError extends QvacErrorBase {
   /** The prompt alone, in tokens; unset when the source reported KV cells. */

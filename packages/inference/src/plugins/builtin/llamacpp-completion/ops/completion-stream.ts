@@ -479,7 +479,8 @@ export async function* completion(
   // ---- KV-cache path. The session owns every bookkeeping layer; the
   // handler registers one deferred unwind (`rollback`, or the non-destructive
   // `releaseTurn` on a recognised pre-mutation refusal) that `commitTurn`
-  // short-circuits on the happy path. ----
+  // short-circuits on the happy path. Cancellations / zero-token replies /
+  // rename failures all still unwind destructively through the same hook. ----
 
   const session = createKvCacheSession(modelId, { logger: requestLogger })
   const systemPromptFromHistory = extractSystemPrompt(history)
