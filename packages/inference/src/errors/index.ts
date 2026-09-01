@@ -271,18 +271,15 @@ export class CompletionFailedError extends QvacErrorBase {
 }
 
 /**
- * Thrown when the prompt exceeds the loaded model's configured context
- * window — distinct from a generic `CompletionFailedError` so consumers
- * can drive UX (truncate, summarize, or surface a "increase ctx_size /
+ * Thrown when a request no longer fits the model's effective context
+ * capacity — distinct from a generic `CompletionFailedError` so consumers
+ * can drive UX (truncate, summarize, or surface a "raise ctx_size /
  * start a new thread" CTA) instead of treating it as an opaque failure.
  *
- * Carries the addon-reported prompt size and the model's context window
- * when the addon's error message includes them (the C++ overflow paths
- * in `TextLlmContext.cpp` and `MtmdLlmContext.cpp` format both numbers
- * into the message; the bare `processPromptImpl: context overflow`
- * fallback in `LlamaModel.cpp` carries neither — both fields are
- * therefore optional). `modelId` is supplied by the handler that wraps
- * the addon error.
+ * All size fields are optional: they carry whatever the addon guard
+ * reported (a cold prompt, a warm cached-plus-prompt split, or a bare
+ * overflow with no numbers). `modelId` is supplied by the handler that
+ * wraps the addon error.
  *
  * Serializes its typed fields (`toErrorResponseFields`) so a receiver can
  * rebuild it after the error crosses a serialization boundary (an RPC

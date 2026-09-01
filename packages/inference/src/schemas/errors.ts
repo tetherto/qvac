@@ -392,15 +392,19 @@ const errorDefinitions: ErrorCodesMap = {
       requiredTokens?: string
     ) => {
       const model = modelId ? ` for model "${modelId}"` : ''
-      const window = ctxSize ? `the ${ctxSize}-token context window` : "the model's context window"
-      // Warm cache: name both halves instead of blaming the appended prompt.
+      // Totals can be KV cells or tokens, and the guards trigger at equality
+      // (a generating request needs a free slot) — so unit-neutral wording,
+      // phrased as leaving no room rather than exceeding.
+      const capacity = ctxSize
+        ? `the effective context capacity (${ctxSize} units)`
+        : "the model's context capacity"
       if (requiredTokens && cachedTokens) {
-        return `Conversation needs ${requiredTokens} context tokens (${cachedTokens} already cached) and no longer fits ${window}${model}. Start a new conversation or raise ctx_size.`
+        return `Conversation uses ${requiredTokens} context units (${cachedTokens} already cached) and leaves no room to generate within ${capacity}${model}. Start a new conversation or raise ctx_size.`
       }
-      // A lone total can be KV cells or tokens — stay neutral on both.
       if (requiredTokens) {
-        return `Request needs ${requiredTokens} context tokens and no longer fits ${window}${model}. Reduce the prompt size, start a new conversation, or raise ctx_size.`
+        return `Request uses ${requiredTokens} context units and leaves no room to generate within ${capacity}${model}. Reduce the prompt size, start a new conversation, or raise ctx_size.`
       }
+      const window = ctxSize ? `the ${ctxSize}-token context window` : "the model's context window"
       const prompt = promptTokens ? `${promptTokens} prompt tokens` : 'prompt'
       return `${prompt} exceeds ${window}${model}. Reduce the prompt size or start a new conversation.`
     }

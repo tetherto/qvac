@@ -84,19 +84,29 @@ test('ContextOverflowError message names both halves on a warm cache', (t) => {
     cachedTokens: 8170,
     requiredTokens: 8201
   })
-  t.ok(err.message.includes('needs 8201 context tokens'), 'leads with the failing total')
+  t.ok(err.message.includes('uses 8201 context units'), 'leads with the failing total')
   t.ok(err.message.includes('8170 already cached'), 'names the cached half')
 })
 
 // A lone total can be a cached sum or KV cells — the message must not blame
-// a "prompt" of that size or claim a unit.
-test('ContextOverflowError message stays neutral when only requiredTokens is known', (t) => {
+// a "prompt" of that size or call the value tokens.
+test('ContextOverflowError message stays unit-neutral when only requiredTokens is known', (t) => {
   const err = new ContextOverflowError(undefined, 512, 'model-1', undefined, {
     requiredTokens: 600
   })
-  t.ok(err.message.includes('Request needs 600 context tokens'), 'neutral phrasing')
-  t.absent(err.message.includes('prompt spanning'), 'no prompt-of-that-size claim')
+  t.ok(err.message.includes('Request uses 600 context units'), 'unit-neutral phrasing')
   t.absent(err.message.includes('600 prompt tokens'), 'the total is not labelled a prompt')
+  t.absent(err.message.includes('600 context tokens'), 'the total is not labelled tokens')
+})
+
+// The guards trigger at equality — a generating request needs a free slot —
+// so the message must not read as a contradiction when the total equals the
+// capacity.
+test('ContextOverflowError message reads coherently at the equality boundary', (t) => {
+  const err = new ContextOverflowError(undefined, 512, 'model-1', undefined, {
+    requiredTokens: 512
+  })
+  t.ok(err.message.includes('leaves no room to generate'), 'equality is about the output slot')
 })
 
 test('createErrorResponse: ContextOverflowError omits absent fields from typedFields', (t) => {
