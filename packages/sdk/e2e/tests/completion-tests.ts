@@ -648,9 +648,8 @@ export const completionStats: TestDefinition = {
   metadata: { category: 'completion', dependency: 'llm', estimatedDurationMs: 10000 }
 }
 
-// The 480 predict budget exceeds what fits after the prompt in the 512
-// window, so a "length" stop under the budget can only be the boundary.
-// An early EOS is unlikely, not impossible — a fixture-model diagnostic.
+// The 480 budget exceeds what fits after the prompt in the 512 window, so a
+// "length" stop under it can only be the boundary; an early EOS is a fixture diagnostic.
 export const completionContextBoundaryStop = createCompletionTest(
   'completion-context-boundary-stop',
   {

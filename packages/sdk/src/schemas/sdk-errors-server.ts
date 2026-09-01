@@ -309,9 +309,8 @@ const serverErrorDefinitions: ErrorCodesMap = {
       requiredTokens?: string
     ) => {
       const model = modelId ? ` for model "${modelId}"` : ''
-      // Totals can be KV cells or tokens, and the guards trigger at equality
-      // (a generating request needs a free slot) — so unit-neutral wording,
-      // phrased as leaving no room rather than exceeding.
+      // Ambiguous totals can be KV cells, and the guards trigger at equality —
+      // unit-neutral wording, phrased as leaving no room rather than exceeding.
       const capacity = ctxSize
         ? `the effective context capacity (${ctxSize} units)`
         : "the model's context capacity"

@@ -56,9 +56,8 @@ test('loadModelOptionsToRequestSchema: rejects retired n_discarded for LLM', (t)
   )
 })
 
-// The raw wire request must fail closed too: a non-strict modelConfig would
-// strip the retired key and silently disable sliding for an older or
-// hand-rolled client instead of failing the load.
+// The raw wire request must fail closed too — a non-strict modelConfig would
+// strip the retired key and silently disable sliding.
 test('loadModelSrcRequestSchema: rejects retired n_discarded for LLM', (t) => {
   t.is(
     loadModelSrcRequestSchema.safeParse({

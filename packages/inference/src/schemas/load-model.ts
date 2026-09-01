@@ -54,9 +54,8 @@ import { audioGenConfigSchema } from '@/schemas/audio-gen'
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([...Object.values(ModelType), ...Object.keys(ModelTypeAliases)])
 
-// Structural exclusion of the built-in types for the custom-plugin catch-all.
-// A regex, not a refine: a refine does not serialize, so generated clients
-// would accept a built-in modelType with arbitrary config through this arm.
+// Structural (regex, not refine) exclusion of built-in types: a refine does
+// not serialize, so generated clients would accept built-ins through this arm.
 const customPluginModelTypeSchema = z
   .string()
   .regex(new RegExp(`^(?!(?:${[...builtInModelTypes].join('|')})$).+$`), {

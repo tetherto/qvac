@@ -99,9 +99,8 @@ test('ContextOverflowError message stays unit-neutral when only requiredTokens i
   t.absent(err.message.includes('600 context tokens'), 'the total is not labelled tokens')
 })
 
-// The guards trigger at equality — a generating request needs a free slot —
-// so the message must not read as a contradiction when the total equals the
-// capacity.
+// The guards trigger at equality (a free output slot is needed), so the
+// message must not read as a contradiction at total == capacity.
 test('ContextOverflowError message reads coherently at the equality boundary', (t) => {
   const err = new ContextOverflowError(undefined, 512, 'model-1', undefined, {
     requiredTokens: 512
