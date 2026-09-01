@@ -48,16 +48,21 @@ test('send rejects a loadModel carrying retired n_discarded before any handler r
   clearPlugins()
   registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
   try {
-    await t.exception(
-      () =>
-        send({
-          type: 'loadModel',
-          modelType: ModelType.llamacppCompletion,
-          modelSrc: 'model.gguf',
-          modelConfig: { ctx_size: 2048, n_discarded: 256 }
-        } as unknown as Request),
-      /n_discarded/,
-      'the retired key fails request preparation instead of being stripped'
+    await send({
+      type: 'loadModel',
+      modelType: ModelType.llamacppCompletion,
+      modelSrc: 'model.gguf',
+      modelConfig: { ctx_size: 2048, n_discarded: 256 }
+    } as unknown as Request)
+    t.fail('expected the retired key to fail request preparation')
+  } catch (error) {
+    t.ok(
+      error instanceof RequestValidationFailedError,
+      'the defaults parse rejects as a structured validation failure, not a raw ZodError'
+    )
+    t.ok(
+      error instanceof Error && /n_discarded/.test(error.message),
+      'the failure names the retired key'
     )
   } finally {
     await close()

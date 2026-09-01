@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from tetherto.qvac_sdk import _api as api
+from tetherto.qvac_sdk._generated.models import LoadModelSrcRequest
 from tetherto.qvac_sdk.errors import (
     ModelLoadFailedError,
     ModelSrcTypeMismatchError,
@@ -142,6 +143,7 @@ def test_load_model_request_union_still_accepts_custom_plugin_types():
             "modelConfig": {"anything": True},
         }
     )
+    assert isinstance(request.root, LoadModelSrcRequest)
     assert request.root.root.model_type == "my-custom-plugin"
 
 

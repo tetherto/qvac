@@ -421,11 +421,17 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
   async contextOverflowWarmCache(params: CompletionTestParams): Promise<TestResult> {
     const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
     const kvCache = `ctx-overflow-warm-${Date.now()}`
-    const result = await this.runWarmOverflow(llmModelId, kvCache, params)
+    // Cleanup must run even when the flow throws unexpectedly — a leaked
+    // named cache poisons retries and adjacent runs.
+    let result: TestResult
+    try {
+      result = await this.runWarmOverflow(llmModelId, kvCache, params)
+    } catch (error) {
+      result = { passed: false, output: `Warm-cache flow threw: ${error}` }
+    }
     try {
       await deleteCache({ kvCacheKey: kvCache, modelId: llmModelId })
     } catch (error) {
-      // A leaked named cache poisons retries and adjacent runs — surface it.
       const context = result.passed ? 'Test passed but cache' : `${result.output}; cache also`
       return { passed: false, output: `${context} failed to delete: ${error}` }
     }
