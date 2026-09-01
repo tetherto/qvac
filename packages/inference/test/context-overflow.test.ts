@@ -88,27 +88,51 @@ test('isAddonContextOverflowError: message fallback is anchored to known C++ for
   t.is(isAddonContextOverflowError(new Error('processPromptImpl: context overflow\n')), true)
 })
 
-// The scheduler's admission guards reject pre-mutation but throw the generic
-// InvalidArgument status; the wording is the only handle for non-destructive
-// turn release. One case per emitted form.
-test('isAddonAdmissionCapRejection: recognises every scheduler admission wording', (t) => {
+// The scheduler's submit-time refusals reject pre-mutation but throw the
+// generic InvalidArgument status; the real code AND an enumerated wording
+// are both required. One positive case per emitted form, plus near-misses.
+test('isAddonAdmissionCapRejection: recognises every scheduler submit refusal', (t) => {
+  const ARG_CODE = '[ LLM :: InvalidArgument ]'
   const wordings = [
     'ContinuousBatchScheduler::submit: prompt of 600 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: prompt of 512 tokens leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: prefill prompt of 600 tokens exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
+    'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
+    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=2)'
   ]
   for (const wording of wordings) {
-    t.is(isAddonAdmissionCapRejection(new Error(wording)), true, wording)
+    t.is(
+      isAddonAdmissionCapRejection(Object.assign(new Error(wording), { code: ARG_CODE })),
+      true,
+      wording
+    )
   }
+  // Near-misses: right wording without the status code, right code with an
+  // unlisted wording, and a wording buried behind wrapper text.
+  t.is(isAddonAdmissionCapRejection(new Error(wordings[0]!)), false, 'code is required')
   t.is(
-    isAddonAdmissionCapRejection(new Error('some other InvalidArgument from the scheduler')),
-    false
+    isAddonAdmissionCapRejection(
+      Object.assign(new Error('some other InvalidArgument from the scheduler'), {
+        code: ARG_CODE
+      })
+    ),
+    false,
+    'unlisted wordings do not qualify'
   )
   t.is(
     isAddonAdmissionCapRejection(
-      new Error(
-        '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
+      Object.assign(new Error(`wrapped: ${wordings[0]!}`), { code: ARG_CODE })
+    ),
+    false,
+    'the wording must start the message'
+  )
+  t.is(
+    isAddonAdmissionCapRejection(
+      Object.assign(
+        new Error(
+          '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
+        ),
+        { code: ARG_CODE }
       )
     ),
     false,

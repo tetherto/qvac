@@ -366,6 +366,7 @@ test('completion: kv-cache still skips the tool block when a retired slide key i
 function registerSecondTurnThrowingModel(
   modelId: string,
   calls: RecordedCall[],
+  cachePaths: string[],
   thrown: Error
 ): void {
   let runCount = 0
@@ -379,6 +380,7 @@ function registerSecondTurnThrowingModel(
           messages: prompt as RecordedCall['messages'],
           prefill: opts?.prefill === true
         })
+        if (opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         if (!opts?.prefill) {
           runCount += 1
           if (runCount === 2) throw thrown
@@ -405,7 +407,12 @@ function registerSecondTurnThrowingModel(
 
 // Turn one commits, turn two is refused by the fake, turn three retries the
 // same history. Returns the refusal and the non-prefill calls for assertion.
-async function runRefusalScenario(modelId: string, calls: RecordedCall[], kvCacheKey: string) {
+async function runRefusalScenario(
+  modelId: string,
+  calls: RecordedCall[],
+  cachePaths: string[],
+  kvCacheKey: string
+) {
   const complete = completer(modelId, kvCacheKey)
   const first = user('Area of a triangle, base 10 height 5?')
   await complete([first])
@@ -416,8 +423,13 @@ async function runRefusalScenario(modelId: string, calls: RecordedCall[], kvCach
   } catch (error) {
     refusal = error
   }
+  // Bookkeeping surviving is not enough — the committed bytes must still be
+  // on disk between the refusal and the retry.
+  const fs = await import('bare-fs')
+  const fileSurvivedRefusal =
+    cachePaths.length > 0 && fs.existsSync(cachePaths[cachePaths.length - 1]!)
   await complete(grown)
-  return { refusal, turnCalls: calls.filter((call) => !call.prefill) }
+  return { refusal, fileSurvivedRefusal, turnCalls: calls.filter((call) => !call.prefill) }
 }
 
 // A prefill-guard overflow rejects before any decode or save, so it must not
@@ -428,17 +440,25 @@ test('completion: kv-cache survives an overflow rejection between turns', async 
 
   const modelId = `kvcache-overflow-preserves-${Date.now()}`
   const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
   registerSecondTurnThrowingModel(
     modelId,
     calls,
+    cachePaths,
     Object.assign(
       new Error(
         '[TextLlm] context overflow at batch prefill step: cached tokens 400 plus prompt tokens 200 exceed the max context tokens 512'
       ),
-      { code: '[ TextLlmAddon :: ContextOverflow ]' }
+      { code: '[ LLM :: ContextOverflow ]' }
     )
   )
-  const { refusal, turnCalls } = await runRefusalScenario(modelId, calls, 'overflow-preserves-key')
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'overflow-preserves-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
   t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused')
   t.is(turnCalls.length, 3, 'all three turns reached the model')
   t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
@@ -456,17 +476,25 @@ test('completion: kv-cache survives a scheduler admission rejection between turn
 
   const modelId = `kvcache-admission-preserves-${Date.now()}`
   const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
   registerSecondTurnThrowingModel(
     modelId,
     calls,
+    cachePaths,
     Object.assign(
       new Error(
         'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
       ),
-      { code: '[ TextLlmAddon :: InvalidArgument ]' }
+      { code: '[ LLM :: InvalidArgument ]' }
     )
   )
-  const { refusal, turnCalls } = await runRefusalScenario(modelId, calls, 'admission-preserves-key')
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'admission-preserves-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
   t.ok(refusal instanceof Error && /per-sequence cap/.test(refusal.message), 'turn two is refused')
   t.is(turnCalls.length, 3, 'all three turns reached the model')
   t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')

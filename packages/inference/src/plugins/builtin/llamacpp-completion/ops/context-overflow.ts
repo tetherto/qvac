@@ -36,18 +36,22 @@ export function isAddonContextOverflowError(err: unknown): boolean {
   )
 }
 
-// The continuous scheduler's admission guards (per-sequence cap on KV cells,
-// tokens, or a positive n_predict reservation) reject before any decode or
-// save, but throw the generic InvalidArgument status — recognisable only by
-// their wording. Callers use this to release a turn non-destructively; it is
-// deliberately NOT part of ContextOverflowError classification.
+// The continuous scheduler's submit-time refusals (per-sequence caps, the
+// positive n_predict reservation, and the batcher's AddStatus rejections)
+// all reject before any decode or save, but throw the generic
+// InvalidArgument status. The addon's real status code AND one of the
+// enumerated wordings are both required, since this picks preserve over
+// delete for the committed cache. Deliberately NOT part of
+// ContextOverflowError classification.
+const ADMISSION_REFUSAL_FORMS =
+  /^ContinuousBatchScheduler::submit: (?:(?:prefill )?prompt of \d+ (?:KV cells|tokens) (?:exceeds|leaves no room under) per-sequence cap \d+|n_predict -?\d+ \+ prompt \d+ KV cells exceeds per-sequence cap \d+|failed to add to batch \(MultiRequestBatcher::AddStatus=-?\d+\))/
+
 export function isAddonAdmissionCapRejection(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
+  const code = (err as { code?: unknown }).code
+  if (typeof code !== 'string' || !/::\s*InvalidArgument\s*\]/.test(code)) return false
   const message = (err as { message?: unknown }).message
-  return (
-    typeof message === 'string' &&
-    /ContinuousBatchScheduler::submit: .*per-sequence cap/.test(message)
-  )
+  return typeof message === 'string' && ADMISSION_REFUSAL_FORMS.test(message)
 }
 
 export type ContextOverflowSizes = {
