@@ -88,11 +88,9 @@ test('isAddonContextOverflowError: message fallback is anchored to known C++ for
   t.is(isAddonContextOverflowError(new Error('processPromptImpl: context overflow\n')), true)
 })
 
-// The scheduler's submit-time refusals reject pre-mutation but throw the
-// generic InvalidArgument status; the real code AND an enumerated wording
-// are both required. One positive case per emitted form, plus near-misses.
-test('isAddonPreMutationRefusal: recognises every pre-mutation refusal wording', (t) => {
-  const ARG_CODE = '[ LLM :: InvalidArgument ]'
+// Production errors arrive through the async transport as exception.what()
+// alone — no code — so message-only recognition must be exact.
+test('isAddonPreMutationRefusal: recognises the enumerated refusal forms', (t) => {
   const wordings = [
     'ContinuousBatchScheduler::submit: prompt of 600 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: prompt of 512 tokens leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',
@@ -103,43 +101,39 @@ test('isAddonPreMutationRefusal: recognises every pre-mutation refusal wording',
     'failed to initialise sampler with per-request generationParams (invalid grammar or json_schema?)'
   ]
   for (const wording of wordings) {
-    t.is(
-      isAddonPreMutationRefusal(Object.assign(new Error(wording), { code: ARG_CODE })),
-      true,
-      wording
-    )
+    t.is(isAddonPreMutationRefusal(new Error(wording)), true, `plain (async shape): ${wording}`)
   }
-  // Near-misses: right wording without the status code, right code with an
-  // unlisted wording, and a wording buried behind wrapper text.
-  t.is(isAddonPreMutationRefusal(new Error(wordings[0]!)), false, 'code is required')
+  // A code only exists on the synchronous path: correct one accepted,
+  // any other rejected even with a valid wording.
   t.is(
     isAddonPreMutationRefusal(
-      Object.assign(new Error('some other InvalidArgument from the scheduler'), {
-        code: ARG_CODE
-      })
+      Object.assign(new Error(wordings[0]!), { code: '[ LLM :: InvalidArgument ]' })
     ),
-    false,
-    'unlisted wordings do not qualify'
+    true
   )
   t.is(
     isAddonPreMutationRefusal(
-      Object.assign(new Error(`wrapped: ${wordings[0]!}`), { code: ARG_CODE })
+      Object.assign(new Error(wordings[0]!), { code: '[ LLM :: ContextOverflow ]' })
     ),
     false,
-    'the wording must start the message'
+    'a different status code disqualifies the wording'
   )
-  t.is(
-    isAddonPreMutationRefusal(
-      Object.assign(
-        new Error(
-          '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
-        ),
-        { code: ARG_CODE }
-      )
-    ),
-    false,
-    'overflow wordings stay with their own detector'
-  )
+  // Strictness probes: the message is the safety boundary, so near-misses
+  // and impossible or out-of-range variants must all be rejected.
+  const rejected = [
+    'some other InvalidArgument from the scheduler',
+    `wrapped: ${wordings[0]!}`,
+    `${wordings[0]!}\npost-persistence save failed`,
+    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=0)',
+    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=-1)',
+    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=9)',
+    'ContinuousBatchScheduler::submit: n_predict -1 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
+    'ContinuousBatchScheduler::submit: prefill prompt of 5 KV cells leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',
+    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
+  ]
+  for (const wording of rejected) {
+    t.is(isAddonPreMutationRefusal(new Error(wording)), false, `rejected: ${wording.slice(0, 60)}`)
+  }
 })
 
 test('parseContextOverflowMessage: extracts from long-form TextLlm message', (t) => {
@@ -189,9 +183,8 @@ test('parseContextOverflowMessage: covers every current addon guard', (t) => {
     ),
     { promptTokens: 31, cachedTokens: 8170, requiredTokens: 8201, ctxSize: 8192 }
   )
-  // MtmdLlmContext.cpp, single-prompt guard: its "tokens" figure is KV
-  // cells (the cached guard labels the same quantity), so promptTokens
-  // stays unset.
+  // MtmdLlmContext.cpp single-prompt guard: its "tokens" figure is KV
+  // cells, so promptTokens stays unset.
   t.alike(
     parseContextOverflowMessage(
       '[MtmdLlm] context overflow at prefill step (31 tokens, 24 positions, max 8192)\n'
@@ -215,10 +208,8 @@ test('parseContextOverflowMessage: covers every current addon guard', (t) => {
   )
 })
 
-// Valid addon state keeps KV cells >= positions, so these positions-dominant
-// messages are synthetic malformed-input probes: the defensive max must still
-// keep requiredTokens no smaller than the window if a future addon inverts
-// the relation.
+// Positions-dominant messages are synthetic malformed-input probes (valid
+// addon state keeps cells >= positions); the defensive max must still hold.
 test('parseContextOverflowMessage: positions-dominant probes keep the invariant defensively', (t) => {
   t.alike(
     parseContextOverflowMessage(

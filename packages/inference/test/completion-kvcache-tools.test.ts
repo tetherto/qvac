@@ -445,11 +445,9 @@ test('completion: kv-cache survives an overflow rejection between turns', async 
     modelId,
     calls,
     cachePaths,
-    Object.assign(
-      new Error(
-        '[TextLlm] context overflow at batch prefill step: cached tokens 400 plus prompt tokens 200 exceed the max context tokens 512'
-      ),
-      { code: '[ LLM :: ContextOverflow ]' }
+    // Production shape: the async transport delivers the message alone.
+    new Error(
+      '[TextLlm] context overflow at batch prefill step: cached tokens 400 plus prompt tokens 200 exceed the max context tokens 512'
     )
   )
   const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
@@ -467,9 +465,8 @@ test('completion: kv-cache survives an overflow rejection between turns', async 
   clearRegistry()
 })
 
-// The generationParams apply step validates against local copies before
-// touching live state — reachable at parallel = 1 via responseFormat — and
-// must not destroy the committed cache either.
+// The generationParams apply step rejects before touching live state
+// (reachable at parallel = 1) and must not destroy the committed cache.
 test('completion: kv-cache survives a generationParams rejection between turns', async (t) => {
   await setIsolatedHome()
   clearRegistry()
@@ -481,12 +478,7 @@ test('completion: kv-cache survives a generationParams rejection between turns',
     modelId,
     calls,
     cachePaths,
-    Object.assign(
-      new Error(
-        'invalid generationParams.json_schema: [json.exception.parse_error.101] parse error'
-      ),
-      { code: '[ LLM :: InvalidArgument ]' }
-    )
+    new Error('invalid generationParams.json_schema: [json.exception.parse_error.101] parse error')
   )
   const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
     modelId,
@@ -504,8 +496,7 @@ test('completion: kv-cache survives a generationParams rejection between turns',
 })
 
 // The scheduler's per-sequence-cap admission refusals (parallel >= 2) are
-// equally pre-mutation but carry the generic InvalidArgument status — they
-// must not destroy the committed cache either.
+// equally pre-mutation and must not destroy the committed cache either.
 test('completion: kv-cache survives a scheduler admission rejection between turns', async (t) => {
   await setIsolatedHome()
   clearRegistry()
@@ -517,11 +508,8 @@ test('completion: kv-cache survives a scheduler admission rejection between turn
     modelId,
     calls,
     cachePaths,
-    Object.assign(
-      new Error(
-        'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
-      ),
-      { code: '[ LLM :: InvalidArgument ]' }
+    new Error(
+      'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
     )
   )
   const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(

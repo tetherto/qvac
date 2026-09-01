@@ -36,23 +36,30 @@ export function isAddonContextOverflowError(err: unknown): boolean {
   )
 }
 
-// Refusals the addon throws before any decode or save — the scheduler's
-// submit guards (per-sequence caps, the positive n_predict reservation,
-// the batcher's AddStatus rejections) and the generationParams apply step,
-// which validates against local copies before touching live state. All
-// carry the generic InvalidArgument status, so the addon's real status
-// code AND one of the enumerated wordings are both required: this picks
-// preserve over delete for the committed cache. Deliberately NOT part of
-// ContextOverflowError classification.
-const PRE_MUTATION_REFUSAL_FORMS =
-  /^(?:ContinuousBatchScheduler::submit: (?:(?:prefill )?prompt of \d+ (?:KV cells|tokens) (?:exceeds|leaves no room under) per-sequence cap \d+|n_predict -?\d+ \+ prompt \d+ KV cells exceeds per-sequence cap \d+|failed to add to batch \(MultiRequestBatcher::AddStatus=-?\d+\))|invalid generationParams\.json_schema: |failed to initialise sampler with per-request generationParams \(invalid grammar or json_schema\?\))/
+// Refusals thrown before any decode or save; the async transport delivers
+// exception.what() alone, so each form is matched complete and end-anchored.
+const PRE_MUTATION_REFUSAL_FORMS = [
+  /^ContinuousBatchScheduler::submit: prompt of \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
+  /^ContinuousBatchScheduler::submit: prompt of \d+ tokens leaves no room under per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
+  /^ContinuousBatchScheduler::submit: prefill prompt of \d+ tokens exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
+  /^ContinuousBatchScheduler::submit: n_predict \d+ \+ prompt \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
+  /^ContinuousBatchScheduler::submit: failed to add to batch \(MultiRequestBatcher::AddStatus=[1-4]\)$/,
+  /^invalid generationParams\.json_schema: [^\n]*$/,
+  /^failed to initialise sampler with per-request generationParams \(invalid grammar or json_schema\?\)$/
+]
 
 export function isAddonPreMutationRefusal(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
+  // A status code only exists on the synchronous throw path; when present it
+  // must be InvalidArgument, and its absence (the async transport) is fine.
   const code = (err as { code?: unknown }).code
-  if (typeof code !== 'string' || !/::\s*InvalidArgument\s*\]/.test(code)) return false
+  if (code !== undefined && (typeof code !== 'string' || !/::\s*InvalidArgument\s*\]/.test(code))) {
+    return false
+  }
   const message = (err as { message?: unknown }).message
-  return typeof message === 'string' && PRE_MUTATION_REFUSAL_FORMS.test(message)
+  if (typeof message !== 'string') return false
+  const trimmed = message.trim()
+  return PRE_MUTATION_REFUSAL_FORMS.some((form) => form.test(trimmed))
 }
 
 export type ContextOverflowSizes = {
@@ -72,13 +79,8 @@ type PatternEntry = {
   map: (groups: number[]) => ContextOverflowSizes
 }
 
-// One entry per guard that formats numbers, most specific first. Separators
-// are horizontal whitespace only, so numbers cannot pair across lines. The
-// multimodal guards trip on EITHER positions or KV cells against the same
-// ceiling; valid addon state keeps cells >= positions, so taking the larger
-// measure is defensive rather than load-bearing. Keep in step with
-// TextLlmContext.cpp / MtmdLlmContext.cpp — a drifted wording silently
-// returns no fields.
+// One entry per number-formatting guard, most specific first; keep in step
+// with TextLlmContext.cpp / MtmdLlmContext.cpp or fields silently vanish.
 const MESSAGE_PATTERNS: PatternEntry[] = [
   {
     // "cached tokens C plus prompt tokens N exceed the max context tokens M"
@@ -91,9 +93,8 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
     })
   },
   {
-    // "cached P positions / C KV cells plus P2 positions / N KV cells of
-    //  prompt exceed the max context tokens M" — not tokens, so promptTokens
-    // stays unset.
+    // "cached P positions / C KV cells plus ... of prompt exceed the max
+    // context tokens M" — KV cells, not tokens, so promptTokens stays unset.
     pattern:
       /cached (\d+) positions \/ (\d+) KV cells plus (\d+) positions \/ (\d+) KV cells of prompt exceeds? the max context tokens (\d+)/i,
     map: ([cPos, cCells, pPos, pCells, ctx]) => ({
@@ -115,8 +116,7 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
   },
   {
     // "(N tokens, P positions, max M)" — the "tokens" figure is
-    // mtmd_helper_get_n_tokens, i.e. KV cells (the sibling cached guard
-    // labels the same quantity "KV cells"), so promptTokens stays unset.
+    // mtmd_helper_get_n_tokens, i.e. KV cells, so promptTokens stays unset.
     pattern: /\((\d+)[ \t]+tokens,[ \t]*(\d+)[ \t]+positions,[ \t]*max[ \t]+(\d+)\)/i,
     map: ([cells, pos, ctx]) => ({
       requiredTokens: Math.max(cells!, pos!),
