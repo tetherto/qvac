@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-01
+
 ### Changed
 
 - Raise the `speech-cpp` floor to 2026-09-01#1, which brings in ggml-speech

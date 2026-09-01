@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-01
+
 ### Added
 
 - Multi-Track (lego) generation: `taskType: 'lego'` with a `track` option
