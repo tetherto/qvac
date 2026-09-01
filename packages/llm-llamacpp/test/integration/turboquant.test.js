@@ -35,11 +35,12 @@ const isVulkanHappyPath =
 const isMetalRejectPath = platform === 'darwin' || platform === 'ios'
 const isAndroid = platform === 'android'
 
-// isVulkanHappyPath is a platform test, and on linux x64 the platform no longer
-// decides the backend: CUDA enumerates ahead of Vulkan and has no TurboQuant or
-// PolarQuant kernels, so the addon refuses these cache types there. Name the
-// backend the sweep is actually about instead of relying on enumeration order.
-const pinToVulkan = platform === 'linux' && arch === 'x64'
+// QVAC-23763: these rows used to name `backend: 'vulkan'` on linux x64, because
+// CUDA enumerates ahead of Vulkan, has no TurboQuant or PolarQuant kernels, and
+// the addon refused the load rather than stepping down. Selection now asks ggml
+// whether a device can run the requested cache type and passes it over before
+// the cascade picks, so the sweep reaches Vulkan on its own. The pin is gone:
+// what it worked around is fixed, and running unpinned is what exercises it.
 
 const skipReason =
   isVulkanHappyPath || isMetalRejectPath
@@ -89,7 +90,6 @@ function makeConfig(kv) {
     'cache-type-k': kv.k,
     'cache-type-v': kv.v,
     'flash-attn': 'on',
-    ...(pinToVulkan ? { backend: 'vulkan' } : {}),
     verbosity: '2'
   }
 }
@@ -181,18 +181,19 @@ for (const kv of KV_COMBOS) {
     const output = await collectResponse(response)
     const generatedTokens = Number(response.stats?.generatedTokens ?? 0)
 
-    // chooseBackend() logs this only on the override path; a `backend` that
-    // matches no device falls through to the default cascade with a warning.
-    // Without this the pin is advisory, and a silent fallback to CUDA would
-    // read as a pass here. Checked after the first run, never straight after
-    // load(): backend selection is lazy, so the log lands a tick later and an
-    // immediate check reads an empty buffer and fails on a pin that did bind.
-    if (pinToVulkan) {
-      t.ok(
-        specLogger.logs.some((l) => /backend override/.test(l)),
-        'vulkan backend pin took effect'
-      )
-    }
+    // QVAC-23763: these are TurboQuant/PolarQuant rows and ggml-cuda has no
+    // kernels for them, so whatever the cascade picks it must not be CUDA. That
+    // holds on every host, which is why it replaces the old "the vulkan pin
+    // bound" check: this asserts the outcome that matters rather than that a
+    // workaround was applied.
+    //
+    // Checked after the first run, never straight after load(): backend
+    // selection is lazy, so the log lands a tick later and an immediate check
+    // reads an empty buffer.
+    t.absent(
+      specLogger.logs.some((l) => /Chosen GPU CUDA/.test(l)),
+      'a TBQ/PQ row did not land on CUDA'
+    )
 
     t.comment(`output: ${JSON.stringify(output.slice(0, 200))}`)
     t.ok(output.length > 0, `output non-empty (${output.length} chars)`)
