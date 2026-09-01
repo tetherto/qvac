@@ -224,6 +224,38 @@ and diverges halfway. `coverNoiseStrength` controls the source/noise blend
 from `0` to `1`. The full FSQ-based `cover` task is reserved but not
 implemented.
 
+Use `lego` to generate a new isolated instrument layer that follows the
+source (tempo, key, groove). The result is only the new stem, ready to mix
+over the source. Lego requires the base DiT variant (turbo and sft are
+rejected) and a `track` name:
+
+```js
+const response = await gen.run('clean electric guitar with syncopated fills', {
+  lyrics: '[Instrumental]',
+  taskType: 'lego',
+  track: 'guitar',
+  sourceAudio
+})
+```
+
+Valid `track` names: `vocals`, `backing_vocals`, `drums`, `bass`, `guitar`,
+`keyboard`, `percussion`, `strings`, `synth`, `fx`, `brass`, `woodwinds`.
+Output length locks to the source length. Takes vary per seed; generate a few
+and keep the best. The base DiT is not in the registry `ditVariant` set yet,
+so pass it as an explicit `files.ditModel` path next to `modelDir` (which
+still resolves the three fixed stages).
+
+See [`examples/generate-lego.js`](examples/generate-lego.js) for a runnable
+stem example using raw stereo 48 kHz float PCM input:
+
+```bash
+ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  AUDIOGEN_BASE_DIT_MODEL=/path/to/acestep-v15-base-Q8_0.gguf \
+  AUDIOGEN_SOURCE_PCM=source.f32le \
+  npm run example:lego
+```
+
 See [`examples/generate-cover.js`](examples/generate-cover.js) for a runnable
 cover example using raw stereo 48 kHz float PCM input.
 
@@ -400,8 +432,10 @@ wrapped by a level-gated `QvacLogger`.
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |
-| `sourceAudio` | Source PCM in the same format; required by cover tasks. |
-| `taskType` | `text2music` (default), `cover-nofsq`, or reserved `cover`. |
+| `sourceAudio` | Source PCM in the same format; required by cover and lego tasks. |
+| `taskType` | `text2music` (default), `cover-nofsq`, `lego`, or reserved `cover`. |
+| `track` | Lego target layer; required when `taskType` is `lego`. |
+| `guidanceScale` | DiT classifier-free guidance; `0` (default) auto-resolves to `1.0` on turbo and `7.0` on base/sft. |
 | `audioCoverStrength` | Fraction of the run that follows the source, from `0` to `1` (default `1`). |
 | `coverNoiseStrength` | Initial source/noise blend from `0` to `1`. |
 

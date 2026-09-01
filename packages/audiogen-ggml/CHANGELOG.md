@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support the full `audioCoverStrength` range for `cover-nofsq`. Values below
   `1` follow the source for that fraction of the diffusion run and finish
   freely afterwards; `0.5` starts as a cover and diverges halfway.
+- Multi-Track (lego) generation: `taskType: 'lego'` with a `track` option
+  (one of the 12 ACE-Step layer names) generates a new isolated instrument
+  layer that follows `sourceAudio` and returns only that stem. Requires the
+  base DiT model.
+- Optional `guidanceScale` generation control for DiT classifier-free
+  guidance; `0` (the default) picks the loaded model's preset automatically.
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-31, which brings in the ACE-Step
+  Multi-Track (lego) task and base-model guided sampling.
 
 ## [0.3.2] - 2026-09-01
 
@@ -271,6 +282,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-08-03
 
 ### Changed
+
 - Update `ggml-speech` dependency version to align with other packages that also depend on it.
 
 ## [0.1.0] - 2026-07-30
