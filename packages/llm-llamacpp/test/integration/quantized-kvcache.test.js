@@ -199,9 +199,10 @@ async function runBenchmark(cfg, modelInfo) {
       // into "the demotion fired". Read here, after the run: backend selection
       // is lazy, so the log is not in the buffer yet when load() returns.
       demotedForKvType: specLogger.logs.some((l) => /cannot run KV-cache type/.test(l)),
-      // chooseBackend's own verdict. Read from the log because the addon
-      // exposes no API that reports which backend was selected.
-      choseCuda: specLogger.logs.some((l) => /Chosen GPU CUDA/.test(l))
+      // chooseBackend's own verdict, from its structured line. Read from the
+      // log because the addon exposes no API that reports the selected backend
+      // by name — `stats.backendFamily` is the coarse enum, not the device.
+      choseCuda: specLogger.logs.some((l) => /\[backend-selection\].*selected=cuda/.test(l))
     }
   } finally {
     await model.unload().catch(() => {})

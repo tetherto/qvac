@@ -59,11 +59,16 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
 
   await inference.load()
 
-  // chooseBackend() logs this only on the override path; a `backend` that
-  // matches no device falls through to the default cascade with a warning, and
-  // the override block is skipped outright for a CPU load. Without this the
-  // pin is advisory, and the four Qwen3.5 tests that depend on it would fall
-  // back to CUDA and report their old flakiness as a genuine failure.
+  // chooseBackend() reports `path=override` only when a `backend` list actually
+  // bound; a list matching no device falls through to the default cascade with a
+  // warning, and the override block is skipped outright for a CPU load. Without
+  // this the pin is advisory, and the four Qwen3.5 tests that depend on it would
+  // fall back to CUDA and report their old flakiness as a genuine failure.
+  //
+  // QVAC-23763: matches the structured line rather than chooseBackend's prose,
+  // which is gone. `backend-required` on these rows makes a missed pin a load
+  // error too, so this is now the second of two defences rather than the only
+  // one.
   //
   // Call this AFTER the first completion, never straight after load(): backend
   // selection is lazy, so the log lands a tick later and an immediate check
@@ -73,7 +78,7 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
       return
     }
     t.ok(
-      specLogger.logs.some((l) => /backend override/.test(l)),
+      specLogger.logs.some((l) => /\[backend-selection\].*path=override/.test(l)),
       `${config.backend} backend pin took effect`
     )
   }
@@ -749,10 +754,17 @@ safeTest(
 // while CPU ran the full 3072 without closing, diverging about fifteen tokens
 // in. That is a cross-backend trajectory divergence, tracked separately.
 // Pinning the backend keeps these tests meaningful; it does not fix it.
+//
+// QVAC-23763: `backend-required` makes that pin binding. Without it a `backend`
+// matching no device falls through to the default cascade, so these rows would
+// silently run on CUDA and report the divergence above as a genuine failure —
+// the exact failure mode the pin exists to avoid.
 const QWEN35_REASONING_CONFIG = {
   ctx_size: '8192',
   n_predict: '3072',
-  ...(os.platform() === 'linux' && os.arch() === 'x64' ? { backend: 'vulkan' } : {})
+  ...(os.platform() === 'linux' && os.arch() === 'x64'
+    ? { backend: 'vulkan', 'backend-required': 'true' }
+    : {})
 }
 
 // Qwen3.5 is a hybrid SSM family. The recurrent half is rolled back

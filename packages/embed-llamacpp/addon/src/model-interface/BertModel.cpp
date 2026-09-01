@@ -509,12 +509,17 @@ BertModelSetup setupParams(
         }
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_INFO,
+            // QVAC-23763: this said "restricting --device to the %s backend's
+            // own devices", which stopped being true when the dedupe landed -
+            // a second physical card is kept even when another backend
+            // registers it. llm-llamacpp's copy of this line was corrected at
+            // the time; this one was missed.
             string_format(
-                "[BertModel] split-mode: restricting --device to the %s "
-                "backend's own devices (%s); this host registers GPUs under "
-                "more than one backend\n",
-                chosenBackend.second.c_str(),
-                deviceList.c_str())
+                "[BertModel] split-mode: naming each discrete GPU once in "
+                "--device (%s), preferring %s on a tie; this host registers "
+                "GPUs under more than one backend\n",
+                deviceList.c_str(),
+                chosenBackend.second.c_str())
                 .c_str(),
             nullptr);
         configVector.emplace_back("--device");

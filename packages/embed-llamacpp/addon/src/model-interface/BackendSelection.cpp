@@ -366,19 +366,38 @@ const char* exclusionReasonName(backend_selection::ExclusionReason reason) {
   return "unknown";
 }
 
-const char* cascadeLogFor(DeviceFamily family) {
-  switch (family) {
-  case DeviceFamily::OpenClAdreno:
-  case DeviceFamily::OpenClOther:
-    return "Chosen GPU OpenCL";
-  case DeviceFamily::Cuda:
-    return "Chosen GPU CUDA";
-  case DeviceFamily::Gpu:
-    return "Chosen GPU Backend";
-  case DeviceFamily::Igpu:
-    return "Chosen iGPU Backend";
+const char* selectionPathName(backend_selection::SelectionPath path) {
+  using backend_selection::SelectionPath;
+  switch (path) {
+  case SelectionPath::Cascade:
+    return "cascade";
+  case SelectionPath::Override:
+    return "override";
+  case SelectionPath::Cpu:
+    return "cpu";
   }
-  return "Chosen GPU Backend";
+  return "unknown";
+}
+
+/// The one line that says what selection decided and why. Same format as
+/// llm-llamacpp's, so one log grep works across both addons. QVAC-23763.
+void emitSelectionLog(
+    const BackendInterface& bckI, const backend_selection::SelectionTrace& t) {
+  std::string text = string_format(
+      "[backend-selection] selected=%s registry=%s path=%s",
+      t.selectedName.empty() ? "none" : t.selectedName.c_str(),
+      t.selectedRegistry.empty() ? "-" : t.selectedRegistry.c_str(),
+      ::selectionPathName(t.path));
+  if (t.skippedName.empty()) {
+    text += " skipped=none";
+  } else {
+    text += string_format(
+        " skipped=%s skipped_registry=%s skipped_reason=%s",
+        t.skippedName.c_str(),
+        t.skippedRegistry.empty() ? "-" : t.skippedRegistry.c_str(),
+        ::exclusionReasonName(t.skippedReason));
+  }
+  bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
 }
 
 /// First surviving candidate of @p family. Callers iterate family-major and this
@@ -707,6 +726,7 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     choice.trace.selectedName = c.name;
     choice.trace.selectedRegistry = c.registry;
     choice.trace.path = path;
+    ::emitSelectionLog(bckI, choice.trace);
     return choice;
   };
 
@@ -729,9 +749,6 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
             continue;
           }
           if (::backendNameMatchesFamily(c.name, family)) {
-            std::string text = string_format(
-                "Chosen %s Backend (backend override)", family.c_str());
-            bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
             return settle(c, SelectionPath::Override);
           }
         }
@@ -782,14 +799,12 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
 
   for (const DeviceFamily family : ::K_CASCADE_ORDER) {
     if (const Candidate* c = ::firstUsable(enumeration, family); c != nullptr) {
-      bckI.llamaLogCallback(
-          GGML_LOG_LEVEL_INFO, ::cascadeLogFor(family), nullptr);
       return settle(*c, SelectionPath::Cascade);
     }
   }
 
-  bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
   choice.trace.path = SelectionPath::Cpu;
+  ::emitSelectionLog(bckI, choice.trace);
   return choice;
 }
 
