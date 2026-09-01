@@ -28,9 +28,16 @@ runs:
     # unpacked once per component-list revision. The key includes the pinned
     # list's hash via the action file itself changing the runner workspace,
     # so bump cache-suffix when editing COMPONENTS.
-    - name: Cache CUDA toolkit
+    #
+    # QVAC-23763: restore and save are split on purpose. The key is global and
+    # `pull_request_target` runs with GITHUB_REF on the base branch, so a
+    # combined `actions/cache` would let any authorized PR write the entry that
+    # main's prebuild and publish runs later restore, putting an author-supplied
+    # nvcc on PATH in a privileged run. cpp-lint is the lane that makes that
+    # reachable without a label, so only trusted events may save.
+    - name: Restore CUDA toolkit
       id: cache-cuda
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4
       with:
         path: ${{ runner.temp }}/cuda
         key: cuda-redist-${{ inputs.cuda-version }}-r1
@@ -71,6 +78,18 @@ runs:
         if [ -d "$prefix/lib" ] && [ ! -e "$prefix/lib64" ]; then
           ln -s lib "$prefix/lib64"
         fi
+
+    # Only trusted events populate the entry every other run restores.
+    - name: Save CUDA toolkit
+      if: >-
+        steps.cache-cuda.outputs.cache-hit != 'true' &&
+        (github.event_name == 'push' ||
+         github.event_name == 'workflow_dispatch' ||
+         github.event_name == 'merge_group')
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/cuda
+        key: cuda-redist-${{ inputs.cuda-version }}-r1
 
     - name: Export CUDA environment
       shell: bash
