@@ -1,6 +1,6 @@
 import { closeSync, constants, fstatSync, openSync, readFileSync } from 'node:fs'
 
-import { ServeOptionsError } from './startup.js'
+import { ServeOptionsError } from '@/serve/startup'
 
 export interface ServeApiKeyOptions {
   readonly apiKey?: string | undefined

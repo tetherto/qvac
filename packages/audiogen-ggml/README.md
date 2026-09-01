@@ -50,6 +50,13 @@ prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
 opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`
 on the build host).
 
+The prebuilt CUDA module targets **compute capability 8.0 and newer**. It
+carries native code for 8.6 (RTX 30xx, A40) and 8.9 (RTX 40xx, L40) and
+JIT-compiles from 8.0 PTX for anything newer (Hopper, Blackwell / RTX 50xx),
+which costs a one-off compile on first use that the driver then caches. Cards
+below 8.0 — Turing (RTX 20xx, GTX 16xx, T4), Volta and Pascal — have no CUDA
+code path in the prebuild and should run on Vulkan.
+
 To build the native addon from source in a repository checkout:
 
 ```bash
@@ -127,9 +134,11 @@ for await (const item of response.iterate()) {
   }
 }
 const stats = await response.await()
-// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId }
-// backendDevice: 0 = CPU, 1 = GPU
-// backendId:     0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId,
+//   gpuFallbackReason }
+// backendDevice:     0 = CPU, 1 = GPU
+// backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+// gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
 
 await gen.destroy()
 ```
@@ -141,6 +150,10 @@ await gen.destroy()
 > so a `useGPU: true` run that fell back to the CPU is detectable. Use
 > `audiogenBackendName(stats.backendId)` rather than copying the code table
 > above; it returns `undefined` for an id this version does not know.
+> When a `useGPU: true` run resolves to the CPU, `gpuFallbackReason` says which
+> half of the acquisition failed - no GPU device was enumerated, or one was and
+> every attempt to initialise it failed. Name it with
+> `audiogenGpuFallbackReason(stats.gpuFallbackReason)`.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
 
 ### 2. A song with lyrics + rhythm

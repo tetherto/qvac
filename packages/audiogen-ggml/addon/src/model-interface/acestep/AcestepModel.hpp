@@ -10,6 +10,7 @@
 #include <variant>
 #include <vector>
 
+#include "audiogen-cpp/gpu_fallback.h"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/AudioGenProgress.hpp"
@@ -156,6 +157,8 @@ private:
   int channels_ = 0;   // populated from the engine result in generate()
 
   std::string backendName_ = "CPU";
+  tts_cpp::GpuFallbackReason gpuFallbackReason_ =
+      tts_cpp::GpuFallbackReason::not_requested;
 };
 
 } // namespace qvac::audiogenggml::acestep

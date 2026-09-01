@@ -23,6 +23,29 @@ export function estimateWhisper(input: EstimatorInput): EstimatorResult {
     }
   }
 
+  // A zero here is an unmeasured placeholder, not a measurement: the harness
+  // writes `{ lower: 0, upper: 0 }` until its whisper pass has run. Consuming
+  // it would return a confident estimate whose entire audio working memory is
+  // zero — the same failure shape as a mis-subtracted KV cache.
+  if (calibration.audioWindowBytes.upper <= 0) {
+    return {
+      kind: 'unknown',
+      estimatorVersion: WHISPER_ESTIMATOR_VERSION,
+      reasons: [
+        'the audio window coefficient for this platform has not been measured, so an audio estimate cannot be defended'
+      ]
+    }
+  }
+  if (workload.streaming && calibration.audioStreamingBytes.upper <= 0) {
+    return {
+      kind: 'unknown',
+      estimatorVersion: WHISPER_ESTIMATOR_VERSION,
+      reasons: [
+        'the streaming-session coefficient for this platform has not been measured, so a streaming audio estimate cannot be defended'
+      ]
+    }
+  }
+
   const assumptions: string[] = []
   const reasons: string[] = []
 

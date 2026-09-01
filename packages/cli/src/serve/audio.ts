@@ -4,7 +4,7 @@
 //   2) serve.models["${model}-${voice}"]
 //   3) serve.models[model]
 
-import { ENCODED_SPEECH_FORMATS, type EncodedSpeechFormat } from './lib/audio-transcode.js'
+import { ENCODED_SPEECH_FORMATS, type EncodedSpeechFormat } from '@/serve/lib/audio-transcode'
 
 const NATIVE_FORMATS = new Set(['wav', 'pcm'])
 

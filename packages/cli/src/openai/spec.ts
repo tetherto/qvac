@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { buildServer } from '../serve/index.js'
+import { buildServer } from '@/serve/index'
 
 export type SpecFormat = 'json' | 'yaml'
 
