@@ -134,6 +134,21 @@ def test_load_model_request_union_rejects_builtin_type_with_retired_key():
         )
 
 
+def test_load_model_request_union_accepts_the_model_type_enum_directly():
+    # Enums subclass str, so a member routes through its own Literal arm —
+    # direct generated-client construction works without stringifying.
+    request = LoadModelRequest.model_validate(
+        {
+            "type": "loadModel",
+            "modelType": ModelType.llamacpp_completion,
+            "modelSrc": "/models/x.gguf",
+            "modelConfig": {"ctx_size": 2048},
+        }
+    )
+    assert isinstance(request.root, LoadModelSrcRequest)
+    assert request.root.root.model_type == "llamacpp-completion"
+
+
 def test_load_model_request_union_still_accepts_custom_plugin_types():
     request = LoadModelRequest.model_validate(
         {

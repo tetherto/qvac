@@ -287,6 +287,11 @@ def run_datamodel_codegen(output_dir: Path) -> None:
             # what datamodel-code-generator's own docs say this flag is
             # headed toward becoming the pydantic v2 default for anyway.
             "--use-annotated",
+            # Enums subclass their value type (`class ModelType(str, Enum)`),
+            # so a member equals its wire string and validates through the
+            # request unions' Literal arms — direct generated-client use of
+            # `ModelType.X` works without stringifying first.
+            "--use-subclass-enum",
             # A single-value Literal is the wire discriminator (`type:
             # Literal["embed"]`); defaulting it means callers never pass the
             # redundant `type="embed"`, so a generated request is ergonomic
@@ -790,6 +795,11 @@ def run_datamodel_codegen_single(schema_path: Path, output_path: Path) -> None:
             "--disable-warnings",
             "--use-double-quotes",
             "--use-annotated",
+            # Enums subclass their value type (`class ModelType(str, Enum)`),
+            # so a member equals its wire string and validates through the
+            # request unions' Literal arms — direct generated-client use of
+            # `ModelType.X` works without stringifying first.
+            "--use-subclass-enum",
             "--base-class",
             "tetherto.qvac_sdk._generated_base.GeneratedBaseModel",
         ],

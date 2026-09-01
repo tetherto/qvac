@@ -94,7 +94,7 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
     ]
 
 
-class AssessModelFitRequestExecution(Enum):
+class AssessModelFitRequestExecution(str, Enum):
     sequential = "sequential"
     concurrent = "concurrent"
 
@@ -123,13 +123,13 @@ class AssessModelFitRequest(GeneratedBaseModel):
     type: Literal["assessModelFit"] = "assessModelFit"
 
 
-class AssessModelFitResponseVerdict(Enum):
+class AssessModelFitResponseVerdict(str, Enum):
     likely_fits = "likely-fits"
     likely_too_large = "likely-too-large"
     unknown = "unknown"
 
 
-class AssessModelFitResponseExecution(Enum):
+class AssessModelFitResponseExecution(str, Enum):
     sequential = "sequential"
     concurrent = "concurrent"
 
@@ -168,7 +168,7 @@ class AssessModelFitResponseEstimate(GeneratedBaseModel):
     upper_bound_bytes: Annotated[float, Field(alias="upperBoundBytes")]
 
 
-class AssessModelFitResponseModelsItemVerdict(Enum):
+class AssessModelFitResponseModelsItemVerdict(str, Enum):
     likely_fits = "likely-fits"
     likely_too_large = "likely-too-large"
     unknown = "unknown"
@@ -262,7 +262,7 @@ class AssessModelFitResponse(GeneratedBaseModel):
     type: Literal["assessModelFit"] = "assessModelFit"
 
 
-class AudioGenStreamRequestTaskType(Enum):
+class AudioGenStreamRequestTaskType(str, Enum):
     text2music = "text2music"
     cover_nofsq = "cover-nofsq"
 
@@ -456,7 +456,7 @@ class AudioGenStreamResponseProgress(GeneratedBaseModel):
     total: Annotated[int, Field(ge=0, le=9007199254740991)]
 
 
-class AudioGenStreamResponseStopReason(Enum):
+class AudioGenStreamResponseStopReason(str, Enum):
     completed = "completed"
     cancelled = "cancelled"
 
@@ -650,7 +650,7 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema(
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType(
-    Enum
+    str, Enum
 ):
     string = "string"
     number = "number"
@@ -752,7 +752,7 @@ class BatchCompletionStreamRequestPromptsItem(GeneratedBaseModel):
     ] = None
 
 
-class BatchCompletionStreamRequestToolDialect(Enum):
+class BatchCompletionStreamRequestToolDialect(str, Enum):
     hermes = "hermes"
     pythonic = "pythonic"
     json = "json"
@@ -883,7 +883,7 @@ class BatchCompletionStreamResponseEventsItemEventToolCall(GeneratedBaseModel):
     ]
 
 
-class BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode(Enum):
+class BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode(str, Enum):
     parse_error = "PARSE_ERROR"
     validation_error = "VALIDATION_ERROR"
     unknown_tool = "UNKNOWN_TOOL"
@@ -914,7 +914,7 @@ class BatchCompletionStreamResponseEventsItemEventToolError(GeneratedBaseModel):
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice(
-    Enum
+    str, Enum
 ):
     cpu = "cpu"
     gpu = "gpu"
@@ -996,7 +996,7 @@ class BatchCompletionStreamResponseEventsItemEventCompletionDoneError(
     ] = None
 
 
-class BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason(Enum):
+class BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason(str, Enum):
     eos = "eos"
     length = "length"
     stop_sequence = "stopSequence"
@@ -1046,7 +1046,7 @@ class BatchCompletionStreamResponseEventsItem(GeneratedBaseModel):
     )
 
 
-class BatchCompletionStreamResponseStatsBackendDevice(Enum):
+class BatchCompletionStreamResponseStatsBackendDevice(str, Enum):
     cpu = "cpu"
     gpu = "gpu"
 
@@ -1186,7 +1186,7 @@ class BciTranscribeResponse(GeneratedBaseModel):
     type: Literal["bciTranscribe"] = "bciTranscribe"
 
 
-class BciTranscribeStreamRequestStreamOptsEmit(Enum):
+class BciTranscribeStreamRequestStreamOptsEmit(str, Enum):
     delta = "delta"
     full = "full"
 
@@ -1324,12 +1324,12 @@ class CancelRequestRequest(GeneratedBaseModel):
     ] = None
 
 
-class CancelRequestBroadKind(Enum):
+class CancelRequestBroadKind(str, Enum):
     completion = "completion"
     batch_completion = "batchCompletion"
     embeddings = "embeddings"
     transcribe = "transcribe"
-    translate = "translate"
+    translate_ = "translate"
     diffusion = "diffusion"
     world = "world"
     audiogen = "audiogen"
@@ -1430,7 +1430,7 @@ class KvCache(RootModel[str]):
     root: Annotated[str, Field(min_length=1)]
 
 
-class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType(Enum):
+class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType(str, Enum):
     string = "string"
     number = "number"
     integer = "integer"
@@ -1529,7 +1529,7 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
     ] = None
 
 
-class CompletionOrchestrateRequestToolDialect(Enum):
+class CompletionOrchestrateRequestToolDialect(str, Enum):
     hermes = "hermes"
     pythonic = "pythonic"
     json = "json"
@@ -1757,7 +1757,7 @@ class CompletionOrchestrateResponseEventsItemToolCall(GeneratedBaseModel):
     ]
 
 
-class CompletionOrchestrateResponseEventsItemToolErrorErrorCode(Enum):
+class CompletionOrchestrateResponseEventsItemToolErrorErrorCode(str, Enum):
     parse_error = "PARSE_ERROR"
     validation_error = "VALIDATION_ERROR"
     unknown_tool = "UNKNOWN_TOOL"
@@ -1787,7 +1787,9 @@ class CompletionOrchestrateResponseEventsItemToolError(GeneratedBaseModel):
     ]
 
 
-class CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
+class CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice(
+    str, Enum
+):
     cpu = "cpu"
     gpu = "gpu"
 
@@ -1857,7 +1859,7 @@ class CompletionOrchestrateResponseEventsItemCompletionDoneError(GeneratedBaseMo
     ] = None
 
 
-class CompletionOrchestrateResponseEventsItemCompletionDoneStopReason(Enum):
+class CompletionOrchestrateResponseEventsItemCompletionDoneStopReason(str, Enum):
     eos = "eos"
     length = "length"
     stop_sequence = "stopSequence"
@@ -1969,7 +1971,7 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
     ] = None
 
 
-class CompletionStreamRequestToolsItemParametersPropertiesValueType(Enum):
+class CompletionStreamRequestToolsItemParametersPropertiesValueType(str, Enum):
     string = "string"
     number = "number"
     integer = "integer"
@@ -2064,7 +2066,7 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     ] = None
 
 
-class CompletionStreamRequestToolDialect(Enum):
+class CompletionStreamRequestToolDialect(str, Enum):
     hermes = "hermes"
     pythonic = "pythonic"
     json = "json"
@@ -2281,7 +2283,7 @@ class CompletionStreamResponseEventsItemToolCall(GeneratedBaseModel):
     ]
 
 
-class CompletionStreamResponseEventsItemToolErrorErrorCode(Enum):
+class CompletionStreamResponseEventsItemToolErrorErrorCode(str, Enum):
     parse_error = "PARSE_ERROR"
     validation_error = "VALIDATION_ERROR"
     unknown_tool = "UNKNOWN_TOOL"
@@ -2311,7 +2313,7 @@ class CompletionStreamResponseEventsItemToolError(GeneratedBaseModel):
     ]
 
 
-class CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
+class CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice(str, Enum):
     cpu = "cpu"
     gpu = "gpu"
 
@@ -2379,7 +2381,7 @@ class CompletionStreamResponseEventsItemCompletionDoneError(GeneratedBaseModel):
     ] = None
 
 
-class CompletionStreamResponseEventsItemCompletionDoneStopReason(Enum):
+class CompletionStreamResponseEventsItemCompletionDoneStopReason(str, Enum):
     eos = "eos"
     length = "length"
     stop_sequence = "stopSequence"
@@ -2430,17 +2432,17 @@ class CompletionStreamResponse(GeneratedBaseModel):
     ]
 
 
-class AudioGenEngine(Enum):
+class AudioGenEngine(str, Enum):
     acestep = "acestep"
     minimax = "minimax"
 
 
-class AudioGenTaskType(Enum):
+class AudioGenTaskType(str, Enum):
     text2_music = "text2music"
     cover_nofsq = "cover-nofsq"
 
 
-class ModelType(Enum):
+class ModelType(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -2456,7 +2458,7 @@ class ModelType(Enum):
     ggml_classification = "ggml-classification"
 
 
-class PluginId(Enum):
+class PluginId(str, Enum):
     llm = "@qvac/sdk/llamacpp-completion/plugin"
     embedding = "@qvac/sdk/llamacpp-embedding/plugin"
     whisper = "@qvac/sdk/whispercpp-transcription/plugin"
@@ -2470,7 +2472,7 @@ class PluginId(Enum):
     classification = "@qvac/sdk/ggml-classification/plugin"
 
 
-class SupportedAudioFormat(Enum):
+class SupportedAudioFormat(str, Enum):
     mp3 = ".mp3"
     m4_a = ".m4a"
     ogg = ".ogg"
@@ -2480,14 +2482,14 @@ class SupportedAudioFormat(Enum):
     raw = ".raw"
 
 
-class TtsCosyvoice3Emotion(Enum):
+class TtsCosyvoice3Emotion(str, Enum):
     anger = "anger"
     happy = "happy"
     neutral = "neutral"
     sad = "sad"
 
 
-class TtsCosyvoice3InstructDialect(Enum):
+class TtsCosyvoice3InstructDialect(str, Enum):
     cantonese = "cantonese"
     northeastern = "northeastern"
     gansu = "gansu"
@@ -2507,23 +2509,23 @@ class TtsCosyvoice3InstructDialect(Enum):
     yunnan = "yunnan"
 
 
-class TtsCosyvoice3InstructStyle(Enum):
+class TtsCosyvoice3InstructStyle(str, Enum):
     peppa = "peppa"
     robot = "robot"
 
 
-class TtsCosyvoice3InstructVolume(Enum):
+class TtsCosyvoice3InstructVolume(str, Enum):
     loud = "loud"
     soft = "soft"
 
 
-class TtsPace(Enum):
+class TtsPace(str, Enum):
     slow = "slow"
     moderate = "moderate"
     fast = "fast"
 
 
-class Verbosity(Enum):
+class Verbosity(float, Enum):
     error = 0
     warn = 1
     info = 2
@@ -2550,7 +2552,7 @@ class DeleteCacheResponse(GeneratedBaseModel):
     error: str | None = None
 
 
-class DiffusionStreamRequestSamplingMethod(Enum):
+class DiffusionStreamRequestSamplingMethod(str, Enum):
     euler = "euler"
     euler_a = "euler_a"
     heun = "heun"
@@ -2567,7 +2569,7 @@ class DiffusionStreamRequestSamplingMethod(Enum):
     res_2s = "res_2s"
 
 
-class DiffusionStreamRequestScheduler(Enum):
+class DiffusionStreamRequestScheduler(str, Enum):
     discrete = "discrete"
     karras = "karras"
     exponential = "exponential"
@@ -2962,7 +2964,7 @@ class EmbedRequest(GeneratedBaseModel):
     ] = None
 
 
-class EmbedResponseStatsBackendDevice(Enum):
+class EmbedResponseStatsBackendDevice(str, Enum):
     cpu = "cpu"
     gpu = "gpu"
 
@@ -3058,7 +3060,7 @@ class FinetuneRunRequestOptionsValidationDataset(GeneratedBaseModel):
     path: Annotated[str, Field(min_length=1)]
 
 
-class FinetuneRunRequestOptionsLrScheduler(Enum):
+class FinetuneRunRequestOptionsLrScheduler(str, Enum):
     constant = "constant"
     cosine = "cosine"
     linear = "linear"
@@ -3125,7 +3127,7 @@ class FinetuneRunRequestOptions(GeneratedBaseModel):
     weight_decay: Annotated[float | None, Field(alias="weightDecay", ge=0.0)] = None
 
 
-class FinetuneRunRequestOperation(Enum):
+class FinetuneRunRequestOperation(str, Enum):
     start = "start"
     resume = "resume"
 
@@ -3176,7 +3178,7 @@ class FinetuneGetStateRequestOptionsValidationDataset(GeneratedBaseModel):
     path: Annotated[str, Field(min_length=1)]
 
 
-class FinetuneGetStateRequestOptionsLrScheduler(Enum):
+class FinetuneGetStateRequestOptionsLrScheduler(str, Enum):
     constant = "constant"
     cosine = "cosine"
     linear = "linear"
@@ -3255,7 +3257,7 @@ class FinetuneGetStateRequest(GeneratedBaseModel):
     operation: Literal["getState"] = "getState"
 
 
-class FinetuneStopRequestOperation(Enum):
+class FinetuneStopRequestOperation(str, Enum):
     pause = "pause"
     cancel = "cancel"
 
@@ -3271,7 +3273,7 @@ class FinetuneStopRequest(GeneratedBaseModel):
     ]
 
 
-class FinetuneResponseStatus(Enum):
+class FinetuneResponseStatus(str, Enum):
     idle = "IDLE"
     running = "RUNNING"
     paused = "PAUSED"
@@ -3331,7 +3333,7 @@ class GetLoadedModelInfoRequest(GeneratedBaseModel):
     type: Literal["getLoadedModelInfo"] = "getLoadedModelInfo"
 
 
-class LoadedModelInfoToolDialect(Enum):
+class LoadedModelInfoToolDialect(str, Enum):
     hermes = "hermes"
     pythonic = "pythonic"
     json = "json"
@@ -3377,7 +3379,7 @@ class GetModelInfoRequest(GeneratedBaseModel):
     type: Literal["getModelInfo"] = "getModelInfo"
 
 
-class GetModelInfoResponseModelInfoAddon(Enum):
+class GetModelInfoResponseModelInfoAddon(str, Enum):
     llm = "llm"
     whisper = "whisper"
     bci = "bci"
@@ -3601,7 +3603,7 @@ class GetSystemResourcesRequest(GeneratedBaseModel):
 
 
 class GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -3673,7 +3675,7 @@ class GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameFailed(
 
 
 class GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -3745,7 +3747,7 @@ class GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorFailed(
 
 
 class GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -3817,7 +3819,7 @@ class GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureFailed(
 
 
 class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -3889,7 +3891,7 @@ class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresFailed
 
 
 class GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -3961,7 +3963,7 @@ class GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresFailed(
 
 
 class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4033,7 +4035,7 @@ class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresFai
 
 
 class GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4105,7 +4107,7 @@ class GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresFail
 
 
 class GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4177,7 +4179,7 @@ class GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzFailed(
 
 
 class GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4314,7 +4316,7 @@ class GetSystemResourcesResponseCapabilitiesCpuSupportedValue(GeneratedBaseModel
     ]
 
 
-class GetSystemResourcesResponseCapabilitiesCpuSupportedProvenanceScope(Enum):
+class GetSystemResourcesResponseCapabilitiesCpuSupportedProvenanceScope(str, Enum):
     system = "system"
     process = "process"
     device = "device"
@@ -4375,7 +4377,7 @@ class GetSystemResourcesResponseCapabilitiesCpuFailed(GeneratedBaseModel):
 
 
 class GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4458,7 +4460,7 @@ class GetSystemResourcesResponseCapabilitiesMemory(GeneratedBaseModel):
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4530,7 +4532,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameFailed(
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4602,7 +4604,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorFailed(
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4674,7 +4676,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeFailed(
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4746,7 +4748,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameFail
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4818,7 +4820,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionF
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4890,7 +4892,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanF
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -4962,7 +4964,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclF
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5034,7 +5036,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglF
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5106,7 +5108,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuF
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5178,7 +5180,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalFa
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11SupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5250,7 +5252,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12SupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5322,7 +5324,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5394,7 +5396,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaFai
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5466,7 +5468,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZe
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5607,7 +5609,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDrivers(
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5679,7 +5681,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryF
 
 
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -5809,7 +5811,7 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem(GeneratedBase
     ]
 
 
-class GetSystemResourcesResponseCapabilitiesGpusSupportedProvenanceScope(Enum):
+class GetSystemResourcesResponseCapabilitiesGpusSupportedProvenanceScope(str, Enum):
     system = "system"
     process = "process"
     device = "device"
@@ -5888,7 +5890,7 @@ class GetSystemResourcesResponseCapabilities(GeneratedBaseModel):
     )
 
 
-class GetSystemResourcesResponseSampleCpuSupportedProvenanceScope(Enum):
+class GetSystemResourcesResponseSampleCpuSupportedProvenanceScope(str, Enum):
     system = "system"
     process = "process"
     device = "device"
@@ -5943,7 +5945,9 @@ class GetSystemResourcesResponseSampleCpuFailed(GeneratedBaseModel):
     reason: str | None = None
 
 
-class GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenanceScope(Enum):
+class GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenanceScope(
+    str, Enum
+):
     system = "system"
     process = "process"
     device = "device"
@@ -6004,7 +6008,9 @@ class GetSystemResourcesResponseSampleMemoryUsedBytesFailed(GeneratedBaseModel):
     reason: str | None = None
 
 
-class GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenanceScope(Enum):
+class GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenanceScope(
+    str, Enum
+):
     system = "system"
     process = "process"
     device = "device"
@@ -6086,7 +6092,7 @@ class GetSystemResourcesResponseSampleMemory(GeneratedBaseModel):
 
 
 class GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -6158,7 +6164,7 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItemComputeFailed(
 
 
 class GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -6230,7 +6236,7 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeFailed(
 
 
 class GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -6302,7 +6308,7 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeFailed(
 
 
 class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -6374,7 +6380,7 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesFaile
 
 
 class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -6446,7 +6452,7 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesFail
 
 
 class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -6518,7 +6524,7 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsFailed(
 
 
 class GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupportedProvenanceScope(
-    Enum
+    str, Enum
 ):
     system = "system"
     process = "process"
@@ -6642,7 +6648,7 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItem(GeneratedBaseModel)
     ]
 
 
-class GetSystemResourcesResponseSampleGpusSupportedProvenanceScope(Enum):
+class GetSystemResourcesResponseSampleGpusSupportedProvenanceScope(str, Enum):
     system = "system"
     process = "process"
     device = "device"
@@ -6758,7 +6764,7 @@ class Predict(RootModel[int]):
     ]
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode(Enum):
+class LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode(str, Enum):
     none = "none"
     mmap = "mmap"
     mlock = "mlock"
@@ -6766,7 +6772,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode(Enum):
     dio = "dio"
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(Enum):
+class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(float, Enum):
     number_0 = 0
     number_1 = 1
     number_2 = 2
@@ -6784,18 +6790,20 @@ class MainGpu(RootModel[int]):
     ]
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu(Enum):
+class LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu(str, Enum):
     integrated = "integrated"
     dedicated = "dedicated"
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode(Enum):
+class LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode(str, Enum):
     none = "none"
     layer = "layer"
     row = "row"
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(Enum):
+class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -6903,13 +6911,13 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode(Enum):
+class LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode(str, Enum):
     disabled = "disabled"
     batched = "batched"
     sequential = "sequential"
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(Enum):
+class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(str, Enum):
     on = "on"
     off = "off"
 
@@ -7167,7 +7175,7 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy(Enum):
+class LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy(str, Enum):
     greedy = "greedy"
     beam_search = "beam_search"
 
@@ -7207,7 +7215,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams(
     ] = None
 
 
-class LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat(Enum):
+class LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat(str, Enum):
     f32le = "f32le"
     s16le = "s16le"
 
@@ -7238,7 +7246,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig(
     ] = None
 
 
-class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum):
+class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -7773,7 +7781,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig(
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(
-    Enum
+    str, Enum
 ):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -8248,12 +8256,12 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice(Enum):
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice(str, Enum):
     gpu = "gpu"
     cpu = "cpu"
 
 
-class LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling(Enum):
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling(str, Enum):
     none = "none"
     mean = "mean"
     cls = "cls"
@@ -8261,29 +8269,29 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling(Enum):
     rank = "rank"
 
 
-class LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention(Enum):
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention(str, Enum):
     causal = "causal"
     non_causal = "non-causal"
 
 
-class LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention(Enum):
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention(str, Enum):
     on = "on"
     off = "off"
     auto = "auto"
 
 
-class LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu(Enum):
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu(str, Enum):
     integrated = "integrated"
     dedicated = "dedicated"
 
 
-class LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode(Enum):
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode(str, Enum):
     none = "none"
     layer = "layer"
     row = "row"
 
 
-class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(float, Enum):
     number_0 = 0
     number_1 = 1
     number_2 = 2
@@ -8440,11 +8448,11 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode(Enum):
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode(str, Enum):
     full = "full"
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom(Enum):
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom(str, Enum):
     en = "en"
     ar = "ar"
     bg = "bg"
@@ -8501,7 +8509,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom(Enum):
     vi = "vi"
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo(Enum):
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo(str, Enum):
     en = "en"
     ar = "ar"
     bg = "bg"
@@ -8558,7 +8566,9 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo(Enum):
     vi = "vi"
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(Enum):
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -8666,7 +8676,9 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc(
     ] = None
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(Enum):
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -8774,12 +8786,12 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc(
     ] = None
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode(Enum):
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode(str, Enum):
     full = "full"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(
-    Enum
+    str, Enum
 ):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -8889,7 +8901,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc(
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(
-    Enum
+    str, Enum
 ):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -8999,7 +9011,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(
-    Enum
+    str, Enum
 ):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -9272,11 +9284,11 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(GeneratedBaseModel
     ] = None
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode(Enum):
+class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode(str, Enum):
     full = "full"
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom(Enum):
+class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom(str, Enum):
     asm_beng = "asm_Beng"
     ben_beng = "ben_Beng"
     brx_deva = "brx_Deva"
@@ -9305,7 +9317,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom(Enum):
     urd_arab = "urd_Arab"
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo(Enum):
+class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo(str, Enum):
     asm_beng = "asm_Beng"
     ben_beng = "ben_Beng"
     brx_deva = "brx_Deva"
@@ -9451,7 +9463,7 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
     ]
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage(str, Enum):
     en = "en"
     es = "es"
     fr = "fr"
@@ -9477,7 +9489,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage(Enum):
     hi = "hi"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -9583,7 +9595,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc(GeneratedBase
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -9691,7 +9703,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc(
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -9797,7 +9809,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc(GeneratedBaseM
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -9903,7 +9915,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc(GeneratedBase
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -10011,7 +10025,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -10285,7 +10301,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
     tts_voice_style_src: Annotated[Any | None, Field(alias="ttsVoiceStyleSrc")] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage(str, Enum):
     en = "en"
     ko = "ko"
     ja = "ja"
@@ -10319,7 +10335,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage(Enum):
     vi = "vi"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -10427,7 +10445,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -10638,7 +10658,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     tts_voice_style_src: Annotated[Any | None, Field(alias="ttsVoiceStyleSrc")] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion(str, Enum):
     command = "command"
     anger = "anger"
     narration = "narration"
@@ -10653,7 +10673,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion(Enum):
     surprise = "surprise"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigParlerPace(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigParlerPace(str, Enum):
     slow = "slow"
     moderate = "moderate"
     fast = "fast"
@@ -10849,14 +10869,14 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion(str, Enum):
     anger = "anger"
     happy = "happy"
     neutral = "neutral"
     sad = "sad"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace(str, Enum):
     slow = "slow"
     moderate = "moderate"
     fast = "fast"
@@ -10872,7 +10892,7 @@ class Instruct(RootModel[str]):
     ]
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect(str, Enum):
     cantonese = "cantonese"
     northeastern = "northeastern"
     gansu = "gansu"
@@ -10892,12 +10912,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect(Enum):
     yunnan = "yunnan"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume(str, Enum):
     loud = "loud"
     soft = "soft"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle(str, Enum):
     peppa = "peppa"
     robot = "robot"
 
@@ -10929,7 +10949,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct(GeneratedBaseModel
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -11037,7 +11059,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -11252,7 +11276,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -11360,7 +11386,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(
+    str, Enum
+):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -11468,7 +11496,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(Enum):
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -11747,19 +11775,19 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     ]
 
 
-class LoadModelSrcRequestGgmlOcrModelConfigPipelineType(Enum):
+class LoadModelSrcRequestGgmlOcrModelConfigPipelineType(str, Enum):
     easyocr = "easyocr"
     doctr = "doctr"
 
 
-class LoadModelSrcRequestGgmlOcrModelConfigBackendDevice(Enum):
+class LoadModelSrcRequestGgmlOcrModelConfigBackendDevice(str, Enum):
     cpu = "cpu"
     vulkan = "vulkan"
     metal = "metal"
     opencl = "opencl"
 
 
-class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
+class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -12005,14 +12033,14 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigMode(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigMode(str, Enum):
     diffusion = "diffusion"
     upscale = "upscale"
     video = "video"
     world = "world"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigDevice(str, Enum):
     gpu = "gpu"
     cpu = "cpu"
 
@@ -12028,12 +12056,12 @@ class MainGpu2(RootModel[int]):
     ]
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigMainGpu(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigMainGpu(str, Enum):
     integrated = "integrated"
     dedicated = "dedicated"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigPrediction(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigPrediction(str, Enum):
     auto = "auto"
     eps = "eps"
     v = "v"
@@ -12042,7 +12070,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigPrediction(Enum):
     flux2_flow = "flux2_flow"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigType(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigType(str, Enum):
     auto = "auto"
     f32 = "f32"
     f16 = "f16"
@@ -12059,25 +12087,25 @@ class LoadModelSrcRequestSdcppGenerationModelConfigType(Enum):
     q8_0 = "q8_0"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigRng(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigRng(str, Enum):
     cpu = "cpu"
     cuda = "cuda"
     std_default = "std_default"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng(str, Enum):
     cpu = "cpu"
     cuda = "cuda"
     std_default = "std_default"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode(str, Enum):
     auto = "auto"
     immediately = "immediately"
     at_runtime = "at_runtime"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -12183,7 +12211,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc(GeneratedBaseMo
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -12289,7 +12317,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc(GeneratedBaseMo
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -12395,7 +12423,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc(GeneratedBaseMo
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -12501,7 +12529,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc(GeneratedBaseMode
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -12608,7 +12636,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc(GeneratedBaseMode
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(
-    Enum
+    str, Enum
 ):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -12717,7 +12745,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -12823,7 +12851,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc(GeneratedBaseM
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -12931,7 +12959,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -13038,7 +13066,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc(GeneratedBas
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(
-    Enum
+    str, Enum
 ):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -13147,7 +13175,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -13253,7 +13281,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc(GeneratedBaseMo
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -13435,7 +13463,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
+class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -13859,7 +13887,7 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -13967,7 +13995,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc(
     ] = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -14073,7 +14101,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc(GeneratedBaseM
     ] = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -14179,7 +14207,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc(GeneratedBase
     ] = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -14371,7 +14399,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
     ]
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -14477,7 +14505,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc(GeneratedBaseM
     ] = None
 
 
-class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(Enum):
+class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -14704,7 +14732,7 @@ class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
     ]
 
 
-class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
+class LoadModelSrcRequestGgmlVlaModelConfigBackend(str, Enum):
     auto = "auto"
     cpu = "cpu"
 
@@ -15014,12 +15042,12 @@ class LoadModelSrcRequest(
     ]
 
 
-class ReloadConfigRequestModelType(Enum):
+class ReloadConfigRequestModelType(str, Enum):
     whisper = "whisper"
     whispercpp_transcription = "whispercpp-transcription"
 
 
-class ReloadConfigRequestModelConfigStrategy(Enum):
+class ReloadConfigRequestModelConfigStrategy(str, Enum):
     greedy = "greedy"
     beam_search = "beam_search"
 
@@ -15057,7 +15085,7 @@ class ReloadConfigRequestModelConfigVadParams(GeneratedBaseModel):
     ] = None
 
 
-class ReloadConfigRequestModelConfigAudioFormat(Enum):
+class ReloadConfigRequestModelConfigAudioFormat(str, Enum):
     f32le = "f32le"
     s16le = "s16le"
 
@@ -15084,7 +15112,7 @@ class ReloadConfigRequestModelConfigMiscConfig(GeneratedBaseModel):
     ] = None
 
 
-class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
+class ReloadConfigRequestModelConfigVadModelSrcAddon(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -15453,7 +15481,7 @@ class LoggingStreamRequest(GeneratedBaseModel):
     type: Literal["loggingStream"] = "loggingStream"
 
 
-class LoggingStreamResponseLevel(Enum):
+class LoggingStreamResponseLevel(str, Enum):
     error = "error"
     warn = "warn"
     info = "info"
@@ -15525,7 +15553,7 @@ class ModelRegistryGetModelRequest(GeneratedBaseModel):
     registry_source: Annotated[str, Field(alias="registrySource")]
 
 
-class ModelRegistryGetModelResponseModelAddon(Enum):
+class ModelRegistryGetModelResponseModelAddon(str, Enum):
     llm = "llm"
     whisper = "whisper"
     bci = "bci"
@@ -15542,7 +15570,7 @@ class ModelRegistryGetModelResponseModelAddon(Enum):
     other = "other"
 
 
-class ModelRegistryGetModelResponseModelEngine(Enum):
+class ModelRegistryGetModelResponseModelEngine(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -15663,7 +15691,7 @@ class ModelRegistryListRequest(GeneratedBaseModel):
     type: Literal["modelRegistryList"] = "modelRegistryList"
 
 
-class ModelRegistryListResponseModelsItemAddon(Enum):
+class ModelRegistryListResponseModelsItemAddon(str, Enum):
     llm = "llm"
     whisper = "whisper"
     bci = "bci"
@@ -15680,7 +15708,7 @@ class ModelRegistryListResponseModelsItemAddon(Enum):
     other = "other"
 
 
-class ModelRegistryListResponseModelsItemEngine(Enum):
+class ModelRegistryListResponseModelsItemEngine(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -15794,7 +15822,7 @@ class ModelRegistryListResponse(GeneratedBaseModel):
     error: str | None = None
 
 
-class ModelRegistrySearchRequestAddon(Enum):
+class ModelRegistrySearchRequestAddon(str, Enum):
     llm = "llm"
     whisper = "whisper"
     bci = "bci"
@@ -15822,7 +15850,7 @@ class ModelRegistrySearchRequest(GeneratedBaseModel):
     ] = None
 
 
-class ModelRegistrySearchResponseModelsItemAddon(Enum):
+class ModelRegistrySearchResponseModelsItemAddon(str, Enum):
     llm = "llm"
     whisper = "whisper"
     bci = "bci"
@@ -15839,7 +15867,7 @@ class ModelRegistrySearchResponseModelsItemAddon(Enum):
     other = "other"
 
 
-class ModelRegistrySearchResponseModelsItemEngine(Enum):
+class ModelRegistrySearchResponseModelsItemEngine(str, Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
@@ -16038,12 +16066,12 @@ class PluginInvokeStreamResponse(GeneratedBaseModel):
     done: bool | None = None
 
 
-class RagRequestChunkChunkOptsChunkStrategy(Enum):
+class RagRequestChunkChunkOptsChunkStrategy(str, Enum):
     character = "character"
     paragraph = "paragraph"
 
 
-class RagRequestChunkChunkOptsSplitStrategy(Enum):
+class RagRequestChunkChunkOptsSplitStrategy(str, Enum):
     character = "character"
     word = "word"
     token = "token"
@@ -16075,12 +16103,12 @@ class RagRequestChunk(GeneratedBaseModel):
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
-class RagRequestIngestChunkOptsChunkStrategy(Enum):
+class RagRequestIngestChunkOptsChunkStrategy(str, Enum):
     character = "character"
     paragraph = "paragraph"
 
 
-class RagRequestIngestChunkOptsSplitStrategy(Enum):
+class RagRequestIngestChunkOptsSplitStrategy(str, Enum):
     character = "character"
     word = "word"
     token = "token"
@@ -16221,7 +16249,7 @@ class RagResponseChunk(GeneratedBaseModel):
     chunks: list[RagResponseChunkChunksItem]
 
 
-class RagResponseIngestProcessedItemStatus(Enum):
+class RagResponseIngestProcessedItemStatus(str, Enum):
     fulfilled = "fulfilled"
     rejected = "rejected"
 
@@ -16250,7 +16278,7 @@ class RagResponseIngest(GeneratedBaseModel):
     dropped_indices: Annotated[list[float], Field(alias="droppedIndices")]
 
 
-class RagResponseSaveEmbeddingsProcessedItemStatus(Enum):
+class RagResponseSaveEmbeddingsProcessedItemStatus(str, Enum):
     fulfilled = "fulfilled"
     rejected = "rejected"
 
@@ -16373,7 +16401,7 @@ class RagResponseDeleteWorkspace(GeneratedBaseModel):
     operation: Literal["deleteWorkspace"] = "deleteWorkspace"
 
 
-class RagProgressResponseOperation(Enum):
+class RagProgressResponseOperation(str, Enum):
     ingest = "ingest"
     save_embeddings = "saveEmbeddings"
     reindex = "reindex"
@@ -16409,7 +16437,7 @@ class StateRequest(GeneratedBaseModel):
     type: Literal["state"] = "state"
 
 
-class StateResponseState(Enum):
+class StateResponseState(str, Enum):
     active = "active"
     suspending = "suspending"
     suspended = "suspended"
@@ -16435,7 +16463,7 @@ class SuspendResponse(GeneratedBaseModel):
     type: Literal["suspend"] = "suspend"
 
 
-class TextToSpeechRequestEmotion(Enum):
+class TextToSpeechRequestEmotion(str, Enum):
     command = "command"
     anger = "anger"
     narration = "narration"
@@ -16450,7 +16478,7 @@ class TextToSpeechRequestEmotion(Enum):
     surprise = "surprise"
 
 
-class TextToSpeechRequestPace(Enum):
+class TextToSpeechRequestPace(str, Enum):
     slow = "slow"
     moderate = "moderate"
     fast = "fast"
@@ -16564,13 +16592,13 @@ class TextToSpeechResponse(GeneratedBaseModel):
     sentence_chunk: Annotated[str | None, Field(alias="sentenceChunk")] = None
 
 
-class TextToSpeechStreamRequestSentenceDelimiterPreset(Enum):
+class TextToSpeechStreamRequestSentenceDelimiterPreset(str, Enum):
     latin = "latin"
     cjk = "cjk"
     multilingual = "multilingual"
 
 
-class TextToSpeechStreamRequestEmotion(Enum):
+class TextToSpeechStreamRequestEmotion(str, Enum):
     command = "command"
     anger = "anger"
     narration = "narration"
@@ -16585,7 +16613,7 @@ class TextToSpeechStreamRequestEmotion(Enum):
     surprise = "surprise"
 
 
-class TextToSpeechStreamRequestPace(Enum):
+class TextToSpeechStreamRequestPace(str, Enum):
     slow = "slow"
     moderate = "moderate"
     fast = "fast"
@@ -16994,7 +17022,7 @@ class Text3(RootModel[list[Text3Item]]):
     ]
 
 
-class TranslateNmtRequestModelType(Enum):
+class TranslateNmtRequestModelType(str, Enum):
     nmt = "nmt"
     nmtcpp_translation = "nmtcpp-translation"
 
@@ -17038,7 +17066,7 @@ class TranslateNmtRequest(GeneratedBaseModel):
     ] = None
 
 
-class TranslateLlmRequestModelType(Enum):
+class TranslateLlmRequestModelType(str, Enum):
     llm = "llm"
     llamacpp_completion = "llamacpp-completion"
 
@@ -17197,7 +17225,7 @@ class UpscaleStreamRequest(GeneratedBaseModel):
     type: Literal["upscaleStream"] = "upscaleStream"
 
 
-class UpscaleStreamResponseStatsBackendDevice(Enum):
+class UpscaleStreamResponseStatsBackendDevice(str, Enum):
     cpu = "cpu"
     gpu = "gpu"
 
@@ -17284,7 +17312,7 @@ class UpscaleStreamResponse(GeneratedBaseModel):
     ] = None
 
 
-class VideoStreamRequestSamplingMethod(Enum):
+class VideoStreamRequestSamplingMethod(str, Enum):
     euler = "euler"
     euler_a = "euler_a"
     heun = "heun"
@@ -17301,7 +17329,7 @@ class VideoStreamRequestSamplingMethod(Enum):
     res_2s = "res_2s"
 
 
-class VideoStreamRequestScheduler(Enum):
+class VideoStreamRequestScheduler(str, Enum):
     discrete = "discrete"
     karras = "karras"
     exponential = "exponential"
@@ -17316,7 +17344,7 @@ class VideoStreamRequestScheduler(Enum):
     ltx2 = "ltx2"
 
 
-class VideoStreamRequestHighNoiseSampler(Enum):
+class VideoStreamRequestHighNoiseSampler(str, Enum):
     euler = "euler"
     euler_a = "euler_a"
     heun = "heun"
@@ -17333,7 +17361,7 @@ class VideoStreamRequestHighNoiseSampler(Enum):
     res_2s = "res_2s"
 
 
-class VideoStreamRequestHighNoiseScheduler(Enum):
+class VideoStreamRequestHighNoiseScheduler(str, Enum):
     discrete = "discrete"
     karras = "karras"
     exponential = "exponential"
@@ -17365,7 +17393,7 @@ class VaeTileSize1(RootModel[str]):
     root: Annotated[str, Field(description="VAE tile size override.", min_length=1)]
 
 
-class VideoStreamRequestCacheMode(Enum):
+class VideoStreamRequestCacheMode(str, Enum):
     disabled = "disabled"
     easycache = "easycache"
     ucache = "ucache"
@@ -17374,7 +17402,7 @@ class VideoStreamRequestCacheMode(Enum):
     cache_dit = "cache-dit"
 
 
-class VideoStreamRequestMode(Enum):
+class VideoStreamRequestMode(str, Enum):
     txt2vid = "txt2vid"
     img2vid = "img2vid"
 
@@ -17912,7 +17940,7 @@ class WorldSceneStreamResponse(GeneratedBaseModel):
     ] = None
 
 
-class WorldStepStreamRequestKeysItem(Enum):
+class WorldStepStreamRequestKeysItem(str, Enum):
     w = "W"
     a = "A"
     s = "S"
