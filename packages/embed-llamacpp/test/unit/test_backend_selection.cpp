@@ -1095,3 +1095,176 @@ TEST_F(
       splitDevicesFor(mockBackend, "vulkan0"),
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
+
+// ---- backend-required and main-gpu addressing (QVAC-23763 R11/R13) ----
+//
+// Mirrors the llm-llamacpp cases. embed has no metadata, finetuning or Adreno
+// rules, so the "an override cannot resurrect a guarded device" variants have no
+// counterpart here; everything else applies unchanged.
+
+static BackendChoice chooseWithRequired(
+    MockBackendInterface& mockBackend,
+    const std::vector<std::string>& backendOverride, bool required) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.backendOverride = backendOverride;
+  request.backendRequired = required;
+  return chooseBackend(request, bckI);
+}
+
+static BackendChoice chooseWithMainGpu(
+    MockBackendInterface& mockBackend, const MainGpu& mainGpu) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.mainGpu = mainGpu;
+  return chooseBackend(request, bckI);
+}
+
+TEST_F(BackendSelectionTest, AdvisoryOverrideStillFallsThrough) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithRequired(mockBackend, {"cuda"}, false).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, StrictOverrideThrowsWhenNothingMatches) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  try {
+    chooseWithRequired(mockBackend, {"cuda"}, true);
+    FAIL() << "expected a StatusError";
+  } catch (const qvac_errors::StatusError& e) {
+    const std::string what = e.what();
+    EXPECT_NE(what.find("cuda"), std::string::npos) << what;
+    // must name what WAS there, or diagnosing it takes a second run
+    EXPECT_NE(what.find("vulkan0"), std::string::npos) << what;
+  }
+}
+
+TEST_F(BackendSelectionTest, StrictOverrideIsSatisfiedByAMatch) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithRequired(mockBackend, {"vulkan"}, true).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, BackendRequiredParsing) {
+  for (const char* yes : {"true", "on", "1", "TRUE"}) {
+    std::unordered_map<std::string, std::string> cfg{{"backend-required", yes}};
+    EXPECT_TRUE(tryBackendRequiredFromMap(cfg, true)) << yes;
+    EXPECT_EQ(cfg.count("backend-required"), 0u) << yes;
+  }
+  for (const char* no : {"false", "off", "0"}) {
+    std::unordered_map<std::string, std::string> cfg{{"backend-required", no}};
+    EXPECT_FALSE(tryBackendRequiredFromMap(cfg, true)) << no;
+  }
+  std::unordered_map<std::string, std::string> underscore{
+      {"backend_required", "true"}};
+  EXPECT_TRUE(tryBackendRequiredFromMap(underscore, true));
+
+  std::unordered_map<std::string, std::string> absent;
+  EXPECT_FALSE(tryBackendRequiredFromMap(absent, true));
+}
+
+TEST_F(BackendSelectionTest, BackendRequiredRejectsBothSpellings) {
+  std::unordered_map<std::string, std::string> cfg{
+      {"backend-required", "true"}, {"backend_required", "true"}};
+  EXPECT_THROW(tryBackendRequiredFromMap(cfg, true), qvac_errors::StatusError);
+}
+
+TEST_F(BackendSelectionTest, BackendRequiredRejectsNonsense) {
+  std::unordered_map<std::string, std::string> cfg{{"backend-required", "yes"}};
+  EXPECT_THROW(tryBackendRequiredFromMap(cfg, true), qvac_errors::StatusError);
+}
+
+TEST_F(BackendSelectionTest, BackendRequiredWithoutBackendThrows) {
+  std::unordered_map<std::string, std::string> cfg{
+      {"backend-required", "true"}};
+  EXPECT_THROW(tryBackendRequiredFromMap(cfg, false), qvac_errors::StatusError);
+  std::unordered_map<std::string, std::string> off{
+      {"backend-required", "false"}};
+  EXPECT_FALSE(tryBackendRequiredFromMap(off, false));
+}
+
+TEST_F(BackendSelectionTest, MainGpuIntegerStillWorks) {
+  EXPECT_EQ(parseMainGpu("0"), MainGpu(0));
+  EXPECT_EQ(parseMainGpu("integrated"), MainGpu(MainGpuType::Integrated));
+  EXPECT_EQ(parseMainGpu("dedicated"), MainGpu(MainGpuType::Dedicated));
+  EXPECT_EQ(parseMainGpu(""), std::nullopt);
+}
+
+// std::stoi parsed a leading prefix and threw the rest away, which is what made
+// a bus id parse as device 0.
+TEST_F(BackendSelectionTest, MainGpuRejectsPartialIntegerParse) {
+  EXPECT_THROW(parseMainGpu("1abc"), qvac_errors::StatusError);
+  EXPECT_THROW(parseMainGpu("nonsense"), qvac_errors::StatusError);
+}
+
+TEST_F(BackendSelectionTest, MainGpuBusIdNotMisparsedAsZero) {
+  const auto parsed = parseMainGpu("0000:65:00.0");
+  ASSERT_TRUE(parsed.has_value());
+  ASSERT_TRUE(std::holds_alternative<MainGpuBusId>(parsed.value()));
+  EXPECT_EQ(std::get<MainGpuBusId>(parsed.value()).id, "0000:65:00.0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuQualifiedParsing) {
+  const auto parsed = parseMainGpu("CUDA:1");
+  ASSERT_TRUE(parsed.has_value());
+  ASSERT_TRUE(std::holds_alternative<MainGpuQualified>(parsed.value()));
+  EXPECT_EQ(std::get<MainGpuQualified>(parsed.value()).family, "cuda");
+  EXPECT_EQ(std::get<MainGpuQualified>(parsed.value()).index, 1);
+  EXPECT_EQ(
+      std::get<MainGpuQualified>(parseMainGpu("hip:0").value()).family, "rocm");
+}
+
+TEST_F(BackendSelectionTest, MainGpuQualifiedRejectsUnknownFamily) {
+  EXPECT_THROW(parseMainGpu("nvidia:0"), qvac_errors::StatusError);
+}
+
+TEST_F(BackendSelectionTest, MainGpuQualifiedSelectsNthOfFamily) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA1_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 1}).name, "cuda1");
+}
+
+// The point of the qualified form: the same card whatever order the backends
+// registered in.
+TEST_F(BackendSelectionTest, MainGpuQualifiedIsIndependentOfEnumerationOrder) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 0}).name, "cuda0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeFallsThrough) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}).name, "cuda0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuBusIdSelectsMatchingDevice) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(NVIDIA_DESC, CUDA1_BACK), "0000:b3:00.0"));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:b3:00.0"}).name,
+      "cuda1");
+}
+
+TEST_F(BackendSelectionTest, MainGpuBusIdNotFoundFallsThrough) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:ff:00.0"}).name,
+      "cuda0");
+}
+
+// A backend that publishes no bus id cannot be addressed this way; falling
+// through beats failing a load over a device the caller may not have meant.
+TEST_F(BackendSelectionTest, MainGpuBusIdWithoutPublishedIdsFallsThrough) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:65:00.0"}).name,
+      "cuda0");
+}

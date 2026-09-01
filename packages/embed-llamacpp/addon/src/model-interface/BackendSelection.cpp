@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <optional>
+#include <regex>
 #include <string_view>
 #include <variant>
 #include <vector>
@@ -15,6 +17,12 @@
 using namespace backend_selection;
 
 namespace {
+
+// Defined below, next to the family list it matches against. Forward-declared
+// because enumerateCandidates() needs it to resolve a `main-gpu` like "cuda:0".
+bool backendNameMatchesFamily(
+    const std::string& lowercasedBackendName, std::string_view family);
+
 struct DeviceDescription {
   std::string gpuDescription;
   std::string gpuBackend;
@@ -178,6 +186,71 @@ void tryEmplaceDevice(
   }
 }
 
+/// Resolve a backend-qualified or bus-id `main-gpu` to a device index.
+///
+/// Scans rather than indexes: that is what makes these forms stable against
+/// backend load order. Returns nullopt and warns when nothing matches, so the
+/// caller can fall through to the full enumeration.
+std::optional<size_t> resolveNamedMainGpu(
+    const BackendInterface& bckI, const MainGpu& mainGpuValue) {
+  const size_t deviceCount = bckI.ggml_backend_dev_count();
+
+  if (std::holds_alternative<MainGpuQualified>(mainGpuValue)) {
+    const MainGpuQualified& want = std::get<MainGpuQualified>(mainGpuValue);
+    int seen = 0;
+    for (size_t i = 0; i < deviceCount; ++i) {
+      const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+      std::string name = bckI.ggml_backend_dev_name(dev);
+      std::ranges::transform(name, name.begin(), ::tolower);
+      if (!::backendNameMatchesFamily(name, want.family)) {
+        continue;
+      }
+      if (seen == want.index) {
+        return i;
+      }
+      ++seen;
+    }
+    std::string msg = string_format(
+        "main-gpu '%s:%d' matched no device (%d %s device(s) present); using "
+        "the default device order instead",
+        want.family.c_str(),
+        want.index,
+        seen,
+        want.family.c_str());
+    bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, msg.c_str(), nullptr);
+    return std::nullopt;
+  }
+
+  const MainGpuBusId& want = std::get<MainGpuBusId>(mainGpuValue);
+  if (bckI.ggml_backend_dev_get_props == nullptr) {
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_WARN,
+        "main-gpu was given a PCI bus id, but this build cannot read device bus "
+        "ids; using the default device order instead",
+        nullptr);
+    return std::nullopt;
+  }
+  for (size_t i = 0; i < deviceCount; ++i) {
+    const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    ggml_backend_dev_props props{};
+    bckI.ggml_backend_dev_get_props(dev, &props);
+    if (props.device_id == nullptr) {
+      continue;
+    }
+    std::string id = props.device_id;
+    std::ranges::transform(id, id.begin(), ::tolower);
+    if (id == want.id) {
+      return i;
+    }
+  }
+  std::string msg = string_format(
+      "main-gpu bus id '%s' matched no device; using the default device order "
+      "instead",
+      want.id.c_str());
+  bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, msg.c_str(), nullptr);
+  return std::nullopt;
+}
+
 /// Every device the request makes eligible, in ggml enumeration order.
 Enumeration enumerateCandidates(
     const BackendInterface& bckI, const backend_selection::BackendRequest& req) {
@@ -214,6 +287,20 @@ Enumeration enumerateCandidates(
       }
     } else if (std::holds_alternative<MainGpuType>(mainGpuValue)) {
       gpuType = std::get<MainGpuType>(mainGpuValue);
+    } else {
+      // QVAC-23763: the two stable forms. Both resolve by scanning devices
+      // rather than indexing, which is the whole point - an index is what
+      // backend load order moves.
+      //
+      // Not found is a WARN and a fall-through to the full enumeration, exactly
+      // as an out-of-range integer behaves: the device may simply be absent on
+      // this machine, which is not a config error.
+      const std::optional<size_t> resolved =
+          ::resolveNamedMainGpu(bckI, mainGpuValue);
+      if (resolved.has_value()) {
+        ::tryEmplaceDevice(bckI, resolved.value(), std::nullopt, out);
+        loopAllDevices = false;
+      }
     }
   }
   for (size_t i = 0; loopAllDevices && i < bckI.ggml_backend_dev_count(); ++i) {
@@ -267,6 +354,18 @@ constexpr std::array<DeviceFamily, 5> K_OVERRIDE_ORDER = {
     DeviceFamily::Igpu,
     DeviceFamily::OpenClOther};
 
+/// Short stable token for a reason, for logs and error messages.
+const char* exclusionReasonName(backend_selection::ExclusionReason reason) {
+  using backend_selection::ExclusionReason;
+  switch (reason) {
+  case ExclusionReason::None:
+    return "none";
+  case ExclusionReason::KvCacheTypeUnsupported:
+    return "kv-cache-type-unsupported";
+  }
+  return "unknown";
+}
+
 const char* cascadeLogFor(DeviceFamily family) {
   switch (family) {
   case DeviceFamily::OpenClAdreno:
@@ -310,34 +409,6 @@ backend_selection::preferredBackendTypeFromString(const std::string& device) {
       "'cpu'.\n");
 }
 
-std::optional<MainGpu>
-backend_selection::parseMainGpu(const std::string& mainGpuStr) {
-  if (mainGpuStr.empty()) {
-    return std::nullopt;
-  }
-
-  // Try to parse as integer first
-  try {
-    int deviceIndex = std::stoi(mainGpuStr);
-    return MainGpu(deviceIndex);
-  } catch (const std::exception&) {
-    // Not an integer, try enum values
-    std::string lowerStr = mainGpuStr;
-    std::ranges::transform(lowerStr, lowerStr.begin(), tolower);
-
-    if (lowerStr == "integrated") {
-      return MainGpu(MainGpuType::Integrated);
-    }
-    if (lowerStr == "dedicated") {
-      return MainGpu(MainGpuType::Dedicated);
-    }
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        "main-gpu must be an integer device index, 'integrated', or "
-        "'dedicated'");
-  }
-}
-
 namespace {
 
 // Backend families qvac-fabric can register a GPU device for. Used to tell a
@@ -366,7 +437,77 @@ bool backendNameMatchesFamily(
   return family == "metal" && lowercasedBackendName.rfind("mtl", 0) == 0;
 }
 
+/// hip and rocm name the same family; ggml reports those devices as "ROCm%d".
+std::string canonicaliseFamily(std::string family) {
+  return family == "hip" ? "rocm" : family;
+}
+
 } // namespace
+
+std::optional<MainGpu>
+backend_selection::parseMainGpu(const std::string& mainGpuStr) {
+  if (mainGpuStr.empty()) {
+    return std::nullopt;
+  }
+
+  std::string lowerStr = mainGpuStr;
+  std::ranges::transform(lowerStr, lowerStr.begin(), ::tolower);
+
+  // QVAC-23763: the integer arm must consume the WHOLE value. It used to be
+  // std::stoi, which parses a leading prefix and discards the rest, so a PCI bus
+  // id like "0000:65:00.0" parsed silently as device 0. Requiring full
+  // consumption is what makes the string forms below safe to add - and it is a
+  // behaviour change in its own right: "1abc" no longer parses as 1.
+  int deviceIndex = 0;
+  const char* first = lowerStr.data();
+  const char* last = first + lowerStr.size();
+  if (auto [ptr, ec] = std::from_chars(first, last, deviceIndex);
+      ec == std::errc() && ptr == last) {
+    return MainGpu(deviceIndex);
+  }
+
+  if (lowerStr == "integrated") {
+    return MainGpu(MainGpuType::Integrated);
+  }
+  if (lowerStr == "dedicated") {
+    return MainGpu(MainGpuType::Dedicated);
+  }
+
+  // "<family>:<index>", e.g. "cuda:0". Checked before the bus id: neither shape
+  // can match the other, since a family is alphabetic and a bus id is not.
+  static const std::regex qualifiedRe(R"(^([a-z]+):([0-9]+)$)");
+  if (std::smatch m; std::regex_match(lowerStr, m, qualifiedRe)) {
+    const std::string family = ::canonicaliseFamily(m[1].str());
+    if (std::ranges::find(KNOWN_GPU_BACKEND_FAMILIES, family) ==
+        KNOWN_GPU_BACKEND_FAMILIES.end()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "main-gpu names an unknown backend family '%s'. Known families: "
+              "cuda, vulkan, metal, opencl, hip, rocm, sycl.",
+              m[1].str().c_str()));
+    }
+    int index = 0;
+    const std::string digits = m[2].str();
+    std::from_chars(digits.data(), digits.data() + digits.size(), index);
+    return MainGpu(MainGpuQualified{family, index});
+  }
+
+  // A PCI bus id as ggml publishes it in props.device_id, with the domain
+  // optional: "0000:65:00.0" or "65:00.0".
+  static const std::regex busIdRe(
+      R"(^([0-9a-f]{4}:)?[0-9a-f]{2}:[0-9a-f]{2}\.[0-9a-f]$)");
+  if (std::regex_match(lowerStr, busIdRe)) {
+    return MainGpu(MainGpuBusId{lowerStr});
+  }
+
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "main-gpu must be a device index (e.g. '0'), 'integrated', 'dedicated', "
+      "a backend-qualified index (e.g. 'cuda:0'), or a PCI bus id (e.g. "
+      "'0000:65:00.0'). A bare index depends on backend load order; prefer one "
+      "of the latter two.");
+}
 
 std::vector<std::string>
 backend_selection::parseBackendOverride(const std::string& backendStr) {
@@ -452,6 +593,56 @@ std::vector<std::string> backend_selection::tryBackendOverrideFromMap(
   std::vector<std::string> families = parseBackendOverride(it->second);
   configFilemap.erase(it);
   return families;
+}
+
+bool backend_selection::tryBackendRequiredFromMap(
+    std::unordered_map<std::string, std::string>& configFilemap,
+    const bool backendOverridePresent) {
+  auto hIt = configFilemap.find("backend-required");
+  auto uIt = configFilemap.find("backend_required");
+  if (hIt != configFilemap.end() && uIt != configFilemap.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "both 'backend-required' and 'backend_required' are present; use one "
+        "or the other.");
+  }
+  auto it = hIt != configFilemap.end() ? hIt : uIt;
+  if (it == configFilemap.end()) {
+    return false;
+  }
+
+  std::string value = it->second;
+  std::ranges::transform(value, value.begin(), ::tolower);
+  value.erase(0, value.find_first_not_of(K_BACKEND_TRIM));
+  const size_t end = value.find_last_not_of(K_BACKEND_TRIM);
+  if (end != std::string::npos) {
+    value.erase(end + 1);
+  }
+
+  bool required = false;
+  if (value == "true" || value == "on" || value == "1") {
+    required = true;
+  } else if (value == "false" || value == "off" || value == "0") {
+    required = false;
+  } else {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "backend-required must be true/on/1 or false/off/0, got '%s'.",
+            it->second.c_str()));
+  }
+  configFilemap.erase(it);
+
+  // Only meaningful alongside `backend`. On its own it reads as "require the
+  // default cascade", which is not a thing, so it is far more likely to be a
+  // mistake than an intent.
+  if (required && !backendOverridePresent) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "backend-required is set but no 'backend' was given; it makes a "
+        "backend priority list binding and has no meaning without one.");
+  }
+  return required;
 }
 
 std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
@@ -546,11 +737,47 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
         }
       }
     }
-    bckI.llamaLogCallback(
-        GGML_LOG_LEVEL_WARN,
-        "backend override matched no available device; falling back to the "
-        "default backend order",
-        nullptr);
+    // QVAC-23763: name what WAS enumerated. Without it, diagnosing a pin that
+    // missed takes a second run with verbose logging.
+    std::string enumerated;
+    for (const Candidate& c : enumeration.candidates) {
+      if (!enumerated.empty()) {
+        enumerated += ", ";
+      }
+      enumerated += c.name + " (" + c.registry + ")";
+      if (c.excluded != ExclusionReason::None) {
+        enumerated += " [passed over: ";
+        enumerated += ::exclusionReasonName(c.excluded);
+        enumerated += "]";
+      }
+    }
+    if (enumerated.empty()) {
+      enumerated = "none";
+    }
+
+    std::string requested;
+    for (const std::string& family : request.backendOverride) {
+      if (!requested.empty()) {
+        requested += ",";
+      }
+      requested += family;
+    }
+
+    if (request.backendRequired) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "backend '%s' is required but matched no available device. "
+              "Enumerated: %s.\n",
+              requested.c_str(),
+              enumerated.c_str()));
+    }
+    std::string warning = string_format(
+        "backend override '%s' matched no available device; falling back to "
+        "the default backend order. Enumerated: %s",
+        requested.c_str(),
+        enumerated.c_str());
+    bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, warning.c_str(), nullptr);
   }
 
   for (const DeviceFamily family : ::K_CASCADE_ORDER) {
@@ -564,6 +791,22 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
   bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
   choice.trace.path = SelectionPath::Cpu;
   return choice;
+}
+
+backend_selection::BackendChoice backend_selection::chooseBackend(
+    const BackendRequest& request, llamaLogCallbackF llamaLogcallback) {
+  BackendInterface bckI{
+      .ggml_backend_dev_count = ggml_backend_dev_count,
+      .ggml_backend_dev_backend_reg = ggml_backend_dev_backend_reg,
+      .ggml_backend_dev_get = ggml_backend_dev_get,
+      .ggml_backend_reg_name = ggml_backend_reg_name,
+      .ggml_backend_dev_description = ggml_backend_dev_description,
+      .ggml_backend_dev_name = ggml_backend_dev_name,
+      .ggml_backend_dev_type = ggml_backend_dev_type,
+      .ggml_backend_reg_get_proc_address = ggml_backend_reg_get_proc_address,
+      .ggml_backend_dev_get_props = ggml_backend_dev_get_props,
+      .llamaLogCallback = llamaLogcallback};
+  return chooseBackend(request, bckI);
 }
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(

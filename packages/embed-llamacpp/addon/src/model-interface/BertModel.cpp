@@ -420,8 +420,21 @@ BertModelSetup setupParams(
     // loop never forwards it to llama.cpp's argument parser.
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
-    const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
-        preferredBackend, llamaLogCallback, mainGpu, backendOverride);
+
+    // Erased for the same reason, and read after `backend` so the "set without
+    // a backend" check can see whether one was given. QVAC-23763.
+    const bool backendRequired =
+        tryBackendRequiredFromMap(configFilemap, !backendOverride.empty());
+
+    BackendRequest backendRequest;
+    backendRequest.preferred = preferredBackend;
+    backendRequest.mainGpu = mainGpu;
+    backendRequest.backendOverride = backendOverride;
+    backendRequest.backendRequired = backendRequired;
+    const BackendChoice choice =
+        chooseBackend(backendRequest, llamaLogCallback);
+    const std::pair<BackendType, std::string> chosenBackend{
+        choice.type, choice.name};
 
     if (chosenBackend.first == BackendType::GPU) {
       result.resolvedBackendDevice = 1;

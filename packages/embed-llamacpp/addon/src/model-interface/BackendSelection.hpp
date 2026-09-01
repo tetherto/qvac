@@ -16,7 +16,29 @@ enum BackendType : std::uint8_t { CPU, GPU };
 
 enum class MainGpuType : std::uint8_t { Integrated, Dedicated };
 
-using MainGpu = std::variant<int, MainGpuType>;
+/// @brief `main-gpu: "cuda:0"` - the nth device of a backend family.
+///
+/// QVAC-23763: a bare integer indexes ggml's full device list, whose order
+/// depends on which backends loaded. Adding CUDA therefore silently repointed
+/// every existing numeric value. Naming the family makes the address stable
+/// against that.
+struct MainGpuQualified {
+  std::string family;
+  int index = 0;
+  bool operator==(const MainGpuQualified&) const = default;
+};
+
+/// @brief `main-gpu: "0000:65:00.0"` - a PCI bus id, as `props.device_id`.
+///
+/// The only genuinely stable address: it survives backend order, driver order
+/// and adding a card. Meaningless on a backend that publishes no bus id, which
+/// is why the numeric and qualified forms remain.
+struct MainGpuBusId {
+  std::string id;
+  bool operator==(const MainGpuBusId&) const = default;
+};
+
+using MainGpu = std::variant<int, MainGpuType, MainGpuQualified, MainGpuBusId>;
 
 BackendType preferredBackendTypeFromString(const std::string& device);
 
@@ -38,6 +60,21 @@ std::vector<std::string> parseBackendOverride(const std::string& backendStr);
 /// Returns an empty vector when the key is absent.
 std::vector<std::string> tryBackendOverrideFromMap(
     std::unordered_map<std::string, std::string>& configFilemap);
+
+/// @brief Extract and erase `backend-required` (or `backend_required`).
+///
+/// QVAC-23763: a `backend` that matches no device logs a warning and runs the
+/// default cascade, so every pin written with it is advisory. This makes it
+/// binding: with it set, a backend list that matches nothing is an error rather
+/// than a silent move to another backend.
+///
+/// Accepts true/on/1 and false/off/0. Throws when both spellings are present,
+/// when the value is neither, or when it is set true without a `backend` -
+/// which has no meaning and is far more likely a mistake than an intent.
+/// Defaults to false, so existing configs keep the advisory behaviour.
+bool tryBackendRequiredFromMap(
+    std::unordered_map<std::string, std::string>& configFilemap,
+    bool backendOverridePresent);
 
 using llamaLogCallbackF =
     void (*)(ggml_log_level level, const char* text, void* userData);
@@ -113,6 +150,9 @@ struct BackendRequest {
   BackendType preferred = BackendType::CPU;
   std::optional<MainGpu> mainGpu;
   std::vector<std::string> backendOverride;
+  /// When true, a @c backendOverride that matches nothing is an error rather
+  /// than a fall-through to the default cascade. QVAC-23763.
+  bool backendRequired = false;
   LoadConstraints constraints;
 };
 
@@ -125,6 +165,10 @@ struct BackendChoice {
 
 BackendChoice chooseBackend(
     const BackendRequest& request, const BackendInterface& bckI);
+
+/// @brief `chooseBackend()` against the real ggml backend registry.
+BackendChoice
+chooseBackend(const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
 
 /// @brief Adapter for the positional form. Retained so existing callers and
 /// tests are unaffected by the request/choice split; prefer the overload above
