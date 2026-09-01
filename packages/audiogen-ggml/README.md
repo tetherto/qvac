@@ -50,14 +50,13 @@ prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
 opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`
 on the build host).
 
-The prebuilt CUDA module targets **compute capability 8.0 and newer**. It
-carries native code for 8.6 (RTX 30xx, A40) — which Ada (RTX 40xx, L40) runs
-through within-major binary compatibility — and for 12.0 (Blackwell /
-RTX 50xx), and JIT-compiles from 8.0 PTX for the rest (A100, Hopper), a
-one-off compile the driver caches. Cards below 8.0 — Turing (RTX 20xx,
-GTX 16xx, T4), Volta and Pascal — have no CUDA code path in the prebuild;
-the backend skips them at registration and the addon falls back to Vulkan or
-CPU.
+The prebuilt CUDA module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
+Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
+Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
+path here: the backend skips such devices at registration and the addon falls
+back to Vulkan or CPU.
 
 To build the native addon from source in a repository checkout:
 
