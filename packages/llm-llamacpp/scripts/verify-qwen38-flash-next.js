@@ -99,6 +99,10 @@ async function main () {
     config: {
       device: 'gpu',
       gpu_layers: '999',
+      // Direct I/O keeps macOS from routing 68GB of weights through the page
+      // cache; without it the load thrashes into the memory compressor on a
+      // 96GB machine. Matches the fabric benchmarks (--load-mode dio).
+      load_mode: 'dio',
       ctx_size: '16384',
       n_predict: '2048',
       temp: '0',
