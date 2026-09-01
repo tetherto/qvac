@@ -6,10 +6,10 @@ import {
   nearestVideoFrameCount,
   InvalidVideoStrengthError,
   DEFAULT_FPS
-} from '../src/serve/schemas/videos.js'
-import { createVideoJobsStore, type VideoJob } from '../src/serve/core/video-jobs-store.js'
-import { tearDownJob, resolveInputReferenceImage } from '../src/serve/routes/videos.js'
-import type { QvacContext } from '../src/serve/lib/types.js'
+} from '@/serve/schemas/videos'
+import { createVideoJobsStore, type VideoJob } from '@/serve/core/video-jobs-store'
+import { tearDownJob, resolveInputReferenceImage } from '@/serve/routes/videos'
+import type { QvacContext } from '@/serve/lib/types'
 
 type CancelInput = Parameters<NonNullable<QvacContext['cancelOverride']>>[0]
 

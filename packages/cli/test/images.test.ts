@@ -13,8 +13,8 @@ import {
   InvalidImageBatchCountError,
   InvalidImageStrengthError,
   UnsupportedImageOutputError
-} from '../src/serve/schemas/images.js'
-import type { Logger } from '../src/logger.js'
+} from '@/serve/schemas/images'
+import type { Logger } from '@/logger'
 
 // Collects warnings so the log-only helpers can be asserted on.
 function makeLogger(): { warnings: string[]; logger: Logger } {

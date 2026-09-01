@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
-import { initSSE, sendSSE, endSSE } from '../../src/serve/lib/sse.js'
+import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { collectSSE, multipart, assertError, type InjectResponse } from './helpers/http.js'
 
 // Harness self-tests. The SSE case confirms app.inject captures hijacked

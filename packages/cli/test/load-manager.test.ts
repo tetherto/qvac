@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createModelRegistry } from '../src/serve/core/model-registry.js'
+import { createModelRegistry } from '@/serve/core/model-registry'
 import {
   createLoadManager,
   ModelLoadTimeoutError,
   type LoadModelFn
-} from '../src/serve/core/load-manager.js'
-import { createLogger } from '../src/logger.js'
+} from '@/serve/core/load-manager'
+import { createLogger } from '@/logger'
 
 const logger = createLogger('silent')
 

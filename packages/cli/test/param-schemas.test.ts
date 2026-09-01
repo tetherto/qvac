@@ -6,8 +6,8 @@ import {
   paramFields,
   coerceParam,
   validateParam
-} from '../src/configure/param-schemas.js'
-import { TTS_ENGINES, buildEntry } from '../src/configure/presets.js'
+} from '@/configure/param-schemas'
+import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
   it('resolves a config schema for every built-in addon', () => {
