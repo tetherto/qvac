@@ -150,12 +150,10 @@ test('ContextOverflowError message reads coherently at the equality boundary', (
 })
 
 test('createErrorResponse: ContextOverflowError omits absent fields from typedFields', (t) => {
-  // The bare `LlamaModel::processPromptImpl` overflow path emits a
-  // message without prompt/ctx numbers — the addon-wrap throws
-  // `new ContextOverflowError()` with all fields undefined. The
-  // envelope must omit them (rather than send `undefined` values) so
-  // the client reconstructor's optional-number readers see `undefined`
-  // and the class re-instance carries `undefined` for those fields.
+  // A bare overflow (the `processPromptImpl` wording) parses to no numbers,
+  // so every size field can be absent. The envelope must omit absent fields
+  // (rather than send `undefined` values) so the client reconstructor's
+  // optional-number readers see `undefined` on the re-instance.
   const err = new ContextOverflowError()
   const response = createErrorResponse(err)
 

@@ -108,11 +108,9 @@ test('reconstructError: ContextOverflowError round-trips warm-cache fields', (t)
 })
 
 test('reconstructError: ContextOverflowError tolerates missing fields', (t) => {
-  // The bare `LlamaModel::processPromptImpl` overflow path doesn't
-  // include prompt-token or ctx-size numbers in the addon message, so
-  // the server may throw `ContextOverflowError` with both fields
-  // `undefined`. The reconstructor must accept that and not throw, and
-  // `instanceof` must still hold.
+  // A bare overflow (the `processPromptImpl` wording) parses to no numbers,
+  // so every size field can be absent on the wire. The reconstructor must
+  // accept that and not throw, and `instanceof` must still hold.
   const original = new InferenceContextOverflowError()
   const envelope = createErrorResponse(original)
 

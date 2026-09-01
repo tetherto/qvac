@@ -144,7 +144,7 @@ export function parseContextOverflowMessage(message: string): ContextOverflowSiz
     const match = message.match(pattern)
     if (!match) continue
     const numbers = match.slice(1).map(Number)
-    if (numbers.length === 0 || !numbers.every(Number.isFinite)) continue
+    if (!numbers.every(Number.isFinite)) continue
     return map(numbers)
   }
   return {}

@@ -38,11 +38,9 @@ test('isAddonContextOverflowError: ignores unrelated errors', (t) => {
   t.is(isAddonContextOverflowError(42), false)
 })
 
-test("isAddonContextOverflowError: codeString anchored — sibling names don't match", (t) => {
-  // The detector should fire ONLY when the codeString ends in
-  // `:: ContextOverflow ]` — a future addon-side rename like
-  // `ContextOverflowRecovered` or `PostContextOverflow` must not
-  // silently route here.
+test('isAddonContextOverflowError: code must be the complete codeString shape', (t) => {
+  // The detector fires only on the full `[ <addonId> :: ContextOverflow ]`
+  // shape — sibling names and wrapped or suffixed code strings all reject.
   t.is(
     isAddonContextOverflowError(
       Object.assign(new Error('x'), { code: '[ LLM :: ContextOverflowRecovered ]' })
@@ -52,6 +50,12 @@ test("isAddonContextOverflowError: codeString anchored — sibling names don't m
   t.is(
     isAddonContextOverflowError(
       Object.assign(new Error('x'), { code: '[ LLM :: PostContextOverflow ]' })
+    ),
+    false
+  )
+  t.is(
+    isAddonContextOverflowError(
+      Object.assign(new Error('x'), { code: 'wrapped: [ LLM :: ContextOverflow ]' })
     ),
     false
   )
@@ -102,6 +106,11 @@ test('isAddonContextOverflowError: message fallback is anchored to the emitted s
       `code ${JSON.stringify(code)} must reject`
     )
   }
+  // An explicitly `undefined` code is the absent-property production shape.
+  t.is(
+    isAddonContextOverflowError(Object.assign(new Error(validWording), { code: undefined })),
+    true
+  )
 })
 
 // Production errors arrive through the async transport as exception.what()
@@ -268,7 +277,7 @@ test('parseContextOverflowMessage: cached overflow requires no less than the win
 
 test('parseContextOverflowMessage: empty result when numbers are absent', (t) => {
   // `LlamaModel::processPromptImpl` emits a bare message with no
-  // numbers — both fields stay undefined so `ContextOverflowError`
+  // numbers — every size field stays undefined so `ContextOverflowError`
   // can fall through to the message-only constructor path.
   t.alike(parseContextOverflowMessage('processPromptImpl: context overflow\n'), {})
   t.alike(parseContextOverflowMessage(''), {})

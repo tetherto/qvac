@@ -38,6 +38,7 @@ from tetherto.qvac_sdk.schemas import (
     CompletionStreamRequest,
     HeartbeatRequest,
     LoadModelRequest,
+    ModelType,
     TextToSpeechStreamRequest,
     TranscribeStreamRequest,
 )
@@ -126,7 +127,7 @@ async def test_load_model_and_tts_stream_duplex(transport) -> None:
         {
             "type": "loadModel",
             "modelSrc": TTS_EN_SUPERTONIC_Q4_0.src,
-            "modelType": "tts-ggml",
+            "modelType": ModelType.tts_ggml,
             "modelConfig": {"ttsEngine": "supertonic", "language": "en"},
         }
     )
@@ -180,7 +181,7 @@ async def test_transcribe_stream_duplex(transport) -> None:
         {
             "type": "loadModel",
             "modelSrc": PARAKEET_CTC_0_6B_Q4_0.src,
-            "modelType": "parakeet-transcription",
+            "modelType": ModelType.parakeet_transcription,
             "modelConfig": {},
         }
     )
@@ -244,7 +245,7 @@ async def test_bci_transcribe_stream_duplex(transport) -> None:
         {
             "type": "loadModel",
             "modelSrc": BCI_WINDOWED.src,
-            "modelType": "bci-whispercpp-transcription",
+            "modelType": ModelType.bci_whispercpp_transcription,
             "modelConfig": {
                 "whisperConfig": {"language": "en", "temperature": 0.0},
                 "miscConfig": {"caption_enabled": False},
@@ -301,9 +302,9 @@ async def test_calls_fail_fast_when_the_worker_disconnects() -> None:
             await asyncio.wait_for(
                 heartbeat(t, HeartbeatRequest(type="heartbeat")), timeout=10
             )
-        assert not isinstance(
-            excinfo.value, asyncio.TimeoutError
-        ), "call hung after the worker disconnected instead of failing fast"
+        assert not isinstance(excinfo.value, asyncio.TimeoutError), (
+            "call hung after the worker disconnected instead of failing fast"
+        )
     finally:
         await t.close()
 
@@ -329,9 +330,9 @@ async def test_config_cache_directory_redirects_model_storage(tmp_path) -> None:
             ),
         )
         assert load_response.success, load_response.error
-        assert any(
-            os.scandir(cache_dir)
-        ), "cacheDirectory config had no effect -- model was not stored there"
+        assert any(os.scandir(cache_dir)), (
+            "cacheDirectory config had no effect -- model was not stored there"
+        )
 
 
 async def test_completion_orchestrate_without_tools(transport) -> None:
@@ -429,9 +430,9 @@ async def test_completion_orchestrate_runs_the_tool_loop(transport) -> None:
     final = await run.final
 
     assert invoked, "worker never called back into the local tool handler"
-    assert (
-        "4242" in final.content_text
-    ), f"final answer did not reflect the tool result: {final.content_text!r}"
+    assert "4242" in final.content_text, (
+        f"final answer did not reflect the tool result: {final.content_text!r}"
+    )
 
 
 async def test_completion_orchestrate_cancel_stops_generation(transport) -> None:
