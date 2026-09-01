@@ -37,32 +37,13 @@ export function isAddonContextOverflowError(err: unknown): boolean {
 }
 
 export type ContextOverflowSizes = {
-  /**
-   * The prompt alone, in tokens — set only when the guard reports an
-   * actual token count for the prompt. Guards that denominate the prompt
-   * in KV cells leave it undefined rather than mislabelling cells as
-   * tokens (M-RoPE media occupies more cells than positions).
-   */
+  /** The prompt alone, in tokens; unset when the guard reports KV cells. */
   promptTokens?: number
-  /**
-   * The cached conversation a warm-cache guard reports, in the same
-   * units as `ctxSize` (KV cells; equal to tokens for text).
-   */
+  /** Cached conversation on a warm-cache guard, in `ctxSize` units. */
   cachedTokens?: number
-  /**
-   * The total context the request needs — the figure that failed the
-   * guard, in the same units as `ctxSize`. On a warm cache this is the
-   * cached conversation plus the appended prompt; on a cold prefill it
-   * equals the prompt figure. The guards trigger on `>=` for a request
-   * that must still generate, so this can equal the window rather than
-   * exceed it.
-   */
+  /** Total the failing guard reported, in `ctxSize` units; the guards trigger on `>=`, so it can equal the window. */
   requiredTokens?: number
-  /**
-   * The effective context ceiling for this request, in KV cells: the
-   * addon reports its per-sequence ceiling, which is `ctx_size` divided
-   * across slots when `parallel > 1`, not always the configured total.
-   */
+  /** Effective per-request ceiling: `ctx_size` split across slots at `parallel > 1`. */
   ctxSize?: number
 }
 
@@ -72,22 +53,11 @@ type PatternEntry = {
   map: (groups: number[]) => ContextOverflowSizes
 }
 
-/**
- * One entry per guard that formats numbers into a `ContextOverflow`
- * message, ordered most specific first. Each pattern keeps its numbers
- * inside a single emitted line — separators are horizontal whitespace
- * only — so a wrapper that pastes overflow text alongside unrelated
- * numbers on adjacent lines cannot produce a mismatched set.
- *
- * Where a guard reports both positions and KV cells, the cells are
- * captured: they are the binding measure, and `ctx_size` counts cells,
- * so `requiredTokens` and `ctxSize` stay comparable. `promptTokens` is
- * set only from figures the guard denominates in tokens.
- *
- * Keep this in step with the guards in `TextLlmContext.cpp` and
- * `MtmdLlmContext.cpp`. A guard whose wording drifts out of this list
- * does not fail loudly, it silently returns no fields.
- */
+// One entry per guard that formats numbers, most specific first. Separators
+// are horizontal whitespace only, so numbers cannot pair across lines. Where
+// a guard reports positions and KV cells, the cells are captured (ctx_size
+// counts cells). Keep in step with TextLlmContext.cpp / MtmdLlmContext.cpp —
+// a drifted wording silently returns no fields.
 const MESSAGE_PATTERNS: PatternEntry[] = [
   {
     // "cached tokens C plus prompt tokens N exceed the max context tokens M"
@@ -135,15 +105,8 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
   }
 ]
 
-/**
- * Best-effort extraction of the overflow sizes from the addon error
- * message. The C++ paths in `TextLlmContext.cpp` and
- * `MtmdLlmContext.cpp` format the numbers into the message; the
- * `LlamaModel::processPromptImpl` fallback path emits a bare
- * `"<func>: context overflow\n"` with none of them. Returning
- * `undefined` fields is fine, `ContextOverflowError` holds them as
- * optional and the message factory degrades gracefully.
- */
+// Best-effort extraction of the overflow sizes; the bare processPromptImpl
+// path carries no numbers, and undefined fields degrade gracefully.
 export function parseContextOverflowMessage(message: string): ContextOverflowSizes {
   for (const { pattern, map } of MESSAGE_PATTERNS) {
     const match = message.match(pattern)

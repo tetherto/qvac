@@ -648,12 +648,9 @@ export const completionStats: TestDefinition = {
   metadata: { category: 'completion', dependency: 'llm', estimatedDurationMs: 10000 }
 }
 
-// Context is never evicted: a generation that fills the small window must stop
-// at the boundary and surface as the public stopReason "length", keeping the
-// tokens it produced. The predict budget (480) exceeds what fits after the
-// prompt in the 512 window, so a "length" stop with generatedTokens under the
-// budget can only be the boundary. The terminus-free prompt makes an early
-// EOS unlikely, not impossible — that failure is a fixture-model diagnostic.
+// The 480 predict budget exceeds what fits after the prompt in the 512
+// window, so a "length" stop under the budget can only be the boundary.
+// An early EOS is unlikely, not impossible — a fixture-model diagnostic.
 export const completionContextBoundaryStop = createCompletionTest(
   'completion-context-boundary-stop',
   {
@@ -693,8 +690,7 @@ export const completionContextOverflowPrefill = createCompletionTest(
 )
 
 // Turn one fills most of the 512 window and is cached; the follow-up fits
-// the window alone but not on top of the cache. Both addon generations
-// report the failing total, so `requiredTokens` is asserted either way.
+// the window alone but not on top of the cache.
 export const completionContextOverflowWarmCache = createCompletionTest(
   'completion-context-overflow-warm-cache',
   {

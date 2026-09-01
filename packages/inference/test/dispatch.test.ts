@@ -42,10 +42,8 @@ test('send dispatches a model-free request in-process to its handler', async fun
   }
 })
 
-// Dispatch applies device/schema defaults before the request schema runs, so
-// the rejection of a retired config key must happen in that first parse — a
-// non-strict defaults parse would strip the key and hand the later strict
-// schemas a clean object.
+// Defaults apply before the request schema runs, so the retired key must
+// reject in that first parse — a non-strict one would strip it.
 test('send rejects a loadModel carrying retired n_discarded before any handler runs', async function (t) {
   clearPlugins()
   registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))

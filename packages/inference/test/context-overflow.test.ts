@@ -74,10 +74,8 @@ test('isAddonContextOverflowError: message fallback is anchored to known C++ for
     isAddonContextOverflowError(new Error('context overflow at prefill step (5 tokens, max 4)')),
     true
   )
-  // The batch guards say "at batch prefill step". They carry the addon's
-  // ContextOverflow status code, so the code branch already detects them;
-  // the message fallback exists for the bare `processPromptImpl` path and
-  // is kept aligned so it stays accurate if a guard ever loses its code.
+  // The batch guards carry the status code (the code branch detects them);
+  // the message fallback is kept aligned in case a guard loses its code.
   t.is(
     isAddonContextOverflowError(
       new Error(
@@ -104,8 +102,7 @@ test('parseContextOverflowMessage: extracts from long-form TextLlm message', (t)
 })
 
 test('parseContextOverflowMessage: extracts from short-form bracketed message', (t) => {
-  // The retired short form. Both of its emitters format a cached total
-  // (nPast_ + nTokens / cacheTokens + nTokens), so promptTokens stays unset.
+  // The retired short form reports a cached total, so promptTokens stays unset.
   const text = '[TextLlm] context overflow at prefill step (8192 tokens, max 4096)\n'
   t.alike(parseContextOverflowMessage(text), {
     requiredTokens: 8192,
@@ -119,10 +116,8 @@ test('parseContextOverflowMessage: extracts from short-form bracketed message', 
   })
 })
 
-// One case per guard that formats numbers, using the strings the addon
-// actually emits at this commit. `promptTokens` carries only figures the
-// guard denominates in tokens; KV-cell figures ride `requiredTokens` /
-// `cachedTokens`, which share units with `ctxSize`.
+// One case per guard, using the strings the addon actually emits.
+// promptTokens carries only token-denominated figures.
 test('parseContextOverflowMessage: covers every current addon guard', (t) => {
   // TextLlmContext.cpp, first batch-prefill guard.
   t.alike(
@@ -131,11 +126,8 @@ test('parseContextOverflowMessage: covers every current addon guard', (t) => {
     ),
     { promptTokens: 4013, requiredTokens: 4013, ctxSize: 512 }
   )
-  // TextLlmContext.cpp, cached-plus-prompt guard. The "exceed the" wording
-  // is what broke the original single pattern. The appended prompt stays
-  // in promptTokens; the sum that failed the guard is requiredTokens —
-  // reporting 31 alone as the overflow renders as "31 prompt tokens
-  // exceeds the 8192-token context window".
+  // TextLlmContext.cpp, cached-plus-prompt guard: the appended prompt stays
+  // in promptTokens, the sum that failed the guard is requiredTokens.
   t.alike(
     parseContextOverflowMessage(
       '[TextLlm] context overflow at batch prefill step: cached tokens 8170 plus prompt tokens 31 exceed the max context tokens 8192\n'
@@ -150,10 +142,8 @@ test('parseContextOverflowMessage: covers every current addon guard', (t) => {
     ),
     { promptTokens: 31, requiredTokens: 31, ctxSize: 8192 }
   )
-  // MtmdLlmContext.cpp, cached-plus-prompt guard. The prompt figure is KV
-  // cells, so promptTokens stays unset rather than mislabelling cells as
-  // tokens. These are the real numbers from the linux-x64 run that first
-  // hit this path.
+  // MtmdLlmContext.cpp, cached-plus-prompt guard: the prompt figure is KV
+  // cells, so promptTokens stays unset.
   t.alike(
     parseContextOverflowMessage(
       '[MtmdLlm] context overflow at prefill step: cached 5364 positions / 8172 KV cells plus 24 positions / 31 KV cells of prompt exceed the max context tokens 8192\n'
@@ -169,11 +159,8 @@ test('parseContextOverflowMessage: covers every current addon guard', (t) => {
   )
 })
 
-// `requiredTokens` is the whole failing requirement, so on a warm cache it
-// can never sit below the window — the guards trigger on `>=` for a request
-// that must still generate, so equality is emittable and the floor is `>=`,
-// not `>`. Anything smaller means truncation logic reading it gets the wrong
-// quantity.
+// The failing requirement can never sit below the window; the guards trigger
+// on >=, so equality is emittable and the floor is >=, not >.
 test('parseContextOverflowMessage: cached overflow requires no less than the window', (t) => {
   const cases = [
     '[TextLlm] context overflow at batch prefill step: cached tokens 8170 plus prompt tokens 31 exceed the max context tokens 8192\n',

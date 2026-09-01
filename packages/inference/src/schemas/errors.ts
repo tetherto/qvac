@@ -393,14 +393,11 @@ const errorDefinitions: ErrorCodesMap = {
     ) => {
       const model = modelId ? ` for model "${modelId}"` : ''
       const window = ctxSize ? `the ${ctxSize}-token context window` : "the model's context window"
-      // Warm cache: the whole conversation is what no longer fits, so name
-      // both halves instead of blaming the appended prompt alone.
+      // Warm cache: name both halves instead of blaming the appended prompt.
       if (requiredTokens && cachedTokens) {
         return `Conversation needs ${requiredTokens} context tokens (${cachedTokens} already cached) and no longer fits ${window}${model}. Start a new conversation or raise ctx_size.`
       }
-      // A lone requiredTokens can be a cold multimodal prompt (KV cells) or
-      // the retired short form's cached total (tokens) — stay neutral on
-      // both the source and the unit.
+      // A lone total can be KV cells or tokens — stay neutral on both.
       if (requiredTokens) {
         return `Request needs ${requiredTokens} context tokens and no longer fits ${window}${model}. Reduce the prompt size, start a new conversation, or raise ctx_size.`
       }

@@ -334,10 +334,8 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     }
   }
 
-  // Context is never evicted: the predict budget exceeds what fits after the
-  // prompt, so a "length" stop with generatedTokens under the budget proves
-  // the boundary fired, not prediction exhaustion — and the run must keep
-  // the tokens it produced.
+  // The predict budget exceeds what fits after the prompt, so a "length"
+  // stop under the budget proves the boundary, not prediction exhaustion.
   async contextBoundaryStop(params: CompletionTestParams): Promise<TestResult> {
     const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
     const budget = params.generationParams?.predict ?? 0
@@ -418,10 +416,8 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     }
   }
 
-  // The follow-up fits the window alone but not on top of the cached first
-  // turn. The first turn must end commit-eligible (no length/cancel stop, so
-  // the cache-commit policy keeps it), and the error must carry the warm
-  // signature: a positive cachedTokens, not just the failing total.
+  // The first turn must end commit-eligible and the error must carry the
+  // warm signature (positive cachedTokens), not just the failing total.
   async contextOverflowWarmCache(params: CompletionTestParams): Promise<TestResult> {
     const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
     const kvCache = `ctx-overflow-warm-${Date.now()}`
@@ -449,10 +445,8 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       generationParams: params.generationParams
     } as CompletionFnParams)
     const firstFinal = await first.final
-    // The commit policy refuses a turn that exhausted its budget or hit the
-    // boundary; a natural finish carries no stopReason. Without this check
-    // the second turn resends full history cold and proves nothing about
-    // the warm guard.
+    // The commit policy refuses a budget-exhausted or boundary-hit turn; a
+    // rolled-back turn one would make turn two a cold full-history resend.
     if (firstFinal.stopReason !== undefined || firstFinal.raw.fullText.length === 0) {
       return {
         passed: false,

@@ -289,20 +289,13 @@ export class CompletionFailedError extends QvacErrorBase {
  * response).
  */
 export class ContextOverflowError extends QvacErrorBase {
-  /** The prompt alone, in tokens — only when the source reported tokens. */
+  /** The prompt alone, in tokens; unset when the source reported KV cells. */
   readonly promptTokens?: number
-  /** Cached conversation a warm-cache overflow reported, in `ctxSize` units. */
+  /** Cached conversation on a warm-cache overflow, in `ctxSize` units. */
   readonly cachedTokens?: number
-  /**
-   * Total context the request needs — the figure that failed the guard,
-   * in `ctxSize` units (KV cells; equal to tokens for text). Can equal
-   * the window: the guards trigger on `>=` for a generating request.
-   */
+  /** Total the failing guard reported, in `ctxSize` units; can equal the window (`>=` triggers). */
   readonly requiredTokens?: number
-  /**
-   * The effective context ceiling for this request: `ctx_size`, divided
-   * across slots when `parallel > 1` — not always the configured total.
-   */
+  /** Effective per-request ceiling: `ctx_size` split across slots at `parallel > 1`. */
   readonly ctxSize?: number
   readonly modelId?: string
 

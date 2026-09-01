@@ -54,11 +54,9 @@ import { audioGenConfigSchema } from '@/schemas/audio-gen'
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([...Object.values(ModelType), ...Object.keys(ModelTypeAliases)])
 
-// Structural exclusion of the built-in types (canonical + aliases) for the
-// custom-plugin catch-all. A regex, not a refine: a refine does not serialize
-// to JSON Schema, so the exported contract's catch-all arm would accept a
-// built-in modelType with arbitrary config and generated clients (Python)
-// would validate a rejected built-in request through it.
+// Structural exclusion of the built-in types for the custom-plugin catch-all.
+// A regex, not a refine: a refine does not serialize, so generated clients
+// would accept a built-in modelType with arbitrary config through this arm.
 const customPluginModelTypeSchema = z
   .string()
   .regex(new RegExp(`^(?!(?:${[...builtInModelTypes].join('|')})$).+$`), {
@@ -566,19 +564,14 @@ const commonModelConfigSchema = z.object({
 
 // Request schemas for each model type (use canonical types since transforms normalize)
 // Use base schemas (no defaults) for client-side validation.
-// modelConfig optionality mirrors the options schemas: the server injects
-// device + schema defaults before this validation, so a config-less load is
-// valid on the wire for every type whose options accept one. The catch-all
-// arm excludes built-in types, so these arms are the only route for them.
+// modelConfig optionality mirrors the options schemas — the server injects
+// defaults — and the catch-all excludes built-ins, so these arms are their only route.
 // Server applies device defaults, then full schema defaults.
 export const loadLlmModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppCompletion),
-    // Strict so a retired key (`n_discarded`) fails the load on the wire —
-    // raw RPC and generated clients included — instead of being stripped
-    // and silently changing behaviour. Also what marks the contract's
-    // modelConfig `additionalProperties: false`, which the Python
-    // generator turns into `extra="forbid"`.
+    // Strict marks the contract's modelConfig additionalProperties: false,
+    // which the Python generator turns into extra="forbid".
     modelConfig: llmConfigBaseSchema.strict().optional()
   })
   .strict()

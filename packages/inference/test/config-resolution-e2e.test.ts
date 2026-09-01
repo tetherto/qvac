@@ -106,9 +106,8 @@ test('no patterns match = schema defaults only', (t) => {
   t.is(result.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
 })
 
-// Dispatch applies defaults through this resolution BEFORE the strict wire
-// schema runs, so the resolution itself must reject a retired key — a
-// non-strict parse here would strip it and let the later validation pass.
+// Dispatch applies defaults through this resolution before the wire schema
+// runs, so the resolution itself must reject a retired key, not strip it.
 test('config resolution rejects retired n_discarded instead of stripping it', (t) => {
   const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
   t.exception(() =>

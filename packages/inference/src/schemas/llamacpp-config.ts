@@ -19,9 +19,7 @@ const verbositySchema = z.enum(VERBOSITY)
 
 // Base schema - validates types, all fields optional (for input validation).
 // Strict at the source so every derivation — dispatch's default-applying
-// llmConfigSchema, the wire and options request schemas, deviceDefaults, the
-// plugin's loadConfigSchema and the public export — rejects a retired or
-// misspelled key instead of stripping it.
+// parse included — rejects an unknown or retired key instead of stripping it.
 export const llmConfigBaseSchema = z.strictObject({
   ctx_size: z
     .number()

@@ -154,9 +154,8 @@ function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {
 function prepareRequest<T extends Request>(request: T): Request {
   let validated: Request
   try {
-    // Defaults application parses the model config, so an unknown or
-    // retired key rejects here — as a structured validation failure, not
-    // a raw ZodError — before the request schema ever runs.
+    // Defaults application parses the model config, so an unknown or retired
+    // key rejects here, before the request schema ever runs.
     const withDeviceDefaults = applyDeviceDefaults(request)
     validated = requestSchema.parse(withDeviceDefaults)
   } catch (error) {

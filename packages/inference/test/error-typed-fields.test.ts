@@ -88,9 +88,8 @@ test('ContextOverflowError message names both halves on a warm cache', (t) => {
   t.ok(err.message.includes('8170 already cached'), 'names the cached half')
 })
 
-// A lone requiredTokens comes from the retired short form (a cached total)
-// or a cold multimodal prompt (KV cells) — the message must not blame a
-// "prompt" of that size or claim a unit.
+// A lone total can be a cached sum or KV cells — the message must not blame
+// a "prompt" of that size or claim a unit.
 test('ContextOverflowError message stays neutral when only requiredTokens is known', (t) => {
   const err = new ContextOverflowError(undefined, 512, 'model-1', undefined, {
     requiredTokens: 600

@@ -11,7 +11,6 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from tetherto.qvac_sdk import _api as api
-from tetherto.qvac_sdk.schemas import LoadModelRequest
 from tetherto.qvac_sdk.errors import (
     ModelLoadFailedError,
     ModelSrcTypeMismatchError,
@@ -25,6 +24,7 @@ from tetherto.qvac_sdk.model_types import (
     resolve_canonical_engine,
 )
 from tetherto.qvac_sdk.models import QWEN3_600M_INST_Q4
+from tetherto.qvac_sdk.schemas import LoadModelRequest
 
 OK = {"type": "loadModel", "success": True, "modelId": "m-1"}
 
@@ -106,9 +106,8 @@ async def test_load_model_requires_type_for_plain_string_src():
 
 
 async def test_load_model_rejects_retired_n_discarded_before_sending():
-    # The strict LLM union arm rejects the retired key, and the custom-plugin
-    # catch-all excludes built-in model types, so the union has no arm left —
-    # the request must fail validation and never reach the transport.
+    # No union arm accepts a built-in type with the retired key, so the
+    # request must fail validation and never reach the transport.
     transport = FakeTransport(response=OK)
     with pytest.raises(PydanticValidationError):
         await api.load_model(
@@ -121,9 +120,8 @@ async def test_load_model_rejects_retired_n_discarded_before_sending():
 
 
 def test_load_model_request_union_rejects_builtin_type_with_retired_key():
-    # Direct generated-client users hit the same wall: the custom-plugin arm's
-    # modelType pattern excludes built-ins, so a built-in type cannot smuggle
-    # unknown config through the permissive catch-all.
+    # The catch-all arm's modelType pattern excludes built-ins, so a built-in
+    # type cannot smuggle unknown config through it.
     with pytest.raises(PydanticValidationError):
         LoadModelRequest.model_validate(
             {

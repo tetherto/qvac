@@ -168,19 +168,12 @@ class RequestRejectedByPolicyError(QvacError):
 
 
 class ContextOverflowError(QvacError):
-    """Prompt exceeded the loaded model's context window. Distinct from a
-    generic failure so callers can drive UX (truncate, raise `ctx_size`, start a
-    new thread). The token/ctx fields are present only when the worker's
-    error message carried them.
-
-    `prompt_tokens` is the prompt alone, in tokens, and only when the source
-    reported tokens. `cached_tokens` is the cached conversation a warm-cache
-    overflow reported, and `required_tokens` is the total context the request
-    needs — the figure that failed the guard — both in the same units as
-    `ctx_size` (KV cells; equal to tokens for text). `required_tokens` can
-    equal the window: the guards trigger on `>=` for a generating request.
-    `ctx_size` is the effective ceiling for this request — the configured
-    total divided across slots when `parallel > 1`."""
+    """Request exceeded the model's context window; fields are present only
+    when the worker reported them. `prompt_tokens` is the prompt alone, in
+    tokens; `cached_tokens` and `required_tokens` (the figure that failed the
+    guard, which can equal the window) share units with `ctx_size`; and
+    `ctx_size` is the effective per-request ceiling — the configured total
+    divided across slots when `parallel > 1`."""
 
     def __init__(
         self,
