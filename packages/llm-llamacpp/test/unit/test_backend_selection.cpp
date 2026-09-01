@@ -1433,6 +1433,40 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectCudaClearedByFinetuneGuard) 
   EXPECT_EQ(result.first, BackendType::CPU);
 }
 
+// ---- kvCacheTypeFromString ----
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringResolvesTurboQuant) {
+  EXPECT_EQ(kvCacheTypeFromString("tbq3_0"), GGML_TYPE_TBQ3_0);
+  EXPECT_EQ(kvCacheTypeFromString("pq3_0"), GGML_TYPE_PQ3_0);
+  // The types the addon rejects on CUDA must all be recognised, or the filter
+  // silently sees no constraint and the guard never fires.
+  for (const char* name : {"tbq3_0", "tbq4_0", "pq3_0", "pq4_0"}) {
+    const enum ggml_type t = kvCacheTypeFromString(name);
+    EXPECT_NE(t, GGML_TYPE_COUNT) << name;
+    EXPECT_TRUE(ggml_is_tbq_or_pq(t)) << name;
+  }
+}
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringResolvesOrdinaryTypes) {
+  EXPECT_EQ(kvCacheTypeFromString("f16"), GGML_TYPE_F16);
+  EXPECT_EQ(kvCacheTypeFromString("q8_0"), GGML_TYPE_Q8_0);
+  // and these must not look like TBQ/PQ, or every quantized load gets filtered
+  EXPECT_FALSE(ggml_is_tbq_or_pq(kvCacheTypeFromString("q8_0")));
+  EXPECT_FALSE(ggml_is_tbq_or_pq(kvCacheTypeFromString("f16")));
+}
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringIsCaseInsensitive) {
+  EXPECT_EQ(kvCacheTypeFromString("TBQ4_0"), kvCacheTypeFromString("tbq4_0"));
+  EXPECT_NE(kvCacheTypeFromString("TBQ4_0"), GGML_TYPE_COUNT);
+}
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringRejectsNonsense) {
+  EXPECT_EQ(kvCacheTypeFromString(""), GGML_TYPE_COUNT);
+  EXPECT_EQ(kvCacheTypeFromString("not_a_type"), GGML_TYPE_COUNT);
+  // a prefix of a real name must not resolve
+  EXPECT_EQ(kvCacheTypeFromString("tbq"), GGML_TYPE_COUNT);
+}
+
 // ---- parseBackendOverride ----
 
 TEST_F(BackendSelectionTest, ParseBackendOverrideBasic) {

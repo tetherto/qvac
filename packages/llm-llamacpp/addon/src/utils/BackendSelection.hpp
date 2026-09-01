@@ -66,7 +66,25 @@ struct BackendInterface {
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
+  // QVAC-23763: whether @p device can run the op a KV cache of @p kvType needs,
+  // which is SET_ROWS writing kvType from F32 - exactly what llama_kv_cache
+  // builds, and exactly what a backend's supports_op table answers. Asking ggml
+  // the capability question beats matching the device name against "cuda",
+  // because the answer then corrects itself when a backend gains those kernels.
+  //
+  // Deliberately last so existing positional initialisers keep compiling. Null
+  // means "unknown" and fails OPEN - no exclusion, pre-QVAC-23763 behaviour - so
+  // an initialiser that omits it stays correct, just unfiltered.
+  bool (*deviceSupportsKvCacheType)(
+      ggml_backend_dev_t device, enum ggml_type kvType);
 };
+
+/// @brief Map a `cache-type-k`/`cache-type-v` value to its ggml_type.
+///
+/// Returns GGML_TYPE_COUNT when the string names no type. The caller drops that
+/// rather than erroring, because tuneLoadConfigMap still validates the value and
+/// is the right place for the message.
+enum ggml_type kvCacheTypeFromString(const std::string& name);
 
 /// @brief Why a candidate device was passed over.
 ///

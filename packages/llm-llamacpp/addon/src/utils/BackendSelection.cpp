@@ -383,6 +383,35 @@ const char* cascadeLogFor(DeviceFamily family) {
   return "Chosen GPU Backend";
 }
 
+/// Whether @p dev can run SET_ROWS writing @p kvType from F32, which is the op
+/// llama_kv_cache builds for a quantized KV cache.
+///
+/// Mirrors qvac-fabric's own probe in llama-kv-cache.cpp. Only TBQ/PQ is asked
+/// about: every other type is either universally supported or is refused for a
+/// reason supports_op cannot see - OpenCL answers true for q8_0, whose real
+/// failure is the shift/requantize path rather than the write path. So this is a
+/// necessary capability test, not a sufficient one, and the hand-written OpenCL
+/// rule in LoadFitNormalization stays.
+bool productionSupportsKvCacheType(ggml_backend_dev_t dev, ggml_type kvType) {
+  if (dev == nullptr || !ggml_is_tbq_or_pq(kvType)) {
+    return true;
+  }
+  ggml_init_params probeParams = {
+      /*mem_size=*/4096, /*mem_buffer=*/nullptr, /*no_alloc=*/true};
+  ggml_context* probeCtx = ggml_init(probeParams);
+  if (probeCtx == nullptr) {
+    return true; // fail open
+  }
+  const int64_t blk = ggml_blck_size(kvType);
+  ggml_tensor* dst = ggml_new_tensor_3d(probeCtx, kvType, blk, 1, 1);
+  ggml_tensor* src = ggml_new_tensor_3d(probeCtx, GGML_TYPE_F32, blk, 1, 1);
+  ggml_tensor* idx = ggml_new_tensor_2d(probeCtx, GGML_TYPE_I64, 1, 1);
+  const bool ok =
+      ggml_backend_dev_supports_op(dev, ggml_set_rows(probeCtx, dst, src, idx));
+  ggml_free(probeCtx);
+  return ok;
+}
+
 /// First surviving candidate of @p family. Callers iterate family-major and this
 /// iterates enumeration-order-minor, which together preserve
 /// first-registered-wins within a family.
@@ -573,6 +602,21 @@ std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
   return mainGpu;
 }
 
+enum ggml_type backend_selection::kvCacheTypeFromString(const std::string& name) {
+  // qvac-fabric's own kv_cache_type_from_str is static in common/arg.cpp and
+  // cannot be linked, so scan ggml's names instead. Both sides are lowercase.
+  std::string lowered = name;
+  std::transform(lowered.begin(), lowered.end(), lowered.begin(), ::tolower);
+  for (int t = 0; t < GGML_TYPE_COUNT; ++t) {
+    const enum ggml_type type = static_cast<enum ggml_type>(t);
+    const char* typeName = ggml_type_name(type);
+    if (typeName != nullptr && lowered == typeName) {
+      return type;
+    }
+  }
+  return GGML_TYPE_COUNT;
+}
+
 backend_selection::ExclusionKind
 backend_selection::kindOf(const ExclusionReason reason) {
   // No default: a new reason must be classified here before this compiles.
@@ -710,7 +754,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_type,
       ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
-      llamaLogcallback};
+      llamaLogcallback,
+      ::productionSupportsKvCacheType};
   return backend_selection::chooseBackend(
       preferredBackendType,
       bckI,
@@ -782,7 +827,8 @@ bool backend_selection::gpuBackendSupportsRowSplit() {
       ggml_backend_dev_type,
       ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
-      nullptr};
+      nullptr,
+      ::productionSupportsKvCacheType};
   return backend_selection::gpuBackendSupportsRowSplit(bckI);
 }
 
@@ -932,6 +978,7 @@ backend_selection::splitModeDeviceNames(const std::string& selectedDeviceName) {
       ggml_backend_dev_type,
       ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
-      nullptr};
+      nullptr,
+      ::productionSupportsKvCacheType};
   return backend_selection::splitModeDeviceNames(bckI, selectedDeviceName);
 }
