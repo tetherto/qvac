@@ -134,9 +134,11 @@ Three near-identical cleanup blocks in `completion-stream.ts` had to touch all t
 ```typescript
 const session = createKvCacheSession(modelId);
 const turn = await session.beginTurn({ ... });          // primes cache if missing, returns handle
-scope.defer(() => session.rollback(turn));              // ONE cleanup hook for every exit path
+let preserveCacheOnUnwind = false;                      // set when a recognised pre-mutation refusal is thrown
+scope.defer(() =>                                       // ONE cleanup hook for every exit path
+  preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn));
 // ... run model ...
-if (shouldCommit) await session.commitTurn(turn, ...);  // suppresses the deferred rollback
+if (shouldCommit) await session.commitTurn(turn, ...);  // suppresses the deferred cleanup
 ```
 
 `commitTurn` flips an internal flag on the turn handle; `rollback` reads the flag and short-circuits. The happy path commits and the deferred rollback becomes a no-op. Every other exit path (cancel, zero-token, addon error, rename failure, tool-call turn) lets `scope[Symbol.asyncDispose]` run the deferred cleanup: `rollback` unlinks the `.bin` file and clears the `initializedCaches`/`cachedPrefixes` entries, while a thrown addon overflow or enumerated pre-mutation refusal (scheduler submit guards, generationParams validation) takes `releaseTurn`, which frees locks and refs but keeps the committed file and prefix valid for a retry.
@@ -222,7 +224,8 @@ to `"length"` (with `predict: -1` there is no cutoff, so `"length"` can only
 mean the boundary). With `parallel >= 2` the scheduler treats a positive
 `predict` as a reservation: a budget that cannot fit the slot is rejected at
 admission instead of stopping at the boundary — and those admission refusals
-surface as generic `InvalidArgument` errors without typed sizes, not as
+surface as generic untyped errors (the transport delivers the addon's message
+alone, without its `InvalidArgument` status), not as
 `ContextOverflowError`, until the addon gives them a structured status. Use
 `predict: -1`/`-2` or a budget within the slot there.
 

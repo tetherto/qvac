@@ -487,11 +487,8 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
           output: `Expected requiredTokens of at least the window, got requiredTokens=${error.requiredTokens} ctxSize=${error.ctxSize}`
         }
       }
-      // The cached-plus-prompt guard names the cached half; its absence means
-      // the request went in cold. A fresh prime holds only the system prompt
-      // (well under 100 tokens), while the committed first turn is ~370, so
-      // the floor proves the first-turn prefix survived, not merely a warm
-      // state after a silent commit rollback.
+      // A fresh prime caches well under 100 tokens, the committed first turn
+      // ~370, so the floor proves the first-turn prefix itself survived.
       if (typeof error.cachedTokens !== 'number' || error.cachedTokens < 200) {
         return {
           passed: false,
@@ -499,8 +496,7 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
         }
       }
       // A pre-mutation overflow must not destroy the committed cache: the
-      // same follow-up retried before cleanup has to stay warm. A destroyed
-      // cache re-primes system-only and loses the floor.
+      // same follow-up retried before cleanup has to stay warm.
       try {
         const retry = completion({
           modelId: llmModelId,

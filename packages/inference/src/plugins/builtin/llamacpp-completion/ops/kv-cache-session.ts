@@ -42,9 +42,7 @@ const moduleLogger = getEngineLogger()
  * 5. `.auto-cache-<key>` markers — engine-generated cache ownership.
  *
  * Every turn must finish through `commitTurn`, `rollback`, or the
- * non-destructive `releaseTurn` so all inference state stays aligned,
- * the active-path ref is released, and marker metadata follows the
- * cache directory lifecycle.
+ * non-destructive `releaseTurn` so all inference state stays aligned.
  */
 
 // ----- module-scoped state. The session is the single mutation point
@@ -396,10 +394,8 @@ export interface KvCacheSession {
    */
   rollback(turn: TurnHandle): Promise<void>
   /**
-   * Non-destructive counterpart of `rollback`: a thrown addon overflow or
-   * admission refusal never persists the in-flight turn, so the last
-   * committed disk cache and its recorded prefix stay valid for the next
-   * turn. Releases locks, active-refs, and the deferred retention sweep.
+   * Non-destructive counterpart of `rollback`: releases locks and refs but
+   * keeps the committed disk cache and its recorded prefix valid for a retry.
    */
   releaseTurn(turn: TurnHandle): Promise<void>
 

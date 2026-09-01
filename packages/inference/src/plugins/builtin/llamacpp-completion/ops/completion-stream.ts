@@ -476,12 +476,10 @@ export async function* completion(
     )
   }
 
-  // ---- KV-cache path. The session owns all three bookkeeping layers
-  // (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). The
-  // handler asks for a turn, registers rollback on the scope, and on
-  // the happy path calls `commitTurn` which short-circuits the deferred
-  // rollback. Cancellations / zero-token replies / rename failures all
-  // unwind through the same `scope.defer` hook. ----
+  // ---- KV-cache path. The session owns every bookkeeping layer; the
+  // handler registers one deferred unwind (`rollback`, or the non-destructive
+  // `releaseTurn` on a recognised pre-mutation refusal) that `commitTurn`
+  // short-circuits on the happy path. ----
 
   const session = createKvCacheSession(modelId, { logger: requestLogger })
   const systemPromptFromHistory = extractSystemPrompt(history)
@@ -533,9 +531,8 @@ export async function* completion(
   // flips the turn's internal `committed` flag so this becomes a no-op
   // on the happy path. Scope unwinding is LIFO — registered after the
   // `removeEventListener` defer above so rollback runs before the
-  // listener detach. A thrown addon overflow or admission refusal never
-  // persists the in-flight turn, so the last committed cache is still
-  // valid — destroying it would turn a retryable refusal into a cold restart.
+  // listener detach. A thrown overflow or pre-mutation refusal never
+  // persists the in-flight turn, so the committed cache stays valid.
   let preserveCacheOnUnwind = false
   scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 

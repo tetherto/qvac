@@ -4,10 +4,10 @@ import { PathTraversalError } from '@/errors'
 // -----------------------------------------------------------------------------
 // `KvCacheSession` — Bare runtime tests.
 //
-// The session is the single owner of the three KV-cache bookkeeping layers
-// (on-disk `.bin`, `initializedCaches` set, `cachedMessageCounts` map).
-// Without a single owner the completion handler would have to touch all
-// three on every cancel / error branch and quickly drift out of sync.
+// The session is the single owner of the KV-cache bookkeeping layers
+// (on-disk `.bin`, `initializedCaches` set, `cachedPrefixes` map, path
+// refs, auto-cache markers). Without a single owner the completion
+// handler would have to touch every layer on each error branch and drift.
 // The functional-equivalence assertions below pin the contract:
 //
 //   1. `beginTurn` primes the cache (calls the injected closure) the
@@ -16,7 +16,7 @@ import { PathTraversalError } from '@/errors'
 //   2. `commitTurn({ kind: "static" })` records the new saved count and
 //      flips the turn's `committed` flag so the deferred `rollback`
 //      becomes a no-op on the happy path.
-//   3. `rollback` clears all three layers, even when the on-disk file
+//   3. `rollback` clears every layer, even when the on-disk file
 //      doesn't exist (the `unlink` error is logged but not propagated;
 //      in-memory state is still cleared).
 //   4. `rollback` after `commitTurn` is a no-op (handle-internal flag
@@ -560,7 +560,7 @@ test('kv-cache-session: commitTurn records the new saved count and suppresses ro
   }
 })
 
-test('kv-cache-session: rollback wipes all three layers atomically', async (t) => {
+test('kv-cache-session: rollback wipes every bookkeeping layer atomically', async (t) => {
   const { fs, path, mod, utils, cleanup, writeFakeCache } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
@@ -589,7 +589,7 @@ test('kv-cache-session: rollback wipes all three layers atomically', async (t) =
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),
       undefined,
-      'rollback forgot the cachedMessageCounts entry'
+      'rollback forgot the cachedPrefixes entry'
     )
     t.is(
       mod.__kvCacheSessionTestHooks.hasInitializedPath(
@@ -1466,9 +1466,8 @@ test('kv-cache-session: auto-rename commit releases the target active-ref when s
   }
 })
 
-// `releaseTurn` is the non-destructive exit for a thrown addon overflow or
-// admission refusal: the last committed file, its saved prefix, and the init
-// flag must all survive, and a same-key waiter must get the lock.
+// `releaseTurn` is the non-destructive exit: committed file, saved prefix,
+// and init flag must all survive, and a same-key waiter must get the lock.
 test('kv-cache-session: releaseTurn preserves the committed cache and admits a waiter', async (t) => {
   const { mod, utils, cleanup, writeFakeCache } = await loadSession()
   try {
