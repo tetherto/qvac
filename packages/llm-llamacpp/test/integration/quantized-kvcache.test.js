@@ -15,6 +15,7 @@ const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
+const process = require('bare-process')
 
 const platform = os.platform()
 const isDarwin = platform === 'darwin'
@@ -34,7 +35,15 @@ const isAndroid = platform === 'android'
 // Vulkan explicitly on the tbq/pq rows only; the f16 baseline still runs on
 // whatever the host prefers, which is what makes the memory comparison below
 // meaningful on both backends.
-const pinTbqPqToVulkan = platform === 'linux' && os.arch() === 'x64'
+const isLinuxX64 = platform === 'linux' && os.arch() === 'x64'
+const pinTbqPqToVulkan = isLinuxX64
+
+// Which of the two same-runner legs are we on. The -vulkan leg hides the CUDA
+// devices, and CUDA_VISIBLE_DEVICES is the mechanism rather than a label, so it
+// is the signal to trust. FORCE_VULKAN is checked too because llm sets it at
+// job level, while embed only exports the CUDA_VISIBLE_DEVICES it turns into.
+const forceVulkanLeg =
+  process.env.FORCE_VULKAN === 'true' || process.env.CUDA_VISIBLE_DEVICES === '-1'
 
 const skipReason =
   isDarwin || isIos
@@ -190,7 +199,11 @@ async function runBenchmark(cfg, modelInfo) {
       // CUDA would look identical to a run that honoured it. Read here, after
       // the run: backend selection is lazy, so the log is not in the buffer yet
       // when load() returns.
-      backendOverrideApplied: specLogger.logs.some((l) => /backend override/.test(l))
+      backendOverrideApplied: specLogger.logs.some((l) => /backend override/.test(l)),
+      // chooseBackend's own verdict, for the rows that pin nothing. Read from
+      // the log for the same reason as above: the addon exposes no API that
+      // reports which backend was selected.
+      choseCuda: specLogger.logs.some((l) => /Chosen GPU CUDA/.test(l))
     }
   } finally {
     await model.unload().catch(() => {})
@@ -213,6 +226,17 @@ async function runHeadDimSmoke(t, modelInfo, label) {
       t.ok(result.generatedTokens > 0, `${cfg.label}: generated tokens (${result.generatedTokens})`)
       if (cfg.kind === 'tbqpq' && pinTbqPqToVulkan) {
         t.ok(result.backendOverrideApplied, `${cfg.label}: vulkan backend pin took effect`)
+      }
+      if (cfg.kind !== 'tbqpq' && isLinuxX64) {
+        // This row pins nothing, so it shows what the default cascade actually
+        // did. Without it a silent fallback is invisible: both integration legs
+        // pass either way, and the pinned rows above only prove the override
+        // path. The two legs expect opposite answers.
+        if (forceVulkanLeg) {
+          t.absent(result.choseCuda, `${cfg.label}: CUDA hidden, so CUDA was not chosen`)
+        } else {
+          t.ok(result.choseCuda, `${cfg.label}: CUDA is preferred on linux x64 and was chosen`)
+        }
       }
     } catch (err) {
       if (cfg.kind === 'tbqpq' && isTurboQuantUnsupported(err)) {
