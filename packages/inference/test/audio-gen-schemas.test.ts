@@ -409,3 +409,29 @@ test('audioGenStreamResponseSchema accepts progress, PCM, and terminal frames', 
     }).success
   )
 })
+
+test('audioGenStreamResponseSchema carries backend diagnostics on the terminal frame', (t) => {
+  const terminal = audioGenStreamResponseSchema.parse({
+    type: 'audioGenStream',
+    done: true,
+    stopReason: 'completed',
+    stats: { backendDevice: 0, backendId: 0 },
+    diagnostics: {
+      selectedBackend: 'cpu',
+      selectedDevice: 'cpu'
+    }
+  })
+
+  t.alike(terminal.diagnostics, {
+    selectedBackend: 'cpu',
+    selectedDevice: 'cpu'
+  })
+  t.absent(
+    audioGenStreamResponseSchema.safeParse({
+      type: 'audioGenStream',
+      done: true,
+      diagnostics: { selectedBackend: 'vulkan', selectedDevice: 'tpu' }
+    }).success,
+    'selectedDevice is limited to the backend device enum'
+  )
+})

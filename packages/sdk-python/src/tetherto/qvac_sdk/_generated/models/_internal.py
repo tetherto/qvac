@@ -472,6 +472,112 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
 
 
+class AudioGenStreamResponseDiagnosticsSelectedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class AudioGenStreamResponseDiagnosticsGraphicsApi(Enum):
+    vulkan = "vulkan"
+    opencl = "opencl"
+    opengl = "opengl"
+    webgpu = "webgpu"
+    metal = "metal"
+    direct3d11 = "direct3d11"
+    direct3d12 = "direct3d12"
+    cuda = "cuda"
+    level_zero = "levelZero"
+    rocm = "rocm"
+
+
+class AudioGenStreamResponseDiagnosticsDriver(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(min_length=1)]
+    version: Annotated[str | None, Field(min_length=1)] = None
+
+
+class AudioGenStreamResponseDiagnosticsFallbackRequestedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class AudioGenStreamResponseDiagnosticsFallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    requested_backend: Annotated[
+        str | None, Field(alias="requestedBackend", min_length=1)
+    ] = None
+    requested_device: Annotated[
+        AudioGenStreamResponseDiagnosticsFallbackRequestedDevice | None,
+        Field(
+            alias="requestedDevice",
+            title="AudioGenStreamResponseDiagnosticsFallbackRequestedDevice",
+        ),
+    ] = None
+    reason: Annotated[str, Field(min_length=1)]
+
+
+class AudioGenStreamResponseDiagnosticsProbeStatus(Enum):
+    compatible = "compatible"
+    incompatible = "incompatible"
+    unknown = "unknown"
+
+
+class AudioGenStreamResponseDiagnosticsProbe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        AudioGenStreamResponseDiagnosticsProbeStatus,
+        Field(title="AudioGenStreamResponseDiagnosticsProbeStatus"),
+    ]
+    backend: Annotated[str, Field(min_length=1)]
+    reason: str | None = None
+
+
+class AudioGenStreamResponseDiagnostics(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
+    selected_device: Annotated[
+        AudioGenStreamResponseDiagnosticsSelectedDevice,
+        Field(
+            alias="selectedDevice",
+            title="AudioGenStreamResponseDiagnosticsSelectedDevice",
+        ),
+    ]
+    graphics_api: Annotated[
+        AudioGenStreamResponseDiagnosticsGraphicsApi | None,
+        Field(
+            alias="graphicsApi", title="AudioGenStreamResponseDiagnosticsGraphicsApi"
+        ),
+    ] = None
+    driver: Annotated[
+        AudioGenStreamResponseDiagnosticsDriver | None,
+        Field(title="AudioGenStreamResponseDiagnosticsDriver"),
+    ] = None
+    gpu_id: Annotated[
+        str | None,
+        Field(
+            alias="gpuId",
+            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+            min_length=1,
+        ),
+    ] = None
+    fallback: Annotated[
+        AudioGenStreamResponseDiagnosticsFallback | None,
+        Field(title="AudioGenStreamResponseDiagnosticsFallback"),
+    ] = None
+    probe: Annotated[
+        AudioGenStreamResponseDiagnosticsProbe | None,
+        Field(title="AudioGenStreamResponseDiagnosticsProbe"),
+    ] = None
+
+
 class AudioGenStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -496,6 +602,13 @@ class AudioGenStreamResponse(GeneratedBaseModel):
     ] = None
     stats: Annotated[
         AudioGenStreamResponseStats | None, Field(title="AudioGenStreamResponseStats")
+    ] = None
+    diagnostics: Annotated[
+        AudioGenStreamResponseDiagnostics | None,
+        Field(
+            description="Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+            title="AudioGenStreamResponseDiagnostics",
+        ),
     ] = None
 
 
