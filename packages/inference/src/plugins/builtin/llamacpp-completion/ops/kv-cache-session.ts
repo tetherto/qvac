@@ -41,9 +41,10 @@ const moduleLogger = getEngineLogger()
  * 4. `activeCachePaths` — per-path refs that block in-flight eviction.
  * 5. `.auto-cache-<key>` markers — engine-generated cache ownership.
  *
- * Every turn must finish through `commitTurn` or `rollback` so all
- * inference state stays aligned, the active-path ref is released, and
- * marker metadata follows the cache directory lifecycle.
+ * Every turn must finish through `commitTurn`, `rollback`, or the
+ * non-destructive `releaseTurn` so all inference state stays aligned,
+ * the active-path ref is released, and marker metadata follows the
+ * cache directory lifecycle.
  */
 
 // ----- module-scoped state. The session is the single mutation point

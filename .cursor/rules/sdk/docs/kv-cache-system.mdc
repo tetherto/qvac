@@ -107,13 +107,13 @@ Named string-key caches are not inferred from their directory names and remain c
 
 | File | Purpose |
 |------|---------|
-| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the three KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). Exposes `beginTurn` / `commitTurn` / `rollback` / `releaseTurn` (non-destructive: a thrown overflow/admission refusal never persists the turn, so the committed cache stays valid) / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
-| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers one deferred cleanup (rollback, or the non-destructive `releaseTurn` on a thrown addon overflow or per-sequence-cap admission refusal), and calls `session.commitTurn(...)` on the happy path (which suppresses it). No direct references to the three layers. |
+| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedPrefixes`, per-path write locks/active refs, auto-cache markers). Exposes `beginTurn` / `commitTurn` / `rollback` / `releaseTurn` (non-destructive: a thrown overflow/admission refusal never persists the turn, so the committed cache stays valid) / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
+| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers one deferred cleanup (rollback, or the non-destructive `releaseTurn` on a thrown addon overflow or scheduler submit refusal), and calls `session.commitTurn(...)` on the happy path (which suppresses it). No direct references to the session's layers. |
 | `packages/inference/src/plugins/builtin/llamacpp-completion/ops/kv-cache-state.ts` | Pure `decideCachedHistorySlice(...)` helper used by the session — slice decision for the next addon call. No state. |
 | `packages/inference/src/plugins/ops/kv-cache-retention.ts` | Plans idle and quota-based auto-cache evictions while excluding active turn paths. |
 | `packages/inference/src/plugins/ops/kv-cache-utils.ts` | Path / hash / fs utilities: `getCacheFilePath`, `generateConfigHash`, `findMatchingCache`, `getCurrentCacheInfo`, `renameCacheFile`, `deleteCache`. No in-memory state. |
 | `packages/inference/src/plugins/builtin/llamacpp-completion/ops/cache-logger.ts` | Debug logging for cache operations |
-| `packages/inference/src/handlers/delete-cache.ts` | `handleDeleteCache` RPC entry point. Delegates to `deleteKvCacheState(...)` — zero direct references to the three layers. |
+| `packages/inference/src/handlers/delete-cache.ts` | `handleDeleteCache` RPC entry point. Delegates to `deleteKvCacheState(...)` — zero direct references to the session's layers. |
 | `packages/inference/src/utils/cache/paths.ts` | `getKVCacheDir()` base directory |
 | `packages/sdk/src/client/api/delete-cache.ts` | Client-side delete cache API |
 
@@ -129,7 +129,7 @@ Before 0.11.0 the completion handler coordinated three independent bookkeeping l
 
 Three near-identical cleanup blocks in `completion-stream.ts` had to touch all three on every cancel / zero-token / rename-failed / tool-call exit. Any one of those blocks forgetting a layer produced the drift bugs the pitch documents (QVAC-17780 family).
 
-**0.11.0 collapses this into `KvCacheSession`**, the **single mutation point** for the three layers. The handler's loop is now:
+**0.11.0 collapses this into `KvCacheSession`**, the **single mutation point** for the bookkeeping layers (five today — see the table above). The handler's loop is now:
 
 ```typescript
 const session = createKvCacheSession(modelId);
@@ -139,11 +139,11 @@ scope.defer(() => session.rollback(turn));              // ONE cleanup hook for 
 if (shouldCommit) await session.commitTurn(turn, ...);  // suppresses the deferred rollback
 ```
 
-`commitTurn` flips an internal flag on the turn handle; `rollback` reads the flag and short-circuits. The happy path commits and the deferred rollback becomes a no-op. Every other exit path (cancel, zero-token, addon error, rename failure, tool-call turn) lets `scope[Symbol.asyncDispose]` run the deferred rollback, which atomically unlinks the `.bin` file, deletes the `initializedCaches` entry, and forgets the `cachedMessageCounts` entry.
+`commitTurn` flips an internal flag on the turn handle; `rollback` reads the flag and short-circuits. The happy path commits and the deferred rollback becomes a no-op. Every other exit path (cancel, zero-token, addon error, rename failure, tool-call turn) lets `scope[Symbol.asyncDispose]` run the deferred cleanup: `rollback` unlinks the `.bin` file and clears the `initializedCaches`/`cachedPrefixes` entries, while a thrown addon overflow or per-sequence-cap admission refusal takes `releaseTurn`, which frees locks and refs but keeps the committed file and prefix valid for a retry.
 
 **Late-commit vs cancel is intentional, not a race.** A commit only proceeds past its abort re-check for a turn that fully generated and whose file passed `verifySaveAndRecord`. If a cancel lands during the async commit (after that check, during rename/verify), the commit finishes: a **complete, verified** turn is persisted while the operation reports cancelled. This is by design — the persisted cache matches the tokens the client already received, and committing fully-generated verified work beats discarding it. A strict "cancel wins" rollback here would need target-aware cleanup and risks deleting valid completed state, so it is not done.
 
-The maps that backed `clearCacheRegistry` and `cachedMessageCounts` are **private to `kv-cache-session.ts`**. No other module reads or writes them.
+The maps behind the session (`initializedCaches`, `cachedPrefixes`, locks and refs) are **private to `kv-cache-session.ts`**. No other module reads or writes them.
 
 ### Cache Initialization (primeIfMissing) and Addon Non-Transactional Save
 
@@ -197,9 +197,9 @@ await deleteCache({ kvCacheKey: "session-a" });                // remove session
 await deleteCache({ kvCacheKey: "session-a", modelId: "..." }); // remove only one model's session-a cache
 ```
 
-`handleDeleteCache` delegates to `deleteKvCacheState(...)` — a module-level export from `kv-cache-session.ts` that owns the same three layers. It removes the matching on-disk directory tree, prefix-cleans `cachedMessageCounts` against the removed path, and scope-clears `initializedCaches` by `(kvCacheKey[, modelId])`. The RPC handler itself has **zero direct references** to `fsPromises.unlink`, the in-memory `initializedCaches` set, or the `cachedMessageCounts` map.
+`handleDeleteCache` delegates to `deleteKvCacheState(...)` — a module-level export from `kv-cache-session.ts` that owns the same layers. It removes the matching on-disk directory tree and scope-clears the `initializedCaches`/`cachedPrefixes` entries by `(kvCacheKey[, modelId])`. The RPC handler itself has **zero direct references** to `fsPromises.unlink` or the session's in-memory maps.
 
-See `schemas/delete-cache.ts` for the request schema.
+See `schemas/model-ops.ts` for the request schema.
 
 ## Cache Persistence
 
@@ -221,8 +221,10 @@ distinguish a full context from a positive `predict` cutoff — the SDK maps bot
 to `"length"` (with `predict: -1` there is no cutoff, so `"length"` can only
 mean the boundary). With `parallel >= 2` the scheduler treats a positive
 `predict` as a reservation: a budget that cannot fit the slot is rejected at
-admission instead of stopping at the boundary, so use `predict: -1`/`-2` or a
-budget within the slot there.
+admission instead of stopping at the boundary — and those admission refusals
+surface as generic `InvalidArgument` errors without typed sizes, not as
+`ContextOverflowError`, until the addon gives them a structured status. Use
+`predict: -1`/`-2` or a budget within the slot there.
 
 **Config for long conversations:** size `ctx_size` for the whole conversation you
 intend to hold. With `parallel > 1` the window is split across slots, so each
