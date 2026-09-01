@@ -498,9 +498,34 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
           output: `Expected cachedTokens to include the committed first turn (>= 200), got cachedTokens=${error.cachedTokens}`
         }
       }
+      // A pre-mutation overflow must not destroy the committed cache: the
+      // same follow-up retried before cleanup has to stay warm. A destroyed
+      // cache re-primes system-only and loses the floor.
+      try {
+        const retry = completion({
+          modelId: llmModelId,
+          history: followUp,
+          stream: false,
+          kvCache,
+          generationParams: params.generationParams
+        } as CompletionFnParams)
+        await retry.final
+        return { passed: false, output: 'Expected the retry to overflow warm again' }
+      } catch (retryError) {
+        if (
+          !(retryError instanceof ContextOverflowError) ||
+          typeof retryError.cachedTokens !== 'number' ||
+          retryError.cachedTokens < 200
+        ) {
+          return {
+            passed: false,
+            output: `Retry lost the warm cache: cachedTokens=${retryError instanceof ContextOverflowError ? retryError.cachedTokens : retryError}`
+          }
+        }
+      }
       return {
         passed: true,
-        output: `Warm-cache overflow: requiredTokens=${error.requiredTokens} cachedTokens=${error.cachedTokens} ctxSize=${error.ctxSize}`
+        output: `Warm-cache overflow: requiredTokens=${error.requiredTokens} cachedTokens=${error.cachedTokens} ctxSize=${error.ctxSize}, retry stayed warm`
       }
     }
   }
