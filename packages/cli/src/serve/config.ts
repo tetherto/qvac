@@ -1,9 +1,9 @@
 import type { ModelConstant } from '@qvac/sdk'
-import type { ServeConfig, ResolvedModelEntry, LoadConfig } from './core/model-registry.js'
-import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from './aliases/sdcpp-video.js'
-import { normalizeCorsOrigin } from './cors.js'
-import { resolveNestedModelSrcConstants } from './resolve-nested-model-src.js'
-import { loadModelConstants } from './sdk-constants.js'
+import type { ServeConfig, ResolvedModelEntry, LoadConfig } from '@/serve/core/model-registry'
+import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from '@/serve/aliases/sdcpp-video'
+import { normalizeCorsOrigin } from '@/serve/cors'
+import { resolveNestedModelSrcConstants } from '@/serve/resolve-nested-model-src'
+import { loadModelConstants } from '@/serve/sdk-constants'
 
 const ENDPOINT_CATEGORY: Record<string, string> = {
   llm: 'chat',

@@ -1,7 +1,7 @@
 import { unloadModel as sdkUnloadModel, close as sdkClose } from '@qvac/sdk'
-import type { LoadConfig, ModelRegistry, ServeConfig } from './model-registry.js'
-import type { LoadManager } from './load-manager.js'
-import type { Logger } from '../../logger.js'
+import type { LoadConfig, ModelRegistry, ServeConfig } from '@/serve/core/model-registry'
+import type { LoadManager } from '@/serve/core/load-manager'
+import type { Logger } from '@/logger'
 
 export interface PreloadResult {
   /** Number of models marked `preload` that were attempted. */
