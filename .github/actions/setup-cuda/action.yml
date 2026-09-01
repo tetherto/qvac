@@ -25,9 +25,16 @@ runs:
   using: composite
   steps:
     # Cache the assembled toolkit so the component archives are fetched and
-    # unpacked once per component-list revision. The key includes the pinned
-    # list's hash via the action file itself changing the runner workspace,
-    # so bump cache-suffix when editing COMPONENTS.
+    # unpacked once per component-list revision. The key is only the CUDA
+    # version plus the suffix below, so it does NOT track COMPONENTS: bump the
+    # suffix by hand whenever that list changes, or a stale toolkit is restored
+    # and the sha256-verified assemble step is skipped entirely.
+    #
+    # r1 -> r2 on 2026-09-01: r1 was written under a combined `actions/cache`,
+    # whose post-step save let any `pull_request_target` run populate it, and
+    # the prebuilds for asr, audiogen, bci and tts reach this action from that
+    # trigger. Splitting restore from save below only stops new writes, so the
+    # key had to rotate for the entries already there to become unreachable.
     #
     # QVAC-23763: restore and save are split on purpose. The key is global and
     # `pull_request_target` runs with GITHUB_REF on the base branch, so a
@@ -37,10 +44,10 @@ runs:
     # reachable without a label, so only trusted events may save.
     - name: Restore CUDA toolkit
       id: cache-cuda
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-r1
+        key: cuda-redist-${{ inputs.cuda-version }}-r2
 
     - name: Download + verify + assemble CUDA toolkit
       if: steps.cache-cuda.outputs.cache-hit != 'true'
@@ -86,10 +93,10 @@ runs:
         (github.event_name == 'push' ||
          github.event_name == 'workflow_dispatch' ||
          github.event_name == 'merge_group')
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-r1
+        key: cuda-redist-${{ inputs.cuda-version }}-r2
 
     - name: Export CUDA environment
       shell: bash
