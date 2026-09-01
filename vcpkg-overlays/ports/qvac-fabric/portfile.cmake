@@ -190,24 +190,50 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # than our targets and the cubins are not free:
   #     ggml default (7 arches)              148.4 MB
   #     80-virtual;86-real;120a-real          78.9 MB
-  # measured on the built libqvac-ggml-cuda.so. The 70 MB difference matters
-  # because the consumer prebuild is published to GitHub Packages, which caps a
-  # package at 256 MiB, and the llm-llamacpp linux-x64 prebuild already carries
-  # a 93 MB Vulkan module beside this one. The default list pushed it to 303 MB
-  # and the publish failed with a 413.
+  # measured on the built libqvac-ggml-cuda.so before the per-architecture
+  # tiering below; both tiers still need re-measuring. The 70 MB difference
+  # matters because the consumer prebuild is published to GitHub Packages, which
+  # caps a package at 256 MiB, and the llm-llamacpp linux-x64 prebuild already
+  # carries a 93 MB Vulkan module beside this one. The default list pushed it to
+  # 303 MB and the publish failed with a 413.
   #
-  #   86-real     RTX 3090, the qvac-ubuntu*-x64-gpu CI runners
-  #   120a-real   RTX 5090
-  #   80-virtual  PTX, JITs onto sm_87 (Nvidia Jetson Orin) and onto anything
-  #               newer that is not pinned above
+  #   86-real     RTX 3090, the qvac-ubuntu*-x64-gpu CI runners        (x64)
+  #   120a-real   RTX 5090                                             (x64)
+  #   87-real     Nvidia Jetson Orin                                   (arm64)
+  #   80-virtual  PTX floor, both tiers. JITs onto sm_89, sm_90, sm_12x
+  #               and anything newer that is not pinned above.
   #
-  # Not built: 75 (Turing), 89 (Ada), 90 (Hopper), 121a. Ada and Hopper still
-  # reach the kernels by JIT from the 80-virtual PTX. Turing and anything below
-  # 8.0 do NOT, because PTX only JITs upward: those cards enumerate, get
-  # selected, and then fail at the first kernel launch instead of falling back.
+  # THE LOWEST ENTRY MUST STAY -virtual, ON BOTH TIERS.
+  #
+  # From qvac-fabric v10297.2.0, ggml_cuda_compiled_code_available() in
+  # ggml/src/ggml-cuda/common.cuh refuses at registration any NVIDIA device whose
+  # compute capability is below every entry here. Such a device never reaches
+  # ggml_backend_dev_count(), so a consumer's backend cascade falls through to
+  # Vulkan and then CPU. That is what stops a Turing card from enumerating,
+  # winning selection, and then aborting at the first kernel launch.
+  #
+  # That guard is a floor test, not a loadability test: __CUDA_ARCH_LIST__
+  # records numeric compute capabilities only and cannot distinguish -real from
+  # -virtual. A device at or above the lowest entry therefore passes the guard
+  # whether or not any PTX exists for it to JIT from. Replace 80-virtual with
+  # 80-real, or drop it so a -real entry becomes the minimum, and the guard is
+  # silently disarmed for every architecture above the floor -- no build error,
+  # no failing test. ports/ggml-speech/portfile.cmake is a live example of the
+  # hazard: its floor is 75-real, and it is safe only because no NVIDIA device
+  # exists between compute capability 7.5 and 8.0.
+  #
+  # Ordering within the list does not matter to the guard, which keys off the
+  # minimum entry, so both tiers floor at 800.
+  #
   # Which architectures we ship to is a product decision and is still open, so
   # this list is not a statement that the missing ones are unsupported. A local
   # build on a Turing box needs -DCMAKE_CUDA_ARCHITECTURES=75 as an override.
+  #
+  # Note for whoever widens this: the architectures served by PTX rather than
+  # native SASS pay a JIT cost on first launch, cached by the driver under
+  # $HOME/.nv/ComputeCache. A read-only or absent HOME disables that cache and
+  # the cost is paid on every process start. See the CUDA note in the
+  # llm-llamacpp and embed-llamacpp READMEs.
   #
   # The semicolons MUST stay backslash-escaped. vcpkg_cmake_configure(OPTIONS)
   # treats its argument as a CMake list, so an unescaped value splits and the
@@ -215,7 +241,16 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # stray arguments:
   #     -DCMAKE_CUDA_ARCHITECTURES=80-virtual / 86-real / 120a-real
   # which would build sm_80 only and not fail until something ran on a 5090.
-  set(QVAC_CUDA_ARCHS "80-virtual\;86-real\;120a-real")
+  #
+  # Tiered by target architecture: an arm64 package has no use for the x64
+  # cubins and vice versa. No consumer requests cuda-backend on arm64 yet --
+  # llm-llamacpp and embed-llamacpp both gate the feature on "linux & x64" --
+  # so the arm64 tier is correct but unexercised.
+  if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
+    set(QVAC_CUDA_ARCHS "87-real\;80-virtual")
+  else()
+    set(QVAC_CUDA_ARCHS "86-real\;120a-real\;80-virtual")
+  endif()
   message(STATUS "qvac-fabric: cuda-backend ON — building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
   list(APPEND PLATFORM_OPTIONS
     -DGGML_CUDA=ON
