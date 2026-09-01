@@ -16,6 +16,7 @@ import {
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
 import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
+import { isAddonContextOverflowError } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import {
   decideCachedHistorySlice,
@@ -529,8 +530,11 @@ export async function* completion(
   // flips the turn's internal `committed` flag so this becomes a no-op
   // on the happy path. Scope unwinding is LIFO — registered after the
   // `removeEventListener` defer above so rollback runs before the
-  // listener detach.
-  scope.defer(() => session.rollback(turn))
+  // listener detach. A pre-mutation overflow keeps the last committed
+  // cache: the prefill guards reject before any decode or save, so
+  // destroying the file would turn a retryable refusal into a cold restart.
+  let preserveCacheOnUnwind = false
+  scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
   // `cacheExists` is implied by `beginTurn` — the session either found
   // an existing cache or just primed one. Pass `true` to the message
@@ -545,15 +549,21 @@ export async function* completion(
   const messagesToSend = payload.messages
   logMessagesToAddon(messagesToSend, 'PROMPT_SEND')
 
-  const result = yield* processModelResponse(
-    model,
-    messagesToSend,
-    tools,
-    mergedGenerationParams,
-    { cacheKey: turn.cachePath, saveCacheToDisk: true },
-    dialect,
-    setActiveResponse
-  )
+  let result
+  try {
+    result = yield* processModelResponse(
+      model,
+      messagesToSend,
+      tools,
+      mergedGenerationParams,
+      { cacheKey: turn.cachePath, saveCacheToDisk: true },
+      dialect,
+      setActiveResponse
+    )
+  } catch (error) {
+    preserveCacheOnUnwind = isAddonContextOverflowError(error)
+    throw error
+  }
   const shouldCommitTurn = shouldCommitCachedTurn({
     aborted: signal.aborted,
     producedTokens: result.producedTokens,

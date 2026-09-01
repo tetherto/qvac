@@ -394,6 +394,13 @@ export interface KvCacheSession {
    * itself via `commitTurn`).
    */
   rollback(turn: TurnHandle): Promise<void>
+  /**
+   * Non-destructive counterpart of `rollback` for a pre-mutation failure:
+   * the addon's prefill guards reject before any decode or save, so the
+   * disk cache and its recorded prefix stay valid for the next turn. Only
+   * locks and active-refs are released.
+   */
+  releaseTurn(turn: TurnHandle): Promise<void>
 
   /**
    * Forget the in-memory saved-message count for the turn's path
@@ -738,6 +745,15 @@ export function createKvCacheSession(
     await runRollback(state)
   }
 
+  async function releaseTurn(turn: TurnHandle): Promise<void> {
+    const state = turnState.get(turn)
+    if (!state) return
+    if (state.committed || state.rolledBack) return
+    releaseCachePath(state.cachePath)
+    state.rolledBack = true
+    state.releaseWriteLock()
+  }
+
   async function runRollback(state: InternalTurnState): Promise<void> {
     // Order matters only weakly: unlink first so a partial disk-state
     // can't be re-loaded by a sibling turn between the file delete and
@@ -774,6 +790,7 @@ export function createKvCacheSession(
     beginTurn,
     commitTurn,
     rollback,
+    releaseTurn,
     dropStaleSavedCount
   }
 }

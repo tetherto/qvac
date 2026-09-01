@@ -360,3 +360,71 @@ test('completion: kv-cache still skips the tool block when a retired slide key i
   unregisterModel(modelId)
   clearRegistry()
 })
+
+// A prefill-guard overflow rejects before any decode or save, so it must not
+// destroy the last committed cache — the next turn stays warm.
+test('completion: kv-cache survives an overflow rejection between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-overflow-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  let runCount = 0
+  registerModel(modelId, {
+    model: {
+      run(
+        prompt: unknown,
+        opts?: { prefill?: boolean; cacheKey?: string; saveCacheToDisk?: boolean }
+      ) {
+        calls.push({
+          messages: prompt as RecordedCall['messages'],
+          prefill: opts?.prefill === true
+        })
+        if (!opts?.prefill) {
+          runCount += 1
+          if (runCount === 2) {
+            throw Object.assign(
+              new Error(
+                '[TextLlm] context overflow at batch prefill step: cached tokens 400 plus prompt tokens 200 exceed the max context tokens 512'
+              ),
+              { code: '[ TextLlmAddon :: ContextOverflow ]' }
+            )
+          }
+        }
+        const written =
+          opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
+            ? writeCacheFile(opts.cacheKey)
+            : Promise.resolve()
+        return {
+          iterate: async function* () {
+            await written
+            yield 'The area is 25 square units.'
+          },
+          await: () => written,
+          stats: {}
+        }
+      }
+    } as unknown as AnyModel,
+    path: `/tmp/${modelId}.gguf`,
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+
+  const complete = completer(modelId, 'overflow-preserves-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  await complete([first])
+  const grown = [first, assistant('25.'), user('And base 4 height 3?')]
+  await t.exception(() => complete(grown), /CONTEXT_OVERFLOW/, 'turn two is refused')
+  await complete(grown)
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(
+    turnCalls[2]!.messages.length,
+    1,
+    'the retry is warm — it sends the delta, not a re-primed full history'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
