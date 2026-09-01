@@ -293,6 +293,8 @@ export interface AudiogenStats {
   backendDevice?: number
   /** 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other. */
   backendId?: number
+  /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
+  gpuFallbackReason?: number
 }
 
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
@@ -324,6 +326,34 @@ export function audiogenBackendName(
   return AUDIOGEN_BACKEND_NAMES[backendId]
 }
 
+/** Why a GPU-requested run resolved to the CPU. */
+export type AudiogenGpuFallbackReason =
+  | 'none'
+  | 'not-requested'
+  | 'no-devices'
+  | 'init-failed'
+
+/**
+ * `AudiogenStats.gpuFallbackReason` codes, named. Codes match
+ * `tts_cpp::GpuFallbackReason` in the engine.
+ */
+export const AUDIOGEN_GPU_FALLBACK_REASONS: Readonly<
+  Record<number, AudiogenGpuFallbackReason>
+> = {
+  0: 'none',
+  1: 'not-requested',
+  2: 'no-devices',
+  3: 'init-failed'
+}
+
+/** `undefined` for an unset or unrecognised code, never a guessed reason. */
+export function audiogenGpuFallbackReason(
+  code: number | undefined
+): AudiogenGpuFallbackReason | undefined {
+  if (code === undefined) return undefined
+  return AUDIOGEN_GPU_FALLBACK_REASONS[code]
+}
+
 /** Raw shape of the native output-callback payload. */
 interface NativeAudiogenData {
   outputArray?: Int16Array
@@ -335,6 +365,7 @@ interface NativeAudiogenData {
   realTimeFactor?: number
   backendDevice?: number
   backendId?: number
+  gpuFallbackReason?: number
   progressStage?: string
   progressStep?: number
   progressTotal?: number
@@ -1248,7 +1279,10 @@ export class AudioGen {
         ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
         ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {}),
         ...(typeof d.backendDevice === 'number' ? { backendDevice: d.backendDevice } : {}),
-        ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {})
+        ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
+        ...(typeof d.gpuFallbackReason === 'number'
+          ? { gpuFallbackReason: d.gpuFallbackReason }
+          : {})
       }
       this._job.end(stats, stats)
     }

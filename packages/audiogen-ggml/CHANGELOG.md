@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Report why a `useGPU: true` run resolved to the CPU. `stats.gpuFallbackReason`
+  carries the engine's reason code for both ACE-Step and MiniMax, with
+  `AUDIOGEN_GPU_FALLBACK_REASONS` and `audiogenGpuFallbackReason()` to name it.
+
 ### Fixed
 
 - Restore mobile (Android / iOS) support. The generated `index.js` carried

@@ -11,8 +11,9 @@
 // streams the engine's output (progress ticks + one interleaved-Int16 PCM
 // chunk) and resolves with the run stats.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
+exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_GPU_FALLBACK_REASONS = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
 exports.audiogenBackendName = audiogenBackendName;
+exports.audiogenGpuFallbackReason = audiogenGpuFallbackReason;
 exports.detectEngineType = detectEngineType;
 const infer_base_1 = require("@qvac/infer-base");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
@@ -49,6 +50,22 @@ function audiogenBackendName(backendId) {
     if (backendId === undefined)
         return undefined;
     return exports.AUDIOGEN_BACKEND_NAMES[backendId];
+}
+/**
+ * `AudiogenStats.gpuFallbackReason` codes, named. Codes match
+ * `tts_cpp::GpuFallbackReason` in the engine.
+ */
+exports.AUDIOGEN_GPU_FALLBACK_REASONS = {
+    0: 'none',
+    1: 'not-requested',
+    2: 'no-devices',
+    3: 'init-failed'
+};
+/** `undefined` for an unset or unrecognised code, never a guessed reason. */
+function audiogenGpuFallbackReason(code) {
+    if (code === undefined)
+        return undefined;
+    return exports.AUDIOGEN_GPU_FALLBACK_REASONS[code];
 }
 function asNativeData(data) {
     if (typeof data !== 'object' || data === null)
@@ -854,7 +871,10 @@ class AudioGen {
                 ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
                 ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {}),
                 ...(typeof d.backendDevice === 'number' ? { backendDevice: d.backendDevice } : {}),
-                ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {})
+                ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
+                ...(typeof d.gpuFallbackReason === 'number'
+                    ? { gpuFallbackReason: d.gpuFallbackReason }
+                    : {})
             };
             this._job.end(stats, stats);
         }
