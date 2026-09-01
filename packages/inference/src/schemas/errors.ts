@@ -16,10 +16,6 @@ export const ERROR_CODES = {
   // Dispatch (50,200-50,399)
   RPC_NO_HANDLER: 50200,
 
-  // Provider / delegation, consumer side (50,400-50,599)
-  PROVIDER_START_FAILED: 50400,
-  PROVIDER_STOP_FAILED: 50401,
-
   // Config file resolution (50,600-50,799)
   CONFIG_FILE_INVALID: 50603,
   CONFIG_FILE_PARSE_FAILED: 50604,
@@ -33,7 +29,6 @@ export const ERROR_CODES = {
   MODEL_ALREADY_REGISTERED: 52001,
   MODEL_NOT_FOUND: 52002,
   MODEL_NOT_LOADED: 52003,
-  MODEL_IS_DELEGATED: 52004,
   UNKNOWN_MODEL_TYPE: 52005,
 
   // Model loading (52,200-52,399)
@@ -70,6 +65,7 @@ export const ERROR_CODES = {
   INFERENCE_CANCELLED: 52419,
   REQUEST_REJECTED_BY_POLICY: 52420,
   CONTEXT_OVERFLOW: 52421,
+  INVALID_AUDIO_INPUT: 52422,
 
   // RAG operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -102,6 +98,8 @@ export const ERROR_CODES = {
   ARCHIVE_MISSING_SHARDS: 53013,
   PARTIAL_DOWNLOAD_OFFLINE: 53014,
   REGISTRY_DOWNLOAD_FAILED: 53015,
+  INSECURE_MODEL_SOURCE: 53016,
+  CHECKSUM_UNAVAILABLE: 53017,
 
   // Cache operations (53,200-53,349)
   DELETE_CACHE_FAILED: 53200,
@@ -123,10 +121,7 @@ export const ERROR_CODES = {
   INVALID_AUDIO_CHUNK_TYPE: 53502,
   ASYNC_DISPOSE_UNAVAILABLE: 53503,
 
-  // Delegation, provider side (53,700-53,849)
-  DELEGATE_NO_FINAL_RESPONSE: 53700,
-  DELEGATE_CONNECTION_FAILED: 53701,
-  DELEGATE_PROVIDER_ERROR: 53702,
+  // RPC transport (53,700-53,849)
   RPC_NO_DATA_RECEIVED: 53703,
   RPC_UNKNOWN_REQUEST_TYPE: 53704,
 
@@ -193,16 +188,6 @@ const errorDefinitions: ErrorCodesMap = {
       `No handler function registered for request type: ${requestType}`
   },
 
-  // Provider / delegation, consumer side
-  [ERROR_CODES.PROVIDER_START_FAILED]: {
-    name: 'PROVIDER_START_FAILED',
-    message: (details?: string) => `Failed to start provider${details ? `: ${details}` : ''}`
-  },
-  [ERROR_CODES.PROVIDER_STOP_FAILED]: {
-    name: 'PROVIDER_STOP_FAILED',
-    message: (details?: string) => `Failed to stop provider${details ? `: ${details}` : ''}`
-  },
-
   // Config file resolution
   [ERROR_CODES.CONFIG_FILE_INVALID]: {
     name: 'CONFIG_FILE_INVALID',
@@ -242,11 +227,6 @@ const errorDefinitions: ErrorCodesMap = {
   [ERROR_CODES.MODEL_NOT_LOADED]: {
     name: 'MODEL_NOT_LOADED',
     message: (modelId: string) => `Model with ID "${modelId}" is not loaded`
-  },
-  [ERROR_CODES.MODEL_IS_DELEGATED]: {
-    name: 'MODEL_IS_DELEGATED',
-    message: (modelId: string) =>
-      `Model "${modelId}" is a delegated model and cannot be accessed directly`
   },
   [ERROR_CODES.UNKNOWN_MODEL_TYPE]: {
     name: 'UNKNOWN_MODEL_TYPE',
@@ -413,6 +393,10 @@ const errorDefinitions: ErrorCodesMap = {
       return `${prompt}${ctx}${model}. Reduce the prompt size or start a new conversation.`
     }
   },
+  [ERROR_CODES.INVALID_AUDIO_INPUT]: {
+    name: 'INVALID_AUDIO_INPUT',
+    message: (details?: string) => `Invalid audio input${details ? `: ${details}` : ''}`
+  },
 
   // RAG operations
   [ERROR_CODES.RAG_SAVE_FAILED]: {
@@ -511,6 +495,17 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'REGISTRY_DOWNLOAD_FAILED',
     message: (details: string) => `Registry download failed: ${details}`
   },
+  [ERROR_CODES.INSECURE_MODEL_SOURCE]: {
+    name: 'INSECURE_MODEL_SOURCE',
+    message: (url: string, reason: string) =>
+      `Refusing insecure model download from ${url}: ${reason}`
+  },
+  [ERROR_CODES.CHECKSUM_UNAVAILABLE]: {
+    name: 'CHECKSUM_UNAVAILABLE',
+    message: (url: string) =>
+      `Model download from ${url} could not be verified against a trusted checksum ` +
+      `and requireHttpChecksum is enabled`
+  },
   [ERROR_CODES.INVALID_SHARD_URL_PATTERN]: {
     name: 'INVALID_SHARD_URL_PATTERN',
     message: (url: string) => `URL does not contain a valid sharded model pattern: ${url}`
@@ -593,20 +588,7 @@ const errorDefinitions: ErrorCodesMap = {
       'Host runtime does not expose Symbol.asyncDispose; request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare ≥ 1.24) and any polyfill registration.'
   },
 
-  // Delegation, provider side
-  [ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE]: {
-    name: 'DELEGATE_NO_FINAL_RESPONSE',
-    message: 'No final response received from delegated provider'
-  },
-  [ERROR_CODES.DELEGATE_CONNECTION_FAILED]: {
-    name: 'DELEGATE_CONNECTION_FAILED',
-    message: (details: string) => `Failed to connect to delegated provider: ${details}`
-  },
-  [ERROR_CODES.DELEGATE_PROVIDER_ERROR]: {
-    name: 'DELEGATE_PROVIDER_ERROR',
-    message: (details: string, providerCode?: string) =>
-      `Delegated provider error: ${details}` + (providerCode ? ` (code: ${providerCode})` : '')
-  },
+  // RPC transport
   [ERROR_CODES.RPC_NO_DATA_RECEIVED]: {
     name: 'RPC_NO_DATA_RECEIVED',
     message: 'No data received from request'

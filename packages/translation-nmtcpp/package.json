@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "0.10.0",
+  "version": "0.12.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -19,7 +19,7 @@
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js marian.js addonLogging.js index.d.ts marian.d.ts addonLogging.d.ts lib",
+    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js marian.js addonLogging.js index.d.ts marian.d.ts addonLogging.d.ts lib) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js && npm run test:prestage && npm run test:package",
     "test:package": "npm run build:ts && node --test test/package/package-contract.test.js",
@@ -77,7 +77,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/registry-client": "^0.4.0",
+    "@qvac/registry-client": "^0.6.1",
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",
     "bare-stream": "^2.7.0",
@@ -104,13 +104,9 @@
     "brittle": "^3.4.0"
   },
   "peerDependencies": {
-    "@qvac/registry-client": "^0.4.0",
     "bare-fetch": "^3.0.1"
   },
   "peerDependenciesMeta": {
-    "@qvac/registry-client": {
-      "optional": true
-    },
     "bare-fetch": {
       "optional": true
     }

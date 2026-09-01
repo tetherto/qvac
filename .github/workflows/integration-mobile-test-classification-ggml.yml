@@ -70,7 +70,7 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/classification-ggml@<ver> (published) or @tetherto/classification-ggml@<dev> (GPR) to force-install a specific build."
+        description: "Full NPM package spec to test. Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; set @qvac/classification-ggml@<ver> (published) or @tetherto/classification-ggml-mono@<dev> (GPR) to force-install a specific build."
         type: string
         required: false
         default: ""
@@ -92,6 +92,11 @@ concurrency:
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Manual (workflow_dispatch) runs must name a device that exists on Device
   # Farm. This gate fails fast BEFORE any build or Device Farm run, so a typo
   # or an empty selection costs nothing. Skipped for workflow_call.
@@ -145,12 +150,14 @@ jobs:
     # workflow_call: validate-devices is skipped; the `skipped` branch of the
     # condition keeps this job running exactly as before.
     # workflow_dispatch: a bad/empty device selection blocks this job.
-    needs: [validate-devices]
-    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
-    runs-on: ${{ matrix.runner }}
+    needs: [runner_names, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     environment: release
     timeout-minutes: 120
-    continue-on-error: true
+    # No continue-on-error: a Device Farm test failure must fail this run on
+    # every trigger (workflow_dispatch, workflow_call, schedule). Re-adding it
+    # silently turns failed runs green.
     permissions:
       contents: read
       packages: read
@@ -160,7 +167,7 @@ jobs:
       fail-fast: false
       # On workflow_dispatch, run only the chosen platform (devices come from
       # the manual inputs). workflow_call runs both platforms as before.
-      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-24.04"},{"platform":"iOS","os":"macos-14"}]}') }}
 
     steps:
       - name: Validate Dispatch Inputs
@@ -201,9 +208,12 @@ jobs:
           addon-npm-name: '@qvac/classification-ggml'
           prebuild-artifact-prefix: 'classification-ggml-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          # Manual dispatch (inputs.platform set): default (empty `package`) tests
-          # this branch's native prebuild; @qvac/classification-ggml@<ver> = published, @tetherto/classification-ggml@<dev>
-          # = this branch's GPR build). workflow_call is untouched (artifact-first).
+          # Manual dispatch (inputs.platform set). An empty `package` does NOT test
+          # this branch's native code: a standalone dispatch produces no prebuild
+          # artifacts, so the fallback resolves the published @qvac/classification-ggml@latest.
+          # @qvac/classification-ggml@<ver> = published; @tetherto/classification-ggml-mono@<dev> = a branch
+          # build from GitHub Packages, the only way to put unmerged native code on a
+          # device. See docs/ci/MOBILE-ON-DEMAND.md. workflow_call is untouched (artifact-first).
           package-version: ${{ inputs.platform != '' && inputs.package || '' }}
           force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
 
@@ -318,3 +328,5 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
+

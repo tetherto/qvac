@@ -8,12 +8,10 @@ namespace qvac_lib_inference_addon_llama::batching {
 namespace views = std::views;
 
 Request::Request(
-    uint32_t rid, PrefillPlan&& plan, unsigned maxTokens, llama_pos initialPos,
-    bool canSlide)
+    uint32_t rid, PrefillPlan&& plan, unsigned maxTokens, llama_pos initialPos)
     : seqId(rid), pendingPrefillTokens(std::move(plan.tokens)),
       pendingMediaBarriers(std::move(plan.mediaBarriers)),
-      currentPos(initialPos), slideCapable(canSlide),
-      maxTokensPerSequence(maxTokens) {
+      currentPos(initialPos), maxTokensPerSequence(maxTokens) {
   prefillTokenCount = pendingPrefillTokens.size();
   for (const auto& barrier : pendingMediaBarriers) {
     prefillTokenCount += static_cast<size_t>(barrier.nPos);
@@ -22,10 +20,9 @@ Request::Request(
 
 Request::Request(
     uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
-    llama_pos initialPos, bool canSlide)
+    llama_pos initialPos)
     : Request(
-          rid, PrefillPlan{.tokens = std::move(toks)}, maxTokens, initialPos,
-          canSlide) {}
+          rid, PrefillPlan{.tokens = std::move(toks)}, maxTokens, initialPos) {}
 
 bool Request::isPrefillComplete() const {
   return prefillFedCount >= pendingPrefillTokens.size() &&
@@ -33,12 +30,7 @@ bool Request::isPrefillComplete() const {
 }
 
 bool Request::exceededLimit() const {
-  // A slide-capable generating sequence may touch the cap: the driver's
-  // next step slides it back below (or reports contextOverflow and the
-  // scheduler truncates it explicitly).
-  const bool slideMayRecover = slideCapable && isPrefillComplete();
-  return currentPos >= static_cast<llama_pos>(maxTokensPerSequence) &&
-         !slideMayRecover;
+  return currentPos >= static_cast<llama_pos>(maxTokensPerSequence);
 }
 
 bool Request::isFinished() const {
@@ -144,17 +136,16 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequest(
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
     uint32_t seqId, std::vector<llama_token>&& tokens, llama_pos initialPos,
-    bool slideCapable, llama_pos initialKvCells) {
+    llama_pos initialKvCells) {
   return addRequestAt(
       seqId,
       PrefillPlan{.tokens = std::move(tokens)},
       initialPos,
-      slideCapable,
       initialKvCells);
 }
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
-    uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos, bool slideCapable,
+    uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos,
     llama_pos initialKvCells) {
   if (plan.tokens.empty() && plan.mediaBarriers.empty()) {
     return AddStatus::ErrEmptyTokens;
@@ -187,7 +178,7 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
     return AddStatus::ErrNoFreeSlot;
   }
   slots_[seqId].emplace(
-      seqId, std::move(plan), maxTokensPerSequence_, initialPos, slideCapable);
+      seqId, std::move(plan), maxTokensPerSequence_, initialPos);
   return AddStatus::Ok;
 }
 
@@ -306,7 +297,7 @@ void MultiRequestBatcher::advance(
     Request& req = *slot;
     req.currentPos += chunk;
     if (req.exceededLimit() && req.stopReason == StopReason::None) {
-      req.stopReason = StopReason::LimitReached;
+      req.stopReason = StopReason::ContextOverflow;
     }
     if (!req.isPrefillComplete()) {
       advanceReqPrefill(req, chunk, onPrefillComplete);
@@ -337,7 +328,7 @@ bool MultiRequestBatcher::completeMediaBarrier(
     req.pendingMediaBarriers.erase(req.pendingMediaBarriers.begin());
     req.currentPos = newPos;
     if (req.exceededLimit() && req.stopReason == StopReason::None) {
-      req.stopReason = StopReason::LimitReached;
+      req.stopReason = StopReason::ContextOverflow;
     }
     finishPrefillIfComplete(req, onPrefillComplete);
   }
@@ -347,14 +338,55 @@ bool MultiRequestBatcher::completeMediaBarrier(
 void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
   for (auto& slot : slots_ | views::filter(Request::isOptGenerationIdle)) {
     const int logitIdx = lastLogitIndices_[slot->seqId];
-    slot->generatedTokens.push_back(samplerFn(slot->seqId, logitIdx));
-    slot->hasUnfedSample = true;
-    // Stamp the observed token times: first sample fixes firstTokenAt (TTFT
-    // boundary), every sample advances lastTokenAt (observed-TPS window end).
+    const llama_token sampled = samplerFn(slot->seqId, logitIdx);
+    // `generatedTokens` is both the feed queue and the runtime-stats count,
+    // so it must hold exactly the tokens the caller received as content.
+    // `hasUnfedSample` keeps the two roles apart for the one entry that is
+    // counted but never fed.
+    //
+    // A sample that ends the sequence usually does not. `samplerFn` marks the
+    // slot finished for a terminal EOG, an antiprompt hit, a prediction limit
+    // or a context overflow, and `fillBatch` then filters the slot out, so the
+    // token is dropped without ever being decoded. Recording an EOG would
+    // report one token more than the caller ever saw, which is also the
+    // single-prompt path's rule: its loop breaks before the decode, so
+    // `lastGeneratedTokenCount_` never counts the token that stopped
+    // generation.
+    //
+    // A prediction-limit stop is the exception. That sample is ordinary
+    // content, already streamed, and the single-prompt loop decodes and counts
+    // it before its own `n_predict` cap fires (`reachedBudget` is gated on the
+    // batch path). Dropping it here made an identical `predict: N` request
+    // report N on one path and N-1 on the other, and `predict: 1` report 0
+    // next to non-empty output.
+    //
+    // A driver can also stop without producing a token at all and return
+    // `LLAMA_TOKEN_NULL` (see `SequenceStepResult::token`); the MTMD
+    // context-overflow return does. That id must never enter the feed queue.
+    if (sampled == LLAMA_TOKEN_NULL) {
+      continue;
+    }
+    // TTFT measures the token the caller SEES, and `samplerFn` has already
+    // streamed this one out of `onLogitsReady` even when it also ended the
+    // sequence. So the stamp goes before the terminal filter below: a
+    // `predict: 1` request produces exactly one token, and stamping after
+    // would return that output while reporting TTFT 0.
     const auto now = std::chrono::steady_clock::now();
     if (!slot->firstTokenAt.has_value()) {
       slot->firstTokenAt = now;
     }
+    if (slot->isFinished() && slot->stopReason != StopReason::PredictionLimit) {
+      continue;
+    }
+    slot->generatedTokens.push_back(sampled);
+    // Counted, never fed: a finished slot is filtered out of `fillBatch`, and
+    // leaving this false keeps `remainingToFeed` honest for the one step
+    // between the sample and the slot being drained.
+    slot->hasUnfedSample = !slot->isFinished();
+    // Closes the observed-TPS window, so it advances only for tokens that
+    // are counted. A sample dropped above is not one of them, and ending the
+    // window on it would stretch the window over one more gap than the count
+    // has.
     slot->lastTokenAt = now;
   }
 }
@@ -376,13 +408,6 @@ bool MultiRequestBatcher::markFinished(uint32_t seqId, StopReason reason) {
     slots_[seqId]->stopReason = reason;
   }
   return valid;
-}
-
-void MultiRequestBatcher::applySlide(uint32_t seqId, llama_pos discarded) {
-  if (isValid(seqId) && discarded > 0) {
-    Request& req = *slots_[seqId];
-    req.currentPos = std::max<llama_pos>(0, req.currentPos - discarded);
-  }
 }
 
 void MultiRequestBatcher::markAllFinished(StopReason reason) {

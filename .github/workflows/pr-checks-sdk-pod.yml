@@ -219,6 +219,23 @@ jobs:
             fi
           }
 
+          sdk_npm_install_check() {
+            local log status
+            log=$(mktemp)
+            status=0
+
+            npm install --no-fund --no-audit --ignore-scripts --loglevel=info 2>&1 | tee "$log" || status=$?
+
+            if grep -Eq 'ERESOLVE|npm warn (peerOptional|peer)( |$)' "$log"; then
+              echo "::error title=SDK npm peer-resolution drift::npm install surfaced peer dependency errors or warnings"
+              grep -E 'ERESOLVE|npm warn (peerOptional|peer)( |$)' "$log" || true
+              status=1
+            fi
+
+            rm -f "$log"
+            return "$status"
+          }
+
           # Validates the SDK tarball installs cleanly for end consumers:
           #   1. zero peer-dependency warnings on install
           #   2. shared P2P packages resolve to a single copy
@@ -279,14 +296,20 @@ jobs:
             }
 
             # Scenario 1: default install (plug-n-play) - all optionalDependencies present.
+            consumer_fail=0
             consumer_default=$(mktemp -d)
             cd "$consumer_default"
             npm init -y > /dev/null
             npm pkg set type=module > /dev/null
             if [ -f "$npmrc_src" ]; then cp "$npmrc_src" .npmrc; fi
             if [ -n "$inference_tgz" ]; then npm pkg set "overrides.@qvac/inference=file:$inference_tgz"; fi
-            npm install --no-fund --no-audit --ignore-scripts --loglevel=info "$tarball_abs" 2>&1 | tee install.log
-            check_consumer "$consumer_default" "default"
+            if ! npm install --no-fund --no-audit --ignore-scripts --loglevel=info "$tarball_abs" 2>&1 | tee install.log; then
+              echo "::error::[default] npm install failed"
+              consumer_fail=1
+            fi
+            if ! check_consumer "$consumer_default" "default"; then
+              consumer_fail=1
+            fi
 
             # Scenario 2: lean backend install (--omit=optional) - no optionalDependencies.
             consumer_lean=$(mktemp -d)
@@ -295,8 +318,15 @@ jobs:
             npm pkg set type=module > /dev/null
             if [ -f "$npmrc_src" ]; then cp "$npmrc_src" .npmrc; fi
             if [ -n "$inference_tgz" ]; then npm pkg set "overrides.@qvac/inference=file:$inference_tgz"; fi
-            npm install --no-fund --no-audit --ignore-scripts --omit=optional --loglevel=info "$tarball_abs" 2>&1 | tee install.log
-            check_consumer "$consumer_lean" "lean (--omit=optional)"
+            if ! npm install --no-fund --no-audit --ignore-scripts --omit=optional --loglevel=info "$tarball_abs" 2>&1 | tee install.log; then
+              echo "::error::[lean (--omit=optional)] npm install failed"
+              consumer_fail=1
+            fi
+            if ! check_consumer "$consumer_lean" "lean (--omit=optional)"; then
+              consumer_fail=1
+            fi
+
+            [ "$consumer_fail" = "0" ]
           )
 
           # Install the Bare runtime once if any changed package needs it.
@@ -369,6 +399,11 @@ jobs:
               # Per-source setup (no-op if the script is absent).
               run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
 
+              # Peer-resolution drift against this source's resolved @qvac/inference.
+              if [ "$PKG" = "sdk" ]; then
+                run "npm install (peer resolution) $src" sdk_npm_install_check
+              fi
+
               run "format $src" npm run --if-present format
               run "lint $src" npm run --if-present lint
               run "typecheck $src" npm run --if-present typecheck
@@ -399,12 +434,7 @@ jobs:
                 --host linux-x64 \
                 --host win32-arm64 \
                 --host win32-x64
-              if consumer_install_check; then
-                echo "  ok  [$PKG] consumer install"
-              else
-                echo "::error::[$PKG] consumer install check failed"
-                fail=$((fail + 1))
-              fi
+              run "consumer install" consumer_install_check
             fi
 
             cd "$WS"

@@ -78,12 +78,18 @@ on:
         type: string
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Dispatch-only: stage the parakeet GGUF set once and upload a manifest with
   # pinned bytes/sha256 (carried over from the parakeet family).
   pin-model-manifest:
+    needs: runner_names
     if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
     timeout-minutes: 120
-    runs-on: ${{ 'qvac-ubuntu2404-x64' }}
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     environment: release
     permissions:
       contents: read
@@ -141,6 +147,7 @@ jobs:
           if-no-files-found: error
 
   run-integration-tests:
+    needs: runner_names
     if: ${{ !inputs.pin_model_manifest }}
     # Longer than the default budget: the RTF benchmark leg sweeps both
     # engines — six whisper model files plus three parakeet quants across five
@@ -171,36 +178,47 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
+          # The linux-x64 prebuild bundles the CUDA and Vulkan backend modules
+          # and ggml registers CUDA first, so the GPU backend is decided by
+          # whether the CUDA module's cudart/cuBLAS DT_NEEDED entries resolve.
+          # cuda_libs points this row's test steps at the runner's CUDA
+          # toolkit (kept outside ldconfig), giving it end-to-end CUDA
+          # coverage; qvac-ubuntu2404-x64-gpu leaves the CUDA module
+          # unresolvable, so ggml skips it and that row keeps dedicated
+          # Vulkan coverage plus the fallback path itself.
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+            cuda_libs: /usr/local/cuda/lib64
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]
           - os: ubuntu-26.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2604 }}
             platform: linux
             arch: x64
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
           - os: ubuntu-24.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404_arm }}
             platform: linux
             arch: arm64
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
           - os: macos-26
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
             platform: darwin
             arch: arm64
             benchmark_matrix_json: >-
@@ -220,6 +238,7 @@ jobs:
           # Enabling parakeet GPU here would be new, never-run coverage and
           # belongs in its own change.
           - os: macos-15-large
+            runner: ${{ needs.runner_names.outputs.macos_15_large }}
             platform: darwin
             arch: x64
             no_gpu: 'true'
@@ -229,7 +248,7 @@ jobs:
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]
 
@@ -309,21 +328,6 @@ jobs:
             Rename-Item -Path $_.FullName -NewName $newName
           }
 
-      - name: Install gh cli for ubuntu-24.04-arm
-        if: matrix.os == 'ubuntu-24.04-arm'
-        shell: bash
-        run: |
-          (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
-            && sudo mkdir -p -m 755 /etc/apt/keyrings \
-                  && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-                  && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-            && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-            && sudo apt update \
-            && sudo apt install gh -y
-          gh --version
-        continue-on-error: true
-
       - name: Linux arm64 - install dependencies
         if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
         shell: bash
@@ -397,7 +401,9 @@ jobs:
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           # ggml backend .so/.dylib files load transitively from the prebuilds
           # dir (parakeet's transitive-.so gotcha) — keep for the merged addon.
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          # matrix.cuda_libs additionally resolves the CUDA module's
+          # cudart/cuBLAS dependencies on the CUDA-lane runner.
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.cuda_libs && format(':{0}', matrix.cuda_libs) || '' }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Run integration test (Windows)
@@ -422,7 +428,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.cuda_libs && format(':{0}', matrix.cuda_libs) || '' }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Run integration GPU test (Windows)
@@ -545,3 +551,4 @@ jobs:
           Get-ChildItem prebuilds -ErrorAction SilentlyContinue
           tree prebuilds /F 2>$null
         continue-on-error: true
+

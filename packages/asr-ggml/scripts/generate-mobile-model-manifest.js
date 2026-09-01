@@ -38,7 +38,10 @@ const MODELS = {
     'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
     REGISTRY_PREFIX_STREAMING
   ),
-  indicConformerQ4: model('indic-conformer-ctc.q4_0.gguf', REGISTRY_PREFIX_INDIC)
+  indicConformerQ4: model('indic-conformer-ctc.q4_0.gguf', REGISTRY_PREFIX_INDIC),
+  unifiedQ4: model('parakeet-unified-en-0.6b.q4_0.gguf', REGISTRY_PREFIX_UNIFIED),
+  unifiedQ8: model('parakeet-unified-en-0.6b.q8_0.gguf', REGISTRY_PREFIX_UNIFIED),
+  unifiedF16: model('parakeet-unified-en-0.6b.f16.gguf', REGISTRY_PREFIX_UNIFIED)
 }
 
 // Keyed by the mobile RUNNER FUNCTION NAME exported from

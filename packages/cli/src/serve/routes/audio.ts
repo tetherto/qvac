@@ -154,6 +154,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       const { sdkModelId, alias, entry } = await resolveAndCheckModel(
         req,
+        reply,
         String(body.model),
         'transcription'
       )
@@ -231,6 +232,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       const { sdkModelId, alias, entry } = await resolveAndCheckModel(
         req,
+        reply,
         String(body.model),
         'audio-translation'
       )
@@ -385,7 +387,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
 
       const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id
-      const registryEntry = await ensureReady(ctx, alias, modelEntry, modelName, req)
+      const registryEntry = await ensureReady(ctx, alias, modelEntry, modelName, reply)
 
       const sdkModelId = registryEntry.sdkModelId ?? registryEntry.id
       const sampleRate = resolveSampleRate(registryEntry.config)
