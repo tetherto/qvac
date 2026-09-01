@@ -42,6 +42,31 @@ test('send dispatches a model-free request in-process to its handler', async fun
   }
 })
 
+// Dispatch applies device/schema defaults before the request schema runs, so
+// the rejection of a retired config key must happen in that first parse — a
+// non-strict defaults parse would strip the key and hand the later strict
+// schemas a clean object.
+test('send rejects a loadModel carrying retired n_discarded before any handler runs', async function (t) {
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+  try {
+    await t.exception(
+      () =>
+        send({
+          type: 'loadModel',
+          modelType: ModelType.llamacppCompletion,
+          modelSrc: 'model.gguf',
+          modelConfig: { ctx_size: 2048, n_discarded: 256 }
+        } as unknown as Request),
+      /n_discarded/,
+      'the retired key fails request preparation instead of being stripped'
+    )
+  } finally {
+    await close()
+    clearPlugins()
+  }
+})
+
 test('stream yields a non-streaming handler result as a single response', async function (t) {
   clearPlugins()
   registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
