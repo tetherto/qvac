@@ -2,6 +2,7 @@ import { ragIngest } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import {
+  describeErrorChain,
   getRagWorkspaceName,
   runTurboVecRag,
   type RagParams,
@@ -129,8 +130,7 @@ export class MobileRagExecutor extends ModelAssetExecutor<typeof ragTests> {
       })
       return ValidationHelpers.validate(output, expectation)
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      return { passed: false, output: `TurboVec RAG failed: ${errorMsg}` }
+      return { passed: false, output: `TurboVec RAG failed: ${describeErrorChain(error)}` }
     }
   }
 }

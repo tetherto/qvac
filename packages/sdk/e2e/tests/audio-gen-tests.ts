@@ -59,7 +59,10 @@ export const audioGenReferenceAudio: TestDefinition = {
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
-    estimatedDurationMs: 360000
+    // Left at 600s: its slowest real run is 258.7s, and on Windows this case
+    // hangs rather than runs slow (20s vs a 720s timeout), so a wider budget
+    // only lengthens the burn.
+    estimatedDurationMs: 300000
   }
 }
 

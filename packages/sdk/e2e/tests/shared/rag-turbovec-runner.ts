@@ -41,6 +41,19 @@ export function getRagWorkspaceName(params: RagParams, embeddingModelId: string)
   return `${params.workspace}-${workspaceSuffix}`
 }
 
+// QvacError carries the underlying failure as `cause`, and the lock/checkpoint
+// paths report a generic message with the real errno one level down.
+export function describeErrorChain(error: unknown): string {
+  const parts: string[] = []
+  let current: unknown = error
+  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
+    const code = (current as { code?: unknown }).code
+    parts.push(code === undefined ? current.message : `${current.message} (code=${String(code)})`)
+    current = (current as { cause?: unknown }).cause
+  }
+  return parts.length > 0 ? parts.join(' <- ') : String(error)
+}
+
 function describeCheckpoint(probe: TurboVecCheckpointProbe) {
   switch (probe.state) {
     case 'present':

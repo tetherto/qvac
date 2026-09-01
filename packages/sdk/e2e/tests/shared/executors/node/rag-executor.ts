@@ -5,6 +5,7 @@ import * as path from 'node:path'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import {
+  describeErrorChain,
   getRagWorkspaceName,
   runTurboVecRag,
   type RagParams,
@@ -132,8 +133,7 @@ export class RagExecutor extends AbstractModelExecutor<typeof ragTests> {
       })
       return ValidationHelpers.validate(output, expectation)
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      return { passed: false, output: `TurboVec RAG failed: ${errorMsg}` }
+      return { passed: false, output: `TurboVec RAG failed: ${describeErrorChain(error)}` }
     }
   }
 }
