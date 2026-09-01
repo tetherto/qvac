@@ -175,6 +175,27 @@ jobs:
         working-directory: packages/ocr-ggml
         run: npm run test:dts
 
+      # Device Farm shard coverage for test/mobile/test-groups.json. This check
+      # used to live inside scripts/generate-mobile-integration-tests.js, which
+      # `npm run test:integration` chains — so a scheduling-only edit aborted
+      # desktop integration tests on every platform, while the mobile job that
+      # would have caught it is skipped on a PR with no native changes.
+      #
+      # Both scripts are also wired into `npm run test:unit`, which the
+      # merge-guard sanity-checks matrix (pr-gate-merge.yml) already runs for
+      # this package on every authorized PR via run-lint-and-unit-tests — that
+      # is what makes an unassigned runner block the merge. They are repeated
+      # here, cheaply, because this job needs only fork-approval + authorize and
+      # no bare/native build: a bad shard edit then fails in seconds in the
+      # package's own workflow instead of after a full install + lint + bare
+      # setup. Node-only — neither script imports anything outside node builtins
+      # and scripts/lib/. (llm-llamacpp instead calls run-lint-and-unit-tests
+      # from its own ts-checks; doing that here would re-run all of lint +
+      # test:unit that sanity-checks already runs, for no extra coverage.)
+      - name: Mobile test-group coverage
+        working-directory: packages/ocr-ggml
+        run: npm run test:mobile:groups && npm run test:mobile:validate
+
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     needs:
