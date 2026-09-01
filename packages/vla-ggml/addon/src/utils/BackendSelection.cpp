@@ -156,8 +156,9 @@ int parseAdrenoModel(const std::string& description) {
   return 0;
 }
 
-ggml_backend_dev_t
-pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
+ggml_backend_dev_t pickBestGpuDevice(
+    const std::vector<std::string>& backendOverride,
+    const bool backendRequired) {
   using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
 
   const size_t n = ggml_backend_dev_count();
@@ -287,10 +288,42 @@ pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
         }
       }
     }
+    // QVAC-23763: name what WAS accepted. Without it, diagnosing a pin that
+    // missed needs a second run - and on this picker the Adreno gate can be the
+    // reason a device is not in the list at all, which is worth seeing.
+    std::string acceptedNames;
+    for (const auto& [backendLower, dev] : accepted) {
+      (void) dev;
+      if (!acceptedNames.empty()) {
+        acceptedNames += ", ";
+      }
+      acceptedNames += backendLower;
+    }
+    if (acceptedNames.empty()) {
+      acceptedNames = "none";
+    }
+
+    std::string requested;
+    for (const std::string& family : backendOverride) {
+      if (!requested.empty()) {
+        requested += ",";
+      }
+      requested += family;
+    }
+
+    if (backendRequired) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "vla_backend_selection: backend '" + requested +
+              "' is required but matched no accepted device. Accepted: " +
+              acceptedNames + ".\n");
+    }
     QLOG_IF(
         Priority::WARNING,
-        "vla_backend_selection: backend override matched no accepted device; "
-        "falling back to the default backend order");
+        "vla_backend_selection: backend override '" + requested +
+            "' matched no accepted device; falling back to the default backend "
+            "order. Accepted: " +
+            acceptedNames);
   }
 
   // CUDA ahead of HIP: see the header. A CUDA device only ever appears on a

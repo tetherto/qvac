@@ -33,6 +33,8 @@ interface VlaConfig {
 interface VlaInstanceConfig {
   ggufPath: string;
   backend: string;
+  /** "true" / "false"; see the note above on this map being all strings. */
+  backendRequired: string;
   backendsDir: string;
   embodiment: string;
   embodimentCatId: string;
@@ -629,23 +631,45 @@ class VlaModel {
   // check only rejects the shapes that never reach the addon.
   async load({
     backend = "auto",
-  }: { backend?: VlaModel.VlaBackendSelector } = {}): Promise<void> {
+    backendRequired = false,
+  }: {
+    backend?: VlaModel.VlaBackendSelector;
+    backendRequired?: boolean;
+  } = {}): Promise<void> {
     if (typeof backend !== "string" || backend.trim() === "") {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.INVALID_CONFIG,
         adds: `backend must be 'auto', 'cpu', or a comma-separated GPU backend list such as 'cuda,vulkan' (got: ${String(backend)})`,
       });
     }
+    if (typeof backendRequired !== "boolean") {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_CONFIG,
+        adds: `backendRequired must be a boolean (got: ${String(backendRequired)})`,
+      });
+    }
+    // QVAC-23763: on its own it would mean "require the default order", which
+    // is not a thing. Rejected here rather than natively so the message names
+    // the JS-level spelling the caller actually wrote.
+    if (backendRequired && (backend === "auto" || backend === "cpu")) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_CONFIG,
+        adds: `backendRequired has no meaning with backend '${backend}'; name a GPU backend list such as 'cuda,vulkan'`,
+      });
+    }
     return this._run(async () => {
       if (this.state.configLoaded) return;
-      await this._load(backend);
+      await this._load(backend, backendRequired);
       this.state.configLoaded = true;
       this.state.weightsLoaded = true;
     });
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await -- kept async to preserve the Promise-returning contract; the load steps are synchronous native binding calls.
-  private async _load(backend: string): Promise<void> {
+  private async _load(
+    backend: string,
+    backendRequired: boolean,
+  ): Promise<void> {
     this.logger.info("Starting model load");
     this._connectNativeLogger();
     const ggufPath = pickPrimaryGgufPath(this._files);
@@ -677,6 +701,9 @@ class VlaModel {
         {
           ggufPath,
           backend,
+          // The native side reads this as a string, like every other entry in
+          // this map. QVAC-23763.
+          backendRequired: backendRequired ? "true" : "false",
           backendsDir,
           embodiment: embodimentSel.tag,
           embodimentCatId:

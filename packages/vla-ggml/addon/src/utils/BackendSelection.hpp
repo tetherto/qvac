@@ -70,9 +70,16 @@ void loadBackendsOnce(const std::string& backendsDir);
 // priority order, then falls through to the normal order if none match. The
 // Adreno gate above still applies and an override cannot bypass it.
 //
+// `backendRequired` makes that override binding: a list matching no accepted
+// device throws instead of falling through. Without it the pin is advisory, so
+// a caller that must not silently move backends has no way to say so.
+// QVAC-23763. Note the Adreno gate can be the reason a device is not in the
+// accepted list at all, so the error names what was accepted.
+//
 // Returns nullptr if no acceptable GPU exists; the caller should then init
 // the CPU backend.
-ggml_backend_dev_t
-pickBestGpuDevice(const std::vector<std::string>& backendOverride = {});
+ggml_backend_dev_t pickBestGpuDevice(
+    const std::vector<std::string>& backendOverride = {},
+    bool backendRequired = false);
 
 } // namespace vla_backend_selection

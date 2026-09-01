@@ -8,9 +8,12 @@ export interface GGMLConfig {
     attention?: "causal" | "non-causal";
     embd_normalize?: NumericLike;
     flash_attn?: "on" | "off" | "auto";
-    "main-gpu"?: NumericLike | "integrated" | "dedicated";
+    /** Which GPU to use. A device index (e.g. '0') indexes ggml's full device list, whose order depends on which backends loaded, so adding CUDA moves it; the whole value must be an integer, so '1abc' is rejected. Prefer a backend-qualified index ('cuda:0') or a PCI bus id ('0000:65:00.0'), which are stable against backend order. A value matching no device warns and falls back to the default order. */
+    "main-gpu"?: NumericLike | "integrated" | "dedicated" | string;
     /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, hip, rocm, sycl, plus auto for no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use device 'cpu' to run on CPU. */
     backend?: string;
+    /** Make `backend` binding rather than advisory: a backend list matching no device fails the load instead of silently running the default cascade. Only meaningful alongside `backend`; setting it without one is rejected. Defaults to false. */
+    "backend-required"?: boolean | string;
     /** How to split the model across GPUs. 'row' (tensor parallelism) needs split buffers, which no shipped backend provides as of qvac-fabric v10069, so it is degraded to 'layer' at load with a warning. */
     "split-mode"?: "none" | "layer" | "row";
     "tensor-split"?: string;

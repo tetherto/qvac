@@ -1086,7 +1086,8 @@ static bool pi05LoadWeightsAllocCopy(
 // missing tensor or wrong architecture key.
 static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
-    const std::vector<std::string>& backendOverride = {}) {
+    const std::vector<std::string>& backendOverride = {},
+    const bool backendRequired = false) {
   vla_backend_selection::loadBackendsOnce(backendsDir);
   auto m = std::make_unique<Pi05ModelInternal>();
 
@@ -1111,8 +1112,8 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
   // devices fall through to CPU rather than crash on
   // ggml_backend_dev_init. Mirrors smolvla.cpp::try_init_gpu_backend.
   if (!forceCpu) {
-    ggml_backend_dev_t gpu =
-        vla_backend_selection::pickBestGpuDevice(backendOverride);
+    ggml_backend_dev_t gpu = vla_backend_selection::pickBestGpuDevice(
+        backendOverride, backendRequired);
     if (gpu != nullptr) {
       ggml_backend_t gpuBackend = ggml_backend_dev_init(gpu, nullptr);
       if (gpuBackend != nullptr) {
@@ -1991,8 +1992,10 @@ static bool pi05Inference(
 
 Pi05Model::Pi05Model(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
-    const std::vector<std::string>& backendOverride) {
-  impl_ = pi05LoadModel(ggufPath, forceCpu, backendsDir, backendOverride);
+    const std::vector<std::string>& backendOverride,
+    const bool backendRequired) {
+  impl_ = pi05LoadModel(
+      ggufPath, forceCpu, backendsDir, backendOverride, backendRequired);
   hparams_.chunk_size = impl_->action_horizon;
   hparams_.action_dim = impl_->action_dim;
   hparams_.max_action_dim = impl_->action_dim;

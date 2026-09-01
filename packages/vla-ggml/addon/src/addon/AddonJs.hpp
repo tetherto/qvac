@@ -324,8 +324,27 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       noPreference ? std::vector<std::string>{}
                    : vla_backend_selection::parseBackendOverride(backend);
 
+  // QVAC-23763: makes the `backend` list binding. Without it a pin that matches
+  // nothing silently runs the default order, so a caller that must not move
+  // backends has no way to say so. index.js sends "true"/"false"; anything else
+  // is treated as false rather than erroring, since the JS layer validates it.
+  const std::string backendRequiredRaw =
+      detail::normaliseBackendSelector(args.getMapEntry(1, "backendRequired"));
+  const bool backendRequired = backendRequiredRaw == "true";
+  if (backendRequired && backendOverride.empty()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "backendRequired is set but `backend` names no GPU family; it makes a "
+        "backend priority list binding and has no meaning without one.");
+  }
+
   auto model = std::make_unique<VlaModel>(
-      ggufPath, forceCpu, backendsDir, embodiment, backendOverride);
+      ggufPath,
+      forceCpu,
+      backendsDir,
+      embodiment,
+      backendOverride,
+      backendRequired);
 
   // VLA emits a single Float32Array (the action chunk) per job; runtime
   // stats and errors are added to the handler stack by OutputCallBackJs.
