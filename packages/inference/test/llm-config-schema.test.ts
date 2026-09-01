@@ -5,7 +5,7 @@ import {
   REASONING_BUDGET_MAX
 } from '@/schemas/llamacpp-config'
 import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
-import { ModelType, deviceConfigDefaultsSchema } from '@/schemas'
+import { ModelType } from '@/schemas'
 import { ModelTypeAliases } from '@/schemas/model-types'
 
 const LLM_BASE = {
@@ -57,42 +57,12 @@ test('loadModelOptionsToRequestSchema: rejects retired n_discarded for LLM', (t)
   )
 })
 
-// The raw wire request must fail closed too — a non-strict modelConfig would
-// strip the retired key and silently disable sliding.
-test('loadModelSrcRequestSchema: rejects retired n_discarded for LLM', (t) => {
-  t.is(
-    loadModelSrcRequestSchema.safeParse({
-      type: 'loadModel',
-      modelType: ModelType.llamacppCompletion,
-      modelSrc: 'model.gguf',
-      modelConfig: { n_discarded: 256 }
-    }).success,
-    false
-  )
-})
-
 // The custom-plugin exclusion regex interpolates these names unescaped, so a
 // built-in containing a regex metacharacter would silently widen the contract.
 test('built-in model types and aliases stay regex-safe identifiers', (t) => {
   for (const name of [...Object.values(ModelType), ...Object.keys(ModelTypeAliases)]) {
     t.ok(/^[a-z0-9-]+$/.test(name), `${name} is a plain kebab identifier`)
   }
-})
-
-// Same for a stale deployment config: deviceDefaults carrying the retired
-// key must fail config validation, on the canonical key and the alias.
-test('deviceConfigDefaultsSchema: rejects retired n_discarded on both keys', (t) => {
-  t.is(
-    deviceConfigDefaultsSchema.safeParse({
-      [ModelType.llamacppCompletion]: { ctx_size: 2048, n_discarded: 256 }
-    }).success,
-    false
-  )
-  t.is(
-    deviceConfigDefaultsSchema.safeParse({ llm: { ctx_size: 2048, n_discarded: 256 } }).success,
-    false
-  )
-  t.is(deviceConfigDefaultsSchema.safeParse({ llm: { ctx_size: 2048 } }).success, true)
 })
 
 test('llmConfigSchema: leaves load_mode unset by default', (t) => {

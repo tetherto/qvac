@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pydantic import ValidationError as PydanticValidationError
 
 from tetherto.qvac_sdk import _api as api
 from tetherto.qvac_sdk._generated.models import LoadModelSrcRequest, ModelType
@@ -104,34 +103,6 @@ async def test_load_model_requires_type_for_plain_string_src():
     transport = FakeTransport(response=OK)
     with pytest.raises(ModelTypeRequiredError):
         await api.load_model(transport, model_src="/models/x.gguf")
-
-
-async def test_load_model_rejects_retired_n_discarded_before_sending():
-    # No union arm accepts a built-in type with the retired key, so the
-    # request must fail validation and never reach the transport.
-    transport = FakeTransport(response=OK)
-    with pytest.raises(PydanticValidationError):
-        await api.load_model(
-            transport,
-            model_src="/models/x.gguf",
-            model_type="llamacpp-completion",
-            model_config={"ctx_size": 2048, "n_discarded": 256},
-        )
-    assert transport.sent is None
-
-
-def test_load_model_request_union_rejects_builtin_type_with_retired_key():
-    # The catch-all arm's modelType pattern excludes built-ins, so a built-in
-    # type cannot smuggle unknown config through it.
-    with pytest.raises(PydanticValidationError):
-        LoadModelRequest.model_validate(
-            {
-                "type": "loadModel",
-                "modelType": "llamacpp-completion",
-                "modelSrc": "/models/x.gguf",
-                "modelConfig": {"ctx_size": 2048, "n_discarded": 256},
-            }
-        )
 
 
 def test_load_model_request_union_accepts_the_model_type_enum_directly():

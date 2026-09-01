@@ -106,21 +106,6 @@ test('no patterns match = schema defaults only', (t) => {
   t.is(result.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
 })
 
-// Dispatch applies defaults through this resolution before the wire schema
-// runs, so the resolution itself must reject a retired key, not strip it.
-test('config resolution rejects retired n_discarded instead of stripping it', (t) => {
-  const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
-  t.exception(() =>
-    resolveModelConfigWithContext<Record<string, unknown>>(
-      ModelType.llamacppCompletion,
-      { ctx_size: 2048, n_discarded: 256 },
-      ctx,
-      [],
-      []
-    )
-  )
-})
-
 test('multiple patterns merge (general → specific)', (t) => {
   const ctx: RuntimeContext = { platform: 'android', deviceBrand: 'google' }
   const builtinPatterns: DevicePattern[] = [

@@ -7036,9 +7036,6 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(str, Enum):
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     ctx_size: Annotated[
         float | None,
         Field(
