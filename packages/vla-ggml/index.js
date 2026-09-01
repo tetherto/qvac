@@ -14,6 +14,23 @@ const errorModule = require("./lib/error");
 const infer_base_1 = require("@qvac/infer-base");
 const { DEFAULT_IMAGE_SIZE } = addonModule;
 const { QvacErrorAddonVla, ERR_CODES } = errorModule;
+// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, in the
+// @qvac/fabric dependency (prebuilds/<host>/qvac__fabric). On desktop, resolve
+// the single @qvac/fabric install and load the backends from there. On mobile
+// the package tree isn't resolvable at runtime (the worklet runs from a packed
+// bundle), so fall back to this addon's own prebuilds, where the mobile
+// packaging stages the backends. The native side appends BACKENDS_SUBDIR
+// ("<host>/qvac__fabric") to whichever root we return.
+function resolveBackendsDir() {
+    try {
+        const fabricPkg = require.resolve("@qvac/fabric/package");
+        const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");
+        if (fs.existsSync(fabricPrebuilds))
+            return fabricPrebuilds;
+    }
+    catch { }
+    return path.join(__dirname, "prebuilds");
+}
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
 const binding = require("./binding");
 // Maps the C++ Priority enum (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) to the
@@ -509,7 +526,7 @@ class VlaModel {
             // JobRunner thread consumes runJob() and feeds the outputCb.
             const backendsDir = this._config.backendsDir
                 ? this._config.backendsDir
-                : path.join(__dirname, "prebuilds");
+                : resolveBackendsDir();
             this._handle = binding.createInstance(this, {
                 ggufPath,
                 backend,

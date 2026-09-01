@@ -15,6 +15,13 @@ on:
         type: string
         required: false
         default: "packages/vla-ggml"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -132,6 +139,22 @@ jobs:
         run: |
           npm install
 
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
 
@@ -139,14 +162,6 @@ jobs:
         name: Set Vulkan SDK Path on Linux
         shell: bash
         run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
-
-      # vla requests qvac-fabric[hip-backend] (linux-x64), which requires ROCm at
-      # build time — install it so the addon's C++ tests build with HIP.
-      # Omit `with:` so version/gfx/sha256 all come from the action defaults
-      # and match /opt/rocm/.qvac-rocm when this job runs on a stamped image.
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Setup ROCm SDK for HIP cross-compile
-        uses: ./.github/actions/setup-rocm
 
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
@@ -301,12 +316,12 @@ jobs:
             exit 1
           fi
 
-          cd build/test/unit/
-          # Capture test output to a file for later parsing (embodiment sweep results)
-          ./addon-test --gtest_output=xml:cpp-test-results.xml 2>&1 | tee test-output.log
+          # test:cpp:run applies fabric-boundary ASAN_OPTIONS via scripts/run-cpp-tests.js.
+          # pipefail: a failing addon-test exit code propagates through tee.
+          npm run test:cpp:run 2>&1 | tee build/test/unit/test-output.log
 
-          if [ -f cpp-test-results.xml ]; then
-            test_count=$(grep -c '<testcase' cpp-test-results.xml || echo "0")
+          if [ -f build/test/unit/cpp-test-results.xml ]; then
+            test_count=$(grep -c '<testcase' build/test/unit/cpp-test-results.xml || echo "0")
             if [ "$test_count" -eq 0 ]; then
               echo "ERROR: No tests were executed! Test count: $test_count"
               exit 1
@@ -322,15 +337,15 @@ jobs:
           # into a no-op behind a green check. When the artefacts ARE staged,
           # every Groot* test must actually run.
           if [ -n "${GROOT_TEST_GGUF:-}" ]; then
-            if grep -q '^\[  SKIPPED \] Groot' test-output.log; then
+            if grep -q '^\[  SKIPPED \] Groot' build/test/unit/test-output.log; then
               echo "ERROR: GR00T artefacts are staged but Groot tests were skipped:"
-              grep '^\[  SKIPPED \] Groot' test-output.log
+              grep '^\[  SKIPPED \] Groot' build/test/unit/test-output.log
               exit 1
             fi
           fi
 
           if [ -n "${GROOT_TEST_SWEEP_GGUF:-}" ]; then
-            sweep_rows=$(grep -c '\[GrootEmbodimentSweep\]' test-output.log || true)
+            sweep_rows=$(grep -c '\[GrootEmbodimentSweep\]' build/test/unit/test-output.log || true)
             if [ "${sweep_rows:-0}" -eq 0 ]; then
               echo "ERROR: GROOT_TEST_SWEEP_GGUF is set but the multi-embodiment sweep produced no rows"
               exit 1
