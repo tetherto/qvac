@@ -76,11 +76,17 @@ In the qvac addon, `main-gpu` also influences **backend selection** (choosing be
 
 | Value | Behavior |
 |-------|----------|
-| integer (e.g. `'0'`, `'1'`) | Select GPU by device index. Forwarded to qvac-fabric as `--main-gpu`. |
+| integer (e.g. `'0'`, `'1'`) | Select GPU by device index. Forwarded to qvac-fabric as `--main-gpu`. **Indexes ggml's full device list, whose order depends on which backends loaded** — see the warning below. The whole value must be an integer; `'1abc'` is rejected. |
+| `'cuda:0'`, `'vulkan:1'`, … | Select the nth device of a backend family. Resolved by scanning devices, so it is independent of backend load order. Family names are the same set `backend` accepts, and `hip` is canonicalised to `rocm`. |
+| `'0000:65:00.0'` | Select by PCI bus id, as ggml reports it in `props.device_id`. The most stable form: survives backend order, driver order, and adding a card. The domain is optional (`'65:00.0'` also works). Only meaningful on backends that publish a bus id. |
 | `'integrated'` | Filter to integrated GPUs only during backend selection. In multi-GPU split modes, still affects backend selection (may cause CPU fallback if no matching GPU exists) but is **not forwarded** to qvac-fabric as `--main-gpu` (warning logged). Use an integer device index instead. |
 | `'dedicated'`  | Filter to dedicated GPUs only during backend selection. In multi-GPU split modes, still affects backend selection (may cause CPU fallback if no matching GPU exists) but is **not forwarded** to qvac-fabric as `--main-gpu` (warning logged). Use an integer device index instead. |
 
 Accepts both `main-gpu` (hyphen) and `main_gpu` (underscore). Providing both throws an error. The string values are case-insensitive.
+
+> **A bare integer is not a stable address.** It indexes the list ggml enumerates, and that order is a function of which backends registered. Adding CUDA to a machine that previously ran Vulkan moves every index, so a config written against `'0'` selects a different card without any error. Prefer `'cuda:0'` or a PCI bus id.
+>
+> The qualified and bus-id forms are resolved by scanning rather than indexing, which is what makes them stable. A value matching no device logs a warning and falls back to the default device order rather than failing — the device may simply be absent on this machine, which is not a configuration error. The addon still translates whichever form you use into fabric's positional `--main-gpu` against the scoped `--device` list (see [above](#what---device-does-in-split-modes)).
 
 **In `none` mode:** `main-gpu` selects the GPU for the entire model. Integer values pick by device index; `'integrated'`/`'dedicated'` filter by GPU type during [backend selection](#interaction-with-device-and-backend-selection).
 

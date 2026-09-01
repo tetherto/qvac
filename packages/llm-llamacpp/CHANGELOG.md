@@ -2,8 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+
+- `backend-required` (also `backend_required`). By default a `backend` list that
+  matches no device logs a warning and runs the default cascade, so the pin is
+  advisory; with this set the load fails instead, naming every device that was
+  enumerated and the reason for any that were passed over. Only meaningful
+  alongside `backend` — setting it without one is rejected.
+- `main-gpu` accepts two stable forms beside the existing ones: a
+  backend-qualified index (`"cuda:0"`, the nth device of that family) and a PCI
+  bus id (`"0000:65:00.0"`). Both resolve by scanning devices rather than
+  indexing, so neither moves when a backend is added. A value matching no device
+  warns and falls back to the default order rather than failing.
+
 ### Changed
 
+- **Breaking:** `main-gpu`'s index form now requires the whole value to be an
+  integer. `"1abc"` previously parsed as `1` and is now rejected. This is what
+  makes the bus-id form safe: `"0000:65:00.0"` previously parsed silently as
+  device `0`, selecting the wrong GPU with no error.
 - Backend selection filters candidate devices by what the load actually needs
   before the cascade picks one, instead of rejecting the load after a backend
   was already chosen. A TurboQuant/PolarQuant KV-cache type on an NVIDIA host

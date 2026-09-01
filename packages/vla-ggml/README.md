@@ -214,6 +214,21 @@ rejected. The Adreno rules above still apply, so an override can never
 resurrect a device they rejected. Setting `CUDA_VISIBLE_DEVICES=-1` in the
 environment is an equivalent way to force Vulkan without touching the config.
 
+By default that list is **advisory**: if it matches no accepted device, the
+addon logs a warning and continues down the normal order, so a load that was
+meant to run on one backend can quietly run on another. Pass
+`backendRequired: true` alongside it to make it binding — the load then fails
+instead, and the error names every device that *was* accepted, which matters
+here because the Adreno rules above can be the reason a device is missing from
+that list at all.
+
+```js
+await model.load({ backend: 'cuda,vulkan', backendRequired: true })
+```
+
+It is only meaningful with a GPU list: `backendRequired` with `backend: 'auto'`
+or `'cpu'` is rejected, since there is no preference to make binding.
+
 ## Built With
 
 - [qvac-lib-inference-addon-cpp](https://github.com/tetherto/qvac-lib-inference-addon-cpp) — foundational Bare-addon framework.

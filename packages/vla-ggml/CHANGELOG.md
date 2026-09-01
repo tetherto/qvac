@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `load({ backendRequired: true })` makes the `backend` priority list binding. By
+  default a list matching no accepted device logs a warning and continues down
+  the normal order, so a load meant for one backend can quietly run on another;
+  with this set the load fails instead. The error names every device that *was*
+  accepted, which matters here because the Adreno rules can be the reason a
+  device is missing from that list at all. Rejected with `backend: 'auto'` or
+  `'cpu'`, where there is no preference to make binding.
+
 ## [0.23.0] - 2026-08-24
 
 ### Changed

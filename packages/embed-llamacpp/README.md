@@ -44,7 +44,8 @@ backend loading.
 - `backend: "vulkan"` forces Vulkan on an NVIDIA machine. Setting `CUDA_VISIBLE_DEVICES=-1` in the
   environment has the same effect without touching the load config.
 - `main-gpu` as an integer indexes ggml's full device list, so adding CUDA shifts the indices an
-  existing config was written against.
+  existing config was written against. Use the backend-qualified form (`"cuda:0"`) or a PCI bus id
+  (`"0000:65:00.0"`) instead; both are stable against backend load order.
 - The shipped CUDA module covers **compute capability 8.0 and above**: native code for 8.6 and
   12.0a, and PTX for 8.0 that the driver JIT-compiles forward onto anything newer. **A card below
   8.0 — Turing, Volta, Pascal and older — currently still enumerates, is selected over Vulkan, and
@@ -162,8 +163,9 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `attention`      | `"causal"` \| `"non-causal"`                  | model default | Attention type                                                                            |
 | `embd_normalize` | string of integer                             | `"2"`         | Embedding normalization (`-1` = none, `0` = max abs int16, `1` = taxicab, `2` = euclidean, `>2` = p-norm) |
 | `flash_attn`     | `"on"` \| `"off"` \| `"auto"`                 | `"auto"`      | Enable / disable flash attention                                                         |
-| `main-gpu`       | string of integer \| `"integrated"` \| `"dedicated"` | —      | GPU selection for multi-GPU systems                                                      |
+| `main-gpu`       | string of integer \| `"integrated"` \| `"dedicated"` \| `"<backend>:<n>"` \| PCI bus id | — | GPU selection for multi-GPU systems. A bare integer indexes ggml's full device list, **whose order depends on which backends loaded** — prefer `"cuda:0"` or `"0000:65:00.0"`, which are stable. The whole value must be an integer for the index form: `"1abc"` is rejected. A value matching no device warns and falls back to the default order |
 | `backend`        | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm`, `sycl`, or `auto` | — | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU |
+| `backend-required` | `"true"` \| `"false"`                       | `"false"`     | Make `backend` binding. By default a backend list matching no device logs a warning and runs the default cascade, so the pin is advisory; with this set it fails the load instead, naming every device that *was* found. Only meaningful alongside `backend` |
 | `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | `"0"` | Native logging verbosity. The `addonLogging.setLogger` callback receives only messages at or above this threshold. Use `"2"` for llama.cpp INFO logs and `"3"` for DEBUG logs. The verbosity level is process-global and is updated each time a model is constructed, so the most recently constructed model's `config.verbosity` wins for all subsequent native log dispatch. |
 
 #### Native addon logging
