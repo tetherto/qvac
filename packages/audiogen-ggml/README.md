@@ -218,9 +218,12 @@ Both PCM inputs must be `Float32Array` values containing finite, normalized
 samples in interleaved stereo order (`L, R, L, R, ...`) at 48 kHz. The addon
 does not resample, convert channels, or normalize input PCM. Keep samples in
 the conventional `[-1, 1]` range. `sourceAudio` is required for cover tasks.
-`cover-nofsq` currently requires `audioCoverStrength: 1`;
-`coverNoiseStrength` controls the source/noise blend from `0` to `1`. The
-full FSQ-based `cover` task is reserved but not implemented.
+`audioCoverStrength` sets the fraction of the run that follows the source:
+`1` (the default) keeps the source structure throughout, while lower values
+let the generation finish freely after that point — `0.5` starts as a cover
+and diverges halfway. `coverNoiseStrength` controls the source/noise blend
+from `0` to `1`. The full FSQ-based `cover` task is reserved but not
+implemented.
 
 Use `lego` to generate a new isolated instrument layer that follows the
 source (tempo, key, groove). The result is only the new stem, ready to mix
@@ -434,7 +437,7 @@ wrapped by a level-gated `QvacLogger`.
 | `taskType` | `text2music` (default), `cover-nofsq`, `lego`, or reserved `cover`. |
 | `track` | Lego target layer; required when `taskType` is `lego`. |
 | `guidanceScale` | DiT classifier-free guidance; `0` (default) auto-resolves to `1.0` on turbo and `7.0` on base/sft. |
-| `audioCoverStrength` | Source-context strength from `0` to `1`; currently must be `1` for `cover-nofsq`. |
+| `audioCoverStrength` | Fraction of the run that follows the source, from `0` to `1` (default `1`). |
 | `coverNoiseStrength` | Initial source/noise blend from `0` to `1`. |
 
 ## Models

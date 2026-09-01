@@ -56,9 +56,5 @@ jobs:
       artifact-name-prefix: vla-
       linux-extra-packages: libxi-dev libxtst-dev libxrandr-dev
       include-vulkan-sdk: true
-      # Keep HIP in the linux-x64 VLA prebuild while packages/vla-ggml still
-      # requests qvac-fabric[hip-backend]. #3998 moves HIP into @qvac/fabric
-      # and can drop this input once that package is on main.
-      include-rocm: true
       fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
     secrets: inherit

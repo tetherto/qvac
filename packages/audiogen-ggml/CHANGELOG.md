@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Support the full `audioCoverStrength` range for `cover-nofsq`. Values below
+  `1` follow the source for that fraction of the diffusion run and finish
+  freely afterwards; `0.5` starts as a cover and diverges halfway.
 - Multi-Track (lego) generation: `taskType: 'lego'` with a `track` option
   (one of the 12 ACE-Step layer names) generates a new isolated instrument
   layer that follows `sourceAudio` and returns only that stem. Requires the
