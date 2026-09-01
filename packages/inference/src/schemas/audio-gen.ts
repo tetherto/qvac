@@ -4,6 +4,13 @@ import { audioInputSchema, type AudioInput } from '@/schemas/transcription'
 import { encodeBase64 } from '@/utils/encoding'
 
 const base64Schema = z.string().min(1)
+// Mirrors requireMinimaxInferenceSteps and requireMinimaxCfgScale in @qvac/audiogen-ggml.
+const MINIMAX_MAX_INFERENCE_STEPS = 1000
+const MINIMAX_CFG_SCALE_MAX = 3.4028234663852886e38
+const MINIMAX_CFG_SCALE_MIN_POSITIVE = 1.401298464324817e-45
+
+export const AUDIOGEN_ENGINES = ['acestep', 'minimax'] as const
+export const audioGenEngineSchema = z.enum(AUDIOGEN_ENGINES)
 
 /** Sample rate the ACE-Step engine expects for reference and source audio. */
 export const AUDIOGEN_INPUT_SAMPLE_RATE = 48000
@@ -26,52 +33,94 @@ export const AUDIOGEN_INPUT_MAX_SECONDS = 600
 export const AUDIOGEN_TASK_TYPES = ['text2music', 'cover-nofsq'] as const
 export const audioGenTaskTypeSchema = z.enum(AUDIOGEN_TASK_TYPES)
 
-export const audioGenRuntimeConfigSchema = z
+const commonAudioGenRuntimeConfigShape = {
+  useGPU: z
+    .boolean()
+    .optional()
+    .describe(
+      'Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.'
+    ),
+  threads: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('CPU thread count; `0` (default) lets the engine auto-pick.'),
+  backendsDir: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.'
+    )
+}
+
+const acestepRuntimeConfigShape = {
+  ...commonAudioGenRuntimeConfigShape,
+  inferenceSteps: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'DiT sampling steps; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / sft 50).'
+    ),
+  shift: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / sft 1.0).'
+    ),
+  nGpuLayers: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.')
+}
+
+const minimaxCfgScaleSchema = z
+  .number()
+  .min(0)
+  .max(MINIMAX_CFG_SCALE_MAX)
+  .refine((value) => value === 0 || value >= MINIMAX_CFG_SCALE_MIN_POSITIVE, {
+    message: 'cfgScale must be 0 or a positive float32 value'
+  })
+  .describe('MiniMax flow classifier-free guidance scale; `0` uses the model default.')
+
+const minimaxRuntimeConfigShape = {
+  ...commonAudioGenRuntimeConfigShape,
+  inferenceSteps: z
+    .number()
+    .int()
+    .min(0)
+    .max(MINIMAX_MAX_INFERENCE_STEPS)
+    .optional()
+    .describe('MiniMax flow sampling steps; `0` uses the model default.'),
+  cfgScale: minimaxCfgScaleSchema.optional()
+}
+
+const acestepAudioGenRuntimeConfigSchema = z
   .object({
-    useGPU: z
-      .boolean()
-      .optional()
-      .describe(
-        'Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.'
-      ),
-    inferenceSteps: z
-      .number()
-      .int()
-      .nonnegative()
-      .optional()
-      .describe(
-        'DiT sampling steps; `0` (default) lets the engine auto-pick per DiT architecture (turbo 8 / sft 50).'
-      ),
-    shift: z
-      .number()
-      .nonnegative()
-      .optional()
-      .describe(
-        'Flow-matching time-shift; `0` (default) lets the engine auto-pick per DiT architecture (turbo 3.0 / sft 1.0).'
-      ),
-    nGpuLayers: z
-      .number()
-      .int()
-      .nonnegative()
-      .optional()
-      .describe('GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.'),
-    threads: z
-      .number()
-      .int()
-      .nonnegative()
-      .optional()
-      .describe('CPU thread count; `0` (default) lets the engine auto-pick.'),
-    backendsDir: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        'Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.'
-      )
+    engine: z.literal('acestep').optional().describe('Use the ACE-Step music-generation engine.'),
+    ...acestepRuntimeConfigShape
   })
   .strict()
 
-export const audioGenConfigSchema = audioGenRuntimeConfigSchema
+const minimaxAudioGenRuntimeConfigSchema = z
+  .object({
+    engine: z.literal('minimax').describe('Use the MiniMax-Music3 generation engine.'),
+    ...minimaxRuntimeConfigShape
+  })
+  .strict()
+
+export const audioGenRuntimeConfigSchema = z.discriminatedUnion('engine', [
+  acestepAudioGenRuntimeConfigSchema,
+  minimaxAudioGenRuntimeConfigSchema
+])
+
+const acestepAudioGenConfigSchema = acestepAudioGenRuntimeConfigSchema
   .extend({
     textEncModelSrc: modelSrcInputSchema.describe(
       'Text-encoder model source; turns the caption and lyrics into embeddings.'
@@ -85,6 +134,22 @@ export const audioGenConfigSchema = audioGenRuntimeConfigSchema
     )
   })
   .strict()
+
+const minimaxAudioGenConfigSchema = minimaxAudioGenRuntimeConfigSchema
+  .extend({
+    lmModelSrc: modelSrcInputSchema.describe(
+      'MiniMax language-model source; generates semantic music tokens.'
+    ),
+    synthModelSrc: modelSrcInputSchema.describe(
+      'MiniMax synthesis-model source; converts semantic tokens into the output waveform.'
+    )
+  })
+  .strict()
+
+export const audioGenConfigSchema = z.discriminatedUnion('engine', [
+  acestepAudioGenConfigSchema,
+  minimaxAudioGenConfigSchema
+])
 
 const unitIntervalSchema = z.number().min(0).max(1)
 
@@ -127,7 +192,30 @@ const audioGenGenerationShape = {
     .positive()
     .optional()
     .describe(
-      'Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.'
+      'Approximate requested duration in seconds. Engines round to their frame grid; use output frames or stats.audioDurationMs as authoritative.'
+    ),
+  maxFrames: z
+    .number()
+    .int()
+    .min(1)
+    .max(Number.MAX_SAFE_INTEGER)
+    .optional()
+    .describe(
+      'MiniMax semantic-frame cap. Cannot be combined with duration. MiniMax only; rejected by ACE-Step.'
+    ),
+  inferenceSteps: z
+    .number()
+    .int()
+    .min(0)
+    .max(MINIMAX_MAX_INFERENCE_STEPS)
+    .optional()
+    .describe(
+      'MiniMax flow steps for this generation; 0 uses the model default. MiniMax only; rejected by ACE-Step.'
+    ),
+  cfgScale: minimaxCfgScaleSchema
+    .optional()
+    .describe(
+      'MiniMax flow classifier-free guidance scale for this generation. MiniMax only; rejected by ACE-Step.'
     ),
   lmTemperature: z
     .number()
@@ -223,6 +311,26 @@ function validateCoverTask(
   }
 }
 
+function validateAudioGenRequest(
+  value: {
+    duration?: number | undefined
+    maxFrames?: number | undefined
+    taskType?: string | undefined
+    sourceAudio?: unknown
+    audioCoverStrength?: number | undefined
+  },
+  ctx: z.RefinementCtx
+) {
+  validateCoverTask(value, ctx)
+  if (value.duration !== undefined && value.maxFrames !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['maxFrames'],
+      message: 'duration and maxFrames cannot be combined'
+    })
+  }
+}
+
 export const audioGenClientParamsSchema = z
   .object({
     ...audioGenGenerationShape,
@@ -230,7 +338,7 @@ export const audioGenClientParamsSchema = z
     sourceAudio: audioGenClientAudioInputSchema.optional()
   })
   .strict()
-  .superRefine(validateCoverTask)
+  .superRefine(validateAudioGenRequest)
 
 export const audioGenStreamRequestSchema = z
   .object({
@@ -239,7 +347,7 @@ export const audioGenStreamRequestSchema = z
     requestId: z.string().min(1).optional()
   })
   .strict()
-  .superRefine(validateCoverTask)
+  .superRefine(validateAudioGenRequest)
 
 export const audioGenProgressSchema = z.object({
   stage: z.string(),
@@ -270,8 +378,13 @@ export const audioGenStreamResponseSchema = z
   .strict()
 
 export type AudioGenTaskType = z.infer<typeof audioGenTaskTypeSchema>
+export type AudioGenEngine = z.infer<typeof audioGenEngineSchema>
 export type AudioGenAudioInput = z.infer<typeof audioGenAudioInputSchema>
+export type AcestepAudioGenRuntimeConfig = z.infer<typeof acestepAudioGenRuntimeConfigSchema>
+export type MinimaxAudioGenRuntimeConfig = z.infer<typeof minimaxAudioGenRuntimeConfigSchema>
 export type AudioGenRuntimeConfig = z.infer<typeof audioGenRuntimeConfigSchema>
+export type AcestepAudioGenConfig = z.infer<typeof acestepAudioGenConfigSchema>
+export type MinimaxAudioGenConfig = z.infer<typeof minimaxAudioGenConfigSchema>
 export type AudioGenConfig = z.infer<typeof audioGenConfigSchema>
 export type AudioGenClientParams = z.input<typeof audioGenClientParamsSchema>
 export type AudioGenStreamRequest = z.infer<typeof audioGenStreamRequestSchema>

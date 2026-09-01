@@ -169,7 +169,7 @@ class RequestRejectedByPolicyError(QvacError):
 
 class ContextOverflowError(QvacError):
     """Prompt exceeded the loaded model's context window. Distinct from a
-    generic failure so callers can drive UX (truncate, raise `n_ctx`, start a
+    generic failure so callers can drive UX (truncate, raise `ctx_size`, start a
     new thread). The token/ctx fields are present only when the worker's
     error message carried them."""
 

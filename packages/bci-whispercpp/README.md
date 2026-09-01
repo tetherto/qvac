@@ -81,17 +81,26 @@ npm install
 VCPKG_ROOT=/path/to/vcpkg npm run build
 ```
 
-**CUDA (Linux / Windows on NVIDIA)** is opt-in because it needs `nvcc` on the
-build host; the published prebuilds are built without it. Build it yourself
-with `npm run build:cuda` (or `bare-make generate -D ENABLE_CUDA=ON`), which
-adds the `cuda` feature to the `speech-cpp` dependency. On linux-x64 that
+**CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
+gated behind the `ENABLE_CUDA` CMake option. The published linux-x64 prebuild
+turns it on (the prebuild workflow installs the CUDA toolkit); elsewhere
+build it yourself with `npm run build:cuda` (or
+`bare-make generate -D ENABLE_CUDA=ON`), which adds the `cuda` feature to
+the `speech-cpp` dependency. On linux-x64 that
 flips ggml into hybrid dynamically-loaded backend mode: the CPU-variant,
 Vulkan, and CUDA backends ship as `.so` modules next to the addon, only the
 CUDA module depends on the CUDA runtime, and hosts that cannot resolve it
-skip the module and fall back to Vulkan or CPU. Only the NVIDIA driver plus
-the CUDA runtime libraries are needed at runtime; ggml registers CUDA ahead
-of Vulkan, so `use_gpu: true` prefers CUDA when a supported device is
-present.
+skip the module and fall back to Vulkan or CPU. The NVIDIA driver plus the
+CUDA 13 runtime libraries (cudart, cuBLAS — from a CUDA toolkit install) are
+needed at runtime; ggml registers CUDA ahead of Vulkan, so `use_gpu: true`
+prefers CUDA when a supported device is present.
+
+The prebuilt CUDA module targets **compute capability 8.0 and newer**. It
+carries native code for 8.6 (RTX 30xx, A40) and 8.9 (RTX 40xx, L40) and
+JIT-compiles from 8.0 PTX for anything newer (Hopper, Blackwell / RTX 50xx),
+which costs a one-off compile on first use that the driver then caches. Cards
+below 8.0 — Turing (RTX 20xx, GTX 16xx, T4), Volta and Pascal — have no CUDA
+code path in the prebuild and should run on Vulkan.
 
 ### Prerequisites
 
@@ -351,7 +360,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `model` | string | Optional override; usually set via `args.files.model`. |
-| `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows (plus CUDA on opt-in `build:cuda` builds, which is preferred when an NVIDIA device is present), OpenCL/Vulkan on Android. |
+| `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows (plus CUDA on the linux-x64 prebuild and on `build:cuda` builds, preferred when an NVIDIA device and the CUDA runtime are present), OpenCL/Vulkan on Android. |
 | `flash_attn` | boolean | Enable flash attention. |
 | `gpu_device` | number | Select a non-default GPU device. |
 

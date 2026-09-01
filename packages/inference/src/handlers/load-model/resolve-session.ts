@@ -5,9 +5,11 @@ import { cancelTransfer } from '@/handlers/load-model/download-manager'
 import type {
   DownloadRequestBinding,
   ResolveResult,
-  DownloadHooks
+  DownloadHooks,
+  DownloadSecurityOptions
 } from '@/handlers/load-model/types'
 import { mergeDownloadStats } from '@/handlers/load-model/download-stats'
+import { getRuntimeContext } from '@/runtime/state'
 
 export interface ResolveSessionOptions {
   progressCallback?: ((update: ModelProgressUpdate) => void) | undefined
@@ -31,6 +33,13 @@ export interface ResolveSessionOptions {
    * `registry.cancel({ requestId })`.
    */
   requestBinding?: DownloadRequestBinding | undefined
+  /**
+   * Per-call HTTP download security overrides, applied to every resolve in this
+   * session — the primary model and every companion asset resolved by a plugin
+   * — so an explicit `requireSecureTransport` / `requireHttpChecksum` covers the
+   * whole load, not just the main file.
+   */
+  security?: DownloadSecurityOptions | undefined
 }
 
 export interface ResolveSession {
@@ -41,7 +50,7 @@ export interface ResolveSession {
 }
 
 export function createResolveSession(options: ResolveSessionOptions): ResolveSession {
-  const { progressCallback, seed, profilingEnabled, signal, requestBinding } = options
+  const { progressCallback, seed, profilingEnabled, signal, requestBinding, security } = options
   let primaryResult: ResolveResult | undefined
   const resolveResults: ResolveResult[] = []
   const activeDownloadKeys = new Set<string>()
@@ -61,13 +70,22 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
         seed,
         signal,
         downloadHooks,
-        fallbackSrc
+        fallbackSrc,
+        security
       )
       primaryResult = result
       resolveResults.push(result)
       return result.path
     }
-    return resolveModelPath(modelSrc, progressCallback, seed, signal, downloadHooks, fallbackSrc)
+    return resolveModelPath(
+      modelSrc,
+      progressCallback,
+      seed,
+      signal,
+      downloadHooks,
+      fallbackSrc,
+      security
+    )
   }
 
   async function resolveForPlugin(src: unknown) {
@@ -77,12 +95,14 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
         progressCallback,
         seed,
         signal,
-        downloadHooks
+        downloadHooks,
+        undefined,
+        security
       )
       resolveResults.push(result)
       return result.path
     }
-    return resolveModelPath(src, progressCallback, seed, signal, downloadHooks)
+    return resolveModelPath(src, progressCallback, seed, signal, downloadHooks, undefined, security)
   }
 
   function createResolveContext(
@@ -90,11 +110,13 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
     modelType: string,
     modelName?: string
   ): ResolveContext {
+    const platform = getRuntimeContext().platform
     return {
       resolveModelPath: resolveForPlugin,
       modelSrc,
       modelType,
-      ...(modelName !== undefined && { modelName })
+      ...(modelName !== undefined && { modelName }),
+      ...(platform !== undefined && { platform })
     }
   }
 
