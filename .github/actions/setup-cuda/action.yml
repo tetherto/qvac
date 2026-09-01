@@ -24,24 +24,16 @@ inputs:
 runs:
   using: composite
   steps:
-    # Cache the assembled toolkit so the component archives are fetched and
-    # unpacked once per component-list revision. The key is only the CUDA
-    # version plus the suffix below, so it does NOT track COMPONENTS: bump the
-    # suffix by hand whenever that list changes, or a stale toolkit is restored
-    # and the sha256-verified assemble step is skipped entirely.
+    # The key does NOT track COMPONENTS, so bump the suffix by hand when that
+    # list changes or a stale toolkit is restored and the sha256-verified
+    # assemble below is skipped.
     #
-    # r1 -> r2 on 2026-09-01: r1 was written under a combined `actions/cache`,
-    # whose post-step save let any `pull_request_target` run populate it, and
-    # the prebuilds for asr, audiogen, bci and tts reach this action from that
-    # trigger. Splitting restore from save below only stops new writes, so the
-    # key had to rotate for the entries already there to become unreachable.
-    #
-    # QVAC-23763: restore and save are split on purpose. The key is global and
+    # QVAC-23763: restore and save are split, and only trusted events save.
     # `pull_request_target` runs with GITHUB_REF on the base branch, so a
-    # combined `actions/cache` would let any authorized PR write the entry that
-    # main's prebuild and publish runs later restore, putting an author-supplied
-    # nvcc on PATH in a privileged run. cpp-lint is the lane that makes that
-    # reachable without a label, so only trusted events may save.
+    # combined `actions/cache` let any authorized PR write the entry that main's
+    # privileged runs restore, and cpp-lint reaches here with no label at all.
+    # r1 -> r2 because the split only stops new writes; rotating makes whatever
+    # that lane already wrote unreachable.
     - name: Restore CUDA toolkit
       id: cache-cuda
       uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
