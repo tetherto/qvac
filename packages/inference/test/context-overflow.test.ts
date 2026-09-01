@@ -5,11 +5,9 @@ import {
   parseContextOverflowMessage
 } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 
-// The addon's structured-code format from
-// `qvac_errors::StatusError::codeString()`:
-// `"[ <addonId> :: <localCodeMsg> ]"`. Bare's `js_throw_error(env,
-// code, msg)` sets this string on the JS Error's `.code`.
-const ADDON_CODE = '[ TextLlmAddon :: ContextOverflow ]'
+// The released addon's structured code, as `StatusError::codeString()`
+// formats it and `js_throw_error` sets it on the synchronous JS Error.
+const ADDON_CODE = '[ LLM :: ContextOverflow ]'
 
 test("isAddonContextOverflowError: detects addon's structured codeString", (t) => {
   const err = Object.assign(new Error('anything'), { code: ADDON_CODE })
@@ -30,7 +28,7 @@ test('isAddonContextOverflowError: ignores unrelated errors', (t) => {
   t.is(isAddonContextOverflowError(new Error('model failed to load')), false)
   t.is(
     isAddonContextOverflowError(
-      Object.assign(new Error('x'), { code: '[ TtsAddon :: InternalError ]' })
+      Object.assign(new Error('x'), { code: '[ LLM :: InternalError ]' })
     ),
     false
   )
@@ -47,20 +45,20 @@ test("isAddonContextOverflowError: codeString anchored — sibling names don't m
   // silently route here.
   t.is(
     isAddonContextOverflowError(
-      Object.assign(new Error('x'), { code: '[ TextLlmAddon :: ContextOverflowRecovered ]' })
+      Object.assign(new Error('x'), { code: '[ LLM :: ContextOverflowRecovered ]' })
     ),
     false
   )
   t.is(
     isAddonContextOverflowError(
-      Object.assign(new Error('x'), { code: '[ TextLlmAddon :: PostContextOverflow ]' })
+      Object.assign(new Error('x'), { code: '[ LLM :: PostContextOverflow ]' })
     ),
     false
   )
   // The exact form still matches.
   t.is(
     isAddonContextOverflowError(
-      Object.assign(new Error('x'), { code: '[ TextLlmAddon :: ContextOverflow ]' })
+      Object.assign(new Error('x'), { code: '[ LLM :: ContextOverflow ]' })
     ),
     true
   )
@@ -92,19 +90,18 @@ test('isAddonContextOverflowError: message fallback is anchored to the emitted s
       `rejected: ${wording.slice(0, 60)}`
     )
   }
-  // A present status code is authoritative — a contradictory code rejects
-  // even when the message alone would match.
-  t.is(
-    isAddonContextOverflowError(
-      Object.assign(
-        new Error(
-          '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
-        ),
-        { code: '[ LLM :: UnableToSaveSessionFile ]' }
-      )
-    ),
-    false
-  )
+  // A present status code is authoritative — a contradictory or non-string
+  // code rejects even when the message alone would match.
+  const validWording =
+    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
+  const contradictoryCodes = ['[ LLM :: UnableToSaveSessionFile ]', 14, null, { value: 'x' }]
+  for (const code of contradictoryCodes) {
+    t.is(
+      isAddonContextOverflowError(Object.assign(new Error(validWording), { code })),
+      false,
+      `code ${JSON.stringify(code)} must reject`
+    )
+  }
 })
 
 // Production errors arrive through the async transport as exception.what()

@@ -618,34 +618,35 @@ test('completion: kv-cache tolerates a cached attachment vanishing from disk', a
   const fs = await import('bare-fs')
   const os = await import('bare-os')
   const path = await import('bare-path')
-  const attachmentPath = path.join(
-    fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-attachment-')),
-    'diagram.png'
-  )
+  const attachmentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-attachment-'))
+  const attachmentPath = path.join(attachmentDir, 'diagram.png')
   fs.writeFileSync(attachmentPath, 'image-bytes')
 
   const modelId = `kvcache-attachment-vanishes-${Date.now()}`
-  const calls: RecordedCall[] = []
-  registerRecordingModel(modelId, calls)
-  const complete = completer(modelId, 'attachment-vanishes-key')
-  const first = {
-    role: 'user',
-    content: 'Area of the triangle in the attachment?',
-    attachments: [{ path: attachmentPath }]
+  try {
+    const calls: RecordedCall[] = []
+    registerRecordingModel(modelId, calls)
+    const complete = completer(modelId, 'attachment-vanishes-key')
+    const first = {
+      role: 'user',
+      content: 'Area of the triangle in the attachment?',
+      attachments: [{ path: attachmentPath }]
+    }
+    await complete([first] as HistoryEntry[])
+
+    fs.unlinkSync(attachmentPath)
+    await complete([first, assistant('25.'), user('And base 4 height 3?')] as HistoryEntry[])
+
+    const turnCalls = calls.filter((call) => !call.prefill)
+    t.is(turnCalls.length, 2, 'both turns reached the model')
+    t.is(
+      turnCalls[1]!.messages.length,
+      1,
+      'the second turn is warm — the cached attachment is skipped'
+    )
+  } finally {
+    fs.rmSync(attachmentDir, { recursive: true, force: true })
+    unregisterModel(modelId)
+    clearRegistry()
   }
-  await complete([first] as HistoryEntry[])
-
-  fs.unlinkSync(attachmentPath)
-  await complete([first, assistant('25.'), user('And base 4 height 3?')] as HistoryEntry[])
-
-  const turnCalls = calls.filter((call) => !call.prefill)
-  t.is(turnCalls.length, 2, 'both turns reached the model')
-  t.is(
-    turnCalls[1]!.messages.length,
-    1,
-    'the second turn is warm — the cached attachment is skipped'
-  )
-
-  unregisterModel(modelId)
-  clearRegistry()
 })

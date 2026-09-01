@@ -6,7 +6,9 @@
  * msg)` (see `JsUtils.hpp::JSCATCH`) where `code` comes from
  * `qvac_errors::StatusError::codeString()` and formats as
  * `"[ <addonId> :: ContextOverflow ]"`. The message carries the
- * C++-formatted detail (which may include the prompt/ctx sizes).
+ * C++-formatted detail (which may include the prompt/ctx sizes). That
+ * codeString survives only the synchronous throw path — asynchronous run
+ * errors are transported as `exception.what()` alone, with no code.
  *
  * These helpers let the plugin handler convert that addon error into a
  * typed `ContextOverflowError` and let unit tests assert the detection
@@ -24,10 +26,10 @@ const CONTEXT_OVERFLOW_FORMS = [
 export function isAddonContextOverflowError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
   // A present status code is authoritative: exact ContextOverflow accepts,
-  // any other code rejects with no message fallback.
+  // anything else (a non-string included) rejects with no message fallback.
   const code = (err as { code?: unknown }).code
-  if (typeof code === 'string') {
-    return /^\[\s*[\w.-]+\s*::\s*ContextOverflow\s*\]$/.test(code)
+  if (code !== undefined) {
+    return typeof code === 'string' && /^\[\s*[\w.-]+\s*::\s*ContextOverflow\s*\]$/.test(code)
   }
   // The production path: the async transport strips status metadata from
   // every run error, so the message alone identifies the overflow guards.
