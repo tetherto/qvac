@@ -6,9 +6,9 @@ This summary consolidates benchmarking results across all model configurations.
 |-------|------|----------|---------------|-----|------|-----|-----|---------|-------|
 | indic-conformer-ctc.q8_0.gguf | indic-conformer | gujarati | clean | - | batch | 10.81 | 6.07 | Fleurs | Model type: indic-conformer, Threads: 4 |
 | indic-conformer-ctc.q8_0.gguf | indic-conformer | gujarati | clean | ✓ | batch | 10.81 | 6.07 | Fleurs | Model type: indic-conformer, Threads: 4 |
-| indic-conformer-ctc.q8_0.gguf | indic-conformer | hindi | clean | - | batch | 5.37 | 2.97 | Fleurs | Model type: indic-conformer, Threads: 4 |
-| indic-conformer-ctc.q8_0.gguf | indic-conformer | hindi | clean | ✓ | batch | 5.43 | 2.97 | Fleurs | Model type: indic-conformer, Threads: 4 |
-| indic-conformer-ctc.q8_0.gguf | indic-conformer | kannada | clean | - | batch | 8.65 | 3.67 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | hindi | clean | - | batch | 5.43 | 2.97 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | hindi | clean | ✓ | batch | 5.37 | 2.97 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | kannada | clean | - | batch | 8.47 | 3.65 | Fleurs | Model type: indic-conformer, Threads: 4 |
 | indic-conformer-ctc.q8_0.gguf | indic-conformer | kannada | clean | ✓ | batch | 8.65 | 3.67 | Fleurs | Model type: indic-conformer, Threads: 4 |
 | indic-conformer-ctc.q8_0.gguf | indic-conformer | tamil | clean | - | batch | 17.96 | 12.04 | Fleurs | Model type: indic-conformer, Threads: 4 |
 | indic-conformer-ctc.q8_0.gguf | indic-conformer | tamil | clean | ✓ | batch | 17.96 | 12.04 | Fleurs | Model type: indic-conformer, Threads: 4 |
@@ -24,6 +24,9 @@ This summary consolidates benchmarking results across all model configurations.
 | parakeet-tdt-0.6b-v3.f16.gguf | tdt | english | clean | - | batch | 2.26 | 0.77 | Librispeech | Model type: tdt, Threads: 4 |
 | parakeet-tdt-0.6b-v3.f16.gguf | tdt | english | clean | - | streaming | 2.26 | 0.77 | Librispeech | Model type: tdt, Threads: 4 |
 | parakeet-tdt-0.6b-v3.f16.gguf | tdt | english | clean | ✓ | batch | 2.26 | 0.77 | Librispeech | Model type: tdt, Threads: 4 |
+| parakeet-unified-en-0.6b.f16.gguf | unified | english | clean | - | batch | 2.15 | 0.63 | Librispeech | Model type: unified, Threads: 4 |
+| parakeet-unified-en-0.6b.f16.gguf | unified | english | clean | - | streaming | 2.15 | 0.63 | Librispeech | Model type: unified, Threads: 4 |
+| parakeet-unified-en-0.6b.f16.gguf | unified | english | clean | ✓ | batch | 2.15 | 0.63 | Librispeech | Model type: unified, Threads: 4 |
 | sortformer-4spk-v1.f16.gguf | sortformer | english | clean | - | batch |  |  | Librispeech | Model type: sortformer, Threads: 4 |
 | sortformer-4spk-v1.f16.gguf | sortformer | english | clean | ✓ | batch |  |  | Librispeech | Model type: sortformer, Threads: 4 |
 
@@ -70,6 +73,8 @@ The speaker group is a classification introduced by the LibriSpeech authors, who
 | Model Type | Description |
 |------------|-------------|
 | tdt        | Token-and-Duration Transducer (default) |
+| unified    | Unified RNN-T; one checkpoint serving batch and low-latency streaming |
 | ctc        | Connectionist Temporal Classification |
 | eou        | End-of-Utterance detection |
 | sortformer | Sortformer architecture |
+| indic-conformer | Conformer CTC for Indic languages; requires a model language |
