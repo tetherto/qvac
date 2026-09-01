@@ -29,7 +29,7 @@ runs:
     # list's hash via the action file itself changing the runner workspace,
     # so bump cache-suffix when editing COMPONENTS.
     #
-    # QVAC-23763: runner.arch is part of the key. GitHub scopes a cache by repo
+    # QVAC-24442: runner.arch is part of the key. GitHub scopes a cache by repo
     # and ref, not by architecture, so without it an arm64 job would restore the
     # x86_64 toolkit and fail with an exec format error deep in the build.
     - name: Cache CUDA toolkit
@@ -50,9 +50,8 @@ runs:
         # the runtime-loaded module resolves cudart and cuBLAS from the
         # host at run time.
         #
-        # QVAC-23763: NVIDIA calls the arm64 server build "sbsa", and it is a
-        # native toolkit rather than a cross-compiler, so it belongs on an
-        # arm64 runner. Same seven components, same release, same pinning.
+        # QVAC-24442: NVIDIA calls the arm64 build "sbsa". It is a native
+        # toolkit, not a cross-compiler, so it only runs on an arm64 runner.
         case "$(uname -m)" in
           x86_64)  REDIST_ARCH=linux-x86_64 ;;
           aarch64) REDIST_ARCH=linux-sbsa ;;
@@ -78,9 +77,8 @@ runs:
         cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.2.51-archive.tar.xz 35244c4d90e5b1aa48fb98d655f6dfa3f9e4f7d0ac220266ebf85c0928a7524b
         libcublas/linux-sbsa/libcublas-linux-sbsa-13.3.0.5-archive.tar.xz edadce2ec8d997ffb08f5a1c4ee6b1d14a2c883f2aa11e1d3208b4f077d9225f"
 
-        # Indirect through the arch chosen above. The two lists are the same
-        # seven components at the same release, differing only in the redist
-        # path and the hash.
+        # Picks COMPONENTS_linux_x86_64 or COMPONENTS_linux_sbsa. Same seven
+        # components and release either way, only the path and hash differ.
         eval "COMPONENTS=\$COMPONENTS_${REDIST_ARCH//-/_}"
 
         prefix="$RUNNER_TEMP/cuda/toolkit"
