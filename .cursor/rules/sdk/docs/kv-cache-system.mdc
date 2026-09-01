@@ -107,15 +107,15 @@ Named string-key caches are not inferred from their directory names and remain c
 
 | File | Purpose |
 |------|---------|
-| `server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the three KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). Exposes `beginTurn` / `commitTurn` / `rollback` / `releaseTurn` (non-destructive, for pre-mutation overflow rejections) / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
-| `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers one deferred cleanup (rollback, or the non-destructive `releaseTurn` when the addon rejected at a prefill guard before any decode or save), and calls `session.commitTurn(...)` on the happy path (which suppresses it). No direct references to the three layers. |
-| `server/bare/plugins/llamacpp-completion/ops/kv-cache-state.ts` | Pure `decideCachedHistorySlice(...)` helper used by the session — slice decision for the next addon call. No state. |
-| `server/bare/ops/kv-cache-retention.ts` | Plans idle and quota-based auto-cache evictions while excluding active turn paths. |
-| `server/bare/ops/kv-cache-utils.ts` | Path / hash / fs utilities: `getCacheFilePath`, `generateConfigHash`, `findMatchingCache`, `getCurrentCacheInfo`, `renameCacheFile`, `deleteCache`. No in-memory state. |
-| `server/bare/plugins/llamacpp-completion/ops/cache-logger.ts` | Debug logging for cache operations |
-| `server/rpc/handlers/delete-cache.ts` | `handleDeleteCache` RPC entry point. Delegates to `deleteKvCacheState(...)` — zero direct references to the three layers. |
-| `server/utils/cache.ts` | `getKVCacheDir()` base directory |
-| `client/api/delete-cache.ts` | Client-side delete cache API |
+| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the three KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). Exposes `beginTurn` / `commitTurn` / `rollback` / `releaseTurn` (non-destructive: a thrown overflow/admission refusal never persists the turn, so the committed cache stays valid) / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
+| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers one deferred cleanup (rollback, or the non-destructive `releaseTurn` on a thrown addon overflow or per-sequence-cap admission refusal), and calls `session.commitTurn(...)` on the happy path (which suppresses it). No direct references to the three layers. |
+| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/kv-cache-state.ts` | Pure `decideCachedHistorySlice(...)` helper used by the session — slice decision for the next addon call. No state. |
+| `packages/inference/src/plugins/ops/kv-cache-retention.ts` | Plans idle and quota-based auto-cache evictions while excluding active turn paths. |
+| `packages/inference/src/plugins/ops/kv-cache-utils.ts` | Path / hash / fs utilities: `getCacheFilePath`, `generateConfigHash`, `findMatchingCache`, `getCurrentCacheInfo`, `renameCacheFile`, `deleteCache`. No in-memory state. |
+| `packages/inference/src/plugins/builtin/llamacpp-completion/ops/cache-logger.ts` | Debug logging for cache operations |
+| `packages/inference/src/handlers/delete-cache.ts` | `handleDeleteCache` RPC entry point. Delegates to `deleteKvCacheState(...)` — zero direct references to the three layers. |
+| `packages/inference/src/utils/cache/paths.ts` | `getKVCacheDir()` base directory |
+| `packages/sdk/src/client/api/delete-cache.ts` | Client-side delete cache API |
 
 ## Key Behaviors
 
