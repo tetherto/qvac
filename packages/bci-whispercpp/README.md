@@ -96,11 +96,13 @@ needed at runtime; ggml registers CUDA ahead of Vulkan, so `use_gpu: true`
 prefers CUDA when a supported device is present.
 
 The prebuilt CUDA module targets **compute capability 8.0 and newer**. It
-carries native code for 8.6 (RTX 30xx, A40) and 8.9 (RTX 40xx, L40) and
-JIT-compiles from 8.0 PTX for anything newer (Hopper, Blackwell / RTX 50xx),
-which costs a one-off compile on first use that the driver then caches. Cards
-below 8.0 — Turing (RTX 20xx, GTX 16xx, T4), Volta and Pascal — have no CUDA
-code path in the prebuild and should run on Vulkan.
+carries native code for 8.6 (RTX 30xx, A40) — which Ada (RTX 40xx, L40) runs
+through within-major binary compatibility — and for 12.0 (Blackwell /
+RTX 50xx), and JIT-compiles from 8.0 PTX for the rest (A100, Hopper), a
+one-off compile the driver caches. Cards below 8.0 — Turing (RTX 20xx,
+GTX 16xx, T4), Volta and Pascal — have no CUDA code path in the prebuild;
+the backend skips them at registration and the addon falls back to Vulkan or
+CPU.
 
 ### Prerequisites
 

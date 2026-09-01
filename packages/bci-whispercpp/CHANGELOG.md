@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-01#1, which brings in ggml-speech
+  2026-09-01. The CUDA backend now skips, at registration, GPUs whose
+  compute capability has no compiled code in the fatbin, so a
+  `use_gpu: true` run on such a card (Turing and older) falls back to
+  Vulkan or CPU instead of failing at the first kernel launch. The CUDA
+  fatbin retargets from sm86+sm89 to sm86+sm120a: Blackwell (RTX 50xx) runs
+  native code instead of a first-use JIT, Ada (RTX 40xx) runs the
+  binary-compatible sm86 code, and everything else at compute capability
+  8.0 or above keeps the 8.0 PTX JIT path. The roll also brings the
+  compute-buffer OOM handling and k-quant GET_ROWS fixes.
+
 ## [0.8.1] - 2026-08-28
 
 ### Added
