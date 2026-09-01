@@ -1467,6 +1467,39 @@ test('kv-cache-session: auto-rename commit releases the target active-ref when s
   }
 })
 
+// The auto path assigns the prime origin independently of the custom path,
+// so its fresh-prime release needs its own pin: file, init flag, and marker.
+test('kv-cache-session: releaseTurn rolls back an auto cache the same turn primed', async (t) => {
+  const { fs, mod, cleanup, cacheRoot, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash,
+      history: [{ role: 'user', content: 'hi' }],
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+    await session.releaseTurn(turn)
+
+    t.is(fs.existsSync(turn.cachePath), false, 'the fresh auto prime is unlinked')
+    t.absent(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(turn.cachePath),
+      'the init flag is cleared with it'
+    )
+    const rootEntries = fs.existsSync(cacheRoot) ? fs.readdirSync(cacheRoot).map(String) : []
+    t.is(
+      rootEntries.filter((f) => f.startsWith('.auto-cache-')).length,
+      0,
+      'the released fresh auto turn left no retention marker'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
 // A failed first turn must not leave its own prime behind: releaseTurn on a
 // freshly primed cache takes the destructive path instead.
 test('kv-cache-session: releaseTurn rolls back a cache the same turn primed', async (t) => {

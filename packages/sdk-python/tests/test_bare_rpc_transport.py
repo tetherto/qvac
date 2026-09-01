@@ -302,9 +302,9 @@ async def test_calls_fail_fast_when_the_worker_disconnects() -> None:
             await asyncio.wait_for(
                 heartbeat(t, HeartbeatRequest(type="heartbeat")), timeout=10
             )
-        assert not isinstance(excinfo.value, asyncio.TimeoutError), (
-            "call hung after the worker disconnected instead of failing fast"
-        )
+        assert not isinstance(
+            excinfo.value, asyncio.TimeoutError
+        ), "call hung after the worker disconnected instead of failing fast"
     finally:
         await t.close()
 
@@ -330,9 +330,9 @@ async def test_config_cache_directory_redirects_model_storage(tmp_path) -> None:
             ),
         )
         assert load_response.success, load_response.error
-        assert any(os.scandir(cache_dir)), (
-            "cacheDirectory config had no effect -- model was not stored there"
-        )
+        assert any(
+            os.scandir(cache_dir)
+        ), "cacheDirectory config had no effect -- model was not stored there"
 
 
 async def test_completion_orchestrate_without_tools(transport) -> None:
@@ -430,9 +430,9 @@ async def test_completion_orchestrate_runs_the_tool_loop(transport) -> None:
     final = await run.final
 
     assert invoked, "worker never called back into the local tool handler"
-    assert "4242" in final.content_text, (
-        f"final answer did not reflect the tool result: {final.content_text!r}"
-    )
+    assert (
+        "4242" in final.content_text
+    ), f"final answer did not reflect the tool result: {final.content_text!r}"
 
 
 async def test_completion_orchestrate_cancel_stops_generation(transport) -> None:

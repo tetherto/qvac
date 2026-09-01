@@ -5,7 +5,7 @@ import {
   REASONING_BUDGET_MAX
 } from '@/schemas/llamacpp-config'
 import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
-import { ModelType } from '@/schemas'
+import { ModelType, deviceConfigDefaultsSchema } from '@/schemas'
 
 const LLM_BASE = {
   modelType: ModelType.llamacppCompletion,
@@ -54,6 +54,30 @@ test('loadModelOptionsToRequestSchema: rejects retired n_discarded for LLM', (t)
     }).success,
     false
   )
+})
+
+// The deliberate retirement shape (#3380/#3999): outside the strict options
+// path the retired key is inert — loads keep working and the key is dropped.
+test('retired n_discarded strips, not rejects, on the wire and in deviceDefaults', (t) => {
+  const wire = loadModelSrcRequestSchema.safeParse({
+    type: 'loadModel',
+    modelType: ModelType.llamacppCompletion,
+    modelSrc: 'model.gguf',
+    modelConfig: { ctx_size: 2048, n_discarded: 256 }
+  })
+  t.is(wire.success, true, 'the wire request still validates')
+  const wireConfig = (wire.success ? wire.data : {}) as { modelConfig?: Record<string, unknown> }
+  t.absent('n_discarded' in (wireConfig.modelConfig ?? {}), 'the key is dropped from the wire')
+  t.is(wireConfig.modelConfig?.['ctx_size'], 2048, 'the rest of the config survives')
+
+  const defaults = deviceConfigDefaultsSchema.safeParse({
+    llm: { ctx_size: 2048, n_discarded: 256 }
+  })
+  t.is(defaults.success, true, 'deviceDefaults still validate')
+  const llmDefaults = (defaults.success ? defaults.data : {}) as {
+    llm?: Record<string, unknown>
+  }
+  t.absent('n_discarded' in (llmDefaults.llm ?? {}), 'the key is dropped from deviceDefaults')
 })
 
 test('llmConfigSchema: leaves load_mode unset by default', (t) => {

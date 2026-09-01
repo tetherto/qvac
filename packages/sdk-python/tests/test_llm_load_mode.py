@@ -33,3 +33,13 @@ def test_load_mode_is_optional() -> None:
     )
 
     assert config.load_mode is None
+
+
+def test_retired_n_discarded_is_stripped() -> None:
+    # The retired sliding-window key is inert, not an error: the permissive
+    # generated model drops it from the wire, like every retired key before it.
+    config = LoadModelSrcRequestLlamacppCompletionModelConfig.model_validate(
+        {"ctx_size": 2048, "n_discarded": 256}
+    )
+    assert "n_discarded" not in config.model_dump()
+    assert config.ctx_size == 2048
