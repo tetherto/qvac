@@ -188,10 +188,22 @@ if ! "$QVAC_REAL_BIN" --version | tee -a "$ARTIFACT_DIR/qvac-version.txt"; then
   echo "Unable to read QVAC CLI version from $QVAC_REAL_BIN" | tee -a "$ARTIFACT_DIR/qvac-version.txt"
 fi
 
-npx openclaw plugins install "$QVAC_OPENCLAW_PLUGIN_SPEC" \
+# openclaw 2026.8.1 (2026-08-31) added two consent gates that both cancel when
+# nothing can answer them, which is every CI run:
+#   --force               "This source is outside ClawHub review and trust
+#                          metadata. Install cancelled; rerun with --force."
+#   --accept-capabilities "Plugin \"qvac\" requires capability consent."
+# Both are the remedies the CLI itself names, and per its usage strings
+# `plugins install` takes both while `plugins enable` takes the second.
+#
+# Scoped deliberately to these two calls: the smoke installs QVAC's own
+# published plugin, by exact spec, into a throwaway sandbox, with no human at
+# the terminal. This is not a blanket opt-out of plugin trust or capability
+# checks -- end users installing @qvac/openclaw-plugin still get both prompts.
+npx openclaw plugins install "$QVAC_OPENCLAW_PLUGIN_SPEC" --force --accept-capabilities \
   > "$ARTIFACT_DIR/openclaw-plugin-install.stdout" \
   2> "$ARTIFACT_DIR/openclaw-plugin-install.stderr"
-npx openclaw plugins enable qvac \
+npx openclaw plugins enable qvac --accept-capabilities \
   > "$ARTIFACT_DIR/openclaw-plugin-enable.stdout" \
   2> "$ARTIFACT_DIR/openclaw-plugin-enable.stderr"
 npx openclaw config set plugins.allow '["qvac"]' --strict-json \
@@ -215,11 +227,17 @@ npx openclaw config set plugins.entries.qvac.config "$PLUGIN_CONFIG_JSON" --stri
   > "$ARTIFACT_DIR/openclaw-config-plugin.stdout" \
   2> "$ARTIFACT_DIR/openclaw-config-plugin.stderr"
 
+# openclaw 2026.8.1 namespaces plugin-contributed auth choices behind a
+# `provider-plugin:` prefix -- a bare `--auth-choice qvac` is now rejected with
+# a list of built-in choices only. The plugin still declares choiceId "qvac"
+# correctly; the addressing changed on the OpenClaw side, so this is the caller
+# that has to move. Requires openclaw >= 2026.8.1, which the smoke always
+# installs via OPENCLAW_PACKAGE_SPEC=openclaw@latest.
 npx openclaw onboard \
   --non-interactive \
   --accept-risk \
   --mode local \
-  --auth-choice qvac \
+  --auth-choice provider-plugin:qvac \
   --skip-search \
   --skip-health \
   > "$ARTIFACT_DIR/openclaw-onboard.stdout" \
