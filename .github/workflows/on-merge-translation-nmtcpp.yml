@@ -240,17 +240,28 @@ jobs:
 
           # Deliberately keyed on publish-npm ONLY, not publish-gpr.
           #
-          # Integration tests already run on the PR, and the PR's merge-guard
-          # consumes their result as `integration-tests-status` before the merge
-          # is allowed (see on-pr-<addon>.yml). Re-running the same 6-leg matrix
-          # on merge duplicates that work on GPU/Windows/macOS runners for no new
-          # signal.
+          # Publishing a GPR dev build is not a reason to re-run integration
+          # tests: they already ran on the PR, and the PR's merge-guard consumes
+          # their result as `integration-tests-status` before the merge is
+          # allowed (see on-pr-<addon>.yml). Re-running the same 6-leg
+          # GPU/Windows/macOS matrix on merge duplicates that for no new signal.
           #
-          # This mattered when QVAC-24365 fixed publish-gpr: that job had never
-          # succeeded, so this gate had only ever opened on release-* (where
-          # publish-npm runs). Keying on publish-gpr would have silently switched
-          # merge-time integration tests on for every main/feature-*/tmp-* push.
-          # Publishing a GPR dev build is not a reason to re-test.
+          # NOTE, so nobody mistakes this for a live cost saving: the
+          # integration-tests job below cannot currently run on merge at all,
+          # whatever this gate decides. It is `needs: [post-build-gate]` with no
+          # !cancelled()/always(), and post-build-gate needs both publish-gpr and
+          # publish-npm — exactly one of which is skipped on any given branch. So
+          # the skip propagates through this (successful) gate and into the
+          # consumer, the same transitive mechanism QVAC-24365 fixed one level up.
+          # Observed both ways round: tts-ggml run 33366149312 on main
+          # (publish-gpr success, gate true) and ocr-ggml run 32745082430 on
+          # release-* (publish-npm success, gate true) both left
+          # integration-tests skipped.
+          #
+          # This keying is therefore forward-looking protection: it is what keeps
+          # the matrix off merge once that consumer is given its own status
+          # function. Fixing the consumer is deliberately NOT part of QVAC-24365 —
+          # it affects five workflows and wants its own ticket.
           if [ "${{ needs.publish-npm.result }}" = "success" ]; then
             should="true"
           fi

@@ -66,19 +66,47 @@ function condition(jobText) {
   return inline ? inline[1].trim() : ''
 }
 
-// Job names listed under this job's `needs:`, in either the block or the
-// inline-array form.
+// Job names listed under this job's `needs:`. All THREE legal YAML spellings
+// must be handled, because a parse miss here reports "no dependencies", which
+// makes the guard walk return false and turns the miss into a silent pass:
+//
+//   needs: [a, b]     inline array
+//   needs:\n  - a     block sequence  (may be interleaved with comments)
+//   needs: a          plain scalar    — on-merge-vla.yml and
+//                                       on-merge-classification-ggml.yml use it
+//
+// Returns null (not []) when a `needs:` key exists but nothing parses out, so
+// callers can fail loudly instead of treating a parser failure as a clean bill
+// of health.
 function needsOf(jobText) {
   if (!jobText) return []
+  if (!/^ {4}needs:/m.test(jobText)) return []
+
   const inline = jobText.match(/^ {4}needs:[ \t]*\[([^\]]*)\]/m)
   if (inline) {
-    return inline[1].split(',').map((s) => s.trim()).filter(Boolean)
+    const names = inline[1].split(',').map((s) => s.trim()).filter(Boolean)
+    return names.length ? names : null
   }
-  const block = jobText.match(/^ {4}needs:[ \t]*\n((?: {6}- .*\n)+)/m)
-  if (block) {
-    return block[1].split('\n').map((l) => l.replace(/^ *- */, '').trim()).filter(Boolean)
+
+  // Absorb comment and blank lines inside the sequence, then keep only entries.
+  // Requiring consecutive `      - ` lines silently truncated the list at the
+  // first interleaved comment — dropping exactly the release-merge-guard entry
+  // this test exists to find.
+  const block = jobText.match(/^ {4}needs:[ \t]*\n((?: {6}(?:- .*|#.*)\n|[ \t]*\n)*)/m)
+  if (block && /- /.test(block[1])) {
+    const names = block[1]
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith('- '))
+      .map((l) => l.replace(/^- */, '').trim())
+      .filter(Boolean)
+    return names.length ? names : null
   }
-  return []
+
+  const scalar = jobText.match(/^ {4}needs:[ \t]*([A-Za-z_][A-Za-z0-9_-]*)[ \t]*$/m)
+  if (scalar) return [scalar[1]]
+
+  return null
 }
 
 const WORKFLOWS = onMergeWorkflows()
@@ -110,20 +138,40 @@ for (const relativePath of WORKFLOWS) {
   // report which direct dependency carries it. Not hardcoded to the name
   // `build` — classification-ggml calls the equivalent job `prebuild`.
   const GUARD = 'release-merge-guard'
+  const parseMisses = []
+
+  function depsOrRecord(jobName, jobText) {
+    const deps = needsOf(jobText)
+    if (deps === null) {
+      parseMisses.push(jobName)
+      return []
+    }
+    return deps
+  }
 
   function reachesGuard(jobName, seen = new Set()) {
     if (seen.has(jobName)) return false
     seen.add(jobName)
-    const deps = needsOf(jobBlock(source, jobName))
+    const deps = depsOrRecord(jobName, jobBlock(source, jobName))
     if (deps.includes(GUARD)) return true
     return deps.some((d) => reachesGuard(d, seen))
   }
 
-  const skippableDeps = needsOf(gpr).filter(
-    (dep) => dep === GUARD || reachesGuard(dep),
-  )
+  const gprDeps = depsOrRecord('publish-gpr', gpr)
+  const skippableDeps = gprDeps.filter((dep) => dep === GUARD || reachesGuard(dep))
 
   test(`${slug}: publish-gpr survives a skipped upstream dependency`, () => {
+    // A `needs:` key that yields nothing is a parser failure, not proof of
+    // safety. Fail here rather than returning early, otherwise an unsupported
+    // spelling silently switches this guard off for the whole workflow.
+    assert.deepEqual(
+      parseMisses,
+      [],
+      `could not parse the needs: list of ${parseMisses.join(', ')} in ` +
+        `${relativePath}. Treating that as "no dependencies" would let this ` +
+        'guard pass on a workflow carrying the defect.',
+    )
+
     if (skippableDeps.length === 0) return
 
     const cond = condition(gpr)
