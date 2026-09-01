@@ -235,10 +235,14 @@ test('the reschedule derives project, app upload and timeout from the errored ru
     retryOutcome: PASSED
   })
   const params = r.scheduleParams[0]
-  assert.match(params, new RegExp(`project=${DERIVED_PROJECT.replace(/[:]/g, '\\:')} `))
-  assert.match(params, /app=arn:upload:app-from-run/)
-  assert.match(params, /timeout=jobTimeoutMinutes=90/)
-  assert.match(params, /testPackageArn=arn:upload:testpkg/)
+  // Containment, not pattern matching: the claim is that schedule-run was called
+  // with these exact arguments. Building a regex here meant escaping an ARN into
+  // it by hand, which is the kind of partial escaper that silently stops matching
+  // what it claims to. The trailing space pins the end of the project ARN field.
+  assert.ok(params.includes(`project=${DERIVED_PROJECT} `), params)
+  assert.ok(params.includes('app=arn:upload:app-from-run'), params)
+  assert.ok(params.includes('timeout=jobTimeoutMinutes=90'), params)
+  assert.ok(params.includes('testPackageArn=arn:upload:testpkg'), params)
 })
 
 test('a FAILED run with executed tests is never rescheduled', () => {
