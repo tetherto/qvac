@@ -621,15 +621,15 @@ jobs:
     # runner also downloads ~7.5 GiB of models from the registry, so the
     # ceiling budgets for a cold run on a slow connection.
     timeout-minutes: 180
-    environment: release
     permissions:
       contents: read
-      packages: read
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.sha }}
@@ -639,23 +639,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Configure package registries
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const lines = [
-            'registry=https://registry.npmjs.org/',
-            '@qvac:registry=https://registry.npmjs.org/',
-            '@tetherto:registry=https://npm.pkg.github.com/',
-          ];
-          if (process.env.NPM_TOKEN) {
-            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
-          }
-          if (process.env.PAT_TOKEN) {
-            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
-          }
-          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
-
+      # No registry tokens: packages/inference has no @tetherto-scoped
+      # dependencies, so a plain public-npmjs install is all this needs.
       - name: Install and build inference
         shell: bash
         working-directory: packages/inference
