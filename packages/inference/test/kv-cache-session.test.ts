@@ -1498,6 +1498,8 @@ test('kv-cache-session: releaseTurn preserves the committed cache and admits a w
     await session.releaseTurn(second)
 
     const cachePath = await utils.getCacheFilePath('test-model', configHash, 'release-a')
+    const fs = await import('bare-fs')
+    t.ok(fs.existsSync(cachePath), 'the committed bytes are still on disk after the release')
     t.ok(
       mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath),
       'the init flag survives the release'

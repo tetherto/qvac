@@ -176,6 +176,7 @@ export { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
 export {
   InferenceCancelledError,
   ContextOverflowError,
+  type ContextOverflowErrorSizes,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,

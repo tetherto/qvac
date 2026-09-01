@@ -1,5 +1,7 @@
 import test from 'brittle'
 import { createErrorResponse } from '@/schemas/error'
+// Type-only import from the public surface pins the exported record type.
+import type { ContextOverflowErrorSizes } from '@/surface'
 import {
   ContextOverflowError,
   RequestIdConflictError,
@@ -64,10 +66,13 @@ test('createErrorResponse: ContextOverflowError carries overflow fields on typed
 
 // The canonical sizes-record form: one record in, all fields out.
 test('createErrorResponse: ContextOverflowError sizes-record form carries every field', (t) => {
-  const err = new ContextOverflowError(
-    { promptTokens: 31, cachedTokens: 8170, requiredTokens: 8201, ctxSize: 8192 },
-    'model-1'
-  )
+  const contextSizes: ContextOverflowErrorSizes = {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192
+  }
+  const err = new ContextOverflowError(contextSizes, 'model-1')
   t.alike(err.message.includes('8201'), true, 'the message factory sees the record fields')
   t.alike(createErrorResponse(err).typedFields, {
     promptTokens: 31,
@@ -114,6 +119,25 @@ test('ContextOverflowError message stays unit-neutral when only requiredTokens i
   t.ok(err.message.includes('Request uses 600 context units'), 'unit-neutral phrasing')
   t.absent(err.message.includes('600 prompt tokens'), 'the total is not labelled a prompt')
   t.absent(err.message.includes('600 context tokens'), 'the total is not labelled tokens')
+})
+
+// A wider, structurally assignable extras object must not override the
+// positional arguments — the deprecated overload reads only its two fields.
+test('ContextOverflowError legacy extras cannot override positional args', (t) => {
+  const wideExtras = {
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    promptTokens: 999,
+    ctxSize: 999,
+    modelId: 'other-model',
+    cause: 'shadowed'
+  }
+  const err = new ContextOverflowError(31, 8192, 'model-1', undefined, wideExtras)
+  t.is(err.promptTokens, 31)
+  t.is(err.ctxSize, 8192)
+  t.is(err.modelId, 'model-1')
+  t.is(err.cachedTokens, 8170)
+  t.is(err.requiredTokens, 8201)
 })
 
 // The guards trigger at equality (a free output slot is needed), so the

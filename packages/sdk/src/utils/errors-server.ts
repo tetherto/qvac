@@ -208,21 +208,6 @@ export class CompletionFailedError extends QvacErrorBase {
   }
 }
 
-/**
- * Thrown when a request no longer fits the model's effective context
- * capacity — distinct from a generic `CompletionFailedError` so consumers
- * can drive UX (truncate, summarize, or surface a "raise ctx_size /
- * start a new thread" CTA) instead of treating it as an opaque failure.
- *
- * All size fields are optional: they carry whatever the addon guard
- * reported (a cold prompt, a warm cached-plus-prompt split, or a bare
- * overflow with no numbers). `modelId` is supplied by the server-side
- * handler that wraps the addon error.
- *
- * Round-trips the RPC boundary via the typed-error reconstructor in
- * `client/rpc/rpc-error.ts`, so `err instanceof ContextOverflowError`
- * works on the consumer side.
- */
 /** The overflow sizes as one record; fields admit explicit `undefined` so a parser result assigns directly. */
 export type ContextOverflowErrorSizes = {
   promptTokens?: number | undefined
@@ -245,14 +230,33 @@ function normalizeContextOverflowArgs(
       cause: causeOrModelId
     }
   }
+  // Only the two supported extra fields — a spread would let a wider,
+  // structurally assignable extras object override the positional args.
   return {
     promptTokens: sizesOrPromptTokens,
     ctxSize: modelIdOrCtxSize as number | undefined,
     modelId: causeOrModelId as string | undefined,
     cause,
-    ...extraSizes
+    cachedTokens: extraSizes?.cachedTokens,
+    requiredTokens: extraSizes?.requiredTokens
   }
 }
+
+/**
+ * Thrown when a request no longer fits the model's effective context
+ * capacity — distinct from a generic `CompletionFailedError` so consumers
+ * can drive UX (truncate, summarize, or surface a "raise ctx_size /
+ * start a new thread" CTA) instead of treating it as an opaque failure.
+ *
+ * All size fields are optional: they carry whatever the addon guard
+ * reported (a cold prompt, a warm cached-plus-prompt split, or a bare
+ * overflow with no numbers). `modelId` is supplied by the server-side
+ * handler that wraps the addon error.
+ *
+ * Round-trips the RPC boundary via the typed-error reconstructor in
+ * `client/rpc/rpc-error.ts`, so `err instanceof ContextOverflowError`
+ * works on the consumer side.
+ */
 
 export class ContextOverflowError extends QvacErrorBase {
   /** The prompt alone, in tokens; unset when the source reported KV cells. */

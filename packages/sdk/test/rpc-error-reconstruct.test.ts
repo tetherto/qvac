@@ -1,3 +1,5 @@
+// Type-only import from the package entry pins the exported record type.
+import type { ContextOverflowErrorSizes } from '@/index'
 import test from 'brittle'
 import { reconstructError, RPCError } from '@/client/rpc/rpc-error'
 // The worker serializes @qvac/inference's error classes with @qvac/inference's
@@ -86,10 +88,13 @@ test('reconstructError: ContextOverflowError round-trips with all fields', (t) =
 })
 
 test('reconstructError: ContextOverflowError round-trips warm-cache fields', (t) => {
-  const original = new InferenceContextOverflowError(31, 8192, 'qwen3-4b', undefined, {
+  const contextSizes: ContextOverflowErrorSizes = {
+    promptTokens: 31,
     cachedTokens: 8170,
-    requiredTokens: 8201
-  })
+    requiredTokens: 8201,
+    ctxSize: 8192
+  }
+  const original = new InferenceContextOverflowError(contextSizes, 'qwen3-4b')
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope)
