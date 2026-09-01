@@ -22,6 +22,8 @@ struct MockDevice {
   /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
   /// SYCL does as of qvac-fabric v10069, so this defaults to false.
   bool hasSplitBuffers = false;
+  /// PCI bus id as `props.device_id`, empty for a backend that publishes none.
+  std::string deviceId;
 
   MockDevice(
       std::string&& desc, std::string&& backend,
@@ -32,6 +34,11 @@ struct MockDevice {
 
 static MockDevice withSplitBuffers(MockDevice device) {
   device.hasSplitBuffers = true;
+  return device;
+}
+
+static MockDevice withDeviceId(MockDevice device, std::string&& id) {
+  device.deviceId = std::move(id);
   return device;
 }
 
@@ -77,6 +84,7 @@ public:
         &MockBackendInterface::static_dev_name,
         &MockBackendInterface::static_dev_type,
         &MockBackendInterface::static_reg_get_proc_address,
+        &MockBackendInterface::static_dev_get_props,
         &MockBackendInterface::static_llamaLogCallback};
   }
 
@@ -159,6 +167,25 @@ private:
       return reinterpret_cast<void*>(dev);
     }
     return nullptr;
+  }
+
+  // Only `device_id` is read by the code under test; a device with no id
+  // leaves it null, which is how a backend without VK_EXT_pci_bus_info reports.
+  static void
+  static_dev_get_props(ggml_backend_dev_t dev, ggml_backend_dev_props* props) {
+    if (props == nullptr) {
+      return;
+    }
+    *props = {};
+    if (currentInstance == nullptr || dev == nullptr) {
+      return;
+    }
+    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
+    props->type = mock_dev->type;
+    if (!mock_dev->deviceId.empty()) {
+      currentInstance->string_storage.push_back(mock_dev->deviceId);
+      props->device_id = currentInstance->string_storage.back().c_str();
+    }
   }
 
   static void static_llamaLogCallback(
@@ -958,4 +985,83 @@ TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyWhenSelectionUnmatched) {
   mockBackend.addDevice(
       createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
   EXPECT_TRUE(splitDevicesFor(mockBackend, "metal0").empty());
+}
+
+constexpr const char* AMD_DESC = "AMD Radeon RX 7900 XTX";
+constexpr const char* BUS_A = "0000:01:00.0";
+constexpr const char* BUS_B = "0000:02:00.0";
+constexpr const char* BUS_C = "0000:03:00.0";
+
+// One physical card publishing the same bus id under both backends is named
+// once, which is the whole reason --device is passed in split mode.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesDedupesOneCardAcrossRegistry) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG), BUS_A));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0"),
+      (std::vector<std::string>{"cuda0"}));
+}
+
+// The regression scoping by registry introduced: a discrete second card from
+// another vendor is not registered under CUDA, so filtering to the selected
+// registry dropped it and left a two-entry tensor-split on one device.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesKeepsAnotherVendorsCard) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(AMD_DESC, VULKAN1_BACK, VULKAN_REG), BUS_B));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0"),
+      (std::vector<std::string>{"cuda0", "vulkan1"}));
+}
+
+// Two NVIDIA cards plus a discrete AMD: each NVIDIA collapses to its CUDA
+// entry, the AMD survives on Vulkan, and ggml's enumeration order is kept.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesDedupesAcrossMixedVendorHost) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA1_BACK, CUDA_REG), BUS_B));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG), BUS_B));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(AMD_DESC, "Vulkan2", VULKAN_REG), BUS_C));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0"),
+      (std::vector<std::string>{"cuda0", "cuda1", "vulkan2"}));
+}
+
+// A `backend` override selecting Vulkan must keep the Vulkan entry for the
+// shared card, not the CUDA one. Omitting --device could not express this:
+// qvac-fabric's own dedupe keeps whichever backend registered first, and CUDA
+// loads before Vulkan.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesDedupeFollowsChosenBackend) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(AMD_DESC, VULKAN1_BACK, VULKAN_REG), BUS_B));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan0"),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+// A backend that publishes no bus id cannot be matched against its own
+// duplicate, so those devices fall back to the old registry scoping rather than
+// risk naming one physical card twice.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesFallsBackWithoutADeviceId) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0"),
+      (std::vector<std::string>{"cuda0"}));
 }

@@ -183,7 +183,12 @@ async function runBenchmark(cfg, modelInfo) {
     return {
       output,
       kvCacheMiB,
-      generatedTokens: stats.generatedTokens || 0
+      generatedTokens: stats.generatedTokens || 0,
+      // chooseBackend() logs this only on the override path. A `backend` that
+      // matches no device falls through to the default cascade with a warning,
+      // so without this the pin below is advisory and a silent fallback to
+      // CUDA would look identical to a run that honoured it.
+      backendOverrideApplied: specLogger.logs.some((l) => /backend override/.test(l))
     }
   } finally {
     await model.unload().catch(() => {})
@@ -204,8 +209,16 @@ async function runHeadDimSmoke(t, modelInfo, label) {
       results.push({ cfg, result })
       t.ok(result.output.length > 0, `${cfg.label}: produced output`)
       t.ok(result.generatedTokens > 0, `${cfg.label}: generated tokens (${result.generatedTokens})`)
+      if (cfg.kind === 'tbqpq' && pinTbqPqToVulkan) {
+        t.ok(result.backendOverrideApplied, `${cfg.label}: vulkan backend pin took effect`)
+      }
     } catch (err) {
       if (cfg.kind === 'tbqpq' && isTurboQuantUnsupported(err)) {
+        // A refusal is a legitimate skip only where the row was left on the
+        // host's own choice of backend. Where Vulkan was pinned the row has
+        // kernels and must run, so a refusal means the override matched no
+        // device and fell through to the default cascade.
+        t.ok(!pinTbqPqToVulkan, `${cfg.label}: vulkan backend pin took effect`)
         tbqpqSkipped = true
         t.comment(`${cfg.label}: SKIPPED (tbq/pq unsupported on this backend: ${err.message})`)
         continue
@@ -218,10 +231,11 @@ async function runHeadDimSmoke(t, modelInfo, label) {
   const tbq3pq3 = results.find((r) => r.cfg.label === 'tbq3_0+pq3_0')?.result
   t.ok(f16, `${label} head_dim=${modelInfo.headDim} f16 baseline completed`)
 
-  // Every tbq/pq row was refused by the backend, so there is no row to assert
-  // on and nothing to compare against. Demanding one here is what turned the
-  // skip above into a failure.
-  if (tbqpqSkipped) {
+  // The tbq3_0+pq3_0 row is the one this function asserts on, so gate the
+  // early return on that row being absent rather than on the run-wide flag.
+  // Gating on the flag alone let a refusal of any other tbq/pq row delete the
+  // assertion below and still report green.
+  if (!tbq3pq3 && tbqpqSkipped) {
     t.comment(
       `${label} head_dim=${modelInfo.headDim}: tbq/pq rows skipped on this backend, no memory comparison`
     )

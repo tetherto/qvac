@@ -602,6 +602,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_name,
       ggml_backend_dev_type,
       ggml_backend_reg_get_proc_address,
+      ggml_backend_dev_get_props,
       llamaLogcallback};
   return backend_selection::chooseBackend(
       preferredBackendType,
@@ -673,6 +674,7 @@ bool backend_selection::gpuBackendSupportsRowSplit() {
       ggml_backend_dev_name,
       ggml_backend_dev_type,
       ggml_backend_reg_get_proc_address,
+      ggml_backend_dev_get_props,
       nullptr};
   return backend_selection::gpuBackendSupportsRowSplit(bckI);
 }
@@ -684,6 +686,7 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
   struct SplitCandidate {
     std::string registry;
     std::string name;
+    std::string deviceId;
     bool isIgpu;
   };
   std::vector<SplitCandidate> devices;
@@ -721,7 +724,22 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
     if (std::ranges::find(registries, registry) == registries.end()) {
       registries.push_back(registry);
     }
-    devices.push_back({std::move(registry), std::move(deviceName), isIgpu});
+    // Both CUDA and Vulkan publish the PCI bus id here, lowercased and in the
+    // same "domain:bus:device.function" form, which is what makes them
+    // comparable across registries. An absent id is left empty; see below.
+    std::string deviceId;
+    if (bckI.ggml_backend_dev_get_props != nullptr) {
+      ggml_backend_dev_props props{};
+      bckI.ggml_backend_dev_get_props(dev, &props);
+      if (props.device_id != nullptr) {
+        deviceId = props.device_id;
+      }
+    }
+    devices.push_back(
+        {std::move(registry),
+         std::move(deviceName),
+         std::move(deviceId),
+         isIgpu});
   }
 
   if (registries.size() < 2 || selectedRegistry.empty()) {
@@ -735,20 +753,51 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
   // beside a discrete card would put layers on hardware it would never have
   // used. A deliberately selected iGPU, `main-gpu: 'integrated'`, is the
   // exception: scope to that one device.
-  std::vector<std::string> names;
+  if (selectedIsIgpu) {
+    return {selectedDeviceName};
+  }
+
+  // Dedupe by device_id rather than scoping to the selected registry. The
+  // hazard this list exists for is one physical card registering under two
+  // backends; scoping by registry also dropped a *second* physical card on a
+  // mixed-vendor host, an NVIDIA plus a discrete AMD say, which is the very
+  // population split mode is for. Preferring the selected registry on a tie
+  // keeps an explicit `backend` override binding, which omitting `--device`
+  // would not: qvac-fabric's own dedupe keeps whichever backend registered
+  // first, and CUDA loads before Vulkan.
+  std::vector<std::string> selectedIds;
   for (const auto& candidate : devices) {
-    if (candidate.registry != selectedRegistry) {
+    if (!candidate.isIgpu && candidate.registry == selectedRegistry &&
+        !candidate.deviceId.empty()) {
+      selectedIds.push_back(candidate.deviceId);
+    }
+  }
+
+  std::vector<std::string> names;
+  std::vector<std::string> seenIds;
+  for (const auto& candidate : devices) {
+    if (candidate.isIgpu) {
       continue;
     }
-    if (selectedIsIgpu) {
-      if (candidate.name == selectedDeviceName) {
+    // No bus id to compare on, so fall back to registry scoping. Keeping such
+    // a device could list one physical card twice, which is the failure this
+    // function exists to prevent, and qvac-fabric treats a null id as
+    // non-matching for the same reason.
+    if (candidate.deviceId.empty()) {
+      if (candidate.registry == selectedRegistry) {
         names.push_back(candidate.name);
       }
       continue;
     }
-    if (candidate.isIgpu) {
+    if (std::ranges::find(seenIds, candidate.deviceId) != seenIds.end()) {
       continue;
     }
+    if (candidate.registry != selectedRegistry &&
+        std::ranges::find(selectedIds, candidate.deviceId) !=
+            selectedIds.end()) {
+      continue;
+    }
+    seenIds.push_back(candidate.deviceId);
     names.push_back(candidate.name);
   }
   return names;
@@ -765,6 +814,7 @@ backend_selection::splitModeDeviceNames(const std::string& selectedDeviceName) {
       ggml_backend_dev_name,
       ggml_backend_dev_type,
       ggml_backend_reg_get_proc_address,
+      ggml_backend_dev_get_props,
       nullptr};
   return backend_selection::splitModeDeviceNames(bckI, selectedDeviceName);
 }

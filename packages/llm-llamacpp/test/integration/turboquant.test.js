@@ -177,6 +177,17 @@ for (const kv of KV_COMBOS) {
       return
     }
 
+    // chooseBackend() logs this only on the override path; a `backend` that
+    // matches no device falls through to the default cascade with a warning.
+    // Without this the pin is advisory, and a silent fallback to CUDA would
+    // read as a pass here.
+    if (pinToVulkan) {
+      t.ok(
+        specLogger.logs.some((l) => /backend override/.test(l)),
+        'vulkan backend pin took effect'
+      )
+    }
+
     const response = await llm.run(PROMPT)
     const output = await collectResponse(response)
     const generatedTokens = Number(response.stats?.generatedTokens ?? 0)

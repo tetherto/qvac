@@ -53,6 +53,11 @@ struct BackendInterface {
       ggml_backend_dev_t device);
   void* (*ggml_backend_reg_get_proc_address)(
       ggml_backend_reg_t reg, const char* name);
+  // QVAC-23763: splitModeDeviceNames() needs props.device_id to tell one
+  // physical card registered under two backends from two distinct cards. May
+  // be null; that path then falls back to scoping by registry.
+  void (*ggml_backend_dev_get_props)(
+      ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
 };
 
@@ -98,12 +103,19 @@ bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 /// registry.
 bool gpuBackendSupportsRowSplit();
 
-/// @brief The device names to pass as `--device` in multi-GPU split mode,
-/// namely those sharing @p selectedDeviceName's backend registry.
+/// @brief The device names to pass as `--device` in multi-GPU split mode: every
+/// discrete GPU, deduplicated by `props.device_id` so a card registered under
+/// two backends is named once, preferring @p selectedDeviceName's registry.
 ///
 /// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
 /// registers twice, as CUDA0 and Vulkan0, so the old unconditional omission of
-/// `--device` would spread a single card across two backends.
+/// `--device` would spread a single card across two backends. Deduping rather
+/// than scoping to one registry keeps a second physical card on a mixed-vendor
+/// host, and preferring the selected registry keeps a `backend` override
+/// binding, which omitting `--device` would not.
+///
+/// A device whose backend publishes no bus id falls back to registry scoping,
+/// since it cannot be matched against its own duplicate.
 ///
 /// Empty when every GPU/iGPU device comes from one registry, which is every
 /// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
