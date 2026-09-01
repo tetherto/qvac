@@ -6,6 +6,7 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { builtinModules } = require('module')
 const test = require('brittle')
+const lex = require('bare-module-lexer')
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const COMMAND_NAME = 'qvac-audiogen-download-models'
@@ -41,6 +42,7 @@ const REQUIRED_PATHS = [
   ...BENCHMARK_PATHS
 ]
 const FORBIDDEN_PREFIXES = ['package/test/integration/', 'package/test/mobile/']
+const SOURCE_ROOT = path.join(PACKAGE_ROOT, 'src')
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8' })
@@ -165,6 +167,38 @@ function assertForbiddenPaths(t, entries) {
   t.absent(entries.some(isInternalTestUtility), 'tarball excludes internal test utilities')
 }
 
+function walkFiles(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name)
+    return entry.isDirectory() ? walkFiles(entryPath) : [entryPath]
+  })
+}
+
+function generatedScripts() {
+  return walkFiles(SOURCE_ROOT)
+    .filter((filePath) => filePath.endsWith('.ts') && !filePath.endsWith('.d.ts'))
+    .map((filePath) => `${path.relative(SOURCE_ROOT, filePath).slice(0, -'.ts'.length)}.js`)
+    .map((filePath) => filePath.split(path.sep).join('/'))
+    .filter((filePath) => fs.existsSync(path.join(PACKAGE_ROOT, filePath)))
+}
+
+function relativeSpecifiers(specifiers) {
+  return new Set(specifiers.filter((specifier) => specifier.startsWith('.')))
+}
+
+function lexedSpecifiers(source) {
+  return lex(Buffer.from(source)).imports.map((entry) => entry.specifier)
+}
+
+function assertBundlerSeesRequires(t, scriptPath) {
+  const source = fs.readFileSync(path.join(PACKAGE_ROOT, scriptPath), 'utf8')
+  const written = relativeSpecifiers(importedModules(source))
+  const lexed = relativeSpecifiers(lexedSpecifiers(source))
+  for (const specifier of written) {
+    t.ok(lexed.has(specifier), `bare-pack resolves ${specifier} from ${scriptPath}`)
+  }
+}
+
 function runDownloader(downloaderPath, cwd) {
   if (IS_WINDOWS) return run(process.execPath, [downloaderPath, '--help'], cwd)
   fs.accessSync(downloaderPath, fs.constants.X_OK)
@@ -256,4 +290,10 @@ test('published package contains only consumer contract files', (t) => {
     missingRegistryClient.stderr.includes('Install @qvac/registry-client'),
     'downloader explains how to install its optional runtime'
   )
+})
+
+test('generated scripts keep every relative require visible to the bundler', (t) => {
+  const scripts = generatedScripts()
+  t.ok(scripts.includes('index.js'), 'entry point is a generated script')
+  scripts.forEach((scriptPath) => assertBundlerSeesRequires(t, scriptPath))
 })

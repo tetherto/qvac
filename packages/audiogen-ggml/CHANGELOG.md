@@ -9,12 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The mobile (bare-pack) bundle no longer loses `binding.js`, which made
-  loading the addon on device fail with `MODULE_NOT_FOUND: Cannot find module
-  './binding'`. Interpolating exported consts in template literals compiles to
-  a form that derails `bare-module-lexer`, silently dropping every later
-  `require()` in the compiled file; the two occurrences are now plain string
-  concatenations.
+- Restore mobile (Android / iOS) support. The generated `index.js` carried
+  `${exports.…}` interpolations that desynchronise `bare-module-lexer`, so
+  `bare-pack` stopped discovering imports partway through the file and left
+  `binding.js` out of the app bundle. Every on-device model load then failed
+  with `MODULE_NOT_FOUND: Cannot find module './binding'`, even though the
+  file ships in the tarball. The engine validation message and the registry
+  path in `models.js` are now assembled without that construct, and package
+  tests assert every relative `require` in the generated scripts stays
+  visible to the bundler and that the construct never reappears.
 
 ## [0.3.1] - 2026-08-28
 

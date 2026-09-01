@@ -27,6 +27,7 @@ const audio_format_1 = require("./lib/audio-format");
 const error_1 = require("./error");
 exports.ENGINE_ACESTEP = 'acestep';
 exports.ENGINE_MINIMAX = 'minimax';
+const SUPPORTED_ENGINES = [exports.ENGINE_ACESTEP, exports.ENGINE_MINIMAX];
 exports.MINIMAX_FRAMES_PER_SECOND = 25;
 exports.MINIMAX_DEFAULT_MAX_FRAMES = 300;
 const MINIMAX_MIN_FRAMES = 1;
@@ -247,13 +248,15 @@ const ACESTEP_GENERATE_KEYS = [
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
 }
+function quoteEngine(engine) {
+    return `'${engine}'`;
+}
+function supportedEnginesMessage() {
+    return SUPPORTED_ENGINES.map(quoteEngine).join(' or ');
+}
 function validateEngineType(engine) {
-    if (engine !== undefined && engine !== exports.ENGINE_ACESTEP && engine !== exports.ENGINE_MINIMAX) {
-        // Concatenation, not a template literal: tsc rewrites exported consts to
-        // `exports.X`, and interpolating that form in a template literal breaks
-        // bare-module-lexer, so bare-pack drops every later require in the file
-        // (this is how ./binding went missing from the mobile bundle).
-        throw invalidInput("engine must be '" + exports.ENGINE_ACESTEP + "' or '" + exports.ENGINE_MINIMAX + "'");
+    if (engine !== undefined && !SUPPORTED_ENGINES.includes(engine)) {
+        throw invalidInput(`engine must be ${supportedEnginesMessage()}`);
     }
 }
 function detectEngineType(files = {}, explicitEngine) {
