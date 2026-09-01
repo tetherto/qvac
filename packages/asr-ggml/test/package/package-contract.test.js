@@ -161,6 +161,11 @@ function assertConsumerResolvesExports(consumerRoot, installedRoot) {
   })
 }
 
+test('registry-client is a hyperdb-v6 aligned devDependency', () => {
+  assert.equal(sourcePackageJson.devDependencies['@qvac/registry-client'], '^0.6.1')
+  assert.equal(sourcePackageJson.dependencies['@qvac/registry-client'], undefined)
+})
+
 test('packed tarball preserves the public package contract', () => {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'asr-ggml-package-'))
 

@@ -89,8 +89,10 @@ NormalizedFitSnapshot makeNormalizedFitSnapshot(
       .typeK = static_cast<int32_t>(params.cache_type_k),
       .typeV = static_cast<int32_t>(params.cache_type_v),
       .flashAttnType = static_cast<int32_t>(params.flash_attn_type),
-      .useMmap = params.use_mmap,
-      .useMlock = params.use_mlock,
+      .useMmap = params.load_mode == LLAMA_LOAD_MODE_MMAP ||
+                 params.load_mode == LLAMA_LOAD_MODE_MMAP_MLOCK,
+      .useMlock = params.load_mode == LLAMA_LOAD_MODE_MLOCK ||
+                  params.load_mode == LLAMA_LOAD_MODE_MMAP_MLOCK,
       .kvOffload = !params.no_kv_offload,
       .opOffload = !params.no_op_offload,
       .swaFull = params.swa_full,
@@ -303,7 +305,7 @@ void tuneLoadConfigMap(
   // and cuts KV-cache memory ~47%. CPU keeps the f16 default — ARM q8_0 carries
   // a measured quality and decode-throughput cost. OpenCL (Adreno) is also
   // EXCLUDED: q8_0 attention works there, but quantized KV-cache *shifts*
-  // (sliding context / context management) abort natively in
+  // (reasoning-block compaction / state restore) abort natively in
   // llama_kv_cache::update on Adreno, so f16 stays the safe default — and
   // block 3 now *rejects* any explicit quantized KV on OpenCL (q8_0 and q4_0
   // both crash on a shift). Also skipped for finetuning (manages its own KV
@@ -351,11 +353,11 @@ void tuneLoadConfigMap(
 
   // 3. OpenCL (Adreno): reject ALL quantized KV-cache types. q4_0/q8_0
   // attention works, but a quantized K cache needs a
-  // dequantize->RoPE->requantize copy on every KV-cache *shift* (sliding
-  // context / context management), and ggml-opencl has no F32->quantized copy
-  // kernel for that requantize step — so the shift aborts natively in
+  // dequantize->RoPE->requantize copy on every KV-cache *shift* (reasoning-
+  // block compaction / state restore), and ggml-opencl has no F32->quantized
+  // copy kernel for that requantize step, so the shift aborts natively in
   // llama_kv_cache::update on Adreno. Confirmed for BOTH q8_0 and q4_0 (CI run
-  // 28448086915: S25/S26 crash on a q4_0 sliding shift; Mali Vulkan passes).
+  // 28448086915: S25/S26 crash on a q4_0 KV-cache shift; Mali Vulkan passes).
   // Only f32/f16/bf16 are safe on OpenCL. Metal: standard quant types are
   // supported; only TurboQuant/PolarQuant is rejected.
   if (isOpenCl || isMetal) {
@@ -401,8 +403,8 @@ void tuneLoadConfigMap(
                 "[LlamaModel] cache-type-%s=%s: quantized KV-cache is not "
                 "supported on the OpenCL (Adreno) backend. A quantized K or V "
                 "cache aborts in llama_kv_cache::update on KV-cache shifts / "
-                "cache management (sliding context, state restore) — "
-                "ggml-opencl has no F32->quantized copy kernel for the "
+                "cache management (reasoning-block compaction, state restore), "
+                "because ggml-opencl has no F32->quantized copy kernel for the "
                 "requantize step (true for q8_0 and q4_0 alike). Use "
                 "cache-type-%s f32/f16/bf16, or switch device to a Vulkan GPU "
                 "or CPU.\n",
@@ -520,36 +522,49 @@ NormalizedLoad normalizeLoadForFit(
     configFilemap.erase(jit);
   }
 
-  // The current llama.cpp common-argument parser does not expose --no-mmap,
-  // so map this addon's string configuration directly to the native model
-  // parameter instead of forwarding it through the generic argument parser.
-  std::optional<bool> noMmap;
-  for (const std::string& key : {"no-mmap", "no_mmap"}) {
+  // Map the addon's load-mode string configuration directly to the native
+  // model parameter (the generic argument parser is bypassed for it). The
+  // accepted values mirror llama_load_mode_from_str: 'none', 'mmap',
+  // 'mlock', 'mmap+mlock' and 'dio'. When absent, llama.cpp's default
+  // (mmap) applies. Validated with a local table instead of
+  // llama_load_mode_from_str: that helper reports unknown values by throwing
+  // std::invalid_argument, and exceptions thrown inside the fabric DLL do
+  // not reliably match catch-by-type across the module boundary on Windows.
+  std::optional<std::string> loadMode;
+  for (const std::string& key : {"load-mode", "load_mode"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
       std::string value = it->second;
       std::ranges::transform(value, value.begin(), ::tolower);
-      const bool enabled = value.empty() || value == "true";
-      if (!enabled && value != "false") {
+      if (loadMode.has_value() && loadMode.value() != value) {
         throw qvac_errors::StatusError(
             ADDON_ID,
             qvac_errors::general_error::toString(
                 qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "no-mmap must be true or false, got: %s", it->second.c_str()));
+            "load-mode and load_mode must have the same value");
       }
-      if (noMmap.has_value() && noMmap.value() != enabled) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            "no-mmap and no_mmap must have the same value");
-      }
-      noMmap = enabled;
+      loadMode = value;
       configFilemap.erase(it);
     }
   }
-  if (noMmap.value_or(false)) {
-    params.use_mmap = false;
+  if (loadMode.has_value()) {
+    static const std::unordered_map<std::string, llama_load_mode> kLoadModes = {
+        {"none", LLAMA_LOAD_MODE_NONE},
+        {"mmap", LLAMA_LOAD_MODE_MMAP},
+        {"mlock", LLAMA_LOAD_MODE_MLOCK},
+        {"mmap+mlock", LLAMA_LOAD_MODE_MMAP_MLOCK},
+        {"dio", LLAMA_LOAD_MODE_DIRECT_IO}};
+    const auto mode = kLoadModes.find(loadMode.value());
+    if (mode == kLoadModes.end()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "load-mode must be one of 'none', 'mmap', 'mlock', "
+              "'mmap+mlock' or 'dio', got: %s",
+              loadMode->c_str()));
+    }
+    params.load_mode = mode->second;
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
@@ -570,28 +585,6 @@ NormalizedLoad normalizeLoadForFit(
 
   qvac_lib_inference_addon_llama::applyLoadConfigHandlers(
       params, configFilemap);
-
-  // parse custom nDiscarded from config (apply only if > 0)
-  if (auto iter = configFilemap.find("n_discarded");
-      iter != configFilemap.end()) {
-    try {
-      long long parsed = std::stoll(iter->second);
-      if (parsed > 0) {
-        result.configuredNDiscarded = static_cast<llama_pos>(parsed);
-      }
-    } catch (...) {
-      std::string errorMsg = string_format(
-          "%s: invalid n_discarded value: %s\n",
-          K_LEGACY_PARSER_NAME.data(),
-          iter->second.c_str());
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          errorMsg);
-    }
-    configFilemap.erase(iter);
-  }
 
   llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
   auto hIt = configFilemap.find("split-mode");

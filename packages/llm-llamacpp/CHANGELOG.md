@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.48.0] - 2026-08-31
+
+### Removed
+
+- Sliding-context support. `n_discarded` is no longer consumed, so it reaches
+  qvac-fabric's own argument parser and fails model load as an unknown option.
+- `contextSlides` from the runtime stats snapshot and from `RuntimeStats` in the
+  type declarations.
+
+### Changed
+
+- A generation that fills the context window now stops with
+  `stopReason=contextOverflow` and still returns what it produced. A batched
+  sequence that fills its window reports the same, where it previously reported
+  `sequenceLimit`, which is the per-sequence cap and not what was hit.
+- Reasoning-block compaction rewinds to a boundary and re-decodes the tokens it
+  keeps, instead of removing the thinking span and shifting the tail down over
+  it. No `seq_add` remains in the addon.
+- A reasoning close marker that tokenizes to several pieces is now supported;
+  the policy previously refused it.
+- `generatedTokens` is counted where tokens are committed rather than read from
+  qvac-fabric's performance counters, which key on batch size rather than
+  meaning. A batched request that stops on EOG reports one less than before, and
+  one that stops on the prediction limit reports one more, so the batched and
+  single-prompt paths now agree at both boundaries. `TPS` shifts with it.
+- `generationParams` with a key the addon does not read now throws instead of
+  being silently ignored. Only own keys are read and forwarded.
+
+### Fixed
+
+- Time to first token on the batched path is stamped from the token the caller
+  actually receives, so a `predict: 1` request no longer returns output while
+  reporting `TTFT` 0.
+- Compaction replay runs outside the scheduler mutex, so a reasoning turn no
+  longer stalls co-tenant slots or blocks a cross-thread `cancel()` for the
+  length of the replay.
+- A multimodal reasoning turn that ends through EOS substitution now seeds the
+  close marker for replay, so the compacted cache cannot be left holding an
+  unbalanced thinking block.
+
+## [0.47.0] - 2026-08-24
+
+### Added
+
+- Load configuration now accepts `load_mode` (`none`, `mmap`, `mlock`, `mmap+mlock`, `dio`) so callers can select the qvac-fabric model loading path explicitly.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with chat-template, sampling and load-mode API changes).
+- Load-fit normalization now validates load modes locally so fabric-thrown exceptions do not cross the native boundary on Windows.
+
+### Fixed
+
+- Reasoning-budget stop detection now preserves every template-provided thinking
+  end tag, so Qwen3-Coder and DeepSeek tool-call openers can end reasoning
+  without forced-close text corrupting the tool call.
+
+## [0.46.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
 ## [0.45.0] - 2026-08-18
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-ggml",
-  "version": "0.18.0",
+  "version": "0.20.0",
   "description": "GGML-backed OCR addon for qvac (EasyOCR and DocTR pipelines on GGUF weights)",
   "addon": true,
   "engines": {
@@ -11,7 +11,7 @@
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js ocr-ggml.js addonLogging.js lib/error.js index.d.ts ocr-ggml.d.ts addonLogging.d.ts lib/error.d.ts",
+    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js ocr-ggml.js addonLogging.js index.d.ts ocr-ggml.d.ts addonLogging.d.ts lib) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
     "mobile:generate-urls": "bash ./scripts/generate-ocr-ggml-presigned-urls.sh",

@@ -1,30 +1,32 @@
 import { z } from 'zod'
-import type { Logger } from '@/logging/index'
+import type { Logger } from '@/logging'
 import {
   llmConfigBaseSchema,
   embedConfigBaseSchema,
   type LlmConfig,
   type EmbedConfig
-} from '@/schemas/llamacpp-config'
-import { whisperConfigSchema, parakeetLoadConfigSchema } from '@/schemas/transcription-config'
-import type { parakeetConfigSchema } from '@/schemas/transcription-config'
-import { bciConfigSchema } from '@/schemas/bci-config'
-import { delegateSchema } from '@/schemas/delegate'
-import { nmtConfigBaseSchema, nmtConfigSchema } from '@/schemas/translation-config'
+} from './llamacpp-config'
+import { whisperConfigSchema, parakeetLoadConfigSchema } from './transcription-config'
+import type { parakeetConfigSchema } from './transcription-config'
+import { bciConfigSchema } from './bci-config'
+import { nmtConfigBaseSchema, nmtConfigSchema } from './translation-config'
 import {
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
+  ttsAudio8LoadConfigSchema,
   ttsChatterboxLoadConfigSchema,
   ttsConfigSchema,
+  ttsCosyvoice3LoadConfigSchema,
   ttsParlerLoadConfigSchema,
   ttsSupertonicLoadConfigSchema
-} from '@/schemas/text-to-speech'
-import { ocrConfigSchema } from '@/schemas/ocr'
+} from './text-to-speech'
+import { ocrConfigSchema } from './ocr'
 import {
   modelSrcInputSchema,
   modelInputToSrcSchema,
   modelInputToNameSchema,
+  MODEL_SOURCE_URI_HINT,
   type ModelDescriptor
-} from '@/schemas/model-src-utils'
+} from './model-src-utils'
 import {
   llmModelTypeSchema,
   whisperModelTypeSchema,
@@ -43,10 +45,10 @@ import {
   normalizeModelType,
   type CanonicalModelType,
   type ModelTypeInput
-} from '@/schemas/model-types'
-import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
-import { vlaConfigSchema } from '@/schemas/vla'
-import { classificationConfigSchema } from '@/schemas/classification'
+} from './model-types'
+import { sdcppConfigSchema } from './sdcpp-config'
+import { vlaConfigSchema } from './vla'
+import { classificationConfigSchema } from './classification'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
 
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
@@ -55,13 +57,21 @@ const builtInModelTypes = new Set([...Object.values(ModelType), ...Object.keys(M
 export function isBuiltInModelType(modelType: unknown): boolean {
   return typeof modelType === 'string' && builtInModelTypes.has(modelType)
 }
-import { reloadConfigRequestSchema } from '@/schemas/reload-config'
+import { reloadConfigRequestSchema } from './reload-config'
+
+const MODEL_SRC_DESCRIPTION = `The model to load: a registry model constant for a built-in model, or a model source — ${MODEL_SOURCE_URI_HINT} — for HTTP, local, or P2P models.`
 
 const loadModelCommonFields = {
-  modelSrc: modelSrcInputSchema,
+  modelSrc: modelSrcInputSchema.describe(MODEL_SRC_DESCRIPTION),
   seed: z.boolean().optional(),
-  delegate: delegateSchema,
-  fallbackSrc: z.string().optional()
+  fallbackSrc: z
+    .string()
+    .optional()
+    .describe(
+      'Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.'
+    ),
+  requireHttpChecksum: z.boolean().optional(),
+  requireSecureTransport: z.boolean().optional()
 }
 
 const loadModelRequestCommonFields = {
@@ -93,12 +103,14 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
       ttsChatterboxLoadConfigSchema,
       ttsSupertonicLoadConfigSchema,
       ttsParlerLoadConfigSchema,
+      ttsCosyvoice3LoadConfigSchema,
+      ttsAudio8LoadConfigSchema,
       LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
     )
   ],
   [ModelType.ggmlOcr, configKeys(ocrConfigSchema)],
   [ModelType.sdcppGeneration, configKeys(sdcppConfigSchema)],
-  [ModelType.audiogenGgml, configKeys(audioGenConfigSchema)],
+  [ModelType.audiogenGgml, configKeys(...audioGenConfigSchema.options)],
   [ModelType.ggmlVla, configKeys(vlaConfigSchema)],
   [ModelType.ggmlClassification, configKeys(classificationConfigSchema)]
 ])
@@ -204,7 +216,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
   z
     .object({
       ...loadModelCommonFields,
-      modelSrc: modelSrcInputSchema.optional(),
+      modelSrc: modelSrcInputSchema.optional().describe(MODEL_SRC_DESCRIPTION),
       modelType: audioGenModelTypeSchema,
       modelConfig: audioGenConfigSchema
     })
@@ -219,7 +231,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
   z
     .object({
       ...loadModelCommonFields,
-      modelSrc: modelSrcInputSchema.optional(),
+      modelSrc: modelSrcInputSchema.optional().describe(MODEL_SRC_DESCRIPTION),
       modelType: classificationModelTypeSchema,
       modelConfig: classificationConfigSchema.strict().optional()
     })
@@ -245,6 +257,27 @@ export const loadModelOptionsSchema = loadModelOptionsBaseSchema.transform((data
   seed: data.seed ?? false
 }))
 
+// Optional passthrough fields common to every load-model request branch. Spread
+// this into each transform so a new one is added in a single place, not copied
+// across every model type.
+function optionalRequestFields(data: {
+  fallbackSrc?: string | undefined
+  requireHttpChecksum?: boolean | undefined
+  requireSecureTransport?: boolean | undefined
+  requestId?: string | undefined
+}) {
+  return {
+    ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
+    ...(data.requireHttpChecksum !== undefined && {
+      requireHttpChecksum: data.requireHttpChecksum
+    }),
+    ...(data.requireSecureTransport !== undefined && {
+      requireSecureTransport: data.requireSecureTransport
+    }),
+    ...(data.requestId !== undefined && { requestId: data.requestId })
+  }
+}
+
 export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
   z
     .object({
@@ -261,9 +294,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: (data.modelConfig ?? {}) as LlmConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -280,9 +311,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -299,9 +328,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -318,9 +345,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -337,9 +362,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: (data.modelConfig ?? {}) as EmbedConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -365,9 +388,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
           : data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -384,9 +405,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -403,9 +422,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -422,14 +439,12 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
       ...loadModelRequestCommonFields,
-      modelSrc: modelSrcInputSchema.optional(),
+      modelSrc: modelSrcInputSchema.optional().describe(MODEL_SRC_DESCRIPTION),
       modelType: audioGenModelTypeSchema,
       modelConfig: audioGenConfigSchema
     })
@@ -442,9 +457,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
@@ -461,14 +474,12 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     })),
   z
     .object({
       ...loadModelRequestCommonFields,
-      modelSrc: modelSrcInputSchema.optional(),
+      modelSrc: modelSrcInputSchema.optional().describe(MODEL_SRC_DESCRIPTION),
       modelType: classificationModelTypeSchema,
       modelConfig: classificationConfigSchema.strict().optional()
     })
@@ -481,9 +492,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-      ...(data.requestId !== undefined && { requestId: data.requestId })
+      ...optionalRequestFields(data)
     }))
 ])
 
@@ -503,9 +512,7 @@ export const loadCustomPluginToRequestSchema = z
     modelConfig: data.modelConfig ?? {},
     seed: data.seed ?? false,
     withProgress: data.withProgress ?? !!data.onProgress,
-    delegate: data.delegate,
-    ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
-    ...(data.requestId !== undefined && { requestId: data.requestId })
+    ...optionalRequestFields(data)
   }))
 
 const loadModelOptionsToRequestBaseSchema = z.union([
@@ -519,29 +526,40 @@ export const loadModelOptionsToRequestSchema = misplacedLoadModelConfigGuard.pip
 
 const commonModelConfigSchema = z.object({
   type: z.literal('loadModel'),
-  modelSrc: z.string(),
+  modelSrc: z.string().describe(MODEL_SRC_DESCRIPTION),
   modelName: z.string().optional(),
   withProgress: z.boolean().optional(),
   seed: z.boolean().optional(),
-  delegate: delegateSchema,
   fallbackSrc: z
     .string()
     .optional()
     .describe(
       'Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.'
     ),
+  requireHttpChecksum: z
+    .boolean()
+    .optional()
+    .describe(
+      'Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).'
+    ),
+  requireSecureTransport: z
+    .boolean()
+    .optional()
+    .describe(
+      'Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).'
+    ),
   requestId: z
     .string()
     .min(1)
     .optional()
     .describe(
-      'Stable identifier for this in-flight load, generated by the caller at call time. Optional — falls back to a generated id when the field is missing. Exposed on the decorated promise so callers can target this load with `cancel({ requestId })`.'
+      'Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.'
     )
 })
 
 // Request schemas for each model type (use canonical types since transforms normalize)
-// Use base schemas (no defaults) for input validation.
-// The engine applies device defaults, then full schema defaults.
+// Use base schemas (no defaults) for client-side validation.
+// Server applies device defaults, then full schema defaults.
 export const loadLlmModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppCompletion),
@@ -714,7 +732,7 @@ export const hyperdriveUrlSchema = z
 
 /**
  * Schema for registry:// URLs (internal use only).
- * Users should use model constants from @qvac/inference instead of raw URLs.
+ * Users should use model constants from @qvac/sdk instead of raw URLs.
  * Format: registry://source/path/to/model.gguf
  */
 export const registryUrlSchema = z
@@ -781,7 +799,6 @@ export type LoadModelDescriptorOnlyOptions = {
   modelType?: never
   modelConfig?: Record<string, unknown>
   seed?: boolean
-  delegate?: z.input<typeof delegateSchema>
   fallbackSrc?: string
   onProgress?: (progress: ModelProgressUpdate) => void
   logger?: Logger
@@ -827,7 +844,6 @@ export type LoadModelDescriptorInferredOptions<S extends ModelDescriptor> = {
   modelType?: never
   modelConfig?: InferredConfig<S>
   seed?: boolean
-  delegate?: z.input<typeof delegateSchema>
   fallbackSrc?: string
   onProgress?: (progress: ModelProgressUpdate) => void
   logger?: Logger

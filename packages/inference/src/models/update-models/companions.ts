@@ -28,6 +28,13 @@ import { BERGAMOT_MODEL_RE } from '../../surface'
  *     Primary: `char.bin`
  *     Companions in same directory: dicrc, matrix.bin, mecabrc, sys.dic, unk.dic
  *     The TTS addon receives the containing directory for Japanese tokenization.
+ *
+ *   CosyVoice3 TTS sets (directory-based):
+ *     Primary: `cosyvoice3-llm-*.gguf` under a `/cosy_voice/` path
+ *     Companions in same directory: flow, HiFT, vocab.json, merges.txt, voice-en.gguf
+ *     `voice-en.gguf` is written as `voice.gguf` so the addon finds it next to the LLM.
+ *     Companion files stay as standalone catalog entries (same as the original
+ *     hand-patch); only the LLM primary carries `companionSet` for directory load.
  */
 export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   const bySourcePath = new Map<string, ProcessedModel>()
@@ -41,6 +48,7 @@ export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   groupBergamotCompanions(models, bySourcePath, companionKeys)
   groupBciCompanions(models, bySourcePath, companionKeys)
   groupMecabCompanions(models, bySourcePath, companionKeys)
+  groupCosyvoiceCompanions(models, bySourcePath)
 
   return models.map((model) => {
     const key = sourceKey(model.registrySource, model.registryPath)
@@ -281,6 +289,91 @@ function groupMecabCompanions(
       files: [primaryEntry, ...companionEntries]
     }
   }
+}
+
+const COSYVOICE_DIR_MARKER = '/cosy_voice/'
+const COSYVOICE_COMPANIONS = [
+  { filename: 'cosyvoice3-flow-f32.gguf', key: 'flowPath', targetName: 'cosyvoice3-flow-f32.gguf' },
+  { filename: 'cosyvoice3-hift-f32.gguf', key: 'hiftPath', targetName: 'cosyvoice3-hift-f32.gguf' },
+  { filename: 'vocab.json', key: 'vocabPath', targetName: 'vocab.json' },
+  { filename: 'merges.txt', key: 'mergesPath', targetName: 'merges.txt' },
+  { filename: 'voice-en.gguf', key: 'voicePath', targetName: 'voice.gguf' }
+] as const
+
+function isCosyvoiceLlmFilename(filename: string): boolean {
+  return filename.startsWith('cosyvoice3-llm-') && filename.endsWith('.gguf')
+}
+
+function groupCosyvoiceCompanions(
+  models: ProcessedModel[],
+  bySourcePath: Map<string, ProcessedModel>
+): void {
+  for (const model of models) {
+    if (!model.registryPath.includes(COSYVOICE_DIR_MARKER)) continue
+
+    const lastSep = model.registryPath.lastIndexOf('/')
+    const filename = lastSep >= 0 ? model.registryPath.slice(lastSep + 1) : model.registryPath
+    if (!isCosyvoiceLlmFilename(filename)) continue
+
+    const dirPrefix = lastSep >= 0 ? model.registryPath.slice(0, lastSep + 1) : ''
+    const source = model.registrySource
+    const companions = findCosyvoiceCompanions(source, dirPrefix, bySourcePath)
+    if (companions.length !== COSYVOICE_COMPANIONS.length) continue
+
+    const setKey = shortHash(`${source}:${model.registryPath}`)
+    const primaryEntry: CompanionSetMetadataEntry = {
+      key: 'modelPath',
+      registryPath: model.registryPath,
+      registrySource: source,
+      targetName: filename,
+      expectedSize: model.expectedSize,
+      sha256Checksum: model.sha256Checksum,
+      blobCoreKey: model.blobCoreKey,
+      blobBlockOffset: model.blobBlockOffset,
+      blobBlockLength: model.blobBlockLength,
+      blobByteOffset: model.blobByteOffset,
+      primary: true
+    }
+
+    const companionEntries = companions.map(({ key, targetName, model: comp }) => ({
+      key,
+      registryPath: comp.registryPath,
+      registrySource: comp.registrySource,
+      targetName,
+      expectedSize: comp.expectedSize,
+      sha256Checksum: comp.sha256Checksum,
+      blobCoreKey: comp.blobCoreKey,
+      blobBlockOffset: comp.blobBlockOffset,
+      blobBlockLength: comp.blobBlockLength,
+      blobByteOffset: comp.blobByteOffset
+    }))
+
+    model.companionSet = {
+      setKey,
+      primaryKey: 'modelPath',
+      files: [primaryEntry, ...companionEntries]
+    }
+  }
+}
+
+function findCosyvoiceCompanions(
+  source: string,
+  dirPrefix: string,
+  bySourcePath: Map<string, ProcessedModel>
+): { key: string; targetName: string; model: ProcessedModel }[] {
+  const found: { key: string; targetName: string; model: ProcessedModel }[] = []
+
+  for (const companion of COSYVOICE_COMPANIONS) {
+    const model = bySourcePath.get(sourceKey(source, `${dirPrefix}${companion.filename}`))
+    if (!model) return []
+    found.push({
+      key: companion.key,
+      targetName: companion.targetName,
+      model
+    })
+  }
+
+  return found
 }
 
 function findBergamotCompanions(

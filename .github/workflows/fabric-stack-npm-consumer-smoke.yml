@@ -1,0 +1,100 @@
+# Desktop compile smoke for npm-runtime fabric consumers on fabric-stack PRs.
+# Downloads fabric-prebuilds from the same workflow run (published by on-pr-fabric)
+# and verifies the consumer still configures and builds against PR fabric headers.
+name: Fabric stack npm consumer smoke
+
+on:
+  workflow_call:
+    inputs:
+      consumer:
+        description: 'Package directory name under packages/, e.g. classification-ggml'
+        type: string
+        required: true
+      ref:
+        description: 'Git ref to checkout'
+        type: string
+        required: false
+      repository:
+        description: 'Repository to checkout'
+        type: string
+        required: false
+        default: 'tetherto/qvac'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: fabric-stack-smoke-${{ inputs.consumer }}
+    runs-on: qvac-ubuntu2404-x64
+    environment: release
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WORKDIR: packages/${{ inputs.consumer }}
+      PLATFORM: linux
+      ARCH: x64
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # bare-make runs the PR's own CMakeLists on a persistent runner, so no
+          # checkout credential may survive into the build steps.
+          persist-credentials: false
+
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ env.PLATFORM }}
+          arch: ${{ env.ARCH }}
+
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+
+      - name: Set Vulkan SDK Path on Linux
+        shell: bash
+        run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
+
+      - name: Download fabric-prebuilds
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: fabric-prebuilds
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install --ignore-scripts
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ env.PLATFORM }}
+          arch: ${{ env.ARCH }}
+
+      - name: Configure native build (smoke)
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make generate --platform ${{ env.PLATFORM }} --arch ${{ env.ARCH }} -D BUILD_TESTING=OFF
+
+      - name: Build native addon (smoke)
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make build

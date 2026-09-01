@@ -14,9 +14,12 @@
  *     as the engine emits them, with stable session state across
  *     chunks (rolling encoder context, EOU detector, Sortformer
  *     history all preserved);
- *   - `endStreaming` synthesises a JobEnded event in JS so the
- *     wrapper response chain (`onUpdate(...).await()`) resolves
- *     when the input iterable completes.
+ *   - `endStreaming` drains the buffered backlog, then the native
+ *     ParakeetStreamingProcessor queues a terminal RuntimeStats
+ *     (surfaced as JobEnded) through the same FIFO output queue as
+ *     the drained segments, so the wrapper response chain
+ *     (`onUpdate(...).await()`) resolves only after every segment
+ *     has been delivered.
  *
  * Coverage:
  *
@@ -28,7 +31,7 @@
  *      offline `run()` path cannot satisfy this since it batches
  *      everything in JS until end-of-input).
  *   3. The response settles cleanly after `endStreaming` -- proves
- *      the JS-side synthetic JobEnded path actually resolves the
+ *      the queue-delivered terminal JobEnded actually resolves the
  *      response chain.
  *
  * Skips cleanly when no GGUF is available (matching the rest of the

@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 import type { ToolDialect } from '@qvac/sdk'
 
 interface GenerationParams {
@@ -80,7 +80,7 @@ const markerDeterministic: GenerationParams = { ...deterministic, predict: 32 }
 const visionDeterministic: GenerationParams = {
   temp: 0,
   seed: 42,
-  predict: 48
+  predict: 128
 }
 const ELEPHANT_IMAGE_TERMS = ['elephant', 'tusk', 'trunk']
 
