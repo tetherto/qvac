@@ -334,10 +334,13 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     }
   }
 
-  // Context is never evicted: with predict -1 the only source of a "length"
-  // stop is the context boundary, and the run must keep the tokens it produced.
+  // Context is never evicted: the predict budget exceeds what fits after the
+  // prompt, so a "length" stop with generatedTokens under the budget proves
+  // the boundary fired, not prediction exhaustion — and the run must keep
+  // the tokens it produced.
   async contextBoundaryStop(params: CompletionTestParams): Promise<TestResult> {
     const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
+    const budget = params.generationParams?.predict ?? 0
     const run = completion({
       modelId: llmModelId,
       ...params,
@@ -351,6 +354,13 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
         output: `Expected stopReason "length" at the context boundary, got ${JSON.stringify(final.stopReason)}`
       }
     }
+    const generatedTokens = final.stats?.generatedTokens
+    if (typeof generatedTokens !== 'number' || generatedTokens >= budget) {
+      return {
+        passed: false,
+        output: `Expected generatedTokens below the ${budget} budget (boundary, not prediction cutoff), got ${generatedTokens}`
+      }
+    }
     if (final.raw.fullText.length === 0) {
       return {
         passed: false,
@@ -359,7 +369,7 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     }
     return {
       passed: true,
-      output: `Context boundary stop reported as "length" with ${final.raw.fullText.length} chars retained`
+      output: `Context boundary stop: "length" at ${generatedTokens} of ${budget} budget, ${final.raw.fullText.length} chars retained`
     }
   }
 
@@ -409,59 +419,86 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
   }
 
   // The follow-up fits the window alone but not on top of the cached first
-  // turn. Sizing cannot pin which guard fires across tokenizers, so any
-  // overflow whose requiredTokens reaches the window passes.
+  // turn. The first turn must end commit-eligible (no length/cancel stop, so
+  // the cache-commit policy keeps it), and the error must carry the warm
+  // signature: a positive cachedTokens, not just the failing total.
   async contextOverflowWarmCache(params: CompletionTestParams): Promise<TestResult> {
     const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
     const kvCache = `ctx-overflow-warm-${Date.now()}`
+    const result = await this.runWarmOverflow(llmModelId, kvCache, params)
     try {
-      const first = completion({
+      await deleteCache({ kvCacheKey: kvCache, modelId: llmModelId })
+    } catch (error) {
+      // A leaked named cache poisons retries and adjacent runs — surface it.
+      const context = result.passed ? 'Test passed but cache' : `${result.output}; cache also`
+      return { passed: false, output: `${context} failed to delete: ${error}` }
+    }
+    return result
+  }
+
+  private async runWarmOverflow(
+    llmModelId: string,
+    kvCache: string,
+    params: CompletionTestParams
+  ): Promise<TestResult> {
+    const first = completion({
+      modelId: llmModelId,
+      history: params.history,
+      stream: false,
+      kvCache,
+      generationParams: params.generationParams
+    } as CompletionFnParams)
+    const firstFinal = await first.final
+    // The commit policy refuses a turn that exhausted its budget or hit the
+    // boundary; a natural finish carries no stopReason. Without this check
+    // the second turn resends full history cold and proves nothing about
+    // the warm guard.
+    if (firstFinal.stopReason !== undefined || firstFinal.raw.fullText.length === 0) {
+      return {
+        passed: false,
+        output: `First turn is not commit-eligible: stopReason=${JSON.stringify(firstFinal.stopReason)} textLength=${firstFinal.raw.fullText.length}`
+      }
+    }
+    const followUp = [
+      ...params.history,
+      { role: 'assistant', content: firstFinal.raw.fullText },
+      { role: 'user', content: params.followUpContent ?? '' }
+    ]
+    try {
+      const second = completion({
         modelId: llmModelId,
-        history: params.history,
+        history: followUp,
         stream: false,
         kvCache,
         generationParams: params.generationParams
       } as CompletionFnParams)
-      const firstFinal = await first.final
-      const followUp = [
-        ...params.history,
-        { role: 'assistant', content: firstFinal.raw.fullText || 'noted.' },
-        { role: 'user', content: params.followUpContent ?? '' }
-      ]
-      try {
-        const second = completion({
-          modelId: llmModelId,
-          history: followUp,
-          stream: false,
-          kvCache,
-          generationParams: params.generationParams
-        } as CompletionFnParams)
-        await second.final
+      await second.final
+      return { passed: false, output: 'Expected ContextOverflowError on the warm-cache follow-up' }
+    } catch (error) {
+      if (!(error instanceof ContextOverflowError)) {
+        return { passed: false, output: `Expected ContextOverflowError, got: ${error}` }
+      }
+      if (error.ctxSize !== 512) {
+        return { passed: false, output: `Expected ctxSize 512, got ${error.ctxSize}` }
+      }
+      if (typeof error.requiredTokens !== 'number' || error.requiredTokens < error.ctxSize) {
         return {
           passed: false,
-          output: 'Expected ContextOverflowError on the warm-cache follow-up'
-        }
-      } catch (error) {
-        if (!(error instanceof ContextOverflowError)) {
-          return { passed: false, output: `Expected ContextOverflowError, got: ${error}` }
-        }
-        if (error.ctxSize !== 512) {
-          return { passed: false, output: `Expected ctxSize 512, got ${error.ctxSize}` }
-        }
-        if (typeof error.requiredTokens !== 'number' || error.requiredTokens < error.ctxSize) {
-          return {
-            passed: false,
-            output: `Expected requiredTokens of at least the window, got requiredTokens=${error.requiredTokens} ctxSize=${error.ctxSize}`
-          }
-        }
-        const cached = error.cachedTokens !== undefined ? ` cachedTokens=${error.cachedTokens}` : ''
-        return {
-          passed: true,
-          output: `Warm-cache overflow: requiredTokens=${error.requiredTokens}${cached} ctxSize=${error.ctxSize}`
+          output: `Expected requiredTokens of at least the window, got requiredTokens=${error.requiredTokens} ctxSize=${error.ctxSize}`
         }
       }
-    } finally {
-      await deleteCache({ kvCacheKey: kvCache, modelId: llmModelId }).catch(() => undefined)
+      // The cached-plus-prompt guard names the cached half; its absence means
+      // the request went in cold and only the plain prefill guard fired.
+      if (typeof error.cachedTokens !== 'number' || error.cachedTokens <= 0) {
+        return {
+          passed: false,
+          output: `Expected a warm-cache signature (positive cachedTokens), got cachedTokens=${error.cachedTokens}`
+        }
+      }
+      return {
+        passed: true,
+        output: `Warm-cache overflow: requiredTokens=${error.requiredTokens} cachedTokens=${error.cachedTokens} ctxSize=${error.ctxSize}`
+      }
     }
   }
 

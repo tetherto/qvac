@@ -85,6 +85,23 @@ test('reconstructError: ContextOverflowError round-trips with all fields', (t) =
   t.ok(r instanceof Error, 'reconstructed must still satisfy instanceof Error')
 })
 
+test('reconstructError: ContextOverflowError round-trips warm-cache fields', (t) => {
+  const original = new InferenceContextOverflowError(31, 8192, 'qwen3-4b', undefined, {
+    cachedTokens: 8170,
+    requiredTokens: 8201
+  })
+  const envelope = createErrorResponse(original)
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof ContextOverflowError)
+  const r = reconstructed as ContextOverflowError
+  t.is(r.promptTokens, 31)
+  t.is(r.cachedTokens, 8170)
+  t.is(r.requiredTokens, 8201)
+  t.is(r.ctxSize, 8192)
+})
+
 test('reconstructError: ContextOverflowError tolerates missing fields', (t) => {
   // The bare `LlamaModel::processPromptImpl` overflow path doesn't
   // include prompt-token or ctx-size numbers in the addon message, so

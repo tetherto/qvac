@@ -649,10 +649,11 @@ export const completionStats: TestDefinition = {
 }
 
 // Context is never evicted: a generation that fills the small window must stop
-// at the boundary and surface as the public stopReason "length" (predict is -1,
-// so the boundary is the only length source), keeping the tokens it produced.
-// The terminus-free prompt makes an early EOS unlikely, not impossible — a
-// failure with stopReason "eos" is a fixture-model diagnostic, not an SDK bug.
+// at the boundary and surface as the public stopReason "length", keeping the
+// tokens it produced. The predict budget (480) exceeds what fits after the
+// prompt in the 512 window, so a "length" stop with generatedTokens under the
+// budget can only be the boundary. The terminus-free prompt makes an early
+// EOS unlikely, not impossible — that failure is a fixture-model diagnostic.
 export const completionContextBoundaryStop = createCompletionTest(
   'completion-context-boundary-stop',
   {
@@ -664,7 +665,7 @@ export const completionContextBoundaryStop = createCompletionTest(
       }
     ],
     stream: false,
-    generationParams: { ...DETERMINISTIC, predict: -1 }
+    generationParams: { ...DETERMINISTIC, predict: 480 }
   },
   { validation: 'type', expectedType: 'string' },
   { estimatedDurationMs: 45000, dependency: 'llm-small-ctx' }
