@@ -670,6 +670,13 @@ NormalizedLoad normalizeLoadForFit(
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
 
+    // Erased for the same reason, and read after `backend` so the "set without
+    // a backend" check can see whether one was given. A separators-only or
+    // `auto` value parses to an empty list and counts as not given, which is
+    // the right reading: it expresses no preference to make binding.
+    const bool backendRequired =
+        tryBackendRequiredFromMap(configFilemap, !backendOverride.empty());
+
     // QVAC-23763: the KV-cache types the load asks for, so selection can pass
     // over a device that cannot run them instead of the load being refused
     // after one was already chosen.
@@ -698,6 +705,7 @@ NormalizedLoad normalizeLoadForFit(
     request.mainGpu = mainGpu;
     request.isFinetuning = finetuneOverrides.active;
     request.backendOverride = backendOverride;
+    request.backendRequired = backendRequired;
     request.constraints = std::move(constraints);
 
     const SelectedBackend selected = dependencies.resolveBackend(request);

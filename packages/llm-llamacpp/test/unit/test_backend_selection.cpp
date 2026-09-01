@@ -1580,6 +1580,215 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectKvExcludedCuda) {
   EXPECT_EQ(choice.name, "vulkan0");
 }
 
+// ---- backend-required (QVAC-23763 R11) ----
+
+static BackendChoice chooseWithRequired(
+    MockBackendInterface& mockBackend,
+    const std::vector<std::string>& backendOverride, bool required,
+    const std::vector<const char*>& kvTypeNames = {}) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.backendOverride = backendOverride;
+  request.backendRequired = required;
+  for (const char* n : kvTypeNames) {
+    request.constraints.kvCacheTypes.push_back(kvCacheTypeFromString(n));
+  }
+  return chooseBackend(request, bckI);
+}
+
+// Without it a pin is advisory. That is the behaviour that made the integration
+// suites' backend pins silently meaningless.
+TEST_F(BackendSelectionTest, AdvisoryOverrideStillFallsThrough) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithRequired(mockBackend, {"cuda"}, false).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, StrictOverrideThrowsWhenNothingMatches) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  try {
+    chooseWithRequired(mockBackend, {"cuda"}, true);
+    FAIL() << "expected a StatusError";
+  } catch (const qvac_errors::StatusError& e) {
+    const std::string what = e.what();
+    EXPECT_NE(what.find("cuda"), std::string::npos) << what;
+    // must name what WAS there, or diagnosing it takes a second run
+    EXPECT_NE(what.find("vulkan0"), std::string::npos) << what;
+  }
+}
+
+// A device the capability filter ruled out must not satisfy a strict pin
+// either, and the error should say why it was passed over.
+TEST_F(BackendSelectionTest, StrictOverrideThrowsWhenMatchWasFiltered) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  try {
+    chooseWithRequired(mockBackend, {"cuda"}, true, {"tbq4_0"});
+    FAIL() << "expected a StatusError";
+  } catch (const qvac_errors::StatusError& e) {
+    const std::string what = e.what();
+    EXPECT_NE(what.find("kv-cache-type-unsupported"), std::string::npos) << what;
+  }
+}
+
+TEST_F(BackendSelectionTest, StrictOverrideIsSatisfiedByAMatch) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithRequired(mockBackend, {"vulkan"}, true).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, BackendRequiredParsing) {
+  for (const char* yes : {"true", "on", "1", "TRUE", "On"}) {
+    std::unordered_map<std::string, std::string> cfg{{"backend-required", yes}};
+    EXPECT_TRUE(tryBackendRequiredFromMap(cfg, true)) << yes;
+    EXPECT_EQ(cfg.count("backend-required"), 0u) << yes;
+  }
+  for (const char* no : {"false", "off", "0"}) {
+    std::unordered_map<std::string, std::string> cfg{{"backend-required", no}};
+    EXPECT_FALSE(tryBackendRequiredFromMap(cfg, true)) << no;
+  }
+  // underscore spelling, matching main_gpu / cache_type_k
+  std::unordered_map<std::string, std::string> underscore{
+      {"backend_required", "true"}};
+  EXPECT_TRUE(tryBackendRequiredFromMap(underscore, true));
+
+  std::unordered_map<std::string, std::string> absent;
+  EXPECT_FALSE(tryBackendRequiredFromMap(absent, true));
+}
+
+TEST_F(BackendSelectionTest, BackendRequiredRejectsBothSpellings) {
+  std::unordered_map<std::string, std::string> cfg{
+      {"backend-required", "true"}, {"backend_required", "true"}};
+  EXPECT_THROW(tryBackendRequiredFromMap(cfg, true), qvac_errors::StatusError);
+}
+
+TEST_F(BackendSelectionTest, BackendRequiredRejectsNonsense) {
+  std::unordered_map<std::string, std::string> cfg{{"backend-required", "yes"}};
+  EXPECT_THROW(tryBackendRequiredFromMap(cfg, true), qvac_errors::StatusError);
+}
+
+// On its own it would mean "require the default cascade", which is not a thing.
+TEST_F(BackendSelectionTest, BackendRequiredWithoutBackendThrows) {
+  std::unordered_map<std::string, std::string> cfg{
+      {"backend-required", "true"}};
+  EXPECT_THROW(tryBackendRequiredFromMap(cfg, false), qvac_errors::StatusError);
+  // ...but explicitly false without a backend is harmless
+  std::unordered_map<std::string, std::string> off{
+      {"backend-required", "false"}};
+  EXPECT_FALSE(tryBackendRequiredFromMap(off, false));
+}
+
+// ---- main-gpu addressing (QVAC-23763 R13) ----
+
+static BackendChoice chooseWithMainGpu(
+    MockBackendInterface& mockBackend, const MainGpu& mainGpu) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.mainGpu = mainGpu;
+  return chooseBackend(request, bckI);
+}
+
+TEST_F(BackendSelectionTest, MainGpuIntegerStillWorks) {
+  EXPECT_EQ(parseMainGpu("0"), MainGpu(0));
+  EXPECT_EQ(parseMainGpu("3"), MainGpu(3));
+  EXPECT_EQ(parseMainGpu("integrated"), MainGpu(MainGpuType::Integrated));
+  EXPECT_EQ(parseMainGpu("dedicated"), MainGpu(MainGpuType::Dedicated));
+  EXPECT_EQ(parseMainGpu(""), std::nullopt);
+}
+
+// std::stoi parsed a leading prefix and threw the rest away. That is what made
+// a bus id parse as device 0, so tightening it is a prerequisite for the forms
+// below - and a behaviour change worth pinning.
+TEST_F(BackendSelectionTest, MainGpuRejectsPartialIntegerParse) {
+  EXPECT_THROW(parseMainGpu("1abc"), qvac_errors::StatusError);
+  EXPECT_THROW(parseMainGpu("0 1"), qvac_errors::StatusError);
+  EXPECT_THROW(parseMainGpu("nonsense"), qvac_errors::StatusError);
+}
+
+TEST_F(BackendSelectionTest, MainGpuBusIdNotMisparsedAsZero) {
+  const auto parsed = parseMainGpu("0000:65:00.0");
+  ASSERT_TRUE(parsed.has_value());
+  ASSERT_TRUE(std::holds_alternative<MainGpuBusId>(parsed.value()));
+  EXPECT_EQ(std::get<MainGpuBusId>(parsed.value()).id, "0000:65:00.0");
+  // the short form, without the domain
+  const auto shortForm = parseMainGpu("65:00.0");
+  ASSERT_TRUE(shortForm.has_value());
+  EXPECT_TRUE(std::holds_alternative<MainGpuBusId>(shortForm.value()));
+}
+
+TEST_F(BackendSelectionTest, MainGpuQualifiedParsing) {
+  const auto parsed = parseMainGpu("CUDA:1");
+  ASSERT_TRUE(parsed.has_value());
+  ASSERT_TRUE(std::holds_alternative<MainGpuQualified>(parsed.value()));
+  EXPECT_EQ(std::get<MainGpuQualified>(parsed.value()).family, "cuda");
+  EXPECT_EQ(std::get<MainGpuQualified>(parsed.value()).index, 1);
+  // hip canonicalises to rocm, as it does for the `backend` key
+  EXPECT_EQ(
+      std::get<MainGpuQualified>(parseMainGpu("hip:0").value()).family, "rocm");
+}
+
+TEST_F(BackendSelectionTest, MainGpuQualifiedRejectsUnknownFamily) {
+  EXPECT_THROW(parseMainGpu("nvidia:0"), qvac_errors::StatusError);
+}
+
+TEST_F(BackendSelectionTest, MainGpuQualifiedSelectsNthOfFamily) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA1_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 1}).name, "cuda1");
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"vulkan", 0}).name,
+      "vulkan0");
+}
+
+// The point of the qualified form: it names the same card whatever order the
+// backends registered in.
+TEST_F(BackendSelectionTest, MainGpuQualifiedIsIndependentOfEnumerationOrder) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 0}).name, "cuda0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeFallsThrough) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  // device 4 of the cuda family does not exist; selection warns and uses the
+  // default order rather than failing, as an out-of-range integer does
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}).name, "cuda0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuBusIdSelectsMatchingDevice) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(NVIDIA_DESC, CUDA1_BACK), "0000:b3:00.0"));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:b3:00.0"}).name,
+      "cuda1");
+}
+
+TEST_F(BackendSelectionTest, MainGpuBusIdNotFoundFallsThrough) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:ff:00.0"}).name,
+      "cuda0");
+}
+
+// A backend that publishes no bus id cannot be addressed this way; falling
+// through beats failing a load over a device the caller may not have meant.
+TEST_F(BackendSelectionTest, MainGpuBusIdWithoutPublishedIdsFallsThrough) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:65:00.0"}).name,
+      "cuda0");
+}
+
 // ---- kvCacheTypeFromString ----
 
 TEST_F(BackendSelectionTest, KvCacheTypeFromStringResolvesTurboQuant) {
