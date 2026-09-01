@@ -242,7 +242,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: 'packages/vla-ggml'
           addon-npm-name: '@qvac/vla-ggml'
-          prebuild-artifact-prefix: 'vla-'
+          prebuild-artifact-prefix: 'prebuild-vla-ggml-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           # Manual dispatch (inputs.platform set). An empty `package` does NOT test
           # this branch's native code: a standalone dispatch produces no prebuild
