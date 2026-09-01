@@ -9,11 +9,16 @@ start `qvac serve openai` when the provider is used.
 
 ```bash
 npm install -g openclaw @qvac/openclaw-plugin @qvac/cli @qvac/sdk
-openclaw plugins install @qvac/openclaw-plugin
-openclaw plugins enable qvac
+openclaw plugins install @qvac/openclaw-plugin --force --accept-capabilities
+openclaw plugins enable qvac --accept-capabilities
 openclaw config set plugins.allow '["qvac"]' --strict-json
-openclaw onboard --auth-choice qvac
+openclaw onboard --auth-choice provider-plugin:qvac
 ```
+
+> **OpenClaw 2026.8.1 changed these commands.** `plugins install` now asks for
+> trust and capability consent, and plugin-contributed auth choices moved behind
+> a `provider-plugin:` prefix. On **openclaw < 2026.8.1** drop the two consent
+> flags and use the bare `--auth-choice qvac`.
 
 `@qvac/sdk` must be available next to the `qvac` command so serve can resolve
 model constants from the catalog. Installing and enabling the plugin alone does
@@ -27,7 +32,7 @@ openclaw onboard \
   --non-interactive \
   --accept-risk \
   --mode local \
-  --auth-choice qvac \
+  --auth-choice provider-plugin:qvac \
   --skip-search \
   --skip-health
 ```
@@ -63,12 +68,15 @@ bun run typecheck
 bun run build
 npm pack
 
-openclaw plugins install ./qvac-openclaw-plugin-0.1.0.tgz --force
-openclaw plugins enable qvac
+openclaw plugins install ./qvac-openclaw-plugin-0.1.0.tgz --force --accept-capabilities
+openclaw plugins enable qvac --accept-capabilities
 openclaw config set plugins.allow '["qvac"]' --strict-json
 ```
 
-`--force` replaces any previously installed local copy of the plugin.
+`--force` replaces any previously installed local copy of the plugin, and on
+openclaw >= 2026.8.1 also confirms the install source; `--accept-capabilities`
+grants the capabilities the plugin declares. Both are prompts on that version
+and are unnecessary before it.
 `plugins.allow` removes OpenClaw's warning about auto-loading non-bundled
 plugins and explicitly trusts the local `qvac` plugin.
 
@@ -89,7 +97,7 @@ openclaw onboard \
   --non-interactive \
   --accept-risk \
   --mode local \
-  --auth-choice qvac \
+  --auth-choice provider-plugin:qvac \
   --skip-search \
   --skip-health
 
@@ -189,14 +197,14 @@ value into the private key file:
 ```bash
 openclaw config set plugins.entries.qvac.config.apiKey \
   '"abcdefghijklmnopqrstuvwxyzABCDE_"' --strict-json
-openclaw onboard --auth-choice qvac
+openclaw onboard --auth-choice provider-plugin:qvac
 openclaw config unset plugins.entries.qvac.config.apiKey
 ```
 
 Removing the temporary plaintext plugin option after onboarding leaves the
 generated provider configuration pointing at the private key file. `apiKey`
 changes take effect only after re-running
-`openclaw onboard --auth-choice qvac`.
+`openclaw onboard --auth-choice provider-plugin:qvac`.
 
 Other clients connecting to the managed server must send the same bearer key:
 
@@ -224,6 +232,24 @@ the launcher rather than being used.
 
 ## Upgrading
 
+### OpenClaw 2026.8.1
+
+Three command-line changes land in this release. Nothing in the plugin changes,
+but every documented invocation does:
+
+| Before                       | 2026.8.1 and later                                     |
+| ---------------------------- | ------------------------------------------------------ |
+| `plugins install <spec>`     | `plugins install <spec> --force --accept-capabilities` |
+| `plugins enable qvac`        | `plugins enable qvac --accept-capabilities`            |
+| `onboard --auth-choice qvac` | `onboard --auth-choice provider-plugin:qvac`           |
+
+Without the consent flags the install cancels; with the old auth choice,
+onboarding rejects `qvac` and lists only OpenClaw's built-in choices. The plugin
+still registers `choiceId: "qvac"` — OpenClaw namespaces plugin-contributed
+choices now, so it is the invocation that moves, not the plugin.
+
+### Bearer authentication
+
 The managed `qvac serve` now requires bearer authentication, and the key reaches
 the launcher as a `--api-key-file` path in `localService.args`. That argument list
 is written into `openclaw.json` by onboarding, so an install configured **before**
@@ -232,7 +258,7 @@ this change has a persisted arg list without it.
 **A plugin upgrade alone is not enough — re-onboard once:**
 
 ```bash
-openclaw onboard --auth-choice qvac
+openclaw onboard --auth-choice provider-plugin:qvac
 ```
 
 Until you do, every attempt to start the local QVAC service fails with
@@ -246,7 +272,7 @@ key file, refreshes the provider entry, and leaves your model choice alone.
 ## Troubleshooting
 
 If the QVAC key file is missing, unreadable as a key, or its permissions have
-drifted, rerun `openclaw onboard --auth-choice qvac`. Setup recreates a missing
+drifted, rerun `openclaw onboard --auth-choice provider-plugin:qvac`. Setup recreates a missing
 key file, replaces a corrupt or empty one with a freshly generated key in place
 (the key is local-only, so there is nothing to recover from it), and self-heals
 its directory to mode `0700` and the file to mode `0600`. A key path that is not
