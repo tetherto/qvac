@@ -1,7 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "cf1500e91d595db131c41421d4e1455f9143ec6e",
+    "baseline": "4f2fcec33224811d80a025a2cd758cbd8ecbf0cb",
+    "reference": "QVAC-23945/lrc-generation",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
