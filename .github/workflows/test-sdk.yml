@@ -119,7 +119,7 @@ on:
         type: string
         default: '["qvac-ubuntu2204-x64-gpu"]'
       calibration:
-        description: "Run the assessModelFit calibration harness (QVAC-24215; slow: seven model loads per platform)"
+        description: "Run the assessModelFit calibration harness (slow: seven model loads per platform)"
         type: boolean
         default: false
       calibration-platforms:
@@ -606,7 +606,7 @@ jobs:
       test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
     secrets: inherit
 
-  # assessModelFit calibration (QVAC-24215). Dispatch-only and off by default:
+  # assessModelFit calibration. Dispatch-only and off by default:
   # `calibration` is not a workflow_call input, so the PR label path can never
   # trigger it — seven model loads per platform per labelled PR would be brutal.
   # The self-hosted runners use Manual Workspace Cleanup, so a job owns the

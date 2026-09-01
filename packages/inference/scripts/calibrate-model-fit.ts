@@ -1,4 +1,4 @@
-// Calibration harness for assessModelFit (QVAC-23889).
+// Calibration harness for assessModelFit.
 //
 // Loads representative catalog models, measures resident and peak memory around
 // real operations, and derives the coefficients in
