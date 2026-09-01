@@ -2,8 +2,8 @@
 
 import { createRequire } from 'node:module'
 import { Command } from 'commander'
-import { bundleSdk } from './bundle-sdk/index.js'
-import { handleError } from './errors.js'
+import { bundleSdk } from '@/bundle-sdk/index'
+import { handleError } from '@/errors'
 
 const require = createRequire(import.meta.url)
 const pkg = require('../package.json') as { version: string }
@@ -69,7 +69,7 @@ function setupCli(): void {
     .action(
       async (options: { deep?: boolean; json?: boolean; quiet?: boolean; verbose?: boolean }) => {
         try {
-          const { runDoctor } = await import('./doctor/index.js')
+          const { runDoctor } = await import('@/doctor/index')
           const report = await runDoctor({
             projectRoot: process.cwd(),
             deep: options.deep,
@@ -107,7 +107,7 @@ function setupCli(): void {
         quiet?: boolean
       }) => {
         try {
-          const { runConfigure } = await import('./configure/index.js')
+          const { runConfigure } = await import('@/configure/index')
           await runConfigure({
             projectRoot: process.cwd(),
             config: options.config,
@@ -140,7 +140,7 @@ function setupCli(): void {
     .action(async (options: { base: string; head: string; lockfile: string; quiet?: boolean }) => {
       try {
         const { formatVerifyDepsResult, hasNativeChanges, verifyDeps } =
-          await import('./verify/deps/index.js')
+          await import('@/verify/deps/index')
         const result = await verifyDeps({
           projectRoot: process.cwd(),
           base: options.base,
@@ -193,7 +193,7 @@ function setupCli(): void {
           // issue with message "At least one host is required." when hosts is
           // empty — no need to duplicate the guard here.
           const { formatVerifyBundleResult, hasErrors, verifyBundle } =
-            await import('./verify/bundle/index.js')
+            await import('@/verify/bundle/index')
           const verifyOptions: Parameters<typeof verifyBundle>[0] = {
             projectRoot: options.projectRoot ?? process.cwd(),
             addonsSource: options.addonsSource,
@@ -244,7 +244,7 @@ function setupCli(): void {
         offline?: boolean
       }) => {
         try {
-          const { runOpenAiCoverage } = await import('./openai/coverage.js')
+          const { runOpenAiCoverage } = await import('@/openai/coverage')
           const covOpts: Parameters<typeof runOpenAiCoverage>[0] = {}
           if (options.json) covOpts.json = true
           if (options.unsupported) covOpts.unsupported = true
@@ -267,7 +267,7 @@ function setupCli(): void {
     .option('--yaml', 'Emit YAML instead of JSON')
     .action(async (options: { output?: string; yaml?: boolean }) => {
       try {
-        const { emitOpenApiSpec } = await import('./openai/spec.js')
+        const { emitOpenApiSpec } = await import('@/openai/spec')
         const specOpts: Parameters<typeof emitOpenApiSpec>[0] = {}
         if (options.output) specOpts.output = options.output
         if (options.yaml) specOpts.format = 'yaml'
@@ -339,7 +339,7 @@ function setupCli(): void {
         verbose?: boolean
       }) => {
         try {
-          const { startServer } = await import('./serve/index.js')
+          const { startServer } = await import('@/serve/index')
           await startServer({
             projectRoot: process.cwd(),
             config: options.config,

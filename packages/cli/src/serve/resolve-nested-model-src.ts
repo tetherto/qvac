@@ -1,5 +1,5 @@
 import type { ModelConstant } from '@qvac/sdk'
-import { loadModelConstants } from './sdk-constants.js'
+import { loadModelConstants } from '@/serve/sdk-constants'
 
 /**
  * Rewrites nested companion model-source fields whose value is a known SDK
