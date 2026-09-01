@@ -192,7 +192,7 @@ class ContextOverflowError(QvacError):
         self.cached_tokens = cached_tokens
         self.required_tokens = required_tokens
         super().__init__(
-            message or "request exceeds the model's context capacity",
+            message or "request leaves insufficient context capacity to generate",
             name="CONTEXT_OVERFLOW",
             code=_CODE_CONTEXT_OVERFLOW,
             cause=cause,

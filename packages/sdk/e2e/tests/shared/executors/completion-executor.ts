@@ -488,11 +488,14 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
         }
       }
       // The cached-plus-prompt guard names the cached half; its absence means
-      // the request went in cold and only the plain prefill guard fired.
-      if (typeof error.cachedTokens !== 'number' || error.cachedTokens <= 0) {
+      // the request went in cold. A fresh prime holds only the system prompt
+      // (well under 100 tokens), while the committed first turn is ~370, so
+      // the floor proves the first-turn prefix survived, not merely a warm
+      // state after a silent commit rollback.
+      if (typeof error.cachedTokens !== 'number' || error.cachedTokens < 200) {
         return {
           passed: false,
-          output: `Expected a warm-cache signature (positive cachedTokens), got cachedTokens=${error.cachedTokens}`
+          output: `Expected cachedTokens to include the committed first turn (>= 200), got cachedTokens=${error.cachedTokens}`
         }
       }
       return {
