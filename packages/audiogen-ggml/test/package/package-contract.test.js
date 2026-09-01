@@ -6,7 +6,12 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { builtinModules } = require('module')
 const test = require('brittle')
-const lex = require('bare-module-lexer')
+
+// The lexer must be the one `bare-pack` (the mobile bundler) resolves, not an
+// ambient copy — the desync this test hunts for differs between lexer
+// releases. Mirrors scripts/ci/check-bundler-requires.mjs.
+const BARE_PACK_ROOT = path.dirname(require.resolve('bare-pack/package'))
+const lex = require(require.resolve('bare-module-lexer', { paths: [BARE_PACK_ROOT] }))
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const COMMAND_NAME = 'qvac-audiogen-download-models'

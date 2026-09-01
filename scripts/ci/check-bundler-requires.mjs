@@ -22,10 +22,27 @@ const LEXER_PACKAGE = 'bare-module-lexer'
 // check hunts for differs between lexer releases.
 const BUNDLER_SPEC = 'bare-pack@^1.4.7'
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
-// Only the runtime graph a mobile bundle pulls in. Generators under `scripts/`
-// and fixtures under `test/` embed require-looking strings in their output, and
-// none of them are ever bundled.
-const RUNTIME_DIRECTORIES = ['.', 'lib']
+// Directory names that never enter a mobile bundle. Generators under `scripts/`
+// and fixtures under `test/` embed require-looking strings in output text
+// (scanning them produced false positives across six packages); the rest are
+// build outputs, dev-only trees, or native sources. Every other directory is
+// walked, so multi-directory runtime graphs (e.g. asr-ggml's `engines/`) are
+// covered.
+const EXCLUDED_DIRECTORY_NAMES = new Set([
+  'node_modules',
+  'scripts',
+  'test',
+  'tests',
+  'benchmarks',
+  'examples',
+  'build',
+  'prebuilds',
+  'dist',
+  'coverage',
+  'addon'
+])
+const EXIT_HIDDEN_REQUIRE = 1
+const EXIT_INFRASTRUCTURE = 2
 
 function packageDirectory() {
   return path.resolve(process.argv[2] ?? '.')
@@ -35,16 +52,18 @@ function isScript(name) {
   return name.endsWith('.js') || name.endsWith('.cjs')
 }
 
-function scriptsIn(directory) {
-  if (!fs.existsSync(directory)) return []
-  return fs
-    .readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && isScript(entry.name))
-    .map((entry) => path.join(directory, entry.name))
+function isExcludedDirectory(name) {
+  return name.startsWith('.') || EXCLUDED_DIRECTORY_NAMES.has(name)
 }
 
-function collectScripts(packageRoot) {
-  return RUNTIME_DIRECTORIES.flatMap((directory) => scriptsIn(path.join(packageRoot, directory)))
+function collectScripts(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name)
+    if (entry.isDirectory()) {
+      return isExcludedDirectory(entry.name) ? [] : collectScripts(entryPath)
+    }
+    return entry.isFile() && isScript(entry.name) ? [entryPath] : []
+  })
 }
 
 function installBundler() {
@@ -99,14 +118,7 @@ function reportHidden(directory, scriptPath, specifiers) {
   }
 }
 
-function main() {
-  const directory = packageDirectory()
-  if (!fs.existsSync(path.join(directory, 'package.json'))) {
-    process.stderr.write(`no package.json in ${directory}\n`)
-    process.exit(1)
-  }
-  const lex = loadLexer()
-  const scripts = collectScripts(directory)
+function countHidden(lex, directory, scripts) {
   let hidden = 0
   for (const scriptPath of scripts) {
     const specifiers = hiddenSpecifiers(lex, scriptPath)
@@ -114,11 +126,34 @@ function main() {
     reportHidden(directory, scriptPath, specifiers)
     hidden += specifiers.length
   }
+  return hidden
+}
+
+function checkPackage() {
+  const directory = packageDirectory()
+  if (!fs.existsSync(path.join(directory, 'package.json'))) {
+    throw new Error(`no package.json in ${directory}`)
+  }
+  const lex = loadLexer()
+  const scripts = collectScripts(directory)
+  const hidden = countHidden(lex, directory, scripts)
   process.stdout.write(
     `Checked ${scripts.length} script(s) in ${path.basename(directory)}: ` +
       `${hidden} require(s) hidden from the bundler.\n`
   )
-  process.exit(hidden === 0 ? 0 : 1)
+  return hidden === 0 ? 0 : EXIT_HIDDEN_REQUIRE
+}
+
+// Exit codes: 0 = clean, 1 = a require is hidden from the bundler,
+// 2 = the check itself could not run (install/lexer/package resolution) —
+// callers must not report an infrastructure failure as a bundler omission.
+function main() {
+  try {
+    process.exit(checkPackage())
+  } catch (error) {
+    process.stderr.write(`::error::check-bundler-requires could not run: ${error.message}\n`)
+    process.exit(EXIT_INFRASTRUCTURE)
+  }
 }
 
 main()

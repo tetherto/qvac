@@ -90,7 +90,7 @@
   ],
   "devDependencies": {
     "@qvac/registry-client": "^0.6.1",
-    "bare-module-lexer": "^1.6.4",
+    "bare-pack": "^1.4.7",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
