@@ -156,7 +156,7 @@ console.log(JSON.stringify({
   readyTimeoutMs: Number(process.env.QVAC_READY_TIMEOUT_MS),
   ctxSize: 32768,
   reasoningBudget: 0,
-  tools: true
+  tools: false
 }))
 NODE
 )"
