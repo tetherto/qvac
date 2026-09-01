@@ -43,6 +43,7 @@ import { ERR_CODES, QvacErrorAudioGen } from './error'
 
 export const ENGINE_ACESTEP = 'acestep'
 export const ENGINE_MINIMAX = 'minimax'
+const SUPPORTED_ENGINES: readonly string[] = [ENGINE_ACESTEP, ENGINE_MINIMAX]
 export const MINIMAX_FRAMES_PER_SECOND = 25
 export const MINIMAX_DEFAULT_MAX_FRAMES = 300
 const MINIMAX_MIN_FRAMES = 1
@@ -156,7 +157,7 @@ export interface GenerateOptions {
   referenceAudio?: Float32Array
   /**
    * Source / cover audio (same layout as `referenceAudio`). Required when
-   * `taskType` is `"cover"` or `"cover-nofsq"`.
+   * `taskType` is `"cover"`, `"cover-nofsq"`, or `"lego"`.
    */
   sourceAudio?: Float32Array
   /**
@@ -311,18 +312,10 @@ export interface AudiogenStats {
 }
 
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
-export type AudiogenBackendName =
-  | 'cpu'
-  | 'metal'
-  | 'cuda'
-  | 'vulkan'
-  | 'opencl'
-  | 'other'
+export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'other'
 
 /** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
-export const AUDIOGEN_BACKEND_NAMES: Readonly<
-  Record<number, AudiogenBackendName>
-> = {
+export const AUDIOGEN_BACKEND_NAMES: Readonly<Record<number, AudiogenBackendName>> = {
   0: 'cpu',
   1: 'metal',
   2: 'cuda',
@@ -340,19 +333,13 @@ export function audiogenBackendName(
 }
 
 /** Why a GPU-requested run resolved to the CPU. */
-export type AudiogenGpuFallbackReason =
-  | 'none'
-  | 'not-requested'
-  | 'no-devices'
-  | 'init-failed'
+export type AudiogenGpuFallbackReason = 'none' | 'not-requested' | 'no-devices' | 'init-failed'
 
 /**
  * `AudiogenStats.gpuFallbackReason` codes, named. Codes match
  * `tts_cpp::GpuFallbackReason` in the engine.
  */
-export const AUDIOGEN_GPU_FALLBACK_REASONS: Readonly<
-  Record<number, AudiogenGpuFallbackReason>
-> = {
+export const AUDIOGEN_GPU_FALLBACK_REASONS: Readonly<Record<number, AudiogenGpuFallbackReason>> = {
   0: 'none',
   1: 'not-requested',
   2: 'no-devices',
@@ -581,6 +568,10 @@ function isCoverTask(taskType: string | undefined): boolean {
   return taskType === 'cover' || taskType === 'cover-nofsq'
 }
 
+function taskRequiresSourceAudio(taskType: string | undefined): boolean {
+  return isCoverTask(taskType) || taskType === 'lego'
+}
+
 function invalidInput(message: string): QvacErrorAudioGen {
   return new QvacErrorAudioGen({ code: ERR_CODES.INVALID_INPUT, adds: message })
 }
@@ -614,6 +605,8 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'referenceAudio',
   'sourceAudio',
   'taskType',
+  'track',
+  'guidanceScale',
   'audioCoverStrength',
   'coverNoiseStrength'
 ]
@@ -622,9 +615,17 @@ function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boo
   return keys.some((key) => files[key] !== undefined)
 }
 
+function quoteEngine(engine: string): string {
+  return `'${engine}'`
+}
+
+function supportedEnginesMessage(): string {
+  return SUPPORTED_ENGINES.map(quoteEngine).join(' or ')
+}
+
 function validateEngineType(engine: string | undefined): void {
-  if (engine !== undefined && engine !== ENGINE_ACESTEP && engine !== ENGINE_MINIMAX) {
-    throw invalidInput(`engine must be '${ENGINE_ACESTEP}' or '${ENGINE_MINIMAX}'`)
+  if (engine !== undefined && !SUPPORTED_ENGINES.includes(engine)) {
+    throw invalidInput(`engine must be ${supportedEnginesMessage()}`)
   }
 }
 
@@ -1092,13 +1093,13 @@ export class AudioGen {
     const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio')
     const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio')
     if (
-      (isCoverTask(taskType) || taskType === 'lego') &&
+      taskRequiresSourceAudio(taskType) &&
       (sourceAudio === undefined || sourceAudio.length === 0)
     ) {
       throw invalidInput(`taskType '${taskType}' requires sourceAudio`)
     }
     if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
-      throw invalidInput("taskType 'lego' requires track: one of " + [...LEGO_TRACKS].join('|'))
+      throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`)
     }
     if (opts.track !== undefined && taskType !== 'lego') {
       throw invalidInput("track is only valid with taskType 'lego'")

@@ -28,6 +28,7 @@ const audio_format_1 = require("./lib/audio-format");
 const error_1 = require("./error");
 exports.ENGINE_ACESTEP = 'acestep';
 exports.ENGINE_MINIMAX = 'minimax';
+const SUPPORTED_ENGINES = [exports.ENGINE_ACESTEP, exports.ENGINE_MINIMAX];
 exports.MINIMAX_FRAMES_PER_SECOND = 25;
 exports.MINIMAX_DEFAULT_MAX_FRAMES = 300;
 const MINIMAX_MIN_FRAMES = 1;
@@ -242,6 +243,9 @@ function requirePrompt(prompt, name) {
 function isCoverTask(taskType) {
     return taskType === 'cover' || taskType === 'cover-nofsq';
 }
+function taskRequiresSourceAudio(taskType) {
+    return isCoverTask(taskType) || taskType === 'lego';
+}
 function invalidInput(message) {
     return new error_1.QvacErrorAudioGen({ code: error_1.ERR_CODES.INVALID_INPUT, adds: message });
 }
@@ -272,15 +276,23 @@ const ACESTEP_GENERATE_KEYS = [
     'referenceAudio',
     'sourceAudio',
     'taskType',
+    'track',
+    'guidanceScale',
     'audioCoverStrength',
     'coverNoiseStrength'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
 }
+function quoteEngine(engine) {
+    return `'${engine}'`;
+}
+function supportedEnginesMessage() {
+    return SUPPORTED_ENGINES.map(quoteEngine).join(' or ');
+}
 function validateEngineType(engine) {
-    if (engine !== undefined && engine !== exports.ENGINE_ACESTEP && engine !== exports.ENGINE_MINIMAX) {
-        throw invalidInput(`engine must be '${exports.ENGINE_ACESTEP}' or '${exports.ENGINE_MINIMAX}'`);
+    if (engine !== undefined && !SUPPORTED_ENGINES.includes(engine)) {
+        throw invalidInput(`engine must be ${supportedEnginesMessage()}`);
     }
 }
 function detectEngineType(files = {}, explicitEngine) {
@@ -694,12 +706,12 @@ class AudioGen {
         const taskType = optionalTaskType(opts.taskType);
         const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio');
         const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio');
-        if ((isCoverTask(taskType) || taskType === 'lego') &&
+        if (taskRequiresSourceAudio(taskType) &&
             (sourceAudio === undefined || sourceAudio.length === 0)) {
             throw invalidInput(`taskType '${taskType}' requires sourceAudio`);
         }
         if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
-            throw invalidInput("taskType 'lego' requires track: one of " + [...LEGO_TRACKS].join('|'));
+            throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`);
         }
         if (opts.track !== undefined && taskType !== 'lego') {
             throw invalidInput("track is only valid with taskType 'lego'");

@@ -106,7 +106,7 @@ export interface GenerateOptions {
     referenceAudio?: Float32Array;
     /**
      * Source / cover audio (same layout as `referenceAudio`). Required when
-     * `taskType` is `"cover"` or `"cover-nofsq"`.
+     * `taskType` is `"cover"`, `"cover-nofsq"`, or `"lego"`.
      */
     sourceAudio?: Float32Array;
     /**
