@@ -11,6 +11,7 @@ packages:
   - "packages/*"
   - "packages/registry-server/client"
   - "packages/registry-server/shared"
+  - "plugins/*"          # @qvac/opencode-plugin, @qvac/openclaw-plugin
 
 linkWorkspacePackages: true      # plain semver everywhere, no workspace: protocol; resolves a sibling locally when its version satisfies the range, else from the registry
 fetchTimeout: 300000             # large binary tarballs (react-native-bare-kit) exceed pnpm's default 60s
@@ -29,7 +30,7 @@ allowBuilds:                     # only these packages may run install/postinsta
 
 Design choices worth knowing:
 
-- **`linkWorkspacePackages: true` with plain semver (no `workspace:*`)** — a package builds, publishes, and is consumed identically in or out of the monorepo; the workspace link is transparent when the local version satisfies the range.
+- **`linkWorkspacePackages: true` with plain semver (no `workspace:*`)** — a package builds, publishes, and is consumed identically in or out of the monorepo; a local sibling is linked only when its version satisfies the consumer's range, otherwise it resolves from the registry. Note the 0.x caret rule: `^0.43.0` means `>=0.43.0 <0.44.0`, so a sibling already bumped to `0.45.0` resolves from the registry, not the local source (applies to most internal `@qvac/*` ranges today, including the `@qvac/infer-base` consumers pinned to `0.4.x`).
 - **`blockExoticSubdeps` + minimal `allowBuilds`** — supply-chain guardrails. Add to `overrides` / `allowBuilds` only with a one-line why (as above). Don't loosen either to make an install pass.
 
 Dev flow: `pnpm install` at the root once, then work in a package dir with its own scripts:
@@ -52,6 +53,8 @@ Nx (`23.1.0`, root devDependency) is **not** a build system here — it's an **a
 
 1. **Affected graph** — the set of packages a diff impacts, transitively via the dependency graph. Used by CI to run only what a change touches.
 2. **Config source** — `packages/<pkg>/project.json` `targets.<target>.options.ci` declares each package's CI shape as data.
+
+Only native-addon packages carry a `project.json` (they need the `-nx` build/cpp/integration leaves). Pure-JS packages (`inference`, `rag`, `cli`, `ai-sdk-provider`, ...) have none and publish via `trigger-reusable-lib`; nx still tracks them in the graph through their `package.json`.
 
 `nx.json` is intentionally minimal:
 
