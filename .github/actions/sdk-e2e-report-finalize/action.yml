@@ -39,6 +39,10 @@ inputs:
     description: "Immutable inference source identity"
     required: false
     default: ""
+  test-suite-provenance:
+    description: "Immutable test-suite source identity"
+    required: false
+    default: ""
   update-summary:
     description: "Whether to append the rendered report to GITHUB_STEP_SUMMARY"
     required: false
@@ -93,6 +97,7 @@ runs:
         FILTER: ${{ inputs.filter }}
         EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
         INFERENCE_PROVENANCE: ${{ inputs.inference-provenance }}
+        TEST_SUITE_PROVENANCE: ${{ inputs.test-suite-provenance }}
         UPDATE_SUMMARY: ${{ inputs.update-summary }}
         DEVICE_POOL_NAME: ${{ inputs.device-pool-name }}
         DEVICE_POOL_AVAILABILITY: ${{ inputs.device-pool-availability }}
@@ -108,6 +113,7 @@ runs:
           const filter = process.env.FILTER || '';
           const excludeSuite = process.env.EXCLUDE_SUITE || '';
           const inferenceProvenance = process.env.INFERENCE_PROVENANCE || '';
+          const testSuiteProvenance = process.env.TEST_SUITE_PROVENANCE || '';
           const updateSummary = process.env.UPDATE_SUMMARY !== 'false';
 
           const pr = context.payload.pull_request?.number;
@@ -127,7 +133,9 @@ runs:
           const fmt = (v) => (v && v.length > 0 ? `\`${v}\`` : '`(none)`');
           const configLine =
             `**Config:** suite=${fmt(suite)} · filter=${fmt(filter)} · exclude=${fmt(excludeSuite)}`;
-          const inferenceLine = `**Inference:** ${fmt(inferenceProvenance)}`;
+          const provenanceLine =
+            `**Inference:** ${fmt(inferenceProvenance)} · ` +
+            `**Test-suite:** ${fmt(testSuiteProvenance)}`;
 
           // Device pool status line (mobile only). Weather emojis are used on
           // purpose so availability is not confused with pass/fail red/green.
@@ -241,7 +249,7 @@ runs:
                 mark,
                 `### QVAC E2E — \`${platform}\` — ✅ all tests passed (${passed}/${total}, ${duration}s)`,
                 configLine,
-                inferenceLine,
+                provenanceLine,
                 devicePoolLine,
                 linksLine,
               ].filter((line) => line !== null);
@@ -253,7 +261,7 @@ runs:
               `### QVAC E2E — \`${platform}\` — ❌ failed`,
               `**Totals:** ${passed}/${total} passed · ${failed} failed · ${rate}% · ${duration}s`,
               configLine,
-              inferenceLine,
+              provenanceLine,
               devicePoolLine,
               linksLine,
               '',
@@ -344,7 +352,7 @@ runs:
                 marker(platform),
                 `### QVAC E2E — \`${platform}\` — ⚠️ no results`,
                 configLine,
-                inferenceLine,
+                provenanceLine,
                 devicePoolLine,
                 linksLine,
                 '',

@@ -22,7 +22,8 @@ export async function handleDownloadAsset(
   request: DownloadAssetRequest,
   progressCallback?: (update: ModelProgressUpdate) => void
 ): Promise<DownloadAssetResponse> {
-  const { assetSrc, seed } = request
+  const { assetSrc, seed, requireHttpChecksum, requireSecureTransport } = request
+  const security = { requireHttpChecksum, requireSecureTransport }
 
   const profilingMeta = (request as Record<string, unknown>)[PROFILING_KEY] as
     { enabled?: boolean; id?: string } | undefined
@@ -60,12 +61,22 @@ export async function handleDownloadAsset(
         progressCallback,
         seed,
         ctx.signal,
-        hooks
+        hooks,
+        undefined,
+        security
       )
       sourceType = result.sourceType
       downloadStats = result.downloadStats
     } else {
-      await resolveModelPath(assetSrc, progressCallback, seed, ctx.signal, hooks)
+      await resolveModelPath(
+        assetSrc,
+        progressCallback,
+        seed,
+        ctx.signal,
+        hooks,
+        undefined,
+        security
+      )
     }
 
     const response: DownloadAssetResponse = {

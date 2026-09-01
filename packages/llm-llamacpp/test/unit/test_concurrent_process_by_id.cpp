@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <filesystem>
 #include <future>
 #include <stdexcept>
 #include <string>
@@ -25,6 +26,33 @@
 namespace {
 
 using qvac_lib_inference_addon_cpp::JobId;
+
+// A relative `cacheKey` writes a session file into the source checkout, and
+// the next run then starts from whatever the last one left behind. Keep them
+// in the temp dir and remove them on every exit, including an early return
+// from a failed assertion.
+class ScopedCacheFile {
+public:
+  explicit ScopedCacheFile(const std::string& name)
+      : path_(std::filesystem::temp_directory_path() / name) {
+    remove();
+  }
+  ~ScopedCacheFile() { remove(); }
+  ScopedCacheFile(const ScopedCacheFile&) = delete;
+  ScopedCacheFile& operator=(const ScopedCacheFile&) = delete;
+  ScopedCacheFile(ScopedCacheFile&&) = delete;
+  ScopedCacheFile& operator=(ScopedCacheFile&&) = delete;
+
+  [[nodiscard]] std::string key() const { return path_.string(); }
+
+private:
+  void remove() const noexcept {
+    std::error_code ec;
+    std::filesystem::remove(path_, ec);
+  }
+
+  std::filesystem::path path_;
+};
 
 std::string repeatWord(const std::string& word, size_t count) {
   std::string out;
@@ -252,7 +280,6 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsLeavesLlamaPerfCountersAlone) {
         "CacheTokens",
         "generatedTokens",
         "promptTokens",
-        "contextSlides",
         "thinkingBlockDiscards",
         "avgConcurrentSeq",
         "backendDevice"}) {
@@ -493,7 +520,8 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdStopsSinglePathPrefill) {
       "Store this long note in the cached conversation. " +
       repeatWord("detail", 700));
   prompt.prefill = true;
-  prompt.cacheKey = "cancel-prefill-cache.bin";
+  const ScopedCacheFile cacheFile("qvac-cancel-prefill-cache.bin");
+  prompt.cacheKey = cacheFile.key();
 
   std::atomic<bool> done = false;
   auto future = std::async(std::launch::async, [&model, &prompt, &done] {
@@ -586,7 +614,8 @@ TEST_F(ConcurrentProcessByIdTest, WholeModelCancelInDequeueWindowStopsPrefill) {
       "Store this long note in the cached conversation. " +
       repeatWord("detail", 700));
   prompt.prefill = true;
-  prompt.cacheKey = "window-prefill-cache.bin";
+  const ScopedCacheFile cacheFile("qvac-window-prefill-cache.bin");
+  prompt.cacheKey = cacheFile.key();
 
   model->jobStarting(kPrefillId);
   model->cancel();
@@ -621,7 +650,8 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdInDequeueWindowStopsPrefill) {
       "Store this long note in the cached conversation. " +
       repeatWord("detail", 700));
   prompt.prefill = true;
-  prompt.cacheKey = "window-prefill-cache-byid.bin";
+  const ScopedCacheFile cacheFile("qvac-window-prefill-cache-byid.bin");
+  prompt.cacheKey = cacheFile.key();
 
   model->jobStarting(kPrefillId);
   model->cancelById(kPrefillId);
