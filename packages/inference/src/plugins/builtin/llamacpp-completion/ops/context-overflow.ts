@@ -36,7 +36,7 @@ export function isAddonContextOverflowError(err: unknown): boolean {
   )
 }
 
-// Refusals thrown before any decode or save; the async transport delivers
+// Refusals thrown before any decode or disk save; the async transport delivers
 // exception.what() alone, so each form is matched complete and end-anchored.
 const PRE_MUTATION_REFUSAL_FORMS = [
   /^ContinuousBatchScheduler::submit: prompt of \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,

@@ -17,9 +17,8 @@ export const VERBOSITY = {
 
 const verbositySchema = z.enum(VERBOSITY)
 
-// Base schema - validates types, all fields optional (for input validation).
-// Strict at the source so every derivation — dispatch's default-applying
-// parse included — rejects an unknown or retired key instead of stripping it.
+// Base schema, all fields optional. Strict at the source so every derivation —
+// dispatch's default-applying parse included — rejects an unknown or retired key.
 export const llmConfigBaseSchema = z.strictObject({
   ctx_size: z
     .number()

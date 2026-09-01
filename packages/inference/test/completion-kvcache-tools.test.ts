@@ -526,3 +526,33 @@ test('completion: kv-cache survives a scheduler admission rejection between turn
   unregisterModel(modelId)
   clearRegistry()
 })
+
+// An unrecognised failure may have dirtied KV state, so the destructive
+// default must hold: the cache file is unlinked and the retry starts cold.
+test('completion: kv-cache rolls back on an unrecognised addon failure between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-unknown-rolls-back-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    new Error('addon exploded mid-decode')
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'unknown-rolls-back-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the cache file is unlinked after an unrecognised failure')
+  t.ok(refusal instanceof Error && /exploded mid-decode/.test(refusal.message), 'turn two fails')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})

@@ -73,7 +73,7 @@ test('createErrorResponse: ContextOverflowError sizes-record form carries every 
     ctxSize: 8192
   }
   const err = new ContextOverflowError(contextSizes, 'model-1')
-  t.alike(err.message.includes('8201'), true, 'the message factory sees the record fields')
+  t.ok(err.message.includes('8201'), 'the message factory sees the record fields')
   t.alike(createErrorResponse(err).typedFields, {
     promptTokens: 31,
     cachedTokens: 8170,
@@ -118,7 +118,7 @@ test('ContextOverflowError message stays unit-neutral when only requiredTokens i
   })
   t.ok(err.message.includes('Request uses 600 context units'), 'unit-neutral phrasing')
   t.absent(err.message.includes('600 prompt tokens'), 'the total is not labelled a prompt')
-  t.absent(err.message.includes('600 context tokens'), 'the total is not labelled tokens')
+  t.absent(err.message.includes('600 tokens'), 'the total is not labelled tokens')
 })
 
 // A wider, structurally assignable extras object must not override the
