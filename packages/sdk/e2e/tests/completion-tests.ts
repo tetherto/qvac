@@ -648,8 +648,8 @@ export const completionStats: TestDefinition = {
   metadata: { category: 'completion', dependency: 'llm', estimatedDurationMs: 10000 }
 }
 
-// The 480 budget exceeds what fits after the prompt in the 512 window, so a
-// "length" stop under it can only be the boundary; an early EOS is a fixture diagnostic.
+// The 1000 budget is far above the whole 512 window, so a "length" stop under
+// it can only be the boundary; an early EOS is a fixture diagnostic.
 export const completionContextBoundaryStop = createCompletionTest(
   'completion-context-boundary-stop',
   {
@@ -661,7 +661,7 @@ export const completionContextBoundaryStop = createCompletionTest(
       }
     ],
     stream: false,
-    generationParams: { ...DETERMINISTIC, predict: 480 }
+    generationParams: { ...DETERMINISTIC, predict: 1000 }
   },
   { validation: 'type', expectedType: 'string' },
   { estimatedDurationMs: 45000, dependency: 'llm-small-ctx' }
@@ -707,7 +707,9 @@ export const completionContextOverflowWarmCache = createCompletionTest(
         10
       ) + 'After all this text, what is 4+4?',
     stream: false,
-    generationParams: { ...DETERMINISTIC, predict: 16 }
+    // Enough budget that turn one finishes on EOS (commit-eligible) instead
+    // of tripping the prediction cutoff, while still fitting the 512 window.
+    generationParams: { ...DETERMINISTIC, predict: 48 }
   },
   { validation: 'throws-error', errorContains: 'context' },
   { estimatedDurationMs: 30000, dependency: 'llm-small-ctx' }
