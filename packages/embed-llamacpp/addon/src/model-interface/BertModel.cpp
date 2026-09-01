@@ -497,8 +497,9 @@ BertModelSetup setupParams(
       configVector.emplace_back("--device");
       configVector.emplace_back(chosenBackend.second);
     } else if (chosenBackend.first == BackendType::GPU) {
-      const std::vector<std::string> splitDevices =
-          splitModeDeviceNames(chosenBackend.second);
+      const backend_selection::SplitDeviceList split =
+          splitModeDeviceNamesDetailed(chosenBackend.second);
+      const std::vector<std::string>& splitDevices = split.names;
       if (!splitDevices.empty()) {
         std::string deviceList;
         for (const std::string& deviceName : splitDevices) {
@@ -506,6 +507,31 @@ BertModelSetup setupParams(
             deviceList += ',';
           }
           deviceList += deviceName;
+        }
+
+        // QVAC-23763: this split spans more than one backend. Once an uncovered
+        // NVIDIA card is refused by CUDA but still registered by Vulkan, that
+        // stops needing a mixed-vendor host and becomes any box with mixed
+        // generations. An even tensor-split then paces the model to the slower
+        // card, and nothing else says so. Membership is deliberately unchanged.
+        if (split.heterogeneous) {
+          std::string perDevice;
+          for (size_t i = 0; i < splitDevices.size(); ++i) {
+            if (!perDevice.empty()) {
+              perDevice += ", ";
+            }
+            perDevice += splitDevices[i] + " (" + split.registries[i] + ")";
+          }
+          qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+              GGML_LOG_LEVEL_WARN,
+              string_format(
+                  "[BertModel] split-mode: heterogeneous split across backends "
+                  "- %s. An even tensor-split will pace the model to the "
+                  "slowest card; pin `backend` to split on one backend, or set "
+                  "`tensor-split` to weight it.\n",
+                  perDevice.c_str())
+                  .c_str(),
+              nullptr);
         }
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_INFO,

@@ -282,8 +282,8 @@ ggml_backend_dev_t pickBestGpuDevice(
         if (backendNameMatchesFamily(backendLower, family)) {
           QLOG_IF(
               Priority::INFO,
-              "vla_backend_selection: " + family +
-                  " GPU selected by backend override");
+              "[backend-selection] selected=" + backendLower +
+                  " path=override skipped=none");
           return dev;
         }
       }
@@ -326,22 +326,52 @@ ggml_backend_dev_t pickBestGpuDevice(
             acceptedNames);
   }
 
+  // QVAC-23763: same [backend-selection] shape as llm-llamacpp and
+  // embed-llamacpp, so one grep answers "what did this load run on" across all
+  // three addons.
+  //
+  // No skipped_reason field here: this picker has no per-candidate exclusion
+  // reasons. Its one filter is the Adreno gate, which logs each rejection as it
+  // makes it, and the override-missed case is warned about above with the full
+  // accepted list.
+  auto nameOf = [&accepted](ggml_backend_dev_t dev) -> std::string {
+    for (const auto& [backendLower, candidate] : accepted) {
+      if (candidate == dev) {
+        return backendLower;
+      }
+    }
+    return "unknown";
+  };
+
   // CUDA ahead of HIP: see the header. A CUDA device only ever appears on a
   // discrete NVIDIA GPU, which is the mixed-vendor case the HIP comment above
   // flags as picking the wrong device. AMD-only hosts are unaffected.
   if (cudaDev != nullptr) {
     QLOG_IF(
         Priority::INFO,
-        "vla_backend_selection: preferring CUDA GPU (HIP and Vulkan are "
-        "fallbacks)");
+        "[backend-selection] selected=" + nameOf(cudaDev) +
+            " path=cascade skipped=none (HIP and Vulkan are fallbacks)");
     return cudaDev;
   }
 
   if (hipDev != nullptr) {
     QLOG_IF(
         Priority::INFO,
-        "vla_backend_selection: preferring HIP/ROCm GPU (Vulkan is fallback)");
+        "[backend-selection] selected=" + nameOf(hipDev) +
+            " path=cascade skipped=none (Vulkan is fallback)");
     return hipDev;
+  }
+
+  if (fallbackGpu != nullptr) {
+    QLOG_IF(
+        Priority::INFO,
+        "[backend-selection] selected=" + nameOf(fallbackGpu) +
+            " path=cascade skipped=none");
+  } else {
+    // The caller falls back to the CPU backend from here.
+    QLOG_IF(
+        Priority::INFO,
+        "[backend-selection] selected=none path=cpu skipped=none");
   }
   return fallbackGpu;
 }

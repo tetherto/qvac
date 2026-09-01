@@ -238,4 +238,26 @@ std::vector<std::string> splitModeDeviceNames(
 /// @brief `splitModeDeviceNames()` against the real ggml backend registry.
 std::vector<std::string>
 splitModeDeviceNames(const std::string& selectedDeviceName);
+
+/// @brief `splitModeDeviceNames()` plus each device's registry.
+///
+/// QVAC-23763: the caller needs the registries to tell a homogeneous split from
+/// one spanning two backends, and the production `splitModeDeviceNames()`
+/// overload passes a null log callback, so this cannot warn from inside. It
+/// returns the fact instead and lets the caller log it. Same shape as
+/// llm-llamacpp's.
+struct SplitDeviceList {
+  std::vector<std::string> names;
+  /// Parallel to @c names.
+  std::vector<std::string> registries;
+  /// True when @c names spans more than one registry.
+  bool heterogeneous = false;
+};
+
+SplitDeviceList splitModeDeviceNamesDetailed(
+    const BackendInterface& bckI, const std::string& selectedDeviceName);
+
+/// @brief `splitModeDeviceNamesDetailed()` against the real ggml registry.
+SplitDeviceList
+splitModeDeviceNamesDetailed(const std::string& selectedDeviceName);
 } // namespace backend_selection

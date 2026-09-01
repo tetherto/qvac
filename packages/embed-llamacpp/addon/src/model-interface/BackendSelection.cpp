@@ -920,7 +920,8 @@ bool backend_selection::gpuBackendSupportsRowSplit() {
   return backend_selection::gpuBackendSupportsRowSplit(bckI);
 }
 
-std::vector<std::string> backend_selection::splitModeDeviceNames(
+backend_selection::SplitDeviceList
+backend_selection::splitModeDeviceNamesDetailed(
     const BackendInterface& bckI, const std::string& selectedDeviceName) {
   // Kept in ggml's enumeration order, so the list matches what qvac-fabric
   // would have discovered on its own.
@@ -995,7 +996,10 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
   // used. A deliberately selected iGPU, `main-gpu: 'integrated'`, is the
   // exception: scope to that one device.
   if (selectedIsIgpu) {
-    return {selectedDeviceName};
+    SplitDeviceList single;
+    single.names.push_back(selectedDeviceName);
+    single.registries.push_back(selectedRegistry);
+    return single;
   }
 
   // Dedupe by device_id rather than scoping to the selected registry. The
@@ -1025,7 +1029,7 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
     }
   }
 
-  std::vector<std::string> names;
+  SplitDeviceList out;
   std::vector<std::string> seenIds;
   for (const auto& candidate : devices) {
     if (candidate.isIgpu) {
@@ -1036,7 +1040,8 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
     // one card twice.
     if (!selectedRegistryHasAllIds || candidate.deviceId.empty()) {
       if (candidate.registry == selectedRegistry) {
-        names.push_back(candidate.name);
+        out.names.push_back(candidate.name);
+        out.registries.push_back(candidate.registry);
       }
       continue;
     }
@@ -1049,9 +1054,25 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
       continue;
     }
     seenIds.push_back(candidate.deviceId);
-    names.push_back(candidate.name);
+    out.names.push_back(candidate.name);
+    out.registries.push_back(candidate.registry);
   }
-  return names;
+
+  // QVAC-23763: a split spanning more than one registry. Membership is
+  // deliberately unchanged - #4126 keeps a card only another backend
+  // registers - so this only makes the situation visible.
+  for (const std::string& registry : out.registries) {
+    if (registry != out.registries.front()) {
+      out.heterogeneous = true;
+      break;
+    }
+  }
+  return out;
+}
+
+std::vector<std::string> backend_selection::splitModeDeviceNames(
+    const BackendInterface& bckI, const std::string& selectedDeviceName) {
+  return splitModeDeviceNamesDetailed(bckI, selectedDeviceName).names;
 }
 
 std::vector<std::string>
@@ -1068,4 +1089,22 @@ backend_selection::splitModeDeviceNames(const std::string& selectedDeviceName) {
       .ggml_backend_dev_get_props = ggml_backend_dev_get_props,
       .llamaLogCallback = nullptr};
   return backend_selection::splitModeDeviceNames(bckI, selectedDeviceName);
+}
+
+backend_selection::SplitDeviceList
+backend_selection::splitModeDeviceNamesDetailed(
+    const std::string& selectedDeviceName) {
+  BackendInterface bckI{
+      .ggml_backend_dev_count = ggml_backend_dev_count,
+      .ggml_backend_dev_backend_reg = ggml_backend_dev_backend_reg,
+      .ggml_backend_dev_get = ggml_backend_dev_get,
+      .ggml_backend_reg_name = ggml_backend_reg_name,
+      .ggml_backend_dev_description = ggml_backend_dev_description,
+      .ggml_backend_dev_name = ggml_backend_dev_name,
+      .ggml_backend_dev_type = ggml_backend_dev_type,
+      .ggml_backend_reg_get_proc_address = ggml_backend_reg_get_proc_address,
+      .ggml_backend_dev_get_props = ggml_backend_dev_get_props,
+      .llamaLogCallback = nullptr};
+  return backend_selection::splitModeDeviceNamesDetailed(
+      bckI, selectedDeviceName);
 }

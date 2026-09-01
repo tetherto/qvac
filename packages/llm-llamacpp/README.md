@@ -303,6 +303,15 @@ try {
 
 When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
 
+Two further fields say *which* backend, since `backendDevice` cannot distinguish one GPU backend from another:
+
+| Field | Values | Meaning |
+|---|---|---|
+| `backendFamily` | `cuda`, `vulkan`, `metal`, `opencl`, `rocm`, `sycl`, `cpu`, `other`, `none` | Which backend family the load actually ran on. A load that silently fell back from CUDA to Vulkan is otherwise indistinguishable from one that got what it asked for. |
+| `backendSkipReason` | `none`, `kv-cache-type-unsupported`, `bitnet-on-adreno-below-800`, `bitnet-on-adreno-800-plus`, `finetuning-on-adreno-below-800`, `finetuning-on-adreno-800-plus` | Why a higher-priority backend was passed over, or `none` if nothing was. |
+
+The selected device's *name* (`cuda0`, `vulkan1`) is not in the stats — it appears in the `[backend-selection]` log line at `verbosity: "2"`, which also records the selection path (`cascade`, `override`, `cpu`).
+
 #### Batch inference
 
 Load the model with `parallel >= 2`, then pass an array of prompts. Each chunk arrives tagged with the id of the sequence that produced it; `await()` returns results in input order.

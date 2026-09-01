@@ -16,6 +16,13 @@
 
 ### Changed
 
+- **Breaking (logs):** backend selection emits one structured
+  `[backend-selection] selected=… registry=… path=… skipped=…` line in place of
+  the previous prose (`Chosen GPU CUDA`, `Chosen CPU`, …), matching
+  `@qvac/llm-llamacpp` so one log grep works across both. Not an API, but
+  anything matching those strings needs updating.
+- A multi-GPU split whose devices span more than one backend is logged at WARN,
+  naming each device with its registry. Split membership is unchanged.
 - **Breaking:** `main-gpu`'s index form now requires the whole value to be an
   integer. `"1abc"` previously parsed as `1` and is now rejected. This is what
   makes the bus-id form safe: `"0000:65:00.0"` previously parsed silently as
@@ -25,6 +32,14 @@
   this package has no rules that exclude a device today — but it gives the two
   implementations the same shape, and gives a future KV-cache-type feature the
   seam it needs.
+
+### Fixed
+
+- The split-mode log no longer claims to restrict `--device` to one backend's
+  own devices. That stopped being true when the bus-id dedupe landed — a second
+  physical card is kept even when another backend registers it — and
+  `@qvac/llm-llamacpp`'s copy of the line was corrected at the time while this
+  one was missed.
 
 ## [0.36.0] - 2026-08-24
 
