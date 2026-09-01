@@ -625,10 +625,21 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
   // keeps an explicit `backend` override binding, which omitting `--device`
   // would not: qvac-fabric's own dedupe keeps whichever backend registered
   // first, and CUDA loads before Vulkan.
+  // Deduping needs EVERY selected-registry device to publish a bus id. One that
+  // does not leaves no key to match its twin in another registry by, and a
+  // partial key list is worse than none: the cross-registry skip below would
+  // not fire, so the id-less device and its id-bearing twin would both be
+  // emitted, naming one physical card twice. Fall back to registry scoping for
+  // the whole list in that case.
+  bool selectedRegistryHasAllIds = true;
   std::vector<std::string> selectedIds;
   for (const auto& candidate : devices) {
-    if (!candidate.isIgpu && candidate.registry == selectedRegistry &&
-        !candidate.deviceId.empty()) {
+    if (candidate.isIgpu || candidate.registry != selectedRegistry) {
+      continue;
+    }
+    if (candidate.deviceId.empty()) {
+      selectedRegistryHasAllIds = false;
+    } else {
       selectedIds.push_back(candidate.deviceId);
     }
   }
@@ -639,11 +650,10 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
     if (candidate.isIgpu) {
       continue;
     }
-    // No bus id to compare on, so fall back to registry scoping. Keeping such
-    // a device could list one physical card twice, which is the failure this
-    // function exists to prevent, and qvac-fabric treats a null id as
-    // non-matching for the same reason.
-    if (candidate.deviceId.empty()) {
+    // Either there is no usable key set at all, or this particular device has
+    // no id to match on. Both reduce to registry scoping, which can never name
+    // one card twice.
+    if (!selectedRegistryHasAllIds || candidate.deviceId.empty()) {
       if (candidate.registry == selectedRegistry) {
         names.push_back(candidate.name);
       }
