@@ -703,6 +703,7 @@ jobs:
 
           # Select the appropriate config file for this model type
           case "$MODEL_TYPE" in
+            unified) CONFIG_FILE="config-parakeet-unified.yaml" ;;
             ctc) CONFIG_FILE="config-parakeet-ctc.yaml" ;;
             eou) CONFIG_FILE="config-parakeet-eou.yaml" ;;
             sortformer) CONFIG_FILE="config-parakeet-sortformer.yaml" ;;
@@ -716,6 +717,7 @@ jobs:
           # Set timeout based on model type
           case "$MODEL_TYPE" in
             tdt) TIMEOUT=120 ;;
+            unified) TIMEOUT=120 ;;
             ctc) TIMEOUT=60 ;;
             eou) TIMEOUT=120 ;;
             sortformer) TIMEOUT=180 ;;

@@ -17,7 +17,7 @@ metrics.
   - [Google FLEURS](https://huggingface.co/datasets/google/fleurs) multilingual dataset integration
   - Common Voice manifests (Arabic dialect benchmarks, whisper engine)
 - Whisper: 11 languages, WER / CER / AraDiaWER metrics, VAD support
-- Parakeet: TDT, CTC, EOU, Sortformer, and Indic Conformer model types with WER / CER metrics
+- Parakeet: TDT, Unified RNN-T, CTC, EOU, Sortformer, and Indic Conformer model types with WER / CER metrics
 - Configurable batch processing
 
 ## Installation
@@ -69,6 +69,7 @@ Shipped configs:
 | `config-whisper-arabic-levantine.yaml` | whisper | Common Voice Levantine Arabic |
 | `config-whisper-arabic-egyptian.yaml` | whisper | Common Voice Egyptian Arabic |
 | `config-parakeet.yaml` | parakeet | TDT baseline |
+| `config-parakeet-unified.yaml` | parakeet | Unified RNN-T on LibriSpeech English |
 | `config-parakeet-ctc.yaml` | parakeet | CTC |
 | `config-parakeet-eou.yaml` | parakeet | EOU (streaming) |
 | `config-parakeet-sortformer.yaml` | parakeet | Sortformer diarization |

@@ -26,7 +26,7 @@ Trigger the ASR GGML accuracy benchmark GitHub Action workflow.
 
 OPTIONS:
     -e, --engine            Engine: whisper, parakeet (default: $ENGINE)
-    -t, --model-type        Parakeet model type: tdt, ctc, eou, sortformer, indic-conformer, all (default: $MODEL_TYPE)
+    -t, --model-type        Parakeet model type: tdt, unified, ctc, eou, sortformer, indic-conformer, all (default: $MODEL_TYPE)
     -m, --max-samples       Maximum samples to test, 0 = unlimited (default: $MAX_SAMPLES)
     -b, --branch            Git branch to run workflow on (default: current branch)
     -R, --remote            Git remote to use: origin, upstream (default: $REMOTE)

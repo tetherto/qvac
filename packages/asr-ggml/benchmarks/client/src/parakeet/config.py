@@ -35,6 +35,7 @@ class Language(str, Enum):
 
 class ModelType(str, Enum):
     TDT = "tdt"
+    UNIFIED = "unified"
     CTC = "ctc"
     EOU = "eou"
     SORTFORMER = "sortformer"

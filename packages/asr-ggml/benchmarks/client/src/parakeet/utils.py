@@ -208,9 +208,11 @@ def generate_summary():
         "| Model Type | Description |",
         "|------------|-------------|",
         "| tdt        | Token-and-Duration Transducer (default) |",
+        "| unified    | Unified RNN-T; one checkpoint serving batch and low-latency streaming |",
         "| ctc        | Connectionist Temporal Classification |",
         "| eou        | End-of-Utterance detection |",
         "| sortformer | Sortformer architecture |",
+        "| indic-conformer | Conformer CTC for Indic languages; requires a model language |",
         "",
     ]
 
