@@ -107,8 +107,8 @@ Named string-key caches are not inferred from their directory names and remain c
 
 | File | Purpose |
 |------|---------|
-| `server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the three KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). Exposes `beginTurn` / `commitTurn` / `rollback` / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
-| `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers `scope.defer(() => session.rollback(turn))` once, and calls `session.commitTurn(...)` on the happy path (which suppresses the deferred rollback). No direct references to the three layers. |
+| `server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the three KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). Exposes `beginTurn` / `commitTurn` / `rollback` / `releaseTurn` (non-destructive, for pre-mutation overflow rejections) / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
+| `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers one deferred cleanup (rollback, or the non-destructive `releaseTurn` when the addon rejected at a prefill guard before any decode or save), and calls `session.commitTurn(...)` on the happy path (which suppresses it). No direct references to the three layers. |
 | `server/bare/plugins/llamacpp-completion/ops/kv-cache-state.ts` | Pure `decideCachedHistorySlice(...)` helper used by the session — slice decision for the next addon call. No state. |
 | `server/bare/ops/kv-cache-retention.ts` | Plans idle and quota-based auto-cache evictions while excluding active turn paths. |
 | `server/bare/ops/kv-cache-utils.ts` | Path / hash / fs utilities: `getCacheFilePath`, `generateConfigHash`, `findMatchingCache`, `getCurrentCacheInfo`, `renameCacheFile`, `deleteCache`. No in-memory state. |
@@ -219,7 +219,10 @@ Nothing is evicted from the cache to make room. A conversation that grows past
 The second one is a normal completion, not an error. `stopReason` alone does not
 distinguish a full context from a positive `predict` cutoff — the SDK maps both
 to `"length"` (with `predict: -1` there is no cutoff, so `"length"` can only
-mean the boundary).
+mean the boundary). With `parallel >= 2` the scheduler treats a positive
+`predict` as a reservation: a budget that cannot fit the slot is rejected at
+admission instead of stopping at the boundary, so use `predict: -1`/`-2` or a
+budget within the slot there.
 
 **Config for long conversations:** size `ctx_size` for the whole conversation you
 intend to hold. With `parallel > 1` the window is split across slots, so each
