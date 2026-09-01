@@ -86,7 +86,8 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/classification-ggml",
         "ci": {
-          "buildStep": "build:ts",
+          "buildStep": "none",
+          "verifyGenerated": true,
           "nameTransform": "none",
           "repoName": "classification-ggml",
           "testGateMode": "none"

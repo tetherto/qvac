@@ -99,7 +99,8 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/translation-nmtcpp",
         "ci": {
-          "buildStep": "build:ts",
+          "buildStep": "none",
+          "verifyGenerated": true,
           "nameTransform": "none",
           "useVTag": true,
           "testGateMode": "post-publish-integration"
