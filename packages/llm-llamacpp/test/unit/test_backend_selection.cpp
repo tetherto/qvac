@@ -1364,6 +1364,75 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
   EXPECT_EQ(result.first, BackendType::CPU);
 }
 
+// The two guards above have a second arm each, and neither was pinned. Both
+// matter for QVAC-23763: the override block sits after the guards today, so the
+// invariant holds by block ordering alone. Anything that reorders them, or that
+// replaces bucket mutation with per-candidate filtering, has to keep all four
+// arms working.
+
+// BitNet TQ on Adreno <800 is CPU only (TQ kernels run faster there), so no
+// override may reach a GPU. The 800+ arm of this guard is pinned above.
+TEST_F(
+    BackendSelectionTest, OverrideCannotResurrectGpuClearedByBitNetGuardSub800) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  MockModelMetaData bitnetMeta(true, "bitnet");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &bitnetMeta,
+      std::nullopt,
+      nullptr,
+      false,
+      nullptr,
+      {"vulkan", "opencl"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// Finetuning on Adreno 800+ prefers Vulkan by clearing OpenCL, so an explicit
+// opencl override must land on Vulkan rather than resurrecting it. The <800 arm
+// of this guard is pinned above.
+TEST_F(
+    BackendSelectionTest,
+    OverrideCannotResurrectOpenClClearedByFinetuneGuard800Plus) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(false, "qwen3");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &meta,
+      std::nullopt,
+      nullptr,
+      true,
+      nullptr,
+      {"opencl"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+}
+
+// clearAllGpuBackends() grew a cudaBackends.clear() for QVAC-23763. Nothing
+// pinned it, so a CUDA device could be resurrected out of a cleared bucket by an
+// override. Contrived host - CUDA beside an Adreno - but the mechanism is the
+// point, and it is the arm a per-candidate filter is most likely to miss.
+TEST_F(BackendSelectionTest, OverrideCannotResurrectCudaClearedByFinetuneGuard) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  MockModelMetaData meta(false, "qwen3");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &meta,
+      std::nullopt,
+      nullptr,
+      true,
+      nullptr,
+      {"cuda"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
 // ---- parseBackendOverride ----
 
 TEST_F(BackendSelectionTest, ParseBackendOverrideBasic) {
