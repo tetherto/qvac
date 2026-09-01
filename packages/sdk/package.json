@@ -214,10 +214,10 @@
   "dependencies": {
     "@qvac/audiogen-ggml": "^0.3.0",
     "@qvac/asr-ggml": "^0.3.0",
-    "@qvac/bci-whispercpp": "^0.7.1",
+    "@qvac/bci-whispercpp": "^0.8.0",
     "@qvac/classification-ggml": "^0.22.0",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.20.0",
+    "@qvac/diffusion-cpp": "^0.21.0",
     "@qvac/embed-llamacpp": "^0.36.0",
     "@qvac/error": "^0.1.1",
     "@qvac/inference": "^0.18.0",
