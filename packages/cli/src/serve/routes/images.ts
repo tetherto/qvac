@@ -2,10 +2,10 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply } from 'fastify'
 import { diffusion } from '@qvac/sdk'
 import type { DiffusionClientParams } from '@qvac/sdk'
-import { HttpError } from '../lib/http-error.js'
-import { initSSE, sendSSE, endSSE } from '../lib/sse.js'
-import { multipartToBody } from '../lib/multipart.js'
-import { requireModel } from '../plugins/require-model.js'
+import { HttpError } from '@/serve/lib/http-error'
+import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
+import { multipartToBody } from '@/serve/lib/multipart'
+import { requireModel } from '@/serve/plugins/require-model'
 import {
   imagesGenerationsBody,
   imagesEditsBody,
@@ -20,9 +20,9 @@ import {
   InvalidImageBatchCountError,
   InvalidImageStrengthError,
   UnsupportedImageOutputError
-} from '../schemas/images.js'
-import type { EphemeralFilesStore } from '../adapters/openai/ephemeral-files-store.js'
-import type { QvacContext } from '../lib/types.js'
+} from '@/serve/schemas/images'
+import type { EphemeralFilesStore } from '@/serve/adapters/openai/ephemeral-files-store'
+import type { QvacContext } from '@/serve/lib/types'
 
 const SUPPORTED_RESPONSE_FORMATS = new Set(['b64_json', 'url'])
 const RESPONSE_OUTPUT_FORMAT = 'png' as const

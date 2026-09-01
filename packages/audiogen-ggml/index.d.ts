@@ -230,6 +230,8 @@ export interface AudiogenStats {
     backendDevice?: number;
     /** 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other. */
     backendId?: number;
+    /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
+    gpuFallbackReason?: number;
 }
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
 export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'other';
@@ -237,6 +239,15 @@ export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl'
 export declare const AUDIOGEN_BACKEND_NAMES: Readonly<Record<number, AudiogenBackendName>>;
 /** `undefined` for an unset or unrecognised id, never a guessed name. */
 export declare function audiogenBackendName(backendId: number | undefined): AudiogenBackendName | undefined;
+/** Why a GPU-requested run resolved to the CPU. */
+export type AudiogenGpuFallbackReason = 'none' | 'not-requested' | 'no-devices' | 'init-failed';
+/**
+ * `AudiogenStats.gpuFallbackReason` codes, named. Codes match
+ * `tts_cpp::GpuFallbackReason` in the engine.
+ */
+export declare const AUDIOGEN_GPU_FALLBACK_REASONS: Readonly<Record<number, AudiogenGpuFallbackReason>>;
+/** `undefined` for an unset or unrecognised code, never a guessed reason. */
+export declare function audiogenGpuFallbackReason(code: number | undefined): AudiogenGpuFallbackReason | undefined;
 export declare function detectEngineType(files?: AudioGenFiles, explicitEngine?: AudioGenEngine): AudioGenEngine;
 type EditRunner = (source: AudioEditSource, operations: readonly AudioEditOperationData[], options: AudioEditRunOptions) => Promise<QvacResponse<AudiogenOutputChunk>>;
 /**
