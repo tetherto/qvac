@@ -1,7 +1,7 @@
 import { emitKeypressEvents } from 'node:readline'
 import { select, search, editor, confirm, input } from '@inquirer/prompts'
-import type { ModelCatalogEntry } from '../serve/core/model-catalog.js'
-import { parseServeConfig } from '../serve/config.js'
+import type { ModelCatalogEntry } from '@/serve/core/model-catalog'
+import { parseServeConfig } from '@/serve/config'
 import {
   MODALITIES,
   RECOMMENDED,
@@ -15,8 +15,8 @@ import {
   type BuiltEntry,
   type Modality,
   type ServeModelEntry
-} from './presets.js'
-import { docsUrlForAddon } from './docs-links.js'
+} from '@/configure/presets'
+import { docsUrlForAddon } from '@/configure/docs-links'
 import {
   configSchemaForAddon,
   configParamModel,
@@ -25,7 +25,7 @@ import {
   validateValue,
   type ConfigParamModel,
   type ParamField
-} from './param-schemas.js'
+} from '@/configure/param-schemas'
 
 // Sentinel a prompt resolves to when the user backs out (Esc, or a "Back"
 // choice). The delimiters can't occur in a model id or a modality value.

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { VectorStoreExpiresAfter } from '../../schemas/vector-stores.js'
+import type { VectorStoreExpiresAfter } from '@/serve/schemas/vector-stores'
 
 export interface VectorStoreMeta {
   id: string

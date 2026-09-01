@@ -31,6 +31,7 @@ import {
   TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_UNIFIED_0_6B_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
   VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
@@ -397,6 +398,12 @@ resources.define('parakeet-tdt', {
 
 resources.define('parakeet-ctc', {
   constant: PARAKEET_CTC_0_6B_Q4_0,
+  type: 'parakeet-transcription',
+  config: {}
+})
+
+resources.define('parakeet-unified', {
+  constant: PARAKEET_UNIFIED_0_6B_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
