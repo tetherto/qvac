@@ -68,7 +68,13 @@ jobs:
     # smoke_timeout_minutes applies only in default mode; qvac_perf_only runs
     # the full perf list and keeps the leg's normal timeout_minutes.
     timeout-minutes: ${{ (!inputs.qvac_perf_only && matrix.smoke_timeout_minutes) || matrix.timeout_minutes || 360 }}
-    continue-on-error: true
+    # QVAC-23763: per-row now, because the -vulkan leg is a regression check
+    # that CUDA-as-default did not break the old path, and a check that cannot
+    # fail the workflow gates nothing. Rows without `allow_failure` keep the
+    # previous non-blocking behaviour, since an unset matrix field is not
+    # `false`. GitHub will not per-include a literal, so this has to be an
+    # expression.
+    continue-on-error: ${{ matrix.allow_failure != false }}
     runs-on: ${{ matrix.runner }}
     environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.force_vulkan == 'true' && '-vulkan' || '' }}
@@ -112,6 +118,7 @@ jobs:
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
             timeout_minutes: 480
             force_vulkan: 'true'
+            allow_failure: false
             label: linux-x64-u24-gpu-vulkan
           - os: ubuntu-24.04-arm
             platform: linux
