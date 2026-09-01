@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional `guidanceScale` generation control for DiT classifier-free
   guidance. `0` (default) resolves automatically: `1.0` on turbo variants,
   `7.0` on base/sft, where guidance runs through APG.
+- Report why a `useGPU: true` run resolved to the CPU. `stats.gpuFallbackReason`
+  carries the engine's reason code for both ACE-Step and MiniMax, with
+  `AUDIOGEN_GPU_FALLBACK_REASONS` and `audiogenGpuFallbackReason()` to name it.
 
 ### Changed
 

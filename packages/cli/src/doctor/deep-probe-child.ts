@@ -1,3 +1,5 @@
+// Forked by `doctor/deep.ts` with `cwd` set to the probed project. No tsconfig
+// is discoverable from there, so imports in this module are relative.
 import {
   DEEP_PROBE_MESSAGE_KIND,
   DEEP_PROBE_PROTOCOL_VERSION,
