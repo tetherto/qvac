@@ -2278,3 +2278,86 @@ TEST_F(BackendSelectionTest, TraceNamesTheSkippedCandidateAndReason) {
   EXPECT_EQ(
       backendFamilyCodeOf(choice.type, choice.name), BackendFamilyCode::Vulkan);
 }
+
+// ---- heterogeneous split detection (QVAC-23763 R15) ----
+
+static backend_selection::SplitDeviceList splitDetailedFor(
+    MockBackendInterface& mockBackend, const std::string& selectedDeviceName) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  return splitModeDeviceNamesDetailed(bckI, selectedDeviceName);
+}
+
+// The §11b trace from the review, pinned: a 5090 kept on CUDA beside a card
+// CUDA refused but Vulkan still registers. The split spans two backends and an
+// even tensor-split would pace the model to the slower one.
+TEST_F(BackendSelectionTest, SplitDetailedFlagsAHeterogeneousSplit) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
+      "0000:65:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:65:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(TESLA_DESC, VULKAN1_BACK, VULKAN_REG),
+      "0000:b3:00.0"));
+
+  const auto split = splitDetailedFor(mockBackend, "cuda0");
+  // the Vulkan twin of the selected card is deduped away; the second physical
+  // card is kept, and it is only reachable through Vulkan
+  EXPECT_EQ(split.names, (std::vector<std::string>{"cuda0", "vulkan1"}));
+  EXPECT_EQ(split.registries, (std::vector<std::string>{"CUDA", "Vulkan"}));
+  EXPECT_TRUE(split.heterogeneous);
+}
+
+TEST_F(BackendSelectionTest, SplitDetailedDoesNotFlagAHomogeneousSplit) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
+      "0000:65:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA1_BACK, CUDA_REG),
+      "0000:b3:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:65:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG),
+      "0000:b3:00.0"));
+
+  const auto split = splitDetailedFor(mockBackend, "cuda0");
+  // both cards reachable through CUDA, so both Vulkan twins dedupe away
+  EXPECT_EQ(split.names, (std::vector<std::string>{"cuda0", "cuda1"}));
+  EXPECT_FALSE(split.heterogeneous);
+}
+
+// An empty list must not be reported as heterogeneous - that is every
+// pre-CUDA host, and a spurious warning there would be pure noise.
+TEST_F(BackendSelectionTest, SplitDetailedEmptyIsNotHeterogeneous) {
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG));
+  const auto split = splitDetailedFor(mockBackend, "vulkan0");
+  EXPECT_TRUE(split.names.empty());
+  EXPECT_FALSE(split.heterogeneous);
+}
+
+// names and registries must stay index-aligned; the caller pairs them by
+// position to build the warning.
+TEST_F(BackendSelectionTest, SplitDetailedKeepsRegistriesAlignedWithNames) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
+      "0000:65:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(TESLA_DESC, VULKAN1_BACK, VULKAN_REG),
+      "0000:b3:00.0"));
+  const auto split = splitDetailedFor(mockBackend, "cuda0");
+  ASSERT_EQ(split.names.size(), split.registries.size());
+  for (size_t i = 0; i < split.names.size(); ++i) {
+    // every ggml device name is prefixed by its registry, lowercased
+    std::string registryLower = split.registries[i];
+    std::ranges::transform(
+        registryLower, registryLower.begin(), ::tolower);
+    EXPECT_EQ(split.names[i].rfind(registryLower, 0), 0U)
+        << split.names[i] << " vs " << split.registries[i];
+  }
+}

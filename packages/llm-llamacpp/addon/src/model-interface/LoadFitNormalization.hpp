@@ -89,10 +89,14 @@ struct NormalizationDependencies {
   BackendResolver resolveBackend;
   std::function<bool()> gpuBackendSupportsRowSplit;
   /// Args: the chosen backend's device name. Returns the devices to pass as
-  /// `--device` in multi-GPU split mode, or empty to keep omitting it.
-  /// QVAC-23763. Unset is treated as empty, so existing callers that build this
-  /// struct without it keep the pre-CUDA behaviour.
-  std::function<std::vector<std::string>(const std::string&)>
+  /// `--device` in multi-GPU split mode, with each one's registry, or an empty
+  /// list to keep omitting `--device`. QVAC-23763. Unset is treated as empty,
+  /// so existing callers that build this struct without it keep the pre-CUDA
+  /// behaviour.
+  ///
+  /// Returns the registries rather than logging from inside because the
+  /// production `splitModeDeviceNames()` overload passes a null log callback.
+  std::function<backend_selection::SplitDeviceList(const std::string&)>
       splitModeDeviceNames;
 };
 

@@ -506,7 +506,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
           []() { return backend_selection::gpuBackendSupportsRowSplit(); },
       .splitModeDeviceNames =
           [](const std::string& selectedDeviceName) {
-            return backend_selection::splitModeDeviceNames(selectedDeviceName);
+            return backend_selection::splitModeDeviceNamesDetailed(
+                selectedDeviceName);
           }};
 }
 
@@ -869,8 +870,9 @@ NormalizedLoad normalizeLoadForFit(
     } else if (
         selected.type == BackendType::GPU &&
         dependencies.splitModeDeviceNames) {
-      const std::vector<std::string> splitDevices =
+      const backend_selection::SplitDeviceList split =
           dependencies.splitModeDeviceNames(selected.name);
+      const std::vector<std::string>& splitDevices = split.names;
       if (!splitDevices.empty()) {
         std::string deviceList;
         for (const std::string& deviceName : splitDevices) {
@@ -878,6 +880,34 @@ NormalizedLoad normalizeLoadForFit(
             deviceList += ',';
           }
           deviceList += deviceName;
+        }
+
+        // QVAC-23763: this split spans more than one backend. That was a
+        // mixed-vendor curiosity before; once an uncovered NVIDIA card is
+        // refused by CUDA but still registered by Vulkan it becomes any
+        // single-vendor box with mixed generations. An even tensor-split then
+        // paces the whole model to the slower card, and nothing else says so.
+        //
+        // Membership is deliberately unchanged - #4126 chose to keep a card
+        // that only another backend registers - so this is a warning, not a
+        // filter. Excluding such a card is the alternative if this turns out to
+        // bite in practice.
+        if (split.heterogeneous) {
+          std::string perDevice;
+          for (size_t i = 0; i < splitDevices.size(); ++i) {
+            if (!perDevice.empty()) {
+              perDevice += ", ";
+            }
+            perDevice += splitDevices[i] + " (" + split.registries[i] + ")";
+          }
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[LlamaModel] split-mode: heterogeneous split across "
+                  "backends - %s. An even tensor-split will pace the model to "
+                  "the slowest card; pin `backend` to split on one backend, or "
+                  "set `tensor-split` to weight it.\n",
+                  perDevice.c_str()));
         }
         QLOG_IF(
             Priority::INFO,

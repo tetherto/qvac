@@ -458,7 +458,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeOmitsDeviceWhenTheDependencyIsUnset) {
 TEST_F(LoadFitNormalizationTest, SplitModeOmitsDeviceOnAnEmptyDeviceList) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
   dependencies.splitModeDeviceNames = [](const std::string&) {
-    return std::vector<std::string>{};
+    return backend_selection::SplitDeviceList{};
   };
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -473,7 +473,10 @@ TEST_F(LoadFitNormalizationTest, SplitModeEmitsDeviceForTheScopedList) {
   dependencies.splitModeDeviceNames =
       [&seenSelectedName](const std::string& selectedName) {
         seenSelectedName = selectedName;
-        return std::vector<std::string>{"none"};
+        return backend_selection::SplitDeviceList{
+      .names = {"none"},
+      .registries = {"Vulkan"},
+      .heterogeneous = false};
       };
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -489,7 +492,10 @@ TEST_F(LoadFitNormalizationTest, SplitModeEmitsDeviceForTheScopedList) {
 TEST_F(LoadFitNormalizationTest, SplitModeJoinsSeveralDevicesIntoOneValue) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
   dependencies.splitModeDeviceNames = [](const std::string&) {
-    return std::vector<std::string>{"none", "phantom0"};
+    return backend_selection::SplitDeviceList{
+      .names = {"none", "phantom0"},
+      .registries = {"Vulkan", "Vulkan"},
+      .heterogeneous = false};
   };
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -505,7 +511,10 @@ TEST_F(LoadFitNormalizationTest, SplitModeJoinsSeveralDevicesIntoOneValue) {
 TEST_F(LoadFitNormalizationTest, SplitModeRewritesMainGpuToTheScopedPosition) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
   dependencies.splitModeDeviceNames = [](const std::string&) {
-    return std::vector<std::string>{"none"};
+    return backend_selection::SplitDeviceList{
+      .names = {"none"},
+      .registries = {"Vulkan"},
+      .heterogeneous = false};
   };
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -520,7 +529,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeRewritesMainGpuToTheScopedPosition) {
 TEST_F(LoadFitNormalizationTest, SplitModeKeepsMainGpuWhenDeviceIsOmitted) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
   dependencies.splitModeDeviceNames = [](const std::string&) {
-    return std::vector<std::string>{};
+    return backend_selection::SplitDeviceList{};
   };
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -537,7 +546,10 @@ TEST_F(LoadFitNormalizationTest, SingleGpuModeIgnoresTheSplitDeviceList) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
   dependencies.splitModeDeviceNames = [&consulted](const std::string&) {
     consulted = true;
-    return std::vector<std::string>{"phantom0"};
+    return backend_selection::SplitDeviceList{
+      .names = {"phantom0"},
+      .registries = {"Vulkan"},
+      .heterogeneous = false};
   };
   auto config = baseConfig();
   config["split-mode"] = "none";
