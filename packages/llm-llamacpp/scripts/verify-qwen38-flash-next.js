@@ -95,7 +95,11 @@ function visibleOf (output) {
 
 async function main () {
   const inference = new LlmLlamacpp({
-    files: { model: SHARDS, projectionModel: MMPROJ },
+    // Pass only the first shard: with a single path the addon skips its JS
+    // chunk-streaming branch (~15MB/s, and it buffers a second copy of the
+    // weights) and hands the path to llama.cpp, which resolves the
+    // -0000N-of-0000M siblings in the same directory and reads them directly.
+    files: { model: [SHARDS[0]], projectionModel: MMPROJ },
     config: {
       device: 'gpu',
       gpu_layers: '999',
