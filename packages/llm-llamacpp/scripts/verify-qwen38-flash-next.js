@@ -99,10 +99,11 @@ async function main () {
     config: {
       device: 'gpu',
       gpu_layers: '999',
-      // Direct I/O keeps macOS from routing 68GB of weights through the page
-      // cache; without it the load thrashes into the memory compressor on a
-      // 96GB machine. Matches the fabric benchmarks (--load-mode dio).
-      load_mode: 'dio',
+      // The default mmap load thrashes into the macOS memory compressor on a
+      // 96GB machine (33GB compressed, load never finishes), and dio reads at
+      // ~15MB/s here (no page-cache readahead). mmap+mlock keeps the fast
+      // cached reads but pins the pages so the compressor cannot touch them.
+      load_mode: 'mmap+mlock',
       ctx_size: '16384',
       n_predict: '2048',
       temp: '0',
