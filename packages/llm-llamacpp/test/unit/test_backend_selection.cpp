@@ -1698,3 +1698,33 @@ TEST_F(BackendSelectionTest, SplitModeDeviceNamesFallsBackWithoutADeviceId) {
       splitDevicesFor(mockBackend, "cuda0"),
       (std::vector<std::string>{"cuda0"}));
 }
+
+// The same host with the selection on the other side, which is the direction
+// that used to break: `backend: 'vulkan'` on a driver without
+// VK_EXT_pci_bus_info leaves the selected registry publishing no id at all, so
+// a partial key list disabled the cross-registry skip and named the one card
+// twice as cuda0,vulkan0.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesFallsBackWhenSelectedHasNoId) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan0"),
+      (std::vector<std::string>{"vulkan0"}));
+}
+
+// A second real card must still survive the wholesale fallback, scoped to the
+// selected registry, rather than the list collapsing to the one selected name.
+TEST_F(
+    BackendSelectionTest, SplitModeDeviceNamesFallbackKeepsSelectedRegistry) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(AMD_DESC, VULKAN1_BACK, VULKAN_REG));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan0"),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
