@@ -206,39 +206,49 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
-  ts-checks:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs:
-      - fork-approval
-      - authorize
-      - ci-router
+  await-ts-checks:
+    name: Await PR-head TypeScript checks
+    if: github.event_name == 'pull_request_target'
+    needs: authorize
     runs-on: ubuntu-latest
-    environment: release
+    timeout-minutes: 17
+    permissions:
+      checks: read
+      contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Wait for ts-checks result
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         with:
-          node-version: 20
+          script: |
+            const timeoutAt = Date.now() + 15 * 60 * 1000
 
-      - name: Install dependencies
-        working-directory: packages/vla-ggml
-        run: npm install --ignore-scripts
+            while (Date.now() < timeoutAt) {
+              const response = await github.rest.checks.listForRef({
+                ...context.repo,
+                ref: process.env.PR_HEAD_SHA,
+                check_name: 'vla-pr-head-ts-checks / ts-checks',
+                filter: 'latest',
+                per_page: 100
+              })
+              const check = response.data.check_runs.find(
+                ({ name }) => name === 'vla-pr-head-ts-checks / ts-checks'
+              )
 
-      - name: Type declaration check
-        working-directory: packages/vla-ggml
-        run: npm run test:dts
+              if (check?.status === 'completed') {
+                if (check.conclusion !== 'success') {
+                  core.setFailed(
+                    `vla-pr-head-ts-checks / ts-checks completed with conclusion: ${check.conclusion}`
+                  )
+                }
+                return
+              }
 
-      - name: Run lint and unit tests
-        id: run_lint_and_unit_tests
-        uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.GITHUB_TOKEN }}
-          registry-type: gpr
-          workdir: packages/vla-ggml
+              await new Promise((resolve) => setTimeout(resolve, 15_000))
+            }
+
+            core.setFailed('Timed out waiting for the PR-head VLA TypeScript checks')
 
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
@@ -421,7 +431,7 @@ jobs:
         authorize,
         ci-router,
         sanity-checks,
-        ts-checks,
+        await-ts-checks,
         cpp-lint,
         cpp-tests,
         detect-fabric-stack,
@@ -440,6 +450,6 @@ jobs:
       pull-requests: write
       packages: read
     with:
-      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' && needs.await-ts-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
       build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') }}
       integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped') }}
