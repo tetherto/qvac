@@ -9,7 +9,7 @@ import {
   extractGenerationParams,
   type GenerationParams,
   type ResponseFormat
-} from './common.js'
+} from '@/serve/schemas/common'
 
 export const responsesBody = z
   .object({

@@ -36,8 +36,7 @@
   "homepage": "https://qvac.tether.io",
   "scripts": {
     "prepublishOnly": "node scripts/check-publish-ready.cjs",
-    "build": "rm -rf dist && tsc",
-    "build:watch": "tsc --watch",
+    "build": "rm -rf dist && tsc && tsc-alias -p tsconfig.alias.json",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "lint": "lunte",
@@ -78,6 +77,7 @@
     "openai": "^6.48.0",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
+    "tsc-alias": "^1.8.17",
     "typescript": "^5.9.3"
   }
 }
