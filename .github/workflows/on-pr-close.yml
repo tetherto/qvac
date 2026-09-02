@@ -1,4 +1,11 @@
-# Consolidates the 16 on-pr-close-<pkg>.yml files (ephemeral GPR pr-<n> version cleanup).
+# Consolidates the 13 auto-firing on-pr-close-<pkg>.yml files (ephemeral GPR
+# pr-<n> version cleanup).
+#
+# Three on-pr-close-<pkg>.yml files on main are deliberately NOT in this list.
+# transcription-parakeet and transcription-whispercpp were retired into
+# packages/asr-ggml (#3552) and their stubs had the pull_request trigger removed
+# on purpose; translation-nmtcpp is dispatch-only too. Adding them here would
+# re-arm a trigger main intentionally disarmed, so they stay as manual stubs.
 name: On PR Close (cleanup)
 
 on:
@@ -25,7 +32,7 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml transcription-parakeet transcription-whispercpp translation-nmtcpp tts-ggml vla"
+        default: "asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml tts-ggml vla"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean
@@ -50,5 +57,5 @@ jobs:
       version: ${{ inputs.version }}
       pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
-      packages: ${{ inputs.packages || 'asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml transcription-parakeet transcription-whispercpp translation-nmtcpp tts-ggml vla' }}
+      packages: ${{ inputs.packages || 'asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml tts-ggml vla' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
