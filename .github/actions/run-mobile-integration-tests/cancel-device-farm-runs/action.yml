@@ -42,13 +42,28 @@ runs:
         FAILED=0
 
         for ARN in $(echo "$RUN_ARNS_JSON" | jq -r '.[]'); do
-          STATUS=$(aws devicefarm get-run --arn "$ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
+          # QVAC-24365: keep stderr. Swallowing it made a permanent GetRun
+          # failure (AccessDenied, expired credentials) indistinguishable from
+          # "the run already finished" — both render as status=UNKNOWN, and the
+          # run is then skipped and left billing.
+          STATUS=$(aws devicefarm get-run --arn "$ARN" --query 'run.status' --output text) || STATUS="UNKNOWN"
           echo "  Run $ARN: status=$STATUS"
+          if [ "$STATUS" = "UNKNOWN" ]; then
+            echo "    ⚠️  get-run failed (error above) — issuing stop-run anyway rather than assuming it finished"
+            if aws devicefarm stop-run --arn "$ARN"; then
+              echo "    ✅ stop-run issued"
+              STOPPED=$((STOPPED + 1))
+            else
+              echo "    ⚠️  stop-run also failed (see error above)"
+              FAILED=$((FAILED + 1))
+            fi
+            continue
+          fi
 
           if [ "$STATUS" = "RUNNING" ] || [ "$STATUS" = "PENDING" ] || \
              [ "$STATUS" = "PENDING_CONCURRENCY" ] || [ "$STATUS" = "PENDING_DEVICE" ] || \
              [ "$STATUS" = "SCHEDULING" ] || [ "$STATUS" = "PREPARING" ]; then
-            if aws devicefarm stop-run --arn "$ARN" 2>/dev/null; then
+            if aws devicefarm stop-run --arn "$ARN"; then
               echo "    ✅ stop-run issued"
               STOPPED=$((STOPPED + 1))
             else

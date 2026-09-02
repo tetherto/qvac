@@ -115,7 +115,11 @@ runs:
 
         for RUN_ARN in "${RUN_ARNS[@]}"; do
           [ -z "$RUN_ARN" ] && continue
-          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json 2>/dev/null || echo '{}')
+          # QVAC-24365: the `|| echo '<empty>'` fallbacks below are deliberate —
+          # log collection must not fail the job. Dropping the `2>/dev/null` that
+          # used to accompany them is also deliberate: an AccessDenied here is
+          # why the collected logs come back empty, and it needs to be readable.
+          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json || echo '{}')
           RUN_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
           SAFE_RUN=$(echo "$RUN_LABEL" | tr ' /' '__' | tr -cd '[:alnum:]_-')
           echo ""
@@ -123,7 +127,7 @@ runs:
           echo "Run: $RUN_LABEL"
           echo "========================================"
 
-          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json 2>/dev/null || echo '{"jobs":[]}')
+          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json || echo '{"jobs":[]}')
           for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
             DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
             SAFE_DEV=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
@@ -131,7 +135,7 @@ runs:
             mkdir -p "$JOB_DIR"
             echo "  Device: $DEVICE_NAME"
 
-            SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json 2>/dev/null || echo '{"suites":[]}')
+            SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json || echo '{"suites":[]}')
             for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
               SUITE_NAME=$(echo "$SUITES" | jq -r --arg arn "$SUITE_ARN" '.suites[] | select(.arn == $arn) | .name // "unknown"')
 
@@ -143,18 +147,18 @@ runs:
               SUITE_DIR="${JOB_DIR}/${SAFE_SUITE}"
               mkdir -p "$SUITE_DIR"
 
-              ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+              ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json || echo '{"artifacts":[]}')
               for ART in $(echo "$ARTIFACTS" | jq -r '.artifacts[] | @base64'); do
                 download_artifact "$SUITE_DIR" "$ART"
               done
 
-              ARTIFACTS_LOG=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json 2>/dev/null || echo '{"artifacts":[]}')
+              ARTIFACTS_LOG=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json || echo '{"artifacts":[]}')
               for ART in $(echo "$ARTIFACTS_LOG" | jq -r '.artifacts[] | @base64'); do
                 download_artifact "$SUITE_DIR" "$ART"
               done
             done
 
-            JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+            JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json || echo '{"artifacts":[]}')
             for ART in $(echo "$JOB_ARTIFACTS" | jq -r '.artifacts[] | @base64'); do
               download_artifact "$JOB_DIR" "$ART"
             done

@@ -65,12 +65,29 @@ runs:
 
         # ── helpers ──────────────────────────────────────────────────
         # Bash 3.2 compat: no mapfile, no declare -A.
+        #
+        # QVAC-24365: this used to run the AWS CLI with `2>/dev/null`, so a call
+        # that failed for a *permanent* reason (AccessDenied on the action or on
+        # the resource type, expired credentials, bad ARN) looked identical to a
+        # transient network blip: three "attempt N/3 failed" lines and nothing
+        # else. The monitor then polled a dead API for the full 2h ceiling with
+        # `⏳ Run 1:  ()` on every line. Keep stderr and print it — the AWS error
+        # message is the whole diagnosis.
+        AWS_ERR_FILE="${RUNNER_TEMP:-/tmp}/devicefarm-aws-stderr.$$"
         aws_retry() {
           local max_attempts=3 attempt=1 result=""
           while [ $attempt -le $max_attempts ]; do
-            result=$("$@" 2>/dev/null) && { echo "$result"; return 0; }
-            echo "  ⚠️  AWS API attempt $attempt/$max_attempts failed, retrying in 5s..." >&2
-            sleep 5
+            if result=$("$@" 2>"$AWS_ERR_FILE"); then
+              echo "$result"
+              return 0
+            fi
+            echo "  ⚠️  AWS API attempt $attempt/$max_attempts failed: $*" >&2
+            if [ -s "$AWS_ERR_FILE" ]; then
+              sed 's/^/     aws: /' "$AWS_ERR_FILE" >&2 || true
+            else
+              echo "     aws: (no stderr — CLI exited non-zero with no message)" >&2
+            fi
+            [ $attempt -lt $max_attempts ] && sleep 5
             attempt=$((attempt + 1))
           done
           echo ""
@@ -92,6 +109,51 @@ runs:
         for ((i=0; i<RUN_COUNT; i++)); do
           echo "  Run $((i+1)): ${RUN_ARNS[$i]}"
         done
+        echo ""
+
+        # ── preflight (QVAC-24365) ───────────────────────────────────
+        # One unsuppressed GetRun against the first ARN before entering the
+        # polling loop. ScheduleRun succeeding does NOT imply GetRun/ListJobs
+        # will: ScheduleRun and CreateUpload authorize against the *project*
+        # ARN, while GetRun/ListJobs/GetJob/StopRun authorize against the
+        # *run* and *job* ARNs, so an IAM policy whose Resource list stops at
+        # project/upload denies exactly the calls this step depends on.
+        # Print the caller identity and the raw AWS error so that split is
+        # obvious in the log instead of being inferred from empty status lines.
+        echo "::group::Preflight: Device Farm API reachability"
+        echo "Caller identity:"
+        aws sts get-caller-identity --output json || echo "  (sts:GetCallerIdentity failed — see error above)"
+        echo ""
+        PREFLIGHT_OK=false
+        for _attempt in 1 2 3; do
+          echo "GetRun on ${RUN_ARNS[0]} (attempt $_attempt/3):"
+          if aws devicefarm get-run --arn "${RUN_ARNS[0]}" \
+               --query 'run.{status:status,result:result,name:name}' --output json; then
+            PREFLIGHT_OK=true
+            break
+          fi
+          [ "$_attempt" -lt 3 ] && sleep 10
+        done
+        echo "::endgroup::"
+        if [ "$PREFLIGHT_OK" = "true" ]; then
+          echo "✅ Device Farm read API reachable"
+        else
+          # Three visible failures in a row is not a blip. Don't sit in the
+          # polling loop for the full ceiling printing "Run 1:  ()" — say why
+          # and stop. Best-effort stop-run first: the run is already scheduled
+          # and bills device-minutes whether or not this job stays alive, and
+          # the caller's cancel step only fires on cancelled(), not failure.
+          echo "🛑 Stopping the scheduled run(s) before bailing out"
+          for ((i=0; i<RUN_COUNT; i++)); do
+            if aws devicefarm stop-run --arn "${RUN_ARNS[$i]}" >/dev/null; then
+              echo "  stopped ${RUN_ARNS[$i]}"
+            else
+              echo "  ::warning::could not stop ${RUN_ARNS[$i]} — it will bill until its jobTimeoutMinutes"
+            fi
+          done
+          echo "::error title=Device Farm read API unavailable::GetRun failed on a run this job just scheduled. The AWS error is printed in the Preflight group above — read it before assuming a flaky API. If it is AccessDenied, the OIDC role's policy is missing either the action or the run/job resource ARNs: ScheduleRun and CreateUpload authorize against the *project* ARN and will keep succeeding, while GetRun/ListJobs/GetJob/StopRun authorize against the *run* and *job* ARNs."
+          exit 1
+        fi
         echo ""
 
         # ── run-to-tests legend ────────────────────────────────────
@@ -195,12 +257,30 @@ runs:
         DEEP_DIVE_INTERVAL=180
         LAST_DEEP_DIVE=-1
 
+        # Consecutive polls where aws_retry burned all 3 attempts. The preflight
+        # catches an API that is broken from the start; this catches one that
+        # breaks mid-run (credentials expiring under a long poll, a policy edited
+        # while the run is in flight). Without it the loop happily counts to the
+        # 2h ceiling against an API that has stopped answering.
+        POLL_API_FAILURES=0
+        MAX_POLL_API_FAILURES=10
+
         while [ $DONE_COUNT -lt $RUN_COUNT ]; do
           STATUS_LINE=""
           for ((i=0; i<RUN_COUNT; i++)); do
             arn="${RUN_ARNS[$i]}"
             if [ "${DONE[$i]}" != "true" ]; then
               RUN_JSON=$(aws_retry aws devicefarm get-run --arn "$arn" --output json) || true
+              if [ -z "$RUN_JSON" ]; then
+                # aws_retry exhausted its attempts. `echo "" | jq` emits nothing,
+                # so without this the status line rendered as "Run 1:  ()" and
+                # the poll looked like a state we didn't recognise rather than a
+                # failed API call.
+                RUN_JSON='{}'
+                POLL_API_FAILURES=$((POLL_API_FAILURES + 1))
+              else
+                POLL_API_FAILURES=0
+              fi
               CUR_STATUS[$i]=$(echo "$RUN_JSON" | jq -r '.run.status // "UNKNOWN"')
               CUR_RESULT[$i]=$(echo "$RUN_JSON" | jq -r '.run.result // "UNKNOWN"')
               if [ "${CUR_STATUS[$i]}" = "COMPLETED" ]; then
@@ -251,6 +331,12 @@ runs:
             STATUS_LINE="${STATUS_LINE}Run $((i+1)): ${CUR_STATUS[$i]} (${CUR_RESULT[$i]})"
           done
           echo "⏳ ${STATUS_LINE} | ${ELAPSED}s"
+
+          if [ "$POLL_API_FAILURES" -ge "$MAX_POLL_API_FAILURES" ]; then
+            echo ""
+            echo "::error title=Device Farm API stopped responding::${POLL_API_FAILURES} consecutive polls exhausted all retries. The AWS error for each attempt is printed above — read it rather than treating this as a timeout."
+            exit 1
+          fi
 
           # Periodic per-device drill-down. For every slot currently in
           # RUNNING, dump each child job's device + state + counters so
