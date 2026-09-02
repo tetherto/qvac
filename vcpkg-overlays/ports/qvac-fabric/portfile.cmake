@@ -255,7 +255,7 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
     set(QVAC_CUDA_ARCHS "87-real\;80-virtual")
   else()
-    set(QVAC_CUDA_ARCHS "86-real\;120a-real\;80-virtual")
+    set(QVAC_CUDA_ARCHS "75-virtual\;80-real\;86-real\;120a-real")
   endif()
   message(STATUS "qvac-fabric: cuda-backend ON — building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
   list(APPEND PLATFORM_OPTIONS
