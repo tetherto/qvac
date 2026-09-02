@@ -1106,11 +1106,38 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
   const lib = read('.github/scripts/prebuild-status/lib.mjs')
   assert.match(lib, /target_url/, 'lib reads the producing run from the status target_url')
   assert.match(lib, /actions\S*runs/, 'lib parses the producing run id from the run URL')
+  // The producer is resolved per package and compared exactly: on-pr-nx.yml for
+  // the consolidated packages, and for the three carved out of it (fabric,
+  // classification-ggml, vla) their own orchestrator. A flat allowlist of
+  // trusted paths would let any carved-out workflow post for any package, so the
+  // per-package map is the part that must not regress. The behavioural coverage
+  // lives in prebuild-status.test.mjs; this pins the shape.
   assert.match(
     lib,
-    /run\.path !== '\.github\/workflows\/on-pr-nx\.yml'/,
-    'lib trusts only the consolidated on-pr-nx.yml producer (legacy on-pr-<pkg> removed)',
+    /run\.path !== expected/,
+    'lib binds the status to a specific expected producer path',
   )
+  assert.match(
+    lib,
+    /const expected = CARVED_OUT_PRODUCERS\[pkg\] \?\? NX_PRODUCER/,
+    'lib resolves the expected producer per package, defaulting to the nx producer',
+  )
+  assert.match(
+    lib,
+    /NX_PRODUCER = '\.github\/workflows\/on-pr-nx\.yml'/,
+    'the default producer is still the consolidated on-pr-nx.yml',
+  )
+  for (const [pkg, workflow] of [
+    ['fabric', 'on-pr-fabric.yml'],
+    ['classification-ggml', 'on-pr-classification-ggml.yml'],
+    ['vla', 'on-pr-vla.yml'],
+  ]) {
+    assert.match(
+      lib,
+      new RegExp(`'?${pkg}'?: '\\.github/workflows/${workflow.replace('.', '\\.')}'`),
+      `${pkg} is pinned to its own producer ${workflow}`,
+    )
+  }
   assert.match(
     lib,
     /createdMs \/ 1000\) >= prUpdatedEpoch/,

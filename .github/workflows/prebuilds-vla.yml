@@ -1,0 +1,54 @@
+# Build-only workflow. Publishing is handled by on-merge-vla.yml.
+#
+# Routed through .github/workflows/reusable-prebuilds.yml after the
+# consolidation in QVAC-17422 (#1806). VLA-specific knobs (Vulkan SDK,
+# Linux X11/Xrandr packages) are passed as inputs to the reusable;
+# everything else (matrix, checkout, vcpkg, bare-make, strip, upload,
+# merge) lives in the reusable workflow.
+name: "Prebuilds (Vla)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/vla-ggml"
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/vla-ggml"
+
+permissions:
+  contents: read
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ inputs.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+      linux-extra-packages: libxi-dev libxtst-dev libxrandr-dev
+      include-vulkan-sdk: true
+      # Cross-compile the ROCm/HIP backend (gfx1151) into the linux-x64 prebuild.
+      # No AMD GPU needed on the runner; fail-safe if ROCm install/feature is absent.
+      include-rocm: true
+    secrets: inherit

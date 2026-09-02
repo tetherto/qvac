@@ -77,10 +77,29 @@ export function selectNewestBotStatus(statuses, context) {
   )
 }
 
-// Trust a status only from a fresh on-pr-nx run: rejects superseded pre-label runs
-// and legacy on-pr-<pkg> co-posts main still fires. `pkg` kept for signature stability.
+// on-pr-nx is the producer for every consolidated package.
+export const NX_PRODUCER = '.github/workflows/on-pr-nx.yml'
+
+// fabric, classification-ggml and vla are carved out of on-pr-nx (their
+// project.json on-pr target sets carveOut: true) because the fabric-stack overlay
+// needs fabric built before its consumers, which one flat prebuild matrix cannot
+// express. They keep their own orchestrators, so each posts its own status.
+//
+// Deliberately a per-package map rather than a flat allowlist of trusted paths:
+// on-pr-vla.yml must not be able to post a status for classification-ggml. The
+// key is the PREBUILD_KEYS spelling, so `vla`, not `vla-ggml`.
+export const CARVED_OUT_PRODUCERS = {
+  fabric: '.github/workflows/on-pr-fabric.yml',
+  'classification-ggml': '.github/workflows/on-pr-classification-ggml.yml',
+  vla: '.github/workflows/on-pr-vla.yml',
+}
+
+// Trust a status only from a fresh run of THIS package's one legitimate producer:
+// rejects superseded pre-label runs, cross-package forgery, and any other
+// workflow's co-post.
 export function isRunFresh(run, pkg, prUpdatedEpoch) {
-  if (!run || run.path !== '.github/workflows/on-pr-nx.yml') return false
+  const expected = CARVED_OUT_PRODUCERS[pkg] ?? NX_PRODUCER
+  if (!run || run.path !== expected) return false
   const createdMs = Date.parse(run.created_at)
   if (Number.isNaN(createdMs)) return false
   return Math.floor(createdMs / 1000) >= prUpdatedEpoch
@@ -97,8 +116,9 @@ export function classifyState(state) {
 // `lookupRun(runId)` returns the producing run object (or null) and is injected
 // so this stays pure and testable.
 export function evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun) {
-  // Filter to trusted+fresh (on-pr-nx) statuses, then take the newest of those.
-  // Newest-first would let a legacy on-pr-<pkg> co-post mask the real producer.
+  // Filter to trusted+fresh statuses (this package's own producer, see
+  // isRunFresh), then take the newest of those. Newest-first would let any other
+  // workflow's co-post mask the real producer.
   const context = `qvac/prebuild-${pkg}`
   const trusted = (statuses ?? [])
     .filter(

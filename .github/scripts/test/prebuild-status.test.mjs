@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 
 import {
   PREBUILD_KEYS,
+  NX_PRODUCER,
+  CARVED_OUT_PRODUCERS,
   resolvePublishState,
   expectedPrebuilds,
   flattenPages,
@@ -116,6 +118,56 @@ test('isRunFresh requires the matching workflow and created_at >= threshold', ()
   assert.equal(isRunFresh(stale, 'tts-ggml', threshold), false)
   assert.equal(isRunFresh(wrongWorkflow, 'tts-ggml', threshold), false)
   assert.equal(isRunFresh(null, 'tts-ggml', threshold), false)
+})
+
+// fabric, classification-ggml and vla are carved out of on-pr-nx and keep their
+// own orchestrators, so each has exactly ONE legitimate producer. The map must
+// stay per-package: a flat allowlist of trusted paths would let any carved-out
+// workflow post a status for any other package.
+test('isRunFresh: each carved-out package trusts only its own orchestrator', () => {
+  const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
+  const at = '2026-08-10T12:00:05Z'
+
+  for (const [pkg, path] of Object.entries(CARVED_OUT_PRODUCERS)) {
+    assert.equal(
+      isRunFresh({ path, created_at: at }, pkg, threshold),
+      true,
+      `${pkg} rejected its own producer ${path}`,
+    )
+
+    // on-pr-nx must NOT be able to post for a carved-out package: it no longer
+    // builds them, so a status from it could not reflect a real build.
+    assert.equal(
+      isRunFresh({ path: NX_PRODUCER, created_at: at }, pkg, threshold),
+      false,
+      `${pkg} accepted on-pr-nx, which no longer builds it`,
+    )
+
+    // Cross-package forgery: another carved-out orchestrator must be rejected.
+    for (const [otherPkg, otherPath] of Object.entries(CARVED_OUT_PRODUCERS)) {
+      if (otherPkg === pkg) continue
+      assert.equal(
+        isRunFresh({ path: otherPath, created_at: at }, pkg, threshold),
+        false,
+        `${pkg} accepted a status produced by ${otherPath}`,
+      )
+    }
+
+    // Freshness still applies on the carved-out path.
+    assert.equal(
+      isRunFresh({ path, created_at: '2026-08-10T11:59:00Z' }, pkg, threshold),
+      false,
+      `${pkg} accepted a stale run from its own producer`,
+    )
+  }
+})
+
+test('isRunFresh: every carved-out key is a real PREBUILD_KEYS entry', () => {
+  // A typo here (e.g. 'vla-ggml' instead of 'vla') would silently fall back to
+  // the on-pr-nx producer and re-open the gap this map exists to close.
+  for (const pkg of Object.keys(CARVED_OUT_PRODUCERS)) {
+    assert.ok(PREBUILD_KEYS.includes(pkg), `${pkg} is not a PREBUILD_KEYS entry`)
+  }
 })
 
 test('classifyState maps commit-status states to gate outcomes', () => {
