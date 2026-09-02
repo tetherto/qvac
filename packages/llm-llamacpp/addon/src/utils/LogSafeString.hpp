@@ -41,7 +41,17 @@ inline std::string forLogMessage(std::string_view value) {
   out.reserve(kept + (truncated ? 3 : 0));
   for (size_t i = 0; i < kept; ++i) {
     const auto c = static_cast<unsigned char>(value[i]);
-    out += (std::isprint(c) != 0) ? static_cast<char>(c) : '?';
+    // Explicit printable-ASCII range rather than `std::isprint`, for the same
+    // reason `toLowerAscii` above avoids `std::tolower`: it is
+    // locale-dependent. Under a single-byte LC_CTYPE such as
+    // en_US.ISO-8859-1, `isprint(0xE2)` is true, so UTF-8 continuation bytes
+    // and the C1 controls 0x80-0x9F would survive the filter this function
+    // exists to apply — and the fixed truncation below could then split a
+    // multibyte sequence, putting invalid UTF-8 into an error message that
+    // crosses the napi boundary. Restricting to 0x20-0x7E makes the
+    // truncation split-safe by construction.
+    const bool printableAscii = c >= 0x20 && c < 0x7F;
+    out += printableAscii ? static_cast<char>(c) : '?';
   }
   if (truncated) {
     out += "...";

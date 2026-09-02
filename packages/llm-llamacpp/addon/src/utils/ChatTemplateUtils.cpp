@@ -376,15 +376,24 @@ void applyReasoningBudget(
   // With an unlimited cap and no lazy grammar fabric still builds nothing, so
   // this costs only the tokenization.
   //
-  // `generation_prompt` is deliberately NOT set here. It doubles as the
-  // grammar-prefill input, and fabric feeds it to any eager prefill-needing
-  // grammar (common/sampling.cpp). An OUTPUT_FORMAT grammar built from
-  // json_schema_to_grammar starts at a JSON value, so prefilling an assistant
-  // header into it makes common_sampler_init throw. Only the reasoning-budget
-  // sampler and applyToolGrammar, which know their grammar accepts it, set it.
+  // `generation_prompt` doubles as the grammar-prefill input, and fabric feeds
+  // it to any eager prefill-needing grammar (common/sampling.cpp). An
+  // OUTPUT_FORMAT grammar built from json_schema_to_grammar starts at a JSON
+  // value, and a USER grammar starts wherever the caller says, so prefilling
+  // an assistant header into either makes common_sampler_init throw.
+  //
+  // So it is set only when the grammar this request will carry can accept it:
+  // NONE (where `common_grammar_needs_prefill` is false and the value is
+  // inert) or TOOL_CALLS (which is rendered from a template that emitted this
+  // very prefix). Without the type check, a model loaded with a positive
+  // `reasoning_budget` — a load-time config key — failed *every* json_schema
+  // request against a thinking template for as long as it stayed loaded.
+  const bool grammarAcceptsPrefill =
+      next.grammar.type == COMMON_GRAMMAR_TYPE_NONE ||
+      next.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS;
   if (tokenize && !thinkingEndTags.empty() &&
       !thinkingEndTags.front().empty()) {
-    if (params.reasoning_budget > 0) {
+    if (params.reasoning_budget > 0 && grammarAcceptsPrefill) {
       next.generation_prompt = generationPrompt;
     }
     if (!thinkingStartTag.empty()) {
@@ -698,12 +707,15 @@ bool configureTemplateDerivedSampling(
   if (next.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS) {
     next.grammar = {};
   }
-  // The companion fields, however, are cleared unconditionally: this function
-  // is their only writer, so whatever is in them belongs to a tool grammar
-  // from an earlier request. Leaving them behind would attach a stale
+  // The companion fields, however, are cleared unconditionally. There are two
+  // writers — this function and `applyGenerationOverridesToSampling`, which
+  // clears them when it installs a USER / OUTPUT_FORMAT grammar — and both own
+  // them per request, so whatever is in them belongs to an earlier request's
+  // grammar either way. Leaving them behind would attach a stale
   // `grammar_lazy` and its `<tool_call>` trigger to a USER / OUTPUT_FORMAT
   // grammar installed later, making the caller's grammar lazy on a trigger it
-  // can never emit — i.e. silently unenforced.
+  // can never emit — i.e. silently unenforced. A third writer would need the
+  // same per-request ownership to stay safe.
   next.grammar_lazy = false;
   next.grammar_triggers.clear();
   next.preserved_tokens.clear();

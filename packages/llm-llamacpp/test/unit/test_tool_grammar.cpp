@@ -451,13 +451,13 @@ TEST_F(ToolGrammarModelTest, BatchToolGrammarIsPerRequest) {
   ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr)
       << "parallel=2 must build the scheduler";
 
-  const auto withTools = model->processPromptBatch({makePrompt(TOOL_PROMPT)});
-  ASSERT_EQ(withTools.size(), 1u);
-  EXPECT_FALSE(withTools[0].empty());
-
-  const auto withoutTools =
-      model->processPromptBatch({makePrompt(PLAIN_PROMPT)});
-  ASSERT_EQ(withoutTools.size(), 1u);
-  EXPECT_FALSE(withoutTools[0].empty());
-  EXPECT_FALSE(hasToolCallBlock(withoutTools[0])) << withoutTools[0];
+  // Both in one call, so the two are genuinely co-scheduled. Submitting them
+  // sequentially exercised only the per-request clear, never the cross-slot
+  // isolation this test is named for.
+  const auto results = model->processPromptBatch(
+      {makePrompt(TOOL_PROMPT), makePrompt(PLAIN_PROMPT)});
+  ASSERT_EQ(results.size(), 2u);
+  EXPECT_FALSE(results[0].empty());
+  EXPECT_FALSE(results[1].empty());
+  EXPECT_FALSE(hasToolCallBlock(results[1])) << results[1];
 }

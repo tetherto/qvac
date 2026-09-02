@@ -313,19 +313,39 @@ bool TextLlmContext::checkAntiprompt() {
   }
   return false;
 }
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
-void TextLlmContext::requireSampler() const {
+void TextLlmContext::requireSampler() {
   if (smpl_) {
     return;
   }
+  // One rebuild attempt before giving up. The only other assignment sites are
+  // the constructor and the two inside `tokenizeChat`, and this check runs
+  // ahead of both — so without this attempt a single failed restore would
+  // brick the context for every later request, not just the next one, and
+  // recovery would mean reloading the model.
+  try {
+    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
+  } catch (const std::exception& ex) {
+    // Surfaces below as a StatusError rather than escaping as a fabric
+    // exception; the message keeps the reason.
+    QLOG_IF(
+        Priority::WARNING,
+        string_format("[TextLlm] sampler rebuild threw: %s\n", ex.what()));
+  }
+  if (smpl_) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[TextLlm] rebuilt the sampler after an earlier restore failure\n");
+    return;
+  }
   std::string errorMsg = string_format(
-      "[TextLlm] %s: no sampler is installed; a previous request's generation "
-      "parameter restore failed to rebuild it\n",
+      "[TextLlm] %s: no sampler is installed and it could not be rebuilt from "
+      "the current sampling parameters\n",
       __func__);
   throw qvac_errors::StatusError(
       ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void TextLlmContext::tokenizeChat(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools,
@@ -379,8 +399,13 @@ void TextLlmContext::tokenizeChat(
     inputs.tools = std::move(toolChoice.tools);
     inputs.tool_choice = toolChoice.choice;
   }
-  const PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
-  prompt = rendered.prompt;
+  // Not const: `prompt` and `additionalStops` are moved out below. On base
+  // `getPrompt` returned `std::string` and this assignment moved; binding the
+  // struct by const value turned it into a copy of the whole formatted chat
+  // history, reallocated every turn. Everything read from `rendered`
+  // afterwards is a different field.
+  PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
+  prompt = std::move(rendered.prompt);
   if (rendered.toolDefinitionsDropped) {
     ++toolDefinitionsDropped_;
   }
@@ -397,9 +422,12 @@ void TextLlmContext::tokenizeChat(
     return ::common_tokenize(modelCtx_.lctx, text, false, true);
   };
   // Template stop strings are per request: replace, never accumulate. No
-  // template in qvac-fabric 10297.0.0 populates `additional_stops`, so these
-  // lists are empty in practice today; the plumbing is forward-compatible.
-  templateStops_ = rendered.additionalStops;
+  // template any qvac package ships populates `additional_stops`, so these
+  // lists are empty for those models. It is not empty by construction —
+  // fabric's PEG auto-parser pushes `"</assistant>"` for laguna_glm_thinking
+  // templates — so a user-supplied model can legitimately land stops here and
+  // generation will honour them.
+  templateStops_ = std::move(rendered.additionalStops);
   templateStopTokens_.clear();
   templateStopsLower_.clear();
   templateStopsLower_.reserve(templateStops_.size());
@@ -1020,24 +1048,38 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     } else if (
         reasoningState_.inside_reasoning &&
         reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
-      // KNOWN LIMITATION: the sampler already accepted the original EOS
-      // above, but the text emitted is this close tag instead, so the
-      // grammar and reasoning-budget samplers are one token out of step for
-      // the rest of the request. With an eager tool grammar
-      // (`tool_choice: "required"`) that can make every continuation
-      // invalid. Correcting it means deferring the accept until after this
-      // substitution, which several early returns between here and the
-      // sample site would skip — leaving a worse, permanent drift. Left as
-      // is deliberately; needs the generation loop restructured around a
-      // single accept point.
+      // The sampler already accepted the original EOS above, but the text
+      // emitted is this close tag instead, so the two are one token out of
+      // step for the rest of the request. The accept below repairs the half
+      // that matters; see the comment on it for the half that remains.
       //
       // The forced newlines queued below are deliberately NOT fed to the
       // grammar (see the `is_generated = false` accept above): doing so
-      // would turn this bounded drift into a throw that fails every
+      // would turn a bounded drift into a throw that fails every
       // co-scheduled request.
       tokenId = reasoningState_.cached_close_tag_token;
       tokenStr =
           common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+      // Hand the substituted close tag to the sampler so fabric's
+      // reasoning-budget matcher advances to DONE. Without this it stays in
+      // COUNTING for the whole request — the EOS it did see advances no end
+      // matcher, and at an unlimited budget `remaining` is INT_MAX, so the
+      // only other exit never arrives (fabric reasoning-budget.cpp:93-131).
+      // `grammar_should_apply` then returns false for a *lazy* grammar in
+      // COUNTING (sampling.cpp:459-462), which silently disarms the tool
+      // grammar for the rest of the request on the default
+      // `tool_choice: "auto"` — the PR's whole constraint switching itself
+      // off with no error.
+      //
+      // Restricted to the lazy case, and that restriction is what makes it
+      // safe: with `grammar_lazy` set and the budget in COUNTING, fabric
+      // computes `accept_grammar == false`, so the grammar sampler is not
+      // fed this token and cannot throw on it. An eager grammar cannot
+      // reach this branch at all — EOG is masked to -INFINITY unless a
+      // grammar stack is empty (llama-grammar.cpp:1360-1381).
+      if (params_.sampling.grammar_lazy) {
+        common_sampler_accept(smpl_.get(), tokenId, true);
+      }
       reasoningState_.inside_reasoning = false;
       // EOS substitution: the original EOS reached the capture site with
       // capture still off and the substituted close never does, so seed it
@@ -1752,13 +1794,21 @@ bool TextLlmContext::handleReasoningEOS(
   ++nPast;
   ++lastGeneratedTokenCount_;
 
-  // KNOWN LIMITATION, pre-existing: the tokens injected here are streamed and
-  // decoded but never handed to `common_sampler_accept`, so on this
-  // single-prompt path the sampler's `prev` — what `checkAntiprompt` scans —
-  // omits them, unlike the batch path's forced-token branch in
-  // `onLogitsReady`. Fixing it means an accept with `is_generated = false`
-  // here; left alone because this function's decode bookkeeping is shared with
-  // recurrent rollback and is out of scope for the tool-grammar work.
+  // Same reason as the batch path in `onLogitsReady`: the substituted close
+  // tag has to reach fabric's reasoning-budget matcher, or it stays in
+  // COUNTING and `grammar_should_apply` keeps a lazy tool grammar disarmed
+  // for the rest of the request. Lazy only, so the grammar sampler is
+  // provably not fed this token.
+  if (params_.sampling.grammar_lazy) {
+    common_sampler_accept(smpl_.get(), tokenId, true);
+  }
+
+  // KNOWN LIMITATION, pre-existing and narrower than it was: the trailing
+  // newlines injected below are still streamed and decoded without any
+  // `common_sampler_accept`, so on this single-prompt path the sampler's
+  // `prev` — what `checkAntiprompt` scans — omits them, unlike the batch
+  // path's forced-token branch. Left alone because this function's decode
+  // bookkeeping is shared with recurrent rollback.
   //
   // Close marker just committed — record span end before injecting
   // the trailing newlines (they are excluded from the span).

@@ -1011,11 +1011,13 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     return out;
   }
 
-  // Validate `tool_choice` here, outside the try below: a bad value is a
-  // caller error, and the catch-all in that block invalidates the active KV
-  // cache. Throwing before it means a typo costs the caller an error rather
-  // than a warm session, matching how an invalid `json_schema` already
-  // behaves via applyGenerationParams.
+  // Validate `tool_choice` here, outside the try below, whose catch-all runs
+  // `resetAndInvalidateActiveCache()`. Throwing before it means a bad value
+  // costs the caller an error rather than the active KV cache, matching how an
+  // invalid `json_schema` already behaves via applyGenerationParams. Note the
+  // cache *session* is already resolved by this point —
+  // `resolveChatAndTools` calls `handleCache` itself — so what this ordering
+  // saves is the invalidation, not the session setup.
   qvac_lib_inference_addon_llama::utils::validateToolChoice(
       prompt.generationParams.tool_choice, resolved.tools);
 

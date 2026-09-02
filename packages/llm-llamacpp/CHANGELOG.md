@@ -10,9 +10,9 @@
   arguments cannot be generated. A load-time or per-request `grammar` /
   `json_schema` still takes precedence over the tool grammar.
 - Chat-template `additional_stops` are plumbed through per request alongside the
-  load-time antiprompts. No template in qvac-fabric 10297.0.0 populates the
-  field yet, so this is forward-compatible plumbing rather than a behaviour
-  change.
+  load-time antiprompts. No template shipped by a qvac package populates the
+  field, so this is inert for those models; a user-supplied model whose
+  template does populate it will now stop on those strings.
 - `RuntimeStats.toolDefinitionsDropped` reports renders where the template
   rejected the tool definitions, or where the prompt was rendered without a
   Jinja template, and the model therefore never saw the tools.

@@ -150,6 +150,18 @@ function normalizeGenerationParams(generationParams) {
     if (hasGrammar && hasJsonSchema) {
         throw new TypeError("generationParams.grammar and generationParams.json_schema are mutually exclusive");
     }
+    // A caller grammar takes precedence over the template's tool-call grammar, so
+    // demanding a tool call while also constraining the output to something else
+    // can never be satisfied. The addon does reject it, but only from inside the
+    // prefill, where the failure also discards the active KV cache session — so
+    // reject it here, alongside the analogous grammar/json_schema pair.
+    const demandsToolCall = typeof sanitized.tool_choice === "string" &&
+        sanitized.tool_choice !== "auto" &&
+        sanitized.tool_choice !== "none";
+    if (demandsToolCall && (hasGrammar || hasJsonSchema)) {
+        throw new TypeError('generationParams.tool_choice "required" or a function name cannot be combined with ' +
+            "generationParams.grammar or generationParams.json_schema");
+    }
     if (!hasJsonSchema)
         return sanitized;
     let jsonSchemaString;

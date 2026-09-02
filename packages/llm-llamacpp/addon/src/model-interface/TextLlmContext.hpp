@@ -224,10 +224,11 @@ private:
       const std::vector<common_chat_tool>& tools,
       std::vector<llama_token>& inputTokens, bool isCacheLoaded);
 
-  // Throws if `smpl_` is null, which a failed per-request restore can leave
-  // behind. Called at request entry so the failure is a StatusError rather
-  // than a null dereference inside fabric's sampler.
-  void requireSampler() const;
+  // Ensures `smpl_` is non-null, which a failed per-request restore can leave
+  // it. Attempts one rebuild from the current sampling params and throws if
+  // that fails too. Called at request entry so the failure is a StatusError
+  // rather than a null dereference inside fabric's sampler.
+  void requireSampler();
 
   // Replaces an EOS sampled while inside the reasoning channel with the
   // model's single-token close marker and injects the trailing newlines.

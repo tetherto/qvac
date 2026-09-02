@@ -175,7 +175,9 @@ std::function<void()> applyGenerationParamsToContext(
     // noexcept — `common_sampler_init` throws on a grammar it cannot parse,
     // and letting that escape would call std::terminate and take down every
     // other in-flight job in the runtime. The restored params are already
-    // committed above; losing the sampler only fails the next request.
+    // committed above; losing the sampler makes the next request try one
+    // rebuild in `requireSampler()` and fail with a StatusError if that does
+    // not work either.
     try {
       // `common_sampler_init` has two failure modes: it throws on a grammar it
       // cannot parse, and returns nullptr on other bad inputs. Both must null

@@ -285,7 +285,7 @@ private:
       bool isCacheLoaded);
 
   // See TextLlmContext::requireSampler.
-  void requireSampler() const;
+  void requireSampler();
 
   /**
    * The init vision context method. It initializes the vision context.

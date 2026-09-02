@@ -322,13 +322,28 @@ bool MtmdLlmContext::checkAntiprompt() {
   return false;
 }
 
-void MtmdLlmContext::requireSampler() const {
+void MtmdLlmContext::requireSampler() {
   if (smpl_) {
     return;
   }
+  // See TextLlmContext::requireSampler: one rebuild attempt, so a single
+  // failed restore does not brick the context for every later request.
+  try {
+    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
+  } catch (const std::exception& ex) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format("[MtmdLlm] sampler rebuild threw: %s\n", ex.what()));
+  }
+  if (smpl_) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[MtmdLlm] rebuilt the sampler after an earlier restore failure\n");
+    return;
+  }
   std::string errorMsg = string_format(
-      "[MtmdLlm] %s: no sampler is installed; a previous request's generation "
-      "parameter restore failed to rebuild it\n",
+      "[MtmdLlm] %s: no sampler is installed and it could not be rebuilt from "
+      "the current sampling parameters\n",
       __func__);
   throw qvac_errors::StatusError(
       ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
@@ -377,8 +392,10 @@ void MtmdLlmContext::tokenizeChat(
     inputs.tools = std::move(toolChoice.tools);
     inputs.tool_choice = toolChoice.choice;
   }
-  const PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
-  formattedChat = rendered.prompt;
+  // See TextLlmContext::tokenizeChat: not const so the prompt and stop list
+  // move out instead of being copied per request.
+  PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
+  formattedChat = std::move(rendered.prompt);
   if (rendered.toolDefinitionsDropped) {
     ++toolDefinitionsDropped_;
   }
@@ -402,9 +419,10 @@ void MtmdLlmContext::tokenizeChat(
     return ::common_tokenize(modelCtx_.lctx, text, false, true);
   };
   // Template stop strings are per request: replace, never accumulate. No
-  // template in qvac-fabric 10297.0.0 populates `additional_stops`, so these
-  // lists are empty in practice today; the plumbing is forward-compatible.
-  templateStops_ = rendered.additionalStops;
+  // template any qvac package ships populates `additional_stops`, so these
+  // lists are empty for those models — but see TextLlmContext::tokenizeChat:
+  // a user-supplied model can populate them.
+  templateStops_ = std::move(rendered.additionalStops);
   templateStopTokens_.clear();
   templateStopsLower_.clear();
   templateStopsLower_.reserve(templateStops_.size());
@@ -929,6 +947,14 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       tokenId = reasoningState_.cached_close_tag_token;
       tokenStr =
           common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+      // See TextLlmContext::onLogitsReady: the substituted close tag has to
+      // reach fabric's reasoning-budget matcher, or it stays in COUNTING and
+      // a lazy tool grammar is disarmed for the rest of the request. Lazy
+      // only, which is what makes feeding the grammar sampler impossible
+      // here.
+      if (params_.sampling.grammar_lazy) {
+        common_sampler_accept(smpl_.get(), tokenId, true);
+      }
       reasoningState_.inside_reasoning = false;
       // EOS substitution seeds the substituted token itself: the sampled EOS
       // reached the capture site with capture still off.
@@ -1737,6 +1763,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
       reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
     tokenId = reasoningState_.cached_close_tag_token;
     tokenStr = common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+    // See TextLlmContext::onLogitsReady for why the substituted close tag
+    // must reach the reasoning-budget matcher, and why lazy-only is safe.
+    if (params_.sampling.grammar_lazy) {
+      common_sampler_accept(smpl_.get(), tokenId, true);
+    }
     reasoningState_.inside_reasoning = false;
     // EOS substitution skips the `updateReasoningBuffer` handshake, so the
     // substituted close never reaches the capture site on its own. Seed it
