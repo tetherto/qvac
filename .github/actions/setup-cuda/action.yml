@@ -1,7 +1,7 @@
 name: "Setup CUDA toolkit for nvcc compile"
 description: >-
   Assembles a pinned CUDA toolkit from NVIDIA's redistributable component
-  archives on a linux-x64 runner and exports
+  archives on a linux runner, x64 or arm64, and exports
   CUDA_PATH/CUDACXX/PATH(bin)/VCPKG_KEEP_ENV_VARS/LD_LIBRARY_PATH so a
   consumer's speech-cpp cuda feature can compile the ggml CUDA backend.
   Component tarballs are used instead of the runfile installer because the
@@ -24,20 +24,26 @@ inputs:
 runs:
   using: composite
   steps:
-    # Cache the assembled toolkit so the component archives are fetched and
-    # unpacked once per component-list revision. The key includes the pinned
-    # list's hash via the action file itself changing the runner workspace,
-    # so bump cache-suffix when editing COMPONENTS.
+    # The key does NOT track COMPONENTS, so bump the suffix by hand when that
+    # list changes or a stale toolkit is restored and the sha256-verified
+    # assemble below is skipped.
     #
     # QVAC-24442: runner.arch is part of the key. GitHub scopes a cache by repo
     # and ref, not by architecture, so without it an arm64 job would restore the
     # x86_64 toolkit and fail with an exec format error deep in the build.
-    - name: Cache CUDA toolkit
+    #
+    # Restore and save are split so only trusted events write.
+    # `pull_request_target` runs with GITHUB_REF on the base branch, so a
+    # combined `actions/cache` let any authorized PR populate the entry that
+    # main's privileged runs then restore, and cpp-lint reaches here with no
+    # label at all. r1 -> r2 because splitting only stops new writes; rotating
+    # makes whatever the old lane already wrote unreachable.
+    - name: Restore CUDA toolkit
       id: cache-cuda
-      uses: actions/cache@v4
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r1
+        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r2
 
     - name: Download + verify + assemble CUDA toolkit
       if: steps.cache-cuda.outputs.cache-hit != 'true'
@@ -77,9 +83,16 @@ runs:
         cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.2.51-archive.tar.xz 35244c4d90e5b1aa48fb98d655f6dfa3f9e4f7d0ac220266ebf85c0928a7524b
         libcublas/linux-sbsa/libcublas-linux-sbsa-13.3.0.5-archive.tar.xz edadce2ec8d997ffb08f5a1c4ee6b1d14a2c883f2aa11e1d3208b4f077d9225f"
 
-        # Picks COMPONENTS_linux_x86_64 or COMPONENTS_linux_sbsa. Same seven
-        # components and release either way, only the path and hash differ.
-        eval "COMPONENTS=\$COMPONENTS_${REDIST_ARCH//-/_}"
+        # Same seven components and release either way, only the path and hash
+        # differ. An explicit case rather than an indirect expansion: it fails
+        # closed if a new arch is added above without a matching list here,
+        # instead of silently expanding to an empty COMPONENTS and assembling
+        # nothing.
+        case "$REDIST_ARCH" in
+          linux-x86_64) COMPONENTS="$COMPONENTS_linux_x86_64" ;;
+          linux-sbsa)   COMPONENTS="$COMPONENTS_linux_sbsa" ;;
+          *) echo "::error::setup-cuda: no COMPONENTS list for $REDIST_ARCH"; exit 1 ;;
+        esac
 
         prefix="$RUNNER_TEMP/cuda/toolkit"
         mkdir -p "$prefix"
@@ -98,6 +111,18 @@ runs:
         if [ -d "$prefix/lib" ] && [ ! -e "$prefix/lib64" ]; then
           ln -s lib "$prefix/lib64"
         fi
+
+    # Only trusted events populate the entry every other run restores.
+    - name: Save CUDA toolkit
+      if: >-
+        steps.cache-cuda.outputs.cache-hit != 'true' &&
+        (github.event_name == 'push' ||
+         github.event_name == 'workflow_dispatch' ||
+         github.event_name == 'merge_group')
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ runner.temp }}/cuda
+        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r2
 
     - name: Export CUDA environment
       shell: bash
