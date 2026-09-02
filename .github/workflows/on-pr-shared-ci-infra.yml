@@ -36,6 +36,8 @@ jobs:
         run: node --test .github/actions/cache-models/test/*.test.mjs
       - name: Run seed-and-presign action unit tests
         run: node --test .github/actions/run-mobile-integration-tests/seed-and-presign-models/test/*.test.mjs
+      - name: Run check-prebuild-size action unit tests
+        run: node --test .github/actions/check-prebuild-size/test/*.test.mjs
 
   # The per-addon benchmark aggregators are plain Node scripts shared by the
   # benchmark-performance-*.yml workflows, which only run on demand — so without

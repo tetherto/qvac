@@ -1,0 +1,34 @@
+name: Check prebuild size
+description: |
+  Measures an assembled prebuilds tree and reports its total, per-target and
+  largest-file breakdown to the job summary. Fails the job when the total
+  exceeds `max-total-mb`, so a jump in what ships (a wider GPU fatbin, a new
+  shader payload) surfaces on the PR that causes it rather than at publish
+  time, where npm rejects a package whose unpacked size is over its ceiling.
+  Reporting only when `max-total-mb` is empty.
+
+inputs:
+  path:
+    description: Directory holding the assembled prebuilds tree.
+    required: true
+  max-total-mb:
+    description: |
+      Fail when the tree exceeds this many megabytes (decimal MB, matching
+      npm's own reporting). Empty reports without failing.
+    required: false
+    default: ''
+  top-count:
+    description: How many of the largest files to list in the summary.
+    required: false
+    default: '10'
+
+runs:
+  using: composite
+  steps:
+    - name: Measure prebuilds
+      shell: bash
+      env:
+        PREBUILD_DIR: ${{ inputs.path }}
+        MAX_TOTAL_MB: ${{ inputs.max-total-mb }}
+        TOP_COUNT: ${{ inputs.top-count }}
+      run: node "${GITHUB_ACTION_PATH}/check-prebuild-size.mjs"

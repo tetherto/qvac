@@ -46,4 +46,5 @@ jobs:
       include-cuda: true
       platform-cmake-defines: |
         linux-x64: -D ENABLE_CUDA=ON
+      max-prebuild-mb: "480"
     secrets: inherit

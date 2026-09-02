@@ -128,6 +128,17 @@ on:
         type: string
         required: false
         default: ""
+      max-prebuild-mb:
+        description: >-
+          Fail the merge job when the assembled prebuilds tree exceeds this many
+          megabytes. The published package is roughly this plus the JS layer, and
+          npm rejects a package whose unpacked size is over its ceiling, so this
+          catches a jump in what ships (a wider GPU fatbin, a new shader payload)
+          on the PR that causes it instead of at publish time. Empty reports the
+          breakdown to the job summary without failing.
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -582,6 +593,16 @@ jobs:
           echo "::error::fabric-overlay-artifact is set but artifact-name-prefix is empty — the merge would absorb the fabric tree into the prebuilds bundle"
           exit 1
 
+      # Only for the local check-prebuild-size action below; the merged tree
+      # itself comes from the matrix artifacts, not the working tree.
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+          sparse-checkout: .github/actions/check-prebuild-size
+
       - name: Download this workflow's build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
@@ -595,6 +616,15 @@ jobs:
           pattern: ${{ inputs.artifact-name-prefix }}*
           path: prebuilds
           merge-multiple: true
+
+      # The assembled tree here is what lands in the package's prebuilds/
+      # directory, so this is the first place a jump in what ships is visible.
+      # Reports unconditionally; fails only when the caller set a limit.
+      - name: Check prebuild size
+        uses: ./.github/actions/check-prebuild-size
+        with:
+          path: prebuilds
+          max-total-mb: ${{ inputs.max-prebuild-mb }}
 
       - name: Upload merged artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
