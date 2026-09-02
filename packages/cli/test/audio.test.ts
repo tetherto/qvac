@@ -10,9 +10,9 @@ import {
   buildWavHeader,
   buildWavBuffer,
   speechAliasKey
-} from '../src/serve/audio.js'
-import { parseServeConfig } from '../src/serve/config.js'
-import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '../src/serve/lib/audio-transcode.js'
+} from '@/serve/audio'
+import { parseServeConfig } from '@/serve/config'
+import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '@/serve/lib/audio-transcode'
 
 describe('mapResponseFormat', () => {
   it('returns the documented default for missing input', () => {
@@ -259,8 +259,8 @@ describe('parseServeConfig — openai.audio.speech.voices', () => {
       },
       {}
     )
-    assert.equal(cfg.openai.audio.speech.voices?.alloy, 'tts-a')
-    assert.equal(cfg.openai.audio.speech.voices?.echo, 'tts-b')
+    assert.equal(cfg.openai.audio.speech.voices?.['alloy'], 'tts-a')
+    assert.equal(cfg.openai.audio.speech.voices?.['echo'], 'tts-b')
   })
 
   it('rejects a non-object voices value', () => {

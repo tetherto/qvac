@@ -3,11 +3,11 @@ import { before, after, type TestContext } from 'node:test'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildServer, type StartServerOptions } from '../../../src/serve/index.js'
-import { preloadModels } from '../../../src/serve/core/lifecycle.js'
+import { buildServer, type StartServerOptions } from '@/serve/index'
+import { preloadModels } from '@/serve/core/lifecycle'
 import { MODELLESS_CONFIG, writeConfigDir } from './config.js'
 // Side-effect import: augments FastifyInstance with `.qvac`.
-import '../../../src/serve/lib/types.js'
+import '@/serve/lib/types'
 
 export interface CreateServerOptions {
   config?: unknown

@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-01
+
 ### Added
 
+- Support the full `audioCoverStrength` range for `cover-nofsq`. Values below
+  `1` follow the source for that fraction of the diffusion run and finish
+  freely afterwards; `0.5` starts as a cover and diverges halfway.
 - Multi-Track (lego) generation: `taskType: 'lego'` with a `track` option
   (one of the 12 ACE-Step layer names) generates a new isolated instrument
   layer that follows `sourceAudio` and returns only that stem. Requires the
@@ -20,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Raise the `speech-cpp` floor to 2026-08-31, which brings in the ACE-Step
   Multi-Track (lego) task and base-model guided sampling.
-- Raise the `speech-cpp` floor further to 2026-09-01#1, which brings in
-  ggml-speech 2026-09-01. The CUDA backend now skips, at registration, GPUs
+- Raise the `speech-cpp` floor further to 2026-09-01#2, which brings in
+  ggml-speech 2026-09-02. The CUDA backend now skips, at registration, GPUs
   whose compute capability has no compiled code in the fatbin, so a
   `useGPU: true` run on such a card (Turing and older) falls back to Vulkan
   or CPU instead of failing at the first kernel launch. The CUDA fatbin
@@ -29,7 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Turing (7.5), Ampere (8.0, 8.6), Ada (8.9), Hopper (9.0) and Blackwell
   (12.0, 12.1) — with 8.0 PTX for anything newer, so Turing is supported
   again and Blackwell no longer pays a first-use JIT. The roll also brings
-  the compute-buffer OOM handling and k-quant GET_ROWS fixes.
+  the compute-buffer OOM handling and k-quant GET_ROWS fixes, and fixes two
+  multi-GPU faults on a host that mixes supported and unsupported NVIDIA
+  cards: backend initialisation no longer aborts when the unsupported card
+  enumerates first, and a row-split buffer no longer allocates on the
+  skipped card.
 
 ## [0.3.2] - 2026-09-01
 
