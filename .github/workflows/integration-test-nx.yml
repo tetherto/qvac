@@ -114,10 +114,7 @@ jobs:
     strategy:
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
-    # Non-GPU on purpose: this job only runs generate-model-manifest.mjs, which
-    # downloads over node:https and hashes. It carries no native binary, so it
-    # must not occupy a contended qvac-shared GPU box. main moved the per-package
-    # equivalent off the GPU label in #4102 (QVAC-24158); same reasoning here.
+    # Non-GPU: downloads and hashes only, no native binary (#4102).
     runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     environment: release
     permissions:

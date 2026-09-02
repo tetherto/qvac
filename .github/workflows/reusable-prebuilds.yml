@@ -27,10 +27,8 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      # Artifact identity is always DERIVED from the package (basename of workdir):
-      # legs upload as prebuild-<pkg>-<platform>-<arch>, the bundle as prebuilds-<pkg>.
-      # This input is accepted and IGNORED; it exists only so an out-of-repo caller
-      # that still passes it does not hard-fail. No in-repo caller passes it.
+      # Ignored. Names derive from the package: legs prebuild-<pkg>-<platform>-<arch>,
+      # bundle prebuilds-<pkg>. Kept so an out-of-repo caller does not hard-fail.
       artifact-name-prefix:
         description: "Deprecated and ignored. Artifact names are derived from the package."
         type: string
