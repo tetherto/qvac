@@ -44,7 +44,4 @@ jobs:
       linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev
       setup-python-on-windows: true
       include-vulkan-sdk: true
-      include-cuda: true
-      platform-cmake-defines: |
-        linux-x64: -D ASR_CUDA=ON
     secrets: inherit
