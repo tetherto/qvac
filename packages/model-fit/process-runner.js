@@ -8,7 +8,27 @@ const processModule = require("bare-process");
 const process_internal_1 = require("./process-internal");
 const process_1 = require("./process");
 const process = processModule;
-const PACKAGED_BACKENDS_DIR = path.join(__dirname, 'prebuilds');
+// Duplicate of index.js resolveBackendsDir: this runner must not import
+// `./index` at load time because that would load the native binding. The v2
+// llamaConfigFit path also cannot go through fitParams().
+function resolveBackendsDir() {
+    try {
+        const fabricPkg = require.resolve('@qvac/fabric/package');
+        const fabricPrebuilds = path.join(path.dirname(fabricPkg), 'prebuilds');
+        if (fs.statSync(fabricPrebuilds).isDirectory())
+            return fabricPrebuilds;
+    }
+    catch {
+        // Mobile worklets cannot resolve the @qvac/fabric package tree.
+    }
+    try {
+        const packaged = path.join(__dirname, 'prebuilds');
+        return fs.statSync(packaged).isDirectory() ? packaged : undefined;
+    }
+    catch {
+        return undefined;
+    }
+}
 function exitAfterWriteError(error) {
     process.stderr.write(`model-fit process runner failed to write its response: ${error.message}\n`, () => {
         process.exit(2);
@@ -41,13 +61,9 @@ function fitLlama(...args) {
     const binding = require('./binding-internal');
     let resolved = config;
     if (config.backendsDir === undefined) {
-        try {
-            if (fs.statSync(PACKAGED_BACKENDS_DIR).isDirectory()) {
-                resolved = { ...config, backendsDir: PACKAGED_BACKENDS_DIR };
-            }
-        }
-        catch {
-            // Statically linked builds do not need a packaged backends directory.
+        const packaged = resolveBackendsDir();
+        if (packaged !== undefined) {
+            resolved = { ...config, backendsDir: packaged };
         }
     }
     return binding.llamaConfigFit({ loadKind, ...resolved });

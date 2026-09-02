@@ -7,14 +7,27 @@ const fs = require("bare-fs");
 const path = require("bare-path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
 const binding = require('./binding');
-// @qvac/fabric owns the shared llama.cpp + ggml runtime and its dynamically
-// loaded backends. `BACKENDS_SUBDIR` (<host>/qvac__fabric) is appended natively,
-// so use Fabric's prebuilds root rather than this addon's own prebuilds.
-// Resolving the package export also works when the dependency is hoisted.
-const FABRIC_PREBUILDS_DIR = path.join(path.dirname(require.resolve('@qvac/fabric/package')), 'prebuilds');
-function defaultBackendsDir() {
+// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, in the
+// @qvac/fabric dependency (prebuilds/<host>/qvac__fabric). We deliberately do
+// not copy them into this addon. On desktop, resolve the single @qvac/fabric
+// install. On mobile the package tree isn't resolvable at runtime (the worklet
+// runs from a packed bundle), so fall back to this addon's own prebuilds.
+// Native code appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to the root.
+// Return undefined only when neither directory exists, so a statically linked
+// build still skips backendsDir.
+function resolveBackendsDir() {
     try {
-        return fs.statSync(FABRIC_PREBUILDS_DIR).isDirectory() ? FABRIC_PREBUILDS_DIR : undefined;
+        const fabricPkg = require.resolve('@qvac/fabric/package');
+        const fabricPrebuilds = path.join(path.dirname(fabricPkg), 'prebuilds');
+        if (fs.statSync(fabricPrebuilds).isDirectory())
+            return fabricPrebuilds;
+    }
+    catch {
+        // Mobile worklets cannot resolve the @qvac/fabric package tree.
+    }
+    try {
+        const packaged = path.join(__dirname, 'prebuilds');
+        return fs.statSync(packaged).isDirectory() ? packaged : undefined;
     }
     catch {
         return undefined;
@@ -130,7 +143,7 @@ function fitParams(config) {
     // silently replaced by ours.
     let resolved = config;
     if (config.backendsDir === undefined) {
-        const packaged = defaultBackendsDir();
+        const packaged = resolveBackendsDir();
         if (packaged !== undefined) {
             resolved = { ...config, backendsDir: packaged };
         }
