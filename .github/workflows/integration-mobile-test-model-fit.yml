@@ -186,6 +186,14 @@ jobs:
           # whose monitor step could not read any state back.
           KNOWN_RUN_ARN: "arn:aws:devicefarm:us-west-2:833707431398:run:dcde833e-77ce-4248-976d-3828f303039c/5ef19af5-c0ef-42d7-88bc-4754582af6a4"
         run: |
+          # `set +e` is load-bearing. GitHub's default shell line is
+          # `bash --noprofile --norc -e -o pipefail`, and `set -uo pipefail`
+          # does NOT clear that inherited -e. With -e still on, the first DENIED
+          # probe aborted the whole job inside probe()'s command substitution —
+          # which is exactly what happened on run 33670793241, killing the job at
+          # the first GetRun and hiding every probe after it. The point of this
+          # job is to run ALL the probes and print a map, so -e must be off.
+          set +e
           set -uo pipefail
 
           RESULTS=""
@@ -249,8 +257,11 @@ jobs:
           # Prefer a run ARN discovered live, so a stale/expired ARN cannot be
           # mistaken for a permission problem. Fall back to the known one.
           DISCOVERED_RUN_ARN=""
+          # head -1: with --max-items the CLI appends its pagination token as a
+          # second output line, so this captured "<arn>\nNone" and built the
+          # command `get-run --arn <arn> None --output json` (exit 254).
           DISCOVERED_RUN_ARN=$(aws devicefarm list-runs --arn "$PROJECT_ARN" \
-            --max-items 1 --query 'runs[0].arn' --output text 2>/dev/null)
+            --max-items 1 --query 'runs[0].arn' --output text 2>/dev/null | head -1)
           if [ "$DISCOVERED_RUN_ARN" = "None" ]; then DISCOVERED_RUN_ARN=""; fi
 
           if [ -n "$DISCOVERED_RUN_ARN" ]; then
@@ -262,7 +273,7 @@ jobs:
 
             JOB_ARN=""
             JOB_ARN=$(aws devicefarm list-jobs --arn "$DISCOVERED_RUN_ARN" \
-              --query 'jobs[0].arn' --output text 2>/dev/null)
+              --query 'jobs[0].arn' --output text 2>/dev/null | head -1)
             if [ "$JOB_ARN" = "None" ]; then JOB_ARN=""; fi
             if [ -n "$JOB_ARN" ]; then
               probe "devicefarm:GetJob" "job:" \
