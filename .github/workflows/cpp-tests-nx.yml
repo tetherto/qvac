@@ -74,6 +74,9 @@ jobs:
     env:
       BUILD_TYPE: Debug
       ENABLE_COVERAGE: ON
+      # Matches main per lane: coverage caches at the workspace root, standard
+      # per package. Without it the whole matrix loses its vcpkg binary cache.
+      VCPKG_BINARY_SOURCES: ${{ matrix.mode == 'coverage' && format('clear;files,{0}/vcpkg/cache,readwrite', github.workspace) || format('clear;files,{0}/{1}/vcpkg/cache,readwrite', github.workspace, matrix.workdir) }}
     steps:
       - name: Manual Workspace Cleanup
         if: matrix.mode == 'standard' && runner.environment != 'github-hosted'
@@ -116,7 +119,7 @@ jobs:
 
       - name: Setup vcpkg (composite)
         if: matrix.mode == 'standard'
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
