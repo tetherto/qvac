@@ -278,9 +278,7 @@ export function createSystemResourceCollector(dependencies: ResourceCollectorDep
             : normalizeNonNegativeIntegerMetric(view.usedBytes, processProvenance),
         processAvailableBytes:
           view.availableBytes === undefined
-            ? unavailableMetric<number>(
-                'the per-process allowance is not exposed on this platform; iOS needs a native os_proc_available_memory source'
-              )
+            ? unavailableMetric<number>('the per-process allowance is not exposed on this platform')
             : normalizeNonNegativeIntegerMetric(view.availableBytes, processProvenance)
       }
     } catch {
