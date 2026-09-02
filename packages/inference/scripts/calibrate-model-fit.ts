@@ -34,7 +34,7 @@ import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js
 import type { GgufFacts } from '../dist/schemas/model-resource-profile.js'
 import type { PlatformCalibration } from '../dist/resources/model-fit/types.js'
 
-declare const Bare: { argv: string[]; exit(code?: number): void }
+declare const Bare: { argv: string[]; exit(code?: number): never }
 
 const SAMPLE_INTERVAL_MS = 25
 const SETTLE_MS = 250
@@ -283,7 +283,7 @@ async function main() {
     console.log(
       `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
     )
-    return
+    Bare.exit(1)
   }
 
   const fit = fitResidentMemory(measurements)
@@ -291,7 +291,7 @@ async function main() {
     console.log(
       '\nthe measurement design cannot separate the weight ratio, fixed overhead and per-token slope (degenerate fit). No fixture written.'
     )
-    return
+    Bare.exit(1)
   }
   console.log(
     `\nfit: weightRatio ${fit.weightRatio.toFixed(3)}, fixed ${mib(fit.fixedBytes)} MiB, perToken ${fit.perTokenBytes.toFixed(0)} B, worst excess ${mib(fit.worstExcessBytes)} MiB`
