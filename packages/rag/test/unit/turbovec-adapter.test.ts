@@ -2153,3 +2153,159 @@ test('TurboVecAdapter recovers after the competing writer releases the lock', as
   await adapter.close()
   await store.close()
 })
+
+// Windows refuses a file path longer than 259 characters, so the part the
+// adapter builds under its checkpoint directory has to stay well inside that.
+// The rest is whatever directory the application keeps its data in. The
+// longest name today is the temporary manifest, at 118 characters.
+const MAX_WORKSPACE_PATH_LENGTH = 128
+
+interface PatchableFs {
+  mkdirSync: (...args: unknown[]) => unknown
+  writeFileSync: (...args: unknown[]) => unknown
+  openSync: (...args: unknown[]) => number
+  renameSync: (...args: unknown[]) => unknown
+  unlinkSync: (...args: unknown[]) => unknown
+}
+
+interface FileSystemCall {
+  operation: string
+  target: string
+  flags: string | null
+}
+
+// Records every path the adapter hands to the file system during `run`, so a
+// test can measure the names it builds without reaching into private state.
+// Both this file and the adapter resolve `bare-fs` to the same module, so
+// replacing a function here is visible to the adapter.
+async function recordFileSystemCalls(run: () => Promise<void>): Promise<FileSystemCall[]> {
+  const calls: FileSystemCall[] = []
+  const patchable = fs as unknown as PatchableFs
+  const original = {
+    mkdirSync: patchable.mkdirSync,
+    writeFileSync: patchable.writeFileSync,
+    openSync: patchable.openSync,
+    renameSync: patchable.renameSync,
+    unlinkSync: patchable.unlinkSync
+  }
+
+  function note(operation: string, target: unknown, flags?: unknown) {
+    calls.push({
+      operation,
+      target: String(target),
+      flags: typeof flags === 'string' ? flags : null
+    })
+  }
+
+  patchable.mkdirSync = (...args) => {
+    note('mkdir', args[0])
+    return original.mkdirSync(...args)
+  }
+  patchable.writeFileSync = (...args) => {
+    note('writeFile', args[0])
+    return original.writeFileSync(...args)
+  }
+  patchable.openSync = (...args) => {
+    note('open', args[0], args[1])
+    return original.openSync(...args)
+  }
+  patchable.renameSync = (...args) => {
+    note('rename', args[0])
+    note('rename', args[1])
+    return original.renameSync(...args)
+  }
+  patchable.unlinkSync = (...args) => {
+    note('unlink', args[0])
+    return original.unlinkSync(...args)
+  }
+
+  try {
+    await run()
+  } finally {
+    patchable.mkdirSync = original.mkdirSync
+    patchable.writeFileSync = original.writeFileSync
+    patchable.openSync = original.openSync
+    patchable.renameSync = original.renameSync
+    patchable.unlinkSync = original.unlinkSync
+  }
+
+  return calls
+}
+
+function runDurabilityCycle(
+  checkpointDir: string,
+  store: InstanceType<typeof Corestore>
+): Promise<FileSystemCall[]> {
+  const adapter = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-path-budget',
+    indexProvider,
+    checkpointDir
+  })
+
+  return recordFileSystemCalls(async () => {
+    await adapter.ready()
+    await adapter.saveEmbeddings([
+      {
+        id: 'alpha',
+        content: 'alpha document',
+        embeddingModelId: 'test-model',
+        embedding: vector(8, 0)
+      }
+    ])
+    await adapter.checkpoint()
+    await adapter.close()
+  })
+}
+
+test('TurboVecAdapter keeps every path it builds within the workspace budget', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const checkpointDir = path.join(tmpDir, 'index')
+
+  const calls = await runDurabilityCycle(checkpointDir, store)
+  await store.close()
+
+  const inside = calls.filter((call) => call.target.startsWith(`${checkpointDir}${path.sep}`))
+  t.ok(inside.length > 0, 'the cycle touched paths inside the checkpoint directory')
+
+  let longest = { target: '', length: 0 }
+  for (const call of inside) {
+    const length = call.target.length - checkpointDir.length - 1
+    if (length > longest.length) longest = { target: call.target, length }
+  }
+
+  t.ok(
+    longest.length <= MAX_WORKSPACE_PATH_LENGTH,
+    `longest workspace path is ${longest.length} characters (${path.basename(longest.target)})`
+  )
+})
+
+test('TurboVecAdapter opens durability files for writing before flushing', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const checkpointDir = path.join(tmpDir, 'index')
+
+  const calls = await runDurabilityCycle(checkpointDir, store)
+  await store.close()
+
+  const flushed = calls.filter((call) => {
+    if (call.operation !== 'open') return false
+    const name = path.basename(call.target)
+    return name.startsWith('owner.json.tmp-') || name.startsWith('manifest.json.tmp-')
+  })
+
+  t.ok(
+    flushed.some((call) => path.basename(call.target).startsWith('owner.json.tmp-')),
+    'the lock record was reopened'
+  )
+  t.ok(
+    flushed.some((call) => path.basename(call.target).startsWith('manifest.json.tmp-')),
+    'the manifest was reopened'
+  )
+  t.alike(
+    [...new Set(flushed.map((call) => call.flags))],
+    ['r+'],
+    'files that are flushed carry write access, which Windows requires'
+  )
+})

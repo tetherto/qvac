@@ -54,9 +54,10 @@
     "build": "tsc -p tsconfig.build.json && bare scripts/copy-hyperspec.ts dist",
     "prepare": "npm run build",
     "build:test": "tsc -p test/tsconfig.build.json && bare scripts/copy-hyperspec.ts test/dist/src && bare scripts/copy-test-fixtures.ts",
-    "test:unit": "npm run build:test && brittle-bare 'test/dist/test/unit/*.test.js'",
-    "test:integration": "npm run build:test && brittle-bare 'test/dist/test/integration/*.test.js'",
-    "build:hyperdb-spec": "bare scripts/build-hyperdb-spec.ts"
+    "test:unit": "npm run build:test && brittle-bare \"test/dist/test/unit/*.test.js\"",
+    "test:integration": "npm run build:test && brittle-bare \"test/dist/test/integration/*.test.js\"",
+    "build:hyperdb-spec": "bare scripts/build-hyperdb-spec.ts",
+    "probe:paths": "bare scripts/probe-windows-paths.mjs"
   },
   "license": "Apache-2.0",
   "author": "Tether",

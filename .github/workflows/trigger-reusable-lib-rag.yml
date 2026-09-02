@@ -99,6 +99,40 @@ jobs:
           echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
+  # The TurboVec adapter keeps its durability state in plain files, and Windows
+  # constrains paths and handle flushing in ways Linux does not, so the unit
+  # suite runs on both. It does not gate the publish jobs; a `workflow_dispatch`
+  # run on any branch is the way to check a fix before it merges.
+  test:
+    name: Unit tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: bun install
+
+      # Prints what this runner's file system actually allows, so a failure in
+      # the suite below can be read against real numbers.
+      - name: Probe file system path limits
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run probe:paths -- probe-tmp
+
+      - name: Unit tests
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:unit
+
   # Install deps + compile dist ONCE, then hand the built dist to every publish
   # job so `npm publish` never has to rebuild in a node_modules-less job.
   build:
