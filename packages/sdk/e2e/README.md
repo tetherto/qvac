@@ -171,6 +171,32 @@ See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-te
 - Release-branch PRs with SDK or inference changes auto-run the same desktop and mobile suite.
 - Success applies the `e2e-tested` label.
 
+These three are **base runs**: each records its per-platform failure set into a hidden state
+comment on the PR, which is what the rerun label below consumes.
+
+### Re-running only the tests that failed
+
+- `test-e2e-rerun-failed` — re-runs just the tests that failed on the last base run, on the
+  platforms where they failed. A platform that was green is not started at all: one failure
+  on Windows and one on Linux means two tests on two runners, with macOS, Android, and iOS
+  skipped entirely.
+
+The label needs no new commit — the rerun always tests the current PR HEAD, so it verifies a
+pushed fix or, on an unchanged commit, checks for flakiness. It is removed automatically once
+the run picks it up, so the next attempt is a single click, and it never applies `e2e-tested`.
+
+Wait for the **QVAC E2E — base run recorded** comment before applying it. The base failure set
+is not known until every family finishes, so a rerun labelled while the base run is still going
+is rejected with a comment saying so (it cannot cancel the base run — reruns use their own
+concurrency group).
+
+The plan is anchored to the base run, not to the previous rerun: every attempt re-runs the
+same set until a new `test-e2e-smoke` / `test-e2e-full` run replaces the base.
+
+See [Re-running failed SDK e2e tests](../../../docs/ci/LABELS.md#re-running-failed-sdk-e2e-tests)
+for the full behaviour table, including what happens when no base is recorded, the base is
+green, or a recorded test no longer exists.
+
 ### Manual runs
 
 Open [Actions → QVAC Tests (sdk) → Run workflow](https://github.com/tetherto/qvac/actions/workflows/test-sdk.yml)

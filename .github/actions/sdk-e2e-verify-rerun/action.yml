@@ -1,0 +1,133 @@
+name: SDK E2E Verify Rerun
+description: >
+  Guards a `test-e2e-rerun-failed` run against a silent pass.
+
+  `--filter` selects by testId prefix, so a planned test id that no longer exists
+  (renamed or deleted since the base run) matches nothing. A platform that ends
+  up executing zero tests would otherwise report a green summary without having
+  verified anything. This action fails the run in that case, and warns about
+  individual planned ids that matched no executed test.
+
+inputs:
+  rerun-plan:
+    description: "JSON {family: {platform: [testId]}} the run was started with"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download rerun results
+      continue-on-error: true
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        pattern: results-*
+        path: .sdk-e2e-verify/results
+
+    - name: Verify planned tests actually ran
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      env:
+        RERUN_PLAN: ${{ inputs.rerun-plan }}
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+
+          const resultsRoot = '.sdk-e2e-verify/results';
+
+          let plan;
+          try {
+            plan = JSON.parse(process.env.RERUN_PLAN || '{}');
+          } catch (err) {
+            core.setFailed(`Could not parse rerun-plan: ${err.message}`);
+            return;
+          }
+
+          function artifactName(family, platform) {
+            return family === 'android' || family === 'ios'
+              ? `results-${family}`
+              : `results-${family}-${platform}`;
+          }
+
+          // actions/download-artifact@v8 extracts a single matched artifact directly
+          // into `path` instead of `path/<artifact-name>/`, so probe both layouts.
+          function findResultFiles(name) {
+            for (const dir of [path.join(resultsRoot, name), resultsRoot]) {
+              if (!fs.existsSync(dir)) continue;
+              const files = fs.readdirSync(dir)
+                .filter((f) => f.startsWith('results-') && f.endsWith('.json'))
+                .map((f) => path.join(dir, f));
+              if (files.length > 0) return files;
+            }
+            return [];
+          }
+
+          const problems = [];
+          const rows = [];
+
+          for (const [family, platforms] of Object.entries(plan)) {
+            for (const [platform, plannedIds] of Object.entries(platforms)) {
+              const label = `${family}/${platform}`;
+              const files = findResultFiles(artifactName(family, platform));
+
+              if (files.length === 0) {
+                // report-finalize already fails on missing results; noted here for context.
+                rows.push(`| \`${label}\` | — | ⚠️ no results artifact |`);
+                continue;
+              }
+
+              const executed = new Set();
+              for (const file of files) {
+                let report;
+                try {
+                  report = JSON.parse(fs.readFileSync(file, 'utf8'));
+                } catch (err) {
+                  core.warning(`Failed to parse ${file}: ${err.message}`);
+                  continue;
+                }
+                for (const test of Array.isArray(report.tests) ? report.tests : []) {
+                  if (test.testId) executed.add(String(test.testId));
+                }
+              }
+
+              // Exact ids, never prefixes: `--filter` selects by prefix, so a deleted
+              // `model-load-llm` would otherwise look covered by the surviving
+              // `model-load-llm-load-mode-none` and this guard would stay quiet.
+              const unmatched = plannedIds.filter((id) => !executed.has(id));
+
+              if (executed.size === 0) {
+                problems.push(`${label}: the rerun executed 0 tests.`);
+                rows.push(`| \`${label}\` | 0 | ❌ nothing executed |`);
+              } else if (unmatched.length === plannedIds.length) {
+                problems.push(
+                  `${label}: none of the ${plannedIds.length} planned test id(s) ran — they no ` +
+                  `longer exist, and the ${executed.size} test(s) that did run were pulled in by ` +
+                  'prefix, so nothing planned was verified.'
+                );
+                rows.push(`| \`${label}\` | ${executed.size} | ❌ no planned id ran |`);
+              } else if (unmatched.length > 0) {
+                core.warning(
+                  `${label}: ${unmatched.length} planned test id(s) did not run and were not ` +
+                  `verified: ${unmatched.join(', ')}`
+                );
+                rows.push(`| \`${label}\` | ${executed.size} | ⚠️ ${unmatched.length} planned id(s) no longer exist |`);
+              } else {
+                rows.push(`| \`${label}\` | ${executed.size} | ✅ all planned ids covered |`);
+              }
+            }
+          }
+
+          if (rows.length > 0) {
+            core.summary.addRaw([
+              '### QVAC E2E rerun — coverage check',
+              '',
+              '| Platform | Tests executed | Status |',
+              '| --- | --- | --- |',
+              ...rows,
+              '',
+            ].join('\n'));
+            await core.summary.write();
+          }
+
+          if (problems.length > 0) {
+            core.setFailed(`Rerun did not verify anything — ${problems.join('; ')}`);
+          }
