@@ -307,10 +307,12 @@ jobs:
         if: matrix.needsParakeetS3Gguf && steps.cache-parakeet-models.outputs.cache-hit != 'true'
         working-directory: ${{ matrix.workdir }}
         shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           set -euo pipefail
           mkdir -p models
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf models/
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf" models/
 
       - name: Verify parakeet GGUF for C++ tests
         if: matrix.needsParakeetS3Gguf
