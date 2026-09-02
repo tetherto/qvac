@@ -1,7 +1,10 @@
 import test from 'brittle'
+import { ENGINE_ACESTEP, ENGINE_MINIMAX } from '@qvac/audiogen-ggml'
 import {
+  AUDIOGEN_ENGINES,
   audioGenClientParamsSchema,
   audioGenConfigSchema,
+  audioGenRuntimeConfigSchema,
   audioGenStreamRequestSchema,
   audioGenStreamResponseSchema
 } from '@/schemas/audio-gen'
@@ -32,6 +35,92 @@ test('audioGenConfigSchema requires all four model sources', (t) => {
   )
 })
 
+test('audioGenConfigSchema accepts MiniMax model pairs and rejects mixed engine files', (t) => {
+  t.alike([...AUDIOGEN_ENGINES], [ENGINE_ACESTEP, ENGINE_MINIMAX])
+  t.ok(
+    audioGenConfigSchema.safeParse({
+      engine: 'minimax',
+      lmModelSrc: 'minimax-lm.gguf',
+      synthModelSrc: 'minimax-synth.gguf',
+      useGPU: true,
+      inferenceSteps: 12,
+      cfgScale: 1.8
+    }).success
+  )
+  t.is(
+    audioGenConfigSchema.safeParse({
+      engine: 'minimax',
+      lmModelSrc: 'minimax-lm.gguf'
+    }).success,
+    false,
+    'both MiniMax models are required'
+  )
+  t.is(
+    audioGenConfigSchema.safeParse({
+      engine: 'minimax',
+      lmModelSrc: 'minimax-lm.gguf',
+      synthModelSrc: 'minimax-synth.gguf',
+      ditModelSrc: 'acestep-dit.gguf'
+    }).success,
+    false,
+    'ACE-Step files cannot be mixed into MiniMax config'
+  )
+})
+
+test('audioGenConfigSchema reports errors from the selected engine branch', (t) => {
+  const result = audioGenConfigSchema.safeParse({
+    engine: 'minimax',
+    lmModelSrc: 'minimax-lm.gguf',
+    synthesisModelSrc: 'minimax-synth.gguf'
+  })
+
+  t.is(result.success, false)
+  if (result.success) return
+
+  t.ok(result.error.issues.some((issue) => issue.path[0] === 'synthModelSrc'))
+  t.ok(result.error.issues.some((issue) => issue.message.includes('synthesisModelSrc')))
+  t.ok(
+    !result.error.issues.some((issue) =>
+      ['textEncModelSrc', 'ditModelSrc', 'vaeModelSrc'].includes(String(issue.path[0]))
+    ),
+    'MiniMax errors do not include requirements from the ACE-Step branch'
+  )
+})
+
+test('AudioGen runtime config rejects controls from the other engine', (t) => {
+  t.ok(audioGenRuntimeConfigSchema.safeParse({ shift: 1, nGpuLayers: 99 }).success)
+  t.ok(
+    audioGenRuntimeConfigSchema.safeParse({
+      engine: 'minimax',
+      inferenceSteps: 12,
+      cfgScale: 1.8
+    }).success
+  )
+  t.is(
+    audioGenRuntimeConfigSchema.safeParse({
+      engine: 'minimax',
+      shift: 1,
+      nGpuLayers: 99
+    }).success,
+    false
+  )
+  t.is(
+    audioGenRuntimeConfigSchema.safeParse({
+      engine: 'acestep',
+      cfgScale: 1.8
+    }).success,
+    false
+  )
+  t.is(
+    audioGenRuntimeConfigSchema.safeParse({
+      engine: 'minimax',
+      inferenceSteps: 1001
+    }).success,
+    false
+  )
+  t.is(audioGenConfigSchema.safeParse({ ...modelConfig, cfgScale: 1.8 }).success, false)
+})
+
 test('AudioGen load transform permits omitted primary modelSrc', (t) => {
   const request = loadModelOptionsToRequestSchema.parse({
     modelType: 'audiogen',
@@ -58,6 +147,44 @@ test('audioGen client params validate generation controls', (t) => {
       modelId: 'model-1',
       caption: ' ',
       bpm: 0
+    }).success,
+    false
+  )
+})
+
+test('audioGen client params validate MiniMax frame and flow controls', (t) => {
+  t.ok(
+    audioGenClientParamsSchema.safeParse({
+      modelId: 'minimax-model',
+      caption: 'warm cinematic piano',
+      maxFrames: 250,
+      inferenceSteps: 12,
+      cfgScale: 1.8
+    }).success
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({
+      modelId: 'minimax-model',
+      caption: 'warm cinematic piano',
+      duration: 10,
+      maxFrames: 250
+    }).success,
+    false,
+    'duration and maxFrames are mutually exclusive'
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({
+      modelId: 'minimax-model',
+      caption: 'warm cinematic piano',
+      inferenceSteps: 1001
+    }).success,
+    false
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({
+      modelId: 'minimax-model',
+      caption: 'warm cinematic piano',
+      cfgScale: 1e-100
     }).success,
     false
   )
@@ -280,5 +407,31 @@ test('audioGenStreamResponseSchema accepts progress, PCM, and terminal frames', 
       done: true,
       stopReason: 'cancelled'
     }).success
+  )
+})
+
+test('audioGenStreamResponseSchema carries backend diagnostics on the terminal frame', (t) => {
+  const terminal = audioGenStreamResponseSchema.parse({
+    type: 'audioGenStream',
+    done: true,
+    stopReason: 'completed',
+    stats: { backendDevice: 0, backendId: 0 },
+    diagnostics: {
+      selectedBackend: 'cpu',
+      selectedDevice: 'cpu'
+    }
+  })
+
+  t.alike(terminal.diagnostics, {
+    selectedBackend: 'cpu',
+    selectedDevice: 'cpu'
+  })
+  t.absent(
+    audioGenStreamResponseSchema.safeParse({
+      type: 'audioGenStream',
+      done: true,
+      diagnostics: { selectedBackend: 'vulkan', selectedDevice: 'tpu' }
+    }).success,
+    'selectedDevice is limited to the backend device enum'
   )
 })

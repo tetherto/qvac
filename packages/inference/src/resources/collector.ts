@@ -48,6 +48,11 @@ const gpuProvenance = {
   source: GPU_SOURCE
 } as const
 
+const processProvenance = {
+  source: 'bare-os',
+  scope: 'process'
+} as const
+
 function supportedMetric<T>(value: T, provenance: ResourceProvenance): ResourceMetric<T> {
   return { status: 'supported', value, provenance }
 }
@@ -263,12 +268,33 @@ export function createSystemResourceCollector(dependencies: ResourceCollectorDep
     return supportedMetric(samples, gpuProvenance)
   }
 
+  function sampleProcessMemory() {
+    try {
+      const view = dependencies.sampleProcessMemory()
+      return {
+        processUsedBytes:
+          view.usedBytes === undefined
+            ? unavailableMetric<number>('process memory usage is not exposed on this platform')
+            : normalizeNonNegativeIntegerMetric(view.usedBytes, processProvenance),
+        processAvailableBytes:
+          view.availableBytes === undefined
+            ? unavailableMetric<number>('the per-process allowance is not exposed on this platform')
+            : normalizeNonNegativeIntegerMetric(view.availableBytes, processProvenance)
+      }
+    } catch {
+      return {
+        processUsedBytes: failedMetric<number>('process memory sampling failed'),
+        processAvailableBytes: failedMetric<number>('process memory sampling failed')
+      }
+    }
+  }
+
   function sample() {
     const cpuSample = sampleCPU()
     return {
       sampledAt: dependencies.now(),
       cpu: cpuSample.cpu,
-      memory: cpuSample.memory,
+      memory: { ...cpuSample.memory, ...sampleProcessMemory() },
       gpus: sampleGPUs()
     }
   }

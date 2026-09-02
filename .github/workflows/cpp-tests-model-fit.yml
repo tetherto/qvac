@@ -29,7 +29,13 @@ on:
         default: "packages/model-fit"
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-cpp-tests:
+    needs: runner_names
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-cpp-tests
@@ -44,18 +50,19 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
           - os: macos-14
             platform: darwin
             arch: arm64
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
           - os: macos-15-intel
+            runner: ${{ needs.runner_names.outputs.macos_15_intel }}
             platform: darwin
             arch: x64
           - os: windows-2025
             platform: windows
             arch: x64
-            runner: qvac-win25-x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
 
     env:
       WORKDIR: ${{ inputs.workdir }}
@@ -106,7 +113,7 @@ jobs:
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:

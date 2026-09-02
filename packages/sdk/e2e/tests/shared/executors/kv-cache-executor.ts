@@ -1,5 +1,5 @@
 import { cancel, completion, deleteCache } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { kvCacheTests } from '../../kv-cache-tests.js'
 import { callWhenAddonIdle } from '../utils/addon-idle.js'
@@ -498,7 +498,12 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
   // (flag dropped before the addon) collapses the two runs to equal token
   // counts and fails the assertion.
   async removeThinkingCompaction(
-    params: { cacheKeyOn: string; cacheKeyOff: string; messages: string[] },
+    params: {
+      cacheKeyOn: string
+      cacheKeyOff: string
+      messages: string[]
+      generationParams?: Record<string, unknown>
+    },
     expectation: Expectation
   ): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('tools')
@@ -521,7 +526,10 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
           history: [...history],
           stream: false,
           kvCache: cacheKey,
-          generationParams: { remove_thinking_from_context: removeThinking }
+          generationParams: {
+            ...params.generationParams,
+            remove_thinking_from_context: removeThinking
+          }
         })
 
         const text = await result.text

@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 export const kvCacheDeleteAll: TestDefinition = {
   testId: 'kv-cache-delete-all',
@@ -213,7 +213,10 @@ export const kvCacheRemoveThinkingCompaction: TestDefinition = {
     messages: [
       'Think step by step, then answer: what is 17 multiplied by 23?',
       'Now add 100 to that result.'
-    ]
+    ],
+    // Bounded, not disabled: the assertion needs a reasoning block, and a
+    // positive budget still force-emits the closing think tag.
+    generationParams: { reasoning_budget: 128, predict: 256, temp: 0, seed: 42 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],

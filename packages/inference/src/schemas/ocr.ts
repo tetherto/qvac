@@ -6,18 +6,71 @@ import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 // (useGPU, timeout, pipelineMode, decodingMethod, straightenPages) are dropped;
 // zod's default (non-strict) object strips them silently if still passed.
 export const ocrConfigSchema = z.object({
-  langList: z.array(z.string()).optional(),
-  pipelineType: z.enum(['easyocr', 'doctr']).optional(),
-  magRatio: z.number().optional(),
-  canvasSize: z.number().optional(),
-  defaultRotationAngles: z.array(z.number()).optional(),
-  contrastRetry: z.boolean().optional(),
-  lowConfidenceThreshold: z.number().optional(),
-  recognizerBatchSize: z.number().optional(),
-  nThreads: z.number().optional(),
-  backendDevice: z.enum(['cpu', 'vulkan', 'metal', 'opencl']).optional(),
-  gpuDevice: z.number().optional(),
-  detectorModelSrc: modelSrcInputSchema.optional()
+  langList: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Languages handled by the recognizer, e.g. `['en']` or `['en', 'fr']`. Required for `easyocr`; ignored by the language-agnostic `doctr` pipeline."
+    ),
+  pipelineType: z
+    .enum(['easyocr', 'doctr'])
+    .optional()
+    .describe(
+      "OCR pipeline: `'easyocr'` (CRAFT detector + CRNN recognizer, default) or `'doctr'` (DBNet detector + doctr recognizer, language-agnostic)."
+    ),
+  magRatio: z
+    .number()
+    .optional()
+    .describe('Detection magnification ratio (easyocr only). Default 1.5.'),
+  canvasSize: z
+    .number()
+    .optional()
+    .describe(
+      'Detection canvas cap (long side, px) applied after `magRatio` scaling; lower it on memory-constrained targets. Default 2560. easyocr only.'
+    ),
+  defaultRotationAngles: z
+    .array(z.number())
+    .optional()
+    .describe(
+      'Rotation angles tried when the primary pass is low-confidence (easyocr only). Default [90, 270].'
+    ),
+  contrastRetry: z
+    .boolean()
+    .optional()
+    .describe('Retry low-confidence boxes with contrast adjustment (easyocr only). Default false.'),
+  lowConfidenceThreshold: z
+    .number()
+    .optional()
+    .describe(
+      'Confidence threshold below which contrast-retry kicks in (easyocr only). Default 0.4.'
+    ),
+  recognizerBatchSize: z
+    .number()
+    .optional()
+    .describe('Recognizer batch size (easyocr only). Default 32.'),
+  nThreads: z
+    .number()
+    .optional()
+    .describe(
+      "GGML CPU thread count: `0` (default) auto-detects physical cores, `> 0` sets an explicit count, `< 0` leaves the backend's default unchanged."
+    ),
+  backendDevice: z
+    .enum(['cpu', 'vulkan', 'metal', 'opencl'])
+    .optional()
+    .describe(
+      "ggml backend device: `'cpu'` (default), `'vulkan'`, `'metal'`, or `'opencl'`. Falls back to CPU when the requested GPU device is unavailable."
+    ),
+  gpuDevice: z
+    .number()
+    .optional()
+    .describe(
+      "0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`."
+    ),
+  detectorModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Text-detector model source (easyocr: CRAFT; doctr: DBNet). Derived from the recognizer model source when omitted.'
+    )
 })
 
 // Image input types

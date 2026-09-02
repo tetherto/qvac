@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { DEFAULT_SDK_NAME } from '../constants.js'
-import type { Check } from '../check.js'
+import { DEFAULT_SDK_NAME } from '@/doctor/constants'
+import type { Check } from '@/doctor/check'
 
 // Locate @qvac/sdk the same way a consumer project's runtime would, so
 // we correctly find the package whether installed locally, hoisted in a

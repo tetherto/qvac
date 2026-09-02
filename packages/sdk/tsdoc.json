@@ -6,9 +6,15 @@
       "tagName": "@overloadLabel",
       "syntaxKind": "block",
       "allowMultiple": false
+    },
+    {
+      "tagName": "@prototype",
+      "syntaxKind": "block",
+      "allowMultiple": false
     }
   ],
   "supportForTags": {
-    "@overloadLabel": true
+    "@overloadLabel": true,
+    "@prototype": true
   }
 }

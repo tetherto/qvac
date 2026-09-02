@@ -5,7 +5,7 @@
 // class of card, so these can run on the shared GPU desktop runners. That makes
 // this a correctness lane, not a performance one — block times here are far
 // below interactive.
-import type { TestDefinition, TestResult } from '@qvac/qvac-test-suite'
+import type { TestDefinition, TestResult } from '@qvac/test-suite'
 
 type ExpectationLike =
   | { validation: 'type'; expectedType: 'string' | 'number' | 'array' }

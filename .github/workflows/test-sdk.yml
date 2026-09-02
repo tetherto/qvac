@@ -60,12 +60,23 @@ on:
         description: "Inference source (branch builds packages/inference; npm resolves a version; manifest keeps SDK package.json)"
         type: choice
         options:
+          - branch
+          - manifest
+          - npm
+        default: branch
+      inference-version:
+        description: "npm inference version or dist-tag (blank defaults to latest)"
+        type: string
+      test-suite-source:
+        description: "Test-suite source (branch builds packages/test-suite; npm resolves a version; manifest keeps the e2e package.json)"
+        type: choice
+        options:
           - manifest
           - branch
           - npm
         default: manifest
-      inference-version:
-        description: "npm inference version or dist-tag (blank defaults to latest)"
+      test-suite-version:
+        description: "npm test-suite version or dist-tag (blank defaults to latest)"
         type: string
       cache-models:
         description: "Reuse downloaded models for Desktop, Electron, and Snap"
@@ -107,6 +118,19 @@ on:
         description: "Advanced: Snap runners (JSON array)"
         type: string
         default: '["qvac-ubuntu2204-x64-gpu"]'
+      # One input, not a boolean plus a runner list: workflow_dispatch allows at
+      # most 25 inputs and this workflow is at the ceiling. Picking a single
+      # runner is what a re-run after a busy-host warning needs anyway.
+      calibration:
+        description: "Run the assessModelFit calibration harness (~30 min per platform warm; first run also downloads ~7.5 GiB of models)"
+        type: choice
+        options:
+          - "off"
+          - all
+          - qvac-macos26-arm64-gpu-calibration
+          - qvac-ubuntu2204-x64-gpu-calibration
+          - qvac-win25-x64-gpu-calibration
+        default: "off"
 
   workflow_call:
     inputs:
@@ -152,9 +176,17 @@ on:
       inference-source:
         description: "Inference source: branch, npm, or manifest"
         type: string
-        default: "manifest"
+        default: "branch"
       inference-version:
         description: "Inference version or dist-tag for npm"
+        type: string
+        default: ""
+      test-suite-source:
+        description: "Test-suite source: branch, npm, or manifest"
+        type: string
+        default: "manifest"
+      test-suite-version:
+        description: "Test-suite version or dist-tag for npm"
         type: string
         default: ""
       cache-models:
@@ -177,6 +209,7 @@ jobs:
       run-snap: ${{ steps.resolve.outputs.run-snap }}
       run-android: ${{ steps.resolve.outputs.run-android }}
       run-ios: ${{ steps.resolve.outputs.run-ios }}
+      run-e2e: ${{ steps.resolve.outputs.run-e2e }}
     steps:
       - name: Resolve configuration
         id: resolve
@@ -189,6 +222,7 @@ jobs:
           RUN_SNAP: ${{ inputs.snap }}
           RUN_ANDROID: ${{ inputs.android }}
           RUN_IOS: ${{ inputs.ios }}
+          RUN_CALIBRATION: ${{ inputs.calibration }}
           SUITE: ${{ inputs.suite }}
           SUITE_CUSTOM: ${{ inputs.suite-custom }}
         run: |
@@ -217,8 +251,16 @@ jobs:
             RESOLVED_ANDROID="$RUN_ANDROID"
             RESOLVED_IOS="$RUN_IOS"
 
-            if [ "${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}" = "falsefalsefalsefalsefalse" ]; then
-              echo "::error::Select at least one platform to test."
+            # Calibration counts as a selection: it wants a host to itself, so a
+            # calibration-only dispatch is the normal way to run it.
+            RESOLVED_CALIBRATION=false
+            if [ "${RUN_CALIBRATION:-off}" != "off" ]; then
+              RESOLVED_CALIBRATION=true
+            fi
+
+            SELECTED="${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}${RESOLVED_CALIBRATION}"
+            if [ "$SELECTED" = "falsefalsefalsefalsefalsefalse" ]; then
+              echo "::error::Select at least one platform to test, or enable calibration."
               exit 1
             fi
           else
@@ -264,6 +306,14 @@ jobs:
             esac
           fi
 
+          # Lets the prepare jobs skip on a calibration-only dispatch: the
+          # calibration job builds packages/inference itself and never consumes
+          # a resolved inference or test-suite artifact.
+          RESOLVED_E2E=true
+          if [ "${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}" = "falsefalsefalsefalsefalse" ]; then
+            RESOLVED_E2E=false
+          fi
+
           {
             echo "suite=$RESOLVED_SUITE"
             echo "run-desktop=$RESOLVED_DESKTOP"
@@ -271,11 +321,13 @@ jobs:
             echo "run-snap=$RESOLVED_SNAP"
             echo "run-android=$RESOLVED_ANDROID"
             echo "run-ios=$RESOLVED_IOS"
+            echo "run-e2e=$RESOLVED_E2E"
           } >> "$GITHUB_OUTPUT"
 
   prepare-inference:
     name: Resolve inference source
     needs: resolve
+    if: needs.resolve.outputs.run-e2e == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -358,8 +410,89 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  prepare-test-suite:
+    name: Resolve test-suite source
+    needs: resolve
+    if: needs.resolve.outputs.run-e2e == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      source: ${{ steps.test-suite.outputs.source }}
+      dependency-spec: ${{ steps.test-suite.outputs.dependency-spec }}
+      provenance: ${{ steps.test-suite.outputs.provenance }}
+      artifact-name: ${{ steps.artifact.outputs.name }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+    steps:
+      - id: checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk/e2e/package.json
+            packages/test-suite
+            .github/actions/sdk-e2e-prepare-test-suite
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Configure package registries
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+          ];
+          if (process.env.NPM_TOKEN) {
+            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
+          }
+          if (process.env.PAT_TOKEN) {
+            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
+          }
+          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
+
+      - name: Resolve and prepare test-suite
+        id: test-suite
+        shell: bash
+        env:
+          TEST_SUITE_SOURCE: ${{ inputs.test-suite-source || 'manifest' }}
+          TEST_SUITE_VERSION: ${{ inputs.test-suite-version || '' }}
+          PROJECT_DIRECTORY: packages/sdk/e2e
+          TEST_SUITE_DIRECTORY: packages/test-suite
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/sdk-e2e-test-suite-package
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
+        run: node .github/actions/sdk-e2e-prepare-test-suite/prepare.mjs resolve
+
+      - name: Derive branch artifact name
+        id: artifact
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const name = `sdk-e2e-test-suite-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `name=${name}\n`);
+
+      - name: Upload branch test-suite package
+        if: steps.test-suite.outputs.source == 'branch'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.test-suite.outputs.artifact-path }}
+          if-no-files-found: error
+          retention-days: 7
+
   desktop-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     if: needs.resolve.outputs.run-desktop == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
@@ -376,11 +509,15 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   electron-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     if: needs.resolve.outputs.run-electron == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
@@ -397,11 +534,15 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   snap-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     if: needs.resolve.outputs.run-snap == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
@@ -418,11 +559,15 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   android-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     permissions:
       actions: read
       id-token: write
@@ -448,10 +593,14 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
     secrets: inherit
 
   ios-tests:
-    needs: [resolve, prepare-inference]
+    needs: [resolve, prepare-inference, prepare-test-suite]
     permissions:
       actions: read
       id-token: write
@@ -477,4 +626,94 @@ jobs:
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
       inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
       inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
     secrets: inherit
+
+  # Deliberately not a workflow_call input: the PR label path must never trigger
+  # seven model loads per platform.
+  #
+  # Measurement wants a quiet host. The harness reads its own process RSS, so a
+  # co-scheduled job does not inflate the numbers — but it can create memory
+  # pressure that evicts this process's mapped pages and DEFLATES the persistent
+  # deltas, which is the dangerous direction for an upper bound. The
+  # `*-calibration` labels guarantee that: a runner hook drain-stops the sibling
+  # agents on the host when this job starts and restarts them when it ends, so
+  # the job owns the machine for the duration. Two contract points with that
+  # hook: the job id below MUST stay `calibration` (the hook matches
+  # GITHUB_JOB), and the run holds the whole host, so dispatch during off-peak
+  # windows. The harness's busy-host warnings remain as a backstop — do not
+  # ship a fixture from a warned run.
+  calibration:
+    if: github.event_name == 'workflow_dispatch' && inputs.calibration != 'off'
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: >-
+          ${{ fromJSON(inputs.calibration == 'all'
+            && '["qvac-macos26-arm64-gpu-calibration", "qvac-ubuntu2204-x64-gpu-calibration", "qvac-win25-x64-gpu-calibration"]'
+            || format('["{0}"]', inputs.calibration)) }}
+    runs-on: ${{ matrix.platform }}
+    # Expected completion: ~30 min warm (validated darwin-arm64 runs measured
+    # ~15 min for the 21 loads, plus install and build) — the first run on a
+    # runner also downloads ~7.5 GiB of models from the registry, so the
+    # ceiling budgets for a cold run on a slow connection.
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      # Deliberately no `test-version` here: this job executes the checked-out
+      # code on a persistent runner, so it only ever builds the ref the
+      # workflow was dispatched on — the dispatch branch picker is the way to
+      # choose what to calibrate (CodeQL: cache poisoning via untrusted ref).
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      # No registry tokens: packages/inference has no @tetherto-scoped
+      # dependencies, so a plain public-npmjs install is all this needs.
+      - name: Install and build inference
+        shell: bash
+        working-directory: packages/inference
+        run: |
+          npm install
+          npm run build
+
+      - name: Run calibration harness
+        id: calibrate
+        shell: bash
+        working-directory: packages/inference
+        run: |
+          # The harness names the fixture after the runtime's platform triple,
+          # in a directory that already holds every other platform's fixture —
+          # so the upload has to name the one file this run writes, or a run
+          # that wrote nothing would ship a stale fixture under this platform's
+          # artifact name. Recorded before the harness runs so the path is still
+          # available when it exits non-zero.
+          PLATFORM=$(node -p "process.platform + '-' + process.arch")
+          echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM.ts" >> "$GITHUB_OUTPUT"
+          npx bare scripts/calibrate-model-fit.ts --write
+
+      - name: Upload fixture
+        # A failed gate still writes a fixture (`validated: false`), and that is
+        # worth auditing. The harness's earlier aborts write nothing at all, and
+        # then this step finding no file is the accurate outcome.
+        if: success() || failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: calibration-fixture-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.calibrate.outputs.fixture }}
+          if-no-files-found: error
+          retention-days: 30

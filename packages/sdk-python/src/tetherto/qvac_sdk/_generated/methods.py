@@ -15,6 +15,8 @@ from collections.abc import AsyncIterable, AsyncIterator
 
 from .._transport import Transport
 from . import (
+    AssessModelFitRequest,
+    AssessModelFitResponse,
     AudioGenStreamRequest,
     AudioGenStreamResponse,
     BatchCompletionStreamRequest,
@@ -97,6 +99,13 @@ from . import (
     WorldStepStreamRequest,
     WorldStepStreamResponse,
 )
+
+
+async def assess_model_fit(
+    transport: Transport, params: AssessModelFitRequest
+) -> AssessModelFitResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return AssessModelFitResponse.model_validate(await transport.call(payload))
 
 
 async def audio_gen_stream(
@@ -447,6 +456,7 @@ async def world_step_stream(
 
 
 __all__ = [
+    "assess_model_fit",
     "audio_gen_stream",
     "batch_completion_stream",
     "bci_transcribe",
