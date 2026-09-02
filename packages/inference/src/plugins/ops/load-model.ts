@@ -94,11 +94,11 @@ export async function loadModel(
     }
   }
 
-  // Experimental, opt-in, and advisory: every outcome — including a projected
-  // insufficiency — continues to the ordinary load below. Runs after config
-  // resolution and path validation so it sees the same state the real load
-  // uses, and before `createModel()` so it never competes with the native
-  // load for device memory.
+  // Advisory: every outcome — including a projected insufficiency — continues
+  // to the ordinary load below. Runs after config resolution and path
+  // validation so it sees the same state the real load uses, and before
+  // `createModel()` so it never competes with the native load for device
+  // memory.
   await runAdvisoryFitCheck({
     modelId,
     modelType: modelType as CanonicalModelType,

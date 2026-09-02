@@ -25,7 +25,7 @@ const FIT_LOAD_KEYS: Record<LlamaLoadKind, readonly string[]> = {
     'device',
     'ctx_size',
     'gpu_layers',
-    'no_mmap',
+    'load_mode',
     'parallel',
     'cache-type-k',
     'cache-type-v',
@@ -78,11 +78,12 @@ const NON_FIT_KEYS: Record<LlamaLoadKind, readonly string[]> = {
 const UNSUPPORTED_KEYS: readonly string[] = ['lora']
 
 /**
- * llama.cpp's fitter constrains device memory but treats host memory as
- * unlimited, so a CPU load is always projected to fit no matter how large the
- * model is. Measured on a 24 GiB M4 Pro: an 18.3 GiB model at 32k context
- * reports `fits` on `device: 'cpu'`. That answer carries no information, so it
- * is refused here rather than spending a child process to produce it.
+ * A CPU load's weights stay file-backed and evictable, so the fitter projects
+ * `fits` for nearly any model the OS could page through. Measured on a 24 GiB
+ * M4 Pro against `@qvac/model-fit@0.8.0`: an 18.3 GiB model at 32k context
+ * still reports `fits` on `device: 'cpu'` (and it does decode — at 0.1 tok/s).
+ * That answer carries no admission information, so it is refused here rather
+ * than spending a child process to produce it.
  */
 function isCpuLoad(params: Record<string, string>): boolean {
   return params['device']?.toLowerCase() === 'cpu'

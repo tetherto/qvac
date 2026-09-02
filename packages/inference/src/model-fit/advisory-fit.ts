@@ -23,8 +23,6 @@ const ADVISORY_FIT_BASE_MARGIN_MIB = 1024
 
 const BYTES_PER_MIB = 1024 * 1024
 
-const ENABLED_VALUES = new Set(['1', 'true', 'on', 'yes'])
-
 /**
  * `fit` and `does-not-fit` are projections of the load the SDK is about to run,
  * not admission decisions. `@qvac/model-fit` duplicates the loader's policy for
@@ -60,7 +58,6 @@ export interface AdvisoryFitInput {
  */
 export interface AdvisoryFitOptions {
   signal?: AbortSignal
-  enabled?: boolean
   mobile?: boolean
   timeoutMs?: number
   runFit?: typeof runIsolatedFit
@@ -69,20 +66,10 @@ export interface AdvisoryFitOptions {
 }
 
 /**
- * Opt-in while the result has no consumer: enabling it costs a child process
- * and a full ggml backend registration on every supported load.
- *
- * The worker environment and the mobile runtime flag are imported lazily. Both
- * modules reach Bare-only bindings, and resolving them eagerly would make this
- * orchestration untestable outside a Bare runtime.
+ * The mobile runtime flag is imported lazily. The module reaches Bare-only
+ * bindings, and resolving it eagerly would make this orchestration untestable
+ * outside a Bare runtime.
  */
-async function resolveEnabled(explicit: boolean | undefined): Promise<boolean> {
-  if (explicit !== undefined) return explicit
-  const { getValidatedEnv } = await import('@/runtime/env')
-  const value = getValidatedEnv().QVAC_ADVISORY_MODEL_FIT
-  return value !== undefined && ENABLED_VALUES.has(value.toLowerCase())
-}
-
 async function resolveMobile(explicit: boolean | undefined): Promise<boolean> {
   if (explicit !== undefined) return explicit
   const { isMobile } = await import('@/runtime/state')
@@ -91,16 +78,19 @@ async function resolveMobile(explicit: boolean | undefined): Promise<boolean> {
 
 /**
  * Sums the on-disk weight sizes of every model currently registered in this
- * worker. The fit child is a fresh process, and Metal reports `free` as
- * `recommendedMaxWorkingSetSize - currentAllocatedSize` *per process*
- * (ggml-metal-device.m), so the child sees an idle device no matter what this
- * worker holds resident. Measured consequence: a verdict that is correct on an
- * idle machine admits a load that cannot decode once another model is loaded.
+ * worker. Since `@qvac/model-fit@0.8.0` (qvac-fabric#214) the fit child budgets
+ * against system-wide availability (total − wired − compressor), so weights the
+ * worker holds *wired* on the GPU are already visible to it. What the child
+ * still cannot see is the unwired remainder — mmap'd host-side layers and KV of
+ * resident models — which the OS reports as evictable right up until a decode
+ * needs it resident. Measured consequence on 0.7.0 (where the child saw a fully
+ * idle device): a verdict correct on an idle machine admitted a load that could
+ * not decode with another model loaded.
  *
- * Reserving the resident weight bytes through `marginMiB` folds that footprint
- * back into the child's budget. Weight size is a lower bound — resident KV and
- * compute buffers are not counted — so the verdict stays optimistic, but
- * strictly less so than ignoring residency entirely.
+ * Reserving the resident weight bytes through `marginMiB` keeps that footprint
+ * in the child's budget. Where those weights are wired this now double-counts
+ * and the verdict turns conservative — deliberately so: the measured failure
+ * modes punish optimism (loads that cannot decode), not caution.
  *
  * Advisory and fail-open like everything else here: any failure to stat a file
  * contributes zero rather than an error.
@@ -181,9 +171,8 @@ function report(logger: Logger, input: AdvisoryFitInput, outcome: AdvisoryFitOut
     return
   }
 
-  // `info`, not `debug`: this check only runs when it has been explicitly
-  // enabled to gather evidence, and "why was there no verdict" is the most
-  // useful thing it can report. `not-enabled` returns before reaching here.
+  // `info`, not `debug`: "why was there no verdict" is the most useful thing
+  // this check can report, and the default logger hides `debug`.
   logger.info(
     `${prefix} no fit evidence: ${outcome.reason}${
       outcome.message === undefined ? '' : ` (${outcome.message})`
@@ -206,7 +195,6 @@ export async function runAdvisoryFitCheck(
   let logger: Logger | undefined = options.logger
   try {
     logger ??= getEngineLogger()
-    if (!(await resolveEnabled(options.enabled))) return unknown('not-enabled')
 
     const plan = createLlamaFitRequest({
       modelType: input.modelType,

@@ -1,23 +1,15 @@
 /**
- * Advisory llama.cpp fit check (QVAC-22629) — experimental, opt-in.
+ * Advisory llama.cpp fit check (QVAC-22629).
  *
- * Before a completion or embedding load, the SDK can run `@qvac/model-fit` in
- * one disposable Bare child and project whether the exact configuration it is
+ * Before a completion or embedding load, the SDK runs `@qvac/model-fit` in one
+ * disposable Bare child and projects whether the exact configuration it is
  * about to load will fit in device memory.
  *
  * The result is ADVISORY. It never blocks a load. `does-not-fit` is logged and
- * the ordinary load path runs unchanged, exactly as it would with the check
- * switched off. Crashes, timeouts, malformed responses, unsupported
- * configurations, and internal errors all resolve to "no evidence" and are
- * equally non-blocking. Nothing consumes the verdict yet — this PR only
- * produces it.
- *
- * Enable it with:
- *
- *     QVAC_ADVISORY_MODEL_FIT=1 bun run examples/advisory-model-fit.ts
- *
- * With the flag unset the check never runs, costs one environment read, and
- * loads none of the process machinery.
+ * the ordinary load path runs unchanged. Crashes, timeouts, malformed
+ * responses, unsupported configurations, and internal errors all resolve to
+ * "no evidence" and are equally non-blocking. Nothing consumes the verdict
+ * yet — this PR only produces it.
  *
  * The verdict is emitted on the SDK server log stream, not to stdout, so this
  * example subscribes to `loggingStream({ id: SDK_LOG_ID })` and reprints the
@@ -27,47 +19,41 @@
  * What fits on this machine (Apple M4 Pro, 24 GiB unified memory)
  * ---------------------------------------------------------------------------
  *
- * Measured with the fit addon on 2026-08-24, at the default 1024 MiB margin.
- * Metal reports a working-set budget well below the full 24 GiB, so the usable
- * ceiling for an all-GPU load is far lower than the raw RAM figure suggests.
+ * Measured with `@qvac/model-fit@0.8.0` (the first release carrying the
+ * qvac-fabric#214 memory-reporting fix) at the default 1024 MiB margin. The
+ * fitter budgets against what the machine can actually keep resident
+ * (total − wired − compressor: 17.4 GiB on this machine at idle), not the raw
+ * RAM figure.
  *
  *   PROJECTED TO FIT — all layers on GPU
  *     Qwen3.5 0.8B  Q4_K_M   0.5 GiB  @   4k ctx
- *     Qwen3.5 9B    Q4_K_M   5.3 GiB  @   8k ctx
- *     Qwen3.5 9B    Q6_K     7.0 GiB  @  32k ctx
  *     gpt-oss-20B   Q4_K_M  10.8 GiB  @  32k ctx
  *     gte-large     fp16     0.6 GiB  (embedding, context pinned to 512)
  *
  *   PROJECTED NOT TO FIT — try any of these to see a `does-not-fit` verdict
  *     gpt-oss-20B   Q4_K_M  10.8 GiB  @ 128k ctx with an f32 KV cache ← below
- *     Gemma 4 31B   Q4_K_M  18.3 GiB  @  32k ctx
- *     Gemma 4 31B   Q4_K_M  18.3 GiB  @   8k ctx
  *     Gemma 4 31B   Q4_K_M  18.3 GiB  @   1k ctx   ← the weights alone do not
  *                                                    fit with gpu_layers: 99
- *     ...and anything larger: a 70B at Q4 (~40 GiB), Qwen3.5 72B, Llama 3.3
- *     70B, or any 30B+ model at Q6/Q8 will not fit either.
  *
- * The first of those is the interesting one, and it is what this example uses:
  * gpt-oss-20B at 128k context FITS with the default KV cache and DOES NOT FIT
  * once `cache-type-k`/`cache-type-v` are set to `f32`. Same model, same
  * context, same machine — the verdict tracks the configuration, not the file
  * size.
  *
- * That verdict is also, measurably, WRONG: the configuration loads and runs at
- * 54-69 tok/s. Which is the point of the example. Treat these verdicts as
- * evidence to gather, not as answers to act on — they are not reliable in
- * either direction yet. Gemma 4 31B is the opposite case: it loads and then
- * fails at decode, so `loadModel` returning an id is not a usability signal
- * either.
+ * Two boundaries worth understanding when reading verdicts:
  *
- * Note the shape of that boundary: it is set by `gpu_layers`, not by the model
- * alone. The SDK's schema default is `gpu_layers: 99`, i.e. "put everything on
- * the GPU", so the question the fitter answers is always "does this fit
- * entirely on the GPU?". Gemma 4 31B @ 32k reports `does-not-fit` under that
- * default — but omit `gpu_layers` and the same model at the same context is
- * projected to FIT with 48 of its layers offloaded and the rest on CPU. A
- * `does-not-fit` therefore means "not at this placement", not "not on this
- * machine".
+ * 1. The verdict answers for a PLACEMENT, not a model. The SDK's schema
+ *    default is `gpu_layers: 99` ("everything on the GPU"), so `does-not-fit`
+ *    means "not at this placement". Omit `gpu_layers` and the fitter is free
+ *    to move layers to the CPU side instead.
+ * 2. A `does-not-fit` configuration can still RUN on macOS when the OS
+ *    compresses and pages hard enough — and a `fits` configuration right at
+ *    the boundary can still fail at first decode under memory pressure.
+ *    Prediction cannot separate those cases from a snapshot; the addon-side
+ *    probe decode (QVAC-24114) is the runtime check that catches the
+ *    remainder. The verdict here is the honest working-set budget, and the
+ *    measured failure modes punish over-committing, so treat `does-not-fit`
+ *    as "expect degradation or decode failure", not "the load will error".
  */
 
 import {
@@ -82,13 +68,8 @@ import {
 
 // The oversized load below is expected to be reported as `does-not-fit` and
 // then attempted anyway, because the check is advisory. It really does try to
-// allocate, so it is opt-in on top of the feature flag itself.
+// allocate ~11 GiB, so it stays opt-in.
 const ATTEMPT_OVERSIZED = process.env['QVAC_FIT_DEMO_ATTEMPT_OVERSIZED'] === '1'
-
-if (process.env['QVAC_ADVISORY_MODEL_FIT'] === undefined) {
-  console.log('▸ QVAC_ADVISORY_MODEL_FIT is unset — the check will not run.')
-  console.log('▸ Re-run with: QVAC_ADVISORY_MODEL_FIT=1 bun run examples/advisory-model-fit.ts\n')
-}
 
 // Reprint the worker's advisory verdicts. They arrive on the SDK server log
 // stream; everything else on that stream is filtered out to keep this readable.
@@ -171,7 +152,7 @@ try {
       const checkFinal = await check.final
       console.log(
         `▸ ...and it actually runs: ${checkFinal.stats?.tokensPerSecond?.toFixed(1) ?? '?'} tok/s ` +
-          `— this verdict was a false negative`
+          `— the OS compressed and paged its way past the working-set budget`
       )
     } catch (inferenceError) {
       console.log(
