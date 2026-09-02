@@ -18,8 +18,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Raise the `speech-cpp` floor to 2026-09-01#1, which brings in ggml-speech
-  2026-09-01. The CUDA backend now skips, at registration, GPUs whose
+- Raise the `speech-cpp` floor to 2026-09-01#2, which brings in ggml-speech
+  2026-09-02. The CUDA backend now skips, at registration, GPUs whose
   compute capability has no compiled code in the fatbin, so a
   `use_gpu` / `useGPU: true` run on such a card (Turing and older) falls
   back to Vulkan or CPU instead of failing at the first kernel launch. The
@@ -27,7 +27,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   target — Turing (7.5), Ampere (8.0, 8.6), Ada (8.9), Hopper (9.0) and
   Blackwell (12.0, 12.1) — with 8.0 PTX for anything newer, so Turing is
   supported again and Blackwell no longer pays a first-use JIT. The roll
-  also brings the compute-buffer OOM handling and k-quant GET_ROWS fixes.
+  also brings the compute-buffer OOM handling and k-quant GET_ROWS fixes, and
+  fixes two multi-GPU faults on a host that mixes supported and unsupported
+  NVIDIA cards: backend initialisation no longer aborts when the unsupported
+  card enumerates first, and a row-split buffer no longer allocates on the
+  skipped card.
 
 ## [0.4.1] - 2026-08-28
 
