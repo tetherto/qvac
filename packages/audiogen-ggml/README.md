@@ -267,6 +267,29 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:cover
 ```
 
+### Simple Mode: one sentence in, a full song out
+
+With `simpleMode: true` the caption is a short natural-language query and the
+LM composes the complete request before synthesis — a detailed caption, full
+lyrics, and every metadata field you left unset (BPM, key/scale, time
+signature, vocal language, and duration when `duration` is `0`). Anything you
+set is kept. Leave `lyrics` unset for LM-written vocals, or pass
+`'[Instrumental]'` for an instrumental song.
+
+```js
+const response = await gen.run(
+  'a romantic modern salsa with male lead vocals for a wedding',
+  { simpleMode: true, duration: 0, seed: 4242 }
+)
+```
+
+Or end to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:simple
+```
+
 ### Ordered audio editing
 
 `edit()` starts a source-driven pipeline. `edit()`/`flowEdit()` and `repaint()`
@@ -430,6 +453,8 @@ wrapped by a level-gated `QvacLogger`.
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
+| `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
+| `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |

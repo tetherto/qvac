@@ -55,10 +55,35 @@ function profile(overrides: Partial<ModelResourceProfile> = {}): ModelResourcePr
   }
 }
 
-function resources(options: { totalBytes?: number; usedBytes?: number; gpu?: boolean } = {}) {
+function resources(
+  options: {
+    totalBytes?: number
+    usedBytes?: number
+    gpu?: boolean
+    processUsedBytes?: number
+    processAvailableBytes?: number
+  } = {}
+) {
   const total = options.totalBytes ?? 64 * GIB
   const used = options.usedBytes ?? 16 * GIB
   const provenance = { source: 'test', scope: 'system' as const }
+  const processProvenance = { source: 'test', scope: 'process' as const }
+  const processUsed =
+    options.processUsedBytes === undefined
+      ? ({ status: 'unavailable' } as const)
+      : ({
+          status: 'supported',
+          value: options.processUsedBytes,
+          provenance: processProvenance
+        } as const)
+  const processAvailable =
+    options.processAvailableBytes === undefined
+      ? ({ status: 'unavailable' } as const)
+      : ({
+          status: 'supported',
+          value: options.processAvailableBytes,
+          provenance: processProvenance
+        } as const)
 
   const value: SystemResources = {
     capabilities: {
@@ -100,7 +125,9 @@ function resources(options: { totalBytes?: number; usedBytes?: number; gpu?: boo
       cpu: { status: 'unavailable' },
       memory: {
         usedBytes: { status: 'supported', value: used, provenance },
-        totalBytes: { status: 'supported', value: total, provenance }
+        totalBytes: { status: 'supported', value: total, provenance },
+        processUsedBytes: processUsed,
+        processAvailableBytes: processAvailable
       },
       gpus: { status: 'supported', provenance, value: [] }
     }
@@ -454,8 +481,11 @@ test('assess: desktop reserve is the larger of 2 GiB and 15%', (t) => {
   t.is(large.budget?.reservedBytes, 64 * GIB * 0.15, '15% dominates on a large machine')
 })
 
-test('assess: mobile reserve is the larger of 1 GiB and 20%', (t) => {
-  const result = assessModelFitFromResources({
+test('assess: iOS budgets are per-process and refuse without the allowance metric', (t) => {
+  // System metrics being supported must NOT produce a budget on iOS: jetsam
+  // enforces a per-process limit, and a system budget would defend verdicts
+  // the OS does not honor.
+  const withoutMetric = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
@@ -463,7 +493,42 @@ test('assess: mobile reserve is the larger of 1 GiB and 20%', (t) => {
     calibration: calibration(),
     resolveProfile: () => profile()
   })
+  t.is(withoutMetric.basis, 'process-memory')
+  t.is(withoutMetric.verdict, 'unknown')
+  t.absent(withoutMetric.budget)
+  t.ok(
+    withoutMetric.reasons.some((r) => r.includes('per-process allowance metric is not available'))
+  )
+
+  const withMetric = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ processUsedBytes: 1 * GIB, processAvailableBytes: 3 * GIB }),
+    platform: 'ios-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(withMetric.basis, 'process-memory')
+  // Ceiling = allowance + footprint (the relation jetsam enforces); the mobile
+  // reserve applies against that ceiling: max(1 GiB, 20% of 4 GiB) = 1 GiB.
+  t.is(withMetric.budget?.totalBytes, 4 * GIB)
+  t.is(withMetric.budget?.usedBytes, 1 * GIB)
+  t.is(withMetric.budget?.reservedBytes, 1 * GIB)
+  t.is(withMetric.budget?.availableAfterReserveBytes, 2 * GIB)
+})
+
+test('assess: android keeps the system basis with the mobile reserve, by explicit decision', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
+    platform: 'android-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(result.basis, 'system-memory')
   t.is(result.budget?.reservedBytes, 8 * GIB * 0.2)
+  t.ok(result.assumptions.some((a) => a.includes('android budgets deliberately use system memory')))
 })
 
 test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
@@ -479,7 +544,7 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
   })
   t.is(noSample.verdict, 'unknown')
   t.absent(noSample.budget)
-  t.ok(noSample.reasons.some((r) => r.includes('no system-memory sample')))
+  t.ok(noSample.reasons.some((r) => r.includes('no memory sample')))
 
   const unsupported = assessModelFitFromResources({
     models: [candidate()],
@@ -491,7 +556,9 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
         cpu: { status: 'unavailable' },
         memory: {
           usedBytes: { status: 'unavailable' },
-          totalBytes: { status: 'unavailable' }
+          totalBytes: { status: 'unavailable' },
+          processUsedBytes: { status: 'unavailable' },
+          processAvailableBytes: { status: 'unavailable' }
         },
         gpus: { status: 'unavailable' }
       }

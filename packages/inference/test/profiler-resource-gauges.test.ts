@@ -45,7 +45,8 @@ test('operation profiling: resource gauges sample only when requested', async (t
     }),
     createGPUInfo: () => undefined,
     createGPUId: () => 'gpu-1',
-    now: () => 123
+    now: () => 123,
+    sampleProcessMemory: () => ({ usedBytes: 512, availableBytes: undefined })
   })
 
   const unprofiled = await profileReplyHandler(
