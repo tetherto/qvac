@@ -5,8 +5,8 @@ import {
   worldCreateScene,
   worldStep,
   ABOT_WORLD_0_5B_Q8_0,
-  ABOT_WORLD_0_5B_LF_VAE,
-  ABOT_WORLD_0_5B_LF_VAE_F16,
+  ABOT_WORLD_0_5B_LF_TAEHV_VAE,
+  ABOT_WORLD_0_5B_LF_WAN_VAE,
   UMT5_XXL_ENC_Q8_0
 } from '@qvac/sdk'
 import fs from 'fs'
@@ -55,9 +55,9 @@ try {
       //   vaeModelSrc   — the full-precision Wan2.2 VAE. ENCODES the first frame
       //     during worldCreateScene, and is not touched again after that.
       // Swapping them loads at first and fails once the walk starts.
-      taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
+      taehvModelSrc: ABOT_WORLD_0_5B_LF_TAEHV_VAE,
       t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
-      vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
+      vaeModelSrc: ABOT_WORLD_0_5B_LF_WAN_VAE,
       world: {
         seed: 42,
         // ~3.7x fewer frame-passes per block. Without it, block times ramp from
