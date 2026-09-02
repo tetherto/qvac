@@ -15,6 +15,7 @@ Apply this checklist **only** when the PR is in `tetherto/qvac` AND touches at l
 - `packages/sdk/schemas/plugin.ts` — plugin contract types, `ADDON_*` constants, `SDK_DEFAULT_PLUGINS`
 - `packages/sdk/schemas/load-model.ts` — load-model contract; plugin schema changes flow through here
 - New `packages/sdk/schemas/*-config.ts` files — typically a new plugin config schema
+- `packages/sdk/schemas/completion-stream.ts` or `packages/sdk/schemas/batch-completion-stream.ts` — request/sampling params used by serve
 - `packages/sdk/server/worker.ts` — plugin registration
 - `packages/sdk/commands/bundle/**` — bundler `BUILTIN_PLUGINS` mapping (a new plugin must be registered here to be bundleable)
 

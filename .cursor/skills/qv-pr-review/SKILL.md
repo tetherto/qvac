@@ -258,6 +258,7 @@ If the PR touches SDK plugin paths, also run the SDK plugin integration checklis
 - `packages/sdk/client/api/**`
 - `packages/sdk/schemas/plugin.ts` or `packages/sdk/schemas/load-model.ts`
 - a new `packages/sdk/schemas/*-config.ts`
+- `packages/sdk/schemas/completion-stream.ts` or `packages/sdk/schemas/batch-completion-stream.ts`
 - `packages/sdk/server/worker.ts`
 - `packages/sdk/commands/bundle/**`
 
