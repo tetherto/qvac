@@ -7126,12 +7126,6 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             description="Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`)."
         ),
     ] = None
-    n_discarded: Annotated[
-        float | None,
-        Field(
-            description="Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`)."
-        ),
-    ] = None
     parallel: Annotated[
         int | None,
         Field(
