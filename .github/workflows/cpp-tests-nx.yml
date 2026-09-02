@@ -455,6 +455,22 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
+  # Added to main after this consolidation was written (#3930). Its only caller
+  # there is on-pr-model-fit.yml, which the stacked cleanup PR deletes, so
+  # without this job model-fit's C++ tests would silently stop running.
+  cpp-tests-model-fit:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'model-fit')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    uses: ./.github/workflows/cpp-tests-model-fit.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
   cpp-tests-translation:
     needs: matrix
     if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'translation-nmtcpp')
