@@ -178,7 +178,12 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
  * code-based predicates.
  */
 export function reconstructError(response: ErrorResponse): Error {
-  const reconstructor = response.name ? RECONSTRUCTORS[response.name] : undefined
+  // Own-key gate: the map is an object literal, so a hostile name like
+  // "constructor" would otherwise resolve through Object.prototype.
+  const reconstructor =
+    response.name && Object.prototype.hasOwnProperty.call(RECONSTRUCTORS, response.name)
+      ? RECONSTRUCTORS[response.name]
+      : undefined
   if (!reconstructor) {
     return new RPCError(response)
   }

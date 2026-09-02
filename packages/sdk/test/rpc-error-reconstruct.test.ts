@@ -150,6 +150,17 @@ test('reconstructError: unknown error name falls through to RPCError', (t) => {
   t.is(rpc.isQvacError, true)
 })
 
+test('reconstructError: inherited object keys are not reconstructors', (t) => {
+  // "constructor" resolves through Object.prototype on an object literal;
+  // it must fall through to RPCError instead of returning a non-Error.
+  const envelope = { type: 'error' as const, name: 'constructor', message: 'probe' }
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof RPCError, 'inherited keys fall through to RPCError')
+  t.ok(reconstructed instanceof Error, 'the result is a real Error')
+})
+
 test('reconstructError: non-typed error envelope falls through to RPCError', (t) => {
   const envelope = createErrorResponse(new Error('plain'))
 
