@@ -23,6 +23,7 @@
           "artifactNamePrefix": "tts-ggml-",
           "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev",
           "includeVulkanSdk": true,
+          "setupPythonOnWindows": true,
           "includeCuda": true,
           "platformCmakeDefines": "linux-x64: -D ENABLE_CUDA=ON\n"
         }

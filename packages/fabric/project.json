@@ -20,7 +20,8 @@
         "cwd": "packages/fabric",
         "ci": {
           "artifactNamePrefix": "fabric-",
-          "includeVulkanSdk": true
+          "includeVulkanSdk": true,
+          "includeRocm": true
         }
       },
       "inputs": [
