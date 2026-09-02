@@ -1,11 +1,6 @@
-# Consolidates the 13 auto-firing on-pr-close-<pkg>.yml files (ephemeral GPR
-# pr-<n> version cleanup).
-#
-# Three on-pr-close-<pkg>.yml files on main are deliberately NOT in this list.
-# transcription-parakeet and transcription-whispercpp were retired into
-# packages/asr-ggml (#3552) and their stubs had the pull_request trigger removed
-# on purpose; translation-nmtcpp is dispatch-only too. Adding them here would
-# re-arm a trigger main intentionally disarmed, so they stay as manual stubs.
+# Consolidates the 13 auto-firing on-pr-close-<pkg>.yml files (GPR pr-<n> cleanup).
+# transcription-parakeet, transcription-whispercpp and translation-nmtcpp are
+# excluded on purpose: their stubs are dispatch-only (#3552).
 name: On PR Close (cleanup)
 
 on:
