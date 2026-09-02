@@ -182,7 +182,8 @@ export interface GenerateOptions {
   guidanceScale?: number
   /**
    * Fraction of DiT steps that keep the source context (0..1). Default 1.0.
-   * Values < 1 are rejected by the engine until context switching lands.
+   * Below 1 the engine follows the source for that fraction of the run, then
+   * finishes freely on a silence context.
    */
   audioCoverStrength?: number
   /**

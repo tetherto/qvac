@@ -6,8 +6,8 @@ import {
   paramFields,
   coerceParam,
   validateParam
-} from '../src/configure/param-schemas.js'
-import { TTS_ENGINES, buildEntry } from '../src/configure/presets.js'
+} from '@/configure/param-schemas'
+import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
   it('resolves a config schema for every built-in addon', () => {
@@ -67,7 +67,7 @@ describe('configure: param-schemas', () => {
     assert.ok(schema)
     for (const engine of TTS_ENGINES) {
       const built = buildEntry('speech', engine)
-      assert.equal(built.entry.config?.ttsEngine, engine)
+      assert.equal(built.entry.config?.['ttsEngine'], engine)
       assert.ok(built.entry.src, `${engine} starter has a model`)
       const res = schema.safeParse(built.entry.config)
       assert.ok(
@@ -78,7 +78,9 @@ describe('configure: param-schemas', () => {
   })
 
   it('shows an object field shape and enforces it on input', () => {
-    const model = configParamModel(configSchemaForAddon('tts'))
+    const ttsSchema = configSchemaForAddon('tts')
+    assert.ok(ttsSchema)
+    const model = configParamModel(ttsSchema)
     assert.ok(model?.kind === 'variants')
     const audio8 = model.variants.find((v) => v.value === 'audio8')
     const ref = audio8?.fields.find((f) => f.name === 'referenceAudioSrc')

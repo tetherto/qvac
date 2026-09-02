@@ -10263,7 +10263,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     stream_chunk_tokens: Annotated[
@@ -10687,7 +10687,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
@@ -10860,7 +10860,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
@@ -11293,7 +11293,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
@@ -11746,7 +11746,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
