@@ -792,6 +792,102 @@
           },
           "additionalProperties": false,
           "title": "AudioGenStreamResponseStats"
+        },
+        "diagnostics": {
+          "description": "Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "AudioGenStreamResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "AudioGenStreamResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "AudioGenStreamResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "AudioGenStreamResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "AudioGenStreamResponseDiagnostics"
         }
       },
       "required": ["type", "done"],
@@ -8314,10 +8410,6 @@
                         "type": "string"
                       }
                     },
-                    "n_discarded": {
-                      "description": "Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`).",
-                      "type": "number"
-                    },
                     "parallel": {
                       "description": "Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding and splits the KV cache evenly across slots.",
                       "type": "integer",
@@ -10400,7 +10492,7 @@
                           "type": "string"
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "streamChunkTokens": {
@@ -11091,7 +11183,7 @@
                           "type": "number"
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
@@ -11387,7 +11479,7 @@
                           "minLength": 1
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
@@ -11545,7 +11637,7 @@
                           ]
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
@@ -11820,7 +11912,7 @@
                           "maximum": 2147483647
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
