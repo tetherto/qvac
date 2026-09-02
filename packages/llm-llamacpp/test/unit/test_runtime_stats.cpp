@@ -206,9 +206,9 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsToolDefinitionsDropped) {
   Request reqB = makeStubRequest();
   Request reqC = makeStubRequest();
 
-  stats.accumulateSlot(0, 0, /*thinkingDiscards=*/0, /*toolsDropped=*/1, reqA);
-  stats.accumulateSlot(0, 0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
-  stats.accumulateSlot(0, 0, /*thinkingDiscards=*/0, /*toolsDropped=*/2, reqC);
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/1, reqA);
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/2, reqC);
 
   EXPECT_EQ(stats.toolDefinitionsDropped, 3);
   EXPECT_EQ(stats.thinkingBlockDiscards, 0)
@@ -218,7 +218,7 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsToolDefinitionsDropped) {
 TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsToolDefinitionsDropped) {
   RuntimeStatsSnapshot stats;
   Request req = makeStubRequest();
-  stats.accumulateSlot(0, 0, 0, 5, req);
+  stats.accumulateSlot(0, 0, 5, req);
   EXPECT_EQ(stats.toolDefinitionsDropped, 5);
 
   stats.reset();

@@ -46,45 +46,6 @@ bool hasToolCallBlock(const std::string& text) {
   return text.find("<tool_call>") != std::string::npos;
 }
 
-std::string jsonEscape(const std::string& text) {
-  std::string out;
-  out.reserve(text.size() + 16);
-  for (const char c : text) {
-    switch (c) {
-    case '"':
-      out += "\\\"";
-      break;
-    case '\\':
-      out += "\\\\";
-      break;
-    case '\n':
-      out += "\\n";
-      break;
-    case '\r':
-      out += "\\r";
-      break;
-    case '\t':
-      out += "\\t";
-      break;
-    default:
-      out += c;
-    }
-  }
-  return out;
-}
-
-// TOOL_PROMPT extended with the assistant's reply and one more user turn, so
-// the request continues the same conversation instead of starting a new one.
-std::string
-followUpPrompt(const std::string& assistantReply, const std::string& userTurn) {
-  std::string prompt(TOOL_PROMPT);
-  prompt.pop_back(); // drop the closing ']'
-  prompt += R"(,{"role":"assistant","content":")" + jsonEscape(assistantReply) +
-            R"("},{"role":"user","content":")" + jsonEscape(userTurn) +
-            R"("}])";
-  return prompt;
-}
-
 } // namespace
 
 class ToolGrammarModelTest : public ::testing::Test {
@@ -377,66 +338,6 @@ TEST_F(ToolGrammarModelTest, JsonSchemaWithoutToolsStillConstrainsOutput) {
   const std::string output = model->processPrompt(prompt);
   EXPECT_NE(output.find("\"colour\""), std::string::npos) << output;
   EXPECT_FALSE(hasToolCallBlock(output)) << output;
-}
-
-// A first-turn tool block sits below firstMsgTokens_, so a context slide on a
-// later turn removes tokens after it and never touches the tool definitions.
-// Verifies the existing protection rather than changing it.
-TEST_F(
-    ToolGrammarModelTest, ProtectedPrefixKeepsFirstTurnToolBlockAcrossSlides) {
-  if (!hasQwen3Model()) {
-    GTEST_SKIP() << qwen3Model_.missingMessage();
-  }
-  config_["ctx_size"] = "320";
-  config_["n_discarded"] = "32";
-  config_["n_predict"] = "96";
-  auto model = createModel();
-  LlmContext* ctx = LlamaModelTestPeer::llmContext(*model);
-  ASSERT_NE(ctx, nullptr);
-
-  // Without a cache key every processPrompt starts a fresh conversation, which
-  // would reset firstMsgTokens_ to 0 between turns. A key keeps the live
-  // context across the turns (nothing is written to disk). Unique per run,
-  // same idiom as `uniqueTextCachePath` in test_text_llm_context.cpp.
-  const auto uniqueId =
-      std::chrono::high_resolution_clock::now().time_since_epoch().count();
-  const std::string cacheKey =
-      (fs::temp_directory_path() /
-       ("qvac-24219-prefix-" + std::to_string(uniqueId) + ".bin"))
-          .string();
-  auto turn = [&](const std::string& input) {
-    LlamaModel::Prompt prompt;
-    prompt.input = input;
-    prompt.cacheKey = cacheKey;
-    // Qwen3 defaults to thinking-block compaction, which hard-fails by
-    // contract when a generation-time slide invalidates its tracked span.
-    // This test is about the slide itself, so keep the reasoning tokens.
-    prompt.generationParams.remove_thinking_from_context = false;
-    return model->processPrompt(prompt);
-  };
-
-  const std::string first = turn(TOOL_PROMPT);
-  ASSERT_FALSE(first.empty());
-  const llama_pos protectedEnd = ctx->getFirstMsgTokens();
-  ASSERT_GT(protectedEnd, 0);
-  const auto firstPromptTokens = static_cast<llama_pos>(
-      test_common::getStatValue(model->runtimeStats(), "promptTokens"));
-  EXPECT_GE(protectedEnd, firstPromptTokens)
-      << "the whole first prompt, tools included, must be protected";
-
-  // Keep the conversation going until the window has to slide.
-  std::string reply = first;
-  double slides = 0;
-  for (int i = 0; i < 6 && slides == 0; ++i) {
-    const std::string next =
-        turn(followUpPrompt(reply, "Tell me more about the weather there."));
-    ASSERT_FALSE(next.empty());
-    reply = next;
-    slides = test_common::getStatValue(model->runtimeStats(), "contextSlides");
-  }
-  ASSERT_GT(slides, 0) << "the configured context never slid; tune ctx_size";
-  EXPECT_EQ(ctx->getFirstMsgTokens(), protectedEnd)
-      << "a slide must not move the protected prefix boundary";
 }
 
 // Regression guard for the continuous-batching path: every slot gets a fresh

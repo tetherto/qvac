@@ -95,6 +95,7 @@ const GENERATION_PARAM_KEYS = new Set([
     "repeat_penalty",
     "grammar",
     "json_schema",
+    "tool_choice",
     "reasoning_budget",
     "remove_thinking_from_context",
 ]);
