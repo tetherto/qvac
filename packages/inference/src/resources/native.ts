@@ -46,16 +46,15 @@ export const nativeResourceCollectorDependencies: ResourceCollectorDependencies 
     return Date.now()
   },
   sampleProcessMemory() {
-    let usedBytes: number | undefined
-    try {
-      const usage = os.memoryUsage()
-      usedBytes = usage && usage.rss > 0 ? usage.rss : undefined
-    } catch {
-      usedBytes = undefined
-    }
+    // A throw here is a sampling failure, not a platform gap: let it reach the
+    // collector so the metric reports `failed` rather than `unavailable`.
+    const usage = os.memoryUsage()
     // No platform exposes the per-process allowance yet. On iOS this is
     // `os_proc_available_memory()` — the limit jetsam actually enforces — and
     // it needs a native source before the metric can report a value.
-    return { usedBytes, availableBytes: undefined }
+    return {
+      usedBytes: usage && usage.rss > 0 ? usage.rss : undefined,
+      availableBytes: undefined
+    }
   }
 }
