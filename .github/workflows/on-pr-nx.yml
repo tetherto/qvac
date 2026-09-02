@@ -112,6 +112,7 @@ jobs:
       perfcomposite: ${{ steps.filter.outputs.perfcomposite }}
       perfrtf: ${{ steps.filter.outputs.perfrtf }}
       prebuilds: ${{ steps.filter.outputs.prebuilds }}
+      packages: ${{ steps.filter.outputs.packages }}
     steps:
       # Load the action + options.ci ONLY from the trusted default branch (never
       # PR head). Full checkout: sparse config leaks into the action and breaks the pnpm pin.
@@ -142,13 +143,17 @@ jobs:
             # One qvac/prebuild-<key> status per affected prebuild package. statusKey
             # maps the vla-ggml nx project -> "vla" (Merge Guard's key); unique_by dedupes rows.
             echo "prebuilds=$(echo "$M" | jq -c '[.[] | select(.hasPrebuilds == true) | {package, statusKey: (if .package == "vla-ggml" then "vla" else .package end)}] | unique_by(.package)')"
+            # Passed to the leaves as their explicit `packages:`; each would otherwise
+            # self-affect against its own target and miss the on-pr carveOut.
+            echo "packages=$(echo "$M" | jq -c '[.[] | .package] | unique')"
           } >> "$GITHUB_OUTPUT"
 
-  # The 4 leaves self-affect from their own project.json targets (absorbing their
-  # carve-out packages internally), so on-pr calls them uniformly.
+  # Leaves get the on-pr package list explicitly so carved-out packages (fabric,
+  # classification-ggml, vla-ggml) are not built here as well as by their own
+  # orchestrators. The list is already transitive.
   prebuild:
-    needs: [fork-approval, authorize, ci-router]
-    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_prebuilds == 'true'
+    needs: [fork-approval, authorize, ci-router, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && needs.matrix.outputs.packages != '[]'
     # actions: read required down the chain: the reuse action lists prior runs +
     # downloads artifacts (else the reusable's request exceeds the grant -> startup_failure).
     permissions:
@@ -162,13 +167,14 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      packages: ${{ needs.matrix.outputs.packages }}
       # Enable cross-run prebuild reuse: a PR push that doesn't touch a
       # package's native tree reuses that package's prior prebuilds-<pkg>.
       reuse-workflow-file: on-pr-nx.yml
 
   cpp-tests:
-    needs: [fork-approval, authorize, ci-router]
-    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_cpp_tests == 'true'
+    needs: [fork-approval, authorize, ci-router, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.matrix.outputs.packages != '[]'
     permissions:
       contents: read
       packages: read
@@ -181,10 +187,11 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      packages: ${{ needs.matrix.outputs.packages }}
 
   run-integration-tests:
-    needs: [fork-approval, authorize, ci-router, prebuild]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_desktop == 'true' && needs.prebuild.result != 'cancelled'
+    needs: [fork-approval, authorize, ci-router, prebuild, matrix]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_desktop == 'true' && needs.prebuild.result != 'cancelled' && needs.matrix.outputs.packages != '[]'
     permissions:
       contents: read
       packages: read
@@ -194,6 +201,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      packages: ${{ needs.matrix.outputs.packages }}
 
   # Mobile integration tests are NOT run on PRs (QVAC-23665 moved them to on-demand
   # dispatch). ci-router's run_mobile output is retained but triggers nothing here.
