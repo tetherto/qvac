@@ -252,9 +252,11 @@ test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
     // Gemma 3 models (including 4B size variant) must not be detected as Gemma 4
     [undefined, '/cache/abc_gemma3-Q4_K_M.gguf'],
     ['GEMMA3_Q4', '/Users/x/.qvac/models/abc_gemma-3-4b-q4_k_m.gguf'],
-    // Qwen3 5B (5 billion params) must not be mistaken for Qwen3.5 (model version 3.5)
+    // Qwen3 5B and 8B sizes must not be mistaken for model versions 3.5 and 3.8
     [undefined, '/cache/abc_Qwen3-5B-Instruct-Q4_K_M.gguf'],
     ['QWEN3_5B_INST', '/Users/x/.qvac/models/abc_qwen3-5b-instruct.gguf'],
+    [undefined, '/cache/abc_Qwen3-8B-Instruct-Q4_K_M.gguf'],
+    ['QWEN3_8B_INST_Q4_K_M', '/Users/x/.qvac/models/abc_qwen3-8b-instruct.gguf'],
     [undefined, '/cache/abc_Qwen3-50B-Instruct-Q4_K_M.gguf'],
     ['QWEN3_50B_INST', '/Users/x/.qvac/models/abc_qwen3-50b-instruct.gguf'],
     [undefined, '/cache/abc_Qwen3-60B-Instruct-Q4_K_M.gguf'],
