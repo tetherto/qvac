@@ -2,8 +2,9 @@
 
 `assessModelFit` answers one question before anything is downloaded: is this
 model likely to fit in this device's memory? It reads generated catalog metadata
-and a fresh system-memory sample. It never downloads weights, never loads a
-model, and never runs a native probe.
+and a fresh memory sample — system-wide or process-scoped, depending on the
+result's [`basis`](#policy-interactive-v1). It never downloads weights, never
+loads a model, and never runs a native probe.
 
 It is **advisory**. It does not block `loadModel`, reserve memory, choose a
 model for you, or make any claim about speed.
@@ -54,8 +55,11 @@ reserve anything on the strength of it.
 
 ### `policy: 'interactive-v1'`
 
-Headroom left for the rest of the system: the larger of 2 GiB or 15% of total
-RAM on desktop, the larger of 1 GiB or 20% on mobile.
+Headroom withheld from the budget: the larger of 2 GiB or 15% of `total` on
+desktop, the larger of 1 GiB or 20% on mobile — the percentage applies to
+whatever `total` means under the result's `basis`. Under `system-memory` that
+headroom is left for the rest of the system; under `process-memory` it is left
+inside the app's own ceiling, since jetsam acts on this app's footprint.
 
 ```text
 budget = total − in use now − policy reserve
