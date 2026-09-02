@@ -50,6 +50,7 @@ const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
 const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
 const { readImageDimensions } = require('@qvac/diffusion-cpp/addon.js')
 const { ensureModelPath, setupJsLogger } = require('./utils.js')
+const { pngLuminanceStddev, readScenePackPromptRows } = require('./abot-guards.js')
 
 // The registry client is a devDependency used only by the desktop provisioning
 // path (the lanes skip on mobile). The indirect specifier keeps the literal out
@@ -334,71 +335,6 @@ async function walkTape(world, tape) {
   return blocks
 }
 
-// Luminance standard deviation of an 8-bit RGB PNG frame — the numerical
-// quality gate the 2026-08-11 scene-creation regression slipped past: frames
-// that collapse into blur/garbage land at stddev 8-12 while any real walk
-// frame (photo or synthetic scene, moving or idle) holds 30+. Structural
-// asserts (frame count, dimensions, frames-differ) all pass on garbage.
-function pngLuminanceStddev(png) {
-  const zlib = require('bare-zlib')
-  let pos = 8
-  let width = 0
-  let height = 0
-  let bitDepth = 0
-  let colorType = 0
-  const idat = []
-  while (pos < png.length) {
-    const len = (png[pos] << 24) | (png[pos + 1] << 16) | (png[pos + 2] << 8) | png[pos + 3]
-    const type = String.fromCharCode(png[pos + 4], png[pos + 5], png[pos + 6], png[pos + 7])
-    const chunk = png.subarray(pos + 8, pos + 8 + len)
-    if (type === 'IHDR') {
-      width = (chunk[0] << 24) | (chunk[1] << 16) | (chunk[2] << 8) | chunk[3]
-      height = (chunk[4] << 24) | (chunk[5] << 16) | (chunk[6] << 8) | chunk[7]
-      bitDepth = chunk[8]
-      colorType = chunk[9]
-    } else if (type === 'IDAT') {
-      idat.push(chunk)
-    }
-    pos += 12 + len
-  }
-  if (bitDepth !== 8 || colorType !== 2) return -1 // only the addon's RGB frames
-  const raw = zlib.inflateSync(Buffer.concat(idat))
-  const stride = width * 3
-  let prev = Buffer.alloc(stride)
-  let sum = 0
-  let sumSq = 0
-  let p = 0
-  for (let y = 0; y < height; y++) {
-    const filter = raw[p++]
-    const line = Buffer.from(raw.subarray(p, p + stride))
-    p += stride
-    for (let i = 0; i < stride; i++) {
-      const a = i >= 3 ? line[i - 3] : 0
-      const b = prev[i]
-      if (filter === 1) line[i] = (line[i] + a) & 255
-      else if (filter === 2) line[i] = (line[i] + b) & 255
-      else if (filter === 3) line[i] = (line[i] + ((a + b) >> 1)) & 255
-      else if (filter === 4) {
-        const c = i >= 3 ? prev[i - 3] : 0
-        const pp = a + b - c
-        const pa = Math.abs(pp - a)
-        const pb = Math.abs(pp - b)
-        const pc = Math.abs(pp - c)
-        line[i] = (line[i] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255
-      }
-    }
-    for (let i = 0; i < stride; i += 3) {
-      const yv = 0.299 * line[i] + 0.587 * line[i + 1] + 0.114 * line[i + 2]
-      sum += yv
-      sumSq += yv * yv
-    }
-    prev = line
-  }
-  const n = width * height
-  const mean = sum / n
-  return Math.sqrt(Math.max(0, sumSq / n - mean * mean))
-}
-
 function framesAre(blocks, width, height, magic) {
   return blocks.every((frames) =>
     frames.every((frame) => {
@@ -456,6 +392,39 @@ test(
       .await()
     t.ok(fs.existsSync(scenePath), 'scene pack written by native scene creation')
     t.ok(/"scene"/.test(sceneMsg), 'scene-creation completion JSON received')
+
+    // Conditioning invariants, straight off the pack - no DiT, no GPU, no
+    // frames. `live < rows` is the reference's zeroed prompt padding: without
+    // it the walk cross-attends to pad-token embeddings in all 512 rows and
+    // collapses into blur from the first block (the 2026-08-11 port
+    // regression). `live > 0` means the prompt survived at all.
+    const census = readScenePackPromptRows(fs.readFileSync(scenePath))
+    t.ok(census.live > 0, `prompt encoded into the pack (${census.live} live rows)`)
+    t.ok(
+      census.live < census.rows,
+      `prompt padding is zeroed (${census.live}/${census.rows} rows live; ` +
+        'all rows live = pad embeddings condition the walk)'
+    )
+
+    // ...and the embeddings must actually depend on the prompt. One extra
+    // umT5 encode (seconds, no DiT) guards the "prompt is ignored" class.
+    const otherScenePath = path.join(dir, 'scene-native-e2e-prompt-b.safetensors')
+    if (fs.existsSync(otherScenePath)) fs.unlinkSync(otherScenePath)
+    const otherCreation = await world.createScene({
+      prompt: '| unknown | A snowy mountain village at night under heavy snowfall.',
+      image,
+      t5: t5Xxl,
+      vae: vaePath,
+      output: otherScenePath,
+      width: 832,
+      height: 480
+    })
+    await otherCreation.onUpdate(() => {}).await()
+    const otherCensus = readScenePackPromptRows(fs.readFileSync(otherScenePath))
+    t.ok(
+      !census.prefix.equals(otherCensus.prefix) || census.live !== otherCensus.live,
+      'a different prompt produces different embeddings (prompt is not ignored)'
+    )
 
     // 2. Walk the newly created world with the KV cache on, covering the
     //    demo's input space: idle, move, move+camera chord, and the array
