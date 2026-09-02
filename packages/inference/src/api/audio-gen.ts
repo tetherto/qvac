@@ -6,7 +6,8 @@ import {
   type AudioGenProgress,
   type AudioGenResult,
   type AudioGenStats,
-  type AudioGenStreamRequest
+  type AudioGenStreamRequest,
+  type InferenceBackendDiagnostics
 } from '@/schemas/index'
 import { stream } from '@/dispatch'
 import { parseClientInput } from '@/api/parse-input'
@@ -30,7 +31,7 @@ function concatenateChunks(chunks: Uint8Array[]) {
  * MiniMax-Music3 AudioGen model.
  *
  * @param params - AudioGen request parameters (model, caption, optional lyrics, seed, bpm, etc.).
- * @returns A result object exposing `requestId`, `progressStream` (async iterator of `{ stage, step, total }`), `audio` (promise of the generated PCM and its format), and `stats` (promise of generation statistics).
+ * @returns A result object exposing `requestId`, `progressStream` (async iterator of `{ stage, step, total }`), `audio` (promise of the generated PCM and its format), `stats` (promise of generation statistics), and `diagnostics` (promise of the backend selection detail for the run).
  *
  * @example
  * ```typescript
@@ -75,6 +76,14 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
   })
   stats.catch(() => {})
 
+  let resolveDiagnostics: (diagnostics: InferenceBackendDiagnostics | undefined) => void = () => {}
+  let rejectDiagnostics: (error: unknown) => void = () => {}
+  const diagnostics = new Promise<InferenceBackendDiagnostics | undefined>((resolve, reject) => {
+    resolveDiagnostics = resolve
+    rejectDiagnostics = reject
+  })
+  diagnostics.catch(() => {})
+
   function notifyProgress() {
     progressResolve?.()
     progressResolve = undefined
@@ -112,6 +121,7 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
             const error = new InferenceCancelledError(requestId)
             rejectAudio(error)
             rejectStats(error)
+            rejectDiagnostics(error)
             break
           }
           if (sampleRate === undefined || channels === undefined || bitsPerSample === undefined) {
@@ -124,6 +134,7 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
             bitsPerSample
           })
           resolveStats(chunk.stats)
+          resolveDiagnostics(chunk.diagnostics)
           break
         }
       }
@@ -136,6 +147,7 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
         error instanceof Error ? error : new InvalidResponseError('audioGenStream', error)
       rejectAudio(progressError)
       rejectStats(progressError)
+      rejectDiagnostics(progressError)
     } finally {
       progressDone = true
       notifyProgress()
@@ -165,6 +177,7 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
     requestId,
     progressStream: progressStream(),
     audio,
-    stats
+    stats,
+    diagnostics
   }
 }

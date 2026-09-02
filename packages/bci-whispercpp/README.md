@@ -90,10 +90,18 @@ the `speech-cpp` dependency. On linux-x64 that
 flips ggml into hybrid dynamically-loaded backend mode: the CPU-variant,
 Vulkan, and CUDA backends ship as `.so` modules next to the addon, only the
 CUDA module depends on the CUDA runtime, and hosts that cannot resolve it
-skip the module and fall back to Vulkan or CPU. Only the NVIDIA driver plus
-the CUDA runtime libraries are needed at runtime; ggml registers CUDA ahead
-of Vulkan, so `use_gpu: true` prefers CUDA when a supported device is
-present.
+skip the module and fall back to Vulkan or CPU. The NVIDIA driver plus the
+CUDA 13 runtime libraries (cudart, cuBLAS — from a CUDA toolkit install) are
+needed at runtime; ggml registers CUDA ahead of Vulkan, so `use_gpu: true`
+prefers CUDA when a supported device is present.
+
+The prebuilt CUDA module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
+Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
+Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
+path here: the backend skips such devices at registration and the addon falls
+back to Vulkan or CPU.
 
 ### Prerequisites
 

@@ -65,7 +65,7 @@ describe('models', () => {
     const res = await post('/v1/embeddings', { model: E2E.embedLazy, input: 'lazy load me' })
     assert.equal(res.statusCode, 200)
     const body = res.json() as { data: Array<{ embedding: number[] }> }
-    assert.ok(body.data[0]?.embedding.length > 0)
+    assert.ok(body.data[0]!.embedding.length > 0)
 
     assert.equal(registry.getEntry(E2E.embedLazy)?.state, registry.STATES.READY)
   })

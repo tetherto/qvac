@@ -1,10 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  chatCompletionChunk,
-  chatCompletionResponse
-} from '../src/serve/adapters/openai/chat-shapes.js'
-import { sdkToolCallsToOpenaiDeltas } from '../src/serve/adapters/openai/tool-calls.js'
+import { chatCompletionChunk, chatCompletionResponse } from '@/serve/adapters/openai/chat-shapes'
+import { sdkToolCallsToOpenaiDeltas } from '@/serve/adapters/openai/tool-calls'
 
 describe('chat agent OpenAI shapes', () => {
   it('maps blocking SDK tool calls to OpenAI chat tool_calls', () => {
