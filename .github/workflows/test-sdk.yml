@@ -127,9 +127,9 @@ on:
         options:
           - "off"
           - all
-          - qvac-macos26-arm64-gpu
-          - qvac-ubuntu2204-x64-gpu
-          - qvac-win25-x64-gpu
+          - qvac-macos26-arm64-gpu-calibration
+          - qvac-ubuntu2204-x64-gpu-calibration
+          - qvac-win25-x64-gpu-calibration
         default: "off"
 
   workflow_call:
@@ -638,14 +638,14 @@ jobs:
   # Measurement wants a quiet host. The harness reads its own process RSS, so a
   # co-scheduled job does not inflate the numbers — but it can create memory
   # pressure that evicts this process's mapped pages and DEFLATES the persistent
-  # deltas, which is the dangerous direction for an upper bound. The current
-  # labels are served by more than one agent (some sharing a host), so
-  # exclusivity is not guaranteed yet. DevOps is adding calibration-labeled
-  # runners whose job hooks drain-stop the sibling agents on the host for the
-  # duration of the run and restart them afterwards; once those labels exist,
-  # the `calibration` input's options should switch to them. Until then: dispatch
-  # during off-peak windows, and do not ship a fixture from a run the harness
-  # flagged with a busy-host warning.
+  # deltas, which is the dangerous direction for an upper bound. The
+  # `*-calibration` labels guarantee that: a runner hook drain-stops the sibling
+  # agents on the host when this job starts and restarts them when it ends, so
+  # the job owns the machine for the duration. Two contract points with that
+  # hook: the job id below MUST stay `calibration` (the hook matches
+  # GITHUB_JOB), and the run holds the whole host, so dispatch during off-peak
+  # windows. The harness's busy-host warnings remain as a backstop — do not
+  # ship a fixture from a warned run.
   calibration:
     if: github.event_name == 'workflow_dispatch' && inputs.calibration != 'off'
     strategy:
@@ -653,7 +653,7 @@ jobs:
       matrix:
         platform: >-
           ${{ fromJSON(inputs.calibration == 'all'
-            && '["qvac-macos26-arm64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-win25-x64-gpu"]'
+            && '["qvac-macos26-arm64-gpu-calibration", "qvac-ubuntu2204-x64-gpu-calibration", "qvac-win25-x64-gpu-calibration"]'
             || format('["{0}"]', inputs.calibration)) }}
     runs-on: ${{ matrix.platform }}
     # Expected completion: ~30 min warm (validated darwin-arm64 runs measured
