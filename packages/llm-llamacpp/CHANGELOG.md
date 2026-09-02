@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `flash-attn` values other than the literal `'on'` are no longer treated as flash-attention-*off* by the
+  KV-cache policy. The predicate behind the q8_0 KV-cache auto-default and the Adreno 800+/Vulkan crash
+  guard was an exact string comparison against `'on'`, so `'enabled'`, `'true'` and `'1'` — all documented
+  and accepted on `LlamaConfig['flash-attn']` — silently skipped both. Values are now matched against
+  qvac-fabric's own three-way vocabulary (`is_truthy` / `is_falsey` / `is_autoy`) under both the
+  `flash-attn` and `flash_attn` spellings.
+
+  Concretely, with `flash-attn` set to `'enabled'`, `'true'` or `'1'` on a Metal or non-Adreno Vulkan GPU:
+  the KV cache now defaults to q8_0 as it already did for `'on'` (roughly halving KV-cache memory), and the
+  Adreno 800+/Vulkan quantized-KV combination is now rejected with `InvalidArgument` instead of reaching
+  the driver bug it guards against.
+
+- `flash-attn: 'auto'` now arms the Adreno 800+/Vulkan crash guard. A quantized `cache-type-k`/`-v` makes
+  qvac-fabric promote AUTO to ENABLED, so the coopmat1 driver crash was reachable with a value the guard
+  did not recognise. Callers get a clean `InvalidArgument` instead.
+
+  `'auto'` deliberately continues **not** to trigger the q8_0 KV-cache auto-default, and still resolves to
+  f16 unless `cache-type-k`/`-v` is set explicitly. Quantizing the V cache would force qvac-fabric to
+  promote AUTO to ENABLED and skip the runtime capability probe, which is precisely what this package
+  documents `'auto'` as preserving — *"`'auto'` lets qvac-fabric decide"*. A caller who wants both should
+  set `cache-type-k`/`-v` alongside it, or use `'on'`.
+
 ## [0.49.0] - 2026-08-31
 
 ### Added

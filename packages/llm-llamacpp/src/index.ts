@@ -1053,10 +1053,23 @@ namespace LlmLlamacpp {
      * Flash attention. Defaults to `'on'` (the addon enables it unless
      * finetuning, which forces it off). `'auto'` lets qvac-fabric decide.
      *
+     * qvac-fabric treats `'on'`, `'enabled'`, `'true'` and `'1'` as
+     * equivalent, and likewise `'off'`, `'disabled'`, `'false'` and `'0'`;
+     * `'auto'` is a third state, not a synonym for either. All spellings are
+     * lower-case — qvac-fabric's parser rejects mixed case.
+     *
+     * **`'auto'` and the KV-cache default.** On a GPU backend the addon
+     * defaults `cache-type-k`/`-v` to q8_0 when flash attention is on, roughly
+     * halving KV-cache memory. `'auto'` deliberately does *not* trigger that
+     * default and keeps f16: a quantized V cache forces qvac-fabric to promote
+     * AUTO to ENABLED, which would skip the runtime capability probe that
+     * `'auto'` exists to run. Set `cache-type-k`/`-v` explicitly alongside
+     * `'auto'`, or use `'on'`, to get both.
+     *
      * Required by `split-mode: 'tensor'` — combining the two with a falsey
      * value is rejected with `InvalidArgument` rather than surfacing as an
-     * opaque native failure. qvac-fabric treats `'off'`, `'disabled'`,
-     * `'false'` and `'0'` as equivalent, and all four are rejected.
+     * opaque native failure. All four falsey spellings are rejected; `'auto'`
+     * is accepted, since qvac-fabric promotes it to ENABLED for that mode.
      *
      * The `flash_attn` spelling is also accepted at runtime and reaches the
      * addon through the index signature below, matching how `main-gpu` and

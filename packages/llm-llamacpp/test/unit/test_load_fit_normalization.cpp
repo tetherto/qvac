@@ -756,6 +756,60 @@ TEST_F(LoadFitNormalizationTest, TensorSplitAllowsFlashAttnOnOrUnset) {
       LLAMA_SPLIT_MODE_TENSOR);
 }
 
+// The guard rejects on the falsey set, so every truthy synonym must pass — and
+// so must "auto", which fabric promotes to ENABLED for this mode itself
+// ("enabling flash_attn since it is required for SPLIT_MODE_TENSOR"). "auto"
+// is the interesting case: it is neither truthy nor falsey, and the sibling
+// guards in tuneLoadConfigMap treat it as a third state, so it is the value
+// most likely to break if the shared vocabulary changes.
+TEST_F(LoadFitNormalizationTest, TensorSplitAllowsFlashAttnTruthyOrAuto) {
+  for (const char* key : {"flash-attn", "flash_attn"}) {
+    // Lower-case only: this path runs fabric's argument parser, whose
+    // is_truthy/is_falsey/is_autoy are case-SENSITIVE, so a mixed-case value
+    // never reaches the guard — see TensorSplitMixedCaseFlashAttnRejected.
+    for (const char* value : {"on", "enabled", "true", "1", "auto", "-1"}) {
+      auto config = baseConfig();
+      config["split-mode"] = "tensor";
+      config[key] = value;
+      EXPECT_EQ(
+          lfn::normalizeLoadForFit(
+              "/tmp/model.gguf",
+              std::move(config),
+              metadata_,
+              {},
+              backend({.type = backend_selection::GPU, .name = "vulkan0"}))
+              .params.split_mode,
+          LLAMA_SPLIT_MODE_TENSOR)
+          << "tensor split with " << key << "=" << value << " must be allowed";
+    }
+  }
+}
+
+// The addon's own guards normalise case before matching, but that is
+// defence-in-depth only: fabric's value predicates are case-sensitive, so a
+// mixed-case value fails at argument parsing with fabric's own message and
+// never reaches a load. Pinned so the addon-side normalisation is not mistaken
+// for end-to-end support for mixed-case values.
+TEST_F(LoadFitNormalizationTest, TensorSplitMixedCaseFlashAttnRejected) {
+  for (const char* value : {"On", "AUTO", "True"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    config["flash-attn"] = value;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+      FAIL() << "mixed-case flash-attn=" << value << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("--flash-attn"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr(value));
+    }
+  }
+}
+
 TEST_F(LoadFitNormalizationTest, TensorSplitRejectsUnsupportedArchitecture) {
   test_common::MockModelMetaData mamba{false, "mamba2"};
   auto config = baseConfig();

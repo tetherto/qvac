@@ -786,7 +786,7 @@ TEST_F(
 }
 
 // An underscore flash_attn=on must still arm the Adreno-Vulkan reject guard
-// (flashAttnOn is read from both key variants).
+// (the flash-attn predicates are read from both key variants).
 TEST_F(
     TuneConfigMapTest,
     AdrenoVulkan_QuantizedKCache_FlashAttnUnderscore_Rejected) {
@@ -1078,4 +1078,318 @@ TEST_F(TuneConfigMapTest, AutoDefault_AdrenoOpenCl_StaysF16) {
 
   EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
   EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+}
+
+// ---- flash-attn value vocabulary ----
+//
+// fabric accepts four spellings of "on" and four of "off"; "auto" is a third
+// state, not a synonym for either. These pin all three sets against the two
+// guards that read them, which answer differently for "auto".
+
+// Helper: plain (non-Adreno) Vulkan GPU — the configuration the q8_0
+// auto-default targets.
+namespace {
+void tuneOnVulkanGpu(
+    std::unordered_map<std::string, std::string>& configFilemap,
+    const MockModelMetaData& meta) {
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap,
+      meta,
+      std::nullopt,
+      FtOverrides{},
+      /*isOpenCl=*/false,
+      /*isMetal=*/false,
+      /*isGpu=*/true);
+}
+} // namespace
+
+// --- Truthy synonyms must arm the q8_0 auto-default, exactly like "on". ---
+// Before QVAC-24254 the predicate was an equality test against "on", so all
+// three of these were classified as flash-attention-off and silently kept f16.
+
+TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnEnabled_DefaultsQ8_0) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "enabled";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
+  EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
+}
+
+TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnTrue_DefaultsQ8_0) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "true";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
+  EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
+}
+
+TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnOne_DefaultsQ8_0) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "1";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
+  EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
+}
+
+// The value is caller-supplied, so case is normalised before matching: a
+// mixed-case value must not fall through every set and read as "off".
+// Defence-in-depth only — fabric's own predicates are case-sensitive, so such
+// a value is rejected at argument parsing and never completes a load (see
+// LoadFitNormalizationTest.TensorSplitMixedCaseFlashAttnRejected). This pins
+// the predicate, not an end-to-end capability.
+TEST_F(
+    TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnMixedCase_DefaultsQ8_0) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "On";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
+  EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
+}
+
+TEST_F(
+    TuneConfigMapTest,
+    AutoDefault_VulkanGpu_FlashAttnEnabledUnderscore_DefaultsQ8_0) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash_attn"] = "enabled";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
+  EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
+}
+
+// --- "auto" must NOT arm the q8_0 auto-default. ---
+// Deliberate, not an oversight: quantizing the V cache makes fabric promote
+// AUTO to ENABLED (llama-context.cpp, "required for quantized V cache"),
+// skipping the runtime capability probe that "auto" exists to run. The
+// package documents 'auto' as "lets qvac-fabric decide" (src/index.ts), so
+// the f16 default is what keeps that promise. An explicit cache-type-k/v
+// still works for a caller who wants both.
+
+TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnAuto_StaysF16) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "auto";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+  // The value reaches fabric untouched, so fabric can still decide.
+  EXPECT_EQ(configFilemap_["flash-attn"], "auto");
+}
+
+TEST_F(
+    TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnAutoUnderscore_StaysF16) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash_attn"] = "auto";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+}
+
+// fabric's is_autoy also accepts "-1" as AUTO.
+TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnMinusOne_StaysF16) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "-1";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+}
+
+TEST_F(TuneConfigMapTest, AutoDefault_MetalGpu_FlashAttnAuto_StaysF16) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "auto";
+
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_,
+      meta,
+      std::nullopt,
+      FtOverrides{},
+      /*isOpenCl=*/false,
+      /*isMetal=*/true,
+      /*isGpu=*/true);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+}
+
+// --- Falsey synonyms must still not arm it. ---
+
+TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnDisabled_NotApplied) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "disabled";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+}
+
+TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnZero_NotApplied) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "0";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+}
+
+// --- A value in no set at all is invalid input, not a fourth state. ---
+// Neither guard claims it; fabric's parser produces the accurate "unknown
+// value for --flash-attn" rather than this file inventing a meaning.
+
+TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnUnknown_StaysF16) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["flash-attn"] = "yes";
+
+  tuneOnVulkanGpu(configFilemap_, meta);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+}
+
+// ---- Adreno 800+ Vulkan crash guard: value vocabulary ----
+//
+// This guard converts a known coopmat1 driver crash into a clean
+// InvalidArgument, so it must fire for every value that can reach fabric with
+// flash attention active — including "auto", which quantized V promotes to
+// ENABLED and which otherwise resolves to enabled wherever the probe passes.
+
+TEST_F(TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_FlashAttnAuto_Rejected) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["flash-attn"] = "auto";
+
+  EXPECT_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          830,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true),
+      qvac_errors::StatusError);
+}
+
+TEST_F(TuneConfigMapTest, AdrenoVulkan_QuantizedVCache_FlashAttnAuto_Rejected) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-v"] = "q8_0";
+  configFilemap_["flash-attn"] = "auto";
+
+  EXPECT_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          830,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true),
+      qvac_errors::StatusError);
+}
+
+TEST_F(
+    TuneConfigMapTest,
+    AdrenoVulkan_QuantizedKCache_FlashAttnAutoUnderscore_Rejected) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["flash_attn"] = "auto";
+
+  EXPECT_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          830,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true),
+      qvac_errors::StatusError);
+}
+
+TEST_F(
+    TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_FlashAttnEnabled_Rejected) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["flash-attn"] = "enabled";
+
+  EXPECT_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          830,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true),
+      qvac_errors::StatusError);
+}
+
+TEST_F(TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_FlashAttnOne_Rejected) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["flash-attn"] = "1";
+
+  EXPECT_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          830,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true),
+      qvac_errors::StatusError);
+}
+
+// Falsey and unknown values leave the guard closed: with flash attention off
+// there is no FA shader to crash, and an unknown value is fabric's to reject
+// with an accurate message rather than this guard's to misattribute.
+
+TEST_F(
+    TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_FlashAttnDisabled_Allowed) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["flash-attn"] = "disabled";
+
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          830,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true));
+}
+
+TEST_F(
+    TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_FlashAttnUnknown_Allowed) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["flash-attn"] = "yes";
+
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          830,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true));
 }

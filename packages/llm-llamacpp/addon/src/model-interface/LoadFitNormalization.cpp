@@ -120,6 +120,52 @@ bool archSupportsTensorSplit(const ModelMetaData& metadata) {
   return kUnsupported.count(*architecture) == 0;
 }
 
+// flash-attn value vocabulary, mirroring qvac-fabric's three-way split in
+// common/arg.cpp (common_arg_utils::is_truthy / is_falsey / is_autoy). The
+// --flash-attn handler at arg.cpp routes every value through those three
+// predicates and throws on anything they all reject, so a value outside all
+// three sets is invalid input, NOT a fourth state to guess at.
+//
+// Three sets rather than "on" vs. "everything else" because the addon asks two
+// DIFFERENT questions of this value and they have different answers for AUTO:
+//   - "will flash attention definitely be on?"  -> truthy only
+//   - "might flash attention be on?"            -> truthy or autoy
+// See flashAttnEnabled / flashAttnMayEnable in tuneLoadConfigMap.
+//
+// Case is normalised by the callers: the value is caller-supplied and mixed
+// case would otherwise slip past every set and be silently treated as "off".
+const std::unordered_set<std::string>& flashAttnTruthy() {
+  static const std::unordered_set<std::string> kTruthy = {
+      "on", "enabled", "true", "1"};
+  return kTruthy;
+}
+
+const std::unordered_set<std::string>& flashAttnFalsey() {
+  static const std::unordered_set<std::string> kFalsey = {
+      "off", "disabled", "false", "0"};
+  return kFalsey;
+}
+
+// "-1" is fabric's numeric spelling of AUTO (is_autoy accepts both). It is not
+// in the index.d.ts union, but the ConfigMap index signature lets it through,
+// so matching fabric here keeps the addon from disagreeing with the parser it
+// is about to hand the value to.
+const std::unordered_set<std::string>& flashAttnAutoy() {
+  static const std::unordered_set<std::string> kAutoy = {"auto", "-1"};
+  return kAutoy;
+}
+
+// Lambda form rather than a bare ::tolower: the value is caller-supplied and
+// may carry non-ASCII bytes, which are negative under a signed char and
+// undefined input to tolower.
+std::string toLowerAscii(std::string value) {
+  std::transform(
+      value.begin(), value.end(), value.begin(), [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+      });
+  return value;
+}
+
 } // namespace
 
 namespace load_fit_normalization {
@@ -327,15 +373,51 @@ void tuneLoadConfigMap(
   // pass flash_attn=on directly, and the underscore->hyphen normalization only
   // happens later in the configVector loop — so check both here, otherwise the
   // auto-default and the Adreno reject guard below would be silently skipped.
+  // The VALUE spelling matters as much as the key spelling, for the same
+  // reason the tensor-split guard in normalizeLoadForFit spells its set out:
+  // fabric accepts "enabled", "true" and "1" as synonyms for "on", so an
+  // equality test against "on" alone classifies three documented, valid values
+  // (index.d.ts) as flash-attention-off and skips both guards for them.
   constexpr int kAdrenoKvQuantThreshold = 800;
-  auto valueIs =
-      [&](const char* hyphenKey, const char* underscoreKey, const char* want) {
-        auto it = configFilemap.find(hyphenKey);
-        if (it == configFilemap.end())
-          it = configFilemap.find(underscoreKey);
-        return it != configFilemap.end() && it->second == want;
-      };
-  const bool flashAttnOn = valueIs("flash-attn", "flash_attn", "on");
+  auto valueIn = [&](const char* hyphenKey,
+                     const char* underscoreKey,
+                     const std::unordered_set<std::string>& set) {
+    auto it = configFilemap.find(hyphenKey);
+    if (it == configFilemap.end())
+      it = configFilemap.find(underscoreKey);
+    return it != configFilemap.end() && set.count(toLowerAscii(it->second)) > 0;
+  };
+  // Two predicates, not one, because the two guards below ask different
+  // questions and AUTO answers them differently.
+  //
+  // flashAttnEnabled — "flash attention will definitely be on". Truthy only.
+  // AUTO is deliberately excluded: the q8_0 KV-cache default it gates would
+  // quantize the V cache, and fabric promotes AUTO to ENABLED whenever the V
+  // cache is quantized (src/llama-context.cpp, "enabling flash_attn since it
+  // is required for quantized V cache"). Defaulting q8_0 for an AUTO caller
+  // would therefore force flash attention on and skip the runtime capability
+  // probe (llama_context::resolve, cparams.auto_fa) that AUTO exists to run —
+  // silently contradicting this package's own documented contract for the
+  // value: "'auto' lets qvac-fabric decide" (src/index.ts). An AUTO caller
+  // keeps the f16 default; an explicit cache-type-k/v still works.
+  //
+  // flashAttnMayEnable — "flash attention might be on". Truthy or autoy. The
+  // Adreno crash guard is defence-in-depth against a native abort, so it must
+  // fire on any value that can reach fabric with flash attention active, and
+  // AUTO can: quantized V promotes it to ENABLED, and even an un-promoted AUTO
+  // resolves to enabled on any device whose probe passes. This is deliberately
+  // conservative — with a quantized K cache only, no promotion fires and the
+  // probe might have disabled flash attention on its own, but the guard runs
+  // long before the probe and cannot know the outcome.
+  //
+  // A value in NEITHER set (a typo like "yes") is invalid input, not a state
+  // to infer: both guards decline it and fabric's own parser produces the
+  // accurate "unknown value for --flash-attn" rather than this file throwing a
+  // misleading flash-attention-and-quantized-KV error.
+  const bool flashAttnEnabled =
+      valueIn("flash-attn", "flash_attn", flashAttnTruthy());
+  const bool flashAttnMayEnable =
+      flashAttnEnabled || valueIn("flash-attn", "flash_attn", flashAttnAutoy());
   // Adreno 800+ on Vulkan: coopmat1 Flash Attention is unstable with quantized
   // KV (no fabric scalar-FA fix on this branch). Adreno selects OpenCL by
   // default, so this is normally unreachable; kept as a defensive guard against
@@ -360,8 +442,8 @@ void tuneLoadConfigMap(
   // both crash on a shift). Also skipped for finetuning (manages its own KV
   // types), when flash attention is off (V-cache quantization requires it), and
   // on Adreno+Vulkan (see above).
-  if (!isFinetuning && isGpu && !isOpenCl && flashAttnOn && !isAdrenoVulkan &&
-      notUserSet("cache-type-k", "cache_type_k") &&
+  if (!isFinetuning && isGpu && !isOpenCl && flashAttnEnabled &&
+      !isAdrenoVulkan && notUserSet("cache-type-k", "cache_type_k") &&
       notUserSet("cache-type-v", "cache_type_v")) {
     configFilemap["cache-type-k"] = "q8_0";
     configFilemap["cache-type-v"] = "q8_0";
@@ -374,7 +456,7 @@ void tuneLoadConfigMap(
   // 2. Adreno 800+ Vulkan: quantized KV-cache with Flash Attention crashes (the
   // FA CM2 shader's dequant path hits an Adreno driver bug). Guard here so
   // callers get a clean error instead of a native abort.
-  if (isAdrenoVulkan && flashAttnOn) {
+  if (isAdrenoVulkan && flashAttnMayEnable) {
     auto checkAdrenoKv = [&](const char* hyphenKey,
                              const char* underscoreKey,
                              const char* side) {
@@ -952,6 +1034,10 @@ NormalizedLoad normalizeLoadForFit(
     // "off" alone would let the other three reach fabric in exactly the state
     // this guard exists to prevent. Case is normalised here too, though a
     // mixed-case value would be rejected by fabric's own parser anyway.
+    // The set itself lives in flashAttnFalsey() at the top of this file, next
+    // to its truthy and autoy siblings, and is shared with the two guards in
+    // tuneLoadConfigMap: this guard and those must agree on what a value
+    // means, and for AUTO they previously did not.
     // BOTH keys are checked, not just the first one found. The configVector
     // loop below emits one --flash-attn per key, so a caller passing
     // { "flash-attn": "on", "flash_attn": "off" } hands fabric two
@@ -966,20 +1052,8 @@ NormalizedLoad normalizeLoadForFit(
       if (flashAttnIt == configFilemap.end()) {
         continue;
       }
-      std::string flashAttnValue = flashAttnIt->second;
-      // Lambda form rather than a bare ::tolower: the value is caller-supplied
-      // and may carry non-ASCII bytes, which are negative under a signed char
-      // and undefined input to tolower.
-      std::transform(
-          flashAttnValue.begin(),
-          flashAttnValue.end(),
-          flashAttnValue.begin(),
-          [](unsigned char character) {
-            return static_cast<char>(std::tolower(character));
-          });
-      static const std::unordered_set<std::string> kFalsey = {
-          "off", "disabled", "false", "0"};
-      if (kFalsey.count(flashAttnValue) > 0) {
+      const std::string flashAttnValue = toLowerAscii(flashAttnIt->second);
+      if (flashAttnFalsey().count(flashAttnValue) > 0) {
         // Under finetuning tuneLoadConfigMap is what wrote flash-attn=off, so
         // telling the caller to remove a key they never set would misdirect
         // them.
