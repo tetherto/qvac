@@ -11,6 +11,7 @@
           "hasCppLint": true,
           "hasTsChecks": true,
           "tsChecksMode": "dts",
+          "prebuildLinkingScript": "packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs",
           "hasPerfReport": true,
           "perfReportVariant": "composite",
           "perfReportPattern": "perf-report-diffusion-cpp-*",
