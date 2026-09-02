@@ -164,6 +164,7 @@ const GENERATION_PARAM_KEYS: ReadonlySet<string> = new Set([
   "repeat_penalty",
   "grammar",
   "json_schema",
+  "tool_choice",
   "reasoning_budget",
   "remove_thinking_from_context",
 ]);
@@ -220,6 +221,15 @@ function normalizeGenerationParams(
     );
   }
 
+  if (
+    sanitized.tool_choice !== undefined &&
+    (typeof sanitized.tool_choice !== "string" || sanitized.tool_choice.length === 0)
+  ) {
+    throw new TypeError(
+      'generationParams.tool_choice must be "auto", "none", "required" or a declared function name',
+    );
+  }
+
   const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
   const hasJsonSchema =
     sanitized.json_schema !== undefined &&
@@ -229,6 +239,23 @@ function normalizeGenerationParams(
   if (hasGrammar && hasJsonSchema) {
     throw new TypeError(
       "generationParams.grammar and generationParams.json_schema are mutually exclusive",
+    );
+  }
+
+  // A caller grammar takes precedence over the template's tool-call grammar, so
+  // demanding a tool call while also constraining the output to something else
+  // can never be satisfied. The addon does reject it, but only from inside the
+  // prefill, where the failure also discards the active KV cache session — so
+  // reject it here, alongside the analogous grammar/json_schema pair.
+  const demandsToolCall =
+    typeof sanitized.tool_choice === "string" &&
+    sanitized.tool_choice !== "auto" &&
+    sanitized.tool_choice !== "none";
+
+  if (demandsToolCall && (hasGrammar || hasJsonSchema)) {
+    throw new TypeError(
+      'generationParams.tool_choice "required" or a function name cannot be combined with ' +
+        "generationParams.grammar or generationParams.json_schema",
     );
   }
 
@@ -1188,6 +1215,18 @@ namespace LlmLlamacpp {
      */
     json_schema?: string | Record<string, unknown>;
     /**
+     * Tool choice for a request whose prompt declares `function` tools, in the
+     * OpenAI style: `"auto"` (default) lets the model decide and constrains a
+     * call only once it starts one; `"required"` forces a tool call;
+     * `"none"` disables the tool-call grammar while leaving the tool
+     * definitions in the prompt; any other string names one declared function
+     * and forces a call to it. Ignored when the prompt carries no tools;
+     * `"required"` or a function name without tools throws.
+     */
+    // `string & {}` keeps the three literals visible to autocomplete without
+    // the union collapsing to plain `string`.
+    tool_choice?: "auto" | "none" | "required" | (string & {});
+    /**
      * Per-request reasoning channel budget. `-1` keeps the model's reasoning
      * channel on; `0` disables it for this request; any positive integer caps
      * the reasoning channel at that many tokens. Equivalent to the load-time
@@ -1379,6 +1418,15 @@ namespace LlmLlamacpp {
      * was disabled per-request, or when no reasoning blocks were emitted.
      */
     thinkingBlockDiscards: number;
+    /**
+     * Number of prompt renders in this request where the chat template
+     * rejected the tool definitions and the prompt was produced without
+     * them, so the model never saw the tools. Per-inference for single
+     * requests; summed across completed slots for batch requests. 0 when no
+     * tools were sent or the template accepted them. Only delivered when the
+     * model was created with `opts: { stats: true }`.
+     */
+    toolDefinitionsDropped: number;
     /**
      * How busy the shared backend was, not a property of your request: the
      * mean number of sequences decoded together per engine step, including

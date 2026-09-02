@@ -5,11 +5,13 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/LogSafeString.hpp"
 #include "utils/QwenTemplate.hpp"
 
 namespace fs = std::filesystem;
@@ -305,11 +307,9 @@ TEST_F(ChatTemplateUtilsTest, GetFixedQwen3TemplateNotNull) {
   EXPECT_GT(strlen(expectedTemplate), 0u);
 }
 
-TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
-  ASSERT_NE(tmpls, nullptr);
+namespace {
 
+common_chat_templates_inputs makeQwenInputs() {
   common_chat_templates_inputs inputs;
   inputs.use_jinja = true;
   inputs.enable_thinking = true;
@@ -318,27 +318,246 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
       /* role = */ "user",
       /* content = */ "What is the capital of France?",
   }};
+  return inputs;
+}
 
-  bool thinkingForcedOpen = true;
-  std::string thinkingStartTag;
-  std::string thinkingEndTag;
-  std::vector<std::string> thinkingEndTags;
-  std::string generationPrompt;
-  const std::string prompt = getPrompt(
-      tmpls.get(),
-      inputs,
-      &thinkingForcedOpen,
-      &thinkingStartTag,
-      &thinkingEndTag,
-      &thinkingEndTags,
-      &generationPrompt);
+common_chat_tool makeWeatherTool() {
+  common_chat_tool tool;
+  tool.name = "get_weather";
+  tool.description = "Get the weather for a city";
+  tool.parameters =
+      R"({"type":"object","properties":{"city":{"type":"string"},)"
+      R"("days":{"type":"integer"}},"required":["city"]})";
+  return tool;
+}
 
-  EXPECT_NE(prompt.find("<|im_start|>assistant"), std::string::npos);
-  EXPECT_EQ(thinkingStartTag, "<think>");
-  EXPECT_EQ(thinkingEndTag, "</think>");
-  EXPECT_EQ(thinkingEndTags, std::vector<std::string>{"</think>"});
-  EXPECT_NE(generationPrompt.find("<|im_start|>assistant"), std::string::npos);
-  EXPECT_FALSE(thinkingForcedOpen);
+// Renders any conversation but raises as soon as tools are present, so
+// getPrompt() must take its tools-stripped retry path.
+constexpr const char* TOOL_REJECTING_TEMPLATE =
+    "{%- if tools %}{{ raise_exception('no tools here') }}{%- endif %}"
+    "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+    "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+
+// Raises unconditionally under Jinja. The `<|im_start|>` marker inside the
+// message makes llama.cpp's legacy renderer recognise it as ChatML, so the
+// legacy fallback succeeds instead of throwing.
+constexpr const char* ALWAYS_RAISING_TEMPLATE =
+    "{{ raise_exception('<|im_start|> always fails') }}";
+
+} // namespace
+
+TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_NE(rendered.prompt.find("<|im_start|>assistant"), std::string::npos);
+  EXPECT_EQ(rendered.thinkingStartTag, "<think>");
+  EXPECT_EQ(rendered.thinkingEndTag, "</think>");
+  EXPECT_EQ(rendered.thinkingEndTags, std::vector<std::string>{"</think>"});
+  EXPECT_NE(
+      rendered.generationPrompt.find("<|im_start|>assistant"),
+      std::string::npos);
+  EXPECT_FALSE(rendered.thinkingForcedOpen);
+  EXPECT_TRUE(rendered.renderedByJinja);
+  EXPECT_FALSE(rendered.toolDefinitionsDropped);
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptExportsToolGrammarWhenToolsPresent) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_NE(rendered.prompt.find("get_weather"), std::string::npos);
+  EXPECT_FALSE(rendered.grammar.empty());
+  EXPECT_FALSE(rendered.preservedTokens.empty());
+  // A lazy grammar without triggers can never activate; the template must
+  // supply them whenever it asks for laziness.
+  if (rendered.grammarLazy) {
+    EXPECT_FALSE(rendered.grammarTriggers.empty());
+  }
+  EXPECT_TRUE(rendered.renderedByJinja);
+  EXPECT_FALSE(rendered.toolDefinitionsDropped);
+  EXPECT_EQ(inputs.tools.size(), 1u) << "tools must not be stripped on success";
+}
+
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoicePassesThroughAutoNoneRequired) {
+  // Two tools, so "tools are not narrowed" is observable: against a
+  // one-element list the size assertion below would hold either way.
+  common_chat_tool other = makeWeatherTool();
+  other.name = "get_time";
+  const std::vector<common_chat_tool> tools{makeWeatherTool(), other};
+  EXPECT_EQ(
+      resolveToolChoice(std::nullopt, tools).choice,
+      COMMON_CHAT_TOOL_CHOICE_AUTO);
+  EXPECT_EQ(
+      resolveToolChoice(std::string("auto"), tools).choice,
+      COMMON_CHAT_TOOL_CHOICE_AUTO);
+  EXPECT_EQ(
+      resolveToolChoice(std::string("none"), tools).choice,
+      COMMON_CHAT_TOOL_CHOICE_NONE);
+  const ResolvedToolChoice required =
+      resolveToolChoice(std::string("required"), tools);
+  EXPECT_EQ(required.choice, COMMON_CHAT_TOOL_CHOICE_REQUIRED);
+  EXPECT_EQ(required.tools.size(), 2u) << "tools list is not narrowed";
+}
+
+TEST_F(
+    ChatTemplateUtilsTest, ResolveToolChoiceNamedFunctionNarrowsAndRequires) {
+  common_chat_tool other = makeWeatherTool();
+  other.name = "get_time";
+  const std::vector<common_chat_tool> tools{makeWeatherTool(), other};
+  const ResolvedToolChoice named =
+      resolveToolChoice(std::string("get_time"), tools);
+  EXPECT_EQ(named.choice, COMMON_CHAT_TOOL_CHOICE_REQUIRED);
+  ASSERT_EQ(named.tools.size(), 1u);
+  EXPECT_EQ(named.tools[0].name, "get_time");
+}
+
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsDuplicateToolNames) {
+  common_chat_tool duplicate = makeWeatherTool();
+  duplicate.description = "a second, different weather tool";
+  const std::vector<common_chat_tool> tools{makeWeatherTool(), duplicate};
+  // Rejected even for "auto", where no name is being looked up: the duplicate
+  // would still reach the template as two indistinguishable blocks.
+  EXPECT_THROW(
+      resolveToolChoice(std::nullopt, tools), qvac_errors::StatusError);
+  EXPECT_THROW(
+      resolveToolChoice(std::string("get_weather"), tools),
+      qvac_errors::StatusError);
+}
+
+// An exotic name is a warning, not an error — the grammar rule it maps to is
+// an internal detail of the vendored converter.
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceAllowsUnusualToolNames) {
+  common_chat_tool odd = makeWeatherTool();
+  odd.name = "get weather/now";
+  const std::vector<common_chat_tool> tools{odd};
+  EXPECT_NO_THROW(resolveToolChoice(std::nullopt, tools));
+  EXPECT_EQ(
+      resolveToolChoice(std::string("get weather/now"), tools).choice,
+      COMMON_CHAT_TOOL_CHOICE_REQUIRED);
+}
+
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsUnknownOrToolless) {
+  const std::vector<common_chat_tool> tools{makeWeatherTool()};
+  EXPECT_THROW(
+      resolveToolChoice(std::string("GET_WEATHER"), tools),
+      qvac_errors::StatusError)
+      << "function names are case-sensitive";
+  EXPECT_THROW(
+      resolveToolChoice(std::string("required"), {}), qvac_errors::StatusError);
+  EXPECT_NO_THROW(resolveToolChoice(std::string("none"), {}));
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptRequiredToolChoiceMakesGrammarEager) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_FALSE(rendered.grammar.empty());
+  EXPECT_FALSE(rendered.grammarLazy) << "required must not wait for a trigger";
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptNoneToolChoiceKeepsToolsDropsGrammar) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_NONE;
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_NE(rendered.prompt.find("get_weather"), std::string::npos)
+      << "none keeps the tool definitions in the prompt";
+  EXPECT_TRUE(rendered.grammar.empty());
+}
+
+// Pins why the addon never hands a per-request json_schema to the template:
+// fabric short-circuits on `has_response_format` and returns a
+// response-format-only parser, so the rendered grammar excludes tool calls
+// rather than composing with them.
+TEST_F(ChatTemplateUtilsTest, TemplateResponseFormatExcludesToolCalls) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs plain = makeQwenInputs();
+  plain.tools = {makeWeatherTool()};
+  const PromptRenderResult toolsOnly = getPrompt(tmpls.get(), plain);
+  ASSERT_FALSE(toolsOnly.grammar.empty());
+
+  common_chat_templates_inputs withSchema = makeQwenInputs();
+  withSchema.tools = {makeWeatherTool()};
+  withSchema.json_schema =
+      R"({"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"]})";
+  const PromptRenderResult withResponseFormat =
+      getPrompt(tmpls.get(), withSchema);
+
+  EXPECT_NE(withResponseFormat.grammar, toolsOnly.grammar)
+      << "a response format must replace the tool-call grammar, not extend it";
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptWithoutToolsExportsNoGrammar) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_TRUE(rendered.grammar.empty());
+  EXPECT_FALSE(rendered.grammarLazy);
+  EXPECT_TRUE(rendered.grammarTriggers.empty());
+  // preservedTokens is deliberately not asserted empty: the template also
+  // preserves its reasoning tags (<think>, </think>) with no tools present.
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptFlagsToolDefinitionsDropped) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, TOOL_REJECTING_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_TRUE(rendered.toolDefinitionsDropped);
+  EXPECT_TRUE(rendered.renderedByJinja);
+  EXPECT_TRUE(inputs.tools.empty())
+      << "stripped tools must not leak to callers";
+  EXPECT_NE(rendered.prompt.find("<user>"), std::string::npos);
+  EXPECT_TRUE(rendered.grammar.empty());
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptLegacyFallbackMarksProvenance) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, ALWAYS_RAISING_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  // The legacy renderer echoes the caller's grammar back untouched; it must
+  // arrive tagged as non-Jinja so it is never mistaken for a tool grammar.
+  inputs.grammar = "root ::= \"x\"";
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_FALSE(rendered.renderedByJinja);
+  EXPECT_FALSE(inputs.use_jinja);
+  EXPECT_EQ(rendered.grammar, "root ::= \"x\"");
+  EXPECT_FALSE(rendered.prompt.empty());
 }
 
 TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextUsesTemplateSuffix) {
@@ -355,3 +574,53 @@ TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextFallsBackToStartTag) {
 TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextEmptyWithoutStartTag) {
   EXPECT_EQ(getThinkingForcedOpenText("<|assistant|>\n", ""), "");
 }
+
+// `requireToolChoiceHonoured` is the whole fail-closed rule for an explicit
+// tool_choice. It takes four plain values, so every path is testable with no
+// model — which is what makes its previous zero coverage worth closing.
+TEST(RequireToolChoiceHonouredTest, RequiredThrowsWhenDefinitionsDropped) {
+  EXPECT_THROW(
+      requireToolChoiceHonoured(
+          COMMON_CHAT_TOOL_CHOICE_REQUIRED,
+          /* toolDefinitionsDropped = */ true,
+          /* toolGrammarApplied = */ true,
+          "[test]"),
+      qvac_errors::StatusError);
+}
+
+TEST(RequireToolChoiceHonouredTest, RequiredThrowsWhenNoGrammarApplied) {
+  EXPECT_THROW(
+      requireToolChoiceHonoured(
+          COMMON_CHAT_TOOL_CHOICE_REQUIRED,
+          /* toolDefinitionsDropped = */ false,
+          /* toolGrammarApplied = */ false,
+          "[test]"),
+      qvac_errors::StatusError);
+}
+
+TEST(RequireToolChoiceHonouredTest, RequiredAcceptsAnAppliedGrammar) {
+  EXPECT_NO_THROW(requireToolChoiceHonoured(
+      COMMON_CHAT_TOOL_CHOICE_REQUIRED,
+      /* toolDefinitionsDropped = */ false,
+      /* toolGrammarApplied = */ true,
+      "[test]"));
+}
+
+// AUTO tolerates a prose answer by definition and NONE asked for no
+// constraint, so neither can be violated however the render turned out.
+TEST(RequireToolChoiceHonouredTest, AutoAndNoneNeverThrow) {
+  for (const bool dropped : {false, true}) {
+    for (const bool applied : {false, true}) {
+      EXPECT_NO_THROW(requireToolChoiceHonoured(
+          COMMON_CHAT_TOOL_CHOICE_AUTO, dropped, applied, "[test]"))
+          << "dropped=" << dropped << " applied=" << applied;
+      EXPECT_NO_THROW(requireToolChoiceHonoured(
+          COMMON_CHAT_TOOL_CHOICE_NONE, dropped, applied, "[test]"))
+          << "dropped=" << dropped << " applied=" << applied;
+    }
+  }
+}
+
+// `forLogMessage` and `toLowerAscii` are declared in `utils/LogSafeString.hpp`,
+// so their tests live in `test_log_safe_string.cpp` — one test file per header,
+// as elsewhere in this directory.

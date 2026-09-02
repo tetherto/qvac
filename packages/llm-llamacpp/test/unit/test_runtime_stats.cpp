@@ -175,10 +175,13 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
   Request reqB = makeStubRequest();
   Request reqC = makeStubRequest();
 
-  // (nPast, thinkingDiscards, req)
-  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/1, reqA);
-  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/0, reqB);
-  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/2, reqC);
+  // (nPast, thinkingDiscards, toolsDropped, req)
+  stats.accumulateSlot(
+      /*nPast=*/0, /*thinkingDiscards=*/1, /*toolsDropped=*/0, reqA);
+  stats.accumulateSlot(
+      /*nPast=*/0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
+  stats.accumulateSlot(
+      /*nPast=*/0, /*thinkingDiscards=*/2, /*toolsDropped=*/0, reqC);
 
   EXPECT_EQ(stats.thinkingBlockDiscards, 3);
 }
@@ -186,11 +189,40 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
 TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsThinkingDiscards) {
   RuntimeStatsSnapshot stats;
   Request req = makeStubRequest();
-  stats.accumulateSlot(0, 5, req);
+  stats.accumulateSlot(0, 5, 0, req);
   EXPECT_EQ(stats.thinkingBlockDiscards, 5);
 
   stats.reset();
   EXPECT_EQ(stats.thinkingBlockDiscards, 0);
+}
+
+// `toolsDropped` is the per-slot count of renders where the chat template did
+// not carry the tool definitions; the scheduler sums it across the batch into
+// `RuntimeStats.toolDefinitionsDropped`. Mirrors the thinkingDiscards pair
+// above, which is the sibling counter added the same way.
+TEST(RuntimeStatsAccumulate, AccumulateSlotSumsToolDefinitionsDropped) {
+  RuntimeStatsSnapshot stats;
+  Request reqA = makeStubRequest();
+  Request reqB = makeStubRequest();
+  Request reqC = makeStubRequest();
+
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/1, reqA);
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/2, reqC);
+
+  EXPECT_EQ(stats.toolDefinitionsDropped, 3);
+  EXPECT_EQ(stats.thinkingBlockDiscards, 0)
+      << "the two counters must not alias each other";
+}
+
+TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsToolDefinitionsDropped) {
+  RuntimeStatsSnapshot stats;
+  Request req = makeStubRequest();
+  stats.accumulateSlot(0, 0, 5, req);
+  EXPECT_EQ(stats.toolDefinitionsDropped, 5);
+
+  stats.reset();
+  EXPECT_EQ(stats.toolDefinitionsDropped, 0);
 }
 
 // promptTokens must reflect tokens ACTUALLY prefilled, not the prompt size
@@ -212,7 +244,8 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
   RuntimeStatsSnapshot stats;
   // Same call the cancel path makes via accumulateSlotRuntimeStats: nothing
   // was processed, so nPast and the generated vector are empty.
-  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/0, req);
+  stats.accumulateSlot(
+      /*nPast=*/0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 0);
 }
@@ -232,7 +265,8 @@ TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
   ASSERT_TRUE(req.isPrefillComplete());
 
   RuntimeStatsSnapshot stats;
-  stats.accumulateSlot(/*nPast=*/42, /*thinkingDiscards=*/0, req);
+  stats.accumulateSlot(
+      /*nPast=*/42, /*thinkingDiscards=*/0, /*toolsDropped=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 42);
 }

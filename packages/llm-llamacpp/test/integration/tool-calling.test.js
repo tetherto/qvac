@@ -166,6 +166,60 @@ function assertDeclaredToolCalls(t, output, prompt, label) {
         `${label}: tool_call "${toolCall.name}" has required argument "${required}"`
       )
     }
+
+    assertArgumentsMatchSchema(
+      t,
+      toolCall.arguments,
+      tool.parameters,
+      `${label}: "${toolCall.name}"`
+    )
+  }
+}
+
+// Under the template's tool grammar a schema-invalid argument is
+// unrepresentable, so every argument the model emitted must satisfy the
+// declared JSON-schema type and enum. `minimum`/`default` are deliberately
+// not checked: they are not grammar properties.
+function assertArgumentsMatchSchema(t, args, schema, label) {
+  const properties = (schema && schema.properties) || {}
+  for (const [key, value] of Object.entries(args)) {
+    const prop = properties[key]
+    t.ok(prop, `${label}: argument "${key}" is declared in the schema`)
+    if (!prop) continue
+    assertValueMatchesSchema(t, value, prop, `${label}.${key}`)
+  }
+}
+
+function assertValueMatchesSchema(t, value, prop, label) {
+  if (prop.enum) {
+    t.ok(prop.enum.includes(value), `${label}: value ${JSON.stringify(value)} is in enum`)
+    return
+  }
+  switch (prop.type) {
+    case 'integer':
+      t.ok(Number.isInteger(value), `${label}: ${JSON.stringify(value)} is an integer`)
+      break
+    case 'number':
+      t.ok(typeof value === 'number', `${label}: ${JSON.stringify(value)} is a number`)
+      break
+    case 'string':
+      t.ok(typeof value === 'string', `${label}: ${JSON.stringify(value)} is a string`)
+      break
+    case 'boolean':
+      t.ok(typeof value === 'boolean', `${label}: ${JSON.stringify(value)} is a boolean`)
+      break
+    case 'array':
+      t.ok(Array.isArray(value), `${label}: is an array`)
+      if (Array.isArray(value) && prop.items) {
+        value.forEach((item, i) => assertValueMatchesSchema(t, item, prop.items, `${label}[${i}]`))
+      }
+      break
+    case 'object':
+      t.ok(value && typeof value === 'object' && !Array.isArray(value), `${label}: is an object`)
+      if (value && typeof value === 'object') assertArgumentsMatchSchema(t, value, prop, label)
+      break
+    default:
+      break
   }
 }
 
@@ -288,3 +342,137 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
     }
   }
 })
+
+// The tool grammar applied for a tools request must not survive into the
+// next request on the same loaded model: a plain question must answer in
+// text, not in a <tool_call> block.
+safeTest(
+  '[tools] grammar does not leak into a tools-free follow-up',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    const modelVariant = TOOL_MODEL_VARIANTS[0]
+    const { model, release } = await createToolModel(modelVariant)
+    try {
+      const withTools = await runPrompt(model, clonePrompt())
+      t.ok(withTools.text.length > 0, 'tools prompt generated text')
+
+      const plainPrompt = [
+        { role: 'system', content: 'You are a helpful assistant. /no_think' },
+        { role: 'user', content: 'Name one colour of the rainbow.' }
+      ]
+      const withoutTools = await runPrompt(model, plainPrompt)
+      t.ok(withoutTools.text.length > 0, 'tools-free prompt generated text')
+      t.absent(
+        withoutTools.text.includes('<tool_call>'),
+        `tools-free output has no tool_call block: ${withoutTools.text.slice(0, 200)}`
+      )
+    } finally {
+      await release()
+    }
+  }
+)
+
+// generationParams.tool_choice: "required" forces a call, "none" turns the
+// tool grammar off (tools stay in the prompt), a function name restricts the
+// call to that function, and an undeclared name is rejected up front.
+safeTest(
+  '[tools] tool_choice controls whether and which tool is called',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    const modelVariant = TOOL_MODEL_VARIANTS[0]
+    const { model, release } = await createToolModel(modelVariant)
+    try {
+      async function runWithToolChoice(toolChoice, extraParams = {}) {
+        const response = await model.run(clonePrompt(), {
+          generationParams: { tool_choice: toolChoice, ...extraParams }
+        })
+        return (await collectResponse(response)).text
+      }
+
+      const required = await runWithToolChoice('required')
+      t.ok(
+        required.includes('<tool_call>'),
+        `required produced a tool call: ${required.slice(0, 200)}`
+      )
+      assertDeclaredToolCalls(t, required, clonePrompt(), 'required')
+
+      // `reasoning_budget: 0` is load-bearing, and the reason is a real limit
+      // of the feature, not test tidying. A named choice resolves to
+      // `required`, which makes the tool grammar eager — and an eager grammar
+      // is built from the whole PEG parser including its reasoning section,
+      // so it *permits* an arbitrarily long `<think>` prefix. All of
+      // `n_predict` can be spent inside that prefix before the call is
+      // reached: this case failed on linux-arm64 (84s, ran to the 1024-token
+      // cap) and darwin-arm64 (4.6s, stopped early) while passing on
+      // linux-x64 and darwin-x64. Narrowing the tools to `queryDB` against a
+      // three-part request is what makes Qwen3-1.7B reason long enough to
+      // hit it.
+      //
+      // `reasoning_budget: 0` stops the template opening `<think>` at all, so
+      // the grammar's first constrained token is the call. A positive budget
+      // would also work — it builds fabric's reasoning-budget sampler, which
+      // forces the block closed at the cap — but 0 is the tighter pin for the
+      // property under test: that a named choice restricts the call to that
+      // function.
+      //
+      // Note this is NOT grammar suppression inside the reasoning block.
+      // `grammar_should_apply` (fabric common/sampling.cpp:452-465) gates
+      // that on `grammar_lazy`, which `required` makes false, so the eager
+      // grammar is active throughout.
+      const named = await runWithToolChoice('queryDB', { reasoning_budget: 0 })
+      const namedCalls = parseToolCalls(named, t)
+      t.ok(namedCalls.length > 0, `named function produced a tool call: ${named.slice(0, 200)}`)
+      for (const call of namedCalls) {
+        t.is(call.name, 'queryDB', 'named function restricts the call to that function')
+      }
+
+      // "none" only removes the grammar constraint (llama-server semantics);
+      // the tools stay in the prompt, so a call is still allowed, just not
+      // enforced. The contract under test is that the request completes.
+      const none = await runWithToolChoice('none')
+      t.ok(none.length > 0, `none still generated text: ${none.slice(0, 200)}`)
+
+      // `t.exception.all` so a native error subclass cannot escape as an
+      // unhandled rejection (see grammar.test.js for the rationale).
+      // The addon raises during the job, so the rejection surfaces on the
+      // response's `.await()`, not on `model.run()` itself.
+      await t.exception.all(
+        async () => {
+          const response = await model.run(clonePrompt(), {
+            generationParams: { tool_choice: 'notDeclared' }
+          })
+          await response.await()
+        },
+        /undeclared function/,
+        'an undeclared function name is rejected'
+      )
+    } finally {
+      await release()
+    }
+  }
+)
+
+// A per-request GBNF grammar takes precedence over the template's tool
+// grammar; the request must complete and honour the user's grammar.
+safeTest(
+  '[tools] per-request grammar wins over the tool grammar',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    const modelVariant = TOOL_MODEL_VARIANTS[0]
+    const { model, release } = await createToolModel(modelVariant)
+    try {
+      const prompt = clonePrompt()
+      prompt[prompt.length - 1] = {
+        role: 'user',
+        content: 'Answer only yes or no: is the sky blue? /no_think'
+      }
+      const response = await model.run(prompt, {
+        generationParams: { grammar: 'root ::= ("yes" | "no")', predict: 4, seed: 42 }
+      })
+      const { text } = await collectResponse(response)
+      t.ok(text === 'yes' || text === 'no', `user grammar constrained the output (got "${text}")`)
+    } finally {
+      await release()
+    }
+  }
+)

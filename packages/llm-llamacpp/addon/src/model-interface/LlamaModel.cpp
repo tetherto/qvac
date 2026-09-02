@@ -877,6 +877,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
       {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted, matching
       // batchRuntimeStatsLocked: concurrent prompts share the one
       // per-context accumulator, so a per-job value would be misattributed.
@@ -982,6 +983,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   // Reset per-inference counters so they don't leak across runs.
   state_->llmContext_->resetThinkingBlockDiscards();
+  state_->llmContext_->resetToolDefinitionsDropped();
   state_->llmContext_->resetVisionEncodeMs();
 
   // Prompt media (both hoisted byte buffers and inline paths) is loaded by
@@ -1009,11 +1011,33 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     return out;
   }
 
+  // Validate `tool_choice` here, outside the try below, whose catch-all runs
+  // `resetAndInvalidateActiveCache()`. Throwing before it means a bad value
+  // costs the caller an error rather than the active KV cache, matching how an
+  // invalid `json_schema` already behaves via applyGenerationParams. Note the
+  // cache *session* is already resolved by this point —
+  // `resolveChatAndTools` calls `handleCache` itself — so what this ordering
+  // saves is the invalidation, not the session setup.
+  qvac_lib_inference_addon_llama::utils::validateToolChoice(
+      prompt.generationParams.tool_choice, resolved.tools);
+
   auto restore =
       state_->llmContext_->applyGenerationParams(prompt.generationParams);
+  // Render-time overrides ride alongside the sampler overrides and are
+  // cleared with them, so a request's `tool_choice` can never leak into the
+  // next request's prompt render.
+  state_->llmContext_->setRenderOverrides(
+      renderOverridesFrom(prompt.generationParams));
 
   try {
-    ScopeGuard paramsGuard([&] { restore(); });
+    // Labelled: `restore()` rebuilds the sampler and is the one guarded
+    // callable here that can legitimately throw.
+    ScopeGuard paramsGuard(
+        [&] {
+          state_->llmContext_->setRenderOverrides({});
+          restore();
+        },
+        "paramsGuard/generationParams-restore");
 
     const LlmContext::EvalMessageResult evalResult =
         resolved.tools.empty()
@@ -1335,6 +1359,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
       {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted in batch mode: multiple
       // prompts share the one per-context accumulator (reset per prompt), so a
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
@@ -1394,6 +1419,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"promptTokens", promptTokens},
       {"thinkingBlockDiscards",
        static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
+      {"toolDefinitionsDropped",
+       static_cast<int64_t>(state_->llmContext_->getToolDefinitionsDropped())},
       // Why the generation stopped, as the numeric GenerationStopReason
       // value; addon.js maps it to a string (same pattern as
       // backendDevice). Prefill-only requests report None rather than

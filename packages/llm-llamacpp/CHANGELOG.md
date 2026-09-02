@@ -1,5 +1,42 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Tool calls are now constrained by the chat template's native tool grammar:
+  when a prompt carries tool definitions the sampler applies the grammar the
+  template computes, so malformed tool-call markup and schema-invalid
+  arguments cannot be generated. A load-time or per-request `grammar` /
+  `json_schema` still takes precedence over the tool grammar.
+- Chat-template `additional_stops` are plumbed through per request alongside the
+  load-time antiprompts. No template shipped by a qvac package populates the
+  field, so this is inert for those models; a user-supplied model whose
+  template does populate it will now stop on those strings.
+- `RuntimeStats.toolDefinitionsDropped` reports renders where the template
+  rejected the tool definitions, or where the prompt was rendered without a
+  Jinja template, and the model therefore never saw the tools.
+- `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
+  function name) controls whether a tool call is forced, allowed or disabled for
+  a request that declares tools; a function name restricts the call to it.
+  `"required"` and a function name now fail with `InvalidArgument` rather than
+  silently answering in prose when the demand cannot be honoured. Known limit:
+  the eager grammar these produce admits an unbounded `<think>` prefix on a
+  reasoning model, so `n_predict` can be spent before the tool call is
+  reached. Cap the reasoning channel with a positive `reasoning_budget`, which
+  forces the block closed at the cap, or disable it with `reasoning_budget: 0`,
+  when a call has to be emitted within a tight token budget.
+
+### Fixed
+
+- A tool grammar applied for one request no longer leaks into a following
+  request that carries no tools on the same loaded model, and no longer leaves
+  its lazy-grammar triggers attached to a later per-request `grammar` or
+  `json_schema`.
+- A chat-template grammar the sampler rejects no longer stays resident in the
+  loaded model's sampling parameters, and a failing per-request restore can no
+  longer terminate the process.
+
 ## [0.49.0] - 2026-08-31
 
 ### Added

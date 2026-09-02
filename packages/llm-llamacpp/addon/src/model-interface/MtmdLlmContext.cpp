@@ -19,6 +19,7 @@
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
@@ -126,7 +127,10 @@ void MtmdLlmContext::initializeCommonState() {
   }
 
   // antiprompt init
+  antipromptLower_.reserve(params_.antiprompt.size());
   for (const std::string& antiprompt : params_.antiprompt) {
+    antipromptLower_.push_back(
+        qvac_lib_inference_addon_llama::utils::toLowerAscii(antiprompt));
     auto ids = ::common_tokenize(modelCtx_.lctx, antiprompt, false, true);
     if (ids.size() == 1) {
       antipromptTokens_.push_back(ids[0]);
@@ -275,44 +279,74 @@ void MtmdLlmContext::initVisionContext() {
 }
 
 bool MtmdLlmContext::checkAntiprompt() {
-  if (!params_.antiprompt.empty()) {
-    constexpr int kNPrev = 32;
-    std::string lastOutput =
-        common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
+  if (antipromptLower_.empty() && templateStopsLower_.empty()) {
+    return false;
+  }
+  constexpr int kNPrev = 32;
+  std::string lastOutput =
+      common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
 
-    // Check if each of the reverse prompts appears anywhere in the recent
-    // output. We search the full kNPrev-token window because a single token
-    // can decode to many characters, and a short antiprompt like "\n" may
-    // appear at the start of such a token, far from the string's tail.
-    // Matching is case-insensitive so callers don't have to list every
-    // casing variant the model might emit.
-    std::string lastOutputLower = lastOutput;
-    std::transform(
-        lastOutputLower.begin(),
-        lastOutputLower.end(),
-        lastOutputLower.begin(),
-        [](unsigned char c) { return std::tolower(c); });
-    for (const std::string& antiprompt : params_.antiprompt) {
-      std::string antipromptLower = antiprompt;
-      std::transform(
-          antipromptLower.begin(),
-          antipromptLower.end(),
-          antipromptLower.begin(),
-          [](unsigned char c) { return std::tolower(c); });
-      if (lastOutputLower.find(antipromptLower) != std::string::npos) {
+  // Check if each of the reverse prompts appears anywhere in the recent
+  // output. We search the full kNPrev-token window because a single token
+  // can decode to many characters, and a short antiprompt like "\n" may
+  // appear at the start of such a token, far from the string's tail.
+  // Matching is case-insensitive so callers don't have to list every
+  // casing variant the model might emit.
+  const std::string lastOutputLower =
+      qvac_lib_inference_addon_llama::utils::toLowerAscii(lastOutput);
+  auto containsAnyStop = [&](const std::vector<std::string>& stopsLower) {
+    for (const std::string& stopLower : stopsLower) {
+      if (lastOutputLower.find(stopLower) != std::string::npos) {
         return true;
       }
     }
+    return false;
+  };
+  if (containsAnyStop(antipromptLower_) ||
+      containsAnyStop(templateStopsLower_)) {
+    return true;
+  }
 
-    // check for reverse prompt using special tokens
-    llama_token lastToken = common_sampler_last(smpl_.get());
-    for (auto token : antipromptTokens_) {
-      if (token == lastToken) {
-        return true;
-      }
+  // check for reverse prompt using special tokens
+  llama_token lastToken = common_sampler_last(smpl_.get());
+  for (auto token : antipromptTokens_) {
+    if (token == lastToken) {
+      return true;
+    }
+  }
+  for (auto token : templateStopTokens_) {
+    if (token == lastToken) {
+      return true;
     }
   }
   return false;
+}
+
+void MtmdLlmContext::requireSampler() {
+  if (smpl_) {
+    return;
+  }
+  // See TextLlmContext::requireSampler: one rebuild attempt, so a single
+  // failed restore does not brick the context for every later request.
+  try {
+    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
+  } catch (const std::exception& ex) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format("[MtmdLlm] sampler rebuild threw: %s\n", ex.what()));
+  }
+  if (smpl_) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[MtmdLlm] rebuilt the sampler after an earlier restore failure\n");
+    return;
+  }
+  std::string errorMsg = string_format(
+      "[MtmdLlm] %s: no sampler is installed and it could not be rebuilt from "
+      "the current sampling parameters\n",
+      __func__);
+  throw qvac_errors::StatusError(
+      ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
 }
 
 void MtmdLlmContext::tokenizeChat(
@@ -324,6 +358,9 @@ void MtmdLlmContext::tokenizeChat(
         string_format("[MtmdLlm] %s: no chat messages provided\n", __func__);
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
+  // See TextLlmContext::tokenizeChat: a null sampler left by a failed restore
+  // must fail this request, not dereference at the next sample site.
+  requireSampler();
 
   common_chat_templates_inputs inputs;
   std::string formattedChat;
@@ -347,27 +384,30 @@ void MtmdLlmContext::tokenizeChat(
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
 
-  if (!tools.empty()) {
-    inputs.tools = tools;
+  // See TextLlmContext::tokenizeChat for the tool_choice rules, and for why
+  // this is not const.
+  ResolvedToolChoice toolChoice =
+      resolveToolChoice(renderOverrides_.toolChoice, tools);
+  if (!toolChoice.tools.empty()) {
+    inputs.tools = std::move(toolChoice.tools);
+    inputs.tool_choice = toolChoice.choice;
   }
-  std::string thinkingStartTag;
-  std::string thinkingEndTag;
-  std::vector<std::string> thinkingEndTags;
-  std::string generationPrompt;
-  formattedChat = getPrompt(
-      tmpls_.get(),
-      inputs,
-      &thinkingForcedOpen_,
-      &thinkingStartTag,
-      &thinkingEndTag,
-      &thinkingEndTags,
-      &generationPrompt);
-  thinkingForcedOpenText_ =
-      thinkingForcedOpen_
-          ? getThinkingForcedOpenText(generationPrompt, thinkingStartTag)
-          : std::string{};
+  // See TextLlmContext::tokenizeChat: not const so the prompt and stop list
+  // move out instead of being copied per request.
+  PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
+  formattedChat = std::move(rendered.prompt);
+  if (rendered.toolDefinitionsDropped) {
+    ++toolDefinitionsDropped_;
+  }
+  thinkingForcedOpen_ = rendered.thinkingForcedOpen;
+  thinkingForcedOpenText_ = thinkingForcedOpen_ ? getThinkingForcedOpenText(
+                                                      rendered.generationPrompt,
+                                                      rendered.thinkingStartTag)
+                                                : std::string{};
   configureReasoningTags(
-      thinkingStartTag, thinkingEndTag, thinkingForcedOpenText_);
+      rendered.thinkingStartTag,
+      rendered.thinkingEndTag,
+      thinkingForcedOpenText_);
 
   if (formattedChat.empty()) {
     std::string errorMsg = string_format(
@@ -375,20 +415,53 @@ void MtmdLlmContext::tokenizeChat(
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
 
-  if (configureReasoningBudgetSampling(
-          params_,
-          modelCtx_.lctx,
-          thinkingStartTag,
-          thinkingEndTags,
-          generationPrompt)) {
-    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
-    if (!smpl_) {
-      std::string errorMsg = string_format(
-          "[MtmdLlm] %s: failed to initialize sampling subsystem\n", __func__);
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+  const Tokenizer tokenize = [this](const std::string& text) {
+    return ::common_tokenize(modelCtx_.lctx, text, false, true);
+  };
+  // Template stop strings are per request: replace, never accumulate. No
+  // template any qvac package ships populates `additional_stops`, so these
+  // lists are empty for those models — but see TextLlmContext::tokenizeChat:
+  // a user-supplied model can populate them.
+  templateStops_ = std::move(rendered.additionalStops);
+  templateStopTokens_.clear();
+  templateStopsLower_.clear();
+  templateStopsLower_.reserve(templateStops_.size());
+  for (const std::string& stop : templateStops_) {
+    templateStopsLower_.push_back(
+        qvac_lib_inference_addon_llama::utils::toLowerAscii(stop));
+    const auto ids = tokenize(stop);
+    if (ids.size() == 1) {
+      templateStopTokens_.push_back(ids[0]);
     }
   }
+  // See TextLlmContext::tokenizeChat: `common_sampler_init` throws on an
+  // unparseable grammar, so the sampling block must roll back rather than
+  // stay poisoned for the life of the loaded model.
+  common_params_sampling savedSampling = params_.sampling;
+  if (configureTemplateDerivedSampling(
+          params_, tokenize, rendered, !tools.empty())) {
+    try {
+      CommonSamplerPtr nextSmpl(
+          common_sampler_init(modelCtx_.model, params_.sampling));
+      if (!nextSmpl) {
+        std::string errorMsg = string_format(
+            "[MtmdLlm] %s: failed to initialize sampling subsystem\n",
+            __func__);
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+      }
+      smpl_ = std::move(nextSmpl);
+    } catch (...) {
+      params_.sampling = std::move(savedSampling);
+      throw;
+    }
+  }
+  // See TextLlmContext::tokenizeChat.
+  requireToolChoiceHonoured(
+      toolChoice.choice,
+      rendered.toolDefinitionsDropped,
+      params_.sampling.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS,
+      "[MtmdLlm]");
 
   QLOG_IF(
       Priority::DEBUG,
@@ -874,6 +947,14 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       tokenId = reasoningState_.cached_close_tag_token;
       tokenStr =
           common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+      // See TextLlmContext::onLogitsReady: the substituted close tag has to
+      // reach fabric's reasoning-budget matcher, or it stays in COUNTING and
+      // a lazy tool grammar is disarmed for the rest of the request. Lazy
+      // only, which is what makes feeding the grammar sampler impossible
+      // here.
+      if (params_.sampling.grammar_lazy) {
+        common_sampler_accept(smpl_.get(), tokenId, true);
+      }
       reasoningState_.inside_reasoning = false;
       // EOS substitution seeds the substituted token itself: the sampled EOS
       // reached the capture site with capture still off.
@@ -1060,6 +1141,14 @@ int32_t MtmdLlmContext::getThinkingBlockDiscards() const {
 }
 void MtmdLlmContext::resetThinkingBlockDiscards() {
   compactor_.resetBlockDiscards();
+}
+
+int32_t MtmdLlmContext::getToolDefinitionsDropped() const {
+  return toolDefinitionsDropped_;
+}
+
+void MtmdLlmContext::resetToolDefinitionsDropped() {
+  toolDefinitionsDropped_ = 0;
 }
 
 std::optional<llama_perf_context_data>
@@ -1626,6 +1715,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
   } else {
     tokenId = forcedTokens_.front();
     forcedTokens_.erase(forcedTokens_.begin());
+    // Mirrors TextLlmContext::onLogitsReady: the sampler's history must see
+    // emitted forced tokens, but `is_generated = false` keeps them out of
+    // the grammar, which never sampled them and would throw on an emptied
+    // stack. See the long comment there for the full rationale.
+    common_sampler_accept(smpl_.get(), tokenId, false);
   }
 
   std::string tokenStr =
@@ -1669,6 +1763,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
       reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
     tokenId = reasoningState_.cached_close_tag_token;
     tokenStr = common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+    // See TextLlmContext::onLogitsReady for why the substituted close tag
+    // must reach the reasoning-budget matcher, and why lazy-only is safe.
+    if (params_.sampling.grammar_lazy) {
+      common_sampler_accept(smpl_.get(), tokenId, true);
+    }
     reasoningState_.inside_reasoning = false;
     // EOS substitution skips the `updateReasoningBuffer` handshake, so the
     // substituted close never reaches the capture site on its own. Seed it

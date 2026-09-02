@@ -162,6 +162,13 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  [[nodiscard]] int32_t getToolDefinitionsDropped() const override;
+  void resetToolDefinitionsDropped() override;
+
+  void setRenderOverrides(RenderOverrides overrides) override {
+    renderOverrides_ = std::move(overrides);
+  }
+
   void setRemoveThinkingFromContext(bool value) override;
 
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
@@ -277,6 +284,9 @@ private:
       const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
       bool isCacheLoaded);
 
+  // See TextLlmContext::requireSampler.
+  void requireSampler();
+
   /**
    * The init vision context method. It initializes the vision context.
    *
@@ -352,6 +362,18 @@ private:
   common_params params_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
+  // Per-request stop strings supplied by the chat template
+  // (`common_chat_params::additional_stops`). Refreshed on every
+  // `tokenizeChat`, unlike the load-time `params_.antiprompt`.
+  std::vector<std::string> templateStops_;
+  std::vector<llama_token> templateStopTokens_;
+  // Lowercased copies of the two stop lists; see TextLlmContext.
+  std::vector<std::string> antipromptLower_;
+  std::vector<std::string> templateStopsLower_;
+  // Renders in the current request where the template dropped the tools.
+  int32_t toolDefinitionsDropped_ = 0;
+  // Per-request `tool_choice` for the chat-template render.
+  RenderOverrides renderOverrides_;
   std::vector<llama_token> forcedTokens_;
 
   mtmd::bitmaps bitmaps_;

@@ -119,6 +119,13 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  [[nodiscard]] int32_t getToolDefinitionsDropped() const override;
+  void resetToolDefinitionsDropped() override;
+
+  void setRenderOverrides(RenderOverrides overrides) override {
+    renderOverrides_ = std::move(overrides);
+  }
+
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
   }
@@ -217,6 +224,12 @@ private:
       const std::vector<common_chat_tool>& tools,
       std::vector<llama_token>& inputTokens, bool isCacheLoaded);
 
+  // Ensures `smpl_` is non-null, which a failed per-request restore can leave
+  // it. Attempts one rebuild from the current sampling params and throws if
+  // that fails too. Called at request entry so the failure is a StatusError
+  // rather than a null dereference inside fabric's sampler.
+  void requireSampler();
+
   // Replaces an EOS sampled while inside the reasoning channel with the
   // model's single-token close marker and injects the trailing newlines.
   // No-op (returns false) when the close marker is multi-token.
@@ -286,6 +299,20 @@ private:
   common_params params_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
+  // Per-request stop strings supplied by the chat template
+  // (`common_chat_params::additional_stops`). Refreshed on every
+  // `tokenizeChat`, unlike the load-time `params_.antiprompt`.
+  std::vector<std::string> templateStops_;
+  std::vector<llama_token> templateStopTokens_;
+  // Lowercased copies of the two stop lists. `checkAntiprompt` runs once per
+  // generated token, and both lists are constant for a whole generation, so
+  // the case folding is done once rather than per token.
+  std::vector<std::string> antipromptLower_;
+  std::vector<std::string> templateStopsLower_;
+  // Renders in the current request where the template dropped the tools.
+  int32_t toolDefinitionsDropped_ = 0;
+  // Per-request `tool_choice` for the chat-template render.
+  RenderOverrides renderOverrides_;
   std::vector<llama_token> forcedTokens_;
 
   llama_pos nPast_ = 0;

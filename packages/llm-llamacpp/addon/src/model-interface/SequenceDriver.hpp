@@ -12,6 +12,7 @@
 #include <llama.h>
 
 #include "MediaLoadOrder.hpp"
+#include "RenderOverrides.hpp"
 #include "addon/LlmErrors.hpp"
 
 class LlamaBatch;
@@ -165,6 +166,10 @@ public:
 
   [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
 
+  /// Renders where the template rejected the tool definitions (see
+  /// `LlmContext::getToolDefinitionsDropped`).
+  [[nodiscard]] virtual int32_t getToolDefinitionsDropped() const { return 0; }
+
   /// Why this sequence's generation stopped, once the scheduler has finalized
   /// the driver (`None` before that, for a prefill-only slot, or on a
   /// cancel/decode-error leg, which skips `onGenerationFinished`). Per
@@ -184,6 +189,12 @@ public:
   // support.
 
   virtual void setRemoveThinkingFromContext(bool value) { (void)value; }
+  /// Per-request `json_schema` / `tool_choice` for the chat-template render;
+  /// see `LlmContext::setRenderOverrides`. The scheduler sets it before
+  /// `preparePrefill`; the driver is destroyed with its slot, so no clear.
+  virtual void setRenderOverrides(RenderOverrides overrides) {
+    (void)overrides;
+  }
 
   /// Tokenize the prompt and stage it for prefill (without running
   /// generation). Returns the text tokens still pending decode by the

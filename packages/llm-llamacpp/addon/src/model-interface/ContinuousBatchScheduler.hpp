@@ -163,6 +163,7 @@ struct TimedDecodeResult {
 struct RuntimeStatsSnapshot {
   int64_t cacheTokens = 0;
   int64_t thinkingBlockDiscards = 0;
+  int64_t toolDefinitionsDropped = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
 
@@ -178,9 +179,12 @@ struct RuntimeStatsSnapshot {
       uint64_t numActiveSequences, uint64_t prefillTokens,
       uint64_t decodeTokens, std::chrono::nanoseconds stepDuration);
 
-  /// Fold one completed slot's contribution into the running totals.
-  void
-  accumulateSlot(int64_t nPast, int64_t thinkingDiscards, const Request& req);
+  /// Fold one completed slot's contribution into the running totals. Every
+  /// counter is required: a defaulted one would let a future caller drop a
+  /// stat silently, with no compile error.
+  void accumulateSlot(
+      int64_t nPast, int64_t thinkingDiscards, int64_t toolsDropped,
+      const Request& req);
 
   /// How busy the shared backend was, NOT a property of any one request: the
   /// mean number of sequences decoded together, averaged over every

@@ -18,6 +18,7 @@
 #include "common/log.h"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 #include "utils/ReasoningUtils.hpp"
@@ -204,7 +205,10 @@ void TextLlmContext::initializeCommonState() {
     }
   }
 
+  antipromptLower_.reserve(params_.antiprompt.size());
   for (const std::string& antiprompt : params_.antiprompt) {
+    antipromptLower_.push_back(
+        qvac_lib_inference_addon_llama::utils::toLowerAscii(antiprompt));
     auto ids = ::common_tokenize(modelCtx_.lctx, antiprompt, false, true);
     if (ids.size() == 1) {
       antipromptTokens_.push_back(ids[0]);
@@ -267,45 +271,80 @@ void TextLlmContext::initializeOwnedThreadpools() {
 }
 
 bool TextLlmContext::checkAntiprompt() {
-  if (!params_.antiprompt.empty()) {
-    constexpr int kNPrev = 32;
-    std::string lastOutput =
-        common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
+  if (antipromptLower_.empty() && templateStopsLower_.empty()) {
+    return false;
+  }
+  constexpr int kNPrev = 32;
+  std::string lastOutput =
+      common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
 
-    // Check if each of the reverse prompts appears anywhere in the recent
-    // output. We search the full kNPrev-token window because a single token
-    // can decode to many characters, and a short antiprompt like "\n" may
-    // appear at the start of such a token, far from the string's tail.
-    // Matching is case-insensitive so callers don't have to list every
-    // casing variant the model might emit.
-    std::string lastOutputLower = lastOutput;
-    std::transform(
-        lastOutputLower.begin(),
-        lastOutputLower.end(),
-        lastOutputLower.begin(),
-        [](unsigned char c) { return std::tolower(c); });
-    for (const std::string& antiprompt : params_.antiprompt) {
-      std::string antipromptLower = antiprompt;
-      std::transform(
-          antipromptLower.begin(),
-          antipromptLower.end(),
-          antipromptLower.begin(),
-          [](unsigned char c) { return std::tolower(c); });
-      if (lastOutputLower.find(antipromptLower) != std::string::npos) {
+  // Check if each of the reverse prompts appears anywhere in the recent
+  // output. We search the full kNPrev-token window because a single token
+  // can decode to many characters, and a short antiprompt like "\n" may
+  // appear at the start of such a token, far from the string's tail.
+  // Matching is case-insensitive so callers don't have to list every
+  // casing variant the model might emit.
+  const std::string lastOutputLower =
+      qvac_lib_inference_addon_llama::utils::toLowerAscii(lastOutput);
+  auto containsAnyStop = [&](const std::vector<std::string>& stopsLower) {
+    for (const std::string& stopLower : stopsLower) {
+      if (lastOutputLower.find(stopLower) != std::string::npos) {
         return true;
       }
     }
+    return false;
+  };
+  if (containsAnyStop(antipromptLower_) ||
+      containsAnyStop(templateStopsLower_)) {
+    return true;
+  }
 
-    // check for reverse prompt using special tokens
-    llama_token lastToken = common_sampler_last(smpl_.get());
-    for (auto token : antipromptTokens_) {
-      if (token == lastToken) {
-        return true;
-      }
+  // check for reverse prompt using special tokens
+  llama_token lastToken = common_sampler_last(smpl_.get());
+  for (auto token : antipromptTokens_) {
+    if (token == lastToken) {
+      return true;
+    }
+  }
+  for (auto token : templateStopTokens_) {
+    if (token == lastToken) {
+      return true;
     }
   }
   return false;
 }
+void TextLlmContext::requireSampler() {
+  if (smpl_) {
+    return;
+  }
+  // One rebuild attempt before giving up. The only other assignment sites are
+  // the constructor and the two inside `tokenizeChat`, and this check runs
+  // ahead of both — so without this attempt a single failed restore would
+  // brick the context for every later request, not just the next one, and
+  // recovery would mean reloading the model.
+  try {
+    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
+  } catch (const std::exception& ex) {
+    // Surfaces below as a StatusError rather than escaping as a fabric
+    // exception; the message keeps the reason.
+    QLOG_IF(
+        Priority::WARNING,
+        string_format("[TextLlm] sampler rebuild threw: %s\n", ex.what()));
+  }
+  if (smpl_) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[TextLlm] rebuilt the sampler after an earlier restore failure\n");
+    return;
+  }
+  std::string errorMsg = string_format(
+      "[TextLlm] %s: no sampler is installed and it could not be rebuilt from "
+      "the current sampling parameters\n",
+      __func__);
+  throw qvac_errors::StatusError(
+      ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+}
+
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void TextLlmContext::tokenizeChat(
     const std::vector<common_chat_msg>& chatMsgs,
@@ -316,6 +355,12 @@ void TextLlmContext::tokenizeChat(
         string_format("[TextLlm] %s: no chat messages provided\n", __func__);
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
+  // A previous request's generation-params restore can fail to rebuild the
+  // sampler and leave it null (see GenerationParamsApply). Reject the request
+  // here: fabric's `common_sampler_sample` dereferences without a null check,
+  // so without this the failure surfaces as a SIGSEGV that takes the whole
+  // runtime down instead of one request.
+  requireSampler();
 
   std::string prompt;
   common_chat_templates_inputs inputs;
@@ -339,41 +384,92 @@ void TextLlmContext::tokenizeChat(
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
 
-  if (!tools.empty()) {
-    inputs.tools = tools;
+  // `tool_choice` may narrow the tool list (named function) and decides
+  // whether the template emits an eager, lazy or no tool grammar. A
+  // per-request `json_schema` is deliberately NOT handed to the template:
+  // fabric's handlers return a response-format-only parser and exclude tool
+  // calls, so composing gains nothing over the sampler-side OUTPUT_FORMAT
+  // grammar and silently yields a never-arming lazy grammar on several
+  // model families.
+  // Not const: `tools` is moved into `inputs` below. Only `.choice` is read
+  // afterwards.
+  ResolvedToolChoice toolChoice =
+      resolveToolChoice(renderOverrides_.toolChoice, tools);
+  if (!toolChoice.tools.empty()) {
+    inputs.tools = std::move(toolChoice.tools);
+    inputs.tool_choice = toolChoice.choice;
   }
-  std::string thinkingStartTag;
-  std::string thinkingEndTag;
-  std::vector<std::string> thinkingEndTags;
-  std::string generationPrompt;
-  prompt = getPrompt(
-      tmpls_.get(),
-      inputs,
-      &thinkingForcedOpen_,
-      &thinkingStartTag,
-      &thinkingEndTag,
-      &thinkingEndTags,
-      &generationPrompt);
-  thinkingForcedOpenText_ =
-      thinkingForcedOpen_
-          ? getThinkingForcedOpenText(generationPrompt, thinkingStartTag)
-          : std::string{};
+  // Not const: `prompt` and `additionalStops` are moved out below. On base
+  // `getPrompt` returned `std::string` and this assignment moved; binding the
+  // struct by const value turned it into a copy of the whole formatted chat
+  // history, reallocated every turn. Everything read from `rendered`
+  // afterwards is a different field.
+  PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
+  prompt = std::move(rendered.prompt);
+  if (rendered.toolDefinitionsDropped) {
+    ++toolDefinitionsDropped_;
+  }
+  thinkingForcedOpen_ = rendered.thinkingForcedOpen;
+  thinkingForcedOpenText_ = thinkingForcedOpen_ ? getThinkingForcedOpenText(
+                                                      rendered.generationPrompt,
+                                                      rendered.thinkingStartTag)
+                                                : std::string{};
   configureReasoningTags(
-      thinkingStartTag, thinkingEndTag, thinkingForcedOpenText_);
-  if (configureReasoningBudgetSampling(
-          params_,
-          modelCtx_.lctx,
-          thinkingStartTag,
-          thinkingEndTags,
-          generationPrompt)) {
-    smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
-    if (!smpl_) {
-      std::string errorMsg = string_format(
-          "[TextLlm] %s: failed to initialize sampling subsystem\n", __func__);
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+      rendered.thinkingStartTag,
+      rendered.thinkingEndTag,
+      thinkingForcedOpenText_);
+  const Tokenizer tokenize = [this](const std::string& text) {
+    return ::common_tokenize(modelCtx_.lctx, text, false, true);
+  };
+  // Template stop strings are per request: replace, never accumulate. No
+  // template any qvac package ships populates `additional_stops`, so these
+  // lists are empty for those models. It is not empty by construction —
+  // fabric's PEG auto-parser pushes `"</assistant>"` for laguna_glm_thinking
+  // templates — so a user-supplied model can legitimately land stops here and
+  // generation will honour them.
+  templateStops_ = std::move(rendered.additionalStops);
+  templateStopTokens_.clear();
+  templateStopsLower_.clear();
+  templateStopsLower_.reserve(templateStops_.size());
+  for (const std::string& stop : templateStops_) {
+    templateStopsLower_.push_back(
+        qvac_lib_inference_addon_llama::utils::toLowerAscii(stop));
+    const auto ids = tokenize(stop);
+    if (ids.size() == 1) {
+      templateStopTokens_.push_back(ids[0]);
     }
   }
+  // Snapshot before configuring: `common_sampler_init` *throws* on a grammar
+  // it cannot parse, and the new sampling block is already committed by then.
+  // Without this rollback a template- or caller-derived grammar that fails to
+  // build stays resident in `params_` for the life of the loaded model, so
+  // every later request rebuilding the sampler fails too.
+  common_params_sampling savedSampling = params_.sampling;
+  if (configureTemplateDerivedSampling(
+          params_, tokenize, rendered, !tools.empty())) {
+    try {
+      CommonSamplerPtr nextSmpl(
+          common_sampler_init(modelCtx_.model, params_.sampling));
+      if (!nextSmpl) {
+        std::string errorMsg = string_format(
+            "[TextLlm] %s: failed to initialize sampling subsystem\n",
+            __func__);
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+      }
+      smpl_ = std::move(nextSmpl);
+    } catch (...) {
+      params_.sampling = std::move(savedSampling);
+      throw;
+    }
+  }
+  // An explicit `tool_choice` is a demand: fail rather than silently answer
+  // in prose when the template dropped the tools or refused a grammar.
+  requireToolChoiceHonoured(
+      toolChoice.choice,
+      rendered.toolDefinitionsDropped,
+      params_.sampling.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS,
+      "[TextLlm]");
 
   QLOG_IF(
       Priority::DEBUG,
@@ -865,6 +961,26 @@ SequenceStepResult TextLlmContext::onLogitsReady(
   } else {
     tokenId = forcedTokens_.front();
     forcedTokens_.erase(forcedTokens_.begin());
+    // Forced tokens are emitted output, so the sampler's history must see
+    // them: `prev` is what `common_sampler_prev_str` returns and
+    // `checkAntiprompt` scans, and the chain owns the penalty state.
+    //
+    // Scope: this is the batch path. The single-prompt path substitutes in
+    // `handleReasoningEOS`, which injects the same tokens without accepting
+    // them at all — a pre-existing asymmetry this comment does not claim to
+    // have fixed. See the note at that injection site.
+    //
+    // `is_generated = false` is load-bearing, not a default. A forced token
+    // was never grammar-sampled, so the grammar may not accept it — and
+    // `llama_grammar_accept_impl` assigns the emptied stack *before* it
+    // throws (fabric src/llama-grammar.cpp:1516-1522), so feeding one both
+    // breaks the grammar and throws from a call `common_sampler_accept` does
+    // not guard. That throw would escape to ContinuousBatchScheduler's step
+    // handler, which fails every co-scheduled request, not just this one.
+    // `false` skips `grmr` and `rbudget` and cannot throw; the grammar
+    // stays out of step with the substituted text, which is the KNOWN
+    // LIMITATION recorded at the substitution site below.
+    common_sampler_accept(smpl_.get(), tokenId, false);
   }
 
   std::string tokenStr =
@@ -932,9 +1048,38 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     } else if (
         reasoningState_.inside_reasoning &&
         reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
+      // The sampler already accepted the original EOS above, but the text
+      // emitted is this close tag instead, so the two are one token out of
+      // step for the rest of the request. The accept below repairs the half
+      // that matters; see the comment on it for the half that remains.
+      //
+      // The forced newlines queued below are deliberately NOT fed to the
+      // grammar (see the `is_generated = false` accept above): doing so
+      // would turn a bounded drift into a throw that fails every
+      // co-scheduled request.
       tokenId = reasoningState_.cached_close_tag_token;
       tokenStr =
           common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+      // Hand the substituted close tag to the sampler so fabric's
+      // reasoning-budget matcher advances to DONE. Without this it stays in
+      // COUNTING for the whole request — the EOS it did see advances no end
+      // matcher, and at an unlimited budget `remaining` is INT_MAX, so the
+      // only other exit never arrives (fabric reasoning-budget.cpp:93-131).
+      // `grammar_should_apply` then returns false for a *lazy* grammar in
+      // COUNTING (sampling.cpp:459-462), which silently disarms the tool
+      // grammar for the rest of the request on the default
+      // `tool_choice: "auto"` — the PR's whole constraint switching itself
+      // off with no error.
+      //
+      // Restricted to the lazy case, and that restriction is what makes it
+      // safe: with `grammar_lazy` set and the budget in COUNTING, fabric
+      // computes `accept_grammar == false`, so the grammar sampler is not
+      // fed this token and cannot throw on it. An eager grammar cannot
+      // reach this branch at all — EOG is masked to -INFINITY unless a
+      // grammar stack is empty (llama-grammar.cpp:1360-1381).
+      if (params_.sampling.grammar_lazy) {
+        common_sampler_accept(smpl_.get(), tokenId, true);
+      }
       reasoningState_.inside_reasoning = false;
       // EOS substitution: the original EOS reached the capture site with
       // capture still off and the substituted close never does, so seed it
@@ -1298,6 +1443,14 @@ void TextLlmContext::resetThinkingBlockDiscards() {
   compactor_.resetBlockDiscards();
 }
 
+int32_t TextLlmContext::getToolDefinitionsDropped() const {
+  return toolDefinitionsDropped_;
+}
+
+void TextLlmContext::resetToolDefinitionsDropped() {
+  toolDefinitionsDropped_ = 0;
+}
+
 std::optional<llama_perf_context_data>
 TextLlmContext::takeUserVisiblePerfSnapshot() {
   auto snapshot = userVisiblePerf_;
@@ -1641,6 +1794,22 @@ bool TextLlmContext::handleReasoningEOS(
   ++nPast;
   ++lastGeneratedTokenCount_;
 
+  // Same reason as the batch path in `onLogitsReady`: the substituted close
+  // tag has to reach fabric's reasoning-budget matcher, or it stays in
+  // COUNTING and `grammar_should_apply` keeps a lazy tool grammar disarmed
+  // for the rest of the request. Lazy only, so the grammar sampler is
+  // provably not fed this token.
+  if (params_.sampling.grammar_lazy) {
+    common_sampler_accept(smpl_.get(), tokenId, true);
+  }
+
+  // KNOWN LIMITATION, pre-existing and narrower than it was: the trailing
+  // newlines injected below are still streamed and decoded without any
+  // `common_sampler_accept`, so on this single-prompt path the sampler's
+  // `prev` — what `checkAntiprompt` scans — omits them, unlike the batch
+  // path's forced-token branch. Left alone because this function's decode
+  // bookkeeping is shared with recurrent rollback.
+  //
   // Close marker just committed — record span end before injecting
   // the trailing newlines (they are excluded from the span).
   // Seed the replay buffer with the substituted close-tag token id
