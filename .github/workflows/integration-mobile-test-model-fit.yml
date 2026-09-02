@@ -234,8 +234,11 @@ jobs:
             aws devicefarm list-projects --output json
           probe "devicefarm:GetProject" "project:" \
             aws devicefarm get-project --arn "$PROJECT_ARN" --output json
+          # --max-items 1: this project has thousands of runs. Without a cap the
+          # CLI pages through all of them, which stalled the job past the point
+          # where it was cancelled twice. One row proves the permission.
           probe "devicefarm:ListRuns" "project:" \
-            aws devicefarm list-runs --arn "$PROJECT_ARN" --output json
+            aws devicefarm list-runs --arn "$PROJECT_ARN" --max-items 1 --output json
           probe "devicefarm:ListDevicePools" "project:" \
             aws devicefarm list-device-pools --arn "$PROJECT_ARN" --output json
 
@@ -247,7 +250,7 @@ jobs:
           # mistaken for a permission problem. Fall back to the known one.
           DISCOVERED_RUN_ARN=""
           DISCOVERED_RUN_ARN=$(aws devicefarm list-runs --arn "$PROJECT_ARN" \
-            --query 'runs[0].arn' --output text 2>/dev/null)
+            --max-items 1 --query 'runs[0].arn' --output text 2>/dev/null)
           if [ "$DISCOVERED_RUN_ARN" = "None" ]; then DISCOVERED_RUN_ARN=""; fi
 
           if [ -n "$DISCOVERED_RUN_ARN" ]; then
@@ -439,6 +442,13 @@ jobs:
           scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'single-pool' }}
           device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
           device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
+          # TEMPORARY — QVAC-24365. Restore the 120 default once devicefarm:StopRun
+          # is granted. Until it is, CI cannot cancel a Device Farm run: the
+          # preflight's stop-run is itself denied, so a run we abandon keeps a
+          # device until jobTimeoutMinutes expires. model-fit's mobile suite is a
+          # single test file, so 20 minutes is ample and caps the waste at 20
+          # device-minutes instead of 120.
+          job-timeout-minutes: "20"
 
       - name: Monitor Device Farm test run
         id: monitor
