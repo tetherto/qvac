@@ -199,6 +199,18 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
     struct ggml_context* c = ggml_init(ip);
     ASSERT_NE(c, nullptr);
 
+    // QVAC-23763: this test regressed to SEH 0xc0000005 on windows Release
+    // while packages/vla-ggml was byte-identical, so the fault is inside ggml
+    // rather than in the code here, and the Release build has no stack trace to
+    // say where. The arena line further down never printed on the failing runs,
+    // which places the fault ABOVE ggml_new_graph_custom, somewhere in graph
+    // construction. cerr is unbuffered, so the last marker printed names the
+    // call that died. Drop these once the fault is located.
+    auto trace = [step](const char* where) {
+      std::cerr << "[M4.4] step " << step << " ok: " << where << std::endl;
+    };
+    trace("arena init");
+
     // actions [132,40]
     struct ggml_tensor* actT =
         ggml_new_tensor_2d(c, GGML_TYPE_F32, ACT_DIM, N_ACT);
@@ -248,16 +260,21 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
       }
     }
 
+    trace("inputs staged");
+
     // af = action_encoder(actions, tau) + position_embedding[:40]
     struct ggml_tensor* af = grootBuildActionEncoderGraph(
         c, actT, tau, aeW1, aeW2, aeW3, DIM, N_ACT);
     ASSERT_NE(af, nullptr);
+    trace("action encoder graph");
     struct ggml_tensor* pos =
         ggml_view_2d(c, posEmbedW, DIM, N_ACT, posEmbedW->nb[1], 0);
     af = ggml_add(c, af, pos);
+    trace("position embedding add");
 
     // sa = cat(state_features, af) → [1536, 41]
     struct ggml_tensor* sa = ggml_concat(c, stateFeat, af, /*dim=*/1);
+    trace("concat");
 
     // DiT → action decoder → velocity[:, -40:]
     struct ggml_tensor* out = grootBuildDitGraph(
@@ -279,12 +296,15 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
         1e-5f,
         nullptr);
     ASSERT_NE(out, nullptr);
+    trace("dit graph");
     struct ggml_tensor* pred = grootBuildCategoryMlpGraph(c, out, dec1, dec2);
     ASSERT_NE(pred, nullptr); // [132, 41]
+    trace("category mlp graph");
     // Drop the leading state token → velocity [132, 40] (contiguous sub-block).
     struct ggml_tensor* vel =
         ggml_view_2d(c, pred, ACT_DIM, N_ACT, pred->nb[1], pred->nb[1]);
     vel = ggml_cont(c, vel);
+    trace("velocity view + cont");
 
     // Allocated last, so this is the first thing to come back NULL if the arena
     // is short — and dereferencing it is an access violation, not a diagnosable
@@ -299,7 +319,9 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
         << "cgraph alloc returned NULL — arena exhausted at step " << step
         << " (used " << ggml_used_mem(c) << " of " << mem << " bytes)";
     ggml_build_forward_expand(gf, vel);
+    trace("graph expanded");
     ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
+    trace("graph computed");
     ASSERT_NE(vel->data, nullptr) << "step " << step;
 
     // Euler update: actions += dt · velocity.
