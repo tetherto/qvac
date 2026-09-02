@@ -404,6 +404,8 @@ const errorDefinitions: ErrorCodesMap = {
         return `Request uses ${requiredTokens} context units and leaves no room to generate within ${capacity}${model}. Reduce the prompt size, start a new conversation, or raise ctx_size.`
       }
       const window = ctxSize ? `the ${ctxSize}-token context window` : "the model's context window"
+      // The prompt-only branch below is reachable only through the public
+      // constructors — the parser always pairs promptTokens with requiredTokens.
       const prompt = promptTokens ? `${promptTokens} prompt tokens` : 'prompt'
       return `${prompt} exceeds ${window}${model}. Reduce the prompt size or start a new conversation.`
     }

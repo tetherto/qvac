@@ -271,7 +271,7 @@ export class ContextOverflowError extends QvacErrorBase {
   /** Canonical form: the parsed sizes as one record. */
   // lunte-disable-next-line constructor-super -- overload declaration, no body; the implementation calls super
   constructor(contextSizes: ContextOverflowErrorSizes, modelId?: string, cause?: unknown)
-  /** @deprecated Positional form kept for existing callers; prefer the sizes-record form. */
+  /** @deprecated Kept for external consumers of the published package; in-repo callers use the record form. */
   // lunte-disable-next-line constructor-super -- overload declaration, no body; the implementation calls super
   constructor(
     promptTokens?: number,
