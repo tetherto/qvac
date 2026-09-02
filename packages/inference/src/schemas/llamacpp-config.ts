@@ -133,7 +133,7 @@ export const llmConfigBaseSchema = z.object({
     .enum(['on', 'off', 'auto'])
     .optional()
     .describe(
-      "Flash attention: `'on'`, `'off'`, or `'auto'` (the backend decides). Unset uses the addon default, `'on'` outside finetuning. `'off'` is incompatible with `'split-mode': 'tensor'`."
+      "Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`."
     ),
   'tensor-split': z
     .string()
