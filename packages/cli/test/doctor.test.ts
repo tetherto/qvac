@@ -20,20 +20,20 @@ import {
   collectCheckSections,
   createDefaultContext,
   isReportOk
-} from '../src/doctor/checks/index.js'
-import type { CheckContext } from '../src/doctor/checks/index.js'
-import { runDoctor } from '../src/doctor/index.js'
+} from '@/doctor/checks/index'
+import type { CheckContext } from '@/doctor/checks/index'
+import { runDoctor } from '@/doctor/index'
 import {
   checkSdkRuntime,
   classifySdkRuntimeFailure,
   probeSdkRuntime,
   type SdkRuntimeProbeResult
-} from '../src/doctor/deep.js'
+} from '@/doctor/deep'
 import {
   DEEP_PROBE_MESSAGE_KIND,
   DEEP_PROBE_PROTOCOL_VERSION,
   isDeepProbeMessage
-} from '../src/doctor/deep-protocol.js'
+} from '@/doctor/deep-protocol'
 
 // Build a CheckContext with a minimal, deterministic baseline and spread
 // per-test overrides on top. Keeps each test assertion about a single

@@ -4,7 +4,7 @@ import type { TranscribeSegment } from '@qvac/sdk'
 import {
   formatTimedTranscription,
   isTimedTranscriptionFormat
-} from '../src/serve/lib/transcription-response.js'
+} from '@/serve/lib/transcription-response'
 
 const SEGMENTS: TranscribeSegment[] = [
   { id: 7, startMs: 0, endMs: 1_250, text: ' Hello', append: false },

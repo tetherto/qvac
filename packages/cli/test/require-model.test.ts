@@ -2,16 +2,16 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { createModelRegistry } from '../src/serve/core/model-registry.js'
+import { createModelRegistry } from '@/serve/core/model-registry'
 import {
   createLoadManager,
   type LoadManagerDeps,
   type LoadModelFn
-} from '../src/serve/core/load-manager.js'
-import { ensureReady, resolveAndCheckModel } from '../src/serve/plugins/require-model.js'
-import { createLogger } from '../src/logger.js'
-import type { QvacContext } from '../src/serve/lib/types.js'
-import { HttpError } from '../src/serve/lib/http-error.js'
+} from '@/serve/core/load-manager'
+import { ensureReady, resolveAndCheckModel } from '@/serve/plugins/require-model'
+import { createLogger } from '@/logger'
+import type { QvacContext } from '@/serve/lib/types'
+import { HttpError } from '@/serve/lib/http-error'
 
 const logger = createLogger('silent')
 
