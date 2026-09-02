@@ -26,6 +26,15 @@
   documents `'auto'` as preserving — *"`'auto'` lets qvac-fabric decide"*. A caller who wants both should
   set `cache-type-k`/`-v` alongside it, or use `'on'`.
 
+### Documentation
+
+- `flash-attn` now has a row in the README config table — it had none, despite being a documented, typed
+  field on `LlamaConfig`. The KV-cache auto-default section states which spellings count as "flash
+  attention on" and why `'auto'` keeps `f16`; `docs/multi-gpu.md` notes that `split-mode: 'tensor'` accepts
+  `'auto'`, and that it is the one place `'auto'` does not preserve qvac-fabric's capability probe. All
+  spellings are documented as lower-case only: qvac-fabric's value predicates are case-sensitive, so a
+  mixed-case value is rejected at argument parsing.
+
 ## [0.49.0] - 2026-08-31
 
 ### Added
