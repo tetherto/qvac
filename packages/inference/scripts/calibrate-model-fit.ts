@@ -4,13 +4,22 @@
 // real operations, and derives the coefficients in
 // `src/resources/model-fit/calibration/<platform>.ts`.
 //
-// Run from the package root, on the platform being calibrated, with bare ≥ 1.30
-// (which runs TypeScript directly via type-stripping — the version the
-// `engines` field already requires):
+// Desktop: run from the package root, on the platform being calibrated, with
+// bare ≥ 1.30 (which runs TypeScript directly via type-stripping — the version
+// the `engines` field already requires):
 //
 //   npm run build
 //   bare scripts/calibrate-model-fit.ts            # measure and print
 //   bare scripts/calibrate-model-fit.ts --write    # also rewrite the fixture
+//
+// Mobile (android/ios): the same script runs inside a bare-kit host app — the
+// SDK e2e consumer apps (packages/sdk/e2e) are exactly that shell. Point the
+// host's Bare entry at this script, sideload onto an idle physical device with
+// at least 6 GB of RAM (plugged in, registry-reachable network), and read the
+// output from adb logcat or the Xcode console. The mobile profile uses smaller
+// models and a lower upper context so no load approaches the per-process
+// ceiling, and the fixture is emitted between BEGIN/END markers on the console
+// instead of written to a source tree.
 //
 // Models are downloaded on first run and cached, so the first pass is slow and
 // needs registry access. See calibration/METHODOLOGY.md for what the numbers
@@ -34,14 +43,10 @@ import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js
 import type { GgufFacts } from '../dist/schemas/model-resource-profile.js'
 import type { PlatformCalibration } from '../dist/resources/model-fit/types.js'
 
-declare const Bare: { argv: string[]; exit(code?: number): never }
+declare const Bare: { argv?: string[]; exit(code?: number): never }
 
 const SAMPLE_INTERVAL_MS = 25
 const SETTLE_MS = 250
-
-// Two contexts per model so fixed overhead and the per-token compute buffer can
-// be separated; a single point cannot tell them apart.
-const CONTEXTS = [512, 8192]
 
 // Every point is measured this many times. Single-shot loads were observed to
 // vary by up to ~100 MiB run to run; all repeats enter the fit, and the upper
@@ -54,10 +59,40 @@ const REPEATS = 3
 // allocation behaviour changed and this methodology needs re-checking.
 const WORKING_DRIFT_WARN_BYTES = 64 * 1024 * 1024
 
-// Small, medium, large — plus one held out of the fit entirely, used only to
-// check that the derived upper bound actually holds.
-const FIT_MODELS = ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_4B_INST_Q4_K_M']
-const HELD_OUT_MODEL = 'QWEN3_8B_INST_Q4_K_M'
+/**
+ * What one platform's run measures: two contexts per model so fixed overhead
+ * and the per-token slope can be separated (a single point cannot tell them
+ * apart), fit models spanning small–large artifact sizes to pin the weight
+ * ratio, and one model held out of the fit entirely to check that the derived
+ * upper bound actually holds.
+ */
+interface CalibrationProfile {
+  contexts: readonly [number, number]
+  fitModels: readonly string[]
+  heldOutModel: string
+}
+
+const DESKTOP_PROFILE: CalibrationProfile = {
+  contexts: [512, 8192],
+  fitModels: ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_4B_INST_Q4_K_M'],
+  heldOutModel: 'QWEN3_8B_INST_Q4_K_M'
+}
+
+// Everything must stay well under a phone's per-process ceiling (iOS jetsam
+// kills near it, and a killed harness measures nothing): smaller models, and
+// the upper context halved so the held-out 4B load stays inside what a 6 GB
+// device grants. Needs a device with at least 6 GB of RAM.
+const MOBILE_PROFILE: CalibrationProfile = {
+  contexts: [512, 4096],
+  fitModels: ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_1_7B_INST_Q4'],
+  heldOutModel: 'QWEN3_4B_INST_Q4_K_M'
+}
+
+function profileFor(platform: string) {
+  return platform.startsWith('android') || platform.startsWith('ios')
+    ? MOBILE_PROFILE
+    : DESKTOP_PROFILE
+}
 
 interface Measurement {
   name: string
@@ -223,9 +258,13 @@ export const ${platform.toUpperCase().replace(/-/g, '_')}_CALIBRATION: PlatformC
 }
 
 async function main() {
-  const write = Bare.argv.includes('--write')
+  // A bare-kit host may not populate argv; treat that as a measure-only run.
+  const write = (Bare.argv ?? []).includes('--write')
   const platform = `${os.platform()}-${os.arch()}`
-  console.log(`calibrating ${platform}`)
+  const profile = profileFor(platform)
+  console.log(
+    `calibrating ${platform} (fit: ${profile.fitModels.join(', ')}; held out: ${profile.heldOutModel}; contexts: ${profile.contexts.join('/')})`
+  )
 
   registerPlugin(llmPlugin)
 
@@ -246,8 +285,8 @@ async function main() {
   const mib = (n: number) => (n / 1024 / 1024).toFixed(0)
   const elementWidths = new Set<number>()
   const measurements: FitPoint[] = []
-  for (const name of FIT_MODELS) {
-    for (const contextTokens of CONTEXTS) {
+  for (const name of profile.fitModels) {
+    for (const contextTokens of profile.contexts) {
       for (let repeat = 0; repeat < REPEATS; repeat++) {
         const measurement = await measure(name, contextTokens)
         // `.lower` is the width a GPU backend defaults to (q8_0), and equals
@@ -309,8 +348,8 @@ async function main() {
       `\nwarning: weightRatio ${fit.weightRatio.toFixed(3)} — resident weights landed well below artifact size. Either this platform pages weights lazily, or the host was under memory pressure during the run. Re-run on an idle host before trusting this fixture.`
     )
   }
-  for (const name of FIT_MODELS) {
-    for (const contextTokens of CONTEXTS) {
+  for (const name of profile.fitModels) {
+    for (const contextTokens of profile.contexts) {
       const repeats = measurements.filter(
         (m) => m.name === name && m.contextTokens === contextTokens
       )
@@ -362,28 +401,29 @@ async function main() {
   let heldOutKv = 0
   let heldOutArtifactBytes = 0
   for (let repeat = 0; repeat < REPEATS; repeat++) {
-    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!)
+    const heldOut = await measure(profile.heldOutModel, profile.contexts[1])
     const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
-    heldOutKv = exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
+    heldOutKv = exactKvBytes(profile.heldOutModel, heldOut.facts, profile.contexts[1], heldOutWidth)
     heldOutArtifactBytes = heldOut.artifactBytes
     heldOutWorstTotal = Math.max(heldOutWorstTotal, heldOut.persistentBytes + heldOut.workingBytes)
   }
   const predictedUpper =
     heldOutArtifactBytes * calibration.weightUpperCoeff +
     calibration.fixedOverheadBytes.upper +
-    calibration.computeBufferBytesPerToken.upper * CONTEXTS[1]! +
+    calibration.computeBufferBytesPerToken.upper * profile.contexts[1] +
     heldOutKv
   const holds = heldOutWorstTotal <= predictedUpper
 
   console.log(
-    `\nheld-out ${HELD_OUT_MODEL}: worst measured ${(heldOutWorstTotal / 2 ** 30).toFixed(2)} GiB vs predicted upper ${(predictedUpper / 2 ** 30).toFixed(2)} GiB — ${holds ? 'PASS' : 'FAIL'}`
+    `\nheld-out ${profile.heldOutModel}: worst measured ${(heldOutWorstTotal / 2 ** 30).toFixed(2)} GiB vs predicted upper ${(predictedUpper / 2 ** 30).toFixed(2)} GiB — ${holds ? 'PASS' : 'FAIL'}`
   )
   calibration.validated = holds
   if (!holds) {
     console.log('the held-out peak exceeded the upper bound; do not ship these coefficients')
   }
 
-  if (write) {
+  const mobile = profile === MOBILE_PROFILE
+  if (write && !mobile) {
     const target = path.join(
       os.cwd(),
       'src',
@@ -396,7 +436,14 @@ async function main() {
     console.log(`\nwrote ${target}`)
     console.log('remember to add the platform to calibration/index.ts and run prettier')
   } else {
-    console.log('\nre-run with --write to update the fixture')
+    // On a phone the harness runs inside an app sandbox (a bare-kit host app),
+    // where there is no source tree to write into — the fixture travels out
+    // through the console instead. The markers make it extractable from adb
+    // logcat or the Xcode console; copy it verbatim, never retyped.
+    console.log(`\n----- BEGIN CALIBRATION FIXTURE ${platform}.ts -----`)
+    console.log(fixtureSource(platform, calibration))
+    console.log(`----- END CALIBRATION FIXTURE ${platform}.ts -----`)
+    if (!mobile) console.log('re-run with --write to update the fixture in place')
   }
 
   // Non-zero so the CI job cannot rot green on a failed gate.

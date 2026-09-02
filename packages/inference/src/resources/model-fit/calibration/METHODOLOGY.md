@@ -25,7 +25,11 @@ for the per-layer accounting.
 ## Procedure
 
 `scripts/calibrate-model-fit.ts` on the platform being calibrated (bare ≥ 1.30
-runs it directly via type-stripping):
+runs it directly via type-stripping). On mobile the same script runs inside a
+bare-kit host app — the SDK e2e consumers are that shell — on an idle physical
+device, and the fixture comes back through the console between BEGIN/END
+markers instead of being written to a source tree; see the script header for
+the run procedure.
 
 llama.cpp allocates **everything at load** — weights, KV cache, engine
 overhead and the context-scaled compute buffers — so a load's RSS delta is the
@@ -36,10 +40,15 @@ completion per point and warns if that working delta grows past 64 MiB: that
 would mean the engine's allocation behaviour changed and this methodology
 needs re-checking.
 
-1. For each of three models (small, medium, large) at two contexts (512 and
-   8192 tokens), **three times each**: settle, read RSS, load, settle, read RSS
-   again — the difference is **persistent**. Single-shot loads were observed to
-   vary by up to ~100 MiB run to run, so every repeat enters the fit.
+1. For each of three models (small, medium, large) at two contexts, **three
+   times each**: settle, read RSS, load, settle, read RSS again — the
+   difference is **persistent**. Single-shot loads were observed to vary by up
+   to ~100 MiB run to run, so every repeat enters the fit. The model set and
+   contexts come from a per-platform-family profile in the harness: desktop
+   uses 600M/1B/4B at 512/8192 with 8B held out; mobile uses 600M/1B/1.7B at
+   512/4096 with 4B held out, because every load must stay well under a phone's
+   per-process ceiling — iOS jetsam kills near it, and a killed harness
+   measures nothing (needs a device with at least 6 GB of RAM).
 2. Subtract the KV cache from each persistent delta — the cache the engine
    _actually allocated_, taken from the estimator's own `kvElementBytes` rather
    than assumed. On a Metal or Vulkan backend the default is `q8_0`, so a fixed
