@@ -556,7 +556,7 @@ host's policy:
 | Platform                | Default backend when `useGPU: true`          |
 |-------------------------|----------------------------------------------|
 | macOS / iOS             | Metal                                        |
-| Linux x64 — NVIDIA      | CUDA (the linux-x64 prebuild bundles CUDA and Vulkan; CUDA wins the cascade) |
+| Linux x64 — NVIDIA      | Vulkan (CUDA is opt-in at build via `ENABLE_CUDA`; CUDA then wins the cascade) |
 | Linux — other / Windows | Vulkan                                       |
 | Android — Adreno 700+   | OpenCL                                       |
 | Android — Mali / others | Vulkan                                       |
@@ -567,11 +567,12 @@ On hosts where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
 and fails loudly when that backend cannot be resolved; unset (or empty)
 keeps the automatic preference above.
 
-The linux-x64 CUDA backend ships as a runtime-loaded module: engaging it
-requires the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
-cuBLAS, from a CUDA toolkit install) resolvable at load time. On hosts
-without them — including CPU-only and non-NVIDIA machines — the module is
-skipped and the addon behaves exactly as before (Vulkan or CPU).
+When the addon is built with `ENABLE_CUDA`, the CUDA backend ships as a
+runtime-loaded module: engaging it requires the NVIDIA driver plus the CUDA
+13 runtime libraries (cudart and cuBLAS, from a CUDA toolkit install)
+resolvable at load time. On hosts without them — including CPU-only and
+non-NVIDIA machines — the module is skipped and the addon behaves exactly as
+before (Vulkan or CPU).
 
 The module targets **compute capability 7.5 and newer**: native code for
 Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6), Ada (8.9), Hopper
@@ -1004,8 +1005,7 @@ baseline commit.
 GPU backends are controlled by the `speech-cpp` port's vcpkg features:
 `metal` (default on osx/ios), `vulkan` (default on
 linux/windows/android), `opencl` (default on android), and `cuda`
-(opt-in via the addon's `ENABLE_CUDA` cmake option; the published
-linux-x64 prebuilds enable it).
+(opt-in via the addon's `ENABLE_CUDA` cmake option).
 On Android the port is configured with
 `GGML_BACKEND_DL=ON` + `GGML_CPU_ALL_VARIANTS=ON`, so the build
 produces per-arch CPU + Vulkan + OpenCL `.so` files alongside the
