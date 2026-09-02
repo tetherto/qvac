@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createModelRegistry } from '../src/serve/core/model-registry.js'
+import { createModelRegistry } from '@/serve/core/model-registry'
 import {
   createLoadManager,
   ModelLoadTimeoutError,
   type LoadModelFn
-} from '../src/serve/core/load-manager.js'
-import { createLogger } from '../src/logger.js'
+} from '@/serve/core/load-manager'
+import { createLogger } from '@/logger'
 
 const logger = createLogger('silent')
 
@@ -100,9 +100,9 @@ describe('load-manager', () => {
     // a and b run; c is queued behind the concurrency=2 cap.
     await Promise.resolve()
     assert.ok(peak <= 2, `peak concurrency ${peak} should not exceed 2`)
-    gates.a!.resolve('sa')
-    gates.b!.resolve('sb')
-    gates.c!.resolve('sc')
+    gates['a']!.resolve('sa')
+    gates['b']!.resolve('sb')
+    gates['c']!.resolve('sc')
     await Promise.all([pa, pb, pc])
     assert.equal(peak, 2)
     assert.equal(reg.getEntry('c')?.state, reg.STATES.READY)

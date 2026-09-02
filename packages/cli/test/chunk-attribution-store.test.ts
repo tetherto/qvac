@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createChunkAttributionStore } from '../src/serve/adapters/openai/chunk-attribution-store.js'
+import { createChunkAttributionStore } from '@/serve/adapters/openai/chunk-attribution-store'
 
 describe('createChunkAttributionStore', () => {
   it('records and looks up attribution under a vector store id', () => {
