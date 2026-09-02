@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `flash-attn` is now recognised as enabled on every spelling qvac-fabric
+  accepts — `on`, `enabled`, `true` and `1` — matching `@qvac/llm-llamacpp`.
+  This supersedes the 0.8.0 entry below pinning it to `on` only: that pinning
+  was correct while the loader also required exact `on`, and became an
+  over-estimate of KV memory once the loader widened. Values are matched by
+  calling `common_arg_utils::is_truthy` / `is_falsey` / `is_autoy` directly
+  rather than mirroring the sets, so the two packages cannot drift again.
+
+- The Adreno 800+/Vulkan quantized-KV guard now also fires for
+  `flash-attn: 'auto'`, matching the loader. Fabric promotes AUTO to ENABLED
+  for a quantized V cache, so the fitter previously reported as supported a
+  configuration the loader rejects with `InvalidArgument`. The q8_0 KV
+  auto-default deliberately still does *not* fire for `'auto'` — quantizing V
+  is what triggers that promotion, which skips the capability probe `'auto'`
+  exists to run.
+
+- An unrecognised or mixed-case `flash-attn` value is rejected up front, naming
+  the accepted spellings, instead of falling through the guards and reaching
+  fabric's parser afterwards. On Adreno 800+ Vulkan with a quantized KV cache
+  the old order surfaced a typo as an unsupported-hardware verdict. Matching is
+  case-sensitive, as fabric's own predicates are.
+
 ## [0.8.0] - 2026-08-29
 
 ### Fixed

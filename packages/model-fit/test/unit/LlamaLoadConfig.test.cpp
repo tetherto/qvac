@@ -493,28 +493,110 @@ int main() {
   }
 
   {
-    // The q8_0 KV auto-default must fire on exactly the spelling
-    // `llm-llamacpp` recognizes, or the projection halves the KV footprint the
-    // load will actually use.
-    const auto flashOn = model_fit::normalizeLlamaLoadConfig(
-        "/model.gguf",
-        LlamaConfigMap{{"device", "gpu"}, {"flash-attn", "on"}},
-        ModelTraits{},
-        {metal(), cpu()});
-    expect(
-        flashOn.params.cache_type_k == GGML_TYPE_Q8_0 &&
-            flashOn.params.cache_type_v == GGML_TYPE_Q8_0,
-        "flash-attn=on must apply the quantized KV auto-default");
+    // The q8_0 KV auto-default must fire on every spelling `llm-llamacpp`
+    // recognizes, or the projection doubles or halves the KV footprint the load
+    // will actually use. This block is the only place the parity contract with
+    // `llm-llamacpp`'s `resolveFlashAttn` is enforced in code.
+    for (const char* value : {"on", "enabled", "true", "1"}) {
+      const auto truthy = model_fit::normalizeLlamaLoadConfig(
+          "/model.gguf",
+          LlamaConfigMap{{"device", "gpu"}, {"flash-attn", value}},
+          ModelTraits{},
+          {metal(), cpu()});
+      expect(
+          truthy.params.cache_type_k == GGML_TYPE_Q8_0 &&
+              truthy.params.cache_type_v == GGML_TYPE_Q8_0,
+          "every truthy flash-attn spelling must apply the quantized KV "
+          "auto-default");
+    }
 
+    // Underscore-side, so `canonicalKey` stays exercised on this path.
     const auto flashTruthy = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{{"device", "gpu"}, {"flash_attn", "true"}},
         ModelTraits{},
         {metal(), cpu()});
     expect(
-        flashTruthy.params.cache_type_k == GGML_TYPE_F16 &&
-            flashTruthy.params.cache_type_v == GGML_TYPE_F16,
-        "flash-attn=true must keep f16 KV, matching llm-llamacpp");
+        flashTruthy.params.cache_type_k == GGML_TYPE_Q8_0 &&
+            flashTruthy.params.cache_type_v == GGML_TYPE_Q8_0,
+        "flash-attn=true must apply q8_0 KV, matching llm-llamacpp");
+
+    // `'auto'` must not: quantizing V is what makes fabric promote AUTO to
+    // ENABLED, skipping the capability probe `'auto'` exists to run. The
+    // loader withholds the default for the same reason.
+    for (const char* value : {"auto", "-1"}) {
+      const auto autoy = model_fit::normalizeLlamaLoadConfig(
+          "/model.gguf",
+          LlamaConfigMap{{"device", "gpu"}, {"flash-attn", value}},
+          ModelTraits{},
+          {metal(), cpu()});
+      expect(
+          autoy.params.cache_type_k == GGML_TYPE_F16 &&
+              autoy.params.cache_type_v == GGML_TYPE_F16,
+          "flash-attn=auto must keep f16 KV, matching llm-llamacpp");
+    }
+  }
+
+  {
+    // The Adreno 800+/Vulkan crash guard asks the wider question: fabric
+    // promotes AUTO to ENABLED for a quantized V cache, so `'auto'` reaches the
+    // coopmat1 driver bug and the fitter must not report it as supported when
+    // the loader rejects it.
+    for (const char* value : {"enabled", "true", "1", "auto", "-1"}) {
+      const auto rejected = model_fit::normalizeLlamaLoadConfig(
+          "/model.gguf",
+          LlamaConfigMap{
+              {"device", "gpu"},
+              {"flash-attn", value},
+              {"cache-type-v", "q8_0"}},
+          ModelTraits{},
+          {adreno(), cpu()});
+      expect(
+          !rejected.supported,
+          "quantized KV must be unsupported on Adreno 800+ Vulkan for every "
+          "flash-attn spelling that can end up enabled");
+    }
+
+    // Falsey stays supported: nothing promotes DISABLED.
+    const auto falsey = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"flash-attn", "off"},
+            {"cache-type-v", "q8_0"}},
+        ModelTraits{},
+        {adreno(), cpu()});
+    expect(
+        falsey.supported,
+        "quantized KV without flash attention must stay supported on Adreno "
+        "800+ Vulkan");
+  }
+
+  {
+    // A value fabric rejects must be reported as the flash-attn value it is.
+    // Matching is case-sensitive, as `common_arg_utils` is — and the rejection
+    // has to precede the Adreno guard, or a mixed-case `On` with quantized KV
+    // surfaces a typo as an unsupported-hardware verdict.
+    for (const char* value : {"yes", "On", "TRUE", ""}) {
+      std::string detail;
+      try {
+        static_cast<void>(model_fit::normalizeLlamaLoadConfig(
+            "/model.gguf",
+            LlamaConfigMap{
+                {"device", "gpu"},
+                {"flash-attn", value},
+                {"cache-type-v", "q8_0"}},
+            ModelTraits{},
+            {adreno(), cpu()}));
+      } catch (const std::invalid_argument& error) {
+        detail = error.what();
+      }
+      expect(
+          detail.find("config.flash-attn") != std::string::npos &&
+              detail.find("Adreno") == std::string::npos,
+          "an unrecognized flash-attn value must be rejected as such, not as "
+          "unsupported hardware");
+    }
   }
 
   {
