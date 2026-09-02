@@ -80,23 +80,17 @@ export function selectNewestBotStatus(statuses, context) {
 // on-pr-nx is the producer for every consolidated package.
 export const NX_PRODUCER = '.github/workflows/on-pr-nx.yml'
 
-// fabric, classification-ggml and vla are carved out of on-pr-nx (their
-// project.json on-pr target sets carveOut: true) because the fabric-stack overlay
-// needs fabric built before its consumers, which one flat prebuild matrix cannot
-// express. They keep their own orchestrators, so each posts its own status.
-//
-// Deliberately a per-package map rather than a flat allowlist of trusted paths:
-// on-pr-vla.yml must not be able to post a status for classification-ggml. The
-// key is the PREBUILD_KEYS spelling, so `vla`, not `vla-ggml`.
+// These three are carved out of on-pr-nx and keep their own orchestrators.
+// Per-package, not a flat allowlist: on-pr-vla.yml must not be able to post for
+// classification-ggml. Keys use the PREBUILD_KEYS spelling, so `vla`.
 export const CARVED_OUT_PRODUCERS = {
   fabric: '.github/workflows/on-pr-fabric.yml',
   'classification-ggml': '.github/workflows/on-pr-classification-ggml.yml',
   vla: '.github/workflows/on-pr-vla.yml',
 }
 
-// Trust a status only from a fresh run of THIS package's one legitimate producer:
-// rejects superseded pre-label runs, cross-package forgery, and any other
-// workflow's co-post.
+// Trust only a fresh run of this package's own producer: rejects superseded
+// pre-label runs, cross-package forgery, and any other workflow's co-post.
 export function isRunFresh(run, pkg, prUpdatedEpoch) {
   const expected = CARVED_OUT_PRODUCERS[pkg] ?? NX_PRODUCER
   if (!run || run.path !== expected) return false
@@ -116,9 +110,8 @@ export function classifyState(state) {
 // `lookupRun(runId)` returns the producing run object (or null) and is injected
 // so this stays pure and testable.
 export function evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun) {
-  // Filter to trusted+fresh statuses (this package's own producer, see
-  // isRunFresh), then take the newest of those. Newest-first would let any other
-  // workflow's co-post mask the real producer.
+  // Trusted+fresh first, then newest: newest-first would let another workflow's
+  // co-post mask the real producer.
   const context = `qvac/prebuild-${pkg}`
   const trusted = (statuses ?? [])
     .filter(

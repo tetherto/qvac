@@ -1106,12 +1106,8 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
   const lib = read('.github/scripts/prebuild-status/lib.mjs')
   assert.match(lib, /target_url/, 'lib reads the producing run from the status target_url')
   assert.match(lib, /actions\S*runs/, 'lib parses the producing run id from the run URL')
-  // The producer is resolved per package and compared exactly: on-pr-nx.yml for
-  // the consolidated packages, and for the three carved out of it (fabric,
-  // classification-ggml, vla) their own orchestrator. A flat allowlist of
-  // trusted paths would let any carved-out workflow post for any package, so the
-  // per-package map is the part that must not regress. The behavioural coverage
-  // lives in prebuild-status.test.mjs; this pins the shape.
+  // Pins the shape only; behaviour is covered in prebuild-status.test.mjs.
+  // The per-package map is the part that must not regress into a flat allowlist.
   assert.match(
     lib,
     /run\.path !== expected/,

@@ -120,10 +120,8 @@ test('isRunFresh requires the matching workflow and created_at >= threshold', ()
   assert.equal(isRunFresh(null, 'tts-ggml', threshold), false)
 })
 
-// fabric, classification-ggml and vla are carved out of on-pr-nx and keep their
-// own orchestrators, so each has exactly ONE legitimate producer. The map must
-// stay per-package: a flat allowlist of trusted paths would let any carved-out
-// workflow post a status for any other package.
+// Each carved-out package has exactly one legitimate producer. A flat allowlist
+// would let any carved-out workflow post for any other package.
 test('isRunFresh: each carved-out package trusts only its own orchestrator', () => {
   const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
   const at = '2026-08-10T12:00:05Z'
@@ -163,8 +161,7 @@ test('isRunFresh: each carved-out package trusts only its own orchestrator', () 
 })
 
 test('isRunFresh: every carved-out key is a real PREBUILD_KEYS entry', () => {
-  // A typo here (e.g. 'vla-ggml' instead of 'vla') would silently fall back to
-  // the on-pr-nx producer and re-open the gap this map exists to close.
+  // A typo ('vla-ggml' for 'vla') would silently fall back to the nx producer.
   for (const pkg of Object.keys(CARVED_OUT_PRODUCERS)) {
     assert.ok(PREBUILD_KEYS.includes(pkg), `${pkg} is not a PREBUILD_KEYS entry`)
   }
