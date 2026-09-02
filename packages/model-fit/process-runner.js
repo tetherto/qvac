@@ -8,7 +8,7 @@ const processModule = require("bare-process");
 const process_internal_1 = require("./process-internal");
 const process_1 = require("./process");
 const process = processModule;
-// Duplicate of index.js resolveBackendsDir: this runner must not import
+// Duplicate of index.ts resolveBackendsDir: this runner must not import
 // `./index` at load time because that would load the native binding. The v2
 // llamaConfigFit path also cannot go through fitParams().
 function resolveBackendsDir() {
