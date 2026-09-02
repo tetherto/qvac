@@ -109,22 +109,24 @@ endif()
 # Loose-file pickup for MODULE backends that aren't surfaced as
 # IMPORTED targets by find_package(ggml). On Android this is what
 # actually delivers Vulkan + OpenCL into the prebuilds folder, and on
-# hybrid Linux builds (arm64, x64 with ENABLE_CUDA) it delivers the
-# CPU-variant / Vulkan / CUDA modules. Glob runs at configure time -- the .so files come from
-# ggml-speech's `file(INSTALL ...)` step in its portfile, which has
-# already completed by the time vcpkg hands control back to us. Apple
-# / Windows static-only configs return an empty list and skip the
+# hybrid desktop builds (linux-arm64, linux-x64 / win32-x64 with
+# ENABLE_CUDA) it delivers the CPU-variant / Vulkan / CUDA modules.
+# Glob runs at configure time -- the module files come from ggml-speech's
+# portfile pickup into lib/ (.so on Linux/Android, .dll on Windows),
+# which has already completed by the time vcpkg hands control back to
+# us. Apple / static-only configs return an empty list and skip the
 # install rule below.
 set(BACKEND_DL_LOOSE_SOS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
+if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
   if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
     message(WARNING "tts-ggml: VCPKG_INSTALLED_PATH "
       "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
-      "ggml backend .so pickup -- the runtime may fail to find "
+      "ggml backend module pickup -- the runtime may fail to find "
       "Vulkan / OpenCL / CUDA backends.")
   else()
     file(GLOB BACKEND_DL_LOOSE_SOS
-      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so")
+      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so"
+      "${VCPKG_INSTALLED_PATH}/lib/qvac-speech-ggml-*.dll")
     foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
       message(STATUS "tts-ggml: will stage ggml backend ${_lib}")
     endforeach()

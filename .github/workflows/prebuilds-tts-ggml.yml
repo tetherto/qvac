@@ -45,4 +45,6 @@ jobs:
       include-cuda: true
       platform-cmake-defines: |
         linux-x64: -D ENABLE_CUDA=ON
+        linux-arm64: -D ENABLE_CUDA=ON
+        win32-x64: -D ENABLE_CUDA=ON
     secrets: inherit

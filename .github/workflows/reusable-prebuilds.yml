@@ -83,11 +83,12 @@ on:
         default: "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
       include-cuda:
         description: >-
-          Install a pinned CUDA toolkit on the linux-x64 build so a consumer's
-          speech-cpp cuda feature compiles the ggml CUDA backend. No NVIDIA GPU
-          is needed on the runner (compile-only). Only affects the linux-x64
-          job; everything else is unchanged. Enable the consumer's CUDA cmake
-          option via platform-cmake-defines (e.g. `linux-x64: -D ENABLE_CUDA=ON`).
+          Install a pinned CUDA toolkit on the linux-x64, linux-arm64 and
+          win32-x64 builds so a consumer's speech-cpp cuda feature compiles
+          the ggml CUDA backend. No NVIDIA GPU is needed on the runner
+          (compile-only). Other matrix entries are unchanged. Enable the
+          consumer's CUDA cmake option per platform via platform-cmake-defines
+          (e.g. `linux-x64: -D ENABLE_CUDA=ON`).
         type: boolean
         required: false
         default: false
@@ -308,7 +309,7 @@ jobs:
           gfx: ${{ inputs.rocm-gfx }}
           sha256: ${{ inputs.rocm-sha256 }}
 
-      - if: ${{ inputs.include-cuda && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+      - if: ${{ inputs.include-cuda && (matrix.platform == 'linux' || matrix.platform == 'win32') && matrix.tags == '' }}
         name: Setup CUDA toolkit for nvcc compile
         uses: ./.github/actions/setup-cuda
 
