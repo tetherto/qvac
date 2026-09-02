@@ -385,6 +385,6 @@ jobs:
     if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') && needs.await-ts-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
