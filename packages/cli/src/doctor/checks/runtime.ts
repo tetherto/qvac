@@ -1,4 +1,4 @@
-import type { Check } from '../check.js'
+import type { Check } from '@/doctor/check'
 
 const MIN_NODE_MAJOR = 18
 const RECOMMENDED_NODE_MAJOR = 20
