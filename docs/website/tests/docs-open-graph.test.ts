@@ -41,6 +41,19 @@ describe('isArchivedPage', () => {
     expect(isArchivedPage(page('/reference/api/v0.9.x'))).toBe(true);
   });
 
+  it('returns true for the current-latest versioned URL of every section (301 alias of the shim)', () => {
+    // Under the shim-based layout, the canonical bare path is served by
+    // `index.mdx` which `<include>`s `v<latestSeries>.x.mdx`. The versioned
+    // URL for the current latest is therefore a byte-duplicate of the shim
+    // and is 301-aliased to the bare path in `public/_redirects`. It must
+    // be hidden from sitemap / llms.txt / internal canonical resolution so
+    // crawlers consolidate on the bare canonical URL. This applies to both
+    // API and release-notes sections while a given series is latest —
+    // regardless of whether the section's archives are otherwise hidden.
+    expect(isArchivedPage(page('/reference/api/v0.18.x'))).toBe(true);
+    expect(isArchivedPage(page('/reference/release-notes/v0.18.x'))).toBe(true);
+  });
+
   it('returns false for archived release-notes series (kept indexable)', () => {
     // Each archived release-notes series is a unique historical document
     // describing what changed in that minor line — no duplicate-content
@@ -169,6 +182,19 @@ describe('buildPageCanonicalUrl', () => {
     );
     expect(buildPageCanonicalUrl(['reference', 'api', 'v0.9.x'])).toBe(
       `${DOCS_SITE_ORIGIN}/reference/api/`,
+    );
+  });
+
+  it('redirects the current-latest versioned URL to the section basePath (both sections)', () => {
+    // The shim `index.mdx` at the bare basePath `<include>`s the current
+    // latest series file; the versioned URL is a 301 alias of the shim.
+    // Both API and release-notes must consolidate their `<link rel=canonical>`
+    // on the bare basePath while their series is latest.
+    expect(buildPageCanonicalUrl(['reference', 'api', 'v0.18.x'])).toBe(
+      `${DOCS_SITE_ORIGIN}/reference/api/`,
+    );
+    expect(buildPageCanonicalUrl(['reference', 'release-notes', 'v0.18.x'])).toBe(
+      `${DOCS_SITE_ORIGIN}/reference/release-notes/`,
     );
   });
 

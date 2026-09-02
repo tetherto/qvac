@@ -44,6 +44,17 @@ export const VERSIONS_TS = path.join(
   "versions.ts",
 );
 
+/**
+ * Absolute path to the `_redirects` file the hosting provider (Sevalla)
+ * reads to apply CDN-level redirects. The release orchestrator patches
+ * a single managed block inside it (see `writeLatestSeriesAliasRedirects`).
+ */
+export const REDIRECTS_FILE = path.join(
+  DOCS_WEBSITE_DIR,
+  "public",
+  "_redirects",
+);
+
 export interface SemVer {
   major: number;
   minor: number;
@@ -286,4 +297,164 @@ export async function rewriteFrontmatterTitleLine(
   }
   const newFrontmatter = frontmatter.replace(titleRe, `title: ${fullTitle}`);
   await fs.writeFile(filePath, newFrontmatter + body, "utf-8");
+}
+
+/**
+ * Read the value of a single frontmatter field from an MDX file without
+ * pulling in a YAML parser. Returns the trimmed line body (everything
+ * after the first `:`), or `null` when the file is missing frontmatter
+ * or the field is absent.
+ *
+ * The docs pipeline's frontmatter is intentionally minimal (title,
+ * description, a couple of scalar overrides). A regex is enough — a
+ * full parser would bring in a big dep tree just to be tolerant of
+ * shapes the pipeline never emits.
+ */
+export async function readFrontmatterField(
+  filePath: string,
+  field: string,
+): Promise<string | null> {
+  const existing = await fs.readFile(filePath, "utf-8");
+  if (!existing.startsWith("---\n")) return null;
+  const closing = existing.indexOf("\n---", 4);
+  if (closing < 0) return null;
+  const frontmatter = existing.slice(0, closing + 4);
+  const re = new RegExp(`^${field}:\\s*(.*)$`, "m");
+  const match = re.exec(frontmatter);
+  if (!match) return null;
+  return match[1].trim();
+}
+
+/**
+ * Rewrite the frontmatter `description:` line of an MDX file, preserving
+ * the body byte-for-byte. Injects a description line right after `title:`
+ * if none exists.
+ *
+ * Used by the patch flow to keep the shim's advertised release range in
+ * sync with the versioned file's after a new patch is inserted.
+ */
+export async function rewriteFrontmatterDescriptionLine(
+  filePath: string,
+  fullDescription: string,
+): Promise<void> {
+  const existing = await fs.readFile(filePath, "utf-8");
+  if (!existing.startsWith("---\n")) {
+    throw new Error(
+      `Description rewrite requires an existing MDX with frontmatter: ${filePath}`,
+    );
+  }
+  const closing = existing.indexOf("\n---", 4);
+  if (closing < 0) {
+    throw new Error(
+      `Description rewrite: could not find frontmatter terminator in ${filePath}`,
+    );
+  }
+  const frontmatter = existing.slice(0, closing + 4);
+  const body = existing.slice(closing + 4);
+
+  const descRe = /^description:.*$/m;
+  if (descRe.test(frontmatter)) {
+    const updated = frontmatter.replace(
+      descRe,
+      `description: ${fullDescription}`,
+    );
+    await fs.writeFile(filePath, updated + body, "utf-8");
+    return;
+  }
+
+  const titleRe = /^(title:.*)$/m;
+  if (!titleRe.test(frontmatter)) {
+    throw new Error(
+      `Description rewrite: no \`description:\` or \`title:\` line in ${filePath}`,
+    );
+  }
+  const updated = frontmatter.replace(
+    titleRe,
+    `$1\ndescription: ${fullDescription}`,
+  );
+  await fs.writeFile(filePath, updated + body, "utf-8");
+}
+
+/**
+ * (Re)write the `index.mdx` shim of a versioned section so it points at
+ * the given series file via Fumadocs' native `<include>` tag. The shim
+ * is intentionally minimal: frontmatter with the "(latest)" label, one
+ * blank line, and the include directive.
+ *
+ * Fumadocs' `remarkInclude` plugin (already in the default plugin chain
+ * — see `fumadocs-mdx/config`) expands the include at MDX-parse time,
+ * BEFORE TOC extraction and heading decoration run. The rendered page
+ * is therefore byte-identical to what a direct copy of `<seriesFile>`
+ * would produce, but the on-disk `index.mdx` stays a tiny fixed
+ * template that only carries the frontmatter and the single include
+ * line.
+ *
+ * The whole point of the shim (see the design doc for the "versioned
+ * docs reorg") is that this file only ever changes across minor
+ * releases — a 1-line diff on the include target, plus the frontmatter
+ * range/label refresh. Patches don't touch it at all except for the
+ * description range (see `rewriteFrontmatterDescriptionLine`).
+ */
+export async function writeShim(
+  sectionDir: string,
+  seriesFile: string,
+  title: string,
+  description: string,
+): Promise<void> {
+  const target = path.join(sectionDir, "index.mdx");
+  const body = [
+    "---",
+    `title: ${title}`,
+    `description: ${description}`,
+    "---",
+    "",
+    `<include>./${seriesFile}</include>`,
+    "",
+  ].join("\n");
+  await fs.writeFile(target, body, "utf-8");
+}
+
+/**
+ * Rewrite the managed block inside `public/_redirects` that aliases the
+ * latest-series versioned paths to the canonical bare paths. Delimited
+ * by two literal marker lines:
+ *
+ *   `# ==== BEGIN latest-series alias (managed) ====`
+ *   `# ==== END latest-series alias (managed) ====`
+ *
+ * Everything between them is replaced atomically; everything else in
+ * the file stays byte-for-byte. Called by the minor release flow when
+ * the latest series rotates.
+ *
+ * `latestSeries` is the series slug (`vX.Y.x`, literal `x`). Both the
+ * trailing-slash and bare forms are emitted for both sections because
+ * Sevalla's Pretty URLs skips dotted final segments — see the surrounding
+ * commentary in `_redirects` for the full rationale.
+ */
+export async function writeLatestSeriesAliasRedirects(
+  latestSeries: string,
+  redirectsPath: string = REDIRECTS_FILE,
+): Promise<void> {
+  const BEGIN = "# ==== BEGIN latest-series alias (managed) ====";
+  const END = "# ==== END latest-series alias (managed) ====";
+  const existing = await fs.readFile(redirectsPath, "utf-8");
+  const beginIdx = existing.indexOf(BEGIN);
+  const endIdx = existing.indexOf(END);
+  if (beginIdx < 0 || endIdx < 0 || endIdx < beginIdx) {
+    throw new Error(
+      `Managed latest-series alias block not found in ${redirectsPath}. ` +
+        `Expected markers "${BEGIN}" and "${END}".`,
+    );
+  }
+  // Preserve the BEGIN line, replace body, restore the END line.
+  const before = existing.slice(0, beginIdx);
+  const after = existing.slice(endIdx + END.length);
+  const rules = [
+    `/reference/api/${latestSeries}/             /reference/api/               301`,
+    `/reference/api/${latestSeries}              /reference/api/               301`,
+    `/reference/release-notes/${latestSeries}/   /reference/release-notes/     301`,
+    `/reference/release-notes/${latestSeries}    /reference/release-notes/     301`,
+  ].join("\n");
+  const replacement = [BEGIN, rules, END].join("\n");
+  await fs.writeFile(redirectsPath, before + replacement + after, "utf-8");
 }

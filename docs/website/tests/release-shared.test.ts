@@ -13,20 +13,25 @@ import { describe, it, expect } from 'vitest'
 import {
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
-  writeFileSync as _w, // alias to silence "unused" if needed
 } from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import {
   parseVersion,
+  readFrontmatterField,
+  rewriteFrontmatterDescriptionLine,
   sameMinor,
   readLatestFromVersionsTs,
   resolveArchivedSibling,
   resolveSeriesSibling,
   seriesName,
   seriesFileName,
+  writeLatestSeriesAliasRedirects,
+  writeShim,
+  REDIRECTS_FILE,
 } from '../scripts/lib/release-shared'
 
 function makeTempDir(): string {
@@ -272,5 +277,199 @@ describe('resolveSeriesSibling', () => {
 
   it('returns null when the directory does not exist', async () => {
     expect(await resolveSeriesSibling('/no/such/dir', 0, 9)).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// writeShim — atomic shim template writer for section index.mdx
+// ---------------------------------------------------------------------------
+
+describe('writeShim', () => {
+  it('writes a minimal shim with frontmatter + <include> pointing at the given series file', async () => {
+    const dir = makeTempDir()
+    try {
+      await writeShim(
+        dir,
+        'v0.18.x.mdx',
+        'SDK Release Notes — v0.18.x (latest)',
+        'Release notes for QVAC SDK v0.18.0.',
+      )
+      const content = readFileSync(path.join(dir, 'index.mdx'), 'utf-8')
+      expect(content).toBe(
+        '---\n' +
+          'title: SDK Release Notes — v0.18.x (latest)\n' +
+          'description: Release notes for QVAC SDK v0.18.0.\n' +
+          '---\n' +
+          '\n' +
+          '<include>./v0.18.x.mdx</include>\n',
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('overwrites an existing index.mdx (used by minor rotation)', async () => {
+    const dir = makeTempDir()
+    try {
+      writeFileSync(path.join(dir, 'index.mdx'), 'stale content\n')
+      await writeShim(dir, 'v0.19.x.mdx', 'title-x', 'desc-x')
+      const content = readFileSync(path.join(dir, 'index.mdx'), 'utf-8')
+      expect(content).toContain('<include>./v0.19.x.mdx</include>')
+      expect(content).not.toContain('stale content')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// readFrontmatterField / rewriteFrontmatterDescriptionLine
+// ---------------------------------------------------------------------------
+
+describe('readFrontmatterField', () => {
+  it('returns the trimmed value of a scalar field', async () => {
+    const dir = makeTempDir()
+    try {
+      const file = path.join(dir, 'sample.mdx')
+      writeFileSync(
+        file,
+        [
+          '---',
+          'title: Some Title',
+          'description: Lists all releases from v0.18.0 to v0.18.2.',
+          '---',
+          '',
+          'body',
+        ].join('\n'),
+      )
+      expect(await readFrontmatterField(file, 'title')).toBe('Some Title')
+      expect(await readFrontmatterField(file, 'description')).toBe(
+        'Lists all releases from v0.18.0 to v0.18.2.',
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('returns null when the field is absent', async () => {
+    const dir = makeTempDir()
+    try {
+      const file = path.join(dir, 'sample.mdx')
+      writeFileSync(file, ['---', 'title: T', '---', '', 'body'].join('\n'))
+      expect(await readFrontmatterField(file, 'description')).toBeNull()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('rewriteFrontmatterDescriptionLine', () => {
+  it('rewrites an existing description line, preserves title + body', async () => {
+    const dir = makeTempDir()
+    try {
+      const file = path.join(dir, 'sample.mdx')
+      writeFileSync(
+        file,
+        [
+          '---',
+          'title: T',
+          'description: OLD',
+          '---',
+          '',
+          '## Heading',
+          'body text',
+        ].join('\n'),
+      )
+      await rewriteFrontmatterDescriptionLine(file, 'NEW')
+      const updated = readFileSync(file, 'utf-8')
+      expect(updated).toContain('description: NEW')
+      expect(updated).not.toContain('description: OLD')
+      expect(updated).toContain('title: T')
+      expect(updated).toContain('## Heading')
+      expect(updated).toContain('body text')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('injects a description line right after title: when absent', async () => {
+    const dir = makeTempDir()
+    try {
+      const file = path.join(dir, 'sample.mdx')
+      writeFileSync(file, ['---', 'title: T', '---', '', 'body'].join('\n'))
+      await rewriteFrontmatterDescriptionLine(file, 'NEW')
+      const updated = readFileSync(file, 'utf-8')
+      expect(updated).toMatch(/title: T\ndescription: NEW\n---/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// writeLatestSeriesAliasRedirects — managed block replacement in _redirects
+// ---------------------------------------------------------------------------
+
+describe('writeLatestSeriesAliasRedirects', () => {
+  const BEGIN = '# ==== BEGIN latest-series alias (managed) ===='
+  const END = '# ==== END latest-series alias (managed) ===='
+
+  it('replaces the body between BEGIN/END markers, preserves surrounding content', async () => {
+    const dir = makeTempDir()
+    try {
+      const file = path.join(dir, '_redirects')
+      writeFileSync(
+        file,
+        [
+          '# top of file (preserved)',
+          BEGIN,
+          '/reference/api/v0.17.x/             /reference/api/               301',
+          '/reference/api/v0.17.x              /reference/api/               301',
+          '/reference/release-notes/v0.17.x/   /reference/release-notes/     301',
+          '/reference/release-notes/v0.17.x    /reference/release-notes/     301',
+          END,
+          '# bottom of file (preserved)',
+          '',
+        ].join('\n'),
+      )
+      await writeLatestSeriesAliasRedirects('v0.18.x', file)
+      const updated = readFileSync(file, 'utf-8')
+      expect(updated).toContain('# top of file (preserved)')
+      expect(updated).toContain('# bottom of file (preserved)')
+      expect(updated).toContain('/reference/api/v0.18.x/             /reference/api/')
+      expect(updated).toContain('/reference/release-notes/v0.18.x    /reference/release-notes/')
+      // Outgoing series must be fully gone from the managed block.
+      expect(updated).not.toContain('v0.17.x')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('throws with a clear error when the markers are missing', async () => {
+    const dir = makeTempDir()
+    try {
+      const file = path.join(dir, '_redirects')
+      writeFileSync(file, '# no markers here\n')
+      await expect(
+        writeLatestSeriesAliasRedirects('v0.18.x', file),
+      ).rejects.toThrow(/Managed latest-series alias block not found/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('produces stable output across two consecutive rotations to the same series (idempotent)', async () => {
+    const dir = makeTempDir()
+    try {
+      const file = path.join(dir, '_redirects')
+      writeFileSync(file, [BEGIN, 'placeholder', END, ''].join('\n'))
+      await writeLatestSeriesAliasRedirects('v0.20.x', file)
+      const first = readFileSync(file, 'utf-8')
+      await writeLatestSeriesAliasRedirects('v0.20.x', file)
+      const second = readFileSync(file, 'utf-8')
+      expect(second).toBe(first)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

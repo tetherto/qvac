@@ -15,7 +15,6 @@
     "docs:audit-tsdoc": "bun run scripts/api-docs/audit-tsdoc.ts",
     "docs:generate-api": "bun run scripts/generate-api-docs.ts",
     "docs:update-versions": "bun run scripts/update-versions-list.ts",
-    "docs:create-version": "bun run scripts/create-version-bundle.ts",
     "docs:release-version": "bun run scripts/release-version.ts",
     "docs:generate-release-notes": "bun run scripts/generate-release-notes.ts",
     "test": "vitest run",

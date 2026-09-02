@@ -41,6 +41,28 @@
 /:a/:b/:c/              /:a/:b/:c.md               303!   Header:Accept=text/markdown
 /:a/:b/:c/:d/           /:a/:b/:c/:d.md            303!   Header:Accept=text/markdown
 
+# Latest-series alias — the current latest minor exists as BOTH the shim
+# `index.mdx` (canonical, served at the bare basePath) AND a versioned
+# `vX.Y.x.mdx` sibling that the shim `<include>`s. Both URLs would
+# otherwise serve identical content (duplicate route + duplicate content
+# for crawlers). Redirect the versioned path to the canonical bare path
+# so search engines consolidate on one URL and the shim is the single
+# entry point for the "latest" series.
+#
+# MUST come before the `:version` wildcards below (first-match-wins).
+# Both slash forms are listed because Sevalla's Pretty URLs skips
+# dotted final segments (same reasoning documented for the wildcard
+# block below).
+#
+# Updated by `scripts/release-version-minor.ts` on every minor release
+# (remove the outgoing latest's rules, add the incoming latest's rules).
+# ==== BEGIN latest-series alias (managed) ====
+/reference/api/v0.18.x/             /reference/api/               301
+/reference/api/v0.18.x              /reference/api/               301
+/reference/release-notes/v0.18.x/   /reference/release-notes/     301
+/reference/release-notes/v0.18.x    /reference/release-notes/     301
+# ==== END latest-series alias (managed) ====
+
 # Sevalla CDN does not resolve directory-to-index.html for path segments
 # containing dots (e.g. `v0.7.x`). The `:version` placeholder matches a
 # single path segment between slashes; the `200` rule rewrites each

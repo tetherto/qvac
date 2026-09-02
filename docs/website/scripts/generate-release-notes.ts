@@ -5,11 +5,13 @@
  *
  * Page model
  * ----------
- * Each minor line has a single permanent MDX page that accumulates patch
- * sections as `## vX.Y.Z` blocks:
- *
- *   - latest minor series → `content/docs/reference/release-notes/index.mdx`
- *   - older minor series  → `content/docs/reference/release-notes/v<X.Y>.x.mdx`
+ * Every minor line lives at `content/docs/reference/release-notes/v<X.Y>.x.mdx`
+ * — no exception for the current latest. The bare canonical URL
+ * `/reference/release-notes` is served by the shim `index.mdx`, which
+ * `<include>`s the current latest series file via Fumadocs'
+ * `remarkInclude` plugin. Rotating latest is a shim rewrite + a
+ * `_redirects` block update (see `release-version-minor.ts`); this
+ * script never has to know which minor is the current latest.
  *
  * The `## vX.Y.0` block is written by the minor release; subsequent
  * patches insert their `## vX.Y.Z` section directly after the minor
@@ -37,15 +39,13 @@
  *   v0.X.<N>" range. Re-running with the same patch is idempotent —
  *   the existing section is replaced in place.
  * - **`--title-only`**: rewrites only the frontmatter `title:` line of
- *   the existing target MDX. Used by the minor orchestrator to relabel
- *   a freshly-frozen series snapshot from `vX.Y.x (latest)` to plain
- *   `vX.Y.x` without touching the body.
+ *   the existing target MDX. Handy for one-off relabel of a series
+ *   page without re-rendering its body.
  *
  * Targets
  * -------
- * - `--latest`: write to `index.mdx`
- * - `--target=<file>`: write to `release-notes/<file>` (used by the
- *   patch-archived flow to address `vX.Y.x.mdx`)
+ * - `--target=<file>`: write to `release-notes/<file>` (used by both
+ *   patch flows to address `vX.Y.x.mdx` explicitly)
  * - otherwise: default to the series-named sibling
  *   `vX.Y.x.mdx` derived from the version arg
  *
@@ -243,7 +243,6 @@ function gatherVerbatim(
 async function main() {
   const args = process.argv.slice(2);
   const version = args.find((arg) => !arg.startsWith("--"));
-  const isLatest = args.includes("--latest");
   const appendPatch = args.includes("--append-patch");
   const titleOnly = args.includes("--title-only");
   const targetFlag = args.find((arg) => arg.startsWith("--target="));
@@ -251,15 +250,17 @@ async function main() {
 
   if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
     console.error(
-      "Usage: bun run scripts/generate-release-notes.ts <version> [--latest] [--target=<file>] [--append-patch] [--title-only]",
+      "Usage: bun run scripts/generate-release-notes.ts <version> [--target=<file>] [--append-patch] [--title-only]",
     );
     console.error("  version must be semver (e.g. 0.11.1)");
     process.exit(1);
   }
 
-  if (isLatest && target) {
+  if (args.includes("--latest")) {
     console.error(
-      "Error: --latest and --target=<file> are mutually exclusive.",
+      "Error: --latest is no longer supported. Under the shim-based layout every\n" +
+        "series (including the current latest) lives at v<X.Y>.x.mdx. The default\n" +
+        "target already resolves to that filename; drop the flag.",
     );
     process.exit(1);
   }
@@ -283,26 +284,23 @@ async function main() {
   );
 
   // Resolve the output target. Default falls back to the series-named
-  // sibling for the version's minor — generic enough that callers don't
-  // need to know about the new naming convention.
+  // sibling for the version's minor.
   const outputPath = resolve(
     releaseNotesDir,
-    target ??
-      (isLatest ? "index.mdx" : seriesFileName(parsed.major, parsed.minor)),
+    target ?? seriesFileName(parsed.major, parsed.minor),
   );
 
   // -------------------------------------------------------------------
-  // Title-only path — relabel a freshly-frozen archived snapshot.
+  // Title-only path — relabel a series page without touching the body.
   // -------------------------------------------------------------------
   if (titleOnly) {
-    const titleLabel = isLatest ? `${series} (latest)` : series;
-    console.log(`📝 Title-only update for SDK Release Notes — ${titleLabel}...`);
+    console.log(`📝 Title-only update for SDK Release Notes — ${series}...`);
     console.log(`   Target: ${outputPath}`);
     await rewriteFrontmatterTitleLine(
       outputPath,
-      `SDK Release Notes — ${titleLabel}`,
+      `SDK Release Notes — ${series}`,
     );
-    console.log(`✅ Title-only update complete (${titleLabel})`);
+    console.log(`✅ Title-only update complete (${series})`);
     return;
   }
 
@@ -425,9 +423,7 @@ async function main() {
     );
   }
 
-  const pageTitle = isLatest
-    ? `SDK Release Notes — ${series} (latest)`
-    : `SDK Release Notes — ${series}`;
+  const pageTitle = `SDK Release Notes — ${series}`;
   const pageDescription = describeReleaseRange([`v${version}`], series);
 
   const rendered = nunjucks.render("release-notes-page.njk", {
