@@ -641,9 +641,12 @@ jobs:
         working-directory: .
         if: runner.environment != 'github-hosted'
 
+      # Deliberately no `test-version` here: this job executes the checked-out
+      # code on a persistent runner, so it only ever builds the ref the
+      # workflow was dispatched on — the dispatch branch picker is the way to
+      # choose what to calibrate (CodeQL: cache poisoning via untrusted ref).
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ inputs.test-version || github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
