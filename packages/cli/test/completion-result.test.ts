@@ -5,8 +5,8 @@ import { InferenceCancelledError } from '@qvac/sdk'
 import {
   drainCompletion,
   completionTokensFromStats
-} from '../src/serve/adapters/openai/completion-result.js'
-import { HttpError } from '../src/serve/lib/http-error.js'
+} from '@/serve/adapters/openai/completion-result'
+import { HttpError } from '@/serve/lib/http-error'
 
 function fakeRun(opts: {
   tokens?: string[]
