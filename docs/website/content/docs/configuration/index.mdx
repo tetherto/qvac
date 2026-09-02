@@ -115,7 +115,7 @@ Model types (allowed keys): `llm` | `embeddings` | `whisper` | `parakeet` | `bci
 | `models` | Map of model aliases to model entries (see [`ModelEntry`](#modelentry) below). Required when running the server. | `Record<string, string \| ModelEntry>` | Yes | — |
 | `publicBaseUrl` | Externally reachable origin (e.g., `"https://api.example.com"`). Required for image `response_format=url`. Must start with `http://` or `https://`. The CLI flag `--public-base-url` overrides this value. | `string` | No | — |
 | `cors` | Browser origins trusted to make cross-origin requests. See [`CorsOptions`](#corsoptions). | `CorsOptions` | No | — |
-| `openai` | OpenAI-adapter–specific options. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
+| `openai` | Options for the `openai` extension, mounted with `qvac serve --openai`. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
 
 #### `CorsOptions`
 
@@ -177,7 +177,7 @@ Example:
 
 #### `LoadOptions` (`serve.load`)
 
-Controls how models are loaded on demand. Each field has a matching CLI flag on `qvac serve openai`.
+Controls how models are loaded on demand. Each field has a matching CLI flag on `qvac serve`.
 
 | Field | Description | Type | Required | Default |
 | --- | --- | --- | --- | --- |

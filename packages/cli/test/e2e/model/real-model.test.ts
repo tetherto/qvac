@@ -6,6 +6,7 @@ import { useModelServer } from '../helpers/server.js'
 import { assertError, multipart, collectSSE, assertStatusAndError } from '../helpers/http.js'
 import { MODEL_CONFIG, E2E } from '../helpers/config.js'
 import { silenceWav, tinyPng, textFile } from '../helpers/fixtures.js'
+import { openaiState } from '@/serve/extensions/openai/state'
 
 // One shared in-process server preloads the small models (LLM, embedding,
 // Whisper ×2). test-video stays preload:false so its requests reach the model check.
@@ -65,7 +66,7 @@ describe('models', () => {
     const res = await post('/v1/embeddings', { model: E2E.embedLazy, input: 'lazy load me' })
     assert.equal(res.statusCode, 200)
     const body = res.json() as { data: Array<{ embedding: number[] }> }
-    assert.ok(body.data[0]?.embedding.length > 0)
+    assert.ok(body.data[0]!.embedding.length > 0)
 
     assert.equal(registry.getEntry(E2E.embedLazy)?.state, registry.STATES.READY)
   })
@@ -690,7 +691,7 @@ describe('vector stores', () => {
 
 describe('responses API', () => {
   it('startup banner documents the volatile store', () => {
-    assert.match(server().qvac.responsesStore.bannerLine(), /in-memory only/i)
+    assert.match(openaiState(server().qvac).responsesStore.bannerLine(), /in-memory only/i)
   })
 
   it('blocking completion returns response shape and stub header', async () => {

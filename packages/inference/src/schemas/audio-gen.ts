@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 import { audioInputSchema, type AudioInput } from '@/schemas/transcription'
+import {
+  inferenceBackendDiagnosticsSchema,
+  type InferenceBackendDiagnostics
+} from '@/schemas/system-resources'
 import { encodeBase64 } from '@/utils/encoding'
 
 const base64Schema = z.string().min(1)
@@ -373,7 +377,12 @@ export const audioGenStreamResponseSchema = z
     bitsPerSample: z.number().int().positive().optional(),
     done: z.boolean().default(false),
     stopReason: z.enum(['completed', 'cancelled']).optional(),
-    stats: audioGenStatsSchema.optional()
+    stats: audioGenStatsSchema.optional(),
+    diagnostics: inferenceBackendDiagnosticsSchema
+      .optional()
+      .describe(
+        'Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
+      )
   })
   .strict()
 
@@ -404,4 +413,5 @@ export interface AudioGenResult {
   progressStream: AsyncGenerator<AudioGenProgress>
   audio: Promise<AudioGenAudio>
   stats: Promise<AudioGenStats | undefined>
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
 }
