@@ -93,17 +93,18 @@ the validated end-user configuration:
 
 | requirement | minimum (832x480 interactive) | notes |
 |---|---|---|
-| GPU VRAM | **≥ 20 GB free**; a **24 GB card is the practical minimum** | 16.3 GB steady (weights + F32 KV ring) + ~2.7 GB transient compute at the first block. The card must be *dedicated*: another process holding VRAM OOMs the first walk block even though load succeeds (see [Troubleshooting](#troubleshooting)) |
+| GPU VRAM | **a dedicated ≥ 16 GB card** (Vulkan build) | 11.5 GB steady + ~3 GB transient compute at the first block on the shipped Vulkan build. The CUDA build uses an F32 KV ring and needs **24 GB** (16.3 GB steady). Either way the card must be *dedicated*: another process holding VRAM OOMs the first walk block even though load succeeds (see [Troubleshooting](#troubleshooting)) |
 | host RAM | 4 GB process / **8 GB system** | 3.1 GB max RSS measured; 8 GB keeps the 7.3 GB walk model set page-cached |
 | CPU | 2 physical cores | ~1.1 cores average during a walk |
 | disk | **14 GB** (7.3 GB if scenes are created elsewhere) | 4 GGUFs + scene packs |
-| PSU / thermal | ~450 W sustained per GPU | the walk holds 50–83 % GPU utilization |
+| PSU / thermal | ~450 W sustained per GPU | the walk holds ~74 % GPU utilization |
 
 **Optimal setup:** an RTX 5090-class GPU with nothing else resident,
-`ABOT_KV_CACHE=1`, and NVMe storage (cold model load ~12 s, warm 1.5 s).
+`ABOT_KV_CACHE=1`, and NVMe storage (cold model load ~12 s, warm ~2 s).
 With two GPUs, split the modules — `ABOT_BACKEND="diffusion=cuda0,vae=cuda1"`
-— to keep scene creation off the walk GPU. Measured at this tier: **1.78
-s/block, 6.7–6.8 fps generation, 16.3 GB peak VRAM**, flat across 45+ blocks.
+— to keep scene creation off the walk GPU. Measured at this tier with the
+walk performance improvements: **1.28 s/block, ~9.4 fps generation, 14.6 GB
+peak VRAM (Vulkan)**, flat across 45+ blocks.
 
 **Low-VRAM tier:** 448x256 walks run on ~6 GB GPUs (validated on a laptop
 RTX 4050) — usable for development, far below interactive frame rates.
@@ -274,6 +275,10 @@ Key API facts:
   against the compiled KV ring and **fails at load** on an unsupported
   combination), `offloadParamsToCpu`, `frameJpegQuality` (0 = PNG, 1..100 =
   JPEG), `kvCache`, `profile`. Types ship in `world.d.ts`.
+  `frameJpegQuality` is validated with `Number.isInteger`, so pass a **number**
+  — a caller reading it from an environment variable or query string must
+  coerce (`Number(process.env.ABOT_JPEG_QUALITY)`); the string `'85'` throws.
+  The launcher env names below map to these config fields.
 - **Keys**: object `{ W: true, L: true }`, array `['S','J']`, or a raw mask
   built from the exported `ActionFlag` named bits
   (`world.step(ActionFlag.W | ActionFlag.L)`; bit 0..7 = `W A S D I J K L`;
@@ -300,34 +305,73 @@ Key API facts:
 - **Sizing**: 832x480 native quality (390 latent tokens/frame), 448x256 for
   ~6 GB GPUs. Attention cost scales ~quadratically with pixel area.
 
+## Prompt behaviour
+
+The prompt conditions a world, but through a much weaker channel than the
+image — this matches the PyTorch reference exactly (all 512 padded rows enter
+cross-attention with no truncation; there is no classifier-free guidance
+anywhere in the reference, and image conditioning arrives through far stronger
+channels: first-frame clean-latent replacement and reference tokens in
+self-attention). Text still conditions the walk in the semantically right
+direction for global appearance, while scene geometry stays governed by the
+image. Measured, same image and seed, only the prompt differing (832x480 Q8):
+
+| prompt | mean frame luma |
+|---|---|
+| *(text removed entirely)* | 140.0 |
+| "snowy winter street **at night**, dark sky" | **81.8** |
+| "sunny tropical beach, **bright daylight**" | **152.5** |
+
+Three rules worth knowing:
+
+1. **The effect builds over the rollout.** Early blocks stay pinned to the
+   photo; walk 20–30 blocks before judging. A 3-block test shows almost
+   nothing — by block 5+ a night/snow prompt produces a dark, snow-covered
+   world.
+2. **Atmosphere words work; object words mostly don't.** Lighting, time of
+   day, weather, season, and ground surface take; objects absent from the
+   source image rarely appear.
+3. **The prompt is applied at world creation only.** Changing it means
+   creating a new world.
+
+A note for anyone tempted to "strengthen" text by trimming the ~490 zero
+padding rows so the real tokens get the full attention mass: it was tried and
+measured, and it **destroys generation** (output collapses to near-black
+within one block). The model was trained with a fixed 512-row context whose
+padding rows act as attention sinks — the padding must be present, and it must
+be zeroed. A pack whose padding is *not* zeroed (the shape of the 2026-08-11
+regression) instead conditions the walk on live pad-token embeddings and
+washes the output out; the scene-pack log line `scene pack: prompt rows N live
+/ 512` reports the live-row count, and the CI guards fail if `N == 512`.
+
 ## Performance vs the PyTorch reference
 
 Measured on the same RTX 5090, same 16-block walk (832x480, 12 frames/block):
-QVAC = this addon (Q8 DiT, KV cache); reference = the upstream
-`ABot-World` PyTorch pipeline in its deployed default quantization
-(fp8-per-token, Triton SLA attention).
+QVAC = this addon (Vulkan, Q8 DiT, KV cache) with the walk performance
+improvements; reference = the upstream `ABot-World` PyTorch pipeline in its
+deployed default quantization (fp8-per-token, Triton SLA attention).
 
 | metric (walk phase) | QVAC addon | PyTorch reference |
 |---|---|---|
-| block time / generation rate | 1758 ms — **6.8 fps** | ~420 ms — **28.5 fps** |
-| GPU utilization (avg) | 73.9 % | 73.6 % |
-| VRAM peak | 16.3 GB | 10.6 GB |
+| block time / generation rate | 1280 ms — **9.4 fps** | ~420 ms — **28.5 fps** |
+| GPU utilization (avg) | ~74 % | 73.6 % |
+| VRAM peak | 14.6 GB (Vulkan) · 16.3 GB (CUDA build) | 10.6 GB |
 | host RAM peak | **3.1 GB** | **43.6 GB** (load/quantize; 17.5 GB steady) |
 | CPU load (avg) | 1.1 cores | 2.3 cores |
-| time to first frame | **1.5 s** (warm) | **~54 s** (load + on-the-fly fp8 quantize) |
+| time to first frame | **~2 s** (warm) | **~54 s** (load + on-the-fly fp8 quantize) |
 | on-disk footprint | 13.3 GB models + 257 MB addon | ~28 GB checkpoints + ~10 GB Python venv |
 | software stack | bare runtime only | Python + torch/cu129 + Triton |
 
-The honest headline: **the QVAC build is ~4.2x slower per block** — the
-biggest known con of the current implementation. Both stacks saturate the GPU
-to the same utilization; the gap is per-op efficiency (the reference's fused
-SLA attention + fp8 GEMMs vs ggml kernels plus a masked-attention composition
-kept compatible with the registry ggml — the fused-softmax kernel in a newer
-ggml would reclaim ~15 % on its own). What QVAC buys for that price: 36x
-faster startup, 14x less host RAM, half the CPU, ~2.5x less disk, higher VRAM
-need (+5.7 GB, the F32 KV ring — an F16 ring upstream would swing VRAM below
-the reference too), and zero Python — a single self-contained native module
-that embeds in bare/Node apps.
+The honest headline: **the QVAC build is ~3x slower per block** — still the
+biggest known con, though the walk perf work (retained compute buffer, fused
+masked softmax, reused action planes, direct-conv decode, tensor-core score
+matmul) cut it from ~2.25 s to 1.28 s/block. Both stacks saturate the GPU to
+the same utilization; the remaining gap is per-op efficiency — the reference's
+fused SLA attention + fp8 GEMMs vs ggml's Vulkan Q8 path, which still routes
+its quantized GEMMs through dequant→f16 rather than tensor cores. What QVAC
+buys for that price: ~27x faster startup, 14x less host RAM, half the CPU,
+~2.5x less disk, and zero Python — a single self-contained native module that
+embeds in bare/Node apps.
 
 ## Validation
 
@@ -345,12 +389,13 @@ validated hands-on on an RTX 5090 with zero errors and flat VRAM.
 **1. OOM at the first walk block — but the session loaded fine.**
 Signature: `ggml_backend_cuda_buffer_type_alloc_buffer: ... cudaMalloc
 failed: out of memory` then `ABot-World walk step failed`. Loading only
-allocates the persistent ~16.3 GB; the first block adds a ~2.7 GB transient
-compute reservation, and that is what tips over when **another process holds
-VRAM on the same GPU** (this makes it look like a walk bug — it isn't). Check
-`nvidia-smi` for co-tenants first; free the card or move to a dedicated one
-(≥ 20 GB free). Dropping to 448x256 or `kvCache: false` also fits smaller
-budgets, at a heavy speed cost.
+allocates the persistent working set (11.5 GB Vulkan, 16.3 GB on the CUDA
+build's F32 KV ring); the first block adds a ~3 GB transient compute
+reservation, and that is what tips over when **another process holds VRAM on
+the same GPU** (this makes it look like a walk bug — it isn't). Check
+`nvidia-smi` for co-tenants first; free the card or move to a dedicated one.
+Dropping to 448x256 or `kvCache: false` also fits smaller budgets, at a heavy
+speed cost.
 
 **2. "failed to create ABot-World walk session" at startup.**
 The scene pack (`ABOT_SCENE` / `scene.safetensors`) does not exist yet. The
