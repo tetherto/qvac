@@ -36,8 +36,12 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 Create your RAG pipeline using [text embeddings](/ai-capabilities/text-embeddings), the functions above, and [completion](/ai-capabilities/text-generation).
 
 Regarding vector storage, you may use:
+- **External vector DB:** use [`embed()`](/reference/api#embed) to generate vectors and store them wherever you want (e.g., MongoDB, LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
 - **Built-in vector store:** use the RAG workspace functions ([`ragIngest()`](/reference/api#ragingest), [`ragSearch()`](/reference/api#ragsearch), etc.). QVAC persists the vectors for you, so this is the simplest path.
-- **External vector DB:** use the embedding primitives ([`ragChunk()`](/reference/api#ragchunk), [`embed()`](/reference/api#embed)) and store the vectors wherever you want (e.g., MongoDB, LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
+
+<Callout type="warn">
+**Built-in vector store is not production grade** and is intended for prototypes only. For production workloads, use one of the external vector DB paths shown below (MongoDB, SQLite, LanceDB, Chroma, etc.).
+</Callout>
 
 <Callout type="info">
 **Important:** when using an external vector DB, make sure its schema matches the embedding dimensionality produced by your model (e.g., GTE Large embeddings used in the example are 1024‑dimensional).
@@ -46,6 +50,10 @@ Regarding vector storage, you may use:
 ## Examples
 
 ### Built-in vector store
+
+<Callout type="warn">
+**Prototype only** — for production, prefer an external vector DB (below).
+</Callout>
 
 The following script shows how to ingest documents into a built-in RAG workspace with `ragIngest()` and query them with `ragSearch()`, without setting up an external vector DB:
 

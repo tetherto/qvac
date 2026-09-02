@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ModelConstant } from '@qvac/sdk'
-import { createModelRegistry } from '../src/serve/core/model-registry.js'
-import type { ResolvedModelEntry, ServeConfig } from '../src/serve/core/model-registry.js'
-import { buildCatalog, filterCatalog, paginate } from '../src/serve/core/model-catalog.js'
+import { createModelRegistry } from '@/serve/core/model-registry'
+import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/model-registry'
+import { buildCatalog, filterCatalog, paginate } from '@/serve/core/model-catalog'
 
 function constant(name: string, over: Partial<ModelConstant> = {}): ModelConstant {
   return {
