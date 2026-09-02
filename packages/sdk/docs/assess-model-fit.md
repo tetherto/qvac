@@ -2,8 +2,9 @@
 
 `assessModelFit` answers one question before anything is downloaded: is this
 model likely to fit in this device's memory? It reads generated catalog metadata
-and a fresh system-memory sample. It never downloads weights, never loads a
-model, and never runs a native probe.
+and a fresh memory sample — system-wide or process-scoped, depending on the
+result's [`basis`](#policy-interactive-v1). It never downloads weights, never
+loads a model, and never runs a native probe.
 
 It is **advisory**. It does not block `loadModel`, reserve memory, choose a
 model for you, or make any claim about speed.
@@ -54,19 +55,34 @@ reserve anything on the strength of it.
 
 ### `policy: 'interactive-v1'`
 
-Headroom left for the rest of the system: the larger of 2 GiB or 15% of total
-RAM on desktop, the larger of 1 GiB or 20% on mobile.
+Headroom withheld from the budget: the larger of 2 GiB or 15% of `total` on
+desktop, the larger of 1 GiB or 20% on mobile — the percentage applies to
+whatever `total` means under the result's `basis`. Under `system-memory` that
+headroom is left for the rest of the system; under `process-memory` it is left
+inside the app's own ceiling, since jetsam acts on this app's footprint.
 
 ```text
-budget = total system RAM − RAM in use now − policy reserve
+budget = total − in use now − policy reserve
 
 lower bound  > budget  → likely-too-large
 upper bound <= budget  → likely-fits
 otherwise              → unknown
 ```
 
-Only system memory is used. GPU and VRAM metrics are `unverified`-scoped by
-design and are deliberately excluded from the budget — see the
+What "total" and "in use" mean depends on the result's `basis`:
+
+- **`system-memory`** — device RAM and system-wide use. Desktop, and Android
+  by explicit decision: its low-memory killer acts system-wide, and native
+  allocations carry no per-process cap.
+- **`process-memory`** — the app's own ceiling. iOS jetsam terminates an app
+  on its per-process footprint against a limit well below device RAM, so a
+  system budget there would defend verdicts the OS does not honor. The budget
+  comes from `os_proc_available_memory()` plus the current footprint; until
+  that per-process metric is available on a build, iOS assessments return
+  `unknown` rather than a confidently wrong `likely-fits`.
+
+GPU and VRAM metrics are `unverified`-scoped by design and are deliberately
+excluded from the budget under either basis — see the
 [system resources support matrix](./system-resources-support-matrix.md).
 
 ## Why the estimate is a range
