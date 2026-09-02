@@ -127,6 +127,12 @@ runs:
         PREFLIGHT_OK=false
         PREFLIGHT_ERR="${RUNNER_TEMP:-/tmp}/devicefarm-preflight-stderr.$$"
         : > "$PREFLIGHT_ERR"
+        # Print the literal command. The call passes ONE fully-qualified run ARN
+        # — no wildcard, no project ARN, no --query trickery — so the log settles
+        # by itself whether a denial is about what we sent or about the policy.
+        echo "The exact call being made (note: explicit run ARN, not a wildcard):"
+        echo "  \$ aws devicefarm get-run --arn ${RUN_ARNS[0]} --output json"
+        echo ""
         for _attempt in 1 2 3; do
           echo "GetRun on ${RUN_ARNS[0]} (attempt $_attempt/3):"
           if aws devicefarm get-run --arn "${RUN_ARNS[0]}" \
