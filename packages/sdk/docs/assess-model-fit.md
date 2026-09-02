@@ -96,7 +96,7 @@ reported in `assumptions`.
 | --------- | ----------------------------------------------------------------------- |
 | Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription` |
 | Workloads | `llm`, `audio`                                                          |
-| Platforms | none validated yet — see the calibration status below                   |
+| Platforms | `darwin-arm64` — see the calibration status below                       |
 
 Everything outside this table assesses as `unknown`. Parakeet, translation, TTS,
 OCR, diffusion, and the vision projector (`mmproj-*`) half of a multimodal load
@@ -104,9 +104,12 @@ are phase 2.
 
 **Calibration status.** A platform only reports estimates once its coefficients
 have been measured on real hardware and a held-out model has validated inside
-the bounds. No platform has cleared that yet, so `assessModelFit` currently
-returns `unknown` everywhere; the machinery, the estimators and the harness are
-in place. See
+the bounds. `darwin-arm64` has cleared that (measured on an Apple M4 Pro
+against the Metal backend), so LLM workloads return real verdicts there. Audio
+workloads still return `unknown` on every platform: their coefficients await
+the harness's whisper pass, and the estimator refuses the unmeasured
+placeholders rather than consuming them. Every other platform returns `unknown`
+until its own run lands. See
 `@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
 
 ## Relationship to `@qvac/model-fit`
