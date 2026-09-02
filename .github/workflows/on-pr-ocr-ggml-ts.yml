@@ -1,0 +1,29 @@
+name: OCR TypeScript Checks
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/ocr-ggml/**"
+      - ".github/workflows/*ocr-ggml*.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ocr-ggml-pr-head-ts-checks:
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/ocr-ggml
