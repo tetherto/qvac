@@ -10,7 +10,7 @@
       "features": [
         {
           "name": "cuda-backend",
-          "platform": "linux & x64"
+          "platform": "linux"
         },
         "hip-backend"
       ]

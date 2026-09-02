@@ -49,8 +49,13 @@ jobs:
       # main, so linux-x64 would otherwise hard-fail the hip port. setup-rocm
       # prefers /opt/rocm when the host stamp matches; otherwise downloads.
       include-rocm: true
-      # QVAC-23763: cuda-backend hard-errors without nvcc, so linux x64 needs
-      # the toolkit. Compile-only. setup-cuda provisions x64 only, and merges
-      # VCPKG_KEEP_ENV_VARS rather than assigning it, so ROCm above survives.
+      # QVAC-23763: cuda-backend hard-errors without nvcc, so linux needs the
+      # toolkit. Compile-only. setup-cuda merges VCPKG_KEEP_ENV_VARS rather
+      # than assigning it, so ROCm above survives.
       include-cuda: true
+      # MEASUREMENT BRANCH ONLY, do not merge. Turns on the arm64 leg so the
+      # sbsa toolkit from QVAC-24442 builds the port and fabric-linux-arm64 can
+      # be weighed against the 37,005,852 byte no-cuda baseline. The
+      # packages/fabric gate is widened to plain "linux" for the same reason.
+      include-cuda-arm64: true
     secrets: inherit
