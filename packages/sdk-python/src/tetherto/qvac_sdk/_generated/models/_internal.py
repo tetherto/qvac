@@ -7126,12 +7126,6 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             description="Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`)."
         ),
     ] = None
-    n_discarded: Annotated[
-        float | None,
-        Field(
-            description="Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`)."
-        ),
-    ] = None
     parallel: Annotated[
         int | None,
         Field(
@@ -10263,7 +10257,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     stream_chunk_tokens: Annotated[
@@ -10687,7 +10681,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
@@ -10860,7 +10854,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
@@ -11293,7 +11287,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
@@ -11746,7 +11740,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
