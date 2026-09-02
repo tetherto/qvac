@@ -2,7 +2,13 @@ import env from 'bare-env'
 import { z } from 'zod'
 
 const envSchema = z.object({
-  HOME_DIR: z.string()
+  HOME_DIR: z.string(),
+  /**
+   * Opt-in for the experimental advisory llama.cpp fit check run before a
+   * completion/embedding load. Free-form rather than an enum so a typo cannot
+   * fail engine startup; only `1`/`true`/`on`/`yes` enable it.
+   */
+  QVAC_ADVISORY_MODEL_FIT: z.string().optional()
 })
 
 type Env = z.infer<typeof envSchema>
@@ -17,7 +23,8 @@ export function initEnv(): void {
     // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
     env['SNAP_USER_COMMON'] ?? env['HOME'] ?? env['USERPROFILE'] ?? '/tmp'
   let envConfig: Record<string, string | undefined> = {
-    HOME_DIR: defaultHomeDir
+    HOME_DIR: defaultHomeDir,
+    QVAC_ADVISORY_MODEL_FIT: env['QVAC_ADVISORY_MODEL_FIT']
   }
 
   const isBareKit = typeof (globalThis as { BareKit?: unknown }).BareKit !== 'undefined'
