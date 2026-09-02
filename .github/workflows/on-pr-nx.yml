@@ -113,6 +113,7 @@ jobs:
       perfrtf: ${{ steps.filter.outputs.perfrtf }}
       prebuilds: ${{ steps.filter.outputs.prebuilds }}
       packages: ${{ steps.filter.outputs.packages }}
+      linking: ${{ steps.filter.outputs.linking }}
     steps:
       # Load the action + options.ci ONLY from the trusted default branch (never
       # PR head). Full checkout: sparse config leaks into the action and breaks the pnpm pin.
@@ -146,6 +147,7 @@ jobs:
             # Passed to the leaves as their explicit `packages:`; each would otherwise
             # self-affect against its own target and miss the on-pr carveOut.
             echo "packages=$(echo "$M" | jq -c '[.[] | .package] | unique')"
+            echo "linking=$(echo "$M" | jq -c '[.[] | select(.prebuildLinkingScript != null) | {package, workdir, prebuildLinkingScript}] | unique_by(.package)')"
           } >> "$GITHUB_OUTPUT"
 
   # Leaves get the on-pr package list explicitly so carved-out packages (fabric,
@@ -411,10 +413,59 @@ jobs:
             benchmark-artifacts/${{ matrix.perfReportOutputStem }}.html
           retention-days: 30
 
+  # A prebuild that would abort CPU-only hosts (gh#3853) must not merge. The
+  # checker comes from a trusted ref so a PR cannot edit the rule it is judged by;
+  # the artifacts under inspection are the untrusted input.
+  verify-prebuild-linking:
+    name: Verify prebuild linking (${{ matrix.package }})
+    needs: [fork-approval, authorize, ci-router, matrix, prebuild]
+    if: >-
+      always() && !cancelled() && needs.authorize.outputs.allowed == 'true' &&
+      needs.matrix.outputs.linking != '[]' && needs.prebuild.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.linking || '[]') }}
+    steps:
+      - name: Checkout linking checker (trusted ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.repository.default_branch }}
+          sparse-checkout: ${{ matrix.prebuildLinkingScript }}
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Download prebuilds (from artifacts)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: prebuild-${{ matrix.package }}-*
+          path: ${{ runner.temp }}/qvac-${{ matrix.package }}
+          merge-multiple: true
+      - name: Verify linux prebuild dynamic linking
+        env:
+          CHECKER: ${{ matrix.prebuildLinkingScript }}
+          ARTIFACTS: ${{ runner.temp }}/qvac-${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          # Bootstrap: the checker may not be on the trusted ref yet. A PR cannot
+          # influence the default branch, so skipping when absent there is safe.
+          if [ ! -f "$CHECKER" ]; then
+            echo "checker not present on the trusted ref yet; nothing to enforce"
+            exit 0
+          fi
+          node "$CHECKER" "$ARTIFACTS"
+
   # Posts the qvac/prebuild-<key> statuses Merge Guard's verify-prebuilds reads,
   # once per affected package. PREBUILD_RESULT is the aggregate result: fail-closed.
   publish-prebuild-status:
-    needs: [prebuild, ci-router, matrix]
+    needs: [prebuild, ci-router, matrix, verify-prebuild-linking]
     if: always() && !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.matrix.outputs.prebuilds != '[]'
     runs-on: ubuntu-latest
     permissions:
@@ -437,7 +488,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PREBUILD_RESULT: ${{ needs.prebuild.result }}
+          # A linking failure must red the status, same fold main uses.
+          PREBUILD_RESULT: ${{ needs.verify-prebuild-linking.result == 'failure' && 'failure' || needs.prebuild.result }}
           REUSE_HIT: ''
           CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
           RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
@@ -446,10 +498,10 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, cpp-tests, run-integration-tests, coload-smoke, coload-smoke-mobile]
+    needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, verify-prebuild-linking, cpp-tests, run-integration-tests, coload-smoke, coload-smoke-mobile]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
+      build-status: ${{ (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') && needs.verify-prebuild-linking.result != 'failure' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
