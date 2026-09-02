@@ -135,10 +135,19 @@ jobs:
             platform: darwin
             arch: x64
             no_gpu: 'true'
+          # The Windows GPU runner also carries an NVIDIA card; with the CUDA
+          # backend in the prebuild the same one-runner-per-backend pinning as
+          # the linux rows applies, one row per backend on the same runner.
           - os: windows-2025
             platform: win32
             arch: x64
             runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
+            gpu_backend: cuda
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
+            gpu_backend: vulkan
 
     steps:
       - name: Setup Node.js
