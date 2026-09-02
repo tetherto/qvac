@@ -118,14 +118,19 @@ on:
         description: "Advanced: Snap runners (JSON array)"
         type: string
         default: '["qvac-ubuntu2204-x64-gpu"]'
+      # One input, not a boolean plus a runner list: workflow_dispatch allows at
+      # most 25 inputs and this workflow is at the ceiling. Picking a single
+      # runner is what a re-run after a busy-host warning needs anyway.
       calibration:
         description: "Run the assessModelFit calibration harness (~30 min per platform warm; first run also downloads ~7.5 GiB of models)"
-        type: boolean
-        default: false
-      calibration-platforms:
-        description: "Advanced: Calibration runners (JSON array)"
-        type: string
-        default: '["qvac-macos26-arm64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-win25-x64-gpu"]'
+        type: choice
+        options:
+          - "off"
+          - all
+          - qvac-macos26-arm64-gpu
+          - qvac-ubuntu2204-x64-gpu
+          - qvac-win25-x64-gpu
+        default: "off"
 
   workflow_call:
     inputs:
@@ -204,6 +209,7 @@ jobs:
       run-snap: ${{ steps.resolve.outputs.run-snap }}
       run-android: ${{ steps.resolve.outputs.run-android }}
       run-ios: ${{ steps.resolve.outputs.run-ios }}
+      run-e2e: ${{ steps.resolve.outputs.run-e2e }}
     steps:
       - name: Resolve configuration
         id: resolve
@@ -216,6 +222,7 @@ jobs:
           RUN_SNAP: ${{ inputs.snap }}
           RUN_ANDROID: ${{ inputs.android }}
           RUN_IOS: ${{ inputs.ios }}
+          RUN_CALIBRATION: ${{ inputs.calibration }}
           SUITE: ${{ inputs.suite }}
           SUITE_CUSTOM: ${{ inputs.suite-custom }}
         run: |
@@ -244,8 +251,16 @@ jobs:
             RESOLVED_ANDROID="$RUN_ANDROID"
             RESOLVED_IOS="$RUN_IOS"
 
-            if [ "${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}" = "falsefalsefalsefalsefalse" ]; then
-              echo "::error::Select at least one platform to test."
+            # Calibration counts as a selection: it wants a host to itself, so a
+            # calibration-only dispatch is the normal way to run it.
+            RESOLVED_CALIBRATION=false
+            if [ "${RUN_CALIBRATION:-off}" != "off" ]; then
+              RESOLVED_CALIBRATION=true
+            fi
+
+            SELECTED="${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}${RESOLVED_CALIBRATION}"
+            if [ "$SELECTED" = "falsefalsefalsefalsefalsefalse" ]; then
+              echo "::error::Select at least one platform to test, or enable calibration."
               exit 1
             fi
           else
@@ -291,6 +306,14 @@ jobs:
             esac
           fi
 
+          # Lets the prepare jobs skip on a calibration-only dispatch: the
+          # calibration job builds packages/inference itself and never consumes
+          # a resolved inference or test-suite artifact.
+          RESOLVED_E2E=true
+          if [ "${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}" = "falsefalsefalsefalsefalse" ]; then
+            RESOLVED_E2E=false
+          fi
+
           {
             echo "suite=$RESOLVED_SUITE"
             echo "run-desktop=$RESOLVED_DESKTOP"
@@ -298,11 +321,13 @@ jobs:
             echo "run-snap=$RESOLVED_SNAP"
             echo "run-android=$RESOLVED_ANDROID"
             echo "run-ios=$RESOLVED_IOS"
+            echo "run-e2e=$RESOLVED_E2E"
           } >> "$GITHUB_OUTPUT"
 
   prepare-inference:
     name: Resolve inference source
     needs: resolve
+    if: needs.resolve.outputs.run-e2e == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -388,6 +413,7 @@ jobs:
   prepare-test-suite:
     name: Resolve test-suite source
     needs: resolve
+    if: needs.resolve.outputs.run-e2e == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -617,15 +643,18 @@ jobs:
   # exclusivity is not guaranteed yet. DevOps is adding calibration-labeled
   # runners whose job hooks drain-stop the sibling agents on the host for the
   # duration of the run and restart them afterwards; once those labels exist,
-  # the calibration-platforms default below should switch to them. Until then:
-  # dispatch during off-peak windows, and do not ship a fixture from a run the
-  # harness flagged with a busy-host warning.
+  # the `calibration` input's options should switch to them. Until then: dispatch
+  # during off-peak windows, and do not ship a fixture from a run the harness
+  # flagged with a busy-host warning.
   calibration:
-    if: github.event_name == 'workflow_dispatch' && inputs.calibration
+    if: github.event_name == 'workflow_dispatch' && inputs.calibration != 'off'
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(inputs.calibration-platforms || '["qvac-macos26-arm64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-win25-x64-gpu"]') }}
+        platform: >-
+          ${{ fromJSON(inputs.calibration == 'all'
+            && '["qvac-macos26-arm64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-win25-x64-gpu"]'
+            || format('["{0}"]', inputs.calibration)) }}
     runs-on: ${{ matrix.platform }}
     # Expected completion: ~30 min warm (validated darwin-arm64 runs measured
     # ~15 min for the 21 loads, plus install and build) — the first run on a
@@ -663,16 +692,28 @@ jobs:
           npm run build
 
       - name: Run calibration harness
+        id: calibrate
         shell: bash
         working-directory: packages/inference
-        run: npx bare scripts/calibrate-model-fit.ts --write
+        run: |
+          # The harness names the fixture after the runtime's platform triple,
+          # in a directory that already holds every other platform's fixture —
+          # so the upload has to name the one file this run writes, or a run
+          # that wrote nothing would ship a stale fixture under this platform's
+          # artifact name. Recorded before the harness runs so the path is still
+          # available when it exits non-zero.
+          PLATFORM=$(node -p "process.platform + '-' + process.arch")
+          echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM.ts" >> "$GITHUB_OUTPUT"
+          npx bare scripts/calibrate-model-fit.ts --write
 
       - name: Upload fixture
-        # A failed fixture (`validated: false`) is still worth auditing.
+        # A failed gate still writes a fixture (`validated: false`), and that is
+        # worth auditing. The harness's earlier aborts write nothing at all, and
+        # then this step finding no file is the accurate outcome.
         if: success() || failure()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: calibration-fixture-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: packages/inference/src/resources/model-fit/calibration/
+          path: ${{ steps.calibrate.outputs.fixture }}
           if-no-files-found: error
           retention-days: 30
