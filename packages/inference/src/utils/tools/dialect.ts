@@ -9,7 +9,7 @@ export function detectToolDialectFromName(name: string | undefined, path: string
   const basename = path.toLowerCase().split(/[/\\]/).pop() ?? ''
   const tag = `${(name ?? '').toLowerCase()}|${basename}`
 
-  if (/qwen3[._-]?[56](?![a-z0-9])/.test(tag)) return 'qwen35'
+  if (/qwen3[._-]?(?:5|6|8)(?![a-z0-9])/.test(tag)) return 'qwen35'
   if (/gemma[-_]?4(?=[^a-z0-9]|$)/.test(tag)) return 'gemma4'
   if (/gpt[_-]?oss/.test(tag)) return 'harmony'
   if (/deepseek[-_. ]?v(?:4|3[._-]?2)(?![0-9])/.test(tag)) return 'dsml'

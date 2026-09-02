@@ -594,14 +594,21 @@ test('detectToolDialectFromName: GPT-OSS variants → harmony', (t) => {
   }
 })
 
-test('detectToolDialectFromName: Qwen3.5 variants → qwen35', (t) => {
+test('detectToolDialectFromName: Qwen3.5, Qwen3.6, and Qwen3.8 variants → qwen35', (t) => {
   const cases: Array<[string | undefined, string]> = [
     [undefined, '/cache/abc_Qwen3.5-7B-Instruct-Q4_K_M.gguf'],
     ['QWEN3_5_7B_INST_Q4', '/Users/x/.qvac/models/abc_qwen3.5-7b-instruct.gguf'],
     [undefined, '/cache/abc_qwen3-5-7b.gguf'],
     // Qwen3.6 shares the same Pythonic-XML tool-call format as Qwen3.5
     [undefined, '/cache/abc_Qwen3.6-7B-Instruct-Q4_K_M.gguf'],
-    ['QWEN3_6_7B_INST', '/Users/x/.qvac/models/abc_qwen3.6-7b-instruct.gguf']
+    ['QWEN3_6_7B_INST', '/Users/x/.qvac/models/abc_qwen3.6-7b-instruct.gguf'],
+    // Qwen3.8 keeps the same format, including the Flash Next variant.
+    [undefined, '/cache/abc_Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf'],
+    [
+      'QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD',
+      '/Users/x/.qvac/models/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf'
+    ],
+    [undefined, '/cache/abc_qwen3-8-flash-next.gguf']
   ]
 
   for (const [name, path] of cases) {
@@ -752,7 +759,7 @@ test("parseQwen35Format: boolean param 'false' coerces to false", (t) => {
   t.is(result.toolCalls[0]?.arguments?.flag, false)
 })
 
-// Qwen3.5/3.6 intermittently emit Python-style capitalised booleans; all casing
+// Qwen3.5/3.6/3.8 intermittently emit Python-style capitalised booleans; all casing
 // variants must coerce so a valid tool call isn't silently dropped.
 const boolCaseTool: Tool = {
   type: 'function',
