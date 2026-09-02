@@ -41,6 +41,14 @@ between the `android`/`ios` and `androidWeekly`/`iosWeekly` sections — no
 workflow edits required. The weekend run posts a pass/fail report to a
 `weekly-mobile-report`-labelled GitHub issue and to the run's Summary page.
 
+Every generated runner must appear in a group, and every group must name a
+generated runner. Coverage is pooled across each OS family's daily and weekly
+maps. Benchmark shards are scheduled through their dedicated workflow, while
+the MoE finetuning test is desktop-only, so neither is required here. These
+rules live in `scripts/lib/validate-test-groups.js` and are enforced by
+`npm run test:mobile:validate` through `npm run test:unit`; they are deliberately
+outside the generator because that also runs before desktop integration tests.
+
 ## Model Pre-Staging (`model-manifest.json`)
 
 Android Device Farm runs never let the phone download weights. The host
@@ -63,7 +71,9 @@ Two things are easy to get wrong, and neither fails loudly:
 
 Both are enforced by `scripts/validate-mobile-manifest.js`, which runs as part
 of `npm run test:mobile:validate` (hard-fails the mobile workflow) and as unit
-tests under `npm run test:prestage`:
+tests under `npm run test:prestage`. Mobile validation also gates
+`npm run test:unit`, so it fails `sanity-checks` on every Ready PR that
+touches this package:
 
 ```bash
 node scripts/validate-mobile-manifest.js         # check
@@ -142,7 +152,7 @@ After adding a new file under `test/integration/`, regenerate the mobile entries
 npm run test:mobile:generate
 ```
 
-This walks `test/integration/`, derives a function name per test file, and rewrites `integration.auto.cjs`. The generator script also runs from CI to ensure mobile and desktop test inventories stay in sync.
+This walks `test/integration/`, derives a function name per test file, and rewrites `integration.auto.cjs`. The generator script also runs from CI to ensure mobile and desktop test inventories stay in sync. The generator only generates; a scheduling mistake fails `npm run test:unit`, not `npm run test:integration`.
 
 ## Running the Tests
 
