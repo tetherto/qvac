@@ -22,7 +22,9 @@
         "ci": {
           "artifactNamePrefix": "tts-ggml-",
           "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev",
-          "includeVulkanSdk": true
+          "includeVulkanSdk": true,
+          "includeCuda": true,
+          "platformCmakeDefines": "linux-x64: -D ENABLE_CUDA=ON\n"
         }
       },
       "inputs": [
@@ -59,7 +61,7 @@
               "warm": "false"
             }
           ],
-          "modelEnv": { "INTEGRATION_TEST_TIMEOUT": "1800", "LD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}", "DYLD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}" },
+          "modelEnv": { "INTEGRATION_TEST_TIMEOUT": "1800", "LD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}:/usr/local/cuda/lib64", "DYLD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}" },
           "modelDownloadScript": "download-models:registry",
           "modelDownloadSkipOnCacheHit": true,
           "runRtfBenchmarks": false,
