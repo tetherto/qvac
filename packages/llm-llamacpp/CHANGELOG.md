@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.49.1] - 2026-09-02
 
 ### Fixed
 
@@ -57,7 +57,8 @@
   projects f16 where this addon now applies q8_0 (over-estimating KV by ~2× and trimming `ctx_size` further
   than needed), and its Adreno 800+/Vulkan guard reports as supported a configuration this addon now
   rejects. `model-fit`'s own CHANGELOG statement that *"`flash-attn` is recognised as enabled on `on` only,
-  as `llm-llamacpp` does"* is stale as of this entry.
+  as `llm-llamacpp` does"* is stale as of this entry. Tracked in
+  [#4223](https://github.com/tetherto/qvac/pull/4223), open as of this release.
 
 - **Grok on a GPU backend fails to load, and this change does not fix it.** qvac-fabric force-disables flash
   attention for Grok, then rejects the quantized V cache the q8_0 default just applied, so context creation
