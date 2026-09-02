@@ -83,26 +83,30 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   assumptions.push(element.assumption)
   const kv = kvCacheBytes(facts, contextTokens, element.bytes, assumptions, reasons)
 
-  // The KV cache is persistent, not a working peak: llama.cpp builds the
-  // context when the model loads, so every loaded model's cache is resident
-  // for its whole lifetime. Parking it in `working` would let `sequential`
-  // aggregation count only the largest cache while all of them are resident.
+  // Everything an LLM load costs is persistent, not a working peak: llama.cpp
+  // builds the context when the model loads — KV cache, engine overhead and
+  // the context-scaled compute buffers included — so every loaded model holds
+  // all of it for its whole lifetime. Calibration runs confirmed this: the
+  // RSS delta during a completion is ~0. Parking any of these terms in
+  // `working` would let `sequential` aggregation count only the largest one
+  // while all of them are resident.
   const persistent: ByteRange = {
-    lower: Math.ceil(artifactBytes + kv.lower),
-    upper: Math.ceil(artifactBytes * calibration.weightUpperCoeff + kv.upper)
+    lower: Math.ceil(
+      artifactBytes +
+        kv.lower +
+        calibration.fixedOverheadBytes.lower +
+        calibration.computeBufferBytesPerToken.lower * contextTokens
+    ),
+    upper: Math.ceil(
+      artifactBytes * calibration.weightUpperCoeff +
+        kv.upper +
+        calibration.fixedOverheadBytes.upper +
+        calibration.computeBufferBytesPerToken.upper * contextTokens
+    )
   }
   assumptions.push(
-    'the KV cache counts as resident for the model’s whole lifetime; llama.cpp allocates it when the model loads, not per operation'
+    'the KV cache, engine overhead and compute buffers count as resident for the model’s whole lifetime; llama.cpp allocates them when the model loads, not per operation'
   )
-
-  const working: ByteRange = {
-    lower:
-      calibration.fixedOverheadBytes.lower +
-      calibration.computeBufferBytesPerToken.lower * contextTokens,
-    upper:
-      calibration.fixedOverheadBytes.upper +
-      calibration.computeBufferBytesPerToken.upper * contextTokens
-  }
 
   assumptions.push(
     'default KV-cache types are assumed; an explicit `cache-type-k`/`cache-type-v` in `modelConfig` is not expressible in a workload and would change these numbers'
@@ -112,7 +116,7 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
     kind: 'estimate',
     estimatorVersion: LLM_ESTIMATOR_VERSION,
     persistent,
-    working: { lower: Math.ceil(working.lower), upper: Math.ceil(working.upper) },
+    working: { lower: 0, upper: 0 },
     reasons,
     assumptions
   }

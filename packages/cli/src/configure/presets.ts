@@ -67,29 +67,84 @@ export const DEFAULT_STARTER: Modality[] = ['chat', 'transcription']
 // and relies on the docs link to finish. Not guaranteed to run untouched.
 export const TTS_VOICE_PLACEHOLDER = '/path/to/voice.wav'
 
-function ttsTemplate(): BuiltEntry {
-  return {
-    aliasBase: 'TTS_T3_TURBO_EN_CHATTERBOX_Q8_0',
-    addon: 'tts',
-    entry: {
-      type: 'tts',
-      src: 'TTS_T3_TURBO_EN_CHATTERBOX_Q8_0',
-      preload: false,
-      config: {
-        ttsEngine: 'chatterbox',
-        language: 'en',
-        s3genModelSrc: 'TTS_S3GEN_EN_CHATTERBOX',
-        referenceAudioSrc: TTS_VOICE_PLACEHOLDER
-      }
+export type TtsEngine = 'chatterbox' | 'supertonic' | 'parler' | 'cosyvoice3' | 'audio8'
+
+interface TtsEngineTemplate {
+  label: string
+  /** Shown under the choice in the picker. */
+  hint: string
+  /** Primary model constant (serve resolves the name). */
+  model: string
+  /** modelConfig; each engine's required + example-recommended fields. */
+  config: Record<string, unknown>
+}
+
+// One starter per TTS engine, mirroring the runnable examples in
+// packages/sdk/examples/tts. TTS is a multi-part assembly, so each template
+// pre-populates the engine's required auxiliary sources (schema-optional but
+// needed to actually run) — chatterbox's S3Gen, audio8's codec decoder — that a
+// bare model pick can't supply. Voice cloning stays a user asset (placeholder).
+export const TTS_ENGINE_TEMPLATES: Record<TtsEngine, TtsEngineTemplate> = {
+  chatterbox: {
+    label: 'Chatterbox (English, voice cloning)',
+    hint: 'T3 + S3Gen; set referenceAudioSrc to clone a voice.',
+    model: 'TTS_T3_TURBO_EN_CHATTERBOX_Q8_0',
+    config: {
+      ttsEngine: 'chatterbox',
+      language: 'en',
+      s3genModelSrc: 'TTS_S3GEN_EN_CHATTERBOX',
+      referenceAudioSrc: TTS_VOICE_PLACEHOLDER
+    }
+  },
+  supertonic: {
+    label: 'Supertonic (multilingual, lightweight)',
+    hint: 'Single-model; fast, no auxiliary sources required.',
+    model: 'TTS_MULTILINGUAL_SUPERTONIC3_Q8_0',
+    config: { ttsEngine: 'supertonic', language: 'en' }
+  },
+  parler: {
+    label: 'Parler (English, prompt-styled)',
+    hint: 'Single-model; describe the voice via the request.',
+    model: 'TTS_MINI_V1_EN_PARLER_TTS_Q8_0',
+    config: { ttsEngine: 'parler' }
+  },
+  cosyvoice3: {
+    label: 'CosyVoice3 (multilingual)',
+    hint: 'LLM GGUF; flow/HiFT/voice load from its co-located companion set.',
+    model: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0',
+    config: { ttsEngine: 'cosyvoice3' }
+  },
+  audio8: {
+    label: 'Audio8 (multilingual, voice cloning)',
+    hint: 'DualAR LM + codec decoder; add the encoder to clone a voice.',
+    model: 'TTS_LM_MULTILINGUAL_AUDIO8_Q8_0',
+    config: {
+      ttsEngine: 'audio8',
+      audio8CodecDecoderModelSrc: 'TTS_CODEC_DECODER_AUDIO8_Q8_0'
     }
   }
 }
 
+export const TTS_ENGINES = Object.keys(TTS_ENGINE_TEMPLATES) as TtsEngine[]
+
+function ttsTemplate(engine: TtsEngine): BuiltEntry {
+  const t = TTS_ENGINE_TEMPLATES[engine]
+  return {
+    aliasBase: t.model,
+    addon: 'tts',
+    entry: { type: 'tts', src: t.model, preload: false, config: { ...t.config } }
+  }
+}
+
 /** Build a serve.models entry for a modality. For pick-able modalities pass the
- * chosen constant name; for `speech` the constant is ignored (fixed template). */
+ * chosen constant name; for `speech` pass the chosen TTS engine (defaults to
+ * chatterbox). */
 export function buildEntry(modality: Modality, constantName?: string): BuiltEntry {
   const info = modalityInfo(modality)
-  if (!info.pick) return ttsTemplate()
+  if (modality === 'speech') {
+    const engine = (constantName as TtsEngine | undefined) ?? 'chatterbox'
+    return ttsTemplate(engine)
+  }
 
   const name = constantName ?? RECOMMENDED[modality]
   if (!name) throw new Error(`No model chosen and no recommended default for "${modality}"`)
