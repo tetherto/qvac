@@ -200,7 +200,14 @@ jobs:
             local out rc
             out=$("$@" 2>&1)
             rc=$?
-            echo "$out"
+            # Truncate: ListRuns on a busy project returns every run ever, which
+            # printed 1.1M log lines and got the job killed on the first attempt.
+            # We only need the verdict and, on failure, the AWS error — both fit
+            # well inside the first 40 lines.
+            echo "$out" | head -40
+            if [ "$(echo "$out" | wc -l)" -gt 40 ]; then
+              echo "  ... output truncated ($(echo "$out" | wc -l) lines total)"
+            fi
             if [ $rc -eq 0 ]; then
               echo "-> exit 0 (ALLOWED)"
               RESULTS="${RESULTS}ALLOWED|${resource_type}|${label}\n"
