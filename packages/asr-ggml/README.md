@@ -120,7 +120,7 @@ SDK code — see [Engine Selection](#engine-selection).
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA (x64 prebuild) |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA via `build:cuda` / `ASR_CUDA=ON` |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 

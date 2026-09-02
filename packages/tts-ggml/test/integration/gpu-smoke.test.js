@@ -54,10 +54,9 @@ const GPU_BACKEND_IDS = { metal: 1, cuda: 2, vulkan: 3, opencl: 4 }
 // the assertions expect whatever the row pinned and fall back to the
 // platform's cascade default when unset.
 const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
-// Parler GPU coverage is validated on Apple, the Android Device Farm, and the
-// linux CUDA lane. Keep desktop Vulkan out until dedicated runs prove it there.
-const isParlerGpuPlatform =
-  isApple || platform === 'android' || (platform === 'linux' && PINNED_GPU_BACKEND === 'cuda')
+// Parler GPU coverage is validated on Apple and the Android Device Farm.
+// Keep desktop Vulkan out until dedicated Linux and Windows runs prove it.
+const isParlerGpuPlatform = isApple || platform === 'android'
 // CosyVoice3's tts-cpp allowlist is Metal (Apple), OpenCL/Adreno (Android),
 // and Vulkan on desktop hosts, so the strict GPU leg runs everywhere the
 // desktop and mobile GPU runners exist. On Android the engine keeps its
