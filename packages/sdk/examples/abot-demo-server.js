@@ -32,7 +32,8 @@ const state = {
   phase: 'loading model',
   hasWorld: false,
   paceMs: 0,
-  buffer: 0
+  buffer: 0,
+  prompt: ''
 }
 const clients = new Set()
 const BOUNDARY = 'abotframe'
@@ -194,9 +195,11 @@ async function createWorld(imageBytes, prompt) {
     console.log(
       `▸ worldCreateScene (${imageBytes.length} bytes${prompt ? `, "${prompt.slice(0, 50)}"` : ''})`
     )
+    const effectivePrompt = prompt || 'a realistic scene with a navigable path'
+    state.prompt = effectivePrompt
     const scene = worldCreateScene({
       modelId,
-      prompt: prompt || 'a realistic scene with a navigable path',
+      prompt: effectivePrompt,
       image: new Uint8Array(imageBytes)
     })
     const sStats = await scene.stats
@@ -237,37 +240,47 @@ kbd.on{background:#1f7a3d;border-color:#3fd06d;color:#fff}</style></head><body><
 <h1>ABot-World — interactive world model, driven by the <b>QVAC SDK</b></h1>
 <div class="card">
 <input type="file" id="file" accept="image/jpeg,image/png">
-<input type="text" id="prompt" placeholder="optional prompt, e.g. 'rainy neon street at night'">
+<input type="text" id="promptText" placeholder="optional prompt, e.g. 'rainy neon street at night'">
 <button id="go" disabled>Create world</button>
 </div>
 <div class="stage"><img src="/stream" alt="walk"><div class="overlay" id="ov">upload a photo to create a world</div></div>
 <div class="hud"><span>block <b id="b">0</b></span><span><b id="ms">0</b> ms/block</span>
 <span>gen <b id="fps">0</b> fps</span><span>play <b id="pace">0</b> ms/frame</span>
 <span id="keys"></span><span id="ph"></span></div>
+<div class="cap">prompt in use: <b id="pr">(none yet)</b></div>
 <div class="cap">walk: <b>W/A/S/D</b> move &middot; <b>I/J/K/L</b> look &mdash;
 loadModel({ mode:'world' }) &middot; worldCreateScene({ prompt, image }) &middot; worldStep({ keys }) &mdash; @qvac/sdk &middot; @qvac/diffusion-cpp 0.19.0</div>
 </div><script>
+// Look every element up explicitly. Relying on id-named globals silently
+// fails for any id that collides with a built-in window property: with
+// id="prompt", \`prompt\` stays window.prompt (the native dialog function),
+// so \`prompt.value\` was undefined and every world was created with the
+// literal string "undefined" instead of the typed text.
+const el=id=>document.getElementById(id)
+const promptEl=el('promptText'),fileEl=el('file'),goEl=el('go'),ovEl=el('ov')
+const blockEl=el('b'),msEl=el('ms'),fpsEl=el('fps'),paceEl=el('pace'),keysEl=el('keys'),phaseEl=el('ph'),prEl=el('pr')
 const KEYS=['W','A','S','D','I','J','K','L'];const heldK=new Set()
 function send(){fetch('/keys',{method:'POST',body:JSON.stringify([...heldK])})}
 addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return
 const k=e.key.toUpperCase();if(KEYS.includes(k)&&!heldK.has(k)){heldK.add(k);send()}})
 addEventListener('keyup',e=>{if(e.target.tagName==='INPUT')return
 const k=e.key.toUpperCase();if(heldK.delete(k))send()})
-file.onchange=()=>{go.disabled=!file.files.length}
-go.onclick=async()=>{
-  const f=file.files[0];if(!f)return
-  go.disabled=true;go.textContent='Creating…'
-  const r=await fetch('/create-world?prompt='+encodeURIComponent(prompt.value),{method:'POST',body:await f.arrayBuffer()})
+fileEl.onchange=()=>{goEl.disabled=!fileEl.files.length}
+goEl.onclick=async()=>{
+  const f=fileEl.files[0];if(!f)return
+  goEl.disabled=true;goEl.textContent='Creating…'
+  const r=await fetch('/create-world?prompt='+encodeURIComponent(promptEl.value),{method:'POST',body:await f.arrayBuffer()})
   if(!r.ok){const j=await r.json().catch(()=>({}));alert('create failed: '+(j.error||r.status))}
-  go.textContent='Create world';go.disabled=!file.files.length
+  goEl.textContent='Create world';goEl.disabled=!fileEl.files.length
 }
 setInterval(async()=>{const s=await(await fetch('/state')).json()
-b.textContent=s.block;ms.textContent=s.lastMs;ph.textContent=s.phase
-fps.textContent=s.lastMs?(12000/s.lastMs).toFixed(1):'0'
-pace.textContent=s.paceMs||0
-keys.innerHTML=KEYS.map(k=>'<kbd class="'+(s.keys.includes(k)?'on':'')+'">'+k+'</kbd>').join('')
-ov.hidden=s.phase==='walking'
-if(!ov.hidden)ov.textContent=s.hasWorld?s.phase:(s.phase==='upload a photo to create a world'||s.phase.startsWith('create')||s.phase.startsWith('reload')||s.phase.startsWith('creating')?s.phase:s.phase)},400)
+blockEl.textContent=s.block;msEl.textContent=s.lastMs;phaseEl.textContent=s.phase
+fpsEl.textContent=s.lastMs?(12000/s.lastMs).toFixed(1):'0'
+paceEl.textContent=s.paceMs||0
+prEl.textContent=s.prompt||'(none yet)'
+keysEl.innerHTML=KEYS.map(k=>'<kbd class="'+(s.keys.includes(k)?'on':'')+'">'+k+'</kbd>').join('')
+ovEl.hidden=s.phase==='walking'
+if(!ovEl.hidden)ovEl.textContent=s.hasWorld?s.phase:(s.phase==='upload a photo to create a world'||s.phase.startsWith('create')||s.phase.startsWith('reload')||s.phase.startsWith('creating')?s.phase:s.phase)},400)
 </script></body></html>`
 
 const server = http.createServer((req, res) => {
