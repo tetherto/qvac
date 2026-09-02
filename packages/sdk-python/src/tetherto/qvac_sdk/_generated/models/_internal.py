@@ -129,6 +129,11 @@ class AssessModelFitResponseVerdict(Enum):
     unknown = "unknown"
 
 
+class AssessModelFitResponseBasis(Enum):
+    system_memory = "system-memory"
+    process_memory = "process-memory"
+
+
 class AssessModelFitResponseExecution(Enum):
     sequential = "sequential"
     concurrent = "concurrent"
@@ -141,11 +146,16 @@ class AssessModelFitResponseBudget(GeneratedBaseModel):
     total_bytes: Annotated[
         float,
         Field(
-            alias="totalBytes", description="Total system RAM reported by the sample."
+            alias="totalBytes",
+            description="Total budgetable memory under the result’s basis: system RAM, or the process ceiling (allowance plus current footprint) under process-memory.",
         ),
     ]
     used_bytes: Annotated[
-        float, Field(alias="usedBytes", description="System RAM in use at sample time.")
+        float,
+        Field(
+            alias="usedBytes",
+            description="Memory in use at sample time under the same basis (system-wide, or this process).",
+        ),
     ]
     reserved_bytes: Annotated[
         float,
@@ -220,11 +230,12 @@ class AssessModelFitResponse(GeneratedBaseModel):
         ),
     ]
     basis: Annotated[
-        Literal["system-memory"],
+        AssessModelFitResponseBasis,
         Field(
-            description="The only evidence used. GPU/VRAM metrics are deliberately excluded — they are `unverified`-scoped by design."
+            description="The evidence the budget was derived from — system RAM, or the per-process ceiling on iOS. GPU/VRAM metrics are deliberately excluded either way; they are `unverified`-scoped by design.",
+            title="AssessModelFitResponseBasis",
         ),
-    ] = "system-memory"
+    ]
     execution: Annotated[
         AssessModelFitResponseExecution,
         Field(
@@ -6178,6 +6189,148 @@ class GetSystemResourcesResponseSampleMemoryTotalBytesFailed(GeneratedBaseModel)
     reason: str | None = None
 
 
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesFailed(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
 class GetSystemResourcesResponseSampleMemory(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -6195,6 +6348,26 @@ class GetSystemResourcesResponseSampleMemory(GeneratedBaseModel):
         | GetSystemResourcesResponseSampleMemoryTotalBytesUnverified
         | GetSystemResourcesResponseSampleMemoryTotalBytesFailed,
         Field(alias="totalBytes"),
+    ]
+    process_used_bytes: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupported
+        | GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnavailable
+        | GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnverified
+        | GetSystemResourcesResponseSampleMemoryProcessUsedBytesFailed,
+        Field(
+            alias="processUsedBytes",
+            description="This process’s resident footprint (RSS). Process-scoped, unlike usedBytes.",
+        ),
+    ]
+    process_available_bytes: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupported
+        | GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnavailable
+        | GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnverified
+        | GetSystemResourcesResponseSampleMemoryProcessAvailableBytesFailed,
+        Field(
+            alias="processAvailableBytes",
+            description="How much more this process may allocate before the OS intervenes. On iOS this is os_proc_available_memory() — the limit jetsam enforces. Unavailable where no per-process limit is exposed.",
+        ),
     ]
 
 
@@ -16088,7 +16261,7 @@ class OcrStreamResponseBlocksItem(GeneratedBaseModel):
         extra="forbid",
     )
     text: str
-    bbox: tuple[float, float, float, float] | None = None
+    bbox: list[Any] | None = None
     confidence: float | None = None
 
 

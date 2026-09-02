@@ -1,3 +1,4 @@
+import os from 'bare-os'
 import { randomUUID } from 'bare-crypto'
 import type { ResourceCollectorDependencies } from '@/resources/types'
 
@@ -43,5 +44,18 @@ export const nativeResourceCollectorDependencies: ResourceCollectorDependencies 
   },
   now() {
     return Date.now()
+  },
+  sampleProcessMemory() {
+    let usedBytes: number | undefined
+    try {
+      const usage = os.memoryUsage()
+      usedBytes = usage && usage.rss > 0 ? usage.rss : undefined
+    } catch {
+      usedBytes = undefined
+    }
+    // No platform exposes the per-process allowance yet. On iOS this is
+    // `os_proc_available_memory()` — the limit jetsam actually enforces — and
+    // it needs a native source before the metric can report a value.
+    return { usedBytes, availableBytes: undefined }
   }
 }

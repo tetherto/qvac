@@ -58,15 +58,27 @@ Headroom left for the rest of the system: the larger of 2 GiB or 15% of total
 RAM on desktop, the larger of 1 GiB or 20% on mobile.
 
 ```text
-budget = total system RAM − RAM in use now − policy reserve
+budget = total − in use now − policy reserve
 
 lower bound  > budget  → likely-too-large
 upper bound <= budget  → likely-fits
 otherwise              → unknown
 ```
 
-Only system memory is used. GPU and VRAM metrics are `unverified`-scoped by
-design and are deliberately excluded from the budget — see the
+What "total" and "in use" mean depends on the result's `basis`:
+
+- **`system-memory`** — device RAM and system-wide use. Desktop, and Android
+  by explicit decision: its low-memory killer acts system-wide, and native
+  allocations carry no per-process cap.
+- **`process-memory`** — the app's own ceiling. iOS jetsam terminates an app
+  on its per-process footprint against a limit well below device RAM, so a
+  system budget there would defend verdicts the OS does not honor. The budget
+  comes from `os_proc_available_memory()` plus the current footprint; until
+  that per-process metric is available on a build, iOS assessments return
+  `unknown` rather than a confidently wrong `likely-fits`.
+
+GPU and VRAM metrics are `unverified`-scoped by design and are deliberately
+excluded from the budget under either basis — see the
 [system resources support matrix](./system-resources-support-matrix.md).
 
 ## Why the estimate is a range
