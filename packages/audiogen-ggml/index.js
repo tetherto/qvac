@@ -11,8 +11,9 @@
 // streams the engine's output (progress ticks + one interleaved-Int16 PCM
 // chunk) and resolves with the run stats.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
+exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_GPU_FALLBACK_REASONS = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
 exports.audiogenBackendName = audiogenBackendName;
+exports.audiogenGpuFallbackReason = audiogenGpuFallbackReason;
 exports.detectEngineType = detectEngineType;
 const infer_base_1 = require("@qvac/infer-base");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
@@ -27,6 +28,7 @@ const audio_format_1 = require("./lib/audio-format");
 const error_1 = require("./error");
 exports.ENGINE_ACESTEP = 'acestep';
 exports.ENGINE_MINIMAX = 'minimax';
+const SUPPORTED_ENGINES = [exports.ENGINE_ACESTEP, exports.ENGINE_MINIMAX];
 exports.MINIMAX_FRAMES_PER_SECOND = 25;
 exports.MINIMAX_DEFAULT_MAX_FRAMES = 300;
 const MINIMAX_MIN_FRAMES = 1;
@@ -48,6 +50,22 @@ function audiogenBackendName(backendId) {
     if (backendId === undefined)
         return undefined;
     return exports.AUDIOGEN_BACKEND_NAMES[backendId];
+}
+/**
+ * `AudiogenStats.gpuFallbackReason` codes, named. Codes match
+ * `tts_cpp::GpuFallbackReason` in the engine.
+ */
+exports.AUDIOGEN_GPU_FALLBACK_REASONS = {
+    0: 'none',
+    1: 'not-requested',
+    2: 'no-devices',
+    3: 'init-failed'
+};
+/** `undefined` for an unset or unrecognised code, never a guessed reason. */
+function audiogenGpuFallbackReason(code) {
+    if (code === undefined)
+        return undefined;
+    return exports.AUDIOGEN_GPU_FALLBACK_REASONS[code];
 }
 function asNativeData(data) {
     if (typeof data !== 'object' || data === null)
@@ -100,7 +118,21 @@ function requireMinimaxCfgScale(value) {
     }
     return scale;
 }
-const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq']);
+const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq', 'lego']);
+const LEGO_TRACKS = new Set([
+    'vocals',
+    'backing_vocals',
+    'drums',
+    'bass',
+    'guitar',
+    'keyboard',
+    'percussion',
+    'strings',
+    'synth',
+    'fx',
+    'brass',
+    'woodwinds'
+]);
 const AUDIO_LATENT_RATE = 25;
 const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE;
 const REPAINT_RANGE_EPSILON_SECONDS = 1e-5;
@@ -109,7 +141,7 @@ function optionalTaskType(value) {
     if (value === undefined)
         return undefined;
     if (typeof value !== 'string' || !GENERATE_TASK_TYPES.has(value)) {
-        throw invalidInput('taskType must be one of text2music|cover|cover-nofsq');
+        throw invalidInput('taskType must be one of text2music|cover|cover-nofsq|lego');
     }
     return value;
 }
@@ -211,6 +243,9 @@ function requirePrompt(prompt, name) {
 function isCoverTask(taskType) {
     return taskType === 'cover' || taskType === 'cover-nofsq';
 }
+function taskRequiresSourceAudio(taskType) {
+    return isCoverTask(taskType) || taskType === 'lego';
+}
 function invalidInput(message) {
     return new error_1.QvacErrorAudioGen({ code: error_1.ERR_CODES.INVALID_INPUT, adds: message });
 }
@@ -241,15 +276,23 @@ const ACESTEP_GENERATE_KEYS = [
     'referenceAudio',
     'sourceAudio',
     'taskType',
+    'track',
+    'guidanceScale',
     'audioCoverStrength',
     'coverNoiseStrength'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
 }
+function quoteEngine(engine) {
+    return `'${engine}'`;
+}
+function supportedEnginesMessage() {
+    return SUPPORTED_ENGINES.map(quoteEngine).join(' or ');
+}
 function validateEngineType(engine) {
-    if (engine !== undefined && engine !== exports.ENGINE_ACESTEP && engine !== exports.ENGINE_MINIMAX) {
-        throw invalidInput(`engine must be '${exports.ENGINE_ACESTEP}' or '${exports.ENGINE_MINIMAX}'`);
+    if (engine !== undefined && !SUPPORTED_ENGINES.includes(engine)) {
+        throw invalidInput(`engine must be ${supportedEnginesMessage()}`);
     }
 }
 function detectEngineType(files = {}, explicitEngine) {
@@ -663,8 +706,19 @@ class AudioGen {
         const taskType = optionalTaskType(opts.taskType);
         const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio');
         const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio');
-        if (isCoverTask(taskType) && (sourceAudio === undefined || sourceAudio.length === 0)) {
+        if (taskRequiresSourceAudio(taskType) &&
+            (sourceAudio === undefined || sourceAudio.length === 0)) {
             throw invalidInput(`taskType '${taskType}' requires sourceAudio`);
+        }
+        if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
+            throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`);
+        }
+        if (opts.track !== undefined && taskType !== 'lego') {
+            throw invalidInput("track is only valid with taskType 'lego'");
+        }
+        const guidanceScale = optionalFiniteNumber(opts.guidanceScale, 'guidanceScale');
+        if (guidanceScale !== undefined && guidanceScale < 0) {
+            throw invalidInput('guidanceScale must be >= 0 (0 = engine default)');
         }
         return {
             type: 'text',
@@ -689,6 +743,8 @@ class AudioGen {
             referenceAudio,
             sourceAudio,
             taskType,
+            track: opts.track,
+            guidanceScale,
             audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
             coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
         };
@@ -847,7 +903,10 @@ class AudioGen {
                 ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
                 ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {}),
                 ...(typeof d.backendDevice === 'number' ? { backendDevice: d.backendDevice } : {}),
-                ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {})
+                ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
+                ...(typeof d.gpuFallbackReason === 'number'
+                    ? { gpuFallbackReason: d.gpuFallbackReason }
+                    : {})
             };
             this._job.end(stats, stats);
         }

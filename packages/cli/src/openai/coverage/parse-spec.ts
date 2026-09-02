@@ -11,7 +11,7 @@ import {
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { load } from 'js-yaml'
-import type { CoverageSpecSourceMode, HttpMethod, SpecEntry } from './types.js'
+import type { CoverageSpecSourceMode, HttpMethod, SpecEntry } from '@/openai/coverage/types'
 
 const SPEC_URL = 'https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml'
 
