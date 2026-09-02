@@ -280,8 +280,17 @@ async function main() {
   // does not match what the engine did.
   const negative = measurements.filter((m) => m.persistentBytes - m.kvBytes < 0)
   if (negative.length > 0) {
+    // Two known causes. Weights measuring far below artifact size alongside a
+    // GPU is the discrete-VRAM signature (observed on a CUDA/Vulkan linux-x64
+    // host: a 2.4 GiB model left ~300 MiB of RSS): the engine offloaded
+    // weights and KV to device memory that process RSS cannot see, and this
+    // RSS-based methodology cannot calibrate such a host at all. Otherwise the
+    // subtracted cache type does not match what the engine allocated.
+    const offloaded = hasGpu && measurements.some((m) => m.persistentBytes < m.artifactBytes / 2)
     console.log(
-      `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
+      offloaded
+        ? `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted, and weights landed far below artifact size with a GPU present: the engine offloaded the model to discrete GPU memory, which process RSS cannot observe. This methodology only calibrates unified-memory or CPU-resident hosts. No fixture written.`
+        : `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
     )
     Bare.exit(1)
   }
