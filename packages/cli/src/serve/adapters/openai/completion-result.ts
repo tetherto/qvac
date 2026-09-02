@@ -1,5 +1,5 @@
 import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
-import { HttpError } from '../../lib/http-error.js'
+import { HttpError } from '@/serve/lib/http-error'
 
 export type OpenAiFinishReason = 'stop' | 'length' | 'tool_calls'
 

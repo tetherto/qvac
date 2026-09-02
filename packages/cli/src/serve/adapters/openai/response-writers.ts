@@ -1,16 +1,20 @@
 import type { ServerResponse } from 'node:http'
 import type { CompletionRun, Tool } from '@qvac/sdk'
-import { sendSSE, endSSE } from '../../lib/sse.js'
-import { drainCompletion } from './completion-result.js'
-import { sdkToolCallsToOpenai } from './tool-calls.js'
-import type { GenerationParams, ResponseFormat } from '../../schemas/common.js'
-import { buildResponseObject, functionCallOutputItemId, messageId } from './responses-shape.js'
+import { sendSSE, endSSE } from '@/serve/lib/sse'
+import { drainCompletion } from '@/serve/adapters/openai/completion-result'
+import { sdkToolCallsToOpenai } from '@/serve/adapters/openai/tool-calls'
+import type { GenerationParams, ResponseFormat } from '@/serve/schemas/common'
+import {
+  buildResponseObject,
+  functionCallOutputItemId,
+  messageId
+} from '@/serve/adapters/openai/responses-shape'
 import {
   RESPONSES_DEFAULT_TTL_SEC,
   RESPONSES_VOLATILE_STUB,
   type ResponsesStore,
   type StoredResponse
-} from './responses-store.js'
+} from '@/serve/adapters/openai/responses-store'
 
 interface ResponseWriterLogger {
   info: (message: string) => void
