@@ -205,11 +205,17 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   #
   # THE LOWEST ENTRY MUST STAY -virtual, ON BOTH TIERS.
   #
-  # From qvac-fabric v10297.2.0, ggml_cuda_compiled_code_available() in
+  # NOT TRUE YET. The guard described below is tetherto/qvac-fabric-llm.cpp#231,
+  # which is still a draft, and no v10297.2.0 tag exists. Until both land, a
+  # device below this floor still enumerates and still dies at the first kernel
+  # launch, which is the open QVAC-23763 bug. Stated as intent, not as behaviour
+  # the shipped release provides.
+  #
+  # Once it lands: ggml_cuda_compiled_code_available() in
   # ggml/src/ggml-cuda/common.cuh refuses at registration any NVIDIA device whose
   # compute capability is below every entry here. Such a device never reaches
   # ggml_backend_dev_count(), so a consumer's backend cascade falls through to
-  # Vulkan and then CPU. That is what stops a Turing card from enumerating,
+  # Vulkan and then CPU. That is what will stop a Turing card from enumerating,
   # winning selection, and then aborting at the first kernel launch.
   #
   # That guard is a floor test, not a loadability test: __CUDA_ARCH_LIST__
