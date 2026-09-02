@@ -468,13 +468,19 @@ jobs:
     outputs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
     steps:
+      # Keyed on publish-npm only. A GPR dev publish must NOT reopen this gate:
+      # post-publish integration already ran on the PR, and merge-guard consumed
+      # its result before the merge was allowed. publish-gpr does run off
+      # release-* here, so keying on it would start the full integration matrix
+      # on every main/feature-*/tmp-* push for asr-ggml, bci-whispercpp,
+      # ocr-ggml, translation-nmtcpp and tts-ggml. main removed exactly this in
+      # #4175 (QVAC-24365); publish-gpr-skip-policy.test.mjs guards it.
       - id: gate
         shell: bash
         run: |
           set -euo pipefail
           should="false"
-          if [ "${{ needs.publish-npm.result }}" = "success" ] || \
-             [ "${{ needs.publish-gpr.result }}" = "success" ]; then
+          if [ "${{ needs.publish-npm.result }}" = "success" ]; then
             should="true"
           fi
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"

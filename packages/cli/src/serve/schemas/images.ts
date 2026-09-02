@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Logger } from '../../logger.js'
+import type { Logger } from '@/logger'
 import type { DiffusionClientParams } from '@qvac/sdk'
 
 export const imagesGenerationsBody = z

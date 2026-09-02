@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import type { Check } from '../check.js'
+import type { Check } from '@/doctor/check'
 
 const MIN_TOTAL_MEMORY_GB = 2
 const RECOMMENDED_TOTAL_MEMORY_GB = 4
