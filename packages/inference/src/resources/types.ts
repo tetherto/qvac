@@ -73,6 +73,20 @@ export interface GPUInfoContext {
   destroy(): void
 }
 
+/**
+ * The process's own memory position, as opposed to the system-wide view.
+ *
+ * @property usedBytes - The process's resident footprint (RSS).
+ * @property availableBytes - How much more this process may allocate before
+ *   the OS intervenes. Only some platforms can state this — on iOS it is
+ *   `os_proc_available_memory()`, the number jetsam actually enforces.
+ *   `undefined` where no such per-process limit is exposed.
+ */
+export interface ProcessMemorySample {
+  usedBytes: number | undefined
+  availableBytes: number | undefined
+}
+
 export interface ResourceCollectorDependencies {
   cpuArchitectures: readonly number[]
   gpuTypes: readonly number[]
@@ -80,6 +94,7 @@ export interface ResourceCollectorDependencies {
   createGPUInfo(): GPUInfoContext | undefined
   createGPUId(): string
   now(): number
+  sampleProcessMemory(): ProcessMemorySample
 }
 
 export interface SystemResourceCollector {

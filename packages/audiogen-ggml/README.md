@@ -40,17 +40,17 @@ Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
 [Models](#models)); point the addon at the folder that holds them.
 MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
 
-The linux-x64 prebuild bundles the CUDA backend next to Vulkan: ggml runs in
-hybrid dynamically-loaded backend mode, the CPU-variant, Vulkan, and CUDA
-backends ship as `.so` modules beside the addon, and only the CUDA module
-depends on the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the
-CUDA 13 runtime libraries (cudart and cuBLAS) resolvable at load time; hosts that
-cannot resolve them skip the module and fall back to Vulkan or CPU. The engine
-prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
-opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`
-on the build host).
+The published linux-x64 prebuild ships Vulkan. CUDA is opt-in at build time
+via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host).
+When CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend
+mode: the CPU-variant, Vulkan, and CUDA backends ship as `.so` modules beside
+the addon, and only the CUDA module depends on the CUDA runtime. Engaging
+CUDA needs the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
+cuBLAS) resolvable at load time; hosts that cannot resolve them skip the
+module and fall back to Vulkan or CPU. The engine prefers CUDA when both GPU
+backends are usable.
 
-The prebuilt CUDA module targets **compute capability 7.5 and newer**, with
+A CUDA build's module targets **compute capability 7.5 and newer**, with
 native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
 Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
 from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
@@ -267,6 +267,29 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:cover
 ```
 
+### Simple Mode: one sentence in, a full song out
+
+With `simpleMode: true` the caption is a short natural-language query and the
+LM composes the complete request before synthesis — a detailed caption, full
+lyrics, and every metadata field you left unset (BPM, key/scale, time
+signature, vocal language, and duration when `duration` is `0`). Anything you
+set is kept. Leave `lyrics` unset for LM-written vocals, or pass
+`'[Instrumental]'` for an instrumental song.
+
+```js
+const response = await gen.run(
+  'a romantic modern salsa with male lead vocals for a wedding',
+  { simpleMode: true, duration: 0, seed: 4242 }
+)
+```
+
+Or end to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:simple
+```
+
 ### Ordered audio editing
 
 `edit()` starts a source-driven pipeline. `edit()`/`flowEdit()` and `repaint()`
@@ -430,6 +453,8 @@ wrapped by a level-gated `QvacLogger`.
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
+| `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
+| `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |

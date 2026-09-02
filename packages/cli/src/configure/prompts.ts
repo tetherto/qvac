@@ -1,7 +1,7 @@
 import { emitKeypressEvents } from 'node:readline'
 import { select, search, editor, confirm, input } from '@inquirer/prompts'
 import type { ModelCatalogEntry } from '@/serve/core/model-catalog'
-import { parseServeConfig } from '@/serve/config'
+import { parseServeConfig } from '@/serve/core/config'
 import {
   MODALITIES,
   RECOMMENDED,
