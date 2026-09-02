@@ -128,7 +128,9 @@ export async function extractApiData(
   version: string,
   options?: { forceExtract?: boolean; samplesDir?: string },
 ): Promise<ApiData> {
-  const entryPoint = path.join(sdkPath, "index.ts").replace(/\\/g, "/");
+  const entryPoint = path
+    .join(sdkPath, "src", "index.ts")
+    .replace(/\\/g, "/");
   const tsconfigPath = path.join(sdkPath, "tsconfig.json").replace(/\\/g, "/");
 
   try {
@@ -138,10 +140,10 @@ export async function extractApiData(
       `SDK entry point not found: ${entryPoint}\n\n` +
         `Either:\n` +
         `  1. Ensure the sdk package exists at: ${sdkPath}\n` +
-        `  2. Or set SDK_PATH to your SDK root, e.g.:\n` +
-        `     set SDK_PATH=C:\\path\\to\\sdk   (Windows)\n` +
-        `     export SDK_PATH=/path/to/sdk     (Linux/macOS)\n` +
-        `  Then run: bun run scripts/generate-api-docs.ts 0.7.0`,
+        `     (its sources must live at ${path.join(sdkPath, "src")})\n` +
+        `  2. Or set SDK_PATH to your SDK package root, e.g.:\n` +
+        `     set SDK_PATH=C:\\path\\to\\qvac\\packages\\sdk   (Windows)\n` +
+        `     export SDK_PATH=/path/to/qvac/packages/sdk        (Linux/macOS)\n`,
     );
   }
 
@@ -169,7 +171,7 @@ export async function extractApiData(
 
   buildTypeMap(project);
   initTsProgram(tsconfigPath);
-  await loadZodDescriptions(path.join(sdkPath, "schemas"));
+  await loadZodDescriptions(path.join(sdkPath, "src", "schemas"));
   await loadSampleProse(options?.samplesDir);
 
   console.log(`🔍 Auditing TSDoc completeness...`);
@@ -244,7 +246,7 @@ export async function extractApiData(
 async function extractErrors(
   sdkPath: string,
 ): Promise<{ client: ErrorEntry[]; server: ErrorEntry[] }> {
-  const schemasDir = path.join(sdkPath, "schemas");
+  const schemasDir = path.join(sdkPath, "src", "schemas");
   let clientSource = "";
   let serverSource = "";
 

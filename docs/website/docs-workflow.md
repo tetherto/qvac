@@ -113,7 +113,7 @@ Without generating API docs, the site loads but SDK API links will 404.
 
 ### Setting `SDK_PATH`
 
-The generation scripts need `SDK_PATH` to point at the SDK package root (the directory containing `index.ts` and `tsconfig.json`).
+The generation scripts need `SDK_PATH` to point at the SDK package root (the directory containing `package.json`, `tsconfig.json`, and `src/index.ts`).
 
 Copy `.env.example` to `.env` and set the path:
 
@@ -148,7 +148,7 @@ bun run scripts/generate-api-docs.ts 0.10.0 --target=v0.10.x.mdx --title-only
 ```
 
 This will:
-1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`) and write `api-data.json`
+1. Run TypeDoc against the SDK entry point (`SDK_PATH/src/index.ts`) and write `api-data.json`
 2. Render a single MDX via the Nunjucks `single-page.njk` template:
    - default → `content/docs/reference/api/v<X.Y>.x.mdx` (series-named — same file whether the series is latest or archived)
    - `--target=<file>` → `content/docs/reference/api/<file>` (explicit override)
@@ -533,14 +533,14 @@ For example, `release-notes-overrides/0.11.0.md`. The file should contain `## He
 ### SDK entry point not found
 
 ```
-SDK entry point not found: /path/to/sdk/index.ts
+SDK entry point not found: /path/to/sdk/src/index.ts
 ```
 
 **Cause:** `SDK_PATH` is not set or points to the wrong directory.
 
 **Fix:**
 1. Verify `.env` exists in `docs/website/` (copy from `.env.example`)
-2. Ensure `SDK_PATH` points to the SDK package root containing `index.ts` and `tsconfig.json`
+2. Ensure `SDK_PATH` points to the SDK package root (the directory containing `package.json`, `tsconfig.json`, and `src/index.ts`)
 3. On Windows, use backslashes or forward slashes — both work with Bun
 
 ### No API functions extracted

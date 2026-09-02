@@ -28,7 +28,9 @@ import type { AuditDiagnostic, AuditOptions, AuditResult } from "./types.js";
 export async function bootstrapProject(
   sdkPath: string,
 ): Promise<ProjectReflection> {
-  const entryPoint = path.join(sdkPath, "index.ts").replace(/\\/g, "/");
+  const entryPoint = path
+    .join(sdkPath, "src", "index.ts")
+    .replace(/\\/g, "/");
   const tsconfigPath = path.join(sdkPath, "tsconfig.json").replace(/\\/g, "/");
 
   const app = await Application.bootstrapWithPlugins({
