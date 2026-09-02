@@ -317,6 +317,46 @@ test(
 )
 
 test(
+  'AudioGen (ggml): generateLrc reports synchronized lyrics',
+  { timeout: INTEGRATION_TIMEOUT_MS },
+  async (t) => {
+    const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
+    if (!download.success) {
+      t.fail('ACE-Step models unavailable')
+      return
+    }
+
+    const gen = await loadAudioGen({
+      modelDir: download.modelDir,
+      ditVariant: VARIANT,
+      useGPU: !NO_GPU
+    })
+    t.teardown(() => gen.destroy())
+
+    const { data } = await runAudioGen(gen, {
+      caption: 'acoustic ballad lrc integration test',
+      opts: {
+        lyrics: '[verse]\nhello world tonight\nsinging by the light',
+        duration: 4,
+        seed: 42,
+        generateLrc: true
+      }
+    })
+    t.ok(data.sampleCount > 0, 'lrc run produced audio')
+    t.ok(typeof data.stats.lrc === 'string' && data.stats.lrc.length > 0, 'stats.lrc present')
+    t.ok(
+      data.stats.lrc.startsWith('[00:'),
+      `lrc starts with a timestamp (${data.stats.lrc.slice(0, 12)})`
+    )
+    t.ok(typeof data.stats.lyricsScore === 'number', 'stats.lyricsScore present')
+    t.ok(
+      data.stats.lyricsScore >= 0 && data.stats.lyricsScore <= 1,
+      `lyricsScore in [0, 1] (${data.stats.lyricsScore})`
+    )
+  }
+)
+
+test(
   'AudioGen (ggml): immediate ACE-Step cancellation is terminal',
   { timeout: INTEGRATION_TIMEOUT_MS },
   async (t) => {
