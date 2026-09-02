@@ -11,15 +11,18 @@ export interface EmitOpenApiSpecOptions {
 
 /**
  * Build the server in-process (no listen), capture the OpenAPI doc, and
- * return it as a string. The `quiet: true` flag on `buildServer` keeps the
- * logger silent so this never contaminates stdout / stderr for callers.
+ * return it as a string. Only the openai extension is mounted, so the emitted
+ * document describes that surface alone. The `quiet: true` flag on
+ * `buildServer` keeps the logger silent so this never contaminates stdout /
+ * stderr for callers.
  */
 export async function renderOpenApiSpec(format: SpecFormat = 'json'): Promise<string> {
   const app = await buildServer({
     projectRoot: tmpdir(),
     port: 0,
     host: '127.0.0.1',
-    quiet: true
+    quiet: true,
+    extensions: ['openai']
   })
   try {
     await app.ready()

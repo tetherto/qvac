@@ -1,17 +1,41 @@
 ---
 title: HTTP server
-description: Run a local HTTP server that exposes an OpenAI-compatible API.
+description: Run a local HTTP server exposing the QVAC API, with an optional OpenAI-compatible extension.
 schemaType: TechArticle
 tocMaxDepth: 3
 ---
 
 ## Overview
 
-To run the server, install the `@qvac/cli` npm package — it depends on `@qvac/sdk` directly, so the SDK is installed automatically. The server is provided by `@qvac/cli` and internally translates HTTP requests into SDK calls. As a result, any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can point to `http://localhost:11434/v1/` and work without changes.
+To run the server, install the `@qvac/cli` npm package — it depends on `@qvac/sdk` directly, so the SDK is installed automatically. The server is provided by `@qvac/cli` and internally translates HTTP requests into SDK calls.
+
+## Surfaces
+
+`qvac serve` runs the QVAC API. Additional surfaces are extensions, mounted by
+their own flag:
+
+| Surface | Mounted with | Paths |
+| --- | --- | --- |
+| QVAC | `qvac serve` | reserved under `/qvac/v1` — no endpoints yet |
+| OpenAI-compatible | `--openai` | `/v1/*` |
+
+```bash
+qvac serve --openai
+```
+
+Any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can then point to `http://localhost:11434/v1/` and work without changes.
+
+Pass `--no-default` to leave the QVAC surface out. Introspection
+(`/openapi.json`, and `/docs` with `--docs`) is always served and describes
+exactly what you mounted.
+
+<Callout type="warn">
+`qvac serve openai` is deprecated; it is equivalent to `qvac serve --openai --no-default`.
+</Callout>
 
 ## AI capabilities
 
-At the moment, the HTTP server supports the following QVAC AI capabilities:
+At the moment, the OpenAI-compatible extension supports the following QVAC AI capabilities:
 * Text generation — via [Chat](#chat) (`/v1/chat/completions`), [Responses](#responses) (`/v1/responses`, modern), or [Legacy completions](#legacy-completions) (`/v1/completions`).
 * [Text embeddings](#embeddings) — via `/v1/embeddings`.
 * RAG — via [Files](#files) (`/v1/files`) and [Vector stores](#vector-stores) (`/v1/vector_stores`).
@@ -67,7 +91,7 @@ qvac configure --yes     # non-interactive: chat + transcription starter
 Start the server:
 
 ```bash
-qvac serve openai
+qvac serve --openai
 ```
 </Step>
 
@@ -125,7 +149,7 @@ Models are declared in `qvac.config.*` under the `serve.models` key. The server 
 - **`preload`**: when `true`, the model is loaded into memory on server startup. When `false`, it is loaded lazily on the first request that names it (cold start — that request blocks while the model loads; concurrent first requests share a single load). Defaults to `true` for constant model entries and `false` for explicit `{ src, type }` entries. Use `--model <alias>` to force a lazy model to warm at startup.
 - **`config`**: model config overrides passed to the underlying addon. Same options as [`modelConfig` in `loadModel()`](/reference/api#loadmodel).
 
-Lazy-load behavior (whether requests may load models on demand, load concurrency, per-load timeout, and cancel-on-disconnect) is tuned under [`serve.load`](/configuration#loadoptions-serveload), with matching `qvac serve openai` flags. Set `serve.load.lazy: false` (or `--no-lazy-load`) to require preloaded models and return `503 model_not_loaded` otherwise.
+Lazy-load behavior (whether requests may load models on demand, load concurrency, per-load timeout, and cancel-on-disconnect) is tuned under [`serve.load`](/configuration#loadoptions-serveload), with matching `qvac serve --openai` flags. Set `serve.load.lazy: false` (or `--no-lazy-load`) to require preloaded models and return `503 model_not_loaded` otherwise.
 
 <Callout type="info">
 The default LLM context window is 1,024 tokens and includes both the input and generated output. Set `config.ctx_size` explicitly for longer prompts. A request's `max_tokens` limits only generated tokens, so budget the prompt and requested output together within `ctx_size`.
@@ -145,10 +169,12 @@ To create a client, you can use any OpenAI-compatible AI SDK provider, such as [
 
 ## CLI
 
-Relevant options are summarized below; run `qvac serve openai --help` for the exact generated help output.
+Relevant options are summarized below; run `qvac serve --help` for the exact generated help output.
 
 | Option | Summary |
 | --- | --- |
+| `--openai` | Mount the OpenAI-compatible surface |
+| `--no-default` | Do not mount the QVAC surface |
 | `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
 | `-p, --port <number>` | Port to listen on (default: `11434`) |
 | `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
@@ -167,7 +193,7 @@ Relevant options are summarized below; run `qvac serve openai --help` for the ex
 CORS is disabled unless trusted origins are supplied through repeatable `--cors-origin` flags or `serve.cors.origins` in `qvac.config.*`, or `--docs` adds its same-port loopback defaults. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. Wildcard (`*`) access is not supported.
 
 ```bash
-qvac serve openai \
+qvac serve --openai \
   --cors-origin https://app.example.com \
   --cors-origin http://localhost:3000
 ```
@@ -176,15 +202,15 @@ The legacy `--cors` flag is retained as a compatibility validation switch, but i
 
 ```bash
 # Before
-qvac serve openai --cors
+qvac serve --openai --cors
 
 # After
-qvac serve openai --cors --cors-origin https://app.example.com
+qvac serve --openai --cors --cors-origin https://app.example.com
 ```
 
-## API
+## OpenAI-compatible API
 
-All endpoints follow the [OpenAI API](https://platform.openai.com/docs/api-reference) request and response format. Base path: `/v1`.
+Served by the `--openai` extension. All endpoints follow the [OpenAI API](https://platform.openai.com/docs/api-reference) request and response format. Base path: `/v1`.
 
 ### Endpoints
 
@@ -928,7 +954,7 @@ Register an alias whose endpoint category is `image` (built-in addons that resol
 - **`url`** — requires `--public-base-url <origin>` (or `serve.publicBaseUrl` in the config). The image is stored in the in-memory ephemeral files store and `data[].url` resolves to `${publicBaseUrl}/v1/files/{id}/content`. Each item also carries `expires_at` (Unix seconds) so clients know exactly when the URL stops working.
 
 ```bash
-qvac serve openai --public-base-url "https://api.example.com"
+qvac serve --openai --public-base-url "https://api.example.com"
 ```
 
 ```bash
@@ -1361,7 +1387,7 @@ Video jobs are asynchronous and are not tied to the creating connection; cancel 
 By default, the server accepts unauthenticated requests on `127.0.0.1`. To require a Bearer token, run the server with the `--api-key` flag:
 
 ```bash
-qvac serve openai --api-key my-secret-token
+qvac serve --openai --api-key my-secret-token
 ```
 
 Clients must then include the token in the `Authorization` header:
@@ -1404,7 +1430,7 @@ Each operation in the document carries `summary`, `tags`, a full markdown `descr
 Swagger UI, opt-in via the `--docs` flag. Off by default to keep the production surface minimal.
 
 ```bash
-qvac serve openai --docs
+qvac serve --openai --docs
 open http://localhost:11434/docs
 ```
 
