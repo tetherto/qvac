@@ -261,6 +261,33 @@ jobs:
     with:
       workdir: ${{ matrix.workdir }}
 
+  # decoder-audio is the ONLY package whose mobile run blocked publish on main:
+  # on-merge-decoder-audio.yml listed mobile-integration-tests in both publish
+  # jobs' needs, so it could not reach GPR or npm until mobile passed. That file
+  # is deleted here and testGateMode: pre-publish-integration covers desktop only.
+  #
+  # A static job rather than a matrix row because `uses:` cannot take an
+  # expression, so a per-package mobile workflow can only be called from a job
+  # that names it literally. Same shape as cpp-tests-nx's carve-outs.
+  #
+  # tts-ggml also lost its mobile run, but on main that was POST-publish and
+  # informational, never a publish blocker, so it is not restored here.
+  mobile-gate-decoder-audio:
+    name: Mobile gate (decoder-audio)
+    needs: detect
+    if: contains(fromJSON(needs.detect.outputs.matrix).*.package, 'decoder-audio')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      workdir: "packages/decoder-audio"
+
   publish-gpr:
     name: Publish GPR (${{ matrix.package }})
     needs:
@@ -269,18 +296,20 @@ jobs:
       - prebuild
       - pre-publish-integration
       - verify-generated
+      - mobile-gate-decoder-audio
     # Test gates are per-package in the steps below, not here: needs.<job>.result is
     # the matrix-wide aggregate, and `matrix` is unavailable in a job-level `if:`.
     #
-    # verify-generated is the exception and is enforced here, aggregate and all.
-    # It is skipped only when this run selected no gated package (rows == '[]'),
-    # so `skipped` cannot mask a gated package's result. A failure blocks every
-    # package in the run rather than just the offender, which is fail-closed and
-    # near-free: dorny normally selects one changed package per run.
+    # verify-generated and mobile-gate-decoder-audio are the exceptions and are
+    # enforced here, aggregate and all. Each is skipped only when this run selected
+    # no package it applies to, so `skipped` cannot mask a real result. A failure
+    # blocks every package in the run rather than just the offender, which is
+    # fail-closed and near-free: dorny normally selects one changed package per run.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
+      (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
       (always() && !cancelled() &&
-      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')))
     runs-on: ubuntu-latest
     environment: release
     strategy:
@@ -376,14 +405,17 @@ jobs:
       - prebuild
       - pre-publish-integration
       - verify-generated
+      - mobile-gate-decoder-audio
     # Test gates are per-package in the steps below (see publish-gpr's `if:`).
     # merge-guard stays here: detect's identity gate ensures its aggregate == the
-    # one package. verify-generated is enforced here too, same reasoning as publish-gpr.
+    # one package. verify-generated and mobile-gate-decoder-audio are enforced here
+    # too, same reasoning as publish-gpr.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
+      (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
       (always() && !cancelled() &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-      needs.publish-logic.outputs.publish_release == 'true')
+      needs.publish-logic.outputs.publish_release == 'true'))
     runs-on: ubuntu-latest
     environment: npm
     strategy:
