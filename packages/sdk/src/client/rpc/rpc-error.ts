@@ -151,8 +151,12 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
   },
   CONTEXT_OVERFLOW: (response) => {
     return new ContextOverflowError(
-      readOptionalNumberField(response.typedFields, 'promptTokens'),
-      readOptionalNumberField(response.typedFields, 'ctxSize'),
+      {
+        promptTokens: readOptionalNumberField(response.typedFields, 'promptTokens'),
+        cachedTokens: readOptionalNumberField(response.typedFields, 'cachedTokens'),
+        requiredTokens: readOptionalNumberField(response.typedFields, 'requiredTokens'),
+        ctxSize: readOptionalNumberField(response.typedFields, 'ctxSize')
+      },
       readOptionalStringField(response.typedFields, 'modelId'),
       response.cause
     )
@@ -174,7 +178,12 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
  * code-based predicates.
  */
 export function reconstructError(response: ErrorResponse): Error {
-  const reconstructor = response.name ? RECONSTRUCTORS[response.name] : undefined
+  // Own-key gate: the map is an object literal, so a hostile name like
+  // "constructor" would otherwise resolve through Object.prototype.
+  const reconstructor =
+    response.name && Object.prototype.hasOwnProperty.call(RECONSTRUCTORS, response.name)
+      ? RECONSTRUCTORS[response.name]
+      : undefined
   if (!reconstructor) {
     return new RPCError(response)
   }
