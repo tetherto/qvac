@@ -279,7 +279,8 @@ const ACESTEP_GENERATE_KEYS = [
     'track',
     'guidanceScale',
     'audioCoverStrength',
-    'coverNoiseStrength'
+    'coverNoiseStrength',
+    'computeQualityScore'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);

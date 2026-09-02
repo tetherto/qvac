@@ -640,7 +640,8 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'track',
   'guidanceScale',
   'audioCoverStrength',
-  'coverNoiseStrength'
+  'coverNoiseStrength',
+  'computeQualityScore'
 ]
 
 function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boolean {
