@@ -15,7 +15,7 @@ export const audioGenHappy: TestDefinition = {
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
-    estimatedDurationMs: 300000
+    estimatedDurationMs: 360000
   }
 }
 
@@ -34,7 +34,7 @@ export const audioGenShortDuration: TestDefinition = {
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
-    estimatedDurationMs: 300000
+    estimatedDurationMs: 360000
   }
 }
 
@@ -59,7 +59,7 @@ export const audioGenReferenceAudio: TestDefinition = {
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
-    estimatedDurationMs: 300000
+    estimatedDurationMs: 360000
   }
 }
 

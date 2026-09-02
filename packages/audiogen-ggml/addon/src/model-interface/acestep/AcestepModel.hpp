@@ -85,6 +85,8 @@ public:
     int lmTopK = 0;
     float lmCfgScale = 2.0F;
     bool lmPhase1 = true;
+    bool simpleMode = false;
+    bool normalizeLoudness = true;
     bool dcwEnabled = true;
     float dcwScaler = 0.05F;
     float dcwHighScaler = 0.02F;
@@ -93,6 +95,8 @@ public:
     std::vector<float> referenceAudio;
     std::vector<float> sourceAudio;
     std::string taskType = "text2music";
+    std::string track;
+    float guidanceScale = 0.0F;
     float audioCoverStrength = 1.0F;
     float coverNoiseStrength = 0.0F;
     std::vector<AudioEditOperationInput> editOperations;

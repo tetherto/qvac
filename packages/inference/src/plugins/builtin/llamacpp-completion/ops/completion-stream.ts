@@ -16,6 +16,10 @@ import {
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
 import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
+import {
+  isAddonPreMutationRefusal,
+  isAddonContextOverflowError
+} from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import {
   decideCachedHistorySlice,
@@ -260,8 +264,7 @@ function prepareMessagesForCache(
   turn: TurnHandle,
   cacheExists: boolean,
   history: HistoryMsg[],
-  tools?: Tool[],
-  toolBlockEvictable = false
+  tools?: Tool[]
 ): CachePayload {
   const toolBlock = tools?.length ? transformMessages(tools) : []
 
@@ -297,9 +300,8 @@ function prepareMessagesForCache(
   // conversation. Skip it only when the prefix is known to hold a rendered
   // one: `toolBlockCached` records that a previous turn actually got it into
   // the cache, which a committed message count does not prove. A stale
-  // boundary means we are resending the whole conversation anyway, and an
-  // evictable block can no longer be assumed present.
-  const skipToolBlock = turn.toolBlockCached && !clearStaleCount && !toolBlockEvictable
+  // boundary means we are resending the whole conversation anyway.
+  const skipToolBlock = turn.toolBlockCached && !clearStaleCount
   const blockToSend = skipToolBlock ? [] : toolBlock
 
   return {
@@ -399,13 +401,6 @@ export async function* completion(
   const modelConfig = getModelConfig(modelId)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
   const toolsActive = !!tools?.length && toolsEnabled
-  // Sliding is opt-in (`n_discarded` defaults to 0). Once on, the addon's
-  // discard window opens at the end of the primed prefix — which is where the
-  // tool block sits, since the prime is the system prompt alone — and nothing
-  // protects it. So while sliding is possible the block cannot be assumed to
-  // survive, and it has to travel with every turn.
-  const toolBlockEvictable = ((modelConfig as { n_discarded?: number }).n_discarded ?? 0) > 0
-
   const dialect =
     tools && tools.length > 0 ? (params.toolDialect ?? detectToolDialect(modelId)) : undefined
 
@@ -481,12 +476,11 @@ export async function* completion(
     )
   }
 
-  // ---- KV-cache path. The session owns all three bookkeeping layers
-  // (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). The
-  // handler asks for a turn, registers rollback on the scope, and on
-  // the happy path calls `commitTurn` which short-circuits the deferred
-  // rollback. Cancellations / zero-token replies / rename failures all
-  // unwind through the same `scope.defer` hook. ----
+  // ---- KV-cache path. The session owns every bookkeeping layer; the
+  // handler registers one deferred unwind (`rollback`, or the non-destructive
+  // `releaseTurn` on a recognised pre-mutation refusal) that `commitTurn`
+  // short-circuits on the happy path. Cancellations / zero-token replies /
+  // rename failures all still unwind destructively through the same hook. ----
 
   const session = createKvCacheSession(modelId, { logger: requestLogger })
   const systemPromptFromHistory = extractSystemPrompt(history)
@@ -538,32 +532,47 @@ export async function* completion(
   // flips the turn's internal `committed` flag so this becomes a no-op
   // on the happy path. Scope unwinding is LIFO — registered after the
   // `removeEventListener` defer above so rollback runs before the
-  // listener detach.
-  scope.defer(() => session.rollback(turn))
+  // listener detach. A thrown overflow, pre-mutation refusal, or pre-addon
+  // attachment failure never persists the turn; the committed cache stays valid.
+  let preserveCacheOnUnwind = false
+  scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
   // `cacheExists` is implied by `beginTurn` — the session either found
   // an existing cache or just primed one. Pass `true` to the message
   // selector so the slicing branches engage.
-  const payload = prepareMessagesForCache(
-    session,
-    turn,
-    /* cacheExists */ true,
-    history,
-    toolsActive ? tools : undefined,
-    toolBlockEvictable
-  )
+  let payload: ReturnType<typeof prepareMessagesForCache>
+  try {
+    payload = prepareMessagesForCache(
+      session,
+      turn,
+      /* cacheExists */ true,
+      history,
+      toolsActive ? tools : undefined
+    )
+  } catch (error) {
+    // A missing attachment is caller input rejected before the addon runs,
+    // so the committed cache is untouched and must survive.
+    preserveCacheOnUnwind = error instanceof AttachmentNotFoundError
+    throw error
+  }
   const messagesToSend = payload.messages
   logMessagesToAddon(messagesToSend, 'PROMPT_SEND')
 
-  const result = yield* processModelResponse(
-    model,
-    messagesToSend,
-    tools,
-    mergedGenerationParams,
-    { cacheKey: turn.cachePath, saveCacheToDisk: true },
-    dialect,
-    setActiveResponse
-  )
+  let result
+  try {
+    result = yield* processModelResponse(
+      model,
+      messagesToSend,
+      tools,
+      mergedGenerationParams,
+      { cacheKey: turn.cachePath, saveCacheToDisk: true },
+      dialect,
+      setActiveResponse
+    )
+  } catch (error) {
+    preserveCacheOnUnwind = isAddonContextOverflowError(error) || isAddonPreMutationRefusal(error)
+    throw error
+  }
   const shouldCommitTurn = shouldCommitCachedTurn({
     aborted: signal.aborted,
     producedTokens: result.producedTokens,
