@@ -1,8 +1,8 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
-import { HttpError } from '../lib/http-error.js'
-import { buildCatalog, filterCatalog, paginate } from '../core/model-catalog.js'
-import { loadModelConstants } from '../sdk-constants.js'
-import { modelCatalogQuery, modelCatalogIdParams } from '../schemas/models-catalog.js'
+import { HttpError } from '@/serve/lib/http-error'
+import { buildCatalog, filterCatalog, paginate } from '@/serve/core/model-catalog'
+import { loadModelConstants } from '@/serve/sdk-constants'
+import { modelCatalogQuery, modelCatalogIdParams } from '@/serve/schemas/models-catalog'
 
 const descriptions = {
   list: `

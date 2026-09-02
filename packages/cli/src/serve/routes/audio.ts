@@ -6,21 +6,21 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { transcribe, textToSpeech } from '@qvac/sdk'
 import type { TranscribeSegment } from '@qvac/sdk'
-import { HttpError } from '../lib/http-error.js'
-import { multipartToBody } from '../lib/multipart.js'
+import { HttpError } from '@/serve/lib/http-error'
+import { multipartToBody } from '@/serve/lib/multipart'
 import {
   formatTimedTranscription,
   isTimedTranscriptionFormat
-} from '../lib/transcription-response.js'
-import { resolveAndCheckModel, ensureReady } from '../plugins/require-model.js'
-import { logUnsupported } from '../plugins/log-unsupported.js'
+} from '@/serve/lib/transcription-response'
+import { resolveAndCheckModel, ensureReady } from '@/serve/plugins/require-model'
+import { logUnsupported } from '@/serve/plugins/log-unsupported'
 import {
   transcriptionsBody,
   translationsBody,
   audioSpeechBody,
   SPEECH_UNSUPPORTED_PARAMS
-} from '../schemas/audio.js'
-import { resolveModelAlias } from '../config.js'
+} from '@/serve/schemas/audio'
+import { resolveModelAlias } from '@/serve/config'
 import {
   buildWavBuffer,
   int16SamplesToBuffer,
@@ -28,14 +28,14 @@ import {
   pcmContentType,
   resolveSampleRate,
   speechAliasKey
-} from '../audio.js'
+} from '@/serve/audio'
 import {
   transcodeWav,
   AudioEncodeFailedError,
   AudioEncodeTimeoutError
-} from '../lib/audio-transcode.js'
-import type { ModelEntry, ResolvedModelEntry } from '../core/model-registry.js'
-import type { QvacContext } from '../lib/types.js'
+} from '@/serve/lib/audio-transcode'
+import type { ModelEntry, ResolvedModelEntry } from '@/serve/core/model-registry'
+import type { QvacContext } from '@/serve/lib/types'
 
 const SUPPORTED_TRANSCRIPTION_FORMATS = new Set(['json', 'text', 'srt', 'vtt', 'verbose_json'])
 

@@ -93,6 +93,9 @@ struct NormalizationDependencies {
   /// struct without it keep the pre-CUDA behaviour.
   std::function<std::vector<std::string>(const std::string&)>
       splitModeDeviceNames;
+  /// Devices to pin LLAMA_SPLIT_MODE_TENSOR to. Consulted only for tensor
+  /// mode; see backend_selection::getTensorSplitDeviceNames.
+  std::function<std::vector<std::string>()> tensorSplitDeviceNames;
 };
 
 struct NormalizedLoad {

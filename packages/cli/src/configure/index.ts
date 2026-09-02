@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { loadModelConstants } from '../serve/sdk-constants.js'
-import { buildBuiltinCatalog } from '../serve/core/model-catalog.js'
+import { loadModelConstants } from '@/serve/sdk-constants'
+import { buildBuiltinCatalog } from '@/serve/core/model-catalog'
 import {
   DEFAULT_STARTER,
   MODALITIES,
@@ -9,8 +9,8 @@ import {
   buildAdditions,
   type AddedEntry,
   type Modality
-} from './presets.js'
-import { CONFIG_DOCS_URL, docsUrlForAddon } from './docs-links.js'
+} from '@/configure/presets'
+import { CONFIG_DOCS_URL, docsUrlForAddon } from '@/configure/docs-links'
 import {
   existingAliasesByModel,
   existingModelIdentities,
@@ -18,7 +18,7 @@ import {
   loadJsonConfig,
   mergeServeModels,
   writeConfigAtomically
-} from './write-config.js'
+} from '@/configure/write-config'
 
 export interface ConfigureOptions {
   projectRoot?: string
@@ -78,7 +78,7 @@ export async function runConfigure(options: ConfigureOptions): Promise<void> {
     const selections = resolveModalities(options.modality).map((modality) => ({ modality }))
     additions = buildAdditions(selections, new Set(existingAliases))
   } else {
-    const { runInteractive } = await import('./prompts.js')
+    const { runInteractive } = await import('@/configure/prompts')
     const catalog = buildBuiltinCatalog(loadModelConstants())
     try {
       additions = await runInteractive(catalog, existingAliases, process.stdout.isTTY === true)

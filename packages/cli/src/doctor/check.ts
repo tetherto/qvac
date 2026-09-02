@@ -1,6 +1,6 @@
 import os from 'node:os'
 import { spawnSync } from 'node:child_process'
-import type { CheckResult } from './types.js'
+import type { CheckResult } from '@/doctor/types'
 
 export interface ProbeResult {
   ok: boolean

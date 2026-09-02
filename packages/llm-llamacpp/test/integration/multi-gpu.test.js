@@ -159,6 +159,95 @@ safeTest(
   }
 )
 
+// QVAC-24253. A device count alone cannot tell tensor mode from layer mode —
+// both put buffers on >= 2 devices. The meta backend names itself
+// "Meta(<dev0>,<dev1>,...)" (ggml-backend-meta.cpp), so that string in the logs
+// is the positive proof LLAMA_SPLIT_MODE_TENSOR actually engaged rather than
+// being quietly degraded or ignored.
+// Device names must be parsed out of the Meta(...) buffer name, NOT from
+// `devices`. extractBufferDevices requires `<Device> model buffer size`, but
+// under tensor mode the buffer is the composed meta buffer, so the line reads
+// `Meta(Vulkan0,Vulkan1) model buffer size = ...` — the token is followed by
+// `,` or `)`, never whitespace, so that set is always empty here.
+function extractMetaDevices(logs) {
+  for (const line of logs) {
+    const match = line.match(/\bMeta\(([^)]*)\)\s+model buffer size\s*=/i)
+    if (match) {
+      return match[1]
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean)
+    }
+  }
+  return []
+}
+
+function assertMetaDeviceEngaged(t, devices, logs) {
+  const metaDevices = extractMetaDevices(logs)
+  t.ok(metaDevices.length > 0, 'should report a Meta(...) buffer, proving the meta backend engaged')
+  t.ok(
+    metaDevices.length >= 2,
+    `weights and KV should span >= 2 devices (found: ${metaDevices.join(', ')})`
+  )
+  // Deliberately NOT asserting "no integrated GPU participates" from these
+  // tokens. The Meta(...) name is built from ggml_backend_buft_name, which
+  // yields backend name + index (`Vulkan0`, `CUDA1`, `ROCm0`) and never
+  // encodes the device type — so a /igpu/ test would be vacuous and pass on a
+  // host where the iGPU had in fact been recruited. Whether the iGPU is
+  // excluded is pinned by the unit tests over getTensorSplitDeviceNames, which
+  // can see the device type. A real end-to-end check would have to match the
+  // known iGPU description against fabric's `using device ...` INFO lines,
+  // which is CI-host-specific.
+  t.comment(`tensor-mode devices: ${metaDevices.join(', ')}`)
+}
+
+safeTest(
+  'multi-gpu: split-mode=tensor distributes weights and KV across GPUs',
+  { timeout: 600_000, skip },
+  async (t) => {
+    // ctx_size is pinned by BASE_CONFIG, which matters here: tensor mode
+    // disables auto-fit, so an unset ctx_size would default to the model's full
+    // trained context.
+    await runMultiGpuTest(t, { 'split-mode': 'tensor' }, assertMetaDeviceEngaged)
+  }
+)
+
+safeTest(
+  'multi-gpu: split-mode=tensor rejects flash-attn off',
+  { timeout: 600_000, skip },
+  async (t) => {
+    if (!hasMultiGpu) {
+      t.comment('Skipping: QVAC_HAS_MULTI_GPU is not set')
+      return
+    }
+
+    let addon = null
+    try {
+      const [modelName, dirPath] = await ensureModel({
+        modelName: MODEL.name,
+        downloadUrl: MODEL.url
+      })
+
+      addon = new LlmLlamacpp({
+        files: { model: [path.join(dirPath, modelName)] },
+        config: { ...BASE_CONFIG, 'split-mode': 'tensor', 'flash-attn': 'off' },
+        logger: null,
+        opts: { stats: true }
+      })
+
+      await addon.load()
+      t.fail('load should reject when tensor split is combined with flash-attn=off')
+    } catch (error) {
+      t.ok(
+        /flash attention/i.test(error.message),
+        'error should name the flash-attention requirement, got: ' + error.message
+      )
+    } finally {
+      if (addon) await addon.unload().catch(() => {})
+    }
+  }
+)
+
 setImmediate(() => {
   setTimeout(() => {}, 500)
 })
