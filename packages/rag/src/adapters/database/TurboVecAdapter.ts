@@ -33,10 +33,6 @@ const ID_MAPPING_VERSION = 1
 const MANIFEST_VERSION = 1
 const DEFAULT_LOCK_STALE_MS = 30_000
 const DEFAULT_LOCK_HEARTBEAT_MS = 10_000
-// Windows rejects a file path over 259 characters, so the temporary and stale
-// artifact names carry a prefix of the owner hash instead of all 64 characters.
-// The full hash stays inside owner.json, which is what ownership compares.
-const OWNER_LABEL_LENGTH = 12
 
 function describeError(error: unknown): string {
   if (!(error instanceof Error)) return String(error)
@@ -1084,7 +1080,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
     this._assertWriterOwnership()
     fs.mkdirSync(this.checkpointWorkspaceDir, { recursive: true })
-    const checkpointId = `${this.lockOwner.slice(0, OWNER_LABEL_LENGTH)}-${Date.now()}`
+    const checkpointId = `${this.lockOwner.slice(0, 12)}-${Date.now()}`
     const snapshot = `index-${this.indexRevision}-${checkpointId}.tvim`
     const snapshotPath = path.join(this.checkpointWorkspaceDir, snapshot)
     const temporarySnapshot = `${snapshotPath}.tmp`
@@ -1236,7 +1232,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
             adds: `TurboVec workspace is already locked: ${lockPath}`
           })
         }
-        const stalePath = `${lockPath}.stale-${this.lockOwner.slice(0, OWNER_LABEL_LENGTH)}-${attempt}`
+        const stalePath = `${lockPath}.stale-${this.lockOwner}-${attempt}`
         try {
           fs.renameSync(lockPath, stalePath)
           this._removeLockArtifact(stalePath)
@@ -1247,12 +1243,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
 
     // The cause does not survive the worker to client boundary, so the reason
-    // and the path length go into the message the caller actually receives.
+    // goes into the message the caller actually receives.
     throw new QvacErrorRAG({
       code: ERR_CODES.DB_OPERATION_FAILED,
-      adds:
-        `Failed to acquire the TurboVec writer lock: ${lockPath} ` +
-        `(path length ${lockPath.length}): ${describeError(lastError)}`,
+      adds: `Failed to acquire the TurboVec writer lock: ${lockPath}: ${describeError(lastError)}`,
       cause: lastError instanceof Error ? lastError : undefined
     })
   }
@@ -1290,10 +1284,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
       updatedAt: Date.now()
     }
     const ownerPath = path.join(lockPath, 'owner.json')
-    const temporaryOwnerPath = path.join(
-      lockPath,
-      `owner.json.tmp-${this.lockOwner.slice(0, OWNER_LABEL_LENGTH)}`
-    )
+    const temporaryOwnerPath = path.join(lockPath, `owner.json.tmp-${this.lockOwner}`)
     if (verifyOwnership) this._assertWriterOwnership()
     try {
       fs.writeFileSync(temporaryOwnerPath, `${JSON.stringify(record)}\n`)

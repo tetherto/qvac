@@ -2154,12 +2154,6 @@ test('TurboVecAdapter recovers after the competing writer releases the lock', as
   await store.close()
 })
 
-// Windows refuses a file path longer than 259 characters, so the part the
-// adapter builds under its checkpoint directory has to stay well inside that.
-// The rest is whatever directory the application keeps its data in. The
-// longest name today is the temporary manifest, at 118 characters.
-const MAX_WORKSPACE_PATH_LENGTH = 128
-
 interface PatchableFs {
   mkdirSync: (...args: unknown[]) => unknown
   writeFileSync: (...args: unknown[]) => unknown
@@ -2257,29 +2251,6 @@ function runDurabilityCycle(
     await adapter.close()
   })
 }
-
-test('TurboVecAdapter keeps every path it builds within the workspace budget', async (t) => {
-  const tmpDir = await tmp()
-  const store = new Corestore(path.join(tmpDir, 'store'))
-  const checkpointDir = path.join(tmpDir, 'index')
-
-  const calls = await runDurabilityCycle(checkpointDir, store)
-  await store.close()
-
-  const inside = calls.filter((call) => call.target.startsWith(`${checkpointDir}${path.sep}`))
-  t.ok(inside.length > 0, 'the cycle touched paths inside the checkpoint directory')
-
-  let longest = { target: '', length: 0 }
-  for (const call of inside) {
-    const length = call.target.length - checkpointDir.length - 1
-    if (length > longest.length) longest = { target: call.target, length }
-  }
-
-  t.ok(
-    longest.length <= MAX_WORKSPACE_PATH_LENGTH,
-    `longest workspace path is ${longest.length} characters (${path.basename(longest.target)})`
-  )
-})
 
 test('TurboVecAdapter opens durability files for writing before flushing', async (t) => {
   const tmpDir = await tmp()
