@@ -210,6 +210,7 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.lm_phase1 = in.lmPhase1;
   params.simple_mode = in.simpleMode;
   params.normalize_loudness = in.normalizeLoudness;
+  params.generate_lrc = in.generateLrc;
   params.dcw_enabled = in.dcwEnabled;
   params.dcw_scaler = in.dcwScaler;
   params.dcw_high_scaler = in.dcwHighScaler;
@@ -272,6 +273,9 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   if (cancelRequested_.load()) {
     throw std::runtime_error("ACE-Step generation cancelled");
   }
+  hasLyricsScore_ = in.generateLrc;
+  lyricsScore_ = result.metadata.lyrics_score;
+  lrc_ = result.metadata.lrc;
 
   // Peak-normalise before the int16 quantisation, exactly like the music CLI's
   // wav_write (gain = 0.9 / peak). The Oobleck VAE routinely outputs float
@@ -330,6 +334,9 @@ qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
   stats.emplace_back("backendId", backendIdFromName(backendName_));
   stats.emplace_back(
       "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
+  if (hasLyricsScore_) {
+    stats.emplace_back("lyricsScore", lyricsScore_);
+  }
   return stats;
 }
 

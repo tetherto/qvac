@@ -158,6 +158,14 @@ export interface GenerateOptions {
    * engine output. Audio edits are never normalized.
    */
   normalizeLoudness?: boolean
+  /**
+   * Synchronized lyric timestamps: after synthesis, the engine aligns the
+   * lyrics with the generated audio and delivers karaoke-style LRC text in
+   * `stats.lrc` with an alignment confidence in `stats.lyricsScore`. Requires
+   * lyrics to align: pass `lyrics` (or let Simple Mode write them) —
+   * instrumental requests are rejected. Requires `taskType: 'text2music'`.
+   */
+  generateLrc?: boolean
   /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
   dcwEnabled?: boolean
   /** DCW low-frequency correction strength (official default: 0.05). */
@@ -295,6 +303,8 @@ export interface AudiogenPcmChunk {
   outputArray: Int16Array
   sampleRate: number
   channels: number
+  /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+  lrc?: string
 }
 
 /** A progress tick delivered through the run's output stream. */
@@ -326,6 +336,14 @@ export interface AudiogenStats {
   backendId?: number
   /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
   gpuFallbackReason?: number
+  /**
+   * Lyric-to-audio alignment confidence in [0, 1]. Present only when the run
+   * set `generateLrc`; the LRC text itself rides on the PCM chunk (`lrc`) and
+   * is repeated here for convenience.
+   */
+  lyricsScore?: number
+  /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+  lrc?: string
 }
 
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
@@ -383,6 +401,8 @@ interface NativeAudiogenData {
   backendDevice?: number
   backendId?: number
   gpuFallbackReason?: number
+  lyricsScore?: number
+  lrc?: string
   progressStage?: string
   progressStep?: number
   progressTotal?: number
@@ -859,6 +879,7 @@ export class AudioGen {
   private _destroyed: boolean
   private _cancelPromise: Promise<void> | null
   private _cancellingResponse: QvacResponse<AudiogenOutputChunk> | null
+  private _lastLrc: string | undefined
   private _cancelTerminalResolve: (() => void) | null
 
   constructor(options: AudioGenOptions = {}) {
@@ -926,6 +947,7 @@ export class AudioGen {
     this._cancelPromise = null
     this._cancellingResponse = null
     this._cancelTerminalResolve = null
+    this._lastLrc = undefined
   }
 
   /** Create the native engine and load its GGUF files. Idempotent. */
@@ -1121,6 +1143,20 @@ export class AudioGen {
     if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
       throw invalidInput('normalizeLoudness must be a boolean')
     }
+    if (opts.generateLrc !== undefined && typeof opts.generateLrc !== 'boolean') {
+      throw invalidInput('generateLrc must be a boolean')
+    }
+    if (opts.generateLrc === true) {
+      if (taskType !== undefined && taskType !== 'text2music') {
+        throw invalidInput("generateLrc requires taskType 'text2music'")
+      }
+      if (
+        opts.simpleMode !== true &&
+        (opts.lyrics === undefined || opts.lyrics === '' || opts.lyrics === '[Instrumental]')
+      ) {
+        throw invalidInput('generateLrc requires lyrics to align')
+      }
+    }
     if (opts.simpleMode === true) {
       if (taskType !== undefined && taskType !== 'text2music') {
         throw invalidInput("simpleMode supports only taskType 'text2music'")
@@ -1151,6 +1187,7 @@ export class AudioGen {
       lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
       simpleMode: opts.simpleMode,
       normalizeLoudness: opts.normalizeLoudness,
+      generateLrc: opts.generateLrc,
       seed: optionalFiniteNumber(opts.seed, 'seed', true),
       vocalLanguage: opts.vocalLanguage,
       bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
@@ -1339,10 +1376,12 @@ export class AudioGen {
     }
 
     if (d.outputArray) {
+      this._lastLrc = typeof d.lrc === 'string' ? d.lrc : undefined
       this._job.output({
         outputArray: d.outputArray,
         sampleRate: d.sampleRate ?? 0,
-        channels: d.channels ?? 0
+        channels: d.channels ?? 0,
+        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
       })
       return
     }
@@ -1356,7 +1395,9 @@ export class AudioGen {
         ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
         ...(typeof d.gpuFallbackReason === 'number'
           ? { gpuFallbackReason: d.gpuFallbackReason }
-          : {})
+          : {}),
+        ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
+        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
       }
       this._job.end(stats, stats)
     }

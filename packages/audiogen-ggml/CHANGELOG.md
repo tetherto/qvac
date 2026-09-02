@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `generateLrc` generation control: karaoke-style synchronized lyric
+  timestamps in `stats.lrc` (standard LRC text) with an alignment confidence
+  in `stats.lyricsScore`. Requires lyrics — explicit or Simple-Mode written —
+  and `taskType: 'text2music'`.
+
+### Changed
+
+- Require `speech-cpp` port revision `2026-09-02#1`, which adds the engine's
+  ACE-Step LRC generation.
+
 ## [0.3.3] - 2026-09-01
 
 ### Added

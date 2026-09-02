@@ -107,6 +107,14 @@ export interface GenerateOptions {
      * engine output. Audio edits are never normalized.
      */
     normalizeLoudness?: boolean;
+    /**
+     * Synchronized lyric timestamps: after synthesis, the engine aligns the
+     * lyrics with the generated audio and delivers karaoke-style LRC text in
+     * `stats.lrc` with an alignment confidence in `stats.lyricsScore`. Requires
+     * lyrics to align: pass `lyrics` (or let Simple Mode write them) —
+     * instrumental requests are rejected. Requires `taskType: 'text2music'`.
+     */
+    generateLrc?: boolean;
     /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
     dcwEnabled?: boolean;
     /** DCW low-frequency correction strength (official default: 0.05). */
@@ -234,6 +242,8 @@ export interface AudiogenPcmChunk {
     outputArray: Int16Array;
     sampleRate: number;
     channels: number;
+    /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+    lrc?: string;
 }
 /** A progress tick delivered through the run's output stream. */
 export interface AudiogenProgressChunk {
@@ -262,6 +272,14 @@ export interface AudiogenStats {
     backendId?: number;
     /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
     gpuFallbackReason?: number;
+    /**
+     * Lyric-to-audio alignment confidence in [0, 1]. Present only when the run
+     * set `generateLrc`; the LRC text itself rides on the PCM chunk (`lrc`) and
+     * is repeated here for convenience.
+     */
+    lyricsScore?: number;
+    /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+    lrc?: string;
 }
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
 export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'other';
@@ -323,6 +341,7 @@ export declare class AudioGen {
     private _destroyed;
     private _cancelPromise;
     private _cancellingResponse;
+    private _lastLrc;
     private _cancelTerminalResolve;
     constructor(options?: AudioGenOptions);
     /** Create the native engine and load its GGUF files. Idempotent. */
