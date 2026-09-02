@@ -8,6 +8,8 @@ const REGISTRY_PREFIX_Q8_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-11'
 const REGISTRY_PREFIX_Q4_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-27'
 const REGISTRY_PREFIX_2026_07_01 = 'qvac_models_compiled/ggml/parakeet/2026-07-01'
 const REGISTRY_PREFIX_STREAMING = 'qvac_models_compiled/ggml/parakeet/2026-05-20'
+const REGISTRY_PREFIX_INDIC = 'qvac_models_compiled/ggml/indic_conformer/2026-08-07'
+const REGISTRY_PREFIX_UNIFIED = 'qvac_models_compiled/ggml/parakeet/2026-08-13'
 const DEFAULT_EXPIRES_IN = '604800'
 
 const outputPath = path.resolve(__dirname, '../test/mobile/testAssets/model-manifest.json')
@@ -19,14 +21,27 @@ const MODELS = {
   tdtQ4: model('parakeet-tdt-0.6b-v3.q4_0.gguf', REGISTRY_PREFIX_Q4_0),
   tdtQ8: model('parakeet-tdt-0.6b-v3.q8_0.gguf', REGISTRY_PREFIX_Q8_0),
   tdtF16: model('parakeet-tdt-0.6b-v3.f16.gguf', REGISTRY_PREFIX_2026_07_01),
+  unifiedQ4: model('parakeet-unified-en-0.6b.q4_0.gguf', REGISTRY_PREFIX_UNIFIED),
+  unifiedQ8: model('parakeet-unified-en-0.6b.q8_0.gguf', REGISTRY_PREFIX_UNIFIED),
+  unifiedF16: model('parakeet-unified-en-0.6b.f16.gguf', REGISTRY_PREFIX_UNIFIED),
   eouQ4: model('parakeet-eou-120m-v1.q4_0.gguf', REGISTRY_PREFIX_Q4_0),
   eouQ8: model('parakeet-eou-120m-v1.q8_0.gguf', REGISTRY_PREFIX_Q8_0),
   eouF16: model('parakeet-eou-120m-v1.f16.gguf', REGISTRY_PREFIX_2026_07_01),
   sortformerQ4: model('sortformer-4spk-v1.q4_0.gguf', REGISTRY_PREFIX_Q4_0),
   sortformerQ8: model('sortformer-4spk-v1.q8_0.gguf', REGISTRY_PREFIX_Q8_0),
   sortformerF16: model('sortformer-4spk-v1.f16.gguf', REGISTRY_PREFIX_2026_07_01),
-  sortformerStreamingQ4: model('diar_streaming_sortformer_4spk-v2.1.q4_0.gguf', REGISTRY_PREFIX_STREAMING),
-  sortformerStreamingQ8: model('diar_streaming_sortformer_4spk-v2.1.q8_0.gguf', REGISTRY_PREFIX_STREAMING)
+  sortformerStreamingQ4: model(
+    'diar_streaming_sortformer_4spk-v2.1.q4_0.gguf',
+    REGISTRY_PREFIX_STREAMING
+  ),
+  sortformerStreamingQ8: model(
+    'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
+    REGISTRY_PREFIX_STREAMING
+  ),
+  indicConformerQ4: model('indic-conformer-ctc.q4_0.gguf', REGISTRY_PREFIX_INDIC),
+  unifiedQ4: model('parakeet-unified-en-0.6b.q4_0.gguf', REGISTRY_PREFIX_UNIFIED),
+  unifiedQ8: model('parakeet-unified-en-0.6b.q8_0.gguf', REGISTRY_PREFIX_UNIFIED),
+  unifiedF16: model('parakeet-unified-en-0.6b.f16.gguf', REGISTRY_PREFIX_UNIFIED)
 }
 
 // Keyed by the mobile RUNNER FUNCTION NAME exported from
@@ -45,47 +60,67 @@ const MODELS = {
 // the device-side network fallback used by the whisper parent lane.
 const TEST_MODELS = {
   runParakeetAccuracyMultilangTest: [MODELS.tdtQ4],
-  runParakeetAddonMultimodelTest: [MODELS.ctcQ4, MODELS.eouQ4, MODELS.sortformerQ4],
+  runParakeetAddonMultimodelTest: [
+    MODELS.ctcQ4,
+    MODELS.eouQ4,
+    MODELS.sortformerQ4,
+    MODELS.indicConformerQ4,
+    MODELS.unifiedQ4
+  ],
   runParakeetColdStartTimingTest: [MODELS.tdtQ4],
   runParakeetCorruptedModelTest: [],
   runParakeetDuplexStreamingEouTest: [MODELS.eouQ4],
-  runParakeetDuplexStreamingTest: [MODELS.tdtQ4],
+  runParakeetDuplexStreamingTest: [MODELS.tdtQ4, MODELS.unifiedQ4],
   runParakeetEouStreamingTest: [MODELS.eouQ4],
-  runParakeetGpuSmokeTest: [MODELS.tdtQ4],
+  runParakeetGpuSmokeTest: [MODELS.tdtQ4, MODELS.unifiedQ4],
   runParakeetLiveStreamSimulationTest: [MODELS.tdtQ4],
   runParakeetMobilePerfCtcCpuTest: [MODELS.ctcQ4, MODELS.ctcQ8, MODELS.ctcF16],
   runParakeetMobilePerfCtcGpuTest: [MODELS.ctcQ4, MODELS.ctcQ8, MODELS.ctcF16],
   runParakeetMobilePerfEouCpuTest: [MODELS.eouQ4, MODELS.eouQ8, MODELS.eouF16],
   runParakeetMobilePerfEouGpuTest: [MODELS.eouQ4, MODELS.eouQ8, MODELS.eouF16],
-  runParakeetMobilePerfSortformerCpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
-  runParakeetMobilePerfSortformerGpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
-  runParakeetMobilePerfSortformerStreamingCpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
-  runParakeetMobilePerfSortformerStreamingGpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
+  runParakeetMobilePerfSortformerCpuTest: [
+    MODELS.sortformerQ4,
+    MODELS.sortformerQ8,
+    MODELS.sortformerF16
+  ],
+  runParakeetMobilePerfSortformerGpuTest: [
+    MODELS.sortformerQ4,
+    MODELS.sortformerQ8,
+    MODELS.sortformerF16
+  ],
+  runParakeetMobilePerfSortformerStreamingCpuTest: [
+    MODELS.sortformerStreamingQ4,
+    MODELS.sortformerStreamingQ8
+  ],
+  runParakeetMobilePerfSortformerStreamingGpuTest: [
+    MODELS.sortformerStreamingQ4,
+    MODELS.sortformerStreamingQ8
+  ],
   runParakeetMobilePerfTdtCpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
   runParakeetMobilePerfTdtGpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
+  runParakeetMobilePerfUnifiedCpuTest: [MODELS.unifiedQ4, MODELS.unifiedQ8, MODELS.unifiedF16],
+  runParakeetMobilePerfUnifiedGpuTest: [MODELS.unifiedQ4, MODELS.unifiedQ8, MODELS.unifiedF16],
   runParakeetModelFileValidationTest: [MODELS.tdtQ4],
   runParakeetMultipleTranscriptionsTest: [MODELS.tdtQ4],
   runParakeetSortformerAoscStreamingTest: [MODELS.sortformerStreamingQ4],
   runParakeetSortformerStreamingAliasTest: []
 }
 
-function model (name, prefix) {
+function model(name, prefix) {
   return { name, s3Key: `${prefix}/${name}` }
 }
 
-function presignModel (bucket, entry, expiresIn) {
-  const url = execFileSync('aws', [
-    's3',
-    'presign',
-    `s3://${bucket}/${entry.s3Key}`,
-    '--expires-in',
-    expiresIn
-  ], { encoding: 'utf8' }).trim()
+function presignModel(bucket, entry, expiresIn) {
+  const url = execFileSync(
+    'aws',
+    ['s3', 'presign', `s3://${bucket}/${entry.s3Key}`, '--expires-in', expiresIn],
+    { encoding: 'utf8' }
+  ).trim()
 
   return { name: entry.name, url }
 }
 
-function main () {
+function main() {
   const bucket = process.env.MODEL_S3_BUCKET
   if (!bucket) {
     throw new Error('MODEL_S3_BUCKET env var is required')

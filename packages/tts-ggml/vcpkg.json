@@ -9,11 +9,52 @@
       "version>=": "1.4.4#3"
     },
     {
-      "name": "tts-cpp",
-      "version>=": "2026-08-06"
+      "name": "speech-cpp",
+      "version>=": "2026-09-01#1",
+      "default-features": false,
+      "features": [
+        "tts",
+        "metal"
+      ],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-09-01#1",
+      "default-features": false,
+      "features": [
+        "tts",
+        "vulkan",
+        "opencl"
+      ],
+      "platform": "android"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-09-01#1",
+      "default-features": false,
+      "features": [
+        "tts",
+        "vulkan"
+      ],
+      "platform": "!(osx | ios | android)"
     }
   ],
   "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "version>=": "2026-09-01#1",
+          "default-features": false,
+          "features": [
+            "cuda"
+          ],
+          "platform": "!(osx | ios | android)"
+        }
+      ]
+    },
     "tests": {
       "description": "Build C++ unit tests",
       "dependencies": [
@@ -24,8 +65,13 @@
       "description": "Enable Vulkan GPU acceleration",
       "dependencies": [
         {
-          "name": "tts-cpp",
-          "features": ["vulkan"]
+          "name": "speech-cpp",
+          "version>=": "2026-09-01#1",
+          "default-features": false,
+          "features": [
+            "vulkan"
+          ],
+          "platform": "!(osx | ios)"
         }
       ]
     }

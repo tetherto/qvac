@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto'
 import {
   createServer,
   request as httpRequest,
@@ -22,7 +23,12 @@ export interface Upstream {
 }
 
 export interface ProxyOptions {
+  // Credential the proxy demands from OpenCode. It is not the managed serve key.
+  readonly proxyToken: string
   readonly getUpstream: () => Upstream | undefined
+  // The managed serve's current key, read per request so a recovered serve is
+  // never sent a stale credential. Undefined until managed serve is ready.
+  readonly getApiKey: () => string | undefined
   readonly whenUpstream: Promise<void>
   readonly openAICompatTransforms: boolean
   readonly upstreamTimeoutMs: number
@@ -41,17 +47,63 @@ export function originOf(baseURL: string): Upstream {
   return { hostname: u.hostname, port: u.port }
 }
 
-function buildForwardHeaders(req: IncomingMessage, bodyLength: number): Record<string, string> {
+export function isLoopbackUpstream(upstream: Upstream): boolean {
+  const host = upstream.hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1')
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') return true
+
+  const octets = host.split('.')
+  return (
+    octets.length === 4 &&
+    octets[0] === '127' &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+  )
+}
+
+// Per RFC 9110 these govern a single hop and must not be relayed. `transfer-encoding`
+// matters most: Node hands us an already-decoded body, so relaying it alongside the
+// recomputed `content-length` would give serve two disagreeing framings of one request.
+const HOP_BY_HOP_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade'
+])
+
+function buildForwardHeaders(
+  req: IncomingMessage,
+  bodyLength: number,
+  apiKey: string
+): Record<string, string> {
   const headers: Record<string, string> = {}
   for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined) continue
+    if (value === undefined || HOP_BY_HOP_HEADERS.has(key)) continue
     headers[key] = Array.isArray(value) ? value.join(', ') : value
   }
   delete headers['host']
   delete headers['accept-encoding']
-  delete headers['content-length']
-  if (bodyLength > 0) headers['content-length'] = String(bodyLength)
+  // Always stated, never inherited: the transforms below can resize the body, and
+  // an explicit length is the only framing the upstream request should carry.
+  headers['content-length'] = String(bodyLength)
+  // The caller's proxy token never reaches serve; serve only sees its own key.
+  headers['authorization'] = `Bearer ${apiKey}`
   return headers
+}
+
+// Fixed-length secrets, so only a length mismatch is short-circuited.
+function isExpectedAuthorization(header: string | undefined, expected: string): boolean {
+  if (header === undefined) return false
+  const given = Buffer.from(header, 'utf8')
+  const want = Buffer.from(expected, 'utf8')
+  return given.length === want.length && timingSafeEqual(given, want)
+}
+
+function isProxyAuthorized(req: IncomingMessage, proxyToken: string): boolean {
+  return isExpectedAuthorization(req.headers['authorization'], `Bearer ${proxyToken}`)
 }
 
 function isInferenceRequest(req: IncomingMessage): boolean {
@@ -150,13 +202,39 @@ function pipeResponse(
   })
 }
 
-function writeProxyError(res: ServerResponse, statusCode: number, message: string): void {
+interface ProxyError {
+  readonly message: string
+  readonly type?: string
+  readonly code?: string
+}
+
+function writeProxyError(
+  res: ServerResponse,
+  statusCode: number,
+  error: ProxyError | string
+): void {
   if (res.headersSent) {
     res.destroy()
     return
   }
   res.writeHead(statusCode, { 'content-type': 'application/json' })
-  res.end(JSON.stringify({ error: { message } }))
+  res.end(JSON.stringify({ error: typeof error === 'string' ? { message: error } : error }))
+}
+
+// Matches `qvac serve`'s own rejection envelope so OpenCode surfaces a bad
+// credential the same way whichever hop refused it.
+const UNAUTHORIZED: ProxyError = {
+  message: 'Invalid or missing API key.',
+  type: 'invalid_request_error',
+  code: 'invalid_api_key'
+}
+
+function rejectUnauthorized(req: IncomingMessage, res: ServerResponse, logger: HostLogger): void {
+  logger.trace(`401 ${req.method ?? '?'} ${req.url ?? '?'}`)
+  writeProxyError(res, 401, UNAUTHORIZED)
+  // Discard whatever body is still in flight instead of collecting it: a caller
+  // we have already refused must not be able to size an allocation here.
+  req.resume()
 }
 
 async function forwardToUpstream(
@@ -165,6 +243,7 @@ async function forwardToUpstream(
   body: Buffer,
   reqStart: number,
   upstream: Upstream,
+  apiKey: string,
   options: ProxyOptions
 ): Promise<void> {
   await new Promise<void>((resolve) => {
@@ -181,7 +260,7 @@ async function forwardToUpstream(
         port: upstream.port,
         path: req.url,
         method: req.method,
-        headers: buildForwardHeaders(req, body.length)
+        headers: buildForwardHeaders(req, body.length, apiKey)
       },
       (proxyRes) => {
         options.logger.trace(
@@ -220,6 +299,13 @@ async function handleRequest(
   options: ProxyOptions,
   runInference: SerializedRunner
 ): Promise<void> {
+  // Defense in depth: the connection handler already refuses unauthenticated
+  // callers before a body is read, so reaching this is a wiring mistake.
+  if (!isProxyAuthorized(req, options.proxyToken)) {
+    rejectUnauthorized(req, res, options.logger)
+    return
+  }
+
   let body = rawBody
   const contentType = req.headers['content-type'] ?? ''
   if (
@@ -239,19 +325,27 @@ async function handleRequest(
     }
   }
 
-  await options.whenUpstream
+  try {
+    await options.whenUpstream
+  } catch (err) {
+    // Managed startup failed or the host is stopping. The reason is a structured
+    // plugin error, never anything carrying a credential.
+    writeProxyError(res, 503, err instanceof Error ? err.message : 'qvac serve is not available')
+    return
+  }
   const upstream = options.getUpstream()
-  if (upstream === undefined) {
+  const apiKey = options.getApiKey()
+  if (upstream === undefined || apiKey === undefined) {
     writeProxyError(res, 503, 'qvac serve is not available')
     return
   }
 
   if (isInferenceRequest(req)) {
-    await runInference(() => forwardToUpstream(req, res, body, reqStart, upstream, options))
+    await runInference(() => forwardToUpstream(req, res, body, reqStart, upstream, apiKey, options))
     return
   }
 
-  await forwardToUpstream(req, res, body, reqStart, upstream, options)
+  await forwardToUpstream(req, res, body, reqStart, upstream, apiKey, options)
 }
 
 export function startOpenAICompatibleProxy(
@@ -262,6 +356,13 @@ export function startOpenAICompatibleProxy(
     res.on('error', () => {})
     req.on('error', () => {})
     const reqStart = Date.now()
+    // Authenticate on the headers alone, before a `data` listener exists: an
+    // unauthenticated caller must not get the host to buffer a body, nor to wait
+    // on managed startup, nor to borrow the serve credential.
+    if (!isProxyAuthorized(req, options.proxyToken)) {
+      rejectUnauthorized(req, res, options.logger)
+      return
+    }
     const chunks: Buffer[] = []
     req.on('data', (c: Buffer) => chunks.push(c))
     req.on('end', () => {
@@ -286,6 +387,9 @@ export function startOpenAICompatibleProxy(
               if (err === undefined) res()
               else rej(err)
             })
+            // A refused caller can leave a half-sent request on the socket, which
+            // would keep `close` pending forever; shutdown must not wait on it.
+            server.closeAllConnections()
           })
       })
     })

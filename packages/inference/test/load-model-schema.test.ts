@@ -20,6 +20,63 @@ test('loadModelSrcRequestSchema: rejects unknown top-level keys', (t) => {
   t.is(result.success, false)
 })
 
+test('loadModelSrcRequestSchema: accepts an optional fallbackSrc', (t) => {
+  const request = {
+    type: 'loadModel',
+    modelType: ModelType.llamacppCompletion,
+    modelSrc: 'registry://hf/known/model.gguf',
+    modelConfig: {},
+    fallbackSrc: 'https://example.com/model.gguf'
+  }
+
+  const result = loadModelSrcRequestSchema.safeParse(request)
+  t.is(result.success, true)
+  if (result.success) {
+    t.is(result.data.fallbackSrc, 'https://example.com/model.gguf')
+  }
+})
+
+test('loadModelOptionsToRequestSchema: carries fallbackSrc from options into the request', (t) => {
+  const request = loadModelOptionsToRequestSchema.parse({
+    modelSrc: 'registry://hf/known/model.gguf',
+    modelType: 'llm',
+    fallbackSrc: './local/fallback.gguf'
+  })
+
+  t.is(request.fallbackSrc, './local/fallback.gguf')
+})
+
+test('loadModelOptionsToRequestSchema: omits fallbackSrc when not provided', (t) => {
+  const request = loadModelOptionsToRequestSchema.parse({
+    modelSrc: 'registry://hf/known/model.gguf',
+    modelType: 'llm'
+  })
+
+  t.absent('fallbackSrc' in request)
+})
+
+test('loadModelOptionsToRequestSchema: carries the per-call security flags into the request', (t) => {
+  const request = loadModelOptionsToRequestSchema.parse({
+    modelSrc: 'https://huggingface.co/org/repo/resolve/main/model.gguf',
+    modelType: 'llm',
+    requireHttpChecksum: true,
+    requireSecureTransport: true
+  })
+
+  t.is(request.requireHttpChecksum, true)
+  t.is(request.requireSecureTransport, true)
+})
+
+test('loadModelOptionsToRequestSchema: omits the security flags when not provided', (t) => {
+  const request = loadModelOptionsToRequestSchema.parse({
+    modelSrc: 'registry://hf/known/model.gguf',
+    modelType: 'llm'
+  })
+
+  t.absent('requireHttpChecksum' in request)
+  t.absent('requireSecureTransport' in request)
+})
+
 test('loadModelOptionsToRequestSchema: points misplaced LLM config fields to modelConfig', (t) => {
   try {
     loadModelOptionsToRequestSchema.parse({

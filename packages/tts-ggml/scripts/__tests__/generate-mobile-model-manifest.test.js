@@ -23,6 +23,7 @@ const {
   FUNCTIONAL_MODELS,
   LAVASR_MODELS,
   COSYVOICE_MODELS,
+  PARLER_MODELS,
   QUALITY_MODELS
 } = require('../generate-mobile-model-manifest')
 
@@ -39,6 +40,7 @@ test('the manifest exposes benchmark and functional model sections', () => {
   assert.equal(manifest.functional.length, 4, 'functional section has every Supertonic 3 tier')
   assert.equal(manifest.lavasr.length, 2, 'lavasr section has the enhancer + denoiser')
   assert.equal(manifest.cosyvoice.length, 6, 'cosyvoice section has the 6 model-dir files')
+  assert.equal(manifest.parler.length, 1, 'parler section has the mini q8_0 GGUF')
   assert.equal(manifest.quality.length, 1, 'quality section has the mobile Whisper model')
 })
 
@@ -110,6 +112,18 @@ test('the lavasr entries are signed from the published fp16 registry paths', () 
   assert.match(denoiser.url, /ggml\/lavasr\/2026-07-03\/lavasr-denoiser-f16\.gguf$/)
 })
 
+// The registry date is pinned so a prestage-path change fails here as a
+// reminder to keep it in lockstep with REGISTRY_DATE_PARLER in
+// test/utils/downloadModel.js (the on-device resolver that would fetch the
+// same GGUF). The target stays the flat registry filename ensureParlerModel
+// scans for directly in <modelsDir>.
+test('the parler entry is signed from the published mini q8_0 registry path', () => {
+  const { manifest } = buildManifest(fakePresign)
+  const [parler] = manifest.parler
+  assert.equal(parler.targetName, 'parler-mini-v1-q8_0.gguf')
+  assert.match(parler.url, /ggml\/parler-tts\/2026-07-20\/parler-mini-v1-q8_0\.gguf$/)
+})
+
 test('LAVASR_MODELS keeps the fp16 registry key / on-disk target split', () => {
   const [enhancer, denoiser] = LAVASR_MODELS
   assert.match(enhancer.s3Key, /lavasr-enhancer-f16\.gguf$/)
@@ -126,7 +140,8 @@ test('signedCount counts each distinct GGUF once across all sections', () => {
       ...Q8_MODELS,
       ...FUNCTIONAL_MODELS,
       ...LAVASR_MODELS,
-      ...COSYVOICE_MODELS
+      ...COSYVOICE_MODELS,
+      ...PARLER_MODELS
     ].map((entry) => entry.name)
   )
   assert.equal(signedCount, distinct.size)

@@ -1,5 +1,5 @@
 // RAG test definitions
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 const createRagTest = (
   testId: string,
@@ -53,6 +53,25 @@ export const ragEmbeddingsLarge = createRagTest('rag-embeddings-large-chunks', {
   chunkOverlap: 70,
   chunkStrategy: 'paragraph'
 })
+
+export const ragTurboVecIngestSearch: TestDefinition = {
+  testId: 'rag-turbovec-ingest-search',
+  params: {
+    workspace: 'turbovec-e2e',
+    documentContent: 'The verification code is ORANGE-742.',
+    secondDocumentContent: 'A blue whale is the largest animal on Earth.',
+    searchQuery: 'What is the verification code?',
+    chunkSize: 100,
+    chunkOverlap: 20,
+    chunkStrategy: 'paragraph',
+    adapter: 'turbovec'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['ORANGE-742', 'checkpoint:present']
+  },
+  metadata: { category: 'rag', dependency: 'embeddings', estimatedDurationMs: 30000 }
+}
 
 export const ragChunk50Overlap10 = createRagTest('rag-embeddings-chunk-50-overlap-10', {
   workspace: 'test',
@@ -117,6 +136,7 @@ export const ragTests = [
   ragEmbeddingsSmall,
   ragEmbeddingsMedium,
   ragEmbeddingsLarge,
+  ragTurboVecIngestSearch,
   ragChunk50Overlap10,
   ragChunk100Overlap20,
   ragChunk200Overlap50,

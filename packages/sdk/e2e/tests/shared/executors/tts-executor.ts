@@ -1,5 +1,5 @@
 import { textToSpeech } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   makeEnhancedTtsHandler,
@@ -9,6 +9,11 @@ import {
   makeParlerEmotionComparisonHandler,
   makeParlerTtsHandler
 } from '../utils/tts-parler-helpers.js'
+import {
+  makeCosyvoice3EmotionComparisonHandler,
+  makeCosyvoice3TtsHandler
+} from '../utils/tts-cosyvoice3-helpers.js'
+import { makeAudio8TtsHandler } from '../utils/tts-audio8-helpers.js'
 import { ttsTests } from '../../tts-tests.js'
 
 type TtsParams = { text: string; stream?: boolean; sentenceStream?: boolean }
@@ -32,6 +37,15 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
       }
       if (test.testId.startsWith('tts-parler-')) {
         return [test.testId, this.makeParler(dep)]
+      }
+      if (test.testId === 'tts-cosyvoice3-emotion-conditioning') {
+        return [test.testId, this.makeCosyvoice3EmotionComparison(dep)]
+      }
+      if (test.testId.startsWith('tts-cosyvoice3-')) {
+        return [test.testId, this.makeCosyvoice3(dep)]
+      }
+      if (test.testId.startsWith('tts-audio8-')) {
+        return [test.testId, this.makeAudio8(dep)]
       }
       if (params.stream && params.sentenceStream) {
         return [test.testId, this.makeSentenceStream(dep)]
@@ -69,6 +83,30 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
 
   private makeParlerEmotionComparison(dep: string) {
     return makeParlerEmotionComparisonHandler<Expectation, TestResult>({
+      dependency: dep,
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
+    })
+  }
+
+  private makeCosyvoice3(dep: string) {
+    return makeCosyvoice3TtsHandler<Expectation, TestResult>({
+      dependency: dep,
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
+    })
+  }
+
+  private makeCosyvoice3EmotionComparison(dep: string) {
+    return makeCosyvoice3EmotionComparisonHandler<Expectation, TestResult>({
+      dependency: dep,
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
+    })
+  }
+
+  private makeAudio8(dep: string) {
+    return makeAudio8TtsHandler<Expectation, TestResult>({
       dependency: dep,
       ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
       validate: (output, expectation) => ValidationHelpers.validate(output, expectation)

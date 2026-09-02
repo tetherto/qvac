@@ -1,6 +1,6 @@
 import { ocr, type OCRTextBlock } from '@qvac/sdk'
 import * as path from 'node:path'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { ocrTests } from '../../../ocr-tests.js'
 

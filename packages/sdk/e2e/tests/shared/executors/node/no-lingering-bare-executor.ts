@@ -1,7 +1,7 @@
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { BaseExecutor, type TestResult } from '@tetherto/qvac-test-suite'
+import { BaseExecutor, type TestResult } from '@qvac/test-suite'
 import {
   noLingeringBareTests,
   noLingeringBareSigterm,

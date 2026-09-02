@@ -37,6 +37,18 @@ void detail::applyVulkanPipelineCache(
   }
 }
 
+void detail::validateNoPerCallControls(
+    const std::string& emotion, const std::string& pace) {
+  if (emotion.empty() && pace.empty())
+    return;
+  const std::string channel = emotion.empty() ? "pace" : "emotion";
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "supertonic applies '" + channel +
+          "' when the engine is built, so it cannot change per call; set it "
+          "in the configuration or reload instead");
+}
+
 namespace {
 
 using qvac_errors::createTTSError;
@@ -51,6 +63,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
   if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.steps.has_value())   opts.steps = *cfg.steps;
   if (cfg.speed.has_value())   opts.speed = *cfg.speed;
+  opts.pace = cfg.pace;
   if (cfg.seed.has_value())    opts.seed  = *cfg.seed;
   if (cfg.threads.has_value()) opts.n_threads = *cfg.threads;
   if (cfg.nGpuLayers.has_value()) {
@@ -265,7 +278,7 @@ SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
 
   // LavaSR neural denoiser (opt-in). Runs BEFORE the enhancer and preserves the
   // sample rate (cleans the signal, no rate change). The UL-UNAS forward is
-  // implemented in qvac-ext-lib-whisper.cpp PR #78; this runs whenever a
+  // implemented in qvac-fabric-speech.cpp PR #78; this runs whenever a
   // denoiser was loaded (i.e. the pinned tts-cpp includes #78).
   if (denoiser) {
     try {

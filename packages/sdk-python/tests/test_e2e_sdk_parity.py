@@ -16,7 +16,7 @@ import os
 
 import pytest
 import pytest_asyncio
-from _worker_env import BARE_BIN, WORKER_AVAILABLE
+from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
 
 from tetherto.qvac_sdk import translate
 from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
@@ -34,7 +34,6 @@ SDK_DIR = os.environ.get(
     "QVAC_POC_SDK_DIR",
     os.path.join(os.path.dirname(__file__), "..", "..", "sdk"),
 )
-WORKER_PATH = os.path.join(SDK_DIR, "dist", "server", "worker.js")
 IMAGES = os.path.join(SDK_DIR, "e2e", "assets", "images")
 
 pytestmark = [

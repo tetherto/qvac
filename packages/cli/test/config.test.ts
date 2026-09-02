@@ -1,12 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { FLUX_2_KLEIN_4B_VAE, TTS_S3GEN_EN_CHATTERBOX, WHISPER_EN_TINY_Q8_0 } from '@qvac/sdk'
-import {
-  parseServeConfig,
-  resolveExplicitServeModel,
-  resolveModelConstant
-} from '../src/serve/config.js'
-import { resolveNestedModelSrcConstants } from '../src/serve/resolve-nested-model-src.js'
+import { parseServeConfig, resolveExplicitServeModel, resolveModelConstant } from '@/serve/config'
+import { resolveNestedModelSrcConstants } from '@/serve/resolve-nested-model-src'
 
 describe('resolveExplicitServeModel', () => {
   it('maps whispercpp-audio-translation to whispercpp-transcription and audio-translation', () => {
@@ -45,7 +41,7 @@ describe('resolveExplicitServeModel', () => {
     })
     assert.equal(r.sdkType, 'whispercpp-transcription')
     assert.equal(r.endpointCategory, 'transcription')
-    assert.equal((r.config.whisperConfig as Record<string, unknown>).translate, false)
+    assert.equal((r.config['whisperConfig'] as Record<string, unknown>)['translate'], false)
   })
 })
 
@@ -77,6 +73,14 @@ describe('resolveModelConstant', () => {
     assert.throws(
       () => resolveModelConstant('alias', { model: 'NOT_A_REAL_CONST' }),
       /unknown model constant "NOT_A_REAL_CONST"/
+    )
+  })
+
+  it('defaults constant entries to preload:true unless explicitly disabled', () => {
+    assert.equal(resolveModelConstant('a', { model: 'WHISPER_EN_TINY_Q8_0' }).preload, true)
+    assert.equal(
+      resolveModelConstant('a', { model: 'WHISPER_EN_TINY_Q8_0', preload: false }).preload,
+      false
     )
   })
 
@@ -171,6 +175,22 @@ describe('parseServeConfig nested companions', () => {
     assert.equal(wan.endpointCategory, 'video')
     assert.equal(wan.config['mode'], 'video')
     assert.equal(wan.config['t5XxlModelSrc'], TTS_S3GEN_EN_CHATTERBOX)
+  })
+
+  it('defaults explicit {src,type} entries to preload:false unless opted in', () => {
+    const cfg = parseServeConfig(
+      {
+        serve: {
+          models: {
+            lazy: { src: 'placeholder', type: 'sdcpp-video' },
+            eager: { src: 'placeholder', type: 'sdcpp-video', preload: true }
+          }
+        }
+      },
+      {}
+    )
+    assert.equal(cfg.models.get('lazy')!.preload, false)
+    assert.equal(cfg.models.get('eager')!.preload, true)
   })
 
   it('leaves the ignored upscaler block unchanged for video entries', () => {

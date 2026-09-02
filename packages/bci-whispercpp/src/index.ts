@@ -141,8 +141,9 @@ type NeuralStreamInput =
   | Uint8Array[];
 
 // Default prebuilds folder for dynamically-loaded ggml backend `.so`
-// files. Consumed by the native addon on Android only (no-op
-// elsewhere). The CMake build stages the per-arch backends into
+// files. Consumed by the native addon on Android and Linux (no-op on
+// static builds and other platforms). The CMake build stages the
+// per-arch backends into
 // `<addon>/prebuilds/<bare_target>/<module_name>/`; the native side
 // joins `backendsDir` with the compile-time `BACKENDS_SUBDIR` before
 // calling `ggml_backend_load_all_from_path()`.

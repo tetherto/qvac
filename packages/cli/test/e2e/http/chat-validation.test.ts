@@ -3,7 +3,7 @@ import { useServer } from '../helpers/server.js'
 import { JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
 
 describe('serve: chat completions validation', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('invalid JSON returns 400', async () => {
     const res = await server().inject({

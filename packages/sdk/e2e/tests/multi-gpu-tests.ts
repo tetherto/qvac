@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 export const multiGpuConfigSmoke: TestDefinition = {
   testId: 'multi-gpu-config-smoke',

@@ -32,7 +32,7 @@ const {
   convertRawToFloat32,
   readFileAsStream,
   validatePaths
-} = require('./utils.js')
+} = require('./parakeet-utils.js')
 
 const SAMPLE_RATE = 16000
 

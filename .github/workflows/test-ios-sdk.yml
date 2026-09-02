@@ -45,11 +45,11 @@ on:
         required: true
         type: string
       ios-device-pools:
-        description: 'JSON array of iOS device pools [{name, arn}]'
+        description: 'JSON array of iOS device pools [{name, arn, p?, r?}]. Set p=true and r=false for private pools; r=false alone marks manual-only public pools.'
         required: true
         type: string
       device-pool-name:
-        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, a random AWS-available pool from ios-device-pools is chosen."
+        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, an available private pool is preferred before the public fallback."
         required: false
         type: string
         default: ""
@@ -57,6 +57,46 @@ on:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
+      inference-source:
+        description: "Resolved inference source"
+        required: false
+        type: string
+        default: manifest
+      inference-dependency-spec:
+        description: "Resolved inference package spec for npm"
+        required: false
+        type: string
+        default: ""
+      inference-artifact-name:
+        description: "Branch inference tarball artifact"
+        required: false
+        type: string
+        default: ""
+      inference-provenance:
+        description: "Immutable inference source identity"
+        required: false
+        type: string
+        default: ""
+      test-suite-source:
+        description: "Resolved test-suite source"
+        required: false
+        type: string
+        default: manifest
+      test-suite-dependency-spec:
+        description: "Resolved test-suite package spec for npm"
+        required: false
+        type: string
+        default: ""
+      test-suite-artifact-name:
+        description: "Branch test-suite tarball artifact"
+        required: false
+        type: string
+        default: ""
+      test-suite-provenance:
+        description: "Immutable test-suite source identity"
+        required: false
+        type: string
+        default: ""
     secrets:
       # MQTT_*, NPM_TOKEN, and Apple signing secrets (TEST_APP_APPLE_*,
       # APPLE_P12_PASSWORD, APPLE_KEYCHAIN_PASSWORD) are typically provided
@@ -64,10 +104,7 @@ on:
       # They are declared required: false here so `secrets: inherit` from a
       # caller with no repo-level values does not fail at the workflow_call
       # boundary; the jobs that consume them have environment access.
-      # PAT_TOKEN and AWS_OIDC_ROLE_ARN remain required:true because they are
-      # repo-level.
-      PAT_TOKEN:
-        required: true
+      # AWS_OIDC_ROLE_ARN remains required:true because it is repo-level.
       NPM_TOKEN:
         required: false
       MQTT_PROTOCOL:
@@ -102,6 +139,7 @@ permissions:
   actions: read
   id-token: write
   contents: read
+  packages: read
 
 jobs:
   report-start:
@@ -127,6 +165,8 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          inference-provenance: ${{ inputs.inference-provenance }}
+          test-suite-provenance: ${{ inputs.test-suite-provenance }}
 
   build:
     name: "[ios] build"
@@ -137,7 +177,7 @@ jobs:
       runId: ${{ steps.runid.outputs.runId }}
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_PORT: ${{ secrets.MQTT_PORT }}
@@ -147,8 +187,12 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
-          sparse-checkout: ${{ inputs.project-directory }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            ${{ inputs.project-directory }}
+            packages/inference
+            .github/actions/sdk-e2e-prepare-inference
+            .github/actions/sdk-e2e-prepare-test-suite
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -335,19 +379,37 @@ jobs:
           const path = require('path');
 
           if (!process.env.NPM_TOKEN) { console.log('NPM_TOKEN is empty'); process.exit(1); }
-          if (!process.env.PAT_TOKEN) { console.log('PAT_TOKEN is empty'); process.exit(1); }
+          if (!process.env.GITHUB_TOKEN) { console.log('GITHUB_TOKEN is empty'); process.exit(1); }
 
           const lines = [
             'registry=https://registry.npmjs.org/',
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
             `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+            `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
           const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
           console.log(`.npmrc configured at ${target}`);
+
+      - name: Apply resolved inference
+        uses: ./.github/actions/sdk-e2e-prepare-inference
+        with:
+          source: ${{ inputs.inference-source }}
+          dependency-spec: ${{ inputs.inference-dependency-spec }}
+          artifact-name: ${{ inputs.inference-artifact-name }}
+          project-directory: ${{ inputs.project-directory }}
+          provenance: ${{ inputs.inference-provenance }}
+
+      - name: Apply resolved test-suite
+        uses: ./.github/actions/sdk-e2e-prepare-test-suite
+        with:
+          source: ${{ inputs.test-suite-source }}
+          dependency-spec: ${{ inputs.test-suite-dependency-spec }}
+          artifact-name: ${{ inputs.test-suite-artifact-name }}
+          project-directory: ${{ inputs.working-directory }}
+          provenance: ${{ inputs.test-suite-provenance }}
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -446,56 +508,30 @@ jobs:
           path: ${{ inputs.working-directory }}/build/consumers/ios/consumer.ipa
           retention-days: 7
 
-  select-pool:
-    name: "[ios] select-pool"
+  device-farm:
+    name: "[ios] device-farm"
+    needs: build
     runs-on: ubuntu-latest
     environment: release
-    permissions:
-      id-token: write
-      contents: read
+    timeout-minutes: 45
     outputs:
-      pool: ${{ steps.select.outputs.pool }}
       name: ${{ steps.select.outputs.name }}
       availability: ${{ steps.select.outputs.availability }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          sparse-checkout: .github/actions/sdk-device-farm-select-pool
-          sparse-checkout-cone-mode: false
-
-      # Only random selection queries Device Farm (GetDevicePool + ListDevices);
-      # an explicit pool name needs no AWS access.
-      - name: Configure AWS credentials
-        if: ${{ inputs.device-pool-name == '' }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: us-west-2
-
-      - name: Select device pool
-        id: select
-        uses: ./.github/actions/sdk-device-farm-select-pool
-        with:
-          # Normalise to strict JSON: the device-pools variable may use lenient
-          # (unquoted-key) JSON that GitHub's fromJSON tolerates but jq does not.
-          pools: ${{ toJSON(fromJSON(inputs.ios-device-pools)) }}
-          pool-name: ${{ inputs.device-pool-name }}
-
-  device-farm:
-    name: "[ios] device-farm"
-    needs: [build, select-pool]
-    runs-on: ubuntu-latest
-    environment: release
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        device: ${{ fromJson(needs.select-pool.outputs.pool) }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           sparse-checkout: ${{ inputs.working-directory }}/device-farm
+
+      - name: Checkout trusted Device Farm selector
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: .github/actions/sdk-device-farm-select-pool
+          sparse-checkout-cone-mode: false
+          path: .workflow
 
       - name: Download IPA artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
@@ -512,7 +548,7 @@ jobs:
       - name: Upload IPA to Device Farm
         id: upload-app
         run: |
-          echo "Uploading IPA to Device Farm for ${{ matrix.device.name }}..."
+          echo "Uploading IPA to Device Farm..."
 
           IPA_FILE=$(find ./ipa -name "*.ipa" | head -1)
           if [ -z "$IPA_FILE" ]; then
@@ -523,7 +559,7 @@ jobs:
 
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --name "consumer-${{ needs.build.outputs.runId }}-${{ matrix.device.name }}.ipa" \
+            --name "consumer-${{ needs.build.outputs.runId }}.ipa" \
             --type "IOS_APP" \
             --output json)
 
@@ -625,16 +661,27 @@ jobs:
             sleep 5
           done
 
+      # Select after every upload is ready to reduce the private availability
+      # check-to-schedule window to only the following scheduling step.
+      - name: Select device pool
+        id: select
+        uses: ./.workflow/.github/actions/sdk-device-farm-select-pool
+        with:
+          # Normalise to strict JSON: the device-pools variable may use lenient
+          # (unquoted-key) JSON that GitHub's fromJSON tolerates but jq does not.
+          pools: ${{ toJSON(fromJSON(inputs.ios-device-pools)) }}
+          pool-name: ${{ inputs.device-pool-name }}
+
       - name: Schedule Device Farm run
         id: schedule
         run: |
-          echo "Scheduling Device Farm run on ${{ matrix.device.name }}..."
+          echo "Scheduling Device Farm run on ${{ steps.select.outputs.name }}..."
 
-          RUN_NAME="ios-${{ matrix.device.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
+          RUN_NAME="ios-${{ steps.select.outputs.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
 
           RUN_ARN=$(aws devicefarm schedule-run \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --device-pool-arn "${{ matrix.device.arn }}" \
+            --device-pool-arn "${{ steps.select.outputs.arn }}" \
             --app-arn "${{ steps.upload-app.outputs.app-arn }}" \
             --name "$RUN_NAME" \
             --test type=APPIUM_NODE,testPackageArn=${{ steps.upload-test-pkg.outputs.pkg-arn }},testSpecArn=${{ steps.upload-spec.outputs.spec-arn }} \
@@ -647,15 +694,15 @@ jobs:
           PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
           RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
           DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
-          echo "Device Farm Console (${{ matrix.device.name }}): $DF_URL"
+          echo "Device Farm Console (${{ steps.select.outputs.name }}): $DF_URL"
 
-          echo "### Device Farm: ${{ matrix.device.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Device Farm: ${{ steps.select.outputs.name }}" >> $GITHUB_STEP_SUMMARY
           echo "[Open Device Farm Console]($DF_URL)" >> $GITHUB_STEP_SUMMARY
 
       - name: Save run ARN
         id: save-arn
         run: |
-          SAFE_NAME=$(echo "${{ matrix.device.name }}" | tr ' /\\:*?"<>|' '_')
+          SAFE_NAME=$(echo "${{ steps.select.outputs.name }}" | tr ' /\\:*?"<>|' '_')
           echo "${{ steps.schedule.outputs.run-arn }}" > "${SAFE_NAME}.txt"
           echo "safe-name=${SAFE_NAME}" >> $GITHUB_OUTPUT
 
@@ -703,10 +750,10 @@ jobs:
     needs: [build, wait-device-farm-running]
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_PORT: ${{ secrets.MQTT_PORT }}
@@ -716,10 +763,13 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             ${{ inputs.project-directory }}
+            packages/inference
             .github/actions/sdk-e2e-fail-on-failures
+            .github/actions/sdk-e2e-prepare-inference
+            .github/actions/sdk-e2e-prepare-test-suite
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -740,11 +790,29 @@ jobs:
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
             `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+            `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
           const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
+
+      - name: Apply resolved inference
+        uses: ./.github/actions/sdk-e2e-prepare-inference
+        with:
+          source: ${{ inputs.inference-source }}
+          dependency-spec: ${{ inputs.inference-dependency-spec }}
+          artifact-name: ${{ inputs.inference-artifact-name }}
+          project-directory: ${{ inputs.project-directory }}
+          provenance: ${{ inputs.inference-provenance }}
+
+      - name: Apply resolved test-suite
+        uses: ./.github/actions/sdk-e2e-prepare-test-suite
+        with:
+          source: ${{ inputs.test-suite-source }}
+          dependency-spec: ${{ inputs.test-suite-dependency-spec }}
+          artifact-name: ${{ inputs.test-suite-artifact-name }}
+          project-directory: ${{ inputs.working-directory }}
+          provenance: ${{ inputs.test-suite-provenance }}
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -1052,7 +1120,7 @@ jobs:
 
   report-finalize:
     name: "[ios] report-finalize"
-    needs: [report-start, run-producer, select-pool]
+    needs: [report-start, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1073,12 +1141,14 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
-          device-pool-name: ${{ needs.select-pool.outputs.name }}
-          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
+          inference-provenance: ${{ inputs.inference-provenance }}
+          test-suite-provenance: ${{ inputs.test-suite-provenance }}
+          device-pool-name: ${{ needs.device-farm.outputs.name }}
+          device-pool-availability: ${{ needs.device-farm.outputs.availability }}
 
   report-artifacts-refresh:
     name: "[ios] report-artifacts-refresh"
-    needs: [report-start, run-producer, cleanup-device-farm, select-pool]
+    needs: [report-start, run-producer, cleanup-device-farm, device-farm]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1099,6 +1169,8 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
-          device-pool-name: ${{ needs.select-pool.outputs.name }}
-          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
+          inference-provenance: ${{ inputs.inference-provenance }}
+          test-suite-provenance: ${{ inputs.test-suite-provenance }}
+          device-pool-name: ${{ needs.device-farm.outputs.name }}
+          device-pool-availability: ${{ needs.device-farm.outputs.availability }}
           update-summary: "false"

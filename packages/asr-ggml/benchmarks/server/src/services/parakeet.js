@@ -7,24 +7,20 @@ const { Readable } = require('bare-stream')
 const process = require('bare-process')
 const path = require('bare-path')
 
-const ALLOWED_LIBS = [
-  '@qvac/asr-ggml'
-]
+const ALLOWED_LIBS = ['@qvac/asr-ggml']
 
 const loadedModels = new Map()
 
-const ALLOWED_AUDIO_DIRS = [
-  path.resolve('.'),
-  path.resolve('./models'),
-  path.resolve('./examples')
-]
+const ALLOWED_INPUT_DIRS = [path.resolve('../..')]
 
 const validateFilePath = (filePath) => {
   const resolved = path.resolve(filePath)
   if (!fs.existsSync(resolved)) {
     throw new Error('File not found')
   }
-  const isAllowed = ALLOWED_AUDIO_DIRS.some(dir => resolved.startsWith(dir + path.sep) || resolved === dir)
+  const isAllowed = ALLOWED_INPUT_DIRS.some(
+    (dir) => resolved.startsWith(dir + path.sep) || resolved === dir
+  )
   if (!isAllowed) {
     throw new Error('File path is outside allowed directories')
   }
@@ -44,13 +40,14 @@ const getPackageVersion = (lib) => {
 
 const runParakeet = async (payload) => {
   try {
-    const { inputs, parakeet, config } =
-      ParakeetInferenceArgsSchema.parse(payload)
+    const { inputs, parakeet, config } = ParakeetInferenceArgsSchema.parse(payload)
 
     const { lib: parakeetLib } = parakeet
 
     if (!ALLOWED_LIBS.includes(parakeetLib)) {
-      throw new Error('Unsupported library: ' + parakeetLib + '. Allowed: ' + ALLOWED_LIBS.join(', '))
+      throw new Error(
+        'Unsupported library: ' + parakeetLib + '. Allowed: ' + ALLOWED_LIBS.join(', ')
+      )
     }
 
     const parakeetVersion = getPackageVersion(parakeetLib) || 'unknown'
@@ -65,11 +62,12 @@ const runParakeet = async (payload) => {
     // in the payload only for cache keys / logging).
     const modelPath = config.path || ''
     const modelType = config.parakeetConfig?.modelType || 'tdt'
+    const language = config.parakeetConfig?.language || ''
     const useGPU = config.parakeetConfig?.useGPU || false
     const streaming = config.streaming || false
     const streamingChunkSize = config.streamingChunkSize || 16384
 
-    const cacheKey = `${parakeetLib}:parakeet:model=${modelPath}:type=${modelType}:gpu=${useGPU}`
+    const cacheKey = `${parakeetLib}:parakeet:model=${modelPath}:type=${modelType}:language=${language}:gpu=${useGPU}`
 
     let modelInstance = loadedModels.get(cacheKey)
     let loadModelMs = 0
@@ -95,7 +93,8 @@ const runParakeet = async (payload) => {
           channels: 1,
           captionEnabled: parakeetConfig.captionEnabled || false,
           timestampsEnabled: parakeetConfig.timestampsEnabled !== false,
-          seed: parakeetConfig.seed ?? -1
+          seed: parakeetConfig.seed ?? -1,
+          language: parakeetConfig.language || ''
         }
       }
 
@@ -114,9 +113,13 @@ const runParakeet = async (payload) => {
       const [loadSec, loadNano] = process.hrtime(loadStart)
       loadModelMs = loadSec * 1e3 + loadNano / 1e6
       loadedModels.set(cacheKey, modelInstance)
-      logger.info(`Loaded new model: ${modelPath} (${parakeetLib}, type=${modelType}, GPU=${useGPU})`)
+      logger.info(
+        `Loaded new model: ${modelPath} (${parakeetLib}, type=${modelType}, GPU=${useGPU})`
+      )
     } else {
-      logger.debug(`Reusing cached model: ${modelPath} (${parakeetLib}, type=${modelType}, GPU=${useGPU})`)
+      logger.debug(
+        `Reusing cached model: ${modelPath} (${parakeetLib}, type=${modelType}, GPU=${useGPU})`
+      )
     }
 
     const outputs = []
@@ -129,9 +132,11 @@ const runParakeet = async (payload) => {
 
       let audioStream
       if (streaming) {
-        logger.info(`Processing ${audioFilePath} in streaming mode with chunk size ${streamingChunkSize}`)
+        logger.info(
+          `Processing ${audioFilePath} in streaming mode with chunk size ${streamingChunkSize}`
+        )
 
-        async function * streamChunks (buffer) {
+        async function* streamChunks(buffer) {
           let offset = 0
           while (offset < buffer.length) {
             const end = Math.min(offset + streamingChunkSize, buffer.length)
@@ -148,21 +153,25 @@ const runParakeet = async (payload) => {
       const response = await modelInstance.run(audioStream)
 
       await response
-        .onUpdate(outputArr => {
+        .onUpdate((outputArr) => {
           const items = Array.isArray(outputArr) ? outputArr : [outputArr]
-          logger.debug(`Segment update: ${JSON.stringify(items.map(i => ({ text: i.text, start: i.start, end: i.end })))}`)
+          logger.debug(
+            `Segment update: ${JSON.stringify(items.map((i) => ({ text: i.text, start: i.start, end: i.end })))}`
+          )
           segments.push(...items)
         })
         .await()
 
       const text = segments
-        .map(s => s.text || s)
-        .filter(t => t && t.trim().length > 0)
+        .map((s) => s.text || s)
+        .filter((t) => t && t.trim().length > 0)
         .join(' ')
         .trim()
         .replace(/\s+/g, ' ')
 
-      logger.debug(`Transcription for ${audioFilePath}: segments=${segments.length}, text="${text.substring(0, 100)}"`)
+      logger.debug(
+        `Transcription for ${audioFilePath}: segments=${segments.length}, text="${text.substring(0, 100)}"`
+      )
       outputs.push(text)
     }
 

@@ -4,41 +4,54 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <llama.h>
 
 #include "../utils/ReasoningRollbackState.hpp"
-#include "ContextSlider.hpp"
-#include "ToolsCompactController.hpp"
 
 namespace qvac_lib_inference_addon_llama {
+
+/// The two cache operations reasoning compaction performs, behind an
+/// indirection so unit tests can drive `compact()` without a real
+/// `llama_context`. Production forwards both straight to
+/// `ReasoningRollbackState`.
+struct IReasoningRewindOps {
+  virtual ~IReasoningRewindOps() = default;
+  /// Rewind the sequence to the reasoning boundary, which sits before the
+  /// span. A tail trim on pure attention, a full-state reload on recurrent /
+  /// hybrid.
+  virtual bool restoreBoundary(
+      utils::ReasoningRollbackState& rollback, ::llama_context* ctx,
+      llama_seq_id seqId) const = 0;
+  /// Re-decode the kept tokens after the restored boundary.
+  virtual bool replayPostReasoning(
+      utils::ReasoningRollbackState& rollback, ::llama_context* ctx,
+      llama_seq_id seqId) const = 0;
+};
+
+/// Returns the default implementation, which forwards to `rollback`.
+const IReasoningRewindOps& defaultReasoningRewindOps();
 
 // Per-inference reasoning-block compaction lifecycle, shared between
 // `TextLlmContext` and `MtmdLlmContext`. Owns:
 //
 //   * the open/close span (`<think>...</think>`) tracking,
-//   * the end-of-prefill snapshot capture (delegated to
+//   * the reasoning-boundary snapshot capture (delegated to
 //     `ReasoningRollbackState` after a feature-gate check),
-//   * the pure-attention `seq_rm + seq_add` compaction path and the
-//     recurrent / hybrid full-state restore + replay path,
+//   * the restore-boundary-then-replay compaction path,
 //   * the `thinkingBlockDiscards` runtime stats counter.
 //
-// Failure contract (uniform across paths, per PR #2813 review):
-// when `remove_thinking_from_context` is enabled/defaulted-on,
-// ANY inability to remove the reasoning span from cache is a hard
-// failure. `snapshotAtPrefillBoundary` throws on capture underflow;
-// `compact()` returns `Outcome::Kind::FailedKvIntact` on pure-
-// attention `seq_rm + seq_add` rejection (live KV was left untouched)
-// and `Outcome::Kind::FailedKvWiped` on hybrid restore underflow,
-// hybrid replay rejection, recurrent partial-resident spans, recurrent
-// open spans without a captured close marker, generation slides that
-// invalidate tracked reasoning state, or the defensive no-boundary branch
-// (sequence memory was best-effort cleared).
-// Callers must run the live-KV recovery documented on the outcome kind
-// (roll back `[preRequestCursor, currentCursor)` or reset positional
-// accounting to zero) before rethrowing `qvac_errors::StatusError` so
-// no saveCache path can persist a header that misrepresents live memory
-// or leaves the reasoning span in cache.
+// Failure contract: when `remove_thinking_from_context` is
+// enabled/defaulted-on, ANY inability to remove the reasoning span from
+// cache is a hard failure. `snapshotAtReasoningBoundary` throws on capture
+// underflow. `compact()` reports every other failure as
+// `Outcome::Kind::FailedKvWiped`: compaction rewinds the sequence before
+// it replays, so by the time anything can fail the cache has already been
+// written to and only a wipe leaves it coherent. Callers must reset
+// positional accounting to zero before rethrowing
+// `qvac_errors::StatusError`, so no saveCache path can persist a header
+// that misrepresents live memory or leaves the reasoning span in cache.
 //
 // State is per-inference. Call `reset()` at the start of each
 // `evalMessageWithTools`. Feature flags (`removeThinkingFromContext`,
@@ -48,14 +61,12 @@ namespace qvac_lib_inference_addon_llama {
 // agnostic to those.
 //
 // Position-specific bookkeeping (`nPast_` for text vs `current_.pos /
-// .cacheTokens` and `protectedPrefix_` for multimodal) is applied by
+// .cacheTokens` for multimodal) is applied by
 // the caller using the returned `Outcome`. The compactor handles only
-// the cache-side operations, logging, stats, and tools-compact slide
-// notification.
+// the cache-side operations, logging, and stats.
 class ReasoningBlockCompactor {
 public:
-  ReasoningBlockCompactor(
-      utils::ReasoningRollbackState& rollback, ToolsCompactController& tools);
+  explicit ReasoningBlockCompactor(utils::ReasoningRollbackState& rollback);
 
   // ---- Feature gates ----
   void setRemoveThinkingFromContext(bool v) noexcept {
@@ -95,19 +106,6 @@ public:
     thinkSpan_.reset();
     pendingThinkCloseCapture_ = false;
   }
-  void markSpanInvalidatedByGenerationSlide(
-      llama_pos pos, llama_pos discarded) noexcept {
-    slideInvalidatedSpan_ = thinkSpan_.has_value();
-    slideInvalidatedPos_ = pos;
-    slideInvalidatedDiscarded_ = discarded;
-    clearSpan();
-  }
-  void markBoundaryInvalidatedByGenerationSlide(
-      llama_pos pos, llama_pos discarded) noexcept {
-    slideInvalidatedBoundary_ = true;
-    slideInvalidatedPos_ = pos;
-    slideInvalidatedDiscarded_ = discarded;
-  }
 
   // ---- Close-marker capture lifecycle ----
   //
@@ -130,47 +128,44 @@ public:
     rollback_.recordPostReasoningToken(id);
   }
 
-  // Seeds the replay buffer with the reasoning close-marker token id.
-  // Called from the close-detection sites BEFORE
-  // `capturePendingThinkClose()` / `onCloseCommitted()` flip capture on,
-  // so the close marker lands at the head of the replay sequence ahead
-  // of any subsequent tokens recorded through `recordPostReasoningToken`.
-  // Gated on the recurrent-snapshot feature and an existing boundary
-  // snapshot — pure-attention models neither restore nor replay.
-  // Without this, the restored SSM state would contain either the
-  // force-opened opener or the replayed generated opener with no
-  // matching close marker before the answer tail, which is an
-  // unbalanced (out-of-distribution) recurrent state for hybrid models
-  // on the next turn.
-  //
-  // Callers MUST pass the *canonical* single-vocab close token
-  // (`reasoningState_.cached_close_tag_token`), not the sampled token
-  // that tripped the string-search detector flip in
-  // `updateReasoningBuffer`. Chat templates whose close carries
-  // surrounding whitespace padding (e.g. Qwen3's `"\n</think>\n\n"`)
-  // defer the flip onto a trailing padding piece — seeding that
-  // padding token would drive the recurrent replay through a newline
-  // with no matching `</think>`, defeating the balancing invariant
-  // this method exists to preserve. `cached_close_tag_token` is
-  // populated (non-null) whenever the recurrent-capture policy
-  // admits us (both `close_is_single_token == true`); passing
-  // `LLAMA_TOKEN_NULL` is silently dropped rather than seeded.
-  void recordCloseMarkerForReplay(llama_token id);
-
   // Seeds the replay buffer with a token that was sampled BEFORE the
   // reasoning open marker fired (either template preamble that the
   // model emits before `<think>`, or one of the tokens that make up
   // the opener itself). Called for every sampled token while reasoning
-  // is not yet open, so on the recurrent / hybrid path the restored
-  // end-of-prefill snapshot can replay `[pre-reasoning tokens...,
-  // close token, captured tail...]` and land in a balanced
-  // `<think>...</think>` state without ever advancing the SSM through
-  // the discarded reasoning span.
+  // is not yet open, so the restored boundary can replay
+  // `[pre-reasoning tokens..., captured tail...]` and land on the
+  // preamble followed by the visible answer without ever advancing
+  // through the discarded reasoning span.
   //
-  // Gated identically to `recordCloseMarkerForReplay`: no-op on pure-
-  // attention paths, on features-off requests, and before the
-  // end-of-prefill boundary snapshot has been captured (nothing to
-  // restore against, so seeding would be pointless bookkeeping).
+  // No structural `<think>` / `</think>` marker is ever replayed: the
+  // boundary is anchored before the span on every model kind, so there
+  // is no open block for a close marker to balance. The opener pieces
+  // that reach this method on generated-opener templates are dropped by
+  // `compact()`'s `clipSeededPrefix` before the replay runs.
+  //
+  // Seeds the replay buffer with the reasoning close marker so a restored
+  // full-state prefix lands on a balanced `<think>...</think>` span. The
+  // marker sits in the seeded prefix, ahead of the captured answer tail.
+  //
+  // Full-state only. Pure attention anchors before the span and replays the
+  // visible tail alone, so it needs no marker and keeps a compacted cache of
+  // `preamble + answer`.
+  //
+  // Callers MUST pass the canonical close token
+  // (`reasoningState_.cached_close_tag_token`), not the sampled token that
+  // tripped the detector: a template whose close carries whitespace padding
+  // (Qwen3's `"\n</think>\n\n"`) defers the flip onto a padding piece, and
+  // seeding that would replay a newline with no matching `</think>`.
+  void recordCloseMarkerForReplay(llama_token id);
+
+  // Sequence overload. The canonical close does not always tokenise to one
+  // piece; seeding every piece is what lets a multi-token marker restore a
+  // balanced span. Null ids are skipped, an empty span is a no-op.
+  void recordCloseMarkerForReplay(const std::vector<llama_token>& ids);
+
+  // No-op on features-off requests and before the boundary has been
+  // captured (nothing to restore against, so seeding would be pointless
+  // bookkeeping).
   // Additionally no-op once an open span has been recorded (i.e.
   // after the reasoning open flip) so callers can safely invoke this
   // for every token where `reasoningState_.inside_reasoning == false`
@@ -190,17 +185,16 @@ public:
   // recognised). Throws `qvac_errors::StatusError` on capture
   // underflow (see the class-level "Failure contract" comment).
   // `labelTag` is "[TextLlm]" / "[MtmdLlm]" for logs.
-  void snapshotAtPrefillBoundary(
+  void snapshotAtReasoningBoundary(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
       const char* labelTag);
 
   // ---- Compaction ----
   //
   // Performs end-of-generation compaction at the current cache cursor
-  // `pos`. The returned `Outcome` carries the new position, the
-  // dropped-token count, and the kept-prefix end (used by callers to
-  // adjust `firstMsgTokens_` / `protectedPrefix_`). The compactor
-  // itself does not write to the caller's position fields.
+  // `pos`. The returned `Outcome` carries the new position and the
+  // dropped-token count. The compactor itself does not write to the
+  // caller's position fields.
   //
   // RAII cleanup: per-inference state (`thinkSpan_`, reasoning boundary
   // snapshot, post-reasoning buffer, capture flag) is cleared on every
@@ -208,19 +202,10 @@ public:
   // can't leave stale state behind.
   //
   // Failure contract:
-  //   * Pure-attention `seq_rm + seq_add` rejection: `compact()`
-  //     returns `Outcome::Kind::FailedKvIntact`. The primitive is
-  //     documented all-or-nothing on rejection, so live KV still
-  //     matches the caller's cursor; no seq wipe is performed. The
-  //     caller MUST roll back the live cache to its pre-request
-  //     cursor (e.g. via `removeLastNTokens(nPast - preRequestNPast)`)
-  //     before rethrowing so both driver metadata and live KV stay
-  //     coherent for the next request on the same driver.
-  //   * Hybrid `restoreReasoningBoundary` / `replayPostReasoning`
+  //   * `restoreReasoningBoundary` / `replayPostReasoning`
   //     failure, a defensive missing-boundary hit, a recurrent
-  //     partial-resident reasoning span left after a tail trim, a recurrent
-  //     open reasoning span with no captured close marker, or a generation
-  //     slide that invalidated tracked reasoning state:
+  //     partial-resident reasoning span left after a tail trim, or a
+  //     recurrent open reasoning span with no captured close marker:
   //     `compact()` best-effort clears the sequence memory (attention
   //     KV cells + recurrent state) and returns
   //     `Outcome::Kind::FailedKvWiped`. The caller MUST reset its
@@ -228,32 +213,31 @@ public:
   //     before rethrowing, so no saveCache path can write a header
   //     that misrepresents live memory.
   //
-  // Callers surface either failure to the outside world by throwing
+  // Callers surface that failure to the outside world by throwing
   // `qvac_errors::StatusError(FailedToDecode, outcome.failureMessage)`
   // (or an equivalent) once the local rollback above has run.
   //
   // When `remove_thinking_from_context` is enabled, there is no soft-failure
   // return: any inability to remove the reasoning span from cache surfaces to
-  // the caller as one of the two `Failed*` outcomes above, and the caller is
+  // the caller as the `FailedKvWiped` outcome above, and the caller is
   // required to surface it as an exception.
   struct Outcome {
     enum class Kind {
       // Feature off, no span captured, degenerate span, or the live cursor is
       // already before the reasoning span when compaction runs.
       NoOp,
-      CompactedAttention,
-      CompactedRecurrent,
-      // Compaction failed but live KV was left untouched; caller must
-      // roll back `[preRequestCursor, currentCursor)` before rethrowing.
-      FailedKvIntact,
+      // Reasoning span dropped: the sequence was rewound to the reasoning
+      // boundary and the answer replayed after it.
+      Compacted,
       // Compaction failed and live KV was best-effort wiped; caller
       // must reset positional accounting to zero before rethrowing.
       FailedKvWiped,
     };
     Kind kind = Kind::NoOp;
-    // New cache position the caller should adopt. Unset for `NoOp` and
-    // for the two `Failed*` outcomes (the caller derives the recovery
-    // cursor from its own `preRequestCursor` / zero, respectively).
+    // New cache position the caller should adopt. Unset for `NoOp` and for
+    // `FailedKvWiped`, whose recovery cursor is always zero: compaction
+    // rewinds before it replays, so a failure leaves nothing to roll back to
+    // but an empty sequence.
     llama_pos newPos = 0;
     // Tokens dropped from the cache. `pos - newPos` for the attention
     // path; `pos - newPos` minus the residue for the recurrent path
@@ -262,12 +246,6 @@ public:
     // Original span boundaries (for logging or caller-side guards).
     llama_pos spanStart = 0;
     llama_pos spanEnd = 0;
-    // First cache position the caller should treat as the new
-    // protected-prefix end. Equals `spanStart` for the attention path
-    // (the slice is removed and the tail shifts left); equals the
-    // restored boundary `nPast` for the recurrent path (the prefix
-    // before the boundary is kept verbatim).
-    llama_pos keptPrefixEnd = 0;
     // Post-reasoning tokens replayed (recurrent path only).
     size_t replayedTokens = 0;
     // Populated on the `Failed*` outcomes: the message the caller
@@ -275,26 +253,16 @@ public:
     // context (span, seqId, snapshot state) the compactor logged.
     std::string failureMessage;
   };
+
   [[nodiscard]] Outcome compact(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
       const char* labelTag);
 
-  // Testing seam: install a non-owning `IContextSliderOps` override
-  // that replaces the default singleton (real `llama_memory_seq_rm` /
-  // `llama_memory_seq_add`) inside `compact()`. Set to `nullptr` to
-  // clear. Persists across `reset()` because it is a test wiring
-  // concern, not per-inference state. Production code MUST NOT call
-  // this — the override lets unit and driver-level tests exercise
-  // the `FailedKvIntact` branch without a real `llama_context`.
-  void setContextSliderOpsForTesting(const IContextSliderOps* ops) noexcept {
-    sliderOpsOverride_ = ops;
-  }
-
-  // Access to the underlying tools-compact controller. Exposed so
-  // `ContextShifter` can route slide notifications to the same
-  // controller without holding an independent reference.
-  [[nodiscard]] ToolsCompactController& toolsController() noexcept {
-    return tools_;
+  // Testing seam: install a non-owning `IReasoningRewindOps` override that
+  // replaces the default forwarding implementation inside `compact()`. Set to
+  // `nullptr` to restore the default.
+  void setRewindOpsForTesting(const IReasoningRewindOps* ops) noexcept {
+    rewindOpsOverride_ = ops;
   }
 
   // ---- Stats ----
@@ -310,22 +278,15 @@ public:
   void reset() noexcept {
     thinkSpan_.reset();
     pendingThinkCloseCapture_ = false;
-    slideInvalidatedSpan_ = false;
-    slideInvalidatedBoundary_ = false;
-    slideInvalidatedPos_ = 0;
-    slideInvalidatedDiscarded_ = 0;
   }
 
 private:
   utils::ReasoningRollbackState& rollback_;
-  ToolsCompactController& tools_;
+  // Null in production, where `defaultReasoningRewindOps()` is used.
+  const IReasoningRewindOps* rewindOpsOverride_ = nullptr;
 
   std::optional<std::pair<llama_pos, llama_pos>> thinkSpan_;
   bool pendingThinkCloseCapture_ = false;
-  bool slideInvalidatedSpan_ = false;
-  bool slideInvalidatedBoundary_ = false;
-  llama_pos slideInvalidatedPos_ = 0;
-  llama_pos slideInvalidatedDiscarded_ = 0;
 
   // Default-off: mirrors the owning LlmContext's default. The owner syncs
   // this during initialization and whenever a request overrides it.
@@ -334,13 +295,6 @@ private:
   bool needsRecurrentSnapshot_ = false;
 
   int32_t thinkingBlockDiscards_ = 0;
-
-  // Non-owning override for the KV primitives used by `compact()`.
-  // Null in production (falls back to `defaultContextSliderOps()`);
-  // tests install a fake via `setContextSliderOpsForTesting` so the
-  // `FailedKvIntact` branch can be triggered without a real
-  // `llama_context`.
-  const IContextSliderOps* sliderOpsOverride_ = nullptr;
 };
 
 } // namespace qvac_lib_inference_addon_llama

@@ -24,8 +24,8 @@
 #include "LlamaFinetuningParams.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
+#include "LoadFitNormalization.hpp"
 #include "ModelMetadata.hpp"
-#include "ToolsCompactController.hpp"
 #include "common/chat.h"
 #include "inference-addon-cpp/BlobsStream.hpp"
 #include "inference-addon-cpp/GGUFShards.hpp"
@@ -38,15 +38,6 @@
 using namespace qvac_lib_inference_addon_cpp::model;
 
 namespace batching = qvac_lib_inference_addon_llama::batching;
-
-struct FinetuneConfigOverrides {
-  bool active{false};
-  int64_t batchSize{128};
-  int64_t microBatchSize{128};
-  int64_t contextLength{128};
-  bool gpuSupportsF16OutProd{true};
-  bool flashAttn{false};
-};
 
 class LlamaModel : public IModel,
                    public IModelAsyncLoad,
@@ -65,31 +56,6 @@ public:
   /// the parent directory of @p modelPath.
   static void
   resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
-
-  /// @brief Apply specific parameter defaults based on model metadata
-  /// and detected Adreno GPU version by inserting entries into configFilemap.
-  /// Must be called before commonParamsParse so inserted entries are processed.
-  ///
-  /// @param configFilemap The user-supplied config map (will be written to).
-  /// @param metadata Model metadata (architecture, quantization info).
-  /// @param adrenoVersion Detected Adreno GPU version, if any.
-  /// @param finetuneOverrides If set, finetuning mode is active with these
-  /// context/batch params and GPU caps.
-  /// @param isOpenCl True when the chosen GPU backend is OpenCL; gates the
-  /// OpenCL KV-cache policy — rejects ALL quantized KV types, only f32/f16/bf16
-  /// are safe (quantized KV-cache shifts abort in llama_kv_cache::update on
-  /// Adreno because ggml-opencl has no F32->quantized requantize kernel).
-  /// @param isMetal True when the chosen GPU backend is Metal; used to reject
-  /// unsupported TurboQuant/PolarQuant KV-cache types.
-  /// @param isGpu True when any GPU backend was selected (OpenCL, Metal, or
-  /// Vulkan); used (together with !isOpenCl) to default the KV-cache to q8_0 on
-  /// Metal/Vulkan GPUs when the caller has not picked a cache type. OpenCL is
-  /// excluded because quantized KV-cache shifts abort on Adreno.
-  static void tuneConfigMap(
-      std::unordered_map<std::string, std::string>& configFilemap,
-      const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-      const FinetuneConfigOverrides& finetuneOverrides = {},
-      bool isOpenCl = false, bool isMetal = false, bool isGpu = false);
 
   /**
    * The Constructor for llama model.
@@ -233,14 +199,6 @@ public:
    */
   bool isLoaded();
 
-  /**
-   * Get the nPast position before tool evaluation.
-   * This is used to find the boundary in the KV cache after evaluating
-   * conversation tokens but before tool tokens.
-   * @return the nPast position, or -1 if not set.
-   */
-  llama_pos getNPastBeforeTools() const;
-
   void waitForLoadInitialization() final {
     std::shared_ptr<ReloadableState> localState;
     {
@@ -255,7 +213,6 @@ public:
   common_params& getCommonParams();
 
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const final;
-  qvac_lib_inference_addon_cpp::RuntimeStats runtimeDebugStats() const;
   static void
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
@@ -386,11 +343,6 @@ private:
     // llmContext_ is destroyed first (members destroyed in reverse order)
     std::optional<LlamaBackendsHandle> backendsHandle_;
 
-    // tools_compact controller - owned by ReloadableState, lifetime matches
-    // the state. Must be declared before llmContext_ so it is destroyed
-    // after contexts that hold references to it.
-    std::unique_ptr<ToolsCompactController> toolsCompact_;
-
     // Store the appropriate context (TextLlmContext or MtmdLlmContext)
     // Destroyed before backendsHandle_ to avoid use-after-free
     std::unique_ptr<LlmContext> llmContext_;
@@ -399,7 +351,8 @@ private:
     std::unique_ptr<batching::ContinuousBatchScheduler> batchScheduler_;
 
     // configuration values parsed from configFilemap
-    llama_pos configuredNDiscarded_ = 0;
+    std::optional<load_fit_normalization::NormalizedFitSnapshot>
+        normalizedFitSnapshot_;
     std::optional<CacheManager> cacheManager_;
 
     /// Mode flags for the most recent `processPrompt*` call, used by
@@ -438,31 +391,11 @@ private:
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;
     std::vector<common_chat_tool> tools;
-    PromptLayout layout;
     bool isCacheLoaded = false;
     bool shouldResetAfterInference = false;
   };
 
-  enum class ToolsCompactResolution {
-    NotRequested,
-    RequestedUnsupported,
-    RequestedSupported
-  };
-
-  struct ResolvedToolsCompactConfig {
-    ToolsCompactResolution resolution = ToolsCompactResolution::NotRequested;
-    std::optional<ToolsCompactProfile> profile;
-  };
-
   ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
-  ResolvedToolsCompactConfig
-  resolveToolsCompactConfig(bool toolsCompactRequested) const;
-
-  void commonParamsParse(
-      const std::string& modelPath,
-      std::unordered_map<std::string, std::string>& configFilemap,
-      common_params& params, std::optional<int>& outAdrenoVersion,
-      ResolvedToolsCompactConfig& outToolsCompactConfig);
 
   /**
    * The Format prompt method. It formats the prompt json to chat messages.
@@ -474,7 +407,7 @@ private:
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result_ptr llamaInit, ToolsCompactController& tools);
+      common_init_result_ptr llamaInit);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 
@@ -573,7 +506,7 @@ private:
   void validateBitnetQuantization();
 
   // Guarded by stateMtx_: written and read exclusively inside
-  // setInitLoader() / init() → commonParamsParse(), both of which run
+  // setInitLoader() / init() → normalizeLoadForFit(), both of which run
   // under the stateMtx_ unique_lock. Callers set it via reload()'s
   // newFinetuneOverrides parameter to avoid any unsynchronised window.
   FinetuneConfigOverrides pendingFinetuneOverrides_;

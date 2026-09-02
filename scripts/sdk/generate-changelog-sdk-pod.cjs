@@ -93,7 +93,7 @@ function extractCodeBlocks(text) {
  */
 function extractBeforeAfter(text) {
   const bcSectionMatch = text.match(
-    /(?:^|\n)##\s*(?:💥\s*)?Breaking Changes\s*\n([\s\S]*?)(?=\n##\s*📦|\n---\s*\n(?:_?Asana|Public docs)|\Z)/im,
+    /(?:^|\n)##\s*(?:💥\s*)?Breaking Changes\s*\n([\s\S]*?)(?=\n##\s|\n---\s*\n(?:_?Asana|Public docs)|(?![\s\S]))/im,
   );
   const scope = bcSectionMatch ? bcSectionMatch[1] : text;
 

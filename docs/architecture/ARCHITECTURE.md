@@ -1,37 +1,31 @@
 # QVAC SDK Architecture
 
-Author(s): [Yuri Samarin](https://github.com/yuranich) — QVAC Team
+Author(s): [Yuri Samarin](https://github.com/yuranich) - QVAC Team
 
-Last Update: Mar 4, 2026
+Last Update: Aug 21, 2026
 
 Related Documents & Links
 
 - [C4 Model Reference](https://c4model.com/)
-- [Agent Integrations](./AGENT-INTEGRATIONS.md) — AI SDK provider, OpenCode plugin, CLI serve, models.dev, layer ownership, and release workflow
+- [Agent Integrations](./AGENT-INTEGRATIONS.md) - AI SDK provider, OpenCode plugin, CLI serve, models.dev, layer ownership, and release workflow
 
 ---
 
 # Product Executive Summary
 
-QVAC SDK is a TypeScript SDK providing local-first, peer-to-peer AI capabilities across desktop and mobile platforms. The core abstraction is a **plugin-based client-server RPC architecture** where:
+QVAC SDK is a local-first, peer-to-peer AI platform for JavaScript, Bare, and Python applications. The architecture is split by responsibility:
 
-- **Client** runs in any JS environment (Node.js, Bun, Expo/React Native, Bare)
-- **Server (Worker)** runs on [Bare Runtime](https://bare.pears.com) with native C++ inference addons, composed of registered **plugins**
+- **`@qvac/inference`** is the engine: dispatch, plugins, models, P2P, RAG, schemas, and request lifecycle. Direct Bare apps import this package and call it in process.
+- **`@qvac/sdk`** is the TypeScript host for Node.js, Bun, Electron, Expo/React Native, and Pear. It owns the client, worker shell, RPC, bundling, and the default all-plugin distribution. The worker runs `@qvac/inference` inside Bare and re-exports the engine public API.
+- **`tetherto-qvac-sdk`** is the generated Python client. It uses the same worker RPC contract as TypeScript.
 
-The SDK is modular: each AI capability ships as a **plugin** that can be included or excluded at build time. Users select plugins in their config and run a build step to produce a tree-shaken worker bundle. Out-of-the-box, a default worker with all built-in plugins is provided.
+`@qvac/bare-sdk` is deprecated. Bare consumers use `@qvac/inference`.
 
-Built-in plugins cover:
-- **LLM Completion** (llama.cpp) — Text generation with streaming, tools, multimodal
-- **Transcription** (whisper.cpp) — Speech-to-text with VAD support
-- **Transcription** (Parakeet) — Speech-to-text (NVIDIA NeMo ONNX)
-- **Embeddings** (llama.cpp) — Text embeddings for RAG
-- **Translation** (nmtcpp) — Neural machine translation (IndicTrans2, Bergamot)
-- **Text-to-Speech** (ONNX/Piper, Chatterbox, Supertonic) — Speech synthesis
-- **OCR** (ONNX) — Optical character recognition
+The core execution model is the same across packages:
 
-Custom plugins can be authored as npm packages with the same contract as built-in plugins.
-
-Model distribution uses the Holepunch stack (Hyperdrive, Hyperswarm) for P2P delivery, HTTP as an alternative, the QVAC Model Registry for catalog-based downloads, or local filesystem paths for development and pre-staged deployments.
+- Plugins implement `QvacPlugin`, provide Zod schemas, create model instances, and expose unary, server-streaming, or duplex handlers.
+- Host clients either call the engine in process or send the same request envelope to a Bare worker over the platform transport.
+- Model distribution uses HTTP, the QVAC Model Registry, Hyperdrive, or local filesystem paths.
 
 ---
 
@@ -41,7 +35,9 @@ Model distribution uses the Holepunch stack (Hyperdrive, Hyperswarm) for P2P del
 
 [PlantUML source](puml/01-system-context.puml)
 
-*Key — Blue: system in scope · Grey: external systems · Arrows: dependency direction*
+*Key - Blue: system in scope; grey: external systems; arrows: intent [transport]. Registry catalog and model bytes use Holepunch (Hyperswarm plus a Hypercore blob store). HTTP/CDN is a separate HTTPS path.*
+
+The family is one software system at this zoom. Package choice is in the [executive summary](#product-executive-summary). Runtime boxes are on the [container diagram](#container-diagram).
 
 ---
 
@@ -51,7 +47,9 @@ Model distribution uses the Holepunch stack (Hyperdrive, Hyperswarm) for P2P del
 
 [PlantUML source](puml/02-container.puml)
 
-*Key — Blue: internal containers · Grey: external systems · Cylinder: data store*
+*Key - Blue: runtime boxes; grey: external systems; cylinder: data store; arrows: intent [transport]. External I/O leaves `@qvac/inference`. Holepunch includes the QVAC Model Registry. Host RPC transports are in the [deployment table](#deployment-diagram).*
+
+Host, worker, and `@qvac/inference` are the runtime path for `@qvac/sdk` and Python. Direct Bare skips this diagram's host and worker; it is the right-hand [deployment](#deployment-diagram) topology.
 
 ---
 
@@ -61,17 +59,17 @@ Model distribution uses the Holepunch stack (Hyperdrive, Hyperswarm) for P2P del
 
 [PlantUML source](puml/03-component-overview.puml)
 
-*Key — Left boundary: Client process · Right boundary: Worker process · Arrows: runtime dependencies*
+*Key - Host process above, `@qvac/inference` below. Host to engine is `bare-rpc` (or in-process on direct Bare). Internal engine arrows are in-process. Python uses the same public API, generated from the wire contract.*
 
-The SDK runs as a single logical unit. On desktop (Node.js/Bun), Client components run in the application process, Worker components run in a spawned Bare subprocess. On mobile (Expo), all components run in-process via BareKit. On Pear Desktop, a pre-hook generates the worker entry and Pear manages the lifecycle. See [Deployment Diagram](#deployment-diagram) for process topology.
+Physical process placement is covered in the [Deployment Diagram](#deployment-diagram).
 
 ---
 
 # Plugin Architecture
 
-The SDK uses a **plugin architecture** where each AI capability is an independent, self-contained plugin. Plugins implement the `QvacPlugin` interface — defining a `modelType`, a model factory (`createModel`), and a set of handlers with Zod-validated request/response schemas. Plugins are registered with the worker at startup via `registerPlugin()`.
+Each AI capability is an independent plugin. A `QvacPlugin` defines its canonical `modelType`, addon metadata, load-config schema, model factory, optional artifact resolution, and handler set. Handlers declare Zod request/response schemas and whether they are unary, server-streaming, or duplex.
 
-This enables modular bundles (include only what you need), custom third-party plugins (same contract as built-in), and uniform dispatch (all operations route through the plugin registry).
+The plugin registry provides uniform dispatch for built-in and custom plugins. Distribution-specific registration rules live in [Worker Generation & Bundle System](#worker-generation--bundle-system).
 
 **Built-in plugins:**
 
@@ -79,15 +77,20 @@ This enables modular bundles (include only what you need), custom third-party pl
 |--------|------------|-------|
 | LLM Completion | `llamacpp-completion` | `@qvac/llm-llamacpp` |
 | Embeddings | `llamacpp-embedding` | `@qvac/embed-llamacpp` |
-| Whisper | `whispercpp-transcription` | `@qvac/transcription-whispercpp` |
-| Parakeet | `parakeet-transcription` | `@qvac/transcription-parakeet` |
+| Whisper | `whispercpp-transcription` | `@qvac/asr-ggml` |
+| BCI Whisper | `bci-whispercpp-transcription` | `@qvac/bci-whispercpp` |
+| Parakeet | `parakeet-transcription` | `@qvac/asr-ggml` |
 | NMT | `nmtcpp-translation` | `@qvac/translation-nmtcpp` |
 | TTS | `tts-ggml` | `@qvac/tts-ggml` |
 | OCR | `ggml-ocr` | `@qvac/ocr-ggml` |
+| Diffusion / Video / Upscale | `sdcpp-generation` | `@qvac/diffusion-cpp` |
+| Audio Generation | `audiogen-ggml` | `@qvac/audiogen-ggml` |
+| Vision-Language-Action | `ggml-vla` | `@qvac/vla-ggml` |
+| Classification | `ggml-classification` | `@qvac/classification-ggml` |
 
-Model types follow an `engine-usecase` naming convention. Backward-compatible aliases (`llm`, `whisper`, `embeddings`, `nmt`, `tts`, `ocr`, `parakeet`) are supported and normalized to canonical types.
+Model types follow an `engine-usecase` naming convention. Backward-compatible aliases (`llm`, `whisper`, `bci`, `embeddings`, `nmt`, `parakeet`, `tts`, `ocr`, `diffusion`, `audiogen`, `vla`, `classification`) are supported and normalized to canonical types.
 
-**Custom plugins** ship as npm packages with two subpath exports: default (`.`) for client wrappers (Metro-safe, cross-platform) and `./plugin` for the Bare-only plugin definition. The build step statically imports selected plugins into the worker.
+**Custom plugins** ship as npm packages whose plugin manifest is imported through a `/plugin` subpath.
 
 **Plugin Invocation Flow:**
 
@@ -95,22 +98,33 @@ Model types follow an `engine-usecase` naming convention. Backward-compatible al
 
 [PlantUML source](puml/04-plugin-invocation-flow.puml)
 
+Streaming uses `invokePluginStream` (async generator, newline-delimited JSON). Transport is the same as the [RPC flow](#rpc-communication-flow).
+
 ---
 
 # Worker Generation & Bundle System
 
-The `plugins` array in `qvac.config.{json,js,ts}` declares which plugins to include. Running `npx qvac bundle sdk` generates a worker entry with static imports for the selected plugins, then bundles it via `bare-pack` — tree-shaking unused addons. Output is `qvac/worker.entry.mjs` (desktop) and `qvac/worker.bundle.js` (mobile).
+Plugin registration is determined by the package and runtime path:
 
-**Worker resolution at runtime:**
+- `@qvac/inference` registers no plugins by default. Consumers assemble the engine explicitly with `plugins([...])` or `registerPlugin(...)`.
+- `@qvac/sdk` ships a default worker that runs `@qvac/inference` with every built-in plugin registered.
+- `qvac bundle sdk` generates an optimized worker entry for the plugin list in `qvac.config.{json,js,ts}`.
+
+The bundle command emits:
+
+- `qvac/worker.entry.mjs` - standalone worker entry with RPC and lifecycle, used by desktop/Electron packaging.
+- `qvac/worker.pear.entry.mjs` - Pear worker entry (same process), generated by the Pear pre-hook.
+- `qvac/worker.bundle.js` - mobile bundle for Expo/React Native BareKit.
+- `qvac/addons.manifest.json` - native addon manifest derived from the bundle.
+
+**TypeScript desktop worker resolution:**
 
 | Priority | Source | Description |
 |----------|--------|-------------|
 | 1 | `QVAC_WORKER_PATH` env var | Explicit path override |
 | 2 | Packaged Electron worker | `resources/.../qvac/worker.entry.mjs` |
 | 3 | `qvac/worker.entry.mjs` in project root | Output of `npx qvac bundle sdk` |
-| 4 | Default SDK worker (`dist/server/worker.js`) | Fallback with all built-in plugins |
-
-**Out-of-the-box**, the SDK ships a default worker with all built-in plugins — no build step required. Running the bundle command produces an optimized worker with only the selected plugins.
+| 4 | Default SDK worker | Fallback that runs `@qvac/inference` with all built-in plugins |
 
 ---
 
@@ -120,9 +134,17 @@ The `plugins` array in `qvac.config.{json,js,ts}` declares which plugins to incl
 
 [PlantUML source](puml/05-deployment.puml)
 
-*Key — Nested boxes: deployment environment · Blue: container instances · Cylinder: persistent storage*
+*Key - Nested boxes: deployment environment; blue: runtime instances; cylinder: persistent storage; arrows: intent [transport]. Left is host plus worker: subprocess on Node/Python/Electron, same process on Pear (in-process) and Expo (BareKit). Right is direct Bare: the app imports `@qvac/inference` and there is no SDK worker.*
 
-**Platform binaries:** Node.js/Bun ships prebuilt native addons for darwin-arm64, darwin-x64, linux-arm64, linux-x64, win32-x64. Electron and Expo/RN bundle addons with the app binary. Pear Desktop and Bare Direct use the host runtime's native modules.
+| Platform | Host | Worker placement | Transport |
+|---|---|---|---|
+| Node.js / Bun / Electron | `@qvac/sdk` | Bare subprocess | Unix socket or named pipe |
+| Python | `tetherto-qvac-sdk` | Bare subprocess | Loopback TCP |
+| Pear | `@qvac/sdk` | Same process | In-process |
+| Expo / React Native | `@qvac/sdk` | BareKit worklet | Native bridge |
+| Direct Bare | `@qvac/inference` | None | In-process |
+
+Native addon packaging follows the deployment target: Node/Bun use installed prebuilds, Electron and Expo/RN package native addons with the app, and Bare/Pear builds include the addons selected by the authored or generated worker entry.
 
 ---
 
@@ -140,6 +162,13 @@ The `plugins` array in `qvac.config.{json,js,ts}` declares which plugins to incl
 
 [PlantUML source](puml/07-rpc-communication-flow.puml)
 
+Worker-backed clients use the same JSON request/response envelopes over different transports:
+
+- TypeScript Node/Bun/Electron clients use `bare-rpc` over a Unix socket or Windows named pipe.
+- Expo clients use `bare-rpc` over the BareKit worklet IPC bridge.
+- Python clients use `bare-rpc-python` over loopback TCP (`127.0.0.1:0`) because asyncio has no cross-platform Unix-socket/named-pipe server.
+
+In-process Bare (`@qvac/inference`) bypasses sockets and calls the dispatch layer directly.
 
 ---
 
@@ -149,7 +178,7 @@ The `plugins` array in `qvac.config.{json,js,ts}` declares which plugins to incl
 
 [PlantUML source](puml/08-model-loading-flow.puml)
 
-**Model Constants:** Model constants are rich objects (not plain strings) containing all metadata — `name`, `src`, `modelId`, `hyperdriveKey`, `expectedSize`, `sha256Checksum`, `addon`. APIs accept both string URIs and object constants via a `ModelSrcInput` union type.
+**Model Constants:** Model constants are rich objects (not plain strings) containing metadata such as `name`, `src`, `modelId`, `blobCoreKey`, `expectedSize`, `sha256Checksum`, and `addon`. APIs accept string URIs, local paths, descriptor objects, and model constants via the `ModelSrcInput` union type. Python receives the same constants from `packages/sdk/contract/models.json`.
 
 ---
 
@@ -159,14 +188,14 @@ The `plugins` array in `qvac.config.{json,js,ts}` declares which plugins to incl
 
 [PlantUML source](puml/09-delegated-inference.puml)
 
-*Key — Left boundary: provider-side · Right boundary: consumer-side · Bidirectional arrows: P2P connections*
+*Key - Consumer above, provider below. Wire path is delegated inference [Noise / Hyperswarm]. The provider invokes a local model in process.*
 
 **Delegation Workflow:**
 
-1. **Provider** loads model locally, calls `startQVACProvider({ topic, firewall? })`
-2. Provider announces on the specified Hyperswarm topic
-3. **Consumer** calls `loadModel({ modelSrc, delegate: { providerPublicKey, topic, timeout?, fallbackToLocal?, forceNewConnection? } })`
-4. Consumer joins swarm, connects to provider
+1. **Provider** loads model locally, calls `startQVACProvider({ firewall? })`
+2. Provider waits for DHT bootstrap, binds its swarm keypair with `swarm.listen()`, and returns its `publicKey`
+3. **Consumer** calls `loadModel({ modelSrc, delegate: { providerPublicKey, timeout?, healthCheckTimeout?, fallbackToLocal?, forceNewConnection? } })`
+4. Consumer dials the provider directly with `dht.connect(providerPublicKey)`
 5. All inference calls proxy through encrypted P2P stream
 6. Provider executes inference locally, streams results back
 
@@ -180,6 +209,8 @@ The `plugins` array in `qvac.config.{json,js,ts}` declares which plugins to incl
 
 [PlantUML source](puml/10-rag-components.puml)
 
+*Key - Host API calls engine handlers. Operations: chunk, ingest, search, delete, reindex, plus workspace create/open/close.*
+
 **Workspace Isolation:** Each workspace is bound to a specific embedding model at creation. Documents from different workspaces cannot be mixed.
 
 ---
@@ -187,6 +218,25 @@ The `plugins` array in `qvac.config.{json,js,ts}` declares which plugins to incl
 # Model Registry (Online Catalog)
 
 The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`), providing catalog-based model discovery. Client APIs: `modelRegistryList`, `modelRegistrySearch`, `modelRegistryGetModel`. Models discovered through the registry can be loaded via `loadModel()` or pre-downloaded via `downloadAsset()`.
+
+---
+
+# Language Contract & Python Client
+
+The language-neutral SDK contract lives under `packages/sdk/contract/**`:
+
+- `schema.json` contains JSON Schema for every request/response wire type and registered public constants.
+- `manifest.json` lists every RPC method and call shape (`request-reply`, `server-stream`, `duplex`).
+- `models.json` contains the generated model constants catalog.
+
+`packages/sdk` owns contract generation via `bun run contract:export` and drift detection via `bun run contract:check`. `packages/sdk-python` consumes the contract to generate Pydantic models, typed method stubs, model type maps, error-code registries, model constants, and the pinned SDK version.
+
+The Python package provides:
+
+- A flat public API under `tetherto.qvac_sdk`, plus `tetherto.qvac_sdk.models` for model constants.
+- Ergonomic wrappers for common calls, generated stubs for the full RPC surface, typed errors, logging/profiling helpers, VLA helpers, and a notebook `SyncClient` facade.
+- Thin PyPI installs that resolve a worker from explicit paths, `QVAC_*` env vars, a local `@qvac/sdk`, a managed `install-worker` cache, or global npm.
+- Self-contained release wheels that bundle the worker and Bare runtime for supported platforms.
 
 ---
 
@@ -198,6 +248,7 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 | Delegated Inference | Firewall allow/deny lists by public key |
 | Model Integrity | SHA256 checksum verification (model constants include checksums; optional for custom URLs) |
 | Path Security | Path traversal protection for model file resolution |
+| Local Worker RPC | Local IPC/loopback only; trusted local process model |
 | Local Storage | No encryption at rest; relies on OS-level file permissions |
 
 **Not in scope:** Authentication/authorization for local API calls (SDK runs as trusted local process).
@@ -213,43 +264,56 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 | Model load fails (corrupt/incompatible) | Error with cause chain; model not registered |
 | Native addon crash | Server process may terminate; client receives RPC error |
 | Server process OOM | OS kills subprocess; client receives RPC connection error and must restart SDK |
-| Plugin not enabled | Fast-fail with message: "plugin not enabled, add to qvac.config and rebuild" |
+| Worker crash during an in-flight request | Client life-signal race rejects pending calls instead of hanging |
+| Plugin not enabled | Fast-fail with a plugin registration / no-handler error and guidance to configure or register the plugin |
+| `@qvac/inference` call before plugin assembly | Fast-fail with guidance to call `plugins([...])` or `registerPlugin(...)` |
 
-**Cancellation:** `cancel({ requestId })` supported for `inference`, `downloadAsset`, and `rag` operations.
+**Cancellation:** `cancel({ requestId })` is the preferred targeted path for migrated long-running operations, including completion/batch completion, embeddings, transcription, translation, fine-tuning, model loading, asset downloads, RAG, and audio generation. Broad cancellation by `modelId` remains available for shutdown, unload, and admin sweeps.
 
 ---
 
 # Native Addons Architecture
 
-- [C++ Addon Framework](../packages/inference-addon-cpp/docs/architecture.md)
-- [LLM Completion — llama.cpp](../packages/llm-llamacpp/docs/architecture.md)
-- [Embeddings — llama.cpp](../packages/embed-llamacpp/docs/architecture.md)
-- [Transcription — whisper.cpp](../packages/transcription-whispercpp/docs/architecture.md)
-- [Translation — nmt.cpp](../packages/translation-nmtcpp/docs/architecture.md)
+- [Addon C++ Framework](../../packages/inference-addon-cpp/docs/architecture.md)
+- [LLM Completion - llama.cpp](../../packages/llm-llamacpp/docs/architecture.md)
+- [Embeddings - llama.cpp](../../packages/embed-llamacpp/docs/architecture.md)
+- [Speech-to-text - ASR GGML](../../packages/asr-ggml/docs/architecture.md)
+- [Translation - nmt.cpp](../../packages/translation-nmtcpp/docs/architecture.md)
+- [Diffusion - stable-diffusion.cpp](../../packages/diffusion-cpp/docs/architecture.md)
+- [Classification - GGML](../../packages/classification-ggml/docs/architecture.md)
 
 ---
 
 # Cross-Cutting Concerns
 
-**Logging:** Logs span three boundaries—client process, server (Bare subprocess), and native addons. Addon logs are forwarded to JS via registered callbacks (plugins can configure this via `logging.module` and `logging.namespace`). A streaming mechanism (`loggingStream`) allows real-time log forwarding from subprocess to client for debugging UIs. Log level and console output are configurable via `qvac.config`.
+**Logging:** Logs span host client, worker core, and native addons. Addon logs are forwarded to JS via registered callbacks (plugins can configure this via `logging.module` and `logging.namespace`). A streaming mechanism (`loggingStream` / `subscribeServerLogs`) allows real-time log forwarding from subprocess to client for debugging UIs. Log level and console output are configurable via `qvac.config` and Python `Client(config=...)`.
 
-**Error Handling:** All SDK errors expose a numeric `code` property for programmatic handling, with original errors preserved via `cause` chain. Errors are structured classes extending `QvacErrorBase`. Client (50,001–52,000) and server (52,001–54,000) error codes are strictly separated.
+**Error Handling:** All SDK errors expose a numeric `code` property for programmatic handling, with original errors preserved via `cause` chain. Errors are structured classes extending `QvacErrorBase`. Client (50,001-52,000) and server (52,001-54,000) error codes are strictly separated.
 
-**Worker Lifecycle:** Startup has two phases: `initializeWorkerCore()` parses environment, starts log buffering, and registers SIGTERM/SIGINT handlers; then plugins are registered; finally `ensureRPCSetup()` creates the IPC client (desktop) or BareKit RPC server (mobile) and begins accepting requests. On termination signal, the registered shutdown handler runs graceful cleanup: clear registries, unload models, destroy swarm, close RAG instances, cancel downloads, close registry client.
+**Worker Lifecycle:** The SDK worker shell frames RPC, acquires the process lock, and calls `@qvac/inference` `send` / `stream` / `duplex`. Startup registers SIGTERM/SIGINT handlers, registers built-in plugins on the engine, then `ensureRPCSetup()` creates the IPC client (desktop) or BareKit RPC server (mobile). Direct Bare imports `@qvac/inference` and skips the worker. On termination, the engine clears registries, unloads models, destroys the swarm, closes RAG instances, cancels downloads, closes the registry client, and releases the worker lock where the runtime owns process exit.
+
+**Request Lifecycle:** Long-running operations run through request lifecycle primitives (`RequestRegistry`, `RequestContext`, `DisposableScope`) that provide request IDs, cancellation, structured cleanup, concurrency policy, and per-request logging. Client-side `completion`, `loadModel`, and `downloadAsset` expose request IDs synchronously so callers can cancel in-flight work.
 
 ---
 
 # Repositories
 
-All packages live in this monorepo under `packages/`:
+Most packages live in this monorepo under `packages/`. Integration plugins live under `plugins/`, and the documentation site lives under `docs/website`.
 
 **SDK & CLI**
 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
-| `qvac-sdk` | `@qvac/sdk` | Core SDK: client API, RPC, plugins, worker |
-| `qvac-cli` | `@qvac/cli` | CLI tooling (`qvac bundle sdk`) |
-| `docs` | `docs` | Documentation site (Next.js / Fumadocs) |
+| `sdk` | `@qvac/sdk` | TypeScript host: public API, worker shell, RPC transports, bundling; re-exports `@qvac/inference` |
+| `bare-sdk` | `@qvac/bare-sdk` | Removed from the repo; last npm release 0.18.2. Bare consumers use `@qvac/inference` |
+| `inference` | `@qvac/inference` | Engine: dispatch, plugins, models, P2P, RAG, schemas; Bare in-process, no worker/RPC |
+| `sdk-python` | `tetherto-qvac-sdk` | Generated Python client for the SDK worker contract |
+| `cli` | `@qvac/cli` | CLI tooling (`qvac bundle sdk`, verification, release helpers) |
+| `ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider integration |
+| `test-suite` | `@qvac/test-suite` | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving the SDK e2e suites across desktop, Electron, Snap, Android, and iOS |
+| `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode integration |
+| `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw integration |
+| `docs/website` | - | Documentation site (Next.js / Fumadocs) |
 
 **Inference Addons**
 
@@ -257,22 +321,25 @@ All packages live in this monorepo under `packages/`:
 |-----------|---------|---------|
 | `llm-llamacpp` | `@qvac/llm-llamacpp` | LLM completion (llama.cpp) |
 | `embed-llamacpp` | `@qvac/embed-llamacpp` | Text embeddings (llama.cpp) |
-| `transcription-whispercpp` | `@qvac/transcription-whispercpp` | Speech-to-text (whisper.cpp) |
-| `transcription-parakeet` | `@qvac/transcription-parakeet` | Speech-to-text (Parakeet) |
+| `asr-ggml` | `@qvac/asr-ggml` | Whisper and Parakeet speech-to-text (GGML) |
+| `bci-whispercpp` | `@qvac/bci-whispercpp` | BCI neural-signal transcription |
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` | Translation (nmt.cpp) |
 | `tts-ggml` | `@qvac/tts-ggml` | Text-to-speech (GGML) |
 | `ocr-ggml` | `@qvac/ocr-ggml` | OCR (GGML) |
+| `diffusion-cpp` | `@qvac/diffusion-cpp` | Image/video generation and upscaling |
+| `audiogen-ggml` | `@qvac/audiogen-ggml` | Text-conditioned audio generation |
+| `vla-ggml` | `@qvac/vla-ggml` | Vision-language-action inference |
+| `classification-ggml` | `@qvac/classification-ggml` | Image classification |
 
 **Support Libraries**
 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
 | `rag` | `@qvac/rag` | RAG with HyperDB |
-| `infer-base` | `@qvac/infer-base` | Base inference client |
 | `decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
 | `logging` | `@qvac/logging` | Logging utilities |
-| `error-base` | `@qvac/error` | Base error types |
+| `error` | `@qvac/error` | Base error types |
 | `langdetect-text` | `@qvac/langdetect-text` | Language detection |
-| `registry-server` | `@qvac/registry-server` | Model registry server |
+| `registry-server` | process package plus `@qvac/registry-client` / shared packages | Distributed model registry service and client/shared contracts |
 
 

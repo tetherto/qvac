@@ -411,14 +411,14 @@ async function runFinetuningArchsTest (options = {}) { // eslint-disable-line no
   return runIntegrationModule('../integration/finetuning-archs.test.js', options)
 }
 
-async function runFinetuningMoeTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningMoeTest')) return __FILTERED
-  return runIntegrationModule('../integration/finetuning-moe.test.js', options)
-}
-
 async function runFinetuningCancelSlotReleaseTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningCancelSlotReleaseTest')) return __FILTERED
   return runIntegrationModule('../integration/finetuning-cancel-slot-release.test.js', options)
+}
+
+async function runFinetuningMoeTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningMoeTest')) return __FILTERED
+  return runIntegrationModule('../integration/finetuning-moe.test.js', options)
 }
 
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -486,11 +486,6 @@ async function runModelLoadingTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/model-loading.test.js', options)
 }
 
-async function runMropeSlidingContextTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMropeSlidingContextTest')) return __FILTERED
-  return runIntegrationModule('../integration/mrope-sliding-context.test.js', options)
-}
-
 async function runMultiGpuTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultiGpuTest')) return __FILTERED
   return runIntegrationModule('../integration/multi-gpu.test.js', options)
@@ -556,19 +551,9 @@ async function runReasoningTest (options = {}) { // eslint-disable-line no-unuse
   return runIntegrationModule('../integration/reasoning.test.js', options)
 }
 
-async function runSlidingContextTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runSlidingContextTest')) return __FILTERED
-  return runIntegrationModule('../integration/sliding-context.test.js', options)
-}
-
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runToolCallingTest')) return __FILTERED
   return runIntegrationModule('../integration/tool-calling.test.js', options)
-}
-
-async function runToolsCompactTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runToolsCompactTest')) return __FILTERED
-  return runIntegrationModule('../integration/tools-compact.test.js', options)
 }
 
 async function runTurboquantTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -589,4 +574,9 @@ async function runUnloadThrowingListenerTest (options = {}) { // eslint-disable-
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUtf8OutputTest')) return __FILTERED
   return runIntegrationModule('../integration/utf8-output.test.js', options)
+}
+
+async function runVisionpsyImageNoUpscaleTokensTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runVisionpsyImageNoUpscaleTokensTest')) return __FILTERED
+  return runIntegrationModule('../integration/visionpsy-image-no-upscale-tokens.test.js', options)
 }

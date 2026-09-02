@@ -1,8 +1,8 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { embed } from '@qvac/sdk'
-import { requireModel } from '../plugins/require-model.js'
-import { logUnsupported } from '../plugins/log-unsupported.js'
-import { embeddingsBody, EMBEDDINGS_UNSUPPORTED_PARAMS } from '../schemas/embeddings.js'
+import { requireModel } from '@/serve/plugins/require-model'
+import { logUnsupported } from '@/serve/plugins/log-unsupported'
+import { embeddingsBody, EMBEDDINGS_UNSUPPORTED_PARAMS } from '@/serve/schemas/embeddings'
 
 const descriptions = {
   embed: `

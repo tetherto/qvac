@@ -20,8 +20,20 @@ import {
   collectCheckSections,
   createDefaultContext,
   isReportOk
-} from '../src/doctor/checks/index.js'
-import type { CheckContext } from '../src/doctor/checks/index.js'
+} from '@/doctor/checks/index'
+import type { CheckContext } from '@/doctor/checks/index'
+import { runDoctor } from '@/doctor/index'
+import {
+  checkSdkRuntime,
+  classifySdkRuntimeFailure,
+  probeSdkRuntime,
+  type SdkRuntimeProbeResult
+} from '@/doctor/deep'
+import {
+  DEEP_PROBE_MESSAGE_KIND,
+  DEEP_PROBE_PROTOCOL_VERSION,
+  isDeepProbeMessage
+} from '@/doctor/deep-protocol'
 
 // Build a CheckContext with a minimal, deterministic baseline and spread
 // per-test overrides on top. Keeps each test assertion about a single
@@ -37,6 +49,54 @@ function makeCtx(overrides: Partial<CheckContext> = {}): CheckContext {
     probe: () => ({ ok: false }),
     ...overrides
   }
+}
+
+function createSdkFixture(source: string): { entrypoint: string; projectRoot: string } {
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-deep-check-'))
+  const sdkDir = path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
+  fs.mkdirSync(sdkDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(sdkDir, 'package.json'),
+    JSON.stringify({
+      name: '@qvac/sdk',
+      version: '0.0.0-test',
+      type: 'module',
+      exports: { '.': './index.js', './package': './package.json' }
+    })
+  )
+  const entrypoint = path.join(sdkDir, 'index.js')
+  fs.writeFileSync(entrypoint, source)
+  return { entrypoint, projectRoot }
+}
+
+function failedProbe(overrides: Partial<SdkRuntimeProbeResult> = {}): SdkRuntimeProbeResult {
+  return {
+    outcome: 'fail',
+    durationMs: 10,
+    stdout: '',
+    stderr: '',
+    exitCode: 1,
+    signal: null,
+    ...overrides
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH'
+  }
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) return true
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return !isProcessAlive(pid)
 }
 
 describe('checkNodeVersion', () => {
@@ -346,6 +406,419 @@ describe('checkSdkInstalled', () => {
       assert.equal(r.value, 'v0.9.1')
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('deep SDK runtime probe', () => {
+  it('passes after an isolated heartbeat and clean close', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {}
+      export async function close() {}
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 2_000
+      })
+      assert.equal(result.outcome, 'pass')
+      assert.equal(result.exitCode, 0)
+      assert.equal(result.phase, 'close')
+      assert.equal(result.probeMessage?.ok, true)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('captures and classifies a native library failure', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {
+        throw new Error("version 'GLIBCXX_3.4.30' not found")
+      }
+      export async function close() {}
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 2_000
+      })
+      assert.equal(result.outcome, 'fail')
+      assert.equal(result.phase, 'heartbeat')
+      assert.equal(result.probeMessage?.ok, false)
+      if (result.probeMessage?.ok === false) {
+        assert.match(result.probeMessage.error.message, /GLIBCXX_3\.4\.30/)
+      }
+      const classification = classifySdkRuntimeFailure(result)
+      assert.equal(classification.id, 'libstdcxx')
+      assert.match(classification.hint, /may be missing or older/i)
+
+      const check = await checkSdkRuntime(fixture.projectRoot)
+      assert.equal(check.code, 'libstdcxx')
+      assert.match(check.hint ?? '', /may be missing or older/i)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('reports a secondary cleanup failure without replacing the heartbeat error', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() { throw new Error('heartbeat failed') }
+      export async function close() { throw new Error('cleanup failed') }
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 2_000
+      })
+      assert.equal(result.outcome, 'fail')
+      assert.equal(result.phase, 'heartbeat')
+      assert.equal(result.probeMessage?.ok, false)
+      if (result.probeMessage?.ok === false) {
+        assert.match(result.probeMessage.error.message, /heartbeat failed/)
+        assert.match(result.probeMessage.cleanupError?.message ?? '', /cleanup failed/)
+      }
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('terminates a hung heartbeat at the configured timeout', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {
+        await new Promise(() => setInterval(() => {}, 1_000))
+      }
+      export async function close() {}
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 50
+      })
+      assert.equal(result.outcome, 'timeout')
+      const classification = classifySdkRuntimeFailure(result)
+      assert.equal(classification.id, 'worker-handshake-timeout')
+      assert.match(classification.hint, /startup handshake/i)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('bounds a hung close with the cleanup timeout', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {}
+      export async function close() {
+        await new Promise(() => setInterval(() => {}, 1_000))
+      }
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 5_000
+      })
+      assert.equal(result.outcome, 'fail')
+      assert.equal(result.phase, 'close')
+      assert.equal(result.probeMessage?.ok, false)
+      if (result.probeMessage?.ok === false) {
+        assert.equal(result.probeMessage.error.name, 'CleanupTimeoutError')
+        assert.match(result.probeMessage.error.message, /2_?000|2000/)
+      }
+      assert.ok(result.durationMs < 4_500, `close took ${result.durationMs} ms`)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('terminates descendants when a timed-out probe is forced down', async () => {
+    const fixture = createSdkFixture(`
+      import { spawn } from 'node:child_process'
+      import { writeFileSync } from 'node:fs'
+      import { join } from 'node:path'
+
+      export async function heartbeat() {
+        const descendant = spawn(
+          process.execPath,
+          ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1_000)"],
+          { stdio: 'ignore' }
+        )
+        writeFileSync(join(process.cwd(), 'descendant.pid'), String(descendant.pid))
+        await new Promise(() => setInterval(() => {}, 1_000))
+      }
+      export async function close() {}
+    `)
+    let descendantPid: number | undefined
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 1_000
+      })
+      assert.equal(result.outcome, 'timeout')
+      descendantPid = Number(
+        fs.readFileSync(path.join(fixture.projectRoot, 'descendant.pid'), 'utf8')
+      )
+      assert.ok(Number.isSafeInteger(descendantPid) && descendantPid > 0)
+      assert.equal(
+        await waitForProcessExit(descendantPid, 2_000),
+        true,
+        `descendant ${descendantPid} survived probe termination`
+      )
+    } finally {
+      if (descendantPid !== undefined && isProcessAlive(descendantPid)) {
+        process.kill(descendantPid, 'SIGKILL')
+      }
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('bounds captured output to its tail', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {
+        process.stderr.write('x'.repeat(1_000))
+        throw new Error('tail marker')
+      }
+      export async function close() {}
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 2_000,
+        maxOutputChars: 512
+      })
+      assert.ok(result.stderr.length <= 512)
+      assert.equal(result.probeMessage?.ok, false)
+      if (result.probeMessage?.ok === false) {
+        assert.match(result.probeMessage.error.message, /tail marker/)
+      }
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('classifies common signal, Bare, Windows runtime, and Vulkan failures', () => {
+    assert.match(
+      classifySdkRuntimeFailure(failedProbe({ signal: 'SIGILL' })).hint,
+      /unsupported by this CPU/i
+    )
+    assert.match(
+      classifySdkRuntimeFailure(failedProbe({ stderr: 'BareRuntimeBinaryNotFoundError' })).hint,
+      /Bare runtime binary appears to be missing/i
+    )
+    assert.match(
+      classifySdkRuntimeFailure(failedProbe({ stderr: 'VCRUNTIME140.dll was not found' })).hint,
+      /Visual C\+\+ runtime dependency/i
+    )
+    assert.match(
+      classifySdkRuntimeFailure(
+        failedProbe({ stderr: 'libnative.so: cannot open shared object file' })
+      ).hint,
+      /shared-library dependency/i
+    )
+    assert.match(
+      classifySdkRuntimeFailure(failedProbe({ stderr: 'vkCreateInstance failed' })).hint,
+      /Vulkan dependency/i
+    )
+    assert.match(
+      classifySdkRuntimeFailure(
+        failedProbe({ stderr: 'libvulkan.so.1: cannot open shared object file' })
+      ).hint,
+      /Vulkan dependency/i
+    )
+  })
+
+  it('returns stable failure ids in explicit priority order', () => {
+    const cases: Array<[SdkRuntimeProbeResult, string]> = [
+      [failedProbe({ signal: 'SIGILL' }), 'cpu-instruction'],
+      [failedProbe({ stderr: "version 'GLIBCXX_3.4.30' not found" }), 'libstdcxx'],
+      [failedProbe({ stderr: 'VCRUNTIME140.dll was not found' }), 'visual-cpp-runtime'],
+      [failedProbe({ stderr: 'vkCreateInstance failed' }), 'vulkan'],
+      [failedProbe({ stderr: 'libnative.so: cannot open shared object file' }), 'shared-library'],
+      [failedProbe({ stderr: 'BareRuntimeBinaryNotFoundError' }), 'bare-runtime'],
+      [failedProbe({ outcome: 'timeout' }), 'worker-handshake-timeout'],
+      [failedProbe({ outcome: 'spawn-error' }), 'spawn-error'],
+      [failedProbe({ outcome: 'protocol-error' }), 'protocol-error'],
+      [failedProbe({ phase: 'import' }), 'import-failed'],
+      [failedProbe({ phase: 'close' }), 'cleanup-failed'],
+      [failedProbe({ phase: 'heartbeat' }), 'heartbeat-failed']
+    ]
+
+    for (const [result, expectedId] of cases) {
+      assert.equal(classifySdkRuntimeFailure(result).id, expectedId)
+    }
+  })
+
+  it('classifies import failures separately from heartbeat failures', () => {
+    const classification = classifySdkRuntimeFailure(failedProbe({ phase: 'import' }))
+    assert.equal(classification.id, 'import-failed')
+    assert.match(classification.hint, /could not be imported or initialized/i)
+  })
+
+  it('reports a real SDK import-surface failure with the import classification', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {}
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 2_000
+      })
+      assert.equal(result.outcome, 'fail')
+      assert.equal(result.phase, 'import')
+      const classification = classifySdkRuntimeFailure(result)
+      assert.equal(classification.id, 'import-failed')
+      assert.match(classification.hint, /could not be imported or initialized/i)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('warns Windows users that a failed deep check may leave a Bare worker', () => {
+    const windows = classifySdkRuntimeFailure(failedProbe(), 'win32')
+    assert.match(windows.hint, /Bare worker process may still be running/i)
+    assert.match(windows.hint, /terminate it manually/i)
+
+    const linux = classifySdkRuntimeFailure(failedProbe(), 'linux')
+    assert.doesNotMatch(linux.hint, /may still be running/i)
+  })
+
+  it('rejects a protocol failure with a malformed cleanup error', () => {
+    assert.equal(
+      isDeepProbeMessage({
+        kind: DEEP_PROBE_MESSAGE_KIND,
+        version: DEEP_PROBE_PROTOCOL_VERSION,
+        ok: false,
+        phase: 'heartbeat',
+        error: { name: 'Error', message: 'heartbeat failed' },
+        cleanupError: { name: 'Error', message: 42 }
+      }),
+      false
+    )
+    assert.equal(
+      isDeepProbeMessage({
+        kind: DEEP_PROBE_MESSAGE_KIND,
+        version: DEEP_PROBE_PROTOCOL_VERSION,
+        ok: true,
+        phase: 'close',
+        cleanupError: { name: 'Error', message: 'unexpected' }
+      }),
+      false
+    )
+  })
+
+  it('prioritizes a concrete SIGILL cause over an RPC timeout wrapper', () => {
+    assert.match(
+      classifySdkRuntimeFailure(
+        failedProbe({ stderr: 'RPCInitTimeoutError: RPC initialization timed out\nsignal SIGILL' })
+      ).hint,
+      /unsupported by this CPU/i
+    )
+    assert.equal(
+      classifySdkRuntimeFailure(
+        failedProbe({ stderr: 'RPCInitTimeoutError: RPC initialization timed out\nsignal SIGILL' })
+      ).id,
+      'cpu-instruction'
+    )
+  })
+
+  it('classifies a child-process spawn error', async () => {
+    const fixture = createSdkFixture('export async function heartbeat() {}')
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        nodePath: path.join(fixture.projectRoot, 'missing-node'),
+        timeoutMs: 2_000
+      })
+      assert.equal(result.outcome, 'spawn-error')
+      assert.match(classifySdkRuntimeFailure(result).hint, /could not be started/i)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('adds the deep section to the doctor report', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {}
+      export async function close() {}
+    `)
+    try {
+      const report = await runDoctor({ projectRoot: fixture.projectRoot, deep: true, quiet: true })
+      const section = report.sections.at(-1)
+      assert.equal(section?.id, 'deep')
+      assert.equal(section?.checks[0]?.status, 'pass')
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('fails when --deep cannot resolve an SDK entrypoint', async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-deep-missing-'))
+    try {
+      const result = await checkSdkRuntime(projectRoot)
+      assert.equal(result.status, 'fail')
+      assert.equal(result.severity, 'required')
+      assert.equal(result.code, 'sdk-not-found')
+      assert.match(result.value ?? '', /not found/i)
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects exit code zero without a valid success message', async () => {
+    const fixture = createSdkFixture('process.exit(0)')
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 2_000
+      })
+      assert.equal(result.outcome, 'protocol-error')
+      assert.match(classifySdkRuntimeFailure(result).hint, /without a valid result/i)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a success message when the probe exits unsuccessfully', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {
+        process.send?.({ kind: '${DEEP_PROBE_MESSAGE_KIND}', version: ${DEEP_PROBE_PROTOCOL_VERSION}, ok: true, phase: 'heartbeat' })
+        process.exit(1)
+      }
+      export async function close() {}
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 2_000
+      })
+      assert.equal(result.outcome, 'protocol-error')
+      assert.match(result.error ?? '', /did not agree/i)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects duplicate protocol result messages', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {
+        const result = { kind: '${DEEP_PROBE_MESSAGE_KIND}', version: ${DEEP_PROBE_PROTOCOL_VERSION}, ok: true, phase: 'heartbeat' }
+        process.send?.(result)
+        process.send?.(result)
+        process.exit(0)
+      }
+      export async function close() {}
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 2_000
+      })
+      assert.equal(result.outcome, 'protocol-error')
+      assert.match(result.error ?? '', /duplicate/i)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('reports close failures separately from heartbeat failures', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {}
+      export async function close() { throw new Error('close failed') }
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 2_000
+      })
+      assert.equal(result.outcome, 'fail')
+      assert.equal(result.phase, 'close')
+      assert.match(classifySdkRuntimeFailure(result).hint, /cleanup failed/i)
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
     }
   })
 })

@@ -1,8 +1,9 @@
 import type { ModelConstant } from '@qvac/sdk'
-import type { ServeConfig, ResolvedModelEntry } from './core/model-registry.js'
-import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from './aliases/sdcpp-video.js'
-import { resolveNestedModelSrcConstants } from './resolve-nested-model-src.js'
-import { loadModelConstants } from './sdk-constants.js'
+import type { ServeConfig, ResolvedModelEntry, LoadConfig } from '@/serve/core/model-registry'
+import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from '@/serve/aliases/sdcpp-video'
+import { normalizeCorsOrigin } from '@/serve/cors'
+import { resolveNestedModelSrcConstants } from '@/serve/resolve-nested-model-src'
+import { loadModelConstants } from '@/serve/sdk-constants'
 
 const ENDPOINT_CATEGORY: Record<string, string> = {
   llm: 'chat',
@@ -33,8 +34,19 @@ interface RawServeConfig {
   serve?: {
     models?: Record<string, string | ConstantModelEntry | ExplicitModelEntry>
     publicBaseUrl?: string
+    cors?: {
+      origins?: unknown
+    }
+    load?: RawLoadConfig
     openai?: RawOpenAIOptions
   }
+}
+
+interface RawLoadConfig {
+  lazy?: unknown
+  concurrency?: unknown
+  timeoutMs?: unknown
+  cancelOnDisconnect?: unknown
 }
 
 interface RawOpenAIOptions {
@@ -68,6 +80,11 @@ interface ExplicitModelEntry {
 interface CLIServeOptions {
   model?: string | string[] | undefined
   publicBaseUrl?: string | undefined
+  corsOrigins?: string[] | undefined
+  lazyLoad?: boolean | undefined
+  loadConcurrency?: number | undefined
+  loadTimeoutMs?: number | null | undefined
+  cancelLoadOnDisconnect?: boolean | undefined
 }
 
 export function parseServeConfig(
@@ -103,13 +120,73 @@ export function parseServeConfig(
   }
 
   const publicBaseUrl = normalizePublicBaseUrl(cliOptions.publicBaseUrl ?? serve.publicBaseUrl)
+  const corsOrigins = parseCorsOrigins(serve.cors?.origins, cliOptions.corsOrigins)
 
   return {
     models,
     defaults: resolveDefaults(models),
+    load: parseLoadConfig(serve.load, cliOptions),
     publicBaseUrl,
+    cors: { origins: corsOrigins },
     openai: parseOpenAIOptions(serve.openai)
   }
+}
+
+const DEFAULT_LOAD_CONCURRENCY = 1
+
+function parseLoadConfig(raw: RawLoadConfig | undefined, cli: CLIServeOptions): LoadConfig {
+  const lazy = cli.lazyLoad ?? asBoolean(raw?.lazy, 'serve.load.lazy') ?? true
+  const cancelOnDisconnect =
+    cli.cancelLoadOnDisconnect ??
+    asBoolean(raw?.cancelOnDisconnect, 'serve.load.cancelOnDisconnect') ??
+    true
+
+  const concurrency =
+    asPositiveInt(cli.loadConcurrency, '--load-concurrency') ??
+    asPositiveInt(raw?.concurrency, 'serve.load.concurrency') ??
+    DEFAULT_LOAD_CONCURRENCY
+
+  let timeoutMs: number | null
+  if (cli.loadTimeoutMs !== undefined) {
+    timeoutMs =
+      cli.loadTimeoutMs === null
+        ? null
+        : (asPositiveInt(cli.loadTimeoutMs, '--load-timeout') ?? null)
+  } else {
+    timeoutMs = asPositiveInt(raw?.timeoutMs, 'serve.load.timeoutMs') ?? null
+  }
+
+  return { lazy, concurrency, timeoutMs, cancelOnDisconnect }
+}
+
+function asBoolean(value: unknown, path: string): boolean | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') throw new Error(`${path} must be a boolean`)
+  return value
+}
+
+function asPositiveInt(value: unknown, path: string): number | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new Error(`${path} must be a positive integer`)
+  }
+  return value
+}
+
+function parseCorsOrigins(configured: unknown, cliOrigins: string[] | undefined): string[] {
+  if (configured !== undefined && !Array.isArray(configured)) {
+    throw new Error('serve.cors.origins must be an array of HTTP(S) origins')
+  }
+
+  const origins = [...(configured ?? []), ...(cliOrigins ?? [])] as unknown[]
+  const normalized = origins.map((origin, index) => {
+    if (typeof origin !== 'string') {
+      throw new Error(`serve.cors.origins[${index}] must be a string`)
+    }
+    return normalizeCorsOrigin(origin)
+  })
+
+  return [...new Set(normalized)]
 }
 
 function normalizePublicBaseUrl(raw: string | undefined): string | null {

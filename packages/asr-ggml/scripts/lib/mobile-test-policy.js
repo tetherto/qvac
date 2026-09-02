@@ -11,24 +11,20 @@
 // subpath: `../../binding` does, `../../engines/whisper/whisper.js` does not,
 // and the build dies with MODULE_NOT_FOUND. These cases also spawn
 // subprocesses via bare-subprocess, which is meaningless on a device.
-const DESKTOP_ONLY = new Set([
-  'addon.test.js'
-])
+const DESKTOP_ONLY = new Set(['addon.test.js'])
 
 // Cases forced to the END of the emitted module, after the alphabetical block.
 // Whisper's GPU teardown can crash the bare app on some Adreno devices at
 // process/context shutdown (whisper.cpp#2373); keeping these last means such a
 // crash cannot drop coverage of any earlier case. Encoded here rather than
 // hand-edited into the generated file, so regenerating preserves the ordering.
-const RUN_LAST = [
-  'mobile-perf-sweep-gpu.test.js',
-  'mobile-perf-tiny-gpu.test.js'
-]
+const RUN_LAST = ['mobile-perf-sweep-gpu.test.js', 'mobile-perf-tiny-gpu.test.js']
 
-function orderIntegrationFiles (files) {
-  const last = files.filter(f => RUN_LAST.includes(f))
+function orderIntegrationFiles(files) {
+  const last = files
+    .filter((f) => RUN_LAST.includes(f))
     .sort((a, b) => RUN_LAST.indexOf(a) - RUN_LAST.indexOf(b))
-  const rest = files.filter(f => !RUN_LAST.includes(f)).sort()
+  const rest = files.filter((f) => !RUN_LAST.includes(f)).sort()
   return [...rest, ...last]
 }
 

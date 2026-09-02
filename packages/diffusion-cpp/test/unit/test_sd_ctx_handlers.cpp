@@ -27,7 +27,11 @@ TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
   EXPECT_EQ(applyOne("prediction", "v").prediction, V_PRED);
   EXPECT_EQ(applyOne("prediction", "edm_v").prediction, EDM_V_PRED);
   EXPECT_EQ(applyOne("prediction", "flow").prediction, FLOW_PRED);
-  EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, FLUX2_FLOW_PRED);
+  // flux2_flow: no engine prediction override exists; the value maps to auto
+  // and raises the addon's FLUX.2 flag instead.
+  EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, PREDICTION_COUNT);
+  EXPECT_TRUE(applyOne("prediction", "flux2_flow").flux2Requested);
+  EXPECT_FALSE(applyOne("prediction", "auto").flux2Requested);
 
   SdCtxConfig cfg;
   EXPECT_THROW(
@@ -137,6 +141,13 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
   EXPECT_TRUE(applyOne("offload_to_cpu", "1").offloadToCpu);
   EXPECT_FALSE(applyOne("clip_on_cpu", "false").keepClipOnCpu);
   EXPECT_TRUE(applyOne("vae_on_cpu", "true").keepVaeOnCpu);
+  EXPECT_TRUE(applyOne("vae_auto_cpu_fallback", "true").vaeAutoCpuFallback);
+  EXPECT_FLOAT_EQ(
+      applyOne("vae_auto_cpu_fallback_memory_ratio", "0.75")
+          .vaeAutoCpuFallbackMemoryRatio,
+      0.75f);
+  EXPECT_THROW(
+      applyOne("vae_auto_cpu_fallback_memory_ratio", "1.1"), StatusError);
   EXPECT_TRUE(applyOne("vae_decode_only", "true").vaeDecodeOnly);
 
   SdCtxConfig cfg;

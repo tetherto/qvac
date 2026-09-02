@@ -37,3 +37,7 @@ The S3 date prefixes mirror the registry prefixes in `parakeet-helpers.js`
 `parakeet-sortformer-aosc-streaming.test.js` resolves it locally instead of downloading
 it during the test timeout. Mobile q4_0/f16 streaming models are provisioned
 separately by the Device Farm workflow.
+
+Indic Conformer CTC q8_0 (`indic_conformer/2026-08-07`) is staged for desktop
+integration (`parakeet-addon-multimodel.test.js`); mobile uses q4_0 via
+`scripts/generate-mobile-model-manifest.js`.

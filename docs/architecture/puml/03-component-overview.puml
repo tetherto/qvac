@@ -1,34 +1,40 @@
 @startuml
 !include <C4/C4_Component>
+HIDE_STEREOTYPE()
 
-title QVAC SDK – Internal Components
+title QVAC SDK Family - Internal Components
 
-Container_Boundary(client_side, "Client (@qvac/sdk)") {
-    Component(api, "Public API", "TypeScript", "loadModel, completion, transcribe, embed, translate, textToSpeech, ocr, rag*, invokePlugin, loggingStream, etc.")
-    Component(rpc_client, "RPC Client", "TypeScript", "IPC socket (desktop) or native bridge (mobile)")
-    Component(config, "Config Loader", "TypeScript", "Load qvac.config.{json,js,ts}, validate with Zod, send to worker")
+Container_Boundary(host_side, "Host") {
+    Component(api, "Public API", "TypeScript / Python", "loadModel, completion, transcribe, embed, translate, and other plugin operations")
+    Component(rpc_client, "RPC Adapter", "bare-rpc", "Socket, BareKit IPC, loopback TCP, or in-process")
 }
 
-Container_Boundary(worker_side, "Worker (Bare Runtime)") {
-    Component(rpc_server, "RPC Server", "TypeScript", "Validate (Zod), route, stream responses, apply device defaults")
-    Component(plugin_registry, "Plugin Registry", "TypeScript", "Register plugins by modelType, resolve handlers, validate schemas")
-    Component(model_registry, "Model Registry", "TypeScript", "Track loaded models (local & delegated) with name/path matching")
-    Component(config_registry, "Config Registry", "TypeScript", "Immutable runtime config store (getSDKConfig / setSDKConfig)")
-    Component(download, "Download Manager", "TypeScript", "HTTP/Hyperdrive/Registry downloads with resume, progress, cancellation, checksum")
-    Component(p2p, "P2P Layer", "TypeScript", "Hyperswarm discovery, Hyperdrive sync, delegated inference")
-    Component(rag, "RAG", "TypeScript", "HyperDB vector storage with workspace isolation")
-    Component(plugins, "Built-in Plugins", "TypeScript/C++", "LLM, Embeddings, Whisper, NMT, TTS, OCR — each wrapping a native addon")
-    Component(logging, "Logging", "TypeScript", "Namespaced loggers (client/server/addon), configurable transports")
+Container_Boundary(engine_side, "Engine (@qvac/inference)") {
+    Component(logging, "Logging", "TypeScript", "Host, engine, and addon logs")
+    Component(dispatch, "Dispatch", "TypeScript", "Validate, route, stream, apply device defaults")
+    Component(plugin_registry, "Plugin Registry", "TypeScript", "Handlers keyed by modelType")
+    Component(plugins, "Plugins", "TypeScript/C++", "Built-in and custom addons")
+    Component(model_registry, "Model Registry", "TypeScript", "Loaded local and delegated models")
+    Component(distribution, "Model Distribution", "TypeScript", "HTTP, registry, Hyperdrive, local")
+    Component(rag, "RAG", "TypeScript", "HyperDB workspaces and vector search")
 }
 
 Rel_D(api, rpc_client, "Serializes calls")
-Rel_D(rpc_client, rpc_server, "JSON-RPC", "IPC / native bridge")
-Rel_D(rpc_server, plugin_registry, "Dispatches by modelType")
+Rel_D(rpc_client, dispatch, "Sends requests", "bare-rpc")
+Rel_U(logging, rpc_client, "Streams logs", "bare-rpc")
+Rel_D(dispatch, plugin_registry, "Looks up handler")
 Rel_D(plugin_registry, plugins, "Invokes handler")
-Rel_D(rpc_server, model_registry, "Registers/unregisters models")
-Rel_D(rpc_server, download, "Resolves and fetches models")
-Rel_D(rpc_server, p2p, "Peer discovery and sync")
-Rel_D(rpc_server, rag, "Vector search and persistence")
-Rel_U(logging, rpc_client, "Streams logs to client")
+Rel_D(dispatch, model_registry, "Registers models")
+Rel_D(dispatch, distribution, "Fetches models")
+Rel_D(dispatch, rag, "Searches vectors")
+
+Lay_D(api, rpc_client)
+Lay_D(rpc_client, dispatch)
+Lay_L(logging, dispatch)
+Lay_D(dispatch, plugin_registry)
+Lay_R(plugin_registry, model_registry)
+Lay_R(model_registry, distribution)
+Lay_R(distribution, rag)
+Lay_D(plugin_registry, plugins)
 
 @enduml

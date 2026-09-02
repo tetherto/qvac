@@ -24,28 +24,164 @@ on:
         description: "Repository to checkout"
         type: string
         required: false
+  # Manual on-demand path. A dispatched run targets ONE platform and the
+  # device(s) chosen below — it never runs the full default pool. The
+  # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
   workflow_dispatch:
     inputs:
+      platform:
+        description: "Platform to run on (a manual run targets one platform)."
+        type: choice
+        required: true
+        options: [Android, iOS]
+        default: Android
+      device:
+        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'. Valid names + how to find them: docs/ci/MOBILE-ON-DEMAND.md."
+        type: choice
+        required: false
+        options:
+          - "(custom)"
+          - "Google Pixel 9"
+          - "Google Pixel 8"
+          - "Samsung Galaxy S25 Ultra"
+          - "Apple iPhone 17"
+          - "Apple iPhone 16 Pro"
+          - "Apple iPhone 15"
+        default: "(custom)"
+      devices_custom:
+        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once. Must match a Device Farm model (list + how to check: docs/ci/MOBILE-ON-DEMAND.md)."
+        type: string
+        required: false
+        default: ""
+      device_model_operator:
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value; use for shorthand like 'Pixel 9'). EQUALS avoids billing a different/slower variant."
+        type: choice
+        required: false
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
+      tests:
+        description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runAddonTest'; combine several with '|'). Empty = full mobile suite. Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
+        type: string
+        required: false
+        default: ""
       ref:
         description: "Git ref (branch/tag/SHA) to test. Leave blank to use the branch you dispatch from."
         type: string
         required: false
         default: ""
 
-# Guards the workflow_dispatch path so two manual dispatches don't run — and bill
-# — concurrent Device Farm runs. The workflow_call path is additionally covered by
-# the caller's own concurrency. NOTE: the group key is a literal, NOT
-# `github.workflow` — under workflow_call that resolves to the CALLER's name and
-# would collide with on-pr-inference-addon-cpp.yml's concurrency group.
 concurrency:
-  group: mobile-df-inference-addon-cpp-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # workflow_dispatch: at most one manual mobile run per (workflow, branch) at a
+  # time — a fresh dispatch cancels the in-flight one so a re-run never stacks — and
+  # bills — a second Device Farm run. Different branches map to different groups, so
+  # the same addon can still be tested on 2-3 branches in parallel. workflow_call
+  # (benchmarks / weekend / on-merge) is keyed per run and never cancels —
+  # inputs.platform is only ever set on a manual dispatch. github.workflow is used
+  # ONLY on the dispatch branch (where it resolves to this workflow's own name); the
+  # call branch uses run_id, so it can never collide with a caller's group.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  cancel-in-progress: ${{ inputs.platform != '' }}
 
 env:
   ADDON_WORKDIR: packages/inference-addon-cpp/mobile
   PREBUILD_PREFIX: infer-cpp-
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  # Manual (workflow_dispatch) runs must name a device that exists on Device
+  # Farm. This gate fails fast BEFORE the (~90 min) build or any Device Farm
+  # run, so a typo or an empty selection costs nothing. Skipped for workflow_call.
+  # inference-addon-cpp ships no committed test-groups.json / integration.auto.cjs
+  # (both are generated from the desktop suites). Regenerate JUST the runner map
+  # here — pure fs, no native build — from the SAME immutable commit the build
+  # compiles (github.event.pull_request.head.sha || inputs.ref; github.ref is
+  # deliberately NOT a fallback so a push mid-run can't make validation inspect
+  # different code than the build), so validate-devices can reject a bad tests filter
+  # and count the real shard fan-out (one shard per desktop suite) BEFORE the
+  # expensive build. This job is UNPRIVILEGED (no environment, no id-token)
+  # precisely because it runs repo-branch code; the privileged validate-devices
+  # job only consumes its JSON output as data. Dispatch-only (inputs.platform
+  # != ''); it fails CLOSED so a generator hiccup blocks the run instead of
+  # silently degrading to a device-only check that would run without a filter.
+  resolve-runner-map:
+    name: Resolve mobile runner map
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout runner-map source (from the tested ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js
+            packages/inference-addon-cpp/tests/integration_js
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Generate mobile runner map (tests-filter + shard-count source)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const{expectedEntries,expectedTestGroups}=require('./packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js');process.stdout.write(expectedTestGroups(expectedEntries()))" > inference-mobile-test-groups.json
+          echo "Generated runner map with $(jq '.android | keys | length' inference-mobile-test-groups.json) shard(s):"
+          jq -r '[.android[] | .[]] | unique | .[] | "  - " + .' inference-mobile-test-groups.json
+      - name: Upload runner map
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: inference-runner-map
+          path: inference-mobile-test-groups.json
+          if-no-files-found: error
+          retention-days: 1
+
+  validate-devices:
+    name: Validate device selection
+    # Depends on the unprivileged generator. Runs on dispatch even when that job
+    # FAILED (via !cancelled()) so the guard step below can fail CLOSED — a
+    # skipped validate-devices would be tolerated by the build gate and silently
+    # run without any tests-filter / shard-count check.
+    needs: [resolve-runner-map]
+    if: ${{ !cancelled() && inputs.platform != '' }}
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Fail closed if the runner map could not be generated
+        if: needs.resolve-runner-map.result != 'success'
+        run: |
+          echo "::error::runner-map generation failed (result: ${{ needs.resolve-runner-map.result }}); cannot validate the tests filter or shard count. Failing closed before any build or Device Farm spend."
+          exit 1
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      - name: Download runner map (data from the tested ref)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: inference-runner-map
+          path: validation-data
+      - name: Validate requested devices
+        uses: ./.github/actions/run-mobile-integration-tests/validate-devices
+        with:
+          platform: ${{ inputs.platform }}
+          devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+          device-model-operator: ${{ inputs.device_model_operator }}
+          tests: ${{ inputs.tests }}
+          test-groups-path: validation-data/inference-mobile-test-groups.json
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
   # Resolve the framework revision ONCE, before any fork code runs. `setup` (inside
   # build) and device-farm both check the framework out and must get the identical
   # revision. Deriving it inside `build` would let a PR repoint test-framework/.git/HEAD
@@ -59,18 +195,10 @@ jobs:
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
     steps:
-      # Audit only for the rollout, matching every existing adopter in this repo. Sole
-      # egress here is api.github.com to resolve the framework HEAD. Promote to block
-      # once egress is characterised across the workflow.
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
       - name: Resolve qvac-test-addon-mobile HEAD
         id: resolve
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SHA=$(gh api repos/tetherto/qvac-test-addon-mobile/commits/main --jq '.sha')
           if [ -z "$SHA" ]; then
@@ -85,19 +213,16 @@ jobs:
   # are spent. Blocks the whole chain. Runs fork code but holds no secrets.
   host-test:
     name: Host build + tests (linux)
+    # Fail fast on a bad/empty device selection before spending the (up to
+    # 20 min) host build. validate-devices is skipped on workflow_call, so
+    # tolerate the skip to keep automated callers unchanged.
+    needs: [validate-devices]
+    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      # Audit only for the rollout. Expected egress: github.com (checkout) and the npm
-      # registry (npm install, plus bare-make fetching its cmake/ninja runtimes).
-      # Deliberately first, before any fork code runs in this job.
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
       # SHA PIN, repeated verbatim at every fork checkout here — keep it in sync.
       #
       # Every option for `ref` is IMMUTABLE, deliberately. head.sha first: a reusable
@@ -112,7 +237,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           persist-credentials: false
       # `package-manager-cache: false` on every setup-node here — do not drop it. The
       # input defaults to TRUE and auto-enables once any package.json declares
@@ -155,25 +280,21 @@ jobs:
   # ---------------------------------------------------------------------------
   prebuild-android:
     name: Prebuild (Android arm64)
-    needs: host-test
-    runs-on: ubuntu-24.04
+    # On a manual single-platform dispatch, skip the unused platform's prebuild
+    # (so an Android-only run is not blocked by an iOS prebuild) and fail fast on
+    # a bad/empty device selection. validate-devices is skipped on workflow_call.
+    needs: [runner_names, host-test, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.host-test.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (inputs.platform == '' || inputs.platform == 'Android') }}
+    runs-on: ${{ needs.runner_names.outputs.ubuntu_2404 }}
     timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      # Audit only for the rollout. Expected egress: github.com (checkout), the npm
-      # registry, and the Ubuntu archives (setup-build-host installs the cross toolchain
-      # via apt). Deliberately first, before any fork code runs in this job.
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           persist-credentials: false
 
       # Selects the NDK, exports ANDROID_TOOLCHAIN_ROOT + API level, installs the cross
@@ -219,8 +340,12 @@ jobs:
 
   prebuild-ios:
     name: Prebuild (iOS arm64)
-    needs: host-test
-    runs-on: macos-14
+    # On a manual single-platform dispatch, skip the unused platform's prebuild
+    # (so an iOS-only run is not blocked by an Android prebuild) and fail fast on
+    # a bad/empty device selection. validate-devices is skipped on workflow_call.
+    needs: [runner_names, host-test, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.host-test.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (inputs.platform == '' || inputs.platform == 'iOS') }}
+    runs-on: ${{ needs.runner_names.outputs.macos_ios }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -229,7 +354,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -280,11 +405,22 @@ jobs:
   # ---------------------------------------------------------------------------
   build:
     name: Build ${{ matrix.platform }} app
+    # validate-devices is skipped on workflow_call (its `skipped` result keeps
+    # this job running); on a manual run a bad/empty device selection blocks the
+    # build before it starts, so no ~90-min build is wasted on a typo.
     needs:
+      - runner_names
       - resolve-framework
       - prebuild-android
       - prebuild-ios
-    runs-on: ${{ matrix.runner }}
+      - validate-devices
+    # Require only the prebuild for the dispatched platform: on a single-platform
+    # manual run the other platform's prebuild is skipped and must not block the
+    # platform the dispatcher chose. workflow_call (inputs.platform == '') still
+    # requires both prebuilds. NOTE: matrix.* is unavailable in a job-level if
+    # (evaluated pre-fan-out), so the discriminator is inputs.platform, not matrix.
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.resolve-framework.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && ((inputs.platform == 'Android' && needs.prebuild-android.result == 'success') || (inputs.platform == 'iOS' && needs.prebuild-ios.result == 'success') || (inputs.platform == '' && needs.prebuild-android.result == 'success' && needs.prebuild-ios.result == 'success')) }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2204_x64 }}
     environment: release
     # Exceeds the 30m default: npm install + expo prebuild + Gradle/xcodebuild.
     timeout-minutes: 90
@@ -295,14 +431,9 @@ jobs:
       packages: read
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: Android
-            os: ubuntu-22.04
-            runner: qvac-ubuntu2204-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
+      # On workflow_dispatch, build only the chosen platform. workflow_call
+      # builds both platforms as before.
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04"},{"platform":"iOS","os":"macos-14"}]}') }}
 
     steps:
       # persist-credentials:false here too, not just on the addon checkout below:
@@ -327,7 +458,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           persist-credentials: false
           path: addon
           fetch-depth: 0
@@ -339,7 +470,7 @@ jobs:
           addon-workdir: ${{ env.ADDON_WORKDIR }}
           addon-npm-name: 'inference-addon-cpp-mobile-tests'
           prebuild-artifact-prefix: ${{ env.PREBUILD_PREFIX }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           # Trusted pin from resolve-framework, so this job never reads a mutable
           # ref and device-farm gets the identical revision.
           test-framework-ref: ${{ needs.resolve-framework.outputs.sha }}
@@ -403,12 +534,19 @@ jobs:
     needs:
       - resolve-framework
       - build
+    # Explicit skip-tolerant gate: on a single-platform dispatch the opposite
+    # prebuild is skipped, and that skip would otherwise propagate through the
+    # `build` needs-closure and skip this job (a silent false green — no
+    # on-device run). Run whenever both direct needs actually succeeded.
+    if: ${{ !cancelled() && needs.resolve-framework.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     environment: release
     # Exceeds the 30m default: waits on the AWS Device Farm run (queue + device
     # provisioning + on-device execution), which routinely takes >30m.
     timeout-minutes: 120
-    continue-on-error: true # advisory until on-device flake is characterised
+    # No continue-on-error: a Device Farm test failure must fail this run on
+    # every trigger. NOTE: this workflow IS called by on-pr-inference-addon-cpp.yml,
+    # so a failing on-device test now blocks the PR (intended — no silent green).
     permissions:
       contents: read
       packages: read
@@ -416,28 +554,13 @@ jobs:
       id-token: write # AWS OIDC — this job runs NO fork code
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # app_name/app_type are deterministic from platform (set by
-          # build-mobile-app's resolve_app), so we hardcode them here instead of
-          # threading matrix-job outputs (which don't survive a matrix fan-out).
-          - platform: Android
-            app_type: ANDROID_APP
-            app_name: test-app-Android.apk
-          - platform: iOS
-            app_type: IOS_APP
-            app_name: test-app-iOS.ipa
+      # app_name/app_type are deterministic from platform (set by
+      # build-mobile-app's resolve_app), so we hardcode them here instead of
+      # threading matrix-job outputs (which don't survive a matrix fan-out).
+      # On workflow_dispatch, run only the chosen platform; workflow_call runs both.
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","app_type":"IOS_APP","app_name":"test-app-iOS.ipa"}]}' || '{"include":[{"platform":"Android","app_type":"ANDROID_APP","app_name":"test-app-Android.apk"}]}') || '{"include":[{"platform":"Android","app_type":"ANDROID_APP","app_name":"test-app-Android.apk"},{"platform":"iOS","app_type":"IOS_APP","app_name":"test-app-iOS.ipa"}]}') }}
 
     steps:
-      # The most sensitive job in this workflow: it holds id-token + AWS. Audit only for
-      # the rollout, matching every existing adopter. Expected egress: github.com
-      # (checkout + artifact download), the npm registry (framework e2e install/pack),
-      # and AWS (sts + devicefarm). Promote to block once that egress is characterised.
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
       # persist-credentials:false here too, not just on the addon checkout below:
       # this checkout lands at $GITHUB_WORKSPACE, so without it actions/checkout writes
       # the job GITHUB_TOKEN into ./.git/config as an http.extraheader — readable by the
@@ -479,7 +602,9 @@ jobs:
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ needs.resolve-framework.outputs.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          # qvac-test-addon-mobile is public, so the repo-scoped GITHUB_TOKEN can
+          # clone it — no PAT / app token needed.
+          token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
           path: test-framework
 
@@ -505,6 +630,26 @@ jobs:
           cp "$STAGING/app/$APP_NAME" "df-app/$APP_NAME"
           ls -la test-framework/e2e/tests df-app "addon/${ADDON_WORKDIR}/test/mobile"
 
+      # On a manual run with a test filter, override to a single grepped spec so
+      # only those tests run (and the sharded fan-out collapses to one spec).
+      # Empty filter / workflow_call keeps the auto-detected shard groups.
+      - name: Resolve manual test filter
+        id: manual_tests
+        if: inputs.platform != '' && inputs.tests != ''
+        shell: bash
+        env:
+          TESTS: ${{ inputs.tests }}
+        run: |
+          # Reject anything but mocha-safe grep characters so a manual `tests`
+          # value cannot break out of the generated WDIO config on the Device
+          # Farm host (defense-in-depth; the sink is also JSON-encoded).
+          if ! printf '%s' "$TESTS" | grep -Eq '^[A-Za-z0-9_ |().*+-]+$'; then
+            echo "::error::Invalid 'tests' filter '$TESTS'. Allowed: letters, digits, and _ space | ( ) . * + - (a mocha --grep on test NAMES, e.g. 'runAddonTest' or 'runFoo|runBar')."
+            exit 1
+          fi
+          MANUAL_GROUPS=$(jq -nc --arg g "$TESTS" '[{name:"manual", grep:$g}]')
+          echo "groups=$MANUAL_GROUPS" >> "$GITHUB_OUTPUT"
+
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -516,6 +661,7 @@ jobs:
           app-name: ${{ matrix.app_name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
+          test-groups: ${{ steps.manual_tests.outputs.groups }}
           enables-perf: 'false'
 
       - name: Schedule Device Farm test run
@@ -529,11 +675,14 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
-          # With the generated test-groups.json there is >1 spec, so the composite
-          # auto-selects SHARDED scheduling (one run per suite, against the pool
-          # ARNs above) and this hint is ignored — it only applies to single-spec
-          # runs. Kept so a future single-group config still schedules sanely.
-          scheduling-mode: 'single-pool'
+          # With the generated test-groups.json there is >1 spec, so on
+          # workflow_call the composite auto-selects SHARDED scheduling (one run
+          # per suite, against the pool ARNs above) and the single-pool hint is
+          # ignored. On workflow_dispatch, manual-devices fans the chosen shard(s)
+          # across the chosen device(s) instead of touching the pool.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'single-pool' }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
           # Cost cap (default 120 device-min). The suite is seconds of compute on desktop,
           # so 25 min leaves margin on a slow device while still bounding a launch-hang —
           # which never throws, so integration-runtime.cjs's crash handlers won't catch it.
@@ -581,3 +730,5 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
+

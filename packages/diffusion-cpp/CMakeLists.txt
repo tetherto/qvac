@@ -9,6 +9,21 @@ endif()
 option(SD_CUDA "Enable CUDA GPU backend" OFF)
 if(SD_CUDA)
   list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
+
+  # nvcc defaults its host compiler to g++, which rejects the -stdlib=libc++
+  # that vcpkg-overlays/triplets/{x64,arm64}-linux.cmake put in
+  # VCPKG_CXX_FLAGS / VCPKG_LINKER_FLAGS. enable_language(CUDA) then fails its
+  # ABI check inside the port build with
+  #   g++: error: unrecognized command-line option '-stdlib=libc++'
+  # Export CUDAHOSTCXX for the vcpkg child process rather than setting
+  # CMAKE_CUDA_HOST_COMPILER in vcpkg-overlays/toolchains/linux-clang.cmake:
+  # that file's contents feed the vcpkg ABI hash of every package on the linux
+  # triplets, so editing it invalidates the binary cache for non-CUDA builds
+  # too and forces every port to rebuild from source. Windows and macOS keep
+  # their default host compiler (MSVC / clang), which already matches.
+  if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE AND NOT DEFINED ENV{CUDAHOSTCXX})
+    set(ENV{CUDAHOSTCXX} "clang++")
+  endif()
 endif()
 
 option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)
@@ -20,8 +35,11 @@ endif()
 # stable-diffusion-cpp registry ports.  CUDA requires a specific build machine
 # so it remains opt-in via SD_CUDA.
 #
-# GGML_BACKEND_DL is ON only on Android (set in the ggml portfile), mirroring
-# qvac-fabric. On Linux/macOS/Windows GPU backends are statically linked.
+# GGML_BACKEND_DL is ON on Android and desktop Linux (set in the ggml
+# portfile), mirroring qvac-fabric: GPU backends are dlopen'd MODULE .so files
+# shipped next to the addon, so the .bare itself never links
+# libvulkan/libOpenCL and loads on hosts without a graphics stack (QVAC-23767).
+# On macOS/iOS (Metal) and Windows GPU backends are statically linked.
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
@@ -62,11 +80,12 @@ bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 message("Building inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
-# On Android with GGML_BACKEND_DL, install GPU backend .so modules alongside
-# the addon so ggml can dlopen them at runtime.  CPU backends are statically
-# linked (GGML_CPU_STATIC) and excluded from this loop.
+# On Android and desktop Linux with GGML_BACKEND_DL, install GPU backend .so
+# modules alongside the addon so ggml can dlopen them at runtime.  CPU
+# backends are statically linked (GGML_CPU_STATIC) and excluded from this
+# loop.
 set(BACKEND_DL_EXPORTS "")
-if(ANDROID AND GGML_BACKEND_DL)
+if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if("${_backend}" MATCHES "^ggml-cpu")
       continue()
@@ -76,8 +95,8 @@ if(ANDROID AND GGML_BACKEND_DL)
       continue()
     endif()
     # qvac ggml ports prefix backend module filenames (e.g.
-    # libqvac-ggml-vulkan.so / libqvac-diffusion-ggml-vulkan.so). These
-    # modules are installed under vcpkg's bin/ directory on Android.
+    # libqvac-ggml-vulkan.so / libqvac-diffusion-ggml-vulkan.so); the ggml
+    # portfile installs them under vcpkg's lib/ or bin/.
     find_library(_${_backend}_LIB NAMES
       "qvac-diffusion-${_backend}"
       "${_backend}"
@@ -100,8 +119,10 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdGenHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdParsers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdVidGenHandlers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/WorldSessionHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/WorldSessionModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
@@ -132,6 +153,19 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
     PRIVATE
       stable-diffusion::stable-diffusion
   )
+
+  # ggml's exported cmake config does not propagate its CUDA runtime
+  # dependencies; without an explicit link the shared .bare module builds with
+  # __cudaRegisterFatBinary et al. unresolved (shared links tolerate undefined
+  # symbols) and fails only at dlopen. Link the toolkit runtime directly.
+  # Under GGML_BACKEND_DL the rationale inverts: ggml-cuda is a dlopen'd
+  # MODULE that carries its own CUDA deps, and linking the toolkit here would
+  # put hard DT_NEEDED libcudart/libcublas/libcublasLt entries back on the
+  # .bare — the exact load-time abort class this DL layout removes (gh#3853).
+  if(SD_CUDA AND NOT GGML_BACKEND_DL)
+    find_package(CUDAToolkit REQUIRED)
+    target_link_libraries(${inference-addon-sd} PRIVATE CUDA::cudart CUDA::cublas CUDA::cublasLt)
+  endif()
 
 target_compile_features(${inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${inference-addon-sd} PUBLIC JS_LOGGER)

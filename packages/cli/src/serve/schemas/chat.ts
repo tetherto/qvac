@@ -15,7 +15,7 @@ import {
   type GenerationParams,
   type ResponseFormat,
   type MessageContentPart
-} from './common.js'
+} from '@/serve/schemas/common'
 
 export const chatCompletionsBody = z
   .object({
@@ -43,7 +43,7 @@ export const CHAT_UNSUPPORTED_PARAMS = [
   'stop'
 ] as const
 
-interface OpenAIMessage {
+export interface OpenAIMessage {
   role: string
   content: string | null | undefined | MessageContentPart[]
   tool_calls?: Array<{

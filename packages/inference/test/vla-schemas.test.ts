@@ -2,11 +2,14 @@ import test from 'brittle'
 import { z } from 'zod'
 import {
   vlaConfigSchema,
+  vlaEmbodimentSelectorSchema,
   vlaHparamsSchema,
   vlaRunRequestSchema,
   vlaRunResponseSchema,
   vlaHparamsRequestSchema,
   vlaHparamsResponseSchema,
+  vlaSetEmbodimentRequestSchema,
+  vlaSetEmbodimentResponseSchema,
   vlaStatsSchema,
   modelInfoSchema,
   ModelType
@@ -18,6 +21,7 @@ import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-r
 import { handlePluginInvoke } from '@/handlers/plugin-invoke'
 import { vlaRun } from '@/plugins/builtin/ggml-vla/ops/vla-run'
 import { vlaGetHparams } from '@/plugins/builtin/ggml-vla/ops/vla-hparams'
+import { vlaSetEmbodiment } from '@/plugins/builtin/ggml-vla/ops/vla-set-embodiment'
 import { encodeBase64 } from '@/utils/encoding'
 
 // ============================================
@@ -57,6 +61,71 @@ test('vlaConfigSchema: rejects non-integer verbosity', (t) => {
 test('vlaConfigSchema.strict(): rejects unknown keys', (t) => {
   const result = vlaConfigSchema.strict().safeParse({ unknown: true })
   t.is(result.success, false)
+})
+
+// ============================================
+// vlaEmbodimentSelectorSchema / config.embodiment (GR00T)
+// ============================================
+
+test('vlaEmbodimentSelectorSchema: accepts a tag string', (t) => {
+  t.is(vlaEmbodimentSelectorSchema.safeParse('libero_sim').success, true)
+})
+
+test('vlaEmbodimentSelectorSchema: rejects an empty tag', (t) => {
+  t.is(vlaEmbodimentSelectorSchema.safeParse('').success, false)
+})
+
+test('vlaEmbodimentSelectorSchema: caps tag length at 256', (t) => {
+  t.is(vlaEmbodimentSelectorSchema.safeParse('a'.repeat(256)).success, true)
+  t.is(vlaEmbodimentSelectorSchema.safeParse('a'.repeat(257)).success, false)
+})
+
+test('vlaEmbodimentSelectorSchema: accepts cat_id bounds 0 and 31', (t) => {
+  t.is(vlaEmbodimentSelectorSchema.safeParse(0).success, true)
+  t.is(vlaEmbodimentSelectorSchema.safeParse(31).success, true)
+})
+
+test('vlaEmbodimentSelectorSchema: rejects cat_id outside 0..31', (t) => {
+  t.is(vlaEmbodimentSelectorSchema.safeParse(32).success, false)
+  t.is(vlaEmbodimentSelectorSchema.safeParse(-1).success, false)
+  t.is(vlaEmbodimentSelectorSchema.safeParse(1.5).success, false)
+})
+
+test('vlaEmbodimentSelectorSchema: accepts object spellings', (t) => {
+  t.is(vlaEmbodimentSelectorSchema.safeParse({ tag: 'real_droid' }).success, true)
+  t.is(vlaEmbodimentSelectorSchema.safeParse({ catId: 24 }).success, true)
+  t.is(vlaEmbodimentSelectorSchema.safeParse({ tag: 'real_g1', numCameras: 2 }).success, true)
+  t.is(vlaEmbodimentSelectorSchema.safeParse({ catId: 3, numCameras: 4 }).success, true)
+})
+
+test('vlaEmbodimentSelectorSchema: rejects tag and catId together', (t) => {
+  const result = vlaEmbodimentSelectorSchema.safeParse({ tag: 'libero_sim', catId: 24 })
+  t.is(result.success, false)
+})
+
+test('vlaEmbodimentSelectorSchema: load path allows naming neither (numCameras-only override)', (t) => {
+  // On the load path the GGUF's default embodiment is used, so an object
+  // carrying only the camera-count override is valid.
+  t.is(vlaEmbodimentSelectorSchema.safeParse({ numCameras: 2 }).success, true)
+  t.is(vlaEmbodimentSelectorSchema.safeParse({}).success, true)
+})
+
+test('vlaEmbodimentSelectorSchema: rejects numCameras outside 1..64', (t) => {
+  t.is(vlaEmbodimentSelectorSchema.safeParse({ tag: 'real_g1', numCameras: 0 }).success, false)
+  t.is(vlaEmbodimentSelectorSchema.safeParse({ tag: 'real_g1', numCameras: 65 }).success, false)
+  t.is(vlaEmbodimentSelectorSchema.safeParse({ tag: 'real_g1', numCameras: 2.5 }).success, false)
+})
+
+test('vlaConfigSchema: accepts embodiment in every selector spelling', (t) => {
+  t.is(vlaConfigSchema.safeParse({ embodiment: 'libero_sim' }).success, true)
+  t.is(vlaConfigSchema.safeParse({ embodiment: 24 }).success, true)
+  t.is(vlaConfigSchema.safeParse({ embodiment: { catId: 3, numCameras: 2 } }).success, true)
+})
+
+test('vlaConfigSchema: rejects invalid embodiment selectors', (t) => {
+  t.is(vlaConfigSchema.safeParse({ embodiment: '' }).success, false)
+  t.is(vlaConfigSchema.safeParse({ embodiment: 32 }).success, false)
+  t.is(vlaConfigSchema.safeParse({ embodiment: { tag: 'a', catId: 1 } }).success, false)
 })
 
 // ============================================
@@ -135,6 +204,40 @@ test('vlaHparamsSchema: rejects unknown imageInputMode', (t) => {
     tokenizerMaxLength: 148,
     visionImageSize: 224,
     imageInputMode: 'tiles'
+  })
+  t.is(result.success, false)
+})
+
+test('vlaHparamsSchema: accepts GR00T selectedEmbodiment fields', (t) => {
+  const result = vlaHparamsSchema.safeParse({
+    chunkSize: 40,
+    actionDim: 32,
+    maxActionDim: 132,
+    maxStateDim: 64,
+    tokenizerMaxLength: 148,
+    visionImageSize: 224,
+    numCameras: 2,
+    imageInputMode: 'patches',
+    imagePatchElems: 262144,
+    selectedEmbodimentTag: 'libero_sim',
+    selectedEmbodimentCatId: 24
+  })
+  t.is(result.success, true)
+  if (result.success) {
+    t.is(result.data.selectedEmbodimentTag, 'libero_sim')
+    t.is(result.data.selectedEmbodimentCatId, 24)
+  }
+})
+
+test('vlaHparamsSchema: rejects selectedEmbodimentCatId outside 0..31', (t) => {
+  const result = vlaHparamsSchema.safeParse({
+    chunkSize: 40,
+    actionDim: 32,
+    maxActionDim: 132,
+    maxStateDim: 64,
+    tokenizerMaxLength: 148,
+    visionImageSize: 224,
+    selectedEmbodimentCatId: 32
   })
   t.is(result.success, false)
 })
@@ -324,6 +427,59 @@ test('vlaHparamsResponseSchema: accepts null backendName', (t) => {
       visionImageSize: 512
     },
     backendName: null
+  })
+  t.is(result.success, true)
+})
+
+// ============================================
+// vlaSetEmbodiment request/response schemas
+// ============================================
+
+test('vlaSetEmbodimentRequestSchema: accepts every selector spelling that names an embodiment', (t) => {
+  const base = { type: 'vlaSetEmbodiment' as const, modelId: 'model-1' }
+  t.is(vlaSetEmbodimentRequestSchema.safeParse({ ...base, embodiment: 'real_droid' }).success, true)
+  t.is(vlaSetEmbodimentRequestSchema.safeParse({ ...base, embodiment: 24 }).success, true)
+  t.is(
+    vlaSetEmbodimentRequestSchema.safeParse({
+      ...base,
+      embodiment: { tag: 'real_g1', numCameras: 2 }
+    }).success,
+    true
+  )
+})
+
+test('vlaSetEmbodimentRequestSchema: rejects a selector that names no embodiment', (t) => {
+  // A switch must name a tag or a catId — the load path's numCameras-only
+  // spelling is not a valid switch target (mirrors the addon's validation).
+  const base = { type: 'vlaSetEmbodiment' as const, modelId: 'model-1' }
+  t.is(vlaSetEmbodimentRequestSchema.safeParse({ ...base, embodiment: {} }).success, false)
+  t.is(
+    vlaSetEmbodimentRequestSchema.safeParse({ ...base, embodiment: { numCameras: 2 } }).success,
+    false
+  )
+})
+
+test('vlaSetEmbodimentRequestSchema: rejects missing embodiment', (t) => {
+  const result = vlaSetEmbodimentRequestSchema.safeParse({
+    type: 'vlaSetEmbodiment',
+    modelId: 'model-1'
+  })
+  t.is(result.success, false)
+})
+
+test('vlaSetEmbodimentResponseSchema: accepts refreshed GR00T hparams', (t) => {
+  const result = vlaSetEmbodimentResponseSchema.safeParse({
+    hparams: {
+      chunkSize: 40,
+      actionDim: 32,
+      maxActionDim: 132,
+      maxStateDim: 64,
+      tokenizerMaxLength: 148,
+      visionImageSize: 224,
+      numCameras: 4,
+      selectedEmbodimentTag: 'real_droid',
+      selectedEmbodimentCatId: 17
+    }
   })
   t.is(result.success, true)
 })
@@ -862,4 +1018,86 @@ test('vlaGetHparams op: surfaces GR00T imageInputMode + imagePatchElems', async 
       t.is(result.hparams.imagePatchElems, 262144)
     }
   )
+})
+
+// ============================================
+// vlaSetEmbodiment op
+// ============================================
+
+test('vlaSetEmbodiment op: forwards the selector and returns refreshed hparams', async function (t) {
+  const refreshedHp = {
+    chunkSize: 40,
+    actionDim: 32,
+    maxActionDim: 132,
+    maxStateDim: 64,
+    tokenizerMaxLength: 148,
+    visionImageSize: 224,
+    numCameras: 4,
+    stateInputMode: 'continuous' as const,
+    imageInputMode: 'patches' as const,
+    imagePatchElems: 262144,
+    selectedEmbodimentTag: 'real_droid',
+    selectedEmbodimentCatId: 17
+  }
+  let observedSelector: unknown
+  const modelId = `test-vla-${Math.random().toString(36).slice(2, 10)}`
+  const fakeModel = {
+    load: async function () {},
+    setEmbodiment: async function (embodiment: unknown) {
+      observedSelector = embodiment
+      return refreshedHp
+    }
+  } as unknown as AnyModel
+
+  try {
+    registerModel(modelId, {
+      model: fakeModel,
+      path: '/tmp/groot-multi.gguf',
+      config: {},
+      modelType: ModelType.ggmlVla
+    })
+    const result = await vlaSetEmbodiment({
+      type: 'vlaSetEmbodiment',
+      modelId,
+      embodiment: { tag: 'real_droid', numCameras: 4 }
+    })
+    t.alike(observedSelector, { tag: 'real_droid', numCameras: 4 })
+    t.alike(result.hparams, refreshedHp)
+    t.is(result.hparams.selectedEmbodimentTag, 'real_droid')
+    t.is(result.hparams.numCameras, 4)
+  } finally {
+    unregisterModel(modelId)
+  }
+})
+
+test('vlaSetEmbodiment op: surfaces the addon rejection', async function (t) {
+  // The addon rejects e.g. an unknown tag, a single-embodiment GGUF, or a
+  // switch while a run() response is pending. The op must let that error
+  // propagate rather than swallow it.
+  const modelId = `test-vla-${Math.random().toString(36).slice(2, 10)}`
+  const fakeModel = {
+    load: async function () {},
+    setEmbodiment: async function () {
+      throw new Error('grootResolveEmbodiment: unknown embodiment tag')
+    }
+  } as unknown as AnyModel
+
+  try {
+    registerModel(modelId, {
+      model: fakeModel,
+      path: '/tmp/groot-single.gguf',
+      config: {},
+      modelType: ModelType.ggmlVla
+    })
+    let err: unknown
+    try {
+      await vlaSetEmbodiment({ type: 'vlaSetEmbodiment', modelId, embodiment: 'nope' })
+    } catch (e) {
+      err = e
+    }
+    t.ok(err instanceof Error)
+    t.ok((err as Error).message.includes('grootResolveEmbodiment'))
+  } finally {
+    unregisterModel(modelId)
+  }
 })

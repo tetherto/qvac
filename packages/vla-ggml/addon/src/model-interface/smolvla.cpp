@@ -1208,6 +1208,21 @@ static bool validateRequiredTensors(const SmolvlaModel& model) {
   return ok;
 }
 
+bool smolvlaCanMmapWeights(ggml_backend_t backend) {
+  // Take the device off the backend, not off its buffer type: ggml declares
+  // the CPU buffer type with a NULL device, so reading it back from there
+  // yields nullptr on every CPU load, skipping the fast path and committing
+  // the whole weight set to anonymous memory — an allocation iOS refuses once
+  // the process approaches its jetsam limit.
+  ggml_backend_dev_t dev = ggml_backend_get_device(backend);
+  if (!dev) {
+    return false;
+  }
+  ggml_backend_dev_props props;
+  ggml_backend_dev_get_props(dev, &props);
+  return props.caps.buffer_from_host_ptr;
+}
+
 // FAST PATH (Apple Metal, CPU): the device reports
 // caps.buffer_from_host_ptr=true. mmap the GGUF file, wrap the tensor-data
 // region in a backend buffer with `ggml_backend_dev_buffer_from_host_ptr()`,
@@ -1265,9 +1280,33 @@ static bool tryLoadWeightsMmap(
   size_t tensorDataSize = fileSize - dataOffset;
   size_t maxTensorSize = ggml_get_max_tensor_size(ctxData);
 
+  // The CPU backend asserts that a host pointer is buffer-type aligned
+  // ("buffer pointer must be aligned" in ggml_backend_cpu_buffer_from_ptr),
+  // and an assert aborts the process instead of returning NULL. mmap gives a
+  // page-aligned base, so only a GGUF written with a sub-alignment
+  // data_offset can trip it — reject that here and let alloc+copy read the
+  // file the slow way.
+  const size_t alignment =
+      ggml_backend_buft_get_alignment(ggml_backend_dev_buffer_type(dev));
+  if (alignment != 0 && ((uintptr_t)tensorDataBase % alignment) != 0) {
+    QLOG_IF(
+        Priority::WARNING,
+        "smolvla_load_model: tensor data at offset " +
+            std::to_string(dataOffset) + " is not " +
+            std::to_string(alignment) +
+            "-byte aligned — falling back to alloc+copy");
+    munmap(addr, fileSize);
+    return false;
+  }
+
   // Reject crafted GGUFs whose per-tensor (offset, nbytes) would point
   // outside the mapped region — a later read through such a tensor
   // would be an out-of-bounds memory access.
+  //
+  // Offsets are checked for alignment too, not just the base above: the file
+  // picks its own `general.alignment` and gguf accepts any power of two down
+  // to 1, where tensors are unpadded and land at arbitrary offsets. alloc+copy
+  // has no such exposure because its allocator pads every tensor.
   for (int64_t i = 0; i < nTensorsInGguf; i++) {
     const char* name = gguf_get_tensor_name(gguf, i);
     struct ggml_tensor* t = ggml_get_tensor(ctxData, name);
@@ -1276,21 +1315,25 @@ static bool tryLoadWeightsMmap(
     }
     size_t off = gguf_get_tensor_offset(gguf, i);
     size_t nbytes = ggml_nbytes(t);
-    if (off > tensorDataSize || nbytes > tensorDataSize - off) {
+    if (off > tensorDataSize || nbytes > tensorDataSize - off ||
+        (alignment != 0 && (off % alignment) != 0)) {
       QLOG_IF(
           Priority::WARNING,
           std::string("smolvla_load_model: tensor '") + name +
-              "' bounds exceed mapped region (off=" + std::to_string(off) +
+              "' is unusable in the mapped region (off=" + std::to_string(off) +
               " nbytes=" + std::to_string(nbytes) +
-              " region=" + std::to_string(tensorDataSize) +
-              ") — falling back to alloc+copy");
+              " region=" + std::to_string(tensorDataSize) + " alignment=" +
+              std::to_string(alignment) + ") — falling back to alloc+copy");
       munmap(addr, fileSize);
       return false;
     }
   }
 
   // Hint the OS to prefetch the file so the first inference doesn't
-  // demand-page its way through 2+ GB of weights.
+  // demand-page its way through 2+ GB of weights. Safe for the CPU loads this
+  // path newly serves: the pages are clean and file-backed, so they are
+  // evictable and are not charged to the footprint iOS terminates on. Dropping
+  // the hint was measured to cost ~12% of CPU inference time on an iPhone 17.
   madvise(addr, fileSize, MADV_WILLNEED);
 
   ggml_backend_buffer_t buf = ggml_backend_dev_buffer_from_host_ptr(
@@ -1335,6 +1378,17 @@ static bool tryLoadWeightsMmap(
         Priority::WARNING,
         "smolvla_load_model: " + std::to_string(nAllocFail) +
             " tensor_alloc calls failed — falling back to alloc+copy");
+    // Un-wire whatever was wired first: alloc+copy skips tensors that already
+    // carry data and then writes through them, so a pointer left over from
+    // this attempt would target the region munmap'd just below.
+    for (int64_t i = 0; i < nTensorsInGguf; i++) {
+      struct ggml_tensor* t =
+          ggml_get_tensor(ctxData, gguf_get_tensor_name(gguf, i));
+      if (t) {
+        t->data = nullptr;
+        t->buffer = nullptr;
+      }
+    }
     ggml_backend_buffer_free(buf);
     munmap(addr, fileSize);
     return false;
@@ -1376,6 +1430,8 @@ static bool loadWeightsAllocCopy(
       ggml_backend_alloc_ctx_tensors_from_buft(ctxData, buft);
   if (!buf) {
     const char* bname = ggml_backend_name(model.backend);
+    const std::string totalMb = std::to_string(totalSize / (1024 * 1024));
+    model.load_error = "out of memory: " + totalMb + " MB weights buffer";
     QLOG_IF(
         Priority::ERROR,
         std::string(
@@ -1390,6 +1446,7 @@ static bool loadWeightsAllocCopy(
 
   FILE* f = fopen(path, "rb");
   if (!f) {
+    model.load_error = "could not open the GGUF file for reading";
     QLOG_IF(
         Priority::ERROR,
         std::string("smolvla_load_model: fopen failed for '") + path + "'");
@@ -1414,6 +1471,7 @@ static bool loadWeightsAllocCopy(
     int seekErr = fseeko(f, (off_t)off, SEEK_SET);
 #endif
     if (seekErr != 0 || fread(readBuf.data(), 1, nbytes, f) != nbytes) {
+      model.load_error = std::string("failed to read tensor '") + name + "'";
       QLOG_IF(
           Priority::ERROR,
           std::string("smolvla_load_model: failed to read tensor '") + name +
@@ -1457,8 +1515,10 @@ bool smolvlaLoadModel(
       std::string("smolvla_load_model: loading model from '") + path +
           "' (force_cpu=" + (forceCpu ? "true" : "false") + ")");
 
+  model.load_error.clear();
   vla_backend_selection::loadBackendsOnce(backendsDir);
   if (!initCpuBackend(model)) {
+    model.load_error = "failed to initialise the CPU backend";
     return false;
   }
   tryInitGpuBackend(model, forceCpu);
@@ -1478,6 +1538,7 @@ bool smolvlaLoadModel(
   };
   gguf_unique_ptr gguf(gguf_init_from_file(path, ggufParams));
   if (!gguf) {
+    model.load_error = "not a readable GGUF file";
     QLOG_IF(Priority::ERROR, "smolvla_load_model: failed to open GGUF file");
     return false;
   }
@@ -1492,6 +1553,7 @@ bool smolvlaLoadModel(
 
   readHparamsFromGguf(gguf.get(), model.hparams);
   if (!validateHparams(model.hparams)) {
+    model.load_error = "hparams out of range";
     QLOG_IF(
         Priority::ERROR,
         "smolvla_load_model: hparams out of range — refusing to load");
@@ -1502,6 +1564,7 @@ bool smolvlaLoadModel(
   // smolvla_inference_with_timing) using the expert layer loop bound, so the
   // two layer counts must match.
   if (model.hparams.text_num_layers != model.hparams.expert_num_layers) {
+    model.load_error = "text_num_layers != expert_num_layers";
     QLOG_IF(
         Priority::ERROR,
         "smolvla_load_model: text_num_layers (" +
@@ -1527,6 +1590,7 @@ bool smolvlaLoadModel(
 
   mapWeightTensors(ctxData, model);
   if (!validateRequiredTensors(model)) {
+    model.load_error = "GGUF is missing required tensors";
     QLOG_IF(
         Priority::ERROR,
         "smolvla_load_model: GGUF is missing required tensors — refusing to "
@@ -1542,24 +1606,24 @@ bool smolvlaLoadModel(
   // otherwise.
   ggml_backend_buffer_type_t buft =
       ggml_backend_get_default_buffer_type(model.backend);
-  ggml_backend_dev_t dev = ggml_backend_buft_get_device(buft);
-  bool hostPtrSupported = false;
-  bool isDefaultBuft = false;
-  if (dev) {
-    ggml_backend_dev_props props;
-    ggml_backend_dev_get_props(dev, &props);
-    hostPtrSupported = props.caps.buffer_from_host_ptr;
-    isDefaultBuft = (buft == ggml_backend_dev_buffer_type(dev));
-  }
 
   const size_t dataOffset = gguf_get_data_offset(gguf.get());
   const int64_t nTensorsInGguf = gguf_get_n_tensors(gguf.get());
 
   bool usedMmap = false;
 #ifndef _WIN32
-  if (hostPtrSupported && isDefaultBuft) {
+  ggml_backend_dev_t dev = ggml_backend_get_device(model.backend);
+  if (smolvlaCanMmapWeights(model.backend)) {
     usedMmap = tryLoadWeightsMmap(
         model, path, gguf.get(), ctxData, dev, dataOffset, nTensorsInGguf);
+  } else {
+    // Losing the fast path costs the whole weight set in anonymous memory, so
+    // say why rather than letting alloc+copy look like the intended route.
+    QLOG_IF(
+        Priority::WARNING,
+        std::string("smolvla_load_model: mmap fast path unavailable on '") +
+            (dev ? ggml_backend_dev_name(dev) : "<no device>") +
+            "' (buffer_from_host_ptr=0)");
   }
 #endif
   if (!usedMmap) {

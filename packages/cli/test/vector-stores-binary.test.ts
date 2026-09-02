@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { looksBinary } from '../src/serve/routes/vector-stores.js'
+import { looksBinary } from '@/serve/routes/vector-stores'
 
 describe('looksBinary', () => {
   it('returns false for plain UTF-8 text', () => {

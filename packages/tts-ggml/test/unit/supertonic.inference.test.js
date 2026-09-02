@@ -51,6 +51,17 @@ test('Supertonic: explicit engine option routes to supertonic', (t) => {
   t.absent(model._s3genModelPath, 'no s3gen path on supertonic')
 })
 
+test('Supertonic: reload rejects an invalid output sample rate', async (t) => {
+  const model = createMockedSupertonicModel()
+  await model.load()
+
+  await t.exception(
+    model.reload({ outputSampleRate: 192001 }),
+    /outputSampleRate must be between 8000 and 192000/
+  )
+  await model.unload()
+})
+
 test('Supertonic: supertonicModel file path alone routes to supertonic engine', (t) => {
   const model = new TTSGgml({
     files: { supertonicModel: './models/super.gguf' },
@@ -317,7 +328,7 @@ test('Supertonic: no enhancer -> no enhancer params (backward compat)', (t) => {
 // === LavaSR denoiser param forwarding ===
 // Mirrors the enhancer: enabled purely by a GGUF path, runs before the
 // enhancer, rate-preserving. The tts-cpp UL-UNAS forward is implemented in
-// qvac-ext-lib-whisper.cpp PR #78; these tests exercise the JS wiring
+// qvac-fabric-speech.cpp PR #78; these tests exercise the JS wiring
 // (path forwarding + validation) without loading a model.
 
 test('Supertonic: files.lavasrDenoiser forwards lavasrDenoiserPath', (t) => {

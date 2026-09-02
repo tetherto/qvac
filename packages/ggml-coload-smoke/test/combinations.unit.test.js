@@ -11,7 +11,12 @@ const { join } = require('node:path')
 const { tmpdir } = require('node:os')
 const { writeFileSync, rmSync } = require('node:fs')
 
+const { withPlugins } = require('../addons.js')
+
 const SCRIPT = join(__dirname, '..', 'scripts', 'coload-combinations.mjs')
+// Restates MIN_MOBILE_COLOAD_ADDONS from the script under test on purpose: the
+// test asserts the contract, so importing the value would make it unfalsifiable.
+const MIN_MOBILE_ADDONS = 2
 
 function run (args) {
   const out = execFileSync('node', [SCRIPT, ...args], { encoding: 'utf8' })
@@ -29,6 +34,13 @@ function runFail (args) {
 
 function names (combos) {
   return combos.map(c => c.name)
+}
+
+function assertColoadsEnoughAddons (combo) {
+  assert.ok(
+    withPlugins(combo.addons.split(',')).length >= MIN_MOBILE_ADDONS,
+    `combo ${combo.name} bundles <${MIN_MOBILE_ADDONS} plugin-backed addons`
+  )
 }
 
 test('full mode always includes the all-addon combo', () => {
@@ -84,11 +96,19 @@ test('--only narrows the matrix to the named combos', () => {
   assert.deepStrictEqual(names(combos), ['all'])
 })
 
-test('--mobile drops combos with fewer than two SDK plugins', () => {
+// The guard exists to drop combos with nothing to co-load on device. Since one
+// addon can back several plugins, counting plugin specifiers would keep a combo
+// that dlopens a single addon, so count plugin-backed addons instead.
+test('--mobile keeps only combos that co-load two or more plugin-backed addons', () => {
   const combos = run(['--mobile'])
   assert.ok(combos.length > 0)
-  for (const c of combos) {
-    const plugins = c.plugins.split(',').filter(Boolean)
-    assert.ok(plugins.length >= 2, `combo ${c.name} has <2 plugins`)
-  }
+  combos.forEach(assertColoadsEnoughAddons)
+})
+
+test('an addon backing several plugins contributes all of them to the bundle', () => {
+  const [speech] = run(['--mobile', '--only', 'stack-speech'])
+  assert.ok(speech, '--mobile filtered stack-speech out, so the assertions below prove nothing')
+  const plugins = speech.plugins.split(',')
+  assert.ok(plugins.includes('@qvac/sdk/parakeet-transcription/plugin'))
+  assert.ok(plugins.includes('@qvac/sdk/whispercpp-transcription/plugin'))
 })

@@ -16,10 +16,19 @@ import asyncio
 import math
 import sys
 
-from _common import print_progress
-
 from tetherto.qvac_sdk import Client, EmbedRequest, embed, load_model, unload_model
 from tetherto.qvac_sdk.models import EMBEDDINGGEMMA_300M_Q4_0
+
+
+def print_progress(p) -> None:
+    """Print model download progress; pass as `on_progress=` to `load_model`."""
+    line = (
+        f"▸ Downloading {p.percentage:.0f}% "
+        f"({p.downloaded / 1e6:.1f}/{p.total / 1e6:.1f} MB)"
+    )
+    print(line, end="\r" if sys.stderr.isatty() else "\n", file=sys.stderr)
+    if p.percentage >= 100:
+        print(file=sys.stderr)
 
 
 def cosine_similarity(a, b) -> float:

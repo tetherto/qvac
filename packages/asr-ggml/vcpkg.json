@@ -11,36 +11,38 @@
       "version>=": "1.4.4#3"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["metal"],
+      "name": "speech-cpp",
+      "version>=": "2026-09-01#1",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "parakeet",
+        "coreml",
+        "metal"
+      ],
       "platform": "osx | ios"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["opencl", "vulkan"],
+      "name": "speech-cpp",
+      "version>=": "2026-09-01#1",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "parakeet",
+        "vulkan",
+        "opencl"
+      ],
       "platform": "android"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["vulkan"],
-      "platform": "!(osx | ios | android)"
-    },
-    {
-      "name": "parakeet-cpp",
-      "version>=": "2026-08-03",
-      "features": ["metal"],
-      "platform": "osx | ios"
-    },
-    {
-      "name": "parakeet-cpp",
-      "version>=": "2026-08-03",
-      "features": ["vulkan", "opencl"],
-      "platform": "android"
-    },
-    {
-      "name": "parakeet-cpp",
-      "version>=": "2026-08-03",
-      "features": ["vulkan"],
+      "name": "speech-cpp",
+      "version>=": "2026-09-01#1",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "parakeet",
+        "vulkan"
+      ],
       "platform": "!(osx | ios | android)"
     },
     {
@@ -53,16 +55,26 @@
     }
   ],
   "features": {
+    "cuda": {
+      "description": "Enable the CUDA GPU backend for both engines (Linux / Windows on NVIDIA). Off by default; the published linux-x64 prebuild enables it, and building it elsewhere needs nvcc on the build host, so opt in with `bare-make generate -D ASR_CUDA=ON`. At runtime CUDA engages only where the NVIDIA driver and the CUDA 13 runtime libraries (cudart, cuBLAS) both resolve; hosts without them skip the CUDA backend and fall back to Vulkan or CPU.",
+      "supports": "!(osx | ios | android)",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "version>=": "2026-09-01#1",
+          "default-features": false,
+          "features": [
+            "cuda"
+          ],
+          "platform": "!(osx | ios | android)"
+        }
+      ]
+    },
     "tests": {
       "description": "Build C++ unit tests",
-      "dependencies": ["gtest"]
+      "dependencies": [
+        "gtest"
+      ]
     }
-  },
-  "overrides": [
-    {
-      "name": "whisper-cpp",
-      "version": "1.9.1",
-      "port-version": 7
-    }
-  ]
+  }
 }

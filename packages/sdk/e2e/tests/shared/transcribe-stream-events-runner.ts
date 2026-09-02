@@ -3,7 +3,7 @@ import {
   type TranscribeStreamConversationSession,
   type TranscribeStreamSession
 } from '@qvac/sdk'
-import type { TestResult } from '@tetherto/qvac-test-suite'
+import type { TestResult } from '@qvac/test-suite'
 import { decodeWavToMonoF32, f32ToLeBytes } from './wav-pcm.js'
 
 export interface TranscribeStreamEventsParams {

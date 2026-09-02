@@ -4,7 +4,7 @@ import {
   ValidationHelpers,
   type Expectation,
   type TestResult
-} from '@tetherto/qvac-test-suite'
+} from '@qvac/test-suite'
 import {
   systemResourcesCapabilities,
   systemResourcesInvalidInput,

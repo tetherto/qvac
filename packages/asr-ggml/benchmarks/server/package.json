@@ -5,7 +5,8 @@
   "scripts": {
     "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
-    "start": "bare index.js"
+    "start": "bare index.js",
+    "test": "node --test test/**/*.test.js"
   },
   "files": [
     "src"

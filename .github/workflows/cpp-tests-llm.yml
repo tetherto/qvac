@@ -28,22 +28,28 @@ permissions:
   contents: read
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   test-cpp:
+    needs: runner_names
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
             platform: linux
-            runner: qvac-ubuntu2404-x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
             arch: x64
           - os: macos-15-xlarge
             platform: darwin
-            runner: macos-26
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
             arch: arm64
           - os: windows-2025
             platform: windows
-            runner: qvac-win25-x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
             arch: x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
@@ -67,7 +73,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path on Windows
@@ -76,7 +82,7 @@ jobs:
 
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -217,3 +223,4 @@ jobs:
             cat build/test/unit/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
+

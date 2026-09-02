@@ -5,7 +5,9 @@
 //   bare examples/generate-music.js "lo-fi hip hop, mellow piano, rainy night"
 //
 // Env:
-//   AUDIOGEN_MODEL_DIR   directory holding the ACE-Step GGUFs
+//   AUDIOGEN_MODEL_DIR   required directory holding the ACE-Step GGUFs
+//   AUDIOGEN_DIT_VARIANT named DiT variant: turbo-q4, turbo-q8, or sft
+//   AUDIOGEN_DIT         explicit DiT model path; overrides AUDIOGEN_DIT_VARIANT
 //   AUDIOGEN_CAPTION     prompt (overrides argv[2])
 //   AUDIOGEN_LYRICS      lyrics text ("[Instrumental]" for no vocals)
 //   AUDIOGEN_LANG        vocal language hint, e.g. "pt"
@@ -29,12 +31,18 @@ const fs = require('bare-fs')
 const process = require('bare-process')
 const { AudioGen } = require('..')
 
-function numEnv (name) {
+function requiredEnv(name) {
+  const value = process.env[name]
+  if (!value) throw new Error(`${name} is required`)
+  return value
+}
+
+function numEnv(name) {
   const v = process.env[name]
   return v === undefined || v === '' ? undefined : Number(v)
 }
 
-function audioCodesEnv () {
+function audioCodesEnv() {
   const file = process.env.AUDIOGEN_CODES
   if (!file) return undefined
   const value = JSON.parse(fs.readFileSync(file, 'utf8')).audio_codes
@@ -42,19 +50,48 @@ function audioCodesEnv () {
   return Int32Array.from(codes)
 }
 
-function boolEnv (name) {
+function boolEnv(name) {
   const v = process.env[name]
   if (v === undefined || v === '') return undefined
   return /^(1|true|yes|on)$/i.test(v)
 }
 
-async function main () {
+function pcmBytes(outputArray) {
+  return Buffer.from(
+    outputArray.buffer.slice(
+      outputArray.byteOffset,
+      outputArray.byteOffset + outputArray.byteLength
+    )
+  )
+}
+
+async function collectOutput(response) {
+  const chunks = []
+  let sampleRate = 0
+  let channels = 0
+  for await (const item of response.iterate()) {
+    if (item.progress) {
+      console.log(`[audiogen] ${item.progress.stage}: ${item.progress.step}/${item.progress.total}`)
+      continue
+    }
+    if (item.outputArray) {
+      sampleRate = item.sampleRate
+      channels = item.channels
+      chunks.push(pcmBytes(item.outputArray))
+    }
+  }
+  const stats = await response.await()
+  return { pcm: Buffer.concat(chunks), sampleRate, channels, stats }
+}
+
+async function main() {
   const caption =
     process.env.AUDIOGEN_CAPTION ||
     process.argv[2] ||
     'Upbeat pop rock with driving electric guitars, punchy drums and a catchy hook'
-  const modelDir = process.env.AUDIOGEN_MODEL_DIR
+  const modelDir = requiredEnv('AUDIOGEN_MODEL_DIR')
   const ditModel = process.env.AUDIOGEN_DIT || undefined
+  const ditVariant = process.env.AUDIOGEN_DIT_VARIANT || undefined
   // GPU (Metal/Vulkan) for the whole pipeline including the VAE (its
   // snake/col2im_1d ops now have Metal kernels). Falls back to CPU if no GPU.
   const useGPU = /^(1|true|yes|on)$/i.test(process.env.AUDIOGEN_GPU || '')
@@ -78,44 +115,35 @@ async function main () {
   console.log('[audiogen] prompt: ' + caption)
   console.log('[audiogen] lyrics: ' + (opts.lyrics.split('\n')[0] || '').slice(0, 60))
 
-  const gen = new AudioGen({ files: { modelDir, ditModel }, config: { useGPU } })
-  await gen.load()
+  const gen = new AudioGen({
+    files: { modelDir, ditModel, ditVariant },
+    config: { useGPU }
+  })
+  try {
+    await gen.load()
+    const t0 = Date.now()
+    const response = await gen.run(caption, opts)
+    const { pcm, sampleRate, channels, stats } = await collectOutput(response)
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
+    const { data, extension } = AudioGen.encode(pcm, outFormat, { sampleRate, channels })
+    const outFile = outFileRaw.endsWith('.' + extension) ? outFileRaw : outFileRaw + '.' + extension
+    fs.writeFileSync(outFile, data)
 
-  // run() returns a @qvac/infer-base QvacResponse: iterate() streams progress
-  // ticks + the interleaved-Int16 PCM chunk(s); await() resolves with the run
-  // stats. PCM chunks carry their own sampleRate/channels (from the engine).
-  const t0 = Date.now()
-  const response = await gen.run(caption, opts)
-
-  const chunks = []
-  let sampleRate = 0
-  let channels = 0
-  for await (const item of response.iterate()) {
-    if (item.outputArray) {
-      sampleRate = item.sampleRate
-      channels = item.channels
-      chunks.push(Buffer.from(item.outputArray.buffer.slice(
-        item.outputArray.byteOffset,
-        item.outputArray.byteOffset + item.outputArray.byteLength)))
-    }
+    const totalSamples = pcm.length / 2
+    console.log('[audiogen] done in ' + elapsed + 's')
+    console.log(
+      '[audiogen] samples:   ' +
+        totalSamples +
+        ' (' +
+        (totalSamples / channels / sampleRate).toFixed(1) +
+        's)'
+    )
+    console.log('[audiogen] rate:      ' + sampleRate + ' Hz, ' + channels + 'ch')
+    console.log('[audiogen] stats:     ' + JSON.stringify(stats))
+    console.log('[audiogen] ' + extension.toUpperCase() + ' ->      ' + outFile)
+  } finally {
+    await gen.destroy()
   }
-  await response.await()
-  const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
-
-  const pcm = Buffer.concat(chunks)
-  const { data, extension } = AudioGen.encode(pcm, outFormat, { sampleRate, channels })
-  const outFile = outFileRaw.endsWith('.' + extension)
-    ? outFileRaw
-    : outFileRaw + '.' + extension
-  fs.writeFileSync(outFile, data)
-
-  const totalSamples = pcm.length / 2
-  console.log('[audiogen] done in ' + elapsed + 's')
-  console.log('[audiogen] samples:   ' + totalSamples + ' (' + (totalSamples / channels / sampleRate).toFixed(1) + 's)')
-  console.log('[audiogen] rate:      ' + sampleRate + ' Hz, ' + channels + 'ch')
-  console.log('[audiogen] ' + extension.toUpperCase() + ' ->      ' + outFile)
-
-  await gen.destroy()
 }
 
 main().catch((err) => {

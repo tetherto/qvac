@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 export const ttsChatterboxShortText: TestDefinition = {
   testId: 'tts-chatterbox-short-text',
@@ -238,6 +238,169 @@ export const ttsParlerInvalidEmotion: TestDefinition = {
   metadata: { category: 'tts', dependency: 'none', estimatedDurationMs: 1000 }
 }
 
+// CosyVoice3 conditions synthesis on a single trained instruction (emotion,
+// pace, or instruct). The executor first proves identical prompts and emotions
+// are deterministic, then verifies changing only the emotion produces
+// different non-empty PCM.
+export const ttsCosyvoice3EmotionConditioning: TestDefinition = {
+  testId: 'tts-cosyvoice3-emotion-conditioning',
+  params: {
+    text: 'Today is a wonderful day.',
+    firstEmotion: 'happy',
+    secondEmotion: 'sad'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['emotion-conditioning-verified', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-cosyvoice3', estimatedDurationMs: 180000 }
+}
+
+// Omitting every conditioning control exercises plain zero-shot synthesis,
+// which is a valid edge case of the public API.
+export const ttsCosyvoice3Default: TestDefinition = {
+  testId: 'tts-cosyvoice3-default',
+  params: {
+    text: 'Hello from CosyVoice3.',
+    stream: false
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['cosyvoice3-generated', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-cosyvoice3', estimatedDurationMs: 150000 }
+}
+
+export const ttsCosyvoice3Streaming: TestDefinition = {
+  testId: 'tts-cosyvoice3-streaming',
+  params: {
+    text: 'CosyVoice3 can generate streaming speech.',
+    operation: 'stream',
+    emotion: 'neutral'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['cosyvoice3-generated', 'operation=stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-cosyvoice3', estimatedDurationMs: 90000 }
+}
+
+// Runs against the native-chunk-streaming resource (streamChunkTokens > 0) so
+// the newly exposed native 24 kHz chunk path is exercised, not just the
+// generic SDK streaming wrapper used by tts-cosyvoice3-streaming.
+export const ttsCosyvoice3NativeStreaming: TestDefinition = {
+  testId: 'tts-cosyvoice3-native-streaming',
+  params: {
+    text: 'CosyVoice3 native chunk streaming emits audio progressively.',
+    operation: 'stream'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['cosyvoice3-generated', 'operation=stream', 'samples']
+  },
+  metadata: {
+    category: 'tts',
+    dependency: 'tts-cosyvoice3-native-stream',
+    estimatedDurationMs: 90000
+  }
+}
+
+export const ttsCosyvoice3SentenceStreaming: TestDefinition = {
+  testId: 'tts-cosyvoice3-sentence-streaming',
+  params: {
+    text: 'This is the first sentence. This is the second sentence.',
+    operation: 'sentence-stream',
+    pace: 'fast'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['cosyvoice3-generated', 'operation=sentence-stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-cosyvoice3', estimatedDurationMs: 120000 }
+}
+
+export const ttsCosyvoice3DuplexStreaming: TestDefinition = {
+  testId: 'tts-cosyvoice3-duplex-streaming',
+  params: {
+    text: 'CosyVoice3 also supports duplex text streaming.',
+    operation: 'duplex',
+    emotion: 'happy'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['cosyvoice3-generated', 'operation=duplex', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-cosyvoice3', estimatedDurationMs: 90000 }
+}
+
+export const ttsCosyvoice3InvalidEmotion: TestDefinition = {
+  testId: 'tts-cosyvoice3-invalid-emotion',
+  params: {
+    text: 'This request must fail validation.',
+    emotion: 'furious',
+    stream: false
+  },
+  expectation: {
+    validation: 'throws-error',
+    errorContains: 'emotion'
+  },
+  metadata: { category: 'tts', dependency: 'none', estimatedDurationMs: 1000 }
+}
+
+// Audio8 takes no per-request conditioning fields, so its coverage exercises
+// each operation shape with the load-time greedy/maxFrames/seed settings.
+export const ttsAudio8Default: TestDefinition = {
+  testId: 'tts-audio8-default',
+  params: {
+    text: 'Hello from Audio8.',
+    stream: false
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 60000 }
+}
+
+export const ttsAudio8Streaming: TestDefinition = {
+  testId: 'tts-audio8-streaming',
+  params: {
+    text: 'Audio8 can generate streaming speech.',
+    operation: 'stream'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'operation=stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 90000 }
+}
+
+export const ttsAudio8SentenceStreaming: TestDefinition = {
+  testId: 'tts-audio8-sentence-streaming',
+  params: {
+    text: 'This is the first sentence. This is the second sentence.',
+    operation: 'sentence-stream'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'operation=sentence-stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 120000 }
+}
+
+export const ttsAudio8DuplexStreaming: TestDefinition = {
+  testId: 'tts-audio8-duplex-streaming',
+  params: {
+    text: 'Audio8 also supports duplex text streaming.',
+    operation: 'duplex'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'operation=duplex', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 90000 }
+}
+
 export const ttsTests = [
   ttsChatterboxShortText,
   ttsChatterboxMediumText,
@@ -257,5 +420,16 @@ export const ttsTests = [
   ttsParlerSentenceStreaming,
   ttsParlerDuplexStreaming,
   ttsParlerIndicMultilingual,
-  ttsParlerInvalidEmotion
+  ttsParlerInvalidEmotion,
+  ttsCosyvoice3EmotionConditioning,
+  ttsCosyvoice3Default,
+  ttsCosyvoice3Streaming,
+  ttsCosyvoice3NativeStreaming,
+  ttsCosyvoice3SentenceStreaming,
+  ttsCosyvoice3DuplexStreaming,
+  ttsCosyvoice3InvalidEmotion,
+  ttsAudio8Default,
+  ttsAudio8Streaming,
+  ttsAudio8SentenceStreaming,
+  ttsAudio8DuplexStreaming
 ]

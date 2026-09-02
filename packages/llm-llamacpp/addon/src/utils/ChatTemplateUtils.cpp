@@ -6,10 +6,10 @@
 #include <ranges>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <llama.h>
 
-#include "Qwen3ToolsDynamicTemplate.hpp"
 #include "QwenTemplate.hpp"
 #include "utils/LoggingMacros.hpp"
 
@@ -40,10 +40,6 @@ std::string normalizeArchitecture(std::string_view architecture) {
   return toLower(architecture);
 }
 
-bool isQwen3Architecture(std::string_view architecture) {
-  return normalizeArchitecture(architecture) == "qwen3";
-}
-
 bool isHarmonyArchitecture(std::string_view architecture) {
   return normalizeArchitecture(architecture) == "gpt-oss";
 }
@@ -53,8 +49,8 @@ bool isGemma4Architecture(std::string_view architecture) {
 }
 
 // Architectures in the Qwen3 family that emit `<think>`/`</think>`.
-// Broader than `isQwen3Architecture` (which is exact-match "qwen3" for
-// the tools_compact path) but deliberately narrower than the full
+// Broader than `isQwen3Architecture` (which is exact-match "qwen3")
+// but deliberately narrower than the full
 // `qwen3*` HuggingFace lineage — explicit list keeps unrelated
 // `qwen3*`-named archs from silently inheriting the wrong tags.
 inline constexpr std::array<std::string_view, 6> QWEN3_REASONING_FAMILY_ARCHES{
@@ -86,8 +82,8 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
     return std::nullopt;
   }
 
-  // Check architecture metadata first; this drives family-specific template and
-  // tools_compact profile selection.
+  // Check architecture metadata first; this drives family-specific template
+  // selection.
   char arch[64] = {0};
   int32_t len = llama_model_meta_val_str(
       model, "general.architecture", arch, sizeof(arch));
@@ -98,12 +94,17 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
   return std::nullopt;
 }
 
+bool isQwen3Architecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "qwen3";
+}
+
 bool isQwen3Model(const ::llama_model* model) {
   if (model == nullptr) {
     return false;
   }
 
-  return supportsToolsCompactForModelMetadata(getModelArchitecture(model));
+  const std::optional<std::string> arch = getModelArchitecture(model);
+  return arch.has_value() && isQwen3Architecture(arch.value());
 }
 
 bool isMedPsyBasename(std::string_view basename) {
@@ -157,19 +158,6 @@ llama_token getHarmonyCallToken(::llama_context* lctx) {
     return tokens[0];
   }
   return LLAMA_TOKEN_NULL;
-}
-
-bool supportsToolsCompactForModelMetadata(
-    const std::optional<std::string>& architecture) {
-  return architecture.has_value() && isQwen3Architecture(architecture.value());
-}
-
-std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
-    const std::optional<std::string>& architecture) {
-  if (!supportsToolsCompactForModelMetadata(architecture)) {
-    return std::nullopt;
-  }
-  return std::string("<tool_call>");
 }
 
 bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture) {
@@ -227,8 +215,7 @@ selectReasoningTagsForModel(const ::llama_model* model) {
 }
 
 std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manualOverride,
-    bool toolsCompact) {
+    const ::llama_model* model, const std::string& manualOverride) {
   if (!manualOverride.empty()) {
     return manualOverride;
   }
@@ -246,20 +233,17 @@ std::string getChatTemplateForModel(
   }
 
   if (isQwen3Model(model)) {
-    return toolsCompact ? getToolsDynamicQwen3Template()
-                        : getFixedQwen3Template();
+    return getFixedQwen3Template();
   }
 
   return "";
 }
 
-std::string getChatTemplate(
-    const ::llama_model* model, const common_params& params,
-    bool toolsCompact) {
+std::string
+getChatTemplate(const ::llama_model* model, const common_params& params) {
   std::string chatTemplate = params.chat_template;
   if (params.use_jinja) {
-    chatTemplate =
-        getChatTemplateForModel(model, params.chat_template, toolsCompact);
+    chatTemplate = getChatTemplateForModel(model, params.chat_template);
     if (!chatTemplate.empty() && chatTemplate != params.chat_template) {
       QLOG_IF(
           Priority::INFO, "[ChatTemplateUtils] Using fixed Qwen3 template\n");
@@ -272,6 +256,7 @@ std::string getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs, bool* outThinkingForcedOpen,
     std::string* outThinkingStartTag, std::string* outThinkingEndTag,
+    std::vector<std::string>* outThinkingEndTags,
     std::string* outGenerationPrompt) {
   auto exportParams = [&](const common_chat_params& params) {
     if (outThinkingForcedOpen) {
@@ -281,46 +266,71 @@ std::string getPrompt(
       *outThinkingStartTag = params.thinking_start_tag;
     }
     if (outThinkingEndTag) {
-      *outThinkingEndTag = params.thinking_end_tag;
+      *outThinkingEndTag = params.thinking_end_tags.empty()
+                               ? std::string()
+                               : params.thinking_end_tags.front();
+    }
+    if (outThinkingEndTags) {
+      *outThinkingEndTags = params.thinking_end_tags;
     }
     if (outGenerationPrompt) {
       *outGenerationPrompt = params.generation_prompt;
     }
   };
+  // A template can fail either because it rejects the tool definitions or
+  // because it rejects the shape of the message list (e.g. Qwen3.5 raises
+  // when there is no user turn to anchor its tool block on). Retry without
+  // tools to tell the two apart, and only drop to the legacy renderer —
+  // which ignores tools and can disagree with the Jinja template — when the
+  // template cannot render the conversation at all.
+  std::string firstError;
   try {
     auto params = common_chat_templates_apply(tmpls, inputs);
     exportParams(params);
     return params.prompt;
   } catch (const std::exception& e) {
-    // Catching known issue when a model does not support tools
-    QLOG_IF(
-        Priority::ERROR,
-        string_format(
-            "[ChatTemplateUtils] model does not support tools. Error: %s. "
-            "Tools will "
-            "be ignored.\n",
-            e.what()));
-    inputs.use_jinja = false;
-    auto params = common_chat_templates_apply(tmpls, inputs);
-    exportParams(params);
-    return params.prompt;
+    firstError = e.what();
   } catch (...) {
-    // Catching any other exception type
-    QLOG_IF(
-        Priority::ERROR,
-        "[ChatTemplateUtils] model does not support tools (unknown exception). "
-        "Tools "
-        "will be ignored.\n");
-    inputs.use_jinja = false;
-    auto params = common_chat_templates_apply(tmpls, inputs);
-    exportParams(params);
-    return params.prompt;
+    firstError = "unknown exception";
   }
+
+  if (!inputs.tools.empty()) {
+    common_chat_templates_inputs withoutTools = inputs;
+    withoutTools.tools.clear();
+    try {
+      auto params = common_chat_templates_apply(tmpls, withoutTools);
+      QLOG_IF(
+          Priority::ERROR,
+          string_format(
+              "[ChatTemplateUtils] chat template rejected the tool "
+              "definitions; rendering without tools. Error: %s\n",
+              firstError.c_str()));
+      inputs.tools.clear();
+      exportParams(params);
+      return params.prompt;
+    } catch (...) {
+      // Falls through: the template rejects this conversation with or
+      // without tools, so tools were not the cause.
+    }
+  }
+
+  QLOG_IF(
+      Priority::ERROR,
+      string_format(
+          "[ChatTemplateUtils] chat template could not render this "
+          "conversation; falling back to the legacy renderer, which ignores "
+          "tools. Error: %s\n",
+          firstError.c_str()));
+  inputs.use_jinja = false;
+  auto params = common_chat_templates_apply(tmpls, inputs);
+  exportParams(params);
+  return params.prompt;
 }
 
 bool configureReasoningBudgetSampling(
     common_params& params, ::llama_context* lctx,
-    const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+    const std::string& thinkingStartTag,
+    const std::vector<std::string>& thinkingEndTags,
     const std::string& generationPrompt) {
   common_params_sampling next = params.sampling;
   next.reasoning_budget_tokens =
@@ -331,17 +341,23 @@ bool configureReasoningBudgetSampling(
   next.generation_prompt.clear();
 
   if (params.reasoning_budget > 0 && lctx != nullptr &&
-      !thinkingEndTag.empty()) {
+      !thinkingEndTags.empty() && !thinkingEndTags.front().empty()) {
     next.generation_prompt = generationPrompt;
     if (!thinkingStartTag.empty()) {
       next.reasoning_budget_start =
           common_tokenize(lctx, thinkingStartTag, false, true);
     }
-    next.reasoning_budget_end =
-        common_tokenize(lctx, thinkingEndTag, false, true);
+
+    next.reasoning_budget_end.reserve(thinkingEndTags.size());
+    for (const std::string& thinkingEndTag : thinkingEndTags) {
+      if (!thinkingEndTag.empty()) {
+        next.reasoning_budget_end.emplace_back(
+            common_tokenize(lctx, thinkingEndTag, false, true));
+      }
+    }
     next.reasoning_budget_forced = common_tokenize(
         lctx,
-        params.sampling.reasoning_budget_message + thinkingEndTag,
+        params.sampling.reasoning_budget_message + thinkingEndTags.front(),
         false,
         true);
   }

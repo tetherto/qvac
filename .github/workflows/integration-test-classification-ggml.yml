@@ -26,12 +26,25 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/classification-ggml@0.1.0). When set, prebuilds are downloaded from npm instead of from per-PR build artifacts."
         type: string
         required: false
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 env:
   PKG_DIR: packages/classification-ggml
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-integration-tests:
+    needs: runner_names
     timeout-minutes: 30
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -45,24 +58,27 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204 }}
             platform: linux
             arch: x64
           - os: ubuntu-24.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404 }}
             platform: linux
             arch: x64
           - os: ubuntu-22.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
             platform: linux
             arch: arm64
-          - os: macos-26
+          - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: macos-26
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
           # @qvac/fabric hard-imports vulkan-1.dll on Windows; qvac-win25-x64-gpu has
           # the Vulkan loader installed (same env as llm-llamacpp and other fabric
           # consumers being migrated).
           - platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
 
     steps:
       - name: Manual Workspace Cleanup
@@ -76,7 +92,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bare runtime
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
@@ -85,7 +101,24 @@ jobs:
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
+        shell: bash
         run: npm install --ignore-scripts
+
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.PKG_DIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       # Prebuilds live in the merged `prebuilds` bundle artifact, which is always present
       # regardless of how they were produced: the prebuild `merge` job uploads it on a fresh
@@ -219,3 +252,4 @@ jobs:
           path: ${{ env.PKG_DIR }}/test/results/performance-report.json
           if-no-files-found: ignore
           retention-days: 30
+

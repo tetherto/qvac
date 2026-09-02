@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 
 import type { SynthesizedServeConfig } from './config-synthesizer.js'
 
+const FLEET_PROTOCOL_VERSION = 2
+
 // A "fleet" is the set of sessions that can share one running serve. Two
 // managed providers may reuse the same serve iff they would launch an
 // identical one: same model set, same per-model config, same bind host. The
@@ -19,8 +21,9 @@ import type { SynthesizedServeConfig } from './config-synthesizer.js'
 // other port. An auto-allocated port (undefined) stays out of the key so the
 // common share-by-config case still collapses.
 //
-// Deliberately NOT part of the key: an auto-allocated port, apiKey/headers
-// (client-side only), and the ephemeral config path (per-spawn temp dir).
+// Deliberately NOT part of the key: an auto-allocated port, the generated
+// managed API key (persisted in the fleet record), client headers, and the
+// ephemeral config path (per-spawn temp dir).
 export function computeFleetKey(
   config: SynthesizedServeConfig,
   host: string,
@@ -35,6 +38,7 @@ export function computeFleetKey(
     .map((alias) => [alias, stableStringify(models[alias])] as const)
 
   const payload = JSON.stringify({
+    protocolVersion: FLEET_PROTOCOL_VERSION,
     host,
     serveBinPath: serveBinPath ?? null,
     servePort: servePort ?? null,

@@ -1,6 +1,7 @@
 # SDK Tests
 
-SDK dogfooding tests built on [`@tetherto/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
+SDK dogfooding tests built on [`@qvac/test-suite`](../../test-suite), the test-orchestration framework
+that lives in this monorepo at `packages/test-suite`.
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
 (packaged Electron main process), strict Snap, or mobile (Bare + React Native).
 
@@ -75,10 +76,10 @@ npx qvac-test run:local:electron --filter completion-
 The Electron consumer registers the desktop/shared executor set, so standard filters such as `completion-`,
 `embedding-`, `translation-`, or `model-` route through the same test definitions used by desktop.
 
-The full Electron pass intentionally skips `diffusion-`, `finetune-`, `delegated-`, `no-lingering-bare-`, and
+The full Electron pass intentionally skips `diffusion-`, `finetune-`, `no-lingering-bare-`, and
 `vla-` tests. These suites are resource-heavy or depend on process/lifecycle behavior that is not stable inside
 the packaged Electron worker model: diffusion and VLA require heavyweight model execution, finetune can monopolize
-the worker during long-running operations, delegated inference depends on peer/provider startup semantics, and
+the worker during long-running operations, and
 no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with Electron's
 packaged worker lock.
 
@@ -112,6 +113,11 @@ The first revision records its home/common paths and creates SDK registry Corest
 must have a different revision home while preserving and reopening those SDK-owned files from common storage.
 After that preflight, the normal MQTT consumer runs the Electron-supported SDK model and addon tests inside the
 installed Snap.
+
+GPU inference uses Canonical's `graphics-core22` content interface and wrapper, with `mesa-core22` as the default
+userspace driver provider. The refresh harness and CI explicitly connect this provider for locally built,
+unsigned Snaps before launching them; the `opengl` plug alone exposes device access but does not supply the
+matching Vulkan userspace drivers required by the native inference backends.
 
 Use `QVAC_TEST_SNAP_SUDO=0` when snap administration does not require `sudo`. Set
 `QVAC_TEST_SNAP_KEEP_INSTALLED=1` to preserve the package and common data after refresh diagnostics.
@@ -161,7 +167,8 @@ See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-te
 
 - `test-e2e-smoke` — runs the `smoke` suite on desktop and mobile consumers.
 - `test-e2e-full` — runs the full catalog on desktop and mobile consumers.
-- Release-branch PRs with SDK changes auto-run the same desktop and mobile suite.
+- Both labels build `packages/inference` and test it together with `packages/sdk` from the authorized PR HEAD.
+- Release-branch PRs with SDK or inference changes auto-run the same desktop and mobile suite.
 - Success applies the `e2e-tested` label.
 
 ### Manual runs
@@ -178,6 +185,15 @@ Non-obvious inputs:
   picks the branch that supplies the _workflow YAML_; `test-version` is the git ref that gets checked out for
   the _code under test_ (and the e2e package). Leave `test-version` blank to test the same branch the
   workflow was loaded from. Set it to test workflow edits from one branch against SDK code on another.
+- `inference-source` controls the `@qvac/inference` package used by every selected platform:
+  - `branch` builds and packs `packages/inference` from `test-version`. The resulting tarball is produced once
+    and reused by desktop, Electron, Snap, Android, and iOS jobs, so SDK and inference changes from that ref are
+    tested together.
+  - `npm` resolves the public `@qvac/inference` package. Set `inference-version` to a version/range or dist-tag;
+    blank means `latest`.
+  - `manifest` preserves the dependency already declared in `packages/sdk/package.json`.
+- The npm selector is resolved to one immutable version before platform fan-out. The exact branch SHA/package
+  version is shown in the workflow summary and PR test comments.
 - `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
 - `desktop-platforms`, `electron-platforms`, and `snap-platforms` — advanced JSON runner overrides,
   pre-filled with the workflow defaults. Narrow them to specific runners only when debugging.

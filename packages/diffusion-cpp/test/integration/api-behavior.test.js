@@ -19,9 +19,13 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 
 // Windows Vulkan and mobile GPU backends are much slower (e.g. Mali-G715 on
 // Vulkan is ~24s/step), so give them a larger timeout to avoid tripping the
-// harness ("Can't comment after end") on a single slow generation.
+// harness ("Can't comment after end") on a single slow generation. The
+// CPU-fallback platforms need the same headroom: a loaded github-hosted
+// linux-arm64 runner measures ~130s per 256x256 generation (denoise ~100s +
+// VAE ~25s) plus the model download inside the first test's budget, which
+// overruns the base timeout mid-generation.
 const BASE_TIMEOUT = 600000
-const testTimeout = isWindows || isMobileDevice ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
+const testTimeout = isWindows || isMobileDevice || useCpu ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
 
 // SD2.1 model for fast behavior tests. Q8_0 is used (not Q4_0): the gpustack
 // Q4_0 file is served over legacy LFS with a stored blob whose bytes do not

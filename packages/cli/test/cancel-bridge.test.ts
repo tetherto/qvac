@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { Logger } from '../src/logger.js'
-import { bindClientDisconnectCancel } from '../src/serve/core/cancel-bridge.js'
+import type { ServerResponse } from 'node:http'
+import type { Logger } from '@/logger'
+import { bindClientDisconnectCancel } from '@/serve/core/cancel-bridge'
 
 function makeLogger(): Logger & { debugs: string[] } {
   const debugs: string[] = []
@@ -18,25 +18,22 @@ function makeLogger(): Logger & { debugs: string[] } {
   } as unknown as Logger & { debugs: string[] }
 }
 
-function makeReq(): IncomingMessage {
-  return new EventEmitter() as unknown as IncomingMessage
-}
-
 function makeRes(initial: { writableEnded?: boolean } = {}): ServerResponse {
-  return { writableEnded: initial.writableEnded ?? false } as unknown as ServerResponse
+  const res = new EventEmitter() as unknown as ServerResponse
+  Object.assign(res, { writableEnded: initial.writableEnded ?? false })
+  return res
 }
 
 describe('bindClientDisconnectCancel', () => {
-  it('fires cancel with the bound requestId on req close', async () => {
-    const req = makeReq()
+  it('fires cancel with the bound requestId on response close', async () => {
     const res = makeRes()
     const cancels: { requestId: string }[] = []
     // lunte-disable-next-line require-await
-    bindClientDisconnectCancel(req, res, 'rid-1', makeLogger(), async (opts) => {
+    bindClientDisconnectCancel(res, 'rid-1', makeLogger(), async (opts) => {
       cancels.push(opts)
     })
 
-    req.emit('close')
+    res.emit('close')
     // cancel is awaited inside the .catch; let the microtask queue drain
     await Promise.resolve()
     await Promise.resolve()
@@ -46,30 +43,28 @@ describe('bindClientDisconnectCancel', () => {
   })
 
   it('skips cancel when the response already finished', async () => {
-    const req = makeReq()
     const res = makeRes({ writableEnded: true })
     let called = 0
     // lunte-disable-next-line require-await
-    bindClientDisconnectCancel(req, res, 'rid-2', makeLogger(), async () => {
+    bindClientDisconnectCancel(res, 'rid-2', makeLogger(), async () => {
       called++
     })
 
-    req.emit('close')
+    res.emit('close')
     await Promise.resolve()
 
     assert.equal(called, 0, 'natural completion should not log a benign no-op cancel')
   })
 
   it('swallows cancel rejections without propagating', async () => {
-    const req = makeReq()
     const res = makeRes()
     const logger = makeLogger()
     // lunte-disable-next-line require-await
-    bindClientDisconnectCancel(req, res, 'rid-3', logger, async () => {
+    bindClientDisconnectCancel(res, 'rid-3', logger, async () => {
       throw new Error('cancel race lost')
     })
 
-    req.emit('close')
+    res.emit('close')
     await Promise.resolve()
     await Promise.resolve()
 
@@ -78,17 +73,16 @@ describe('bindClientDisconnectCancel', () => {
     assert.match(logger.debugs[0]!, /cancel race lost/)
   })
 
-  it('binds via req.once so a second close event does not fire cancel twice', async () => {
-    const req = makeReq()
+  it('binds via res.once so a second close event does not fire cancel twice', async () => {
     const res = makeRes()
     let called = 0
     // lunte-disable-next-line require-await
-    bindClientDisconnectCancel(req, res, 'rid-4', makeLogger(), async () => {
+    bindClientDisconnectCancel(res, 'rid-4', makeLogger(), async () => {
       called++
     })
 
-    req.emit('close')
-    req.emit('close')
+    res.emit('close')
+    res.emit('close')
     await Promise.resolve()
     await Promise.resolve()
 

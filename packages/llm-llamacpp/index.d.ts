@@ -124,25 +124,50 @@ declare namespace LlmLlamacpp {
         top_k?: NumericLike;
         predict?: NumericLike;
         seed?: NumericLike;
-        no_mmap?: "" | "true" | "false";
+        load_mode?: "none" | "mmap" | "mlock" | "mmap+mlock" | "dio";
         reverse_prompt?: string;
         repeat_penalty?: NumericLike;
         presence_penalty?: NumericLike;
         frequency_penalty?: NumericLike;
         tools?: boolean | string;
         verbosity?: NumericLike;
-        n_discarded?: NumericLike;
         "main-gpu"?: NumericLike | string;
         /**
-         * How to split the model across GPUs: 'none' (default, single GPU), 'layer'
-         * (pipeline parallelism), 'row' (tensor parallelism).
+         * How to split the model across GPUs.
          *
-         * 'row' needs split buffers, which only the SYCL backend provides as of
-         * qvac-fabric v10069 — no backend this package ships does. It is accepted but
-         * degraded to 'layer' at load with a WARNING, so it behaves like 'layer'. See
-         * docs/multi-gpu.md.
+         * - 'none' (default) — pin the whole model to a single GPU.
+         * - 'layer' — pipeline parallelism; each GPU holds a contiguous slice of
+         *   layers. The compatible choice, effective on every backend shipped here.
+         * - 'row' — legacy tensor parallelism. Needs split buffers, which only the
+         *   SYCL backend provides as of qvac-fabric v10069 and no backend this
+         *   package ships does, so it is accepted but degraded to 'layer' at load
+         *   with a WARNING.
+         * - 'tensor' — EXPERIMENTAL tensor parallelism via qvac-fabric's meta
+         *   device; weights *and* KV cache are split across every visible GPU.
+         *   Desktop only (rejected on Android/iOS). Requires flash attention, so
+         *   'flash-attn': 'off' is rejected with InvalidArgument. Disables auto-fit
+         *   — gpu_layers then defaults to every layer and ctx_size to the model's
+         *   trained context, so set ctx_size explicitly for large models. Not
+         *   available for every architecture; unsupported ones are rejected up
+         *   front with the architecture named.
+         *
+         * See docs/multi-gpu.md.
          */
-        "split-mode"?: "none" | "layer" | "row";
+        "split-mode"?: "none" | "layer" | "row" | "tensor";
+        /**
+         * Flash attention. Defaults to `'on'` (the addon enables it unless
+         * finetuning, which forces it off). `'auto'` lets qvac-fabric decide.
+         *
+         * Required by `split-mode: 'tensor'` — combining the two with a falsey
+         * value is rejected with `InvalidArgument` rather than surfacing as an
+         * opaque native failure. qvac-fabric treats `'off'`, `'disabled'`,
+         * `'false'` and `'0'` as equivalent, and all four are rejected.
+         *
+         * The `flash_attn` spelling is also accepted at runtime and reaches the
+         * addon through the index signature below, matching how `main-gpu` and
+         * `split-mode` type only their hyphen form. Supplying both is an error.
+         */
+        "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
         /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
         "tensor-split"?: string;
         "cache-type-k"?: string;
@@ -289,33 +314,31 @@ declare namespace LlmLlamacpp {
          * text and multimodal contexts. No-op for models without a recognised
          * reasoning channel.
          *
-         * Recurrent / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba,
-         * Granite-Hybrid, ...) are supported when the reasoning close
-         * marker tokenises to a single vocab token. The recurrent half of
-         * the memory module is snapshotted at the end-of-prefill boundary
-         * and restored at end-of-generation. The replay buffer then feeds
-         * any generated-opener seed tokens, the canonical close marker, and
-         * the post-reasoning tail back through the decoder so both KV halves
-         * stay consistent. Chat templates that force-open the reasoning
-         * channel during prefill and templates that let the model generate
-         * the opener are both supported: on the generated-opener path, every
-         * sampled token from end-of-prefill up to and including the opener
-         * flip is seeded into the replay buffer so the restored snapshot
-         * still lands in a balanced `<think>...</think>` state on the next
-         * turn. If a hybrid / recurrent model uses a multi-token close
-         * marker while this feature is enabled, the request fails with
-         * `StatusError` instead of silently preserving reasoning in cache.
-         * Prefill-only
-         * (cache-warm) requests are exempt from this check: they never
-         * enter generation and cannot emit reasoning tokens, so a cache
-         * warm on a non-conforming hybrid model still succeeds.
+         * Every model kind is handled the same way: the sequence is rewound to a
+         * boundary anchored BEFORE the reasoning span, and the tokens that sit
+         * outside the span, the pre-reasoning preamble and the answer tail, are
+         * replayed through the decoder. Only the anchor's form differs. Recurrent
+         * / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba, Granite-Hybrid, ...)
+         * anchor a full-state snapshot, because the recurrent half cannot be
+         * rewound by dropping cells; pure-attention models anchor a bare position
+         * and rewind with a tail trim.
+         *
+         * No structural reasoning marker is seeded or replayed, so the compacted
+         * cache is preamble plus answer with no `<think>` / `</think>` scaffold
+         * left behind, and close-marker length decides nothing: a marker that
+         * tokenises to several pieces is supported like any other. Chat templates
+         * that force-open the reasoning channel during prefill and templates that
+         * let the model generate the opener are both supported; on the
+         * generated-opener path the sampled pieces that open the block are clipped
+         * out of the replay rather than rebuilt.
+         *
+         * Prefill-only (cache-warm) requests anchor nothing: they never enter
+         * generation and cannot emit reasoning tokens.
          *
          * Uniform hard-fail contract: any inability to remove the reasoning
-         * span from cache — whether the end-of-prefill boundary snapshot
-         * capture, the pure-attention `seq_rm + seq_add` primitive, the
-         * hybrid restore / replay step, or an unsupported multi-token
-         * recurrent close marker — is surfaced to the caller as a
-         * `StatusError`. There is no soft-failure counter: if the feature is
+         * span from cache, whether the boundary anchor, the rewind, or the
+         * replay step, is surfaced to the caller as a `StatusError`. There is no
+         * soft-failure counter: if the feature is
          * enabled and cache cleanup cannot complete, the final request result is
          * failed rather than reported as a successful answer with the reasoning span
          * still resident in cache.
@@ -329,18 +352,16 @@ declare namespace LlmLlamacpp {
          *
          * Before throwing, the affected sequence is cleaned up so that the
          * next request on the same context starts from a coherent state:
-         *   * Pure-attention `seq_rm + seq_add` rejection — the primitive
-         *     is documented all-or-nothing, so live KV is unchanged when
-         *     compaction is rejected. The driver drops the current
-         *     request's contribution (`[preRequestCursor, currentCursor)`)
-         *     from live memory and restores its positional accounting to
-         *     the pre-request cursor before throwing, so both driver
-         *     metadata and live KV agree on the pre-request state.
-         *   * Boundary-capture or hybrid restore / replay failure — the
-         *     driver rolls back to its pre-request checkpoint (or clears
-         *     the sequence entirely on restore underflow) and resets
-         *     positional accounting so subsequent turns cannot decode into
-         *     contaminated positions.
+         *   * Boundary-anchor failure: nothing has been rewound yet, so the
+         *     driver rolls back to its pre-prompt checkpoint (or clears the
+         *     sequence entirely on restore underflow) and resets positional
+         *     accounting, then rethrows.
+         *   * Rewind or replay failure: compaction rewinds before it replays,
+         *     so live KV has already been written to by this point and a tail
+         *     trim can no longer reach a coherent state. The compactor
+         *     best-effort wipes the sequence and the driver zeroes its
+         *     positional accounting to match, so subsequent turns cannot decode
+         *     into contaminated positions.
          *
          * On the continuous-batch path, the scheduler's error-recovery leg
          * deliberately does NOT persist the failed slot's cache: when the
@@ -442,8 +463,6 @@ declare namespace LlmLlamacpp {
         CacheTokens: number;
         generatedTokens: number;
         promptTokens: number;
-        /** Context-window slides for single requests, or the sum across completed batch slots. */
-        contextSlides: number;
         /**
          * Number of `<think>` (or model-equivalent) reasoning blocks dropped
          * from the KV cache at end-of-generation by the

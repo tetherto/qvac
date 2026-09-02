@@ -486,6 +486,7 @@ const REGISTRY_DATE_S3GEN_Q4_0 = '2026-06-01' // chatterbox-s3gen* / -s3gen-mtl*
 const REGISTRY_DATE_Q4_0 = '2026-05-18' // chatterbox-t3*, supertonic, supertonic2
 const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10' // supertonic3-f16 / -f32
 const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0
+const REGISTRY_DATE_AUDIO8 = '2026-08-12'
 
 // Size bands.  Both bounds are enforced (see `hasAllGgufsIn` below) so a
 // stale f16 cache from a previous test run gets rejected and re-fetched
@@ -505,6 +506,11 @@ const SIZE_SUPERTONIC2_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 // 2026-06-10; q8_0 / q4_0 @ 2026-06-15). One generous
 // band covers them all so the resolver accepts whichever tier was fetched.
 const SIZE_SUPERTONIC3 = { minSize: 25_000_000, maxSize: 500_000_000 }
+const SIZE_AUDIO8_LM = { minSize: 500_000_000, maxSize: 2_000_000_000 }
+const SIZE_AUDIO8_DECODER = { minSize: 100_000_000, maxSize: 600_000_000 }
+const SIZE_AUDIO8_ENCODER = { minSize: 150_000_000, maxSize: 800_000_000 }
+const DEFAULT_AUDIO8_QUANT = 'q8_0'
+const VALID_AUDIO8_QUANTS = [DEFAULT_AUDIO8_QUANT, 'f16']
 
 const CHATTERBOX_GGUFS = [
   {
@@ -553,6 +559,34 @@ const SUPERTONIC_MTL_GGUFS = [
     registrySource: REGISTRY_SOURCE
   }
 ]
+
+function audio8Ggufs(quant = DEFAULT_AUDIO8_QUANT, includeEncoder = true) {
+  if (!VALID_AUDIO8_QUANTS.includes(quant)) return []
+  const prefix = `qvac_models_compiled/ggml/audio-8/${REGISTRY_DATE_AUDIO8}`
+  const files = [
+    {
+      name: `audio8-lm-${quant}.gguf`,
+      ...SIZE_AUDIO8_LM,
+      registryPath: `${prefix}/audio8-lm-${quant}.gguf`,
+      registrySource: REGISTRY_SOURCE
+    },
+    {
+      name: `audio8-codec-decoder-${quant}.gguf`,
+      ...SIZE_AUDIO8_DECODER,
+      registryPath: `${prefix}/audio8-codec-decoder-${quant}.gguf`,
+      registrySource: REGISTRY_SOURCE
+    }
+  ]
+  if (includeEncoder) {
+    files.push({
+      name: `audio8-codec-encoder-${quant}.gguf`,
+      ...SIZE_AUDIO8_ENCODER,
+      registryPath: `${prefix}/audio8-codec-encoder-${quant}.gguf`,
+      registrySource: REGISTRY_SOURCE
+    })
+  }
+  return files
+}
 
 // LavaSR 48 kHz bandwidth-extension enhancer (benchmark `enhancer=lavasr` axis).
 // fp16 (~28 MB, the benchmark default) + fp32 (~56 MB) are published on the QVAC
@@ -781,6 +815,52 @@ function hasAllGgufs(dir) {
   return hasAllGgufsIn(dir, CHATTERBOX_GGUFS)
 }
 
+function audio8CandidateDirs(requestedDir) {
+  const candidates = [requestedDir]
+  for (const dir of desktopFallbackDirs()) {
+    if (!candidates.includes(dir)) candidates.push(dir)
+  }
+  return candidates
+}
+
+function findAudio8Dir(candidates, files) {
+  for (const dir of candidates) {
+    if (hasAllGgufsIn(dir, files)) return dir
+  }
+  return null
+}
+
+function audio8Result(dir, quant, includeEncoder, cached) {
+  return {
+    success: true,
+    targetDir: dir,
+    quant,
+    cached,
+    lmPath: path.join(dir, `audio8-lm-${quant}.gguf`),
+    decoderPath: path.join(dir, `audio8-codec-decoder-${quant}.gguf`),
+    encoderPath: includeEncoder ? path.join(dir, `audio8-codec-encoder-${quant}.gguf`) : null
+  }
+}
+
+async function ensureAudio8Models(options = {}) {
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
+  const quant = options.quant || DEFAULT_AUDIO8_QUANT
+  const includeEncoder = options.includeEncoder !== false
+  const files = audio8Ggufs(quant, includeEncoder)
+  if (files.length === 0) {
+    return { success: false, targetDir: requestedDir, quant }
+  }
+
+  const resolvedDir = findAudio8Dir(audio8CandidateDirs(requestedDir), files)
+  if (resolvedDir) return audio8Result(resolvedDir, quant, includeEncoder, true)
+
+  if (await tryFetchGgufsFromRegistry(files, requestedDir)) {
+    return audio8Result(requestedDir, quant, includeEncoder, false)
+  }
+
+  return { success: false, targetDir: requestedDir, quant }
+}
+
 /**
  * Ensure the Chatterbox GGUFs are present under a directory the native
  * addon can read, and return the directory that won.
@@ -877,8 +957,8 @@ async function ensureChatterboxModels(options = {}) {
     console.log('registry path or generate them locally from the upstream tts-cpp')
     console.log('conversion scripts:')
     console.log('')
-    console.log('  git clone git@github.com:tetherto/qvac-ext-lib-whisper.cpp.git')
-    console.log('  cd qvac-ext-lib-whisper.cpp/tts-cpp')
+    console.log('  git clone git@github.com:tetherto/qvac-fabric-speech.cpp.git')
+    console.log('  cd qvac-fabric-speech.cpp/engines/tts')
     console.log('  python -m venv .venv && . .venv/bin/activate')
     console.log('  pip install torch numpy gguf safetensors scipy librosa resampy')
     console.log('  python scripts/convert-t3-turbo-to-gguf.py --out chatterbox-t3-turbo.gguf')
@@ -1258,6 +1338,16 @@ const COSYVOICE_FILES = [
 ]
 
 /**
+ * The on-disk names of the CosyVoice3 base set, so callers that stage or
+ * mirror a model dir track the published tier instead of hardcoding it.
+ *
+ * @returns {string[]}
+ */
+function cosyvoiceBaseFileNames() {
+  return COSYVOICE_FILES.map((f) => f.name)
+}
+
+/**
  * Ensure the CosyVoice3 model directory is staged in a location the native
  * addon can read, and return that directory.  Mirrors ensureChatterboxModels /
  * ensureMecabDict (multi-file): prefer an already-staged local copy, otherwise
@@ -1306,7 +1396,83 @@ async function ensureCosyvoiceModel(options = {}) {
   for (const f of COSYVOICE_FILES) console.log(`   ${f.name}  (${f.registryPath})`)
   console.log(
     ' Assemble one offline with ' +
-      'qvac-ext-lib-whisper.cpp/tts-cpp/scripts/assemble-cosyvoice3-model.py.'
+      'qvac-fabric-speech.cpp/engines/tts/scripts/assemble-cosyvoice3-model.py.'
+  )
+  return { success: false, modelDir: requestedDir, targetDir: requestedDir }
+}
+
+// A deliberately SEPARATE tier from COSYVOICE_FILES: hasAllGgufsIn is
+// all-or-nothing, so folding these in would invalidate every existing staged
+// CosyVoice3 dir and force the ~300 MB download on tests that never clone.
+const REGISTRY_DATE_COSYVOICE_CLONE = '2026-08-14'
+const COSYVOICE_CLONE_REGISTRY_PREFIX = `qvac_models_compiled/ggml/cosy_voice/${REGISTRY_DATE_COSYVOICE_CLONE}`
+
+const COSYVOICE_CLONE_FILES = [
+  {
+    // q8_0 keeps the CI download small and exercises the dtype-adopting
+    // tokenizer weight loader; the registry also publishes an f16 tier.
+    name: 'cosyvoice3-s3tok-q8_0.gguf',
+    minSize: 50_000_000,
+    maxSize: 1_000_000_000,
+    registryPath: `${COSYVOICE_CLONE_REGISTRY_PREFIX}/cosyvoice3-s3tok-q8_0.gguf`,
+    registrySource: REGISTRY_SOURCE
+  },
+  {
+    name: 'cosyvoice3-campplus-f32.gguf',
+    minSize: 1_000_000,
+    maxSize: 100_000_000,
+    registryPath: `${COSYVOICE_CLONE_REGISTRY_PREFIX}/cosyvoice3-campplus-f32.gguf`,
+    registrySource: REGISTRY_SOURCE
+  }
+]
+
+/**
+ * Ensure the CosyVoice3 voice-cloning add-on GGUFs are staged INSIDE a staged
+ * CosyVoice3 model dir (the engine auto-discovers them there by the
+ * cosyvoice3-s3tok* / cosyvoice3-campplus* name prefixes), and return that
+ * dir.  Call after ensureCosyvoiceModel; pass its `modelDir` as `targetDir`.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - staged CosyVoice3 model dir
+ *   (default ./models/cosyvoice3).
+ * @returns {Promise<{ success: boolean, modelDir: string, targetDir: string }>}
+ */
+async function ensureCosyvoiceCloneModels(options = {}) {
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models', COSYVOICE_DIRNAME)
+  console.log(`Ensuring CosyVoice3 cloning add-on GGUFs (requested dir: ${requestedDir})...`)
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      const cd = path.join(d, COSYVOICE_DIRNAME)
+      if (!candidateDirs.includes(cd)) candidateDirs.push(cd)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      const cd = path.join(d, COSYVOICE_DIRNAME)
+      if (!candidateDirs.includes(cd)) candidateDirs.push(cd)
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    // The returned dir feeds the engine's whole-directory discovery, so a
+    // clone-only cache would resolve and then fail on the missing LM.
+    if (hasAllGgufsIn(dir, COSYVOICE_CLONE_FILES) && hasAllGgufsIn(dir, COSYVOICE_FILES)) {
+      console.log(` ✓ using CosyVoice3 cloning GGUFs at ${dir}`)
+      return { success: true, modelDir: dir, targetDir: dir }
+    }
+  }
+
+  if (await tryFetchGgufsFromRegistry(COSYVOICE_CLONE_FILES, requestedDir)) {
+    return { success: true, modelDir: requestedDir, targetDir: requestedDir }
+  }
+
+  console.log(' CosyVoice3 cloning GGUFs not found locally and registry fetch failed.')
+  console.log(` Expected these files under ${requestedDir}:`)
+  for (const f of COSYVOICE_CLONE_FILES) console.log(`   ${f.name}  (${f.registryPath})`)
+  console.log(
+    ' Convert offline with qvac-fabric-speech.cpp/engines/tts/scripts/' +
+      'convert-s3tokenizer-v3-to-gguf.py and convert-campplus-to-gguf.py.'
   )
   return { success: false, modelDir: requestedDir, targetDir: requestedDir }
 }
@@ -1750,12 +1916,16 @@ module.exports = {
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
   ensureSupertonic3Model,
+  ensureAudio8Models,
+  audio8Ggufs,
   supertonic3QuantFromVariant,
   DEFAULT_SUPERTONIC3_QUANT,
   ensureParlerModel,
   parlerQuantFromVariant,
   DEFAULT_PARLER_QUANT,
   ensureCosyvoiceModel,
+  ensureCosyvoiceCloneModels,
+  cosyvoiceBaseFileNames,
   ensureMecabDict,
   ensureCangjieTsv,
   ensureLavaSREnhancerGguf,

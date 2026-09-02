@@ -11,7 +11,7 @@
 // Graceful-skip contract (mirrors tts-ggml/test/utils/downloadModel.js):
 // @qvac/registry-client is lazily required, so a machine without it (or offline)
 // gets `{ success: false }` and the tests fail with a clear "run
-// npm run download-models:registry" message rather than a cryptic crash.
+// npm run download-models:registry -- --output ./models" message rather than a cryptic crash.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -30,8 +30,8 @@ function getBaseDir() {
 }
 
 // Directories searched for an already-present model set, in order: an explicit
-// env override, then the package's own ./models (where download-models:registry
-// puts them).
+// env override, then the package's own ./models when selected as the explicit
+// downloader output.
 function candidateDirs() {
   const dirs = []
   const envDir = proc.env.AUDIOGEN_GGML_LOCAL_MODELS_DIR

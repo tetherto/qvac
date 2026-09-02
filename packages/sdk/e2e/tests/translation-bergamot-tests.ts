@@ -1,4 +1,4 @@
-import type { TestDefinition, Expectation } from '@tetherto/qvac-test-suite'
+import type { TestDefinition, Expectation } from '@qvac/test-suite'
 
 const createBergamotTest = (
   testId: string,

@@ -4,6 +4,7 @@
 #include <string>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml {
 
@@ -85,11 +86,13 @@ EngineType JSAdapter::readEngineType(
     return EngineType::Cosyvoice;
   if (explicitType == "parler")
     return EngineType::Parler;
+  if (explicitType == "audio8")
+    return EngineType::Audio8;
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3' or "
-        "'parler' (got '" +
+        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', 'parler' "
+        "or 'audio8' (got '" +
             explicitType + "')");
   }
 
@@ -111,6 +114,11 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "parlerModelPath");
   if (!parlerPath.empty())
     return EngineType::Parler;
+
+  const std::string audio8Path =
+      readOptionalString(configurationParams, env, "audio8LmPath");
+  if (!audio8Path.empty())
+    return EngineType::Audio8;
 
   const std::string t3Path =
       readOptionalString(configurationParams, env, "t3ModelPath");
@@ -156,7 +164,7 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
   // LavaSR neural denoiser (runs before the enhancer): a non-empty GGUF path
   // turns it on. The tts-cpp UL-UNAS forward is implemented in
-  // qvac-ext-lib-whisper.cpp PR #78 (activates once the pinned tts-cpp has it).
+  // qvac-fabric-speech.cpp PR #78 (activates once the pinned tts-cpp has it).
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
   return cfg;
@@ -179,6 +187,22 @@ JSAdapter::readParlerDescriptionFields(js::Object obj, js_env_t* env) {
   desc.reverb = readOptionalString(obj, env, "reverb");
   desc.quality = readOptionalString(obj, env, "quality");
   return desc;
+}
+
+tts_cpp::cosyvoice::VoiceControls
+JSAdapter::readVoiceControls(js::Object obj, js_env_t* env) {
+  tts_cpp::cosyvoice::VoiceControls controls;
+  controls.emotion = readOptionalString(obj, env, "emotion");
+  controls.pace = readOptionalString(obj, env, "pace");
+  controls.instruct_text = readOptionalString(obj, env, "instruct");
+  return controls;
+}
+
+void JSAdapter::assertNoPerCallSupertonicControls(
+    js::Object obj, js_env_t* env) {
+  supertonic::detail::validateNoPerCallControls(
+      readOptionalString(obj, env, "emotion"),
+      readOptionalString(obj, env, "pace"));
 }
 
 parler::ParlerConfig
@@ -212,6 +236,41 @@ JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
   return cfg;
 }
 
+audio8::Audio8Model::VoiceOverride
+JSAdapter::readAudio8Voice(js::Object obj, js_env_t* env) {
+  audio8::Audio8Model::VoiceOverride voice;
+  voice.referenceAudio = readOptionalString(obj, env, "referenceAudio");
+  voice.referenceText = readOptionalString(obj, env, "referenceText");
+  return voice;
+}
+
+audio8::Audio8Config
+JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
+  audio8::Audio8Config cfg;
+  cfg.lmModelPath =
+      readOptionalString(configurationParams, env, "audio8LmPath");
+  cfg.codecDecoderPath =
+      readOptionalString(configurationParams, env, "audio8CodecDecoderPath");
+  cfg.codecEncoderPath =
+      readOptionalString(configurationParams, env, "audio8CodecEncoderPath");
+  const auto voice = readAudio8Voice(configurationParams, env);
+  cfg.referenceAudio = voice.referenceAudio;
+  cfg.referenceText = voice.referenceText;
+  cfg.greedy = readOptionalBool(configurationParams, env, "greedy");
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.temperature = readOptionalFloat(configurationParams, env, "temperature");
+  cfg.topK = readOptionalInt(configurationParams, env, "topK");
+  cfg.topP = readOptionalFloat(configurationParams, env, "topP");
+  cfg.maxFrames = readOptionalInt(configurationParams, env, "maxFrames");
+  cfg.outputSampleRate =
+      readOptionalInt(configurationParams, env, "outputSampleRate");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  return cfg;
+}
+
 supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
     js::Object configurationParams, js_env_t* env) {
   supertonic::SupertonicConfig cfg;
@@ -223,6 +282,7 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   }
   cfg.steps             = readOptionalInt(configurationParams, env, "steps");
   cfg.speed             = readOptionalFloat(configurationParams, env, "speed");
+  cfg.pace = readOptionalString(configurationParams, env, "pace");
   cfg.seed              = readOptionalInt(configurationParams, env, "seed");
   cfg.threads           = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers        = readOptionalInt(configurationParams, env, "nGpuLayers");
@@ -238,7 +298,7 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
   // LavaSR neural denoiser (runs before the enhancer): a non-empty GGUF path
   // turns it on. The tts-cpp UL-UNAS forward is implemented in
-  // qvac-ext-lib-whisper.cpp PR #78 (activates once the pinned tts-cpp has it).
+  // qvac-fabric-speech.cpp PR #78 (activates once the pinned tts-cpp has it).
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
   return cfg;
@@ -264,6 +324,8 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
   cfg.promptText = readOptionalString(configurationParams, env, "promptText");
   cfg.voice = readOptionalString(configurationParams, env, "voice");
   cfg.instruct = readOptionalString(configurationParams, env, "instruct");
+  cfg.emotion = readOptionalString(configurationParams, env, "emotion");
+  cfg.pace = readOptionalString(configurationParams, env, "pace");
   {
     auto lang = readOptionalString(configurationParams, env, "language");
     if (!lang.empty())

@@ -37,7 +37,9 @@ test(
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
-      t.fail('ACE-Step models unavailable — run `npm run download-models:registry`.')
+      t.fail(
+        'ACE-Step models unavailable — run `npm run download-models:registry -- --output ./models`.'
+      )
       return
     }
 
@@ -62,7 +64,9 @@ test(
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
-      t.fail('ACE-Step models unavailable — run `npm run download-models:registry`.')
+      t.fail(
+        'ACE-Step models unavailable — run `npm run download-models:registry -- --output ./models`.'
+      )
       return
     }
 
@@ -88,7 +92,9 @@ test(
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
-      t.fail('ACE-Step models unavailable — run `npm run download-models:registry`.')
+      t.fail(
+        'ACE-Step models unavailable — run `npm run download-models:registry -- --output ./models`.'
+      )
       return
     }
 

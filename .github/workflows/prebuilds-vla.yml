@@ -31,6 +31,13 @@ on:
         required: false
         type: string
         default: "packages/vla-ggml"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -49,7 +56,5 @@ jobs:
       artifact-name-prefix: vla-
       linux-extra-packages: libxi-dev libxtst-dev libxrandr-dev
       include-vulkan-sdk: true
-      # Cross-compile the ROCm/HIP backend (gfx1151) into the linux-x64 prebuild.
-      # No AMD GPU needed on the runner; fail-safe if ROCm install/feature is absent.
-      include-rocm: true
+      fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
     secrets: inherit

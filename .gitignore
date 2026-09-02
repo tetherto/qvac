@@ -27,6 +27,7 @@ packages/sdk/examples/**/*-output.wav
 # --generate-announcement-post). These are local working artifacts,
 # not release deliverables — never commit them.
 packages/*/changelog/*/announcement-post.txt
+plugins/*/changelog/*/announcement-post.txt
 .claude/worktrees
 
 # Auto-generated agent config (run /setup to regenerate)
@@ -52,6 +53,10 @@ packages/*/changelog/*/announcement-post.txt
 .cursor/rules/dev-diary-local.mdc
 
 docs/website/scripts/api-docs/api-data.json
+
+# Per-job vcpkg downloads tree used by .github/actions/setup-vcpkg
+# (VCPKG_DOWNLOADS=$GITHUB_WORKSPACE/.vcpkg-downloads). Never commit.
+.vcpkg-downloads/
 
 # Local perf-report sim output (sim-*.js scripts)
 /tmp/

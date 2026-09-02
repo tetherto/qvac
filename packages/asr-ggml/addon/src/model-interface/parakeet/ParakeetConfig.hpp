@@ -30,6 +30,8 @@ struct ParakeetConfig {
   bool timestampsEnabled = true;
   int seed = -1;
 
+  std::string language;
+
   // ── Streaming mode ──────────────────────────────────────────────────────
   // When true, the model opens a long-lived qvac_parakeet streaming session
   // (StreamSession for ASR, SortformerStreamSession for diarization) at
@@ -114,7 +116,7 @@ struct ParakeetConfig {
            sampleRate == other.sampleRate && channels == other.channels &&
            captionEnabled == other.captionEnabled &&
            timestampsEnabled == other.timestampsEnabled && seed == other.seed &&
-           streaming == other.streaming &&
+           language == other.language && streaming == other.streaming &&
            streamingChunkMs == other.streamingChunkMs &&
            streamingHistoryMs == other.streamingHistoryMs &&
            streamingEmitPartials == other.streamingEmitPartials &&

@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 // SmolVLA-LIBERO inference always returns a chunkSize × actionDim Float32Array
 // of robot actions plus per-stage timings. These tests exercise the SDK's

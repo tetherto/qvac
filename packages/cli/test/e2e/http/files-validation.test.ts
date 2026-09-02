@@ -5,7 +5,7 @@ import { multipart, assertStatusAndError } from '../helpers/http.js'
 import { tinyPng } from '../helpers/fixtures.js'
 
 describe('serve: files content endpoint', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('GET /v1/files/:id/content returns 404 for unknown id', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/files/file-deadbeef/content' })
@@ -52,7 +52,7 @@ describe('serve: files content endpoint', () => {
 })
 
 describe('serve: files empty list', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('GET /v1/files returns an empty list initially', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/files' })
@@ -64,7 +64,7 @@ describe('serve: files empty list', () => {
 })
 
 describe('serve: files list + metadata', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   async function upload(): Promise<string> {
     const res = await server().inject({

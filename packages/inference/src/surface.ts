@@ -82,8 +82,6 @@ export {
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
-  TOOLS_MODE,
-  type ToolsMode,
   type McpClient,
   type McpClientInput,
   type OCRClientParams,
@@ -178,6 +176,7 @@ export { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
 export {
   InferenceCancelledError,
   ContextOverflowError,
+  type ContextOverflowErrorSizes,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,

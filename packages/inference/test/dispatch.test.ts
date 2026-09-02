@@ -80,8 +80,11 @@ test('concurrent first sends share one initialization', async function (t) {
   // With that, overlapping first calls that each ran their own initialization
   // would have the second `setConfig` throw `ConfigAlreadySetError`; the shared
   // readiness promise keeps it to exactly one.
+  // Any key resolves the config; `loggerLevel` must not be the one, because
+  // `setGlobalLogLevel` outlives this test and would override the explicit
+  // level of every logger a later test builds.
   const configPath = path.join(os.tmpdir(), `qvac-inference-config-${os.pid()}.json`)
-  fs.writeFileSync(configPath, JSON.stringify({ loggerLevel: 'info' }))
+  fs.writeFileSync(configPath, JSON.stringify({ httpDownloadConcurrency: 3 }))
   const previousConfigPath = env['QVAC_CONFIG_PATH']
   env['QVAC_CONFIG_PATH'] = configPath
 

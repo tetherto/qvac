@@ -21,7 +21,6 @@ import {
   ConfigReloadNotSupportedError,
   InferenceCancelledError,
   ModelTypeMismatchError,
-  ModelIsDelegatedError,
   ModelNotFoundError,
   ModelLoadFailedError,
   PluginLoadConfigValidationFailedError,
@@ -47,7 +46,8 @@ export async function handleLoadModel(
     return handleConfigReload(request)
   }
 
-  const { modelSrc, modelName, seed } = request
+  const { modelSrc, modelName, seed, fallbackSrc, requireHttpChecksum, requireSecureTransport } =
+    request
   const canonicalModelType = normalizeModelType(request.modelType)
 
   const profilingMeta = (request as Record<string, unknown>)[PROFILING_KEY] as
@@ -95,10 +95,11 @@ export async function handleLoadModel(
         signal: ctx.signal,
         scope: ctx.scope,
         requestId
-      }
+      },
+      security: { requireHttpChecksum, requireSecureTransport }
     })
 
-    const primaryResolve = session.resolvePrimaryModelPath(modelSrc)
+    const primaryResolve = session.resolvePrimaryModelPath(modelSrc, fallbackSrc)
 
     let resolvedModelPath: string
     let pluginResolveResult:
@@ -252,10 +253,6 @@ async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadMod
     const entry = getModelEntry(modelId)
     if (!entry) {
       throw new ModelNotFoundError(modelId)
-    }
-
-    if (entry.isDelegated) {
-      throw new ModelIsDelegatedError(modelId)
     }
 
     const storedModelType = entry.local.modelType

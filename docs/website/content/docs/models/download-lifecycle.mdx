@@ -34,7 +34,7 @@ await downloadAsset({ assetSrc: QWEN3_4B_INST_Q4_K_M });
 const modelId = await loadModel({ modelSrc: QWEN3_4B_INST_Q4_K_M });
 ```
 
-The SDK instance that performs each call must use the same [`cacheDirectory`](/configuration#options). The initial download still requires registry access; this workflow prepares an application for later offline startup rather than providing a fallback source when the registry is unreachable.
+The SDK instance that performs each call must use the same [`cacheDirectory`](/configuration#options). The initial download still requires registry access; this workflow prepares an application for later offline startup. To load a catalog model from an alternate source when the registry itself is unreachable, see [Fall back to an alternate source](#fall-back-to-an-alternate-source).
 
 If an application manages its own model files, pass a local path and an explicit model type instead:
 
@@ -46,6 +46,54 @@ const modelId = await loadModel({
 ```
 
 Local-path loading does not associate the file with a catalog constant or validate it against catalog checksum metadata. Applications using this path are responsible for provisioning and integrity checks.
+
+## Fall back to an alternate source
+
+On some networks the registry is not reliably reachable, and a `loadModel()` call using a catalog constant can fail before the model arrives. Pass `fallbackSrc` — an HTTP URL or a local file path — to load the same model from an alternate source when the registry download does not succeed:
+
+```ts
+import { loadModel, QWEN3_4B_INST_Q4_K_M } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: QWEN3_4B_INST_Q4_K_M,
+  fallbackSrc: "https://mirror.example.com/qwen3-4b-instruct-q4_k_m.gguf",
+});
+```
+
+The model loaded from `fallbackSrc` is validated against the catalog model's checksum before use, so an alternate source is trusted to the same degree as the registry copy. Download progress for the fallback is reported through the same `onProgress` callback.
+
+`fallbackSrc` is supported only when `modelSrc` is a built-in catalog constant — the constant supplies the checksum to validate against. A local-path or URL `modelSrc` has no catalog checksum, so `fallbackSrc` is rejected for those. When a catalog model cannot be downloaded and no `fallbackSrc` was given, the error suggests supplying one.
+
+## Source trust and transport
+
+Model sources fall into three trust tiers:
+
+- **Catalog / `registry://` (and `fallbackSrc`)** — verified against the checksum bundled with the catalog constant. A `fallbackSrc` is validated against that same checksum, so it is trusted to the same degree as the registry copy.
+- **Hugging Face HTTP URLs** (`huggingface.co` / `hf.co`) — **Hub-attested**. The SDK reads the file's SHA-256 from the Hub (its `X-Linked-Etag`) and verifies the downloaded bytes against it. This covers single-file, sharded, and archive (`.tar`/`.tar.gz`) downloads. If a Hugging Face URL exposes no SHA-256 (for example a small non-LFS file), the download proceeds unverified with a warning — unless `requireHttpChecksum` is enabled (see below).
+- **Other HTTP(S) URLs (bring-your-own)** — downloaded **as-is and unverified**. There is no trusted checksum to check them against. Plaintext `http://` on any host is accepted and an `https://` URL that redirects to `http://` is followed — pointing at your own model server (on any domain) works unchanged. Every download whose integrity cannot be verified (bring-your-own HTTP, or a Hugging Face file with no published SHA-256) logs a warning, so an unverified load is never silent.
+
+Because a Hugging Face download is Hub-attested, its transport is also hardened so the attestation can't be sidestepped: a Hugging Face URL served over plaintext `http://`, or whose redirect chain downgrades to `http://`, is rejected with an `INSECURE_MODEL_SOURCE` error (loopback excepted). This only affects `huggingface.co` / `hf.co` sources — which are HTTPS in practice — and does not apply to bring-your-own HTTP. To extend the same rule to every HTTP source, set `requireSecureTransport: true` in the [configuration](/configuration#options); bring-your-own HTTP must then use HTTPS too (loopback still excepted).
+
+### Require a verified checksum
+
+Set `requireHttpChecksum: true` in the [configuration](/configuration#options) for a stricter Hugging Face posture: a Hugging Face URL that exposes no usable SHA-256 (for example a small non-LFS file) is then **rejected** with a `CHECKSUM_UNAVAILABLE` error instead of downloading unverified. Bring-your-own HTTP is unaffected — it still downloads unverified, with a warning.
+
+The flag defaults to `false`. A checksum **mismatch** on a Hugging Face download always fails with a `CHECKSUM_VALIDATION_FAILED` error, regardless of this flag.
+
+Both `requireHttpChecksum` and `requireSecureTransport` can also be set **per call** on `loadModel()` and `downloadAsset()`, overriding the config for that one download:
+
+```ts
+await loadModel({
+  modelSrc: "https://huggingface.co/org/repo/resolve/main/model.gguf",
+  modelType: "llamacpp-completion",
+  requireSecureTransport: true,
+  requireHttpChecksum: true
+});
+```
+
+<Callout type="warn">
+These flags govern **downloads**. A model already in the cache is served after a freshness check without re-verification, so tightening `requireHttpChecksum` does not retroactively verify a cache entry that was fetched before the flag was set (or before this feature shipped). Clear the cache when you tighten the setting if you need the on-disk copy re-verified.
+</Callout>
 
 ## Cancel a specific call by `requestId`
 

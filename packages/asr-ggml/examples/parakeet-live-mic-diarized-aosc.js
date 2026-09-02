@@ -40,7 +40,7 @@
  *
  * For the upstream API + algorithm details, see
  * `parakeet-cpp/include/parakeet/diarization.h` and the upstream PRs
- * that introduced this feature in qvac-ext-lib-whisper.cpp (PR #22
+ * that introduced this feature in qvac-fabric-speech.cpp (PR #22
  * commit e6ba38c, PR #24 commit 08df2e7).
  *
  * Usage:
@@ -66,7 +66,7 @@ const process = require('bare-process')
 const subprocess = require('bare-subprocess')
 const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
-const { setupLogger, validatePaths, pushableStream } = require('./utils.js')
+const { setupLogger, validatePaths, pushableStream } = require('./parakeet-utils.js')
 
 const CAPTURE_CMD = 'sox -d -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -'
 

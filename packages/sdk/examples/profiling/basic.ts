@@ -4,7 +4,8 @@ try {
   // Enable profiling globally
   profiler.enable({
     mode: 'verbose',
-    includeServerBreakdown: true
+    includeServerBreakdown: true,
+    includeResourceGauges: true
   })
   console.log('▸ Profiler enabled:', profiler.isEnabled())
 
@@ -68,6 +69,44 @@ try {
     // Debug: show what ops are available
     const ops = [...new Set(json.recentEvents?.map((e) => `${e.op}:${e.kind}`) ?? [])]
     console.log('  Available ops:', ops.join(', '))
+  }
+
+  const resourceEvent = json.recentEvents?.filter((event) => event.resources).at(-1)
+  console.log('\n▸ Resource Gauges')
+  if (resourceEvent?.resources) {
+    const resources = resourceEvent.resources
+    console.log('  op:', resourceEvent.op)
+    console.log(
+      '  cpu:',
+      resources.cpu.status === 'supported'
+        ? `${(resources.cpu.value * 100).toFixed(1)}%`
+        : resources.cpu.status
+    )
+    console.log(
+      '  memoryUsed:',
+      resources.memory.usedBytes.status === 'supported'
+        ? `${(resources.memory.usedBytes.value / 1024 ** 3).toFixed(2)} GiB`
+        : resources.memory.usedBytes.status
+    )
+    console.log(
+      '  gpuCount:',
+      resources.gpus.status === 'supported' ? resources.gpus.value.length : resources.gpus.status
+    )
+  } else {
+    console.log('  (no resource gauges reported)')
+  }
+
+  const backendEvent = json.recentEvents?.filter((event) => event.backend).at(-1)
+  console.log('\n▸ Backend Diagnostics')
+  if (backendEvent?.backend) {
+    const backend = backendEvent.backend
+    console.log('  op:', backendEvent.op)
+    console.log('  selectedBackend:', backend.selectedBackend)
+    console.log('  selectedDevice:', backend.selectedDevice)
+    console.log('  graphicsApi:', backend.graphicsApi ?? '(not reported)')
+    console.log('  fallback:', backend.fallback?.reason ?? '(none)')
+  } else {
+    console.log('  (no backend diagnostics reported for this operation)')
   }
 
   console.log('\n▸ Profiler JSON (structure)')

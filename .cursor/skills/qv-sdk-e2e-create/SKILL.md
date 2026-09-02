@@ -132,7 +132,7 @@ compatibility independently rather than treating desktop-only coverage as automa
 ### Test definition (`tests/<feature>-tests.ts`)
 
 ```ts
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from "@qvac/test-suite";
 
 export const <feature>Tests: TestDefinition[] = [
   {
@@ -235,7 +235,7 @@ Before marking scaffolding complete:
 
 - Executor placement, smoke policy, rebuild flow → `.cursor/rules/sdk/e2e.mdc` and
   `packages/sdk/e2e/README.md`.
-- Expectation schema → `@tetherto/qvac-test-suite` `dist/schemas/expectations.js`.
+- Expectation schema → `@qvac/test-suite` `dist/schemas/expectations.js`.
 - Existing examples:
   - Strong output assertion: `packages/sdk/e2e/tests/translation-salamandra-tests.ts`
     (`contains-any` over expected Spanish tokens).

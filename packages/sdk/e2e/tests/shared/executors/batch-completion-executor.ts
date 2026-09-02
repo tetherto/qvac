@@ -1,5 +1,5 @@
 import { batchCompletion } from '@qvac/sdk'
-import { ValidationHelpers, type Expectation, type TestResult } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { batchCompletionTests } from '../../batch-completion-tests.js'
 import type { ResourceManager } from '../resource-manager.js'

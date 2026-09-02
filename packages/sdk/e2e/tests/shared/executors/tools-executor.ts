@@ -1,6 +1,6 @@
 import { completion } from '@qvac/sdk'
 import type { ToolDialect } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { toolsTests } from '../../tools-tests.js'
 
@@ -20,13 +20,12 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
         description: string
         parameters: Record<string, unknown>
       }>
-      toolsMode?: 'static' | 'dynamic'
       toolDialect?: ToolDialect
       resourceKey?: string
       stream?: boolean
       expectedToolCall?: { name: string; argKeys?: string[] }
     }
-    const resourceKey = p.resourceKey ?? (p.toolsMode === 'dynamic' ? 'tools-dynamic' : 'tools')
+    const resourceKey = p.resourceKey ?? 'tools'
     const toolsModelId = await this.resources.ensureLoaded(resourceKey)
 
     try {

@@ -22,10 +22,16 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const MANIFEST_PATH = resolve(__dirname, '..', 'test', 'integration', 'parakeet-models.manifest.json')
+const MANIFEST_PATH = resolve(
+  __dirname,
+  '..',
+  'test',
+  'integration',
+  'parakeet-models.manifest.json'
+)
 const DEFAULT_MODELS_DIR = resolve(__dirname, '..', 'models')
 
-function parseArgs (argv) {
+function parseArgs(argv) {
   const args = { models: DEFAULT_MODELS_DIR, check: false }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--models' || argv[i] === '-m') args.models = resolve(argv[++i])
@@ -35,7 +41,7 @@ function parseArgs (argv) {
   return args
 }
 
-function sha256File (filePath) {
+function sha256File(filePath) {
   return new Promise((resolve, reject) => {
     const hash = createHash('sha256')
     const stream = createReadStream(filePath)
@@ -45,7 +51,7 @@ function sha256File (filePath) {
   })
 }
 
-async function main () {
+async function main() {
   const args = parseArgs(process.argv.slice(2))
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
   const entries = Object.entries(manifest.models || {})
@@ -57,7 +63,9 @@ async function main () {
   for (const [name, entry] of entries) {
     const file = join(args.models, name)
     if (!existsSync(file)) {
-      console.log(`  - ${name}: not present locally — leaving ${entry.bytes == null ? 'unpinned' : 'as-is'}`)
+      console.log(
+        `  - ${name}: not present locally — leaving ${entry.bytes == null ? 'unpinned' : 'as-is'}`
+      )
       missing++
       continue
     }

@@ -231,7 +231,6 @@ The scheduler owns the decode loop. It wraps `MultiRequestBatcher`, the shared `
 - `group` + `outputIndex` — back-pointer to the `BatchGroup` this slot belongs to
 - `streams` — per-sequence `onToken` / `onDone` callbacks wired to the JS streaming path
 - `cacheKey`, `saveCacheToDisk`, `prefillOnly`
-- `tools` — `ToolsCompactController` instance (when tools support is enabled)
 
 **BatchGroup** is shared by all sequences admitted in one `processBatch` call. It accumulates outputs and stats, and carries three fields the rest of the machinery keys off:
 
@@ -252,7 +251,7 @@ This is enforced at admission — every check throws `InvalidArgument` before an
 - **KV cells** — `getKvCellsUsed() + plan.totalKvTokens()` must not exceed the cap. Cells, not positions: M-RoPE media occupies more KV cells than it advances positions, so a multimodal prompt can trip this while its token count still fits.
 - **A generating request** is refused at `promptSize >= cap`, where `promptSize` is `getNPast() + plan.totalPositions()` — exactly filling the window leaves no room for even one generated token.
 - **A prefill-only request** is refused only at `promptSize > cap`; it never generates, so filling the window exactly is legitimate.
-- **The budget check** adds `n_predict` to whichever of the two prompt measures is larger, and applies **only when `n_predict` is positive** — with `predict: -1` (no caller cap) there is no budget to check, so the request is admitted and, absent EOS or sliding, runs to the slot ceiling and stops with `sequenceLimit` instead of throwing.
+- **The budget check** adds `n_predict` to whichever of the two prompt measures is larger, and applies **only when `n_predict` is positive** — with `predict: -1` (no caller cap) there is no budget to check, so the request is admitted and, absent EOS, runs to the slot ceiling and stops with `contextOverflow` instead of throwing. Because that check rejects anything that would not fit, reaching the ceiling can only mean the window filled, never that a caller cap was hit.
 
 ### MultiRequestBatcher
 
@@ -285,17 +284,16 @@ Lifecycle methods in call order:
 
 | Method | When | What it does |
 |--------|------|--------------|
-| `validatePromptPolicy` | Before admission | Rejects oversized prompts or invalid layout |
-| `loadCache` | After validation | Loads KV cache from disk if `cacheKey` is set |
+| `loadCache` | At admission | Loads KV cache from disk if `cacheKey` is set |
 | `preparePrefill` | At admission | Tokenizes chat messages, returns pending tokens |
-| `onPrefillComplete` | When prefill finishes | Records `nPast`, triggers context-shift check |
+| `onPrefillComplete` | When prefill finishes | Records `nPast`, snapshots the reasoning-rollback boundary |
 | `onLogitsReady` | Each generation step | Samples next token, runs antiprompt/stop checks |
-| `onGenerationFinished` | Natural EOG | Runs `onGenerationCompletePolicy` (tools_compact trim), flushes UTF-8 buffer |
-| `onCancel` | User cancel or decode error | Same policy as above; called before KV clear |
+| `onGenerationFinished` | Natural EOG | Flushes UTF-8 buffer |
+| `onCancel` | User cancel or decode error | Flushes UTF-8 buffer; called before KV clear |
 | `onSequenceEnd` | Every terminal path | Flushes remaining UTF-8 buffer |
 | `saveCache` | Before KV clear | Persists KV cache to disk if `saveCacheToDisk` is set. `drainFinishedLocked` calls `saveCacheForSlot` and only then `clearSeqKv` — the order matters, since saving after the clear would serialise an empty sequence. This is what makes a persistable prefill's product survive the slot teardown. |
 
-Each driver carries its own `perSeqCtxCeiling_` (set to `perSeqMaxTokens_` by the scheduler, or `-1` for single-sequence). Prefill sliding and generation overflow checks use this ceiling rather than the full `llama_n_ctx()`. `n_discarded` is clamped to the per-slot window when the scheduler is constructed, before any driver sees it.
+Each driver carries its own `perSeqCtxCeiling_` (set to `perSeqMaxTokens_` by the scheduler, or `-1` for single-sequence). Prefill and generation overflow checks use this ceiling rather than the full `llama_n_ctx()`.
 
 ---
 
@@ -338,8 +336,7 @@ With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens. This affe
 
 - **Admission** — a generating prompt must leave room to generate, so it is rejected once it *reaches* `C / N`; a prefill-only prompt may fill it exactly and is rejected only above it. Either way the rejection is `InvalidArgument` before any tokens are staged.
 - **KV cells** — the physical cell span (`getKvCellsUsed()` plus the plan's KV tokens) is checked against `C / N` independently of the token count, because M-RoPE media consumes more cells than positions.
-- **Budget check** — when `n_predict > 0`, `max(prompt_tokens, prompt_kv_cells) + n_predict` must fit within `C / N`; requests that exceed it are rejected at admission rather than truncated silently. A non-positive `n_predict` (e.g. `predict: -1`) has no budget to check and is admitted, then stops at the slot ceiling with `sequenceLimit`.
-- **Context sliding** — when `n_discarded > 0`, the slide triggers against `C / N`, not the full context. A value of `n_discarded >= C / N` is clamped and logs a warning.
+- **Budget check** — when `n_predict > 0`, `max(prompt_tokens, prompt_kv_cells) + n_predict` must fit within `C / N`; requests that exceed it are rejected at admission rather than truncated silently. A non-positive `n_predict` (e.g. `predict: -1`) has no budget to check and is admitted, then stops at the slot ceiling with `contextOverflow`.
 - **Cache loading** — the overflow check on cached prompts uses `C / N` as the ceiling.
 
 ---
@@ -444,7 +441,7 @@ Both targeted forms honour the same threading rule as `cancel(seqId, admissionId
 Stats are collected in two places and merged at the end:
 
 - **Per-step** — `RuntimeStatsSnapshot::recordDecodeStep` accumulates prefill vs decode tokens and their wall-clock duration. A pure step lands wholly in its own bucket. A **mixed** step — a newcomer's prompt tokens riding along with other sequences' generation, which is the normal case under continuous batching — is split **proportionally by token count**: 1 prefill token beside 3 decode tokens sends a quarter of the step's elapsed time to the prefill bucket and three quarters to the decode bucket, with the tokens counted in their own buckets. That split is what keeps `ppTPS` and batch `TTFT` (which reads `prefillTimeMs()`) honest; charging a mixed step wholly to decode would silently drop the piggybacked prompt tokens and their time, under-reporting both. Compactor replay decode is excluded because `onGenerationFinished` runs outside the timed block, not by any special case here.
-- **Per-slot** — `accumulateSlotRuntimeStats` folds `nPast`, context slides, and cache tokens for each completed slot into the scheduler's `RuntimeStatsSnapshot`.
+- **Per-slot** — `accumulateSlotRuntimeStats` folds `nPast` and cache tokens for each completed slot into the scheduler's `RuntimeStatsSnapshot`.
 
 `avgConcurrentSeq` is computed as:
 
@@ -498,7 +495,7 @@ whether a per-job stats source exists for that id:
 - Per-job override (the job ran through the batch engine): the job's terminal
   snapshot starts from that same aggregate, then `TTFT`, `TPS`,
   `generatedTokens` and `promptTokens` are overridden with the job's OWN
-  observed figures. All other keys (`ppTPS`, `CacheTokens`, `contextSlides`,
+  observed figures. All other keys (`ppTPS`, `CacheTokens`,
   `thinkingBlockDiscards`, `avgConcurrentSeq`, `backendDevice`) stay
   model-level.
 
@@ -536,7 +533,6 @@ no separate per-job source, nothing is overridden.
   "CacheTokens": 210,
   "generatedTokens": 180,
   "promptTokens": 30,
-  "contextSlides": 0,
   "thinkingBlockDiscards": 0,
   "stopReason": "eos",
   "visionEncodeMs": 0,
@@ -564,7 +560,6 @@ job's observed figures:
   "CacheTokens": 840,
   "generatedTokens": 174,
   "promptTokens": 28,
-  "contextSlides": 0,
   "thinkingBlockDiscards": 0,
   "stopReason": "eos",
   "avgConcurrentSeq": 2.9,
@@ -619,7 +614,6 @@ the model actually interleaved ~3-4 sequences, i.e. Y's prompts ran too):
   "CacheTokens": 840,
   "generatedTokens": 355,
   "promptTokens": 61,
-  "contextSlides": 0,
   "thinkingBlockDiscards": 0,
   "avgConcurrentSeq": 3.4,
   "backendDevice": "gpu"
@@ -677,10 +671,8 @@ backend, not a slow model. Per-step accounting: see
 |---------|-----------|
 | Text models | Supported |
 | Multimodal / vision models | Supported (per-slot MTMD driver; batch prompts may include media messages) |
-| Tools | Supported (per-slot `ToolsCompactController`) |
-| `tools_compact` | Supported |
+| Tools | Supported |
 | Per-prompt `cacheKey` | Supported (read sharing allowed; write sharing rejected) |
-| Context shifting (`n_discarded`) | Supported, against per-slot window |
 | Concurrent top-level `run()` calls | Supported — each call is its own scheduler job and decodes alongside the others (see [Admission](#admission-job-ids-and-rejectwhenbusy)) |
 | Live-only prefill (`prefill: true` without `saveCacheToDisk` + `cacheKey`) | Rejected with `InvalidArgument`; persistable prefill is supported (see [Prefill rules](#prefill-rules-persistable-vs-live-only)) |
 | `parallel < 2` | Batch input throws `InvalidArgument` before admission |

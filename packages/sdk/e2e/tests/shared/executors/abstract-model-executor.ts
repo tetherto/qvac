@@ -1,4 +1,4 @@
-import { BaseExecutor, type TestDefinitions } from '@tetherto/qvac-test-suite'
+import { BaseExecutor, type TestDefinitions } from '@qvac/test-suite'
 import type { ResourceManager } from '../resource-manager.js'
 import { modelSetup, modelTeardown } from '../resource-lifecycle.js'
 

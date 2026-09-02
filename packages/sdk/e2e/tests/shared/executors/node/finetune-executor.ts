@@ -1,6 +1,6 @@
 import { finetune } from '@qvac/sdk'
 import type { FinetuneProgress, FinetuneResult, FinetuneStats } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'

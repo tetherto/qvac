@@ -168,10 +168,12 @@ class RequestRejectedByPolicyError(QvacError):
 
 
 class ContextOverflowError(QvacError):
-    """Prompt exceeded the loaded model's context window. Distinct from a
-    generic failure so callers can drive UX (truncate, raise `n_ctx`, start a
-    new thread). The token/ctx fields are present only when the worker's
-    error message carried them."""
+    """Request exceeded the model's context window; fields are present only
+    when the worker reported them. `prompt_tokens` is the prompt alone, in
+    tokens; `cached_tokens` and `required_tokens` (the figure that failed the
+    guard, which can equal the window) share units with `ctx_size`; and
+    `ctx_size` is the effective per-request ceiling — the configured total
+    divided across slots when `parallel > 1`."""
 
     def __init__(
         self,
@@ -179,14 +181,18 @@ class ContextOverflowError(QvacError):
         ctx_size: int | None = None,
         model_id: str | None = None,
         *,
+        cached_tokens: int | None = None,
+        required_tokens: int | None = None,
         cause: Any = None,
         message: str | None = None,
     ) -> None:
         self.prompt_tokens = prompt_tokens
         self.ctx_size = ctx_size
         self.model_id = model_id
+        self.cached_tokens = cached_tokens
+        self.required_tokens = required_tokens
         super().__init__(
-            message or "prompt exceeds the model's context window",
+            message or "request leaves insufficient context capacity to generate",
             name="CONTEXT_OVERFLOW",
             code=_CODE_CONTEXT_OVERFLOW,
             cause=cause,
@@ -458,6 +464,8 @@ def _reconstruct_context_overflow(response: dict[str, Any]) -> QvacError:
         _opt_num_field(fields, "promptTokens"),
         _opt_num_field(fields, "ctxSize"),
         _opt_str_field(fields, "modelId"),
+        cached_tokens=_opt_num_field(fields, "cachedTokens"),
+        required_tokens=_opt_num_field(fields, "requiredTokens"),
         cause=response.get("cause"),
         message=_opt_str(response, "message"),
     )

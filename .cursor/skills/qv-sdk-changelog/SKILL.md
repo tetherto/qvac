@@ -209,27 +209,25 @@ See `.cursor/skills/qv-notice-generate/SKILL.md` for full details.
 
 ### Step 7: Sync lockstep clients (only when `--package=sdk`)
 
-`@qvac/bare-sdk` and `tetherto-qvac-sdk` release in lockstep with `@qvac/sdk`.
-Every sdk release must mirror bare-sdk metadata (+ NOTICE) and regenerate the
-Python client (`SDK_VERSION` and other `_generated/` outputs). Skip this step
-for any other `--package` value.
+`@qvac/sdk` and `tetherto-qvac-sdk` release in lockstep at the
+`@qvac/inference` version anchor. Every sdk release must stamp that anchor into
+sdk and regenerate the Python
+client (`SDK_VERSION` and other `_generated/` outputs). Skip this step for any
+other `--package` value.
 
 Read and follow `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md` (Steps 1–3).
 Short form:
 
 ```bash
-node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs
-cd packages/bare-sdk && bun run check:deps-vs-sdk && cd -
-source .env
-node .cursor/skills/qv-notice-generate/scripts/generate-notice.js bare-sdk
+node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-sdk-pod.mjs
 
 cd packages/sdk-python
 .venv/bin/python3 scripts/generate.py
 .venv/bin/python3 scripts/generate.py --check
 ```
 
-Include bare-sdk + sdk-python generated updates in the release commit. Neither
-client gets its own changelog — history lives in `packages/sdk/CHANGELOG.md`.
+Include sdk-python generated updates in the release commit. The Python
+client does not get its own changelog — history lives in `packages/sdk/CHANGELOG.md`.
 
 ### Step 8: Generate site docs (only when `--package=sdk`)
 
@@ -355,7 +353,7 @@ Before completing:
 - [ ] Generated markdown is prettier-clean (`prettier --check` on the changelog output passes)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] NOTICE file updated for the target package
-- [ ] When `--package=sdk`: `qv-sdk-lockstep-sync` run (bare-sdk + sdk-python), `check:deps-vs-sdk` passing, bare-sdk NOTICE regenerated, python `generate.py --check` passing
+- [ ] When `--package=sdk`: `qv-sdk-lockstep-sync` run (sdk-python), python `generate.py --check` passing
 - [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and `git status` shows only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` as committable docs changes (byproducts gitignored)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order

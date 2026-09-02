@@ -11,34 +11,58 @@
       "version>=": "1.4.4#3"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["opencl", "vulkan"],
+      "name": "speech-cpp",
+      "version>=": "2026-09-01#1",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "opencl",
+        "vulkan"
+      ],
       "platform": "android"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["vulkan"],
+      "name": "speech-cpp",
+      "version>=": "2026-09-01#1",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "vulkan"
+      ],
       "platform": "!(osx | ios | android)"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["metal"],
+      "name": "speech-cpp",
+      "version>=": "2026-09-01#1",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "metal"
+      ],
       "platform": "osx | ios"
     }
   ],
   "features": {
+    "cuda": {
+      "description": "Enable the CUDA GPU backend (Linux / Windows on NVIDIA). Off by default; the published linux-x64 prebuild enables it, and building it elsewhere needs nvcc on the build host, so opt in with `bare-make generate -D ENABLE_CUDA=ON`. At runtime CUDA engages only where the NVIDIA driver and the CUDA 13 runtime libraries (cudart, cuBLAS) both resolve; hosts without them skip the CUDA backend and fall back to Vulkan or CPU.",
+      "supports": "!(osx | ios | android)",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "version>=": "2026-09-01#1",
+          "default-features": false,
+          "features": [
+            "cuda"
+          ],
+          "platform": "!(osx | ios | android)"
+        }
+      ]
+    },
     "tests": {
       "description": "Build C++ unit tests",
       "dependencies": [
         "gtest"
       ]
     }
-  },
-  "overrides": [
-    {
-      "name": "whisper-cpp",
-      "version": "1.9.1",
-      "port-version": 7
-    }
-  ]
+  }
 }

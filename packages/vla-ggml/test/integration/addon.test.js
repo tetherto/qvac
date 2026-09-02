@@ -437,20 +437,64 @@ function _buildFixtureInputs(name, hp) {
   throw new Error(`unknown fixture name: ${name}`)
 }
 
+// The addon queues native log lines and drains them onto the JS thread through
+// a uv_async handle, so they can land after the load promise settles. Waiting
+// for the load's terminal line makes reading the log deterministic: the queue
+// is FIFO, so once that line is present every earlier load line is too.
+async function _waitForNativeLine(lines, needle, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (lines.some((line) => line.includes(needle))) return true
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return false
+}
+
 async function _runEndToEnd(t, modelPath, backend, fixtureName) {
   // Each iteration owns its own VlaModel and explicitly `unload()`s before
   // returning so memory-constrained mobile devices don't hold two copies of
   // the weights at once. `t.teardown` would defer release to end-of-test,
   // which on Android/iOS pushes us past the device-farm OOM limit.
+  //
+  // The native load log is captured so the assertion below can check how the
+  // weights were placed, not just that the load returned: the alloc+copy
+  // fallback commits the whole model to anonymous memory, which iOS refuses
+  // near its jetsam limit (QVAC-23327). Collection is bounded on purpose.
+  const nativeLog = []
+  const _collect = (...args) => {
+    if (nativeLog.length < 4096) nativeLog.push(args.join(' '))
+  }
   const model = new VlaModel({
     files: { model: [path.resolve(modelPath)] },
+    logger: { error: _collect, warn: _collect, info: _collect, debug: _collect },
     opts: { stats: true }
   })
+  // QVAC_LOG_LEVEL (and its EXPO_PUBLIC_ variant) outrank the logger passed
+  // above, so a harness exporting `warn` would drop the INFO lines the load
+  // assertion reads and fail it for the wrong reason. Pin the level instead.
+  model.logger.setLevel('debug')
 
   const tag = `${fixtureName}/${backend}`
 
   try {
     await model.load({ backend })
+
+    // Windows has no mmap path to take (smolvla.cpp guards it with
+    // `#ifndef _WIN32`), and an accelerator backend legitimately copies into
+    // device-local memory, so only a CPU load elsewhere is required to map.
+    if (backend === 'cpu' && _platform !== 'win32') {
+      const drained = await _waitForNativeLine(nativeLog, 'model loaded successfully')
+      t.ok(drained, `native load log reached the test (${tag})`)
+      if (drained) {
+        const mapped = nativeLog.some((line) => line.includes('mmap+host_ptr buffer ready'))
+        if (!mapped) {
+          for (const line of nativeLog.filter((l) => l.includes('smolvla_load_model'))) {
+            t.comment(line)
+          }
+        }
+        t.ok(mapped, `CPU load mapped the weights instead of copying them (${tag})`)
+      }
+    }
 
     const hp = model.hparams
     t.ok(hp.chunkSize > 0)

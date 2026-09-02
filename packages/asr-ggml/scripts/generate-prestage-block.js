@@ -158,11 +158,7 @@ function selectPrestageModels() {
   const fs = require('fs')
   const path = require('path')
   const root = process.env.QVAC_PRESTAGE_TMP_DIR || '/tmp'
-  const tests = (process.env.GREP || '')
-    .split('|')
-    .map((value) => value.trim())
-    .filter(Boolean)
-  if (tests.length === 0) throw new Error('functional shard grep is required')
+  const grep = (process.env.GREP || '').trim()
 
   const definitions = [
     { kind: 'parakeet', file: 'model-manifest.json' },
@@ -180,41 +176,67 @@ function selectPrestageModels() {
   const output = { parakeet: [], whisper: [] }
   const seen = { parakeet: new Map(), whisper: new Map() }
 
-  for (const test of tests) {
-    const matches = definitions.filter(({ kind }) =>
-      Object.prototype.hasOwnProperty.call(manifests[kind], test)
+  // The tests filter is a mocha --grep regex over runner NAMES. Match it against
+  // each manifest's runner keys (mirrors on-device mocha grep) and stage the
+  // union — so a partial pattern like `runMobilePerf` stages every runner it
+  // will run, not just an exact key. An empty grep is benign (no shard resolved
+  // -> stage nothing, device downloads its own models). A NON-empty grep that
+  // fails to compile or matches zero runners is FATAL: the workflow_call lanes
+  // (weekend / on-merge / benchmarks) never run validate-devices, so a
+  // test-groups <-> model-map drift must fail closed here rather than silently
+  // ship an under-staged device. A manual dispatch filter is already validated
+  // by validate-devices, so this throw only fires on genuine drift.
+  let re = null
+  if (!grep) {
+    console.error(
+      '[prestage] WARN: no shard grep resolved — staging nothing so the device downloads its own models'
     )
-    if (matches.length === 0) throw new Error(`missing model mapping for runner: ${test}`)
-    if (matches.length > 1) throw new Error(`ambiguous model mapping for runner: ${test}`)
-
-    const kind = matches[0].kind
-    const entries = manifests[kind][test]
-    if (!Array.isArray(entries)) {
-      throw new Error(`invalid ${kind} model mapping for runner ${test}: expected an array`)
+  } else {
+    try {
+      re = new RegExp(grep)
+    } catch (err) {
+      throw new Error(`[prestage] invalid tests grep /${grep}/: ${err.message}`)
     }
-    for (const [index, model] of entries.entries()) {
-      const invalid =
-        !model ||
-        Array.isArray(model) ||
-        typeof model !== 'object' ||
-        typeof model.name !== 'string' ||
-        model.name.trim() === '' ||
-        /[\t\r\n]/.test(model.name) ||
-        typeof model.url !== 'string' ||
-        model.url.trim() === '' ||
-        /[\t\r\n]/.test(model.url)
-      if (invalid) {
-        throw new Error(`invalid ${kind} model mapping for runner ${test} at index ${index}`)
-      }
+  }
 
-      const previousUrl = seen[kind].get(model.name)
-      if (previousUrl && previousUrl !== model.url) {
-        throw new Error(`conflicting URLs for ${kind} model ${model.name}`)
+  let matchedRunners = 0
+  if (re) {
+    for (const { kind } of definitions) {
+      const runners = Object.keys(manifests[kind]).filter((name) => re.test(name))
+      matchedRunners += runners.length
+      for (const test of runners) {
+        const entries = manifests[kind][test]
+        if (!Array.isArray(entries)) {
+          throw new Error(`invalid ${kind} model mapping for runner ${test}: expected an array`)
+        }
+        for (const [index, model] of entries.entries()) {
+          const invalid =
+            !model ||
+            Array.isArray(model) ||
+            typeof model !== 'object' ||
+            typeof model.name !== 'string' ||
+            model.name.trim() === '' ||
+            /[\t\r\n]/.test(model.name) ||
+            typeof model.url !== 'string' ||
+            model.url.trim() === '' ||
+            /[\t\r\n]/.test(model.url)
+          if (invalid) {
+            throw new Error(`invalid ${kind} model mapping for runner ${test} at index ${index}`)
+          }
+
+          const previousUrl = seen[kind].get(model.name)
+          if (previousUrl && previousUrl !== model.url) {
+            throw new Error(`conflicting URLs for ${kind} model ${model.name}`)
+          }
+          if (!previousUrl) {
+            seen[kind].set(model.name, model.url)
+            output[kind].push(`${model.name}\t${model.url}`)
+          }
+        }
       }
-      if (!previousUrl) {
-        seen[kind].set(model.name, model.url)
-        output[kind].push(`${model.name}\t${model.url}`)
-      }
+    }
+    if (matchedRunners === 0) {
+      throw new Error(`[prestage] tests grep /${grep}/ matched no known runner`)
     }
   }
 
@@ -227,7 +249,7 @@ function selectPrestageModels() {
   }
   console.error(
     `[prestage] ${output.parakeet.length} parakeet + ${output.whisper.length} ` +
-      `whisper model(s) for ${tests.length} test(s)`
+      `whisper model(s) for grep /${grep}/`
   )
 }
 

@@ -1,5 +1,5 @@
 // Real SDK tests
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
@@ -28,8 +28,8 @@ import { bciTests } from './bci-tests.js'
 import { visionTests } from './vision-tests.js'
 import { downloadTests } from './download-tests.js'
 import { downloadResilienceTests } from './download-resilience-tests.js'
-import { delegatedInferenceTests } from './delegated-inference-tests.js'
 import { diffusionTests } from './diffusion-tests.js'
+import { worldTests } from './world-tests.js'
 import { audioGenTests } from './audio-gen-tests.js'
 import { finetuneTests } from './finetune-tests.js'
 import { lifecycleTests } from './lifecycle-tests.js'
@@ -53,6 +53,29 @@ export const modelLoadLlm: TestDefinition = {
     category: 'model',
     dependency: 'none',
     estimatedDurationMs: 60000
+  }
+}
+
+export const modelLoadLlmLoadModeNone: TestDefinition = {
+  testId: 'model-load-llm-load-mode-none',
+  params: { loadMode: 'none' },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
+
+// Asserts the validation code, not the key name: a native --no-mmap error names it too.
+export const modelLoadLlmLegacyNoMmapRejected: TestDefinition = {
+  testId: 'model-load-llm-legacy-no-mmap-rejected',
+  params: { noMmap: true },
+  expectation: { validation: 'throws-error', errorContains: '50010' },
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 1000
   }
 }
 
@@ -216,6 +239,8 @@ export const modelLifecycleNmt: TestDefinition = {
 export const tests = [
   // Model tests (first section)
   modelLoadLlm,
+  modelLoadLlmLoadModeNone,
+  modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
   modelLoadOcrDoctr,
@@ -307,11 +332,11 @@ export const tests = [
   // Diffusion tests
   ...diffusionTests,
 
+  // ABot-World interactive world sessions (desktop GPU only)
+  ...worldTests,
+
   // Audio generation tests (desktop-only; mobile skips via SkipExecutor)
   ...audioGenTests,
-
-  // Delegated inference tests (P2P)
-  ...delegatedInferenceTests,
 
   // Finetuning tests
   ...finetuneTests,

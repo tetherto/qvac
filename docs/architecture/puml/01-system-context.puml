@@ -1,22 +1,20 @@
 @startuml
 !include <C4/C4_Context>
+HIDE_STEREOTYPE()
 
-title QVAC SDK - System Context
+title QVAC SDK Family - System Context
 
-Person(dev, "Application Developer", "Integrates SDK into desktop (Node.js, Bun, Electron, Pear) or mobile (Expo) applications")
-System(sdk, "QVAC SDK", "TypeScript SDK providing local-first, P2P AI capabilities for desktop and mobile via a plugin architecture")
+Person(dev, "Application Developer", "Builds JS, Python, Bare, desktop, and mobile apps")
 
-System_Ext(dht, "Hyperswarm DHT", "Distributed hash table for P2P peer discovery")
-System_Ext(hyperdrive, "Hyperdrive Peers", "P2P nodes hosting model files")
-System_Ext(cdn, "HTTP Servers", "CDN/direct download sources for models")
-System_Ext(registry, "QVAC Model Registry", "Centralized model catalog with metadata, search, and HTTP download")
-System_Ext(providers, "Remote Providers", "P2P nodes offering delegated inference")
+System(sdk, "QVAC SDK Family", "Local-first P2P inference. JS, Python, and Bare entry points share one engine")
+
+System_Ext(registry, "QVAC Model Registry", "Catalog, search, and blob download")
+System_Ext(http, "HTTP / CDN", "Direct model file downloads")
+System_Ext(p2p, "Holepunch P2P Network", "Hyperswarm DHT, Hyperdrive seeders, delegated inference providers")
 
 Rel_D(dev, sdk, "Calls SDK API")
-Rel_R(sdk, dht, "Peer discovery")
-Rel_D(sdk, hyperdrive, "P2P model downloads")
-Rel_D(sdk, cdn, "HTTP model downloads")
-Rel_D(sdk, registry, "Model catalog queries & downloads")
-Rel_D(sdk, providers, "Delegated inference")
+Rel_L(sdk, registry, "Queries catalog and downloads", "Holepunch")
+Rel_D(sdk, http, "Downloads models", "HTTPS")
+Rel_R(sdk, p2p, "Peer discovery, sync, delegated inference", "Hyperswarm")
 
 @enduml

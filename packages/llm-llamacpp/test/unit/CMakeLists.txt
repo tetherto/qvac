@@ -13,12 +13,12 @@ add_executable(
   test_llama_model.cpp
   test_llama_finetuning_helpers.cpp
   test_cache_management.cpp
-  test_cache_management_qwen3.cpp
   test_text_llm_context.cpp
   test_addon_cpp.cpp
   test_cancel_stale_flag.cpp
   test_reload_cancel_state.cpp
   test_backend_selection.cpp
+  test_load_fit_normalization.cpp
   test_tune_config_map.cpp
   test_generation_params_apply.cpp
   test_llm_parsers.cpp
@@ -27,8 +27,6 @@ add_executable(
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
-  test_tools_compact_controller.cpp
-  test_context_slider.cpp
   test_model_metadata.cpp
   test_model_full_loading.cpp
   # Utility tests
@@ -37,14 +35,12 @@ add_executable(
   test_reasoning_utils.cpp
   test_recurrent_state_snapshot.cpp
   test_qwen_template.cpp
-  test_qwen3_tools_dynamic_template.cpp
   test_logging_macros.cpp
   test_llama_lazy_init_backend.cpp
   test_borrow_tracked_shared_buffer.cpp
   test_continuous_batching_default.cpp
   test_continuous_batch_finalize.cpp
   test_batch_entry_guard.cpp
-  test_slide_capable_capability.cpp
   test_media_load_order.cpp
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
@@ -71,9 +67,9 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
@@ -81,9 +77,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextShifter.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
@@ -91,7 +85,6 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
 )
 
 target_compile_options(

@@ -38,17 +38,18 @@ interface CacheCommitContext {
   producedTokens: boolean
   generatedTokens?: number | undefined
   predict?: number | undefined
+  stoppedAtContextBoundary: boolean
 }
 
 export function shouldCommitCachedTurn(context: CacheCommitContext): boolean {
-  const { aborted, producedTokens, generatedTokens, predict } = context
+  const { aborted, producedTokens, generatedTokens, predict, stoppedAtContextBoundary } = context
   const stoppedByBudget =
     predict !== undefined &&
     predict > 0 &&
     generatedTokens !== undefined &&
     generatedTokens >= predict
 
-  return !aborted && producedTokens && !stoppedByBudget
+  return !aborted && producedTokens && !stoppedByBudget && !stoppedAtContextBoundary
 }
 
 /**

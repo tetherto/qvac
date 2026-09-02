@@ -9,7 +9,7 @@ tocMaxDepth: 3
 
 The npm package `@qvac/ai-sdk-provider` is a thin wrapper around [@ai-sdk/openai-compatible](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that provides a better developer experience when integrating with the QVAC OpenAI-compatible API.
 
-_At the moment, its main advantage is providing introspection of the models supported by QVAC for each API operation._ In addition, it provides branded exports, automatic configuration, and a discoverable handle for the [models.dev](https://models.dev) catalog, allowing QVAC to appear in `/connect` for [OpenCode](https://opencode.ai) and other catalog consumers.
+_At the moment, its main advantage is providing introspection of the models supported by QVAC for each API operation._ In addition, it provides branded exports, automatic configuration, and a discoverable handle for the [models.dev](https://models.dev/providers/qvac/) catalog, allowing QVAC to appear in `/connect` for [OpenCode](https://opencode.ai) and other catalog consumers.
 
 <Callout type="info">
 This page is for building a new client. If you want to connect an existing OpenAI-compatible tool (OpenCode, Cline, Aider, Continue, Roo) to the server, see [Connect with the OpenAI-compatible API](/cli/http-server/connection).
@@ -38,7 +38,7 @@ import { streamText } from 'ai'
 
 const qvac = createQvac({
   baseURL: 'http://localhost:11434/v1', // match your HTTP server
-  apiKey: 'qvac'                         // any non-empty value; HTTP server does not validate it
+  apiKey: process.env.QVAC_API_KEY      // must match qvac serve --api-key when enabled
 })
 
 const { textStream } = streamText({
@@ -81,6 +81,20 @@ for await (const chunk of textStream) process.stdout.write(chunk)
 ```
 
 The spawned server is **shared and reused** across processes that request the same model set, and shuts down automatically once no consumer remains for `serveIdleTimeout` (default 5 minutes). `provider.baseURL` / `provider.port` / `provider.pid` expose the live server coordinates. Managed mode requires the optional `@qvac/cli` peer dependency.
+
+A managed server is started with a generated API key, so requests you make yourself must be authenticated. `provider.apiKey` returns the key of the server currently in use:
+
+```ts
+const res = await fetch(`${qvac.baseURL}/models`, {
+  headers: { authorization: `Bearer ${qvac.apiKey}` }
+})
+```
+
+<Callout type="warn">
+`provider.apiKey` is secret material. Read it fresh per request — crash recovery respawns the server with a new key — and never log it or pass it to a process you do not trust. The property is non-enumerable so spreads and object dumps of the provider do not carry it.
+</Callout>
+
+Managed integrations authenticate automatically. The OpenCode plugin gives OpenCode a per-session proxy token while keeping the managed serve key inside its host process. The OpenClaw plugin instead requires `openclaw onboard --auth-choice qvac`; onboarding creates its private key file and configures both OpenClaw and the local serve to use it. Installing or enabling the OpenClaw plugin without onboarding is not sufficient.
 
 <Callout type="info">
 Liveness is tracked by the process that called `createQvac`, not by HTTP traffic. A tool that connects directly to `baseURL` only keeps the server warm while that resolving process stays alive.
@@ -145,7 +159,6 @@ interface QvacManagedOptions {
   serveBinPath?: string                  // default: resolve @qvac/cli
   reuse?: boolean                        // share a matching serve; default: true (false if servePort is pinned)
   serveIdleTimeout?: number              // ms a shared serve lingers after its last consumer; default: 300000
-  apiKey?: string
   headers?: Record<string, string>
   fetch?: typeof fetch
 }

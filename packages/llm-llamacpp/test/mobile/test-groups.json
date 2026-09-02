@@ -7,7 +7,6 @@
     "finetuningArchs": ["runFinetuningArchsTest"],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
-    "slidingContext": ["runSlidingContextTest"],
     "imageFruitPlate": ["runImageFruitPlateTest"],
     "imageMmprojGpu": ["runImageMmprojGpuTest"],
     "imageTileMode": ["runQwen35ImageTileModeTokensTest"],
@@ -20,7 +19,6 @@
       "runCacheStateMachineTest",
       "runConfigParametersTest",
       "runKvCacheTypeDefaultsTest",
-      "runToolsCompactTest",
       "runUnloadThrowingListenerTest"
     ],
     "lightB": [
@@ -29,7 +27,6 @@
       "runModelLoadingTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
-      "runMropeSlidingContextTest",
       "runQwen35Test",
       "runTurboquantTest",
       "runUtf8OutputTest"
@@ -48,15 +45,12 @@
       "runFinetuningArchsTest"
     ],
     "funcShardB": [
-      "runToolsCompactTest",
-      "runSlidingContextTest",
       "runKvCacheTypeDefaultsTest",
       "runCacheStateMachineTest",
       "runUnloadThrowingListenerTest"
     ],
     "funcShardC": [
       "runToolCallingTest",
-      "runMropeSlidingContextTest",
       "runReasoningTest",
       "runGenerationParamsTest"
     ],
@@ -85,7 +79,8 @@
     ],
     "imageHeavy": [
       "runImageElephantTest",
-      "runImageHighResAuroraTest"
+      "runImageHighResAuroraTest",
+      "runVisionpsyImageNoUpscaleTokensTest"
     ],
     "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",
@@ -110,7 +105,8 @@
     ],
     "imageHeavy": [
       "runImageElephantTest",
-      "runImageHighResAuroraTest"
+      "runImageHighResAuroraTest",
+      "runVisionpsyImageNoUpscaleTokensTest"
     ],
     "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",

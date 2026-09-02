@@ -157,27 +157,40 @@ export const parakeetPlugin = definePlugin({
           request.requestId
         )
 
-        for await (const value of iterator) {
-          if (typeof value === 'object' && value !== null && 'type' in value) {
-            if (value.type === 'endOfTurn') {
-              yield {
-                type: 'transcribeStream' as const,
-                endOfTurn: { source: 'parakeet' as const }
+        try {
+          let result = await iterator.next()
+          while (!result.done) {
+            const value = result.value
+            if (typeof value === 'object' && value !== null && 'type' in value) {
+              if (value.type === 'endOfTurn') {
+                yield {
+                  type: 'transcribeStream' as const,
+                  endOfTurn: { source: 'parakeet' as const }
+                }
               }
+              result = await iterator.next()
+              continue
             }
-            continue
+
+            yield {
+              type: 'transcribeStream' as const,
+              text: value
+            }
+            result = await iterator.next()
           }
 
-          yield {
-            type: 'transcribeStream' as const,
-            text: value
-          }
-        }
-
-        yield {
-          type: 'transcribeStream' as const,
-          text: '',
-          done: true
+          const { modelExecutionMs, stats } = result.value
+          yield attachModelExecutionMs(
+            {
+              type: 'transcribeStream' as const,
+              text: '',
+              done: true,
+              ...(stats && { stats })
+            },
+            modelExecutionMs
+          )
+        } finally {
+          await iterator.return?.(undefined as never)
         }
       }
     })

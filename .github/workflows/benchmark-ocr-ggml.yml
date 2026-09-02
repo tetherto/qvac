@@ -27,6 +27,11 @@ on:
         required: false
         default: true
         type: boolean
+      platforms:
+        description: 'Comma-separated platforms: linux-x64, linux-x64-gpu, macos-arm64, windows-x64. Non-linux platforms trigger the full prebuild matrix; prefer a limit when selecting them.'
+        required: false
+        default: 'linux-x64'
+        type: string
 
 env:
   PKG_DIR: packages/ocr-ggml
@@ -37,7 +42,66 @@ permissions:
   contents: read
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: Plan platform matrix
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      need_build: ${{ steps.plan.outputs.need_build }}
+      need_prebuild: ${{ steps.plan.outputs.need_prebuild }}
+    steps:
+      - id: plan
+        shell: bash
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          MATRIX=""
+          NEED_BUILD=false
+          NEED_PREBUILD=false
+          SEEN=""
+          for p in $(echo "$PLATFORMS" | tr ',' ' '); do
+            case " $SEEN " in
+              *" $p "*) continue ;;
+            esac
+            SEEN="$SEEN $p"
+            case "$p" in
+              linux-x64)
+                ROW='{"id":"linux-x64","runner":"ubuntu-24.04","source":"build","devices":"cpu","reference":true}'
+                NEED_BUILD=true
+                ;;
+              linux-x64-gpu)
+                ROW='{"id":"linux-x64-gpu","runner":"qvac-ubuntu2404-x64-gpu","source":"build","devices":"vulkan","reference":false}'
+                NEED_BUILD=true
+                ;;
+              macos-arm64)
+                ROW='{"id":"macos-arm64","runner":"qvac-macos26-arm64-gpu","source":"prebuild","artifact":"ggml-ocr-darwin-arm64","devices":"cpu metal","reference":false}'
+                NEED_PREBUILD=true
+                ;;
+              windows-x64)
+                ROW='{"id":"windows-x64","runner":"qvac-win25-x64-gpu","source":"prebuild","artifact":"ggml-ocr-win32-x64","devices":"cpu vulkan","reference":false}'
+                NEED_PREBUILD=true
+                ;;
+              *)
+                echo "ERROR: unknown platform: $p" >&2
+                exit 1
+                ;;
+            esac
+            if [ -z "$MATRIX" ]; then MATRIX="$ROW"; else MATRIX="$MATRIX,$ROW"; fi
+          done
+          if [ -z "$MATRIX" ]; then
+            echo "ERROR: no platforms selected" >&2
+            exit 1
+          fi
+          {
+            echo "matrix={\"include\":[$MATRIX]}"
+            echo "need_build=$NEED_BUILD"
+            echo "need_prebuild=$NEED_PREBUILD"
+          } >> "$GITHUB_OUTPUT"
+
   build:
+    needs: plan
+    if: needs.plan.outputs.need_build == 'true'
     runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 120
@@ -130,19 +194,52 @@ jobs:
             ${{ env.PKG_DIR }}/node_modules/
           retention-days: 1
 
+  # macOS / Windows evaluation lanes reuse the canonical prebuild pipeline
+  # instead of duplicating its per-platform toolchain setup here.
+  prebuild:
+    needs: plan
+    if: needs.plan.outputs.need_prebuild == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-ocr-ggml.yml
+    secrets: inherit
+
   evaluate:
     needs:
+      - plan
       - build
-    if: needs.build.result == 'success'
-    runs-on: ubuntu-24.04
+      - prebuild
+    if: >-
+      !cancelled() && needs.plan.result == 'success' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 180
-    name: Run Evaluation
+    timeout-minutes: 300
+    name: Run Evaluation (${{ matrix.id }})
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
       id-token: write
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Windows - enable git long paths
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: git config --global core.longpaths true
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -154,28 +251,79 @@ jobs:
           node-version: 20
 
       - name: Install bare-runtime
-        run: npm install -g bare-runtime
+        run: npm install -g --force bare-runtime
 
       - name: Set up Python
+        if: runner.environment == 'github-hosted'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.14'
           cache: pip
 
+      # actions/setup-python hard-fails on the self-hosted GPU runners (its
+      # tarball hardcodes an unwritable toolcache path); use the runner's own
+      # Python via a venv instead. Same pattern as on-pr-sdk-python-e2e-full.
+      - name: Set up Python venv (self-hosted)
+        if: runner.environment != 'github-hosted'
+        run: |
+          set -e
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" -c 'import sys; assert sys.version_info[:2] >= (3, 10), "need Python >=3.10, got " + sys.version'
+          "$PY" -m venv "$GITHUB_WORKSPACE/.qe-venv"
+          if [ -x "$GITHUB_WORKSPACE/.qe-venv/bin/python" ]; then
+            PYBIN="$GITHUB_WORKSPACE/.qe-venv/bin/python"
+          else
+            PYBIN="$GITHUB_WORKSPACE/.qe-venv/Scripts/python"
+          fi
+          echo "PYBIN=$PYBIN" >> "$GITHUB_ENV"
+          "$PYBIN" -m pip install --upgrade pip
+
       - name: Download build artifact
+        if: matrix.source == 'build'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: qvac-ocr-ggml-build
           path: ${{ env.PKG_DIR }}
+
+      - name: Download prebuild artifact
+        if: matrix.source == 'prebuild'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ env.PKG_DIR }}/prebuilds
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
         run: npm install
 
       - name: Install system dependencies
+        if: matrix.id == 'linux-x64'
         run: |
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Install AWS CLI on macOS (runners without a preinstalled aws)
+        if: runner.os == 'macOS'
+        run: |
+          if command -v aws >/dev/null 2>&1; then
+            aws --version
+            exit 0
+          fi
+          for p in /opt/homebrew/bin/aws /usr/local/bin/aws "$HOME/.local/aws-cli/aws"; do
+            if [ -x "$p" ]; then
+              dirname "$p" >> "$GITHUB_PATH"
+              exit 0
+            fi
+          done
+          curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
+          rm -rf /tmp/awscli-expanded
+          pkgutil --expand-full /tmp/AWSCLIV2.pkg /tmp/awscli-expanded
+          mkdir -p "$HOME/.local"
+          rm -rf "$HOME/.local/aws-cli"
+          mv /tmp/awscli-expanded/aws-cli.pkg/Payload/aws-cli "$HOME/.local/aws-cli"
+          rm -rf /tmp/awscli-expanded /tmp/AWSCLIV2.pkg
+          echo "$HOME/.local/aws-cli" >> "$GITHUB_PATH"
+          "$HOME/.local/aws-cli/aws" --version
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -219,6 +367,7 @@ jobs:
           ls -la benchmarks/quality_eval/data/OCRBench_v2/ | head -20
 
       - name: Free up disk space
+        if: matrix.id == 'linux-x64'
         run: |
           echo "Disk space before cleanup:"
           df -h
@@ -231,11 +380,30 @@ jobs:
           echo "Disk space after cleanup:"
           df -h
 
-      - name: Install Python dependencies
+      - name: Install Python dependencies (hosted)
+        if: runner.environment == 'github-hosted'
         working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
         run: |
+          echo "PYBIN=python" >> "$GITHUB_ENV"
           pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Install Python dependencies (self-hosted)
+        if: runner.environment != 'github-hosted'
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: '"$PYBIN" -m pip install -r requirements-qvac.txt'
+
+      # Python's subprocess resolves executables via CreateProcess on Windows,
+      # which cannot find the extension-less npm shim; point it at bare.cmd.
+      - name: Resolve bare runtime path
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BARE_BIN="$(npm prefix -g)/bare.cmd"
+          else
+            BARE_BIN="bare"
+          fi
+          echo "BARE_BIN=$BARE_BIN" >> "$GITHUB_ENV"
+          "$BARE_BIN" -v
 
       - name: Build common evaluate args
         id: eval-args
@@ -267,12 +435,12 @@ jobs:
 
           EASYOCR_ARGS=""
           if [ "${{ inputs.pipeline }}" = "easyocr" ] || [ "${{ inputs.pipeline }}" = "both" ]; then
-            EASYOCR_ARGS="--detector $(pwd)/${{ env.PKG_DIR }}/models/ocr/gguf/easyocr/craft_mlt_25k.gguf --recognizer $(pwd)/${{ env.PKG_DIR }}/models/ocr/gguf/easyocr/latin_g2.gguf"
+            EASYOCR_ARGS="--detector $GITHUB_WORKSPACE/${{ env.PKG_DIR }}/models/ocr/gguf/easyocr/craft_mlt_25k.gguf --recognizer $GITHUB_WORKSPACE/${{ env.PKG_DIR }}/models/ocr/gguf/easyocr/latin_g2.gguf"
           fi
 
           DOCTR_ARGS=""
           if [ "${{ inputs.pipeline }}" = "doctr" ] || [ "${{ inputs.pipeline }}" = "both" ]; then
-            DOCTR_ARGS="--doctr-detector $(pwd)/${{ env.PKG_DIR }}/models/ocr/gguf/doctr/db_mobilenet_v3_large.gguf --doctr-recognizer $(pwd)/${{ env.PKG_DIR }}/models/ocr/gguf/doctr/crnn_mobilenet_v3_small.gguf"
+            DOCTR_ARGS="--doctr-detector $GITHUB_WORKSPACE/${{ env.PKG_DIR }}/models/ocr/gguf/doctr/db_mobilenet_v3_large.gguf --doctr-recognizer $GITHUB_WORKSPACE/${{ env.PKG_DIR }}/models/ocr/gguf/doctr/crnn_mobilenet_v3_small.gguf"
           fi
 
           echo "skip_flag=$SKIP_FLAG" >> $GITHUB_OUTPUT
@@ -283,39 +451,49 @@ jobs:
 
       - name: Run Full-page OCR benchmark (HierText)
         if: contains(inputs.tasks, 'fullpage')
-        timeout-minutes: 90
+        timeout-minutes: 120
         working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
         run: |
-          python evaluate.py \
-            --dataset-path "data/OCRBench_v2" \
-            ${{ steps.eval-args.outputs.pipeline_arg }} \
-            ${{ steps.eval-args.outputs.easyocr_args }} \
-            ${{ steps.eval-args.outputs.doctr_args }} \
-            --task-types "full-page OCR en" \
-            --dataset-filter "HierText" \
-            --results-dir "results/full-page-ocr" \
-            --qvac-addon-path "$(pwd)/../.." \
-            ${{ steps.eval-args.outputs.skip_flag }} \
-            ${{ steps.eval-args.outputs.limit_arg }}
+          for DEVICE in ${{ matrix.devices }}; do
+            "$PYBIN" evaluate.py \
+              --dataset-path "data/OCRBench_v2" \
+              ${{ steps.eval-args.outputs.pipeline_arg }} \
+              ${{ steps.eval-args.outputs.easyocr_args }} \
+              ${{ steps.eval-args.outputs.doctr_args }} \
+              --task-types "full-page OCR en" \
+              --dataset-filter "HierText" \
+              --results-dir "results/full-page-ocr" \
+              --qvac-addon-path "$GITHUB_WORKSPACE/${{ env.PKG_DIR }}" \
+              --bare-path "$BARE_BIN" \
+              --qvac-device "$DEVICE" \
+              ${{ matrix.reference && '--reference' || '--no-reference' }} \
+              ${{ steps.eval-args.outputs.skip_flag }} \
+              ${{ steps.eval-args.outputs.limit_arg }}
+          done
         env:
           PYTHONUNBUFFERED: 1
 
       - name: Run Text Spotting benchmark (IC15)
         if: contains(inputs.tasks, 'spotting')
-        timeout-minutes: 90
+        timeout-minutes: 120
         working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
         run: |
-          python evaluate.py \
-            --dataset-path "data/OCRBench_v2" \
-            ${{ steps.eval-args.outputs.pipeline_arg }} \
-            ${{ steps.eval-args.outputs.easyocr_args }} \
-            ${{ steps.eval-args.outputs.doctr_args }} \
-            --task-types "text spotting en" \
-            --dataset-filter "IC15" \
-            --results-dir "results/text-spotting" \
-            --qvac-addon-path "$(pwd)/../.." \
-            ${{ steps.eval-args.outputs.skip_flag }} \
-            ${{ steps.eval-args.outputs.limit_arg }}
+          for DEVICE in ${{ matrix.devices }}; do
+            "$PYBIN" evaluate.py \
+              --dataset-path "data/OCRBench_v2" \
+              ${{ steps.eval-args.outputs.pipeline_arg }} \
+              ${{ steps.eval-args.outputs.easyocr_args }} \
+              ${{ steps.eval-args.outputs.doctr_args }} \
+              --task-types "text spotting en" \
+              --dataset-filter "IC15" \
+              --results-dir "results/text-spotting" \
+              --qvac-addon-path "$GITHUB_WORKSPACE/${{ env.PKG_DIR }}" \
+              --bare-path "$BARE_BIN" \
+              --qvac-device "$DEVICE" \
+              ${{ matrix.reference && '--reference' || '--no-reference' }} \
+              ${{ steps.eval-args.outputs.skip_flag }} \
+              ${{ steps.eval-args.outputs.limit_arg }}
+          done
         env:
           PYTHONUNBUFFERED: 1
 
@@ -323,7 +501,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: always()
         with:
-          name: ocr-ggml-benchmark-results
+          name: ocr-ggml-benchmark-results-${{ matrix.id }}
           path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/results/*
           retention-days: 30
 
@@ -331,7 +509,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: failure()
         with:
-          name: ocr-ggml-benchmark-logs
+          name: ocr-ggml-benchmark-logs-${{ matrix.id }}
           path: |
             ${{ env.PKG_DIR }}/benchmarks/quality_eval/*.log
           retention-days: 7
@@ -343,147 +521,37 @@ jobs:
     if: always()
 
     steps:
+      - name: Checkout summary renderer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            packages/ocr-ggml/benchmarks/quality_eval/render_summary.py
+          sparse-checkout-cone-mode: false
+
       - name: Download results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         continue-on-error: true
         with:
-          name: ocr-ggml-benchmark-results
+          pattern: ocr-ggml-benchmark-results-*
           path: results
 
       - name: Skip summary if results are missing
         if: ${{ !hashFiles('results/**') }}
         run: |
-          echo "No ocr-ggml-benchmark-results artifact found; skipping summary."
+          echo "No ocr-ggml-benchmark-results artifacts found; skipping summary."
           exit 0
 
       - name: Generate results summary
+        env:
+          PIPELINE: ${{ inputs.pipeline }}
+          TASKS: ${{ inputs.tasks }}
+          LIMIT: ${{ inputs.limit }}
         run: |
-          python3 << 'PYTHON_SCRIPT' >> $GITHUB_STEP_SUMMARY
-          import json
-          from pathlib import Path
-
-          def load_aggregate(results_dir, backend, task_type):
-              task_dir = task_type.replace(" ", "_")
-              path = Path(results_dir) / backend / task_dir / "aggregate.json"
-              if path.exists():
-                  with open(path) as f:
-                      return json.load(f)
-              return None
-
-          def pick_winner(val_a, val_b, name_a, name_b, lower_is_better=True):
-              if val_a is None or val_b is None:
-                  return "N/A", "N/A", "-"
-              if lower_is_better:
-                  a_wins = val_a < val_b
-              else:
-                  a_wins = val_a > val_b
-              a_str = f"**{val_a:.4f}**" if a_wins else f"{val_a:.4f}"
-              b_str = f"**{val_b:.4f}**" if not a_wins else f"{val_b:.4f}"
-              winner = name_a if a_wins else name_b
-              return a_str, b_str, winner
-
-          print("# OCR GGML Benchmark Results\n")
-          print("**Configuration:**")
-          print("- Pipeline: `${{ inputs.pipeline }}`")
-          print("- Tasks: `${{ inputs.tasks }}`")
-          print("- Sample Limit: `${{ inputs.limit }}`\n")
-
-          pipeline = "${{ inputs.pipeline }}"
-          run_easyocr = pipeline in ("easyocr", "both")
-          run_doctr = pipeline in ("doctr", "both")
-
-          # Full-page OCR (HierText)
-          print("## Full-page OCR (HierText)\n")
-          for task_type in ["full-page OCR en"]:
-              if run_easyocr:
-                  qvac_e = load_aggregate("results/full-page-ocr", "qvac-easyocr", task_type)
-                  easyocr = load_aggregate("results/full-page-ocr", "easyocr", task_type)
-                  if qvac_e and easyocr:
-                      print("### EasyOCR pipeline vs Python EasyOCR\n")
-                      print("| Metric | QVAC EasyOCR | EasyOCR Python | Winner |")
-                      print("|--------|-------------|----------------|--------|")
-                      for label, key, lib in [("CER ↓", "cer", True), ("WER ↓", "wer", True), ("ANLS ↑", "anls", False)]:
-                          qv = qvac_e["metrics"].get(key, {}).get("mean")
-                          ev = easyocr["metrics"].get(key, {}).get("mean")
-                          a, b, w = pick_winner(qv, ev, "QVAC EasyOCR", "EasyOCR Python", lib)
-                          print(f"| {label} | {a} | {b} | {w} |")
-                      if qvac_e.get("speed") and easyocr.get("speed"):
-                          qs = qvac_e["speed"]["mean_time_per_image"]
-                          es = easyocr["speed"]["mean_time_per_image"]
-                          speedup = es / qs if qs > 0 else 0
-                          winner = f"QVAC ({speedup:.1f}x)" if qs < es else f"EasyOCR ({1/speedup:.1f}x)"
-                          q_s = f"**{qs:.1f}s**" if qs < es else f"{qs:.1f}s"
-                          e_s = f"**{es:.1f}s**" if es < qs else f"{es:.1f}s"
-                          print(f"| Speed | {q_s}/img | {e_s}/img | {winner} |")
-                      print(f"\n*Samples: {qvac_e['total_samples']}*\n")
-
-              if run_doctr:
-                  qvac_d = load_aggregate("results/full-page-ocr", "qvac-doctr", task_type)
-                  doctr = load_aggregate("results/full-page-ocr", "doctr", task_type)
-                  if qvac_d and doctr:
-                      print("### DocTR pipeline vs python-doctr\n")
-                      print("| Metric | QVAC DocTR | DocTR Python | Winner |")
-                      print("|--------|-----------|--------------|--------|")
-                      for label, key, lib in [("CER ↓", "cer", True), ("WER ↓", "wer", True), ("ANLS ↑", "anls", False)]:
-                          qv = qvac_d["metrics"].get(key, {}).get("mean")
-                          dv = doctr["metrics"].get(key, {}).get("mean")
-                          a, b, w = pick_winner(qv, dv, "QVAC DocTR", "DocTR Python", lib)
-                          print(f"| {label} | {a} | {b} | {w} |")
-                      if qvac_d.get("speed") and doctr.get("speed"):
-                          qs = qvac_d["speed"]["mean_time_per_image"]
-                          ds = doctr["speed"]["mean_time_per_image"]
-                          speedup = ds / qs if qs > 0 else 0
-                          winner = f"QVAC ({speedup:.1f}x)" if qs < ds else f"DocTR ({1/speedup:.1f}x)"
-                          q_s = f"**{qs:.1f}s**" if qs < ds else f"{qs:.1f}s"
-                          d_s = f"**{ds:.1f}s**" if ds < qs else f"{ds:.1f}s"
-                          print(f"| Speed | {q_s}/img | {d_s}/img | {winner} |")
-                      print(f"\n*Samples: {qvac_d['total_samples']}*\n")
-
-          # Text Spotting (IC15)
-          print("## Text Spotting (IC15)\n")
-          for task_type in ["text spotting en"]:
-              if run_easyocr:
-                  qvac_e = load_aggregate("results/text-spotting", "qvac-easyocr", task_type)
-                  easyocr = load_aggregate("results/text-spotting", "easyocr", task_type)
-                  if qvac_e and easyocr:
-                      print("### EasyOCR pipeline vs Python EasyOCR\n")
-                      print("| Metric | QVAC EasyOCR | EasyOCR Python | Winner |")
-                      print("|--------|-------------|----------------|--------|")
-                      for label, key, lib in [
-                          ("E2E F1 ↑", "e2e_f1", False),
-                          ("E2E Precision ↑", "e2e_precision", False),
-                          ("E2E Recall ↑", "e2e_recall", False),
-                          ("Detection F1 ↑", "det_f1", False),
-                          ("Avg CER ↓", "avg_cer", True),
-                          ("Avg ANLS ↑", "avg_anls", False),
-                      ]:
-                          qv = qvac_e["metrics"].get(key, {}).get("mean")
-                          ev = easyocr["metrics"].get(key, {}).get("mean")
-                          a, b, w = pick_winner(qv, ev, "QVAC EasyOCR", "EasyOCR Python", lib)
-                          print(f"| {label} | {a} | {b} | {w} |")
-                      print(f"\n*Samples: {qvac_e['total_samples']}*\n")
-
-              if run_doctr:
-                  qvac_d = load_aggregate("results/text-spotting", "qvac-doctr", task_type)
-                  doctr = load_aggregate("results/text-spotting", "doctr", task_type)
-                  if qvac_d and doctr:
-                      print("### DocTR pipeline vs python-doctr\n")
-                      print("| Metric | QVAC DocTR | DocTR Python | Winner |")
-                      print("|--------|-----------|--------------|--------|")
-                      for label, key, lib in [
-                          ("E2E F1 ↑", "e2e_f1", False),
-                          ("E2E Precision ↑", "e2e_precision", False),
-                          ("E2E Recall ↑", "e2e_recall", False),
-                          ("Detection F1 ↑", "det_f1", False),
-                          ("Avg CER ↓", "avg_cer", True),
-                          ("Avg ANLS ↑", "avg_anls", False),
-                      ]:
-                          qv = qvac_d["metrics"].get(key, {}).get("mean")
-                          dv = doctr["metrics"].get(key, {}).get("mean")
-                          a, b, w = pick_winner(qv, dv, "QVAC DocTR", "DocTR Python", lib)
-                          print(f"| {label} | {a} | {b} | {w} |")
-                      print(f"\n*Samples: {qvac_d['total_samples']}*\n")
-          PYTHON_SCRIPT
+          python3 packages/ocr-ggml/benchmarks/quality_eval/render_summary.py \
+            --results results \
+            --pipeline "$PIPELINE" \
+            --tasks "$TASKS" \
+            --limit "$LIMIT" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload consolidated results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0

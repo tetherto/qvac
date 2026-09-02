@@ -6,7 +6,7 @@
 // sample 2 from the addon's test set) recorded on session day_idx 1. The
 // addon decodes it deterministically (temperature 0, WER 0.0) to
 // "not too controversial", so "controversial" is a stable assertable token.
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 const NEURAL_FILE = 'neural-not-too-controversial.bin'
 

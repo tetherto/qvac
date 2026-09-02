@@ -4,7 +4,11 @@
 #include <string>
 #include <vector>
 
+#include <llama.h>
+
 namespace model_fit {
+
+struct LlamaLoadFitRequest;
 
 /// Floor applied when the caller leaves `nCtxMin` at 0. Reducing towards a
 /// lower bound of zero would let the fitter return a context no model can run
@@ -68,7 +72,7 @@ struct FitRequest {
   int32_t splitMode = 0;
   bool hasSplitMode = false;
 
-  /// Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE.
+  /// Device holding the model, or -1 for an explicit CPU-only NONE placement.
   int32_t mainGpu = 0;
   bool hasMainGpu = false;
 
@@ -87,9 +91,16 @@ struct FitRequest {
   int32_t flashAttnType = 0;
   bool hasFlashAttnType = false;
 
+  bool swaFull = false;
+  bool hasSwaFull = false;
+
   /// Free headroom to leave on every device, in MiB. Upstream default is 1024.
   uint32_t marginMiB = 1024;
 };
+
+void applyFitRequest(
+    const FitRequest& request, llama_model_params& modelParams,
+    llama_context_params& contextParams);
 
 /// Why a fit ended the way it did. `status` alone cannot distinguish an
 /// unreadable model from a machine with no usable backend, which leaves the SDK
@@ -103,6 +114,8 @@ enum class FitReason {
   ModelUnreadable,
   /// No ggml backend registered, so there was no machine to measure.
   NoBackendDevice,
+  /// The experimental load-config replica cannot represent this load reliably.
+  UnsupportedConfig,
 };
 
 /// A tensor buffer-type override the fitter selected. The projection may depend
@@ -142,7 +155,7 @@ struct FitResult {
 
   /// `enum llama_split_mode` — how the model is split across multiple GPUs.
   int32_t splitMode = 0;
-  /// GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE.
+  /// Device holding the model, or -1 for an explicit CPU-only NONE placement.
   int32_t mainGpu = 0;
   /// `enum ggml_type` for the K cache. Changes KV memory, so it changes the
   /// fit.
@@ -179,10 +192,12 @@ struct FitResult {
 /// Throws `std::invalid_argument` for arguments that cannot be acted on:
 ///  - a `modelPath` that is empty or relative;
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
-///  - a pinned `splitMode` of NONE on a host with no GPU device, or with a
-///    `mainGpu` past the registered ones;
+///  - a pinned `splitMode` of NONE on a host with no GPU device, unless the
+///    request is explicitly CPU-only, or with a `mainGpu` past the registered
+///    ones;
 ///  - an `nCtx`, or an explicitly requested `nCtxMin`, above the context
 ///    length the model declares.
 FitResult runFit(const FitRequest& req);
+FitResult runLlamaFit(const LlamaLoadFitRequest& req);
 
 } // namespace model_fit

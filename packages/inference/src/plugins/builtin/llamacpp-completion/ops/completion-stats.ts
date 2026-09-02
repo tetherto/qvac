@@ -58,3 +58,24 @@ export function withEmittedTokens(
     emittedTokens
   }
 }
+
+export function stoppedByLength({
+  cancelled,
+  effectivePredict,
+  generatedTokens,
+  stoppedAtContextBoundary
+}: {
+  cancelled: boolean
+  effectivePredict: number | undefined
+  generatedTokens: number | undefined
+  stoppedAtContextBoundary: boolean
+}): boolean {
+  if (cancelled) return false
+  if (stoppedAtContextBoundary) return true
+  return (
+    effectivePredict !== undefined &&
+    effectivePredict > 0 &&
+    generatedTokens !== undefined &&
+    generatedTokens >= effectivePredict
+  )
+}

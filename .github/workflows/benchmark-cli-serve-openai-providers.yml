@@ -142,13 +142,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          # Audit npm, raw GitHub spec fetches, and artifact-service egress
-          # before promoting this provider-free preview path to block mode.
-          egress-policy: audit
-
       - name: Checkout validated SHA
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -185,7 +178,7 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.mode == 'smoke' || inputs.mode == 'full')
     environment: benchmark-live
-    runs-on: macos-26
+    runs-on: [self-hosted, qvac-macos26-arm64-gpu]
     timeout-minutes: 180
     env:
       BENCHMARK_CONFIG_PATH: ${{ vars.BENCHMARK_CONFIG_PATH }}

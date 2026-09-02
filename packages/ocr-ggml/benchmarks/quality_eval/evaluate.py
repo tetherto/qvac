@@ -28,7 +28,10 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent))
 
 from dataset import OCRBenchLoader
-from backends import EasyOCRBackend, DocTRBackend, QVACOCRGgmlBackend, OCRBackend, OCRResult
+from backends import (
+    EasyOCRBackend, DocTRBackend, QVACOCRGgmlBackend, OCRBackend, OCRResult,
+    BackendDeviceError
+)
 from metrics import compute_cer, compute_wer, compute_anls
 from metrics.spotting import (
     evaluate_text_spotting, parse_gt_boxes, get_image_dimensions
@@ -74,16 +77,29 @@ def compute_sample_metrics(
     return results
 
 
+def result_task_dir(
+    results_dir: Path,
+    backend_name: str,
+    task_type: str,
+    device_dir: Optional[str] = None
+) -> Path:
+    """Resolve the directory holding results for a backend/device/task combo."""
+    base = results_dir / backend_name
+    if device_dir:
+        base = base / device_dir
+    return base / task_type.replace(" ", "_")
+
+
 def save_sample_result(
     results_dir: Path,
     backend_name: str,
     task_type: str,
     sample_id: int,
-    result: Dict[str, Any]
+    result: Dict[str, Any],
+    device_dir: Optional[str] = None
 ) -> None:
     """Save individual sample result to file."""
-    task_dir_name = task_type.replace(" ", "_")
-    task_dir = results_dir / backend_name / task_dir_name
+    task_dir = result_task_dir(results_dir, backend_name, task_type, device_dir)
     task_dir.mkdir(parents=True, exist_ok=True)
 
     result_file = task_dir / f"sample_{sample_id}.json"
@@ -95,11 +111,12 @@ def load_existing_result(
     results_dir: Path,
     backend_name: str,
     task_type: str,
-    sample_id: int
+    sample_id: int,
+    device_dir: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """Load existing result if available."""
-    task_dir_name = task_type.replace(" ", "_")
-    result_file = results_dir / backend_name / task_dir_name / f"sample_{sample_id}.json"
+    task_dir = result_task_dir(results_dir, backend_name, task_type, device_dir)
+    result_file = task_dir / f"sample_{sample_id}.json"
 
     if result_file.exists():
         with open(result_file, 'r', encoding='utf-8') as f:
@@ -155,15 +172,16 @@ def save_aggregate_results(
     results_dir: Path,
     backend_name: str,
     task_type: str,
-    aggregate: Dict[str, Any]
+    aggregate: Dict[str, Any],
+    device_dir: Optional[str] = None
 ) -> None:
     """Save aggregate results for a backend/task combination."""
-    task_dir_name = task_type.replace(" ", "_")
-    task_dir = results_dir / backend_name / task_dir_name
+    task_dir = result_task_dir(results_dir, backend_name, task_type, device_dir)
     task_dir.mkdir(parents=True, exist_ok=True)
 
     aggregate["backend"] = backend_name
     aggregate["task_type"] = task_type
+    aggregate["device"] = (device_dir or "cpu").upper()
 
     aggregate_file = task_dir / "aggregate.json"
     with open(aggregate_file, 'w', encoding='utf-8') as f:
@@ -207,7 +225,8 @@ def evaluate_backend(
     results_path: Path,
     skip_existing: bool,
     limit: int,
-    dataset_filter: Optional[str]
+    dataset_filter: Optional[str],
+    device_dir: Optional[str] = None
 ) -> Dict[str, Dict[str, Any]]:
     """Run evaluation for one backend across all task types."""
     backend_results: Dict[str, Dict[str, Any]] = {}
@@ -252,7 +271,7 @@ def evaluate_backend(
             sample_id = sample.get("id", 0)
             if skip_existing:
                 existing = load_existing_result(
-                    results_path, backend_name, task_type, sample_id
+                    results_path, backend_name, task_type, sample_id, device_dir
                 )
                 if existing:
                     task_results.append(existing)
@@ -270,6 +289,8 @@ def evaluate_backend(
 
             try:
                 ocr_results = backend.run_ocr_batch(image_paths)
+            except BackendDeviceError:
+                raise
             except Exception as e:
                 print(f"\n    Batch error: {e}, falling back to sequential")
                 ocr_results = None
@@ -322,7 +343,9 @@ def evaluate_backend(
                         }
 
                     task_results.append(result)
-                    save_sample_result(results_path, backend_name, task_type, sample_id, result)
+                    save_sample_result(
+                        results_path, backend_name, task_type, sample_id, result, device_dir
+                    )
 
                 # Skip the sequential loop
                 samples_to_process = []
@@ -338,6 +361,8 @@ def evaluate_backend(
             try:
                 ocr_result = backend.run_ocr(str(image_path))
                 prediction = ocr_result.text
+            except BackendDeviceError:
+                raise
             except Exception as e:
                 print(f"\n    Error on sample {sample_id}: {e}")
                 prediction = ""
@@ -379,11 +404,13 @@ def evaluate_backend(
                 }
 
             task_results.append(result)
-            save_sample_result(results_path, backend_name, task_type, sample_id, result)
+            save_sample_result(
+                results_path, backend_name, task_type, sample_id, result, device_dir
+            )
 
         # Compute and save aggregate
         aggregate = compute_aggregate_metrics(task_results)
-        save_aggregate_results(results_path, backend_name, task_type, aggregate)
+        save_aggregate_results(results_path, backend_name, task_type, aggregate, device_dir)
         backend_results[task_type] = aggregate
 
     return backend_results
@@ -477,6 +504,22 @@ def _boxes_to_serializable(boxes) -> list:
     help="Use GPU for Python reference backends"
 )
 @click.option(
+    "--reference/--no-reference",
+    default=True,
+    help="Also run the Python reference backends (EasyOCR, python-doctr)"
+)
+@click.option(
+    "--qvac-device",
+    default="cpu",
+    type=click.Choice(["cpu", "vulkan", "metal"]),
+    help="ggml backend device for the QVAC pipelines"
+)
+@click.option(
+    "--bare-path",
+    default="bare",
+    help="Path to the bare runtime executable"
+)
+@click.option(
     "--dataset-filter",
     default=None,
     help="Filter samples by image_path containing this string (e.g., 'HierText')"
@@ -500,6 +543,9 @@ def main(
     skip_existing: bool,
     limit: int,
     gpu: bool,
+    reference: bool,
+    qvac_device: str,
+    bare_path: str,
     dataset_filter: Optional[str],
     qvac_addon_path: Optional[str]
 ):
@@ -535,10 +581,13 @@ def main(
         print(f"  {task_type}: {count} samples")
 
     # Determine which backend pairs to run
-    backend_pairs = []  # [(backend_instance, name), ...]
+    backend_pairs = []  # [(backend_instance, name, device_dir), ...]
 
     run_easyocr = pipeline in ("easyocr", "both")
     run_doctr = pipeline in ("doctr", "both")
+
+    qvac_backend_device = None if qvac_device == "cpu" else qvac_device
+    qvac_device_dir = None if qvac_device == "cpu" else "gpu"
 
     if run_easyocr:
         if not detector or not recognizer:
@@ -549,11 +598,15 @@ def main(
                 detector_path=detector,
                 recognizer_path=recognizer,
                 pipeline="easyocr",
-                addon_path=qvac_addon_path
+                addon_path=qvac_addon_path,
+                bare_path=bare_path,
+                backend_device=qvac_backend_device
             ),
-            "qvac-easyocr"
+            "qvac-easyocr",
+            qvac_device_dir
         ))
-        backend_pairs.append((EasyOCRBackend(gpu=gpu), "easyocr"))
+        if reference:
+            backend_pairs.append((EasyOCRBackend(gpu=gpu), "easyocr", None))
 
     if run_doctr:
         if not doctr_detector or not doctr_recognizer:
@@ -564,19 +617,23 @@ def main(
                 detector_path=doctr_detector,
                 recognizer_path=doctr_recognizer,
                 pipeline="doctr",
-                addon_path=qvac_addon_path
+                addon_path=qvac_addon_path,
+                bare_path=bare_path,
+                backend_device=qvac_backend_device
             ),
-            "qvac-doctr"
+            "qvac-doctr",
+            qvac_device_dir
         ))
-        backend_pairs.append((DocTRBackend(gpu=gpu), "doctr"))
+        if reference:
+            backend_pairs.append((DocTRBackend(gpu=gpu), "doctr", None))
 
     # Store all results for summary
     all_results: Dict[str, Dict[str, Dict[str, Any]]] = {}
     failed_backends: List[str] = []
 
-    for backend, backend_name in backend_pairs:
+    for backend, backend_name, device_dir in backend_pairs:
         print(f"\n{'=' * 60}")
-        print(f"Evaluating backend: {backend_name}")
+        print(f"Evaluating backend: {backend_name} ({(device_dir or 'cpu').upper()})")
         print("=" * 60)
 
         all_results[backend_name] = {}
@@ -591,7 +648,8 @@ def main(
         try:
             backend_results = evaluate_backend(
                 backend, backend_name, loader, task_type_list,
-                metric_names, results_path, skip_existing, limit, dataset_filter
+                metric_names, results_path, skip_existing, limit, dataset_filter,
+                device_dir
             )
             all_results[backend_name] = backend_results
         finally:

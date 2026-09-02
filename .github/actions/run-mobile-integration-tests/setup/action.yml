@@ -15,6 +15,11 @@ description: |
   adds a pinned-npm session must wire this input the way
   integration-mobile-test-llm-llamacpp.yml does.
 
+  The pinned-package path resolves BOTH registries: @qvac/* from npmjs.org and
+  @tetherto/<addon>-mono from GitHub Packages. The latter is the only way to put
+  an unmerged native change on a device, since a standalone dispatch has no
+  prebuild artifacts of its own to fall back to.
+
   Pre-condition: the consumer has already checked out the addon repository
   at ./addon/. We do NOT check the addon out here so the consumer can run
   addon-specific pre-steps between checkout and this phase (NMT model URLs,
@@ -43,7 +48,10 @@ inputs:
     required: false
     default: "false"
   pat-token:
-    description: "GitHub PAT used to clone qvac-test-addon-mobile"
+    description: |
+      Token used to clone the public qvac-test-addon-mobile AND to authenticate
+      against GitHub Packages when `package-version` names a @tetherto/* dev
+      build (GITHUB_TOKEN suffices for both; the job needs 'packages: read').
     required: true
   test-framework-ref:
     description: "Branch/tag of qvac-test-addon-mobile to check out"
@@ -59,6 +67,13 @@ inputs:
       when empty. Whisper / TTS / Parakeet / benchmark callers wire their
       dispatch `version` or `prebuild_package` input through here so runs can pin
       a specific published version.
+
+      Two registries are supported and picked from the spec's scope:
+        @qvac/<addon>@<version>        -> npmjs.org (published release)
+        @tetherto/<addon>-mono@<dev>   -> GitHub Packages (branch build)
+      The @tetherto form is how an UNMERGED native change gets onto a device;
+      note the '-mono' name suffix, which is what publish-library-to-gpr
+      actually publishes. Requires `pat-token` + 'packages: read'.
     required: false
     default: ""
   force-npm-prebuild:
@@ -203,6 +218,7 @@ runs:
         ADDON_NPM_NAME: ${{ inputs.addon-npm-name }}
         PACKAGE_VERSION: ${{ inputs.package-version }}
         FORCE_NPM_PREBUILD: ${{ inputs.force-npm-prebuild }}
+        GPR_TOKEN: ${{ inputs.pat-token }}
       run: |
         if [ -d "prebuilds" ] && [ -n "$(ls -A prebuilds 2>/dev/null)" ]; then
           if [ "$FORCE_NPM_PREBUILD" = "true" ]; then
@@ -233,14 +249,113 @@ runs:
           "")   SPEC="$ADDON_NPM_NAME@latest" ;;
           *)    SPEC="$ADDON_NPM_NAME@$PACKAGE_VERSION" ;;
         esac
-        echo "No prebuilds from artifacts — downloading $SPEC from npm..."
-        if ! npm pack "$SPEC"; then
-          echo "ERROR: Failed to download $SPEC from npm"
-          echo "Please check that it exists at https://www.npmjs.com/package/$ADDON_NPM_NAME"
+        # Only a plain registry package@version may reach npm. `npm pack` also
+        # accepts file:/git:/https:/github:/npm: specs, and a git spec RUNS
+        # prepare scripts — unacceptable in a step holding a GPR credential,
+        # especially as several workflows forward a dispatch input straight into
+        # `package-version`. The workflow gate is prefix-only, so it lets all of
+        # those through; this is the one that closes it.
+        # Scope is optional because inference-addon-cpp uses an unscoped name.
+        if ! printf '%s' "$SPEC" | grep -Eq '^(@(qvac|tetherto)/)?[a-z0-9][a-z0-9._-]*(@[~^]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$'; then
+          echo "::error::Refusing to npm pack '$SPEC' — not a plain registry spec."
+          echo "Expected @qvac/<addon>@<version|tag> or @tetherto/<addon>-mono@<version|tag>."
+          echo "file:/git:/https:/github:/npm: specs and other scopes are rejected."
           exit 1
         fi
-        tar -xzf *.tgz
-        if [ ! -d "package/prebuilds" ]; then
+        # Registry routing. @qvac/* is published to npmjs.org; @tetherto/* is a
+        # branch/dev build published to GitHub Packages by
+        # .github/actions/publish-library-to-gpr. A bare `npm pack` only ever
+        # talks to registry.npmjs.org, so every @tetherto spec used to 404 there
+        # — which silently made the "test an unmerged native build"
+        # path advertised by the dispatch `package`/`package_spec` inputs
+        # unusable once mobile became dispatch-only. Pack inside a throwaway dir
+        # holding a PROJECT-level .npmrc: project config merges with (rather than
+        # replaces) the runner's ~/.npmrc, so @qvac auth on the self-hosted
+        # runners keeps working, and the token never lands in the addon checkout
+        # that later gets bundled into the Device Farm app.
+        PACK_DIR="${RUNNER_TEMP:-/tmp}/gpr-prebuild-pack"
+        rm -rf "$PACK_DIR"
+        mkdir -p "$PACK_DIR"
+        trap 'rm -rf "$PACK_DIR"' EXIT
+        # npm reads project config from its localPrefix — the nearest ANCESTOR dir
+        # with a package.json/node_modules — NOT from cwd. Without this file, one
+        # above $RUNNER_TEMP would silently shadow the .npmrc below and send
+        # @tetherto to npmjs. This pins localPrefix here.
+        echo '{"name":"qvac-gpr-prebuild-pack","version":"0.0.0","private":true}' \
+          > "$PACK_DIR/package.json"
+        # Package name without the version. A scoped spec starts with '@', so
+        # stripping at the LAST '@' only works when a version is actually present
+        # ("@tetherto/foo-mono@1.0.0" -> "@tetherto/foo-mono", but bare
+        # "@tetherto/foo-mono" -> ""). A versionless scoped spec is legal here (the
+        # @*/* case passes it through and npm resolves @latest), and an empty name
+        # would produce a nonsense -mono warning and truncated failure hints.
+        case "${SPEC#@*/}" in
+          *@*) SPEC_NAME="${SPEC%@*}" ;;
+          *)   SPEC_NAME="$SPEC" ;;
+        esac
+        case "$SPEC" in
+          @tetherto/*)
+            REGISTRY_DESC="GitHub Packages (npm.pkg.github.com)"
+            if [ -z "$GPR_TOKEN" ]; then
+              echo "ERROR: $SPEC is a GitHub Packages spec but no token was supplied."
+              echo "The calling workflow must pass pat-token (secrets.GITHUB_TOKEN is enough)"
+              echo "and grant the job 'packages: read'."
+              exit 1
+            fi
+            # Dev builds are published with a '-mono' name suffix (name-suffix in
+            # every on-merge-*.yml). The un-suffixed @tetherto/<addon> packages are
+            # abandoned leftovers from early 2026 or absent entirely, so a spec
+            # without the suffix is almost always a copy/paste of the old docs.
+            case "$SPEC_NAME" in
+              *-mono) ;;
+              *) echo "::warning::$SPEC_NAME has no '-mono' suffix. GitHub Packages dev builds are published as ${SPEC_NAME}-mono — if this resolve fails, that is why." ;;
+            esac
+            # 0600 before the token is written, on this file only: a global umask
+            # would also hit the extracted prebuilds that get bundled into the
+            # app. $RUNNER_TEMP persists between jobs on self-hosted runners and a
+            # SIGKILL skips the EXIT trap, so a leak must not be world-readable.
+            : > "$PACK_DIR/.npmrc"
+            chmod 600 "$PACK_DIR/.npmrc"
+            printf '%s\n' \
+              '@tetherto:registry=https://npm.pkg.github.com' \
+              "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" \
+              > "$PACK_DIR/.npmrc"
+            # Ask npm where @tetherto actually resolves rather than assuming it
+            # from the scope, so a shadowed .npmrc fails loudly here instead of
+            # 404ing later under a "GitHub Packages" label.
+            EFFECTIVE_REGISTRY=$(cd "$PACK_DIR" && npm config get @tetherto:registry 2>/dev/null || echo "unknown")
+            case "$EFFECTIVE_REGISTRY" in
+              https://npm.pkg.github.com*) ;;
+              *)
+                echo "::error::@tetherto is resolving to '$EFFECTIVE_REGISTRY', not GitHub Packages."
+                echo "The .npmrc in $PACK_DIR is not being applied. npm reads project config from"
+                echo "its localPrefix (nearest ancestor with package.json/node_modules), so a"
+                echo "package.json or node_modules above \$RUNNER_TEMP can shadow it."
+                exit 1
+                ;;
+            esac
+            ;;
+          *)
+            REGISTRY_DESC="npm (registry.npmjs.org)"
+            ;;
+        esac
+        echo "No prebuilds from artifacts — downloading $SPEC from $REGISTRY_DESC..."
+        if ! (cd "$PACK_DIR" && npm pack "$SPEC"); then
+          echo "ERROR: Failed to download $SPEC from $REGISTRY_DESC"
+          case "$SPEC" in
+            @tetherto/*)
+              echo "Check the package and version exist at https://github.com/orgs/tetherto/packages?tab=packages&q=$SPEC_NAME"
+              echo "Dev builds are named @tetherto/<addon>-mono@<version>-tmp.runid-<run id>;"
+              echo "the version is produced by the On Merge Trigger run for your branch."
+              ;;
+            *)
+              echo "Please check that it exists at https://www.npmjs.com/package/$SPEC_NAME"
+              ;;
+          esac
+          exit 1
+        fi
+        tar -xzf "$PACK_DIR"/*.tgz -C "$PACK_DIR"
+        if [ ! -d "$PACK_DIR/package/prebuilds" ]; then
           echo "ERROR: No prebuilds directory found in package"
           exit 1
         fi
@@ -254,25 +369,60 @@ runs:
         # provenance for an EXACT semver pin — a dist-tag or range (latest, next,
         # ^1.2.0) legitimately resolves to a different concrete version, so
         # comparing the packed version to the tag string would false-fail.
+        PACKED_NAME=$(node -p "require('$PACK_DIR/package/package.json').name" 2>/dev/null || echo "unknown")
+        PACKED_VERSION=$(node -p "require('$PACK_DIR/package/package.json').version" 2>/dev/null || echo "unknown")
+
+        # NAME provenance, asserted on every resolve. The version check alone
+        # catches neither the registry returning a different package, nor a caller
+        # pinning the WRONG ADDON's package (e.g. embed's spec in the llm
+        # workflow) — which used to exit 0 and put embed's .bare on the device.
+        if [ "$PACKED_NAME" != "$SPEC_NAME" ]; then
+          echo "ERROR: resolved to $PACKED_NAME but the spec named $SPEC_NAME"
+          exit 1
+        fi
+        # Tie the package to the addon under test. The GPR dev build carries a
+        # '-mono' suffix that the published @qvac name does not, so compare the
+        # unscoped names with that suffix removed:
+        #   @qvac/vla-ggml  vs  @tetherto/vla-ggml-mono  ->  vla-ggml == vla-ggml
+        PACKED_ADDON="${PACKED_NAME##*/}"
+        PACKED_ADDON="${PACKED_ADDON%-mono}"
+        EXPECTED_ADDON="${ADDON_NPM_NAME##*/}"
+        EXPECTED_ADDON="${EXPECTED_ADDON%-mono}"
+        if [ "$PACKED_ADDON" != "$EXPECTED_ADDON" ]; then
+          echo "::error::$PACKED_NAME is not a build of $ADDON_NPM_NAME."
+          echo "The pinned package must be the addon this workflow tests; '$PACKED_ADDON'"
+          echo "!= '$EXPECTED_ADDON'. Check the package name — the GPR dev build is"
+          echo "@tetherto/$EXPECTED_ADDON-mono (note that a few addons' workflow slug and"
+          echo "package name differ, e.g. the 'vla' workflow ships @qvac/vla-ggml)."
+          exit 1
+        fi
+
+        # VERSION provenance: only assert for an EXACT semver pin — a dist-tag or
+        # range (latest, next, ^1.2.0) legitimately resolves to a different
+        # concrete version, so comparing the packed version to the tag string
+        # would false-fail. Non-registry specs can no longer reach this point (the
+        # spec is validated before npm runs), so the case below can no longer be
+        # skipped by a URL or git spec smuggling itself past ${PACKAGE_VERSION##*@}.
         if [ "$FORCE_NPM_PREBUILD" = "true" ] && [ -n "$PACKAGE_VERSION" ]; then
           EXPECTED_VERSION="${PACKAGE_VERSION##*@}"
           case "$EXPECTED_VERSION" in
             [0-9]*.[0-9]*.[0-9]*)
-              PACKED_VERSION=$(node -p "require('./package/package.json').version" 2>/dev/null || echo "unknown")
               if [ "$PACKED_VERSION" != "$EXPECTED_VERSION" ]; then
-                echo "ERROR: forced npm prebuild resolved to $ADDON_NPM_NAME@$PACKED_VERSION but package-version pins $EXPECTED_VERSION"
+                echo "ERROR: forced npm prebuild resolved to $PACKED_NAME@$PACKED_VERSION but package-version pins $EXPECTED_VERSION"
                 exit 1
               fi
-              echo "Verified: prebuilds come from $ADDON_NPM_NAME@$PACKED_VERSION (pinned)"
+              echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION (pinned, $REGISTRY_DESC)"
               ;;
             *)
-              echo "package-version '$EXPECTED_VERSION' is a dist-tag/range; skipping exact-version provenance assertion"
+              echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION ($REGISTRY_DESC); '$EXPECTED_VERSION' is a dist-tag/range so the exact version is not asserted"
               ;;
           esac
+        else
+          echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION ($REGISTRY_DESC)"
         fi
-        mv package/prebuilds ./prebuilds
-        rm -rf package *.tgz
-        echo "Prebuilds downloaded from npm:"
+        mv "$PACK_DIR/package/prebuilds" ./prebuilds
+        rm -rf "$PACK_DIR"
+        echo "Prebuilds downloaded from $REGISTRY_DESC:"
         ls -la prebuilds/
 
     - name: Verify and prepare prebuilds

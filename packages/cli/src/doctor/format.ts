@@ -1,4 +1,4 @@
-import type { CheckResult, CheckStatus, DoctorReport } from './types.js'
+import type { CheckResult, CheckStatus, DoctorReport } from '@/doctor/types'
 
 const STATUS_ICON: Record<CheckStatus, string> = {
   pass: '✅',
@@ -14,7 +14,10 @@ function formatCheckLine(check: CheckResult): string {
   return `  ${icon} ${check.label}${value}`
 }
 
-export function formatReport(report: DoctorReport): string {
+export function formatReport(
+  report: DoctorReport,
+  options: { verbose?: boolean | undefined } = {}
+): string {
   const lines: string[] = []
   lines.push('🩺 QVAC doctor')
   lines.push('')
@@ -27,6 +30,9 @@ export function formatReport(report: DoctorReport): string {
       lines.push(formatCheckLine(check))
       if (check.status !== 'pass' && check.hint) {
         lines.push(`      ${check.hint}`)
+      }
+      if (options.verbose && check.detail) {
+        for (const line of check.detail.split('\n')) lines.push(`      ${line}`)
       }
     }
     lines.push('')

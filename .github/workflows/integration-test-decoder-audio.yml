@@ -15,7 +15,13 @@ on:
         default: "packages/decoder-audio"
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-integration-tests:
+    needs: runner_names
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
@@ -29,25 +35,27 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
           - os: ubuntu-24.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404_arm }}
             platform: linux
             arch: arm64
           - os: macos-15-large
+            runner: ${{ needs.runner_names.outputs.macos_15_large }}
             platform: darwin
             arch: x64
           - os: macos-14
             platform: darwin
             arch: arm64
-            runner: macos-26
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
 
     steps:
       - name: Setup Node.js
@@ -65,7 +73,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install NPM dependencies
         working-directory: ${{ inputs.workdir }}
@@ -81,3 +89,4 @@ jobs:
         run: npm run test:integration
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+

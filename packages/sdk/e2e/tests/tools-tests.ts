@@ -1,5 +1,5 @@
 // Tools/Function calling test definitions
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 import type { ToolDialect } from '@qvac/sdk'
 
 // Helper for creating tools tests
@@ -21,7 +21,6 @@ const createToolsTest = (
       validation: 'type'
       expectedType: 'string' | 'number' | 'array'
     }
-    toolsMode?: 'static' | 'dynamic'
     toolDialect?: ToolDialect
     resourceKey?: string
     suites?: string[]
@@ -35,15 +34,13 @@ const createToolsTest = (
     validation: 'type' as const,
     expectedType: 'string' as const
   }
-  const dependency =
-    options.resourceKey ?? (options.toolsMode === 'dynamic' ? 'tools-dynamic' : 'tools')
+  const dependency = options.resourceKey ?? 'tools'
   return {
     testId,
     params: {
       history: [{ role: 'user', content: userPrompt }],
       tools,
       stream: false,
-      ...(options.toolsMode && { toolsMode: options.toolsMode }),
       ...(options.toolDialect && { toolDialect: options.toolDialect }),
       ...(options.resourceKey && { resourceKey: options.resourceKey }),
       ...(options.expectedToolCall && { expectedToolCall: options.expectedToolCall })
@@ -94,36 +91,6 @@ export const toolsSimpleFunction = createToolsTest(
       argKeys: ['value', 'from_unit', 'to_unit']
     }
   }
-)
-
-export const toolsSimpleFunctionDynamic = createToolsTest(
-  'tools-simple-function-dynamic',
-  "What's 25 degrees Celsius in Fahrenheit?",
-  [
-    {
-      type: 'function',
-      name: 'convert_temperature',
-      description: 'Convert temperature between Celsius and Fahrenheit',
-      parameters: {
-        type: 'object',
-        properties: {
-          value: { type: 'number', description: 'Temperature value' },
-          from_unit: {
-            type: 'string',
-            enum: ['celsius', 'fahrenheit'],
-            description: 'Source unit'
-          },
-          to_unit: {
-            type: 'string',
-            enum: ['celsius', 'fahrenheit'],
-            description: 'Target unit'
-          }
-        },
-        required: ['value', 'from_unit', 'to_unit']
-      }
-    }
-  ],
-  { toolsMode: 'dynamic' }
 )
 
 export const toolsMultipleFunctions = createToolsTest(
@@ -298,7 +265,6 @@ export const toolsSimpleFunctionGemma4 = createToolsTest(
 
 export const toolsTests = [
   toolsSimpleFunction,
-  toolsSimpleFunctionDynamic,
   toolsMultipleFunctions,
   toolsSimpleFunctionQwen35,
   toolsSimpleFunctionGemma4,

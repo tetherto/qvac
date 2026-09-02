@@ -1,5 +1,5 @@
 import { loadModel, embed, completion, GTE_LARGE_FP16 } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { shardedModelTests } from '../../sharded-model-tests.js'
 

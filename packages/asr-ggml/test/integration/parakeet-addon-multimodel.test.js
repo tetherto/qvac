@@ -13,8 +13,8 @@ const {
 
 const { samplesDir } = getTestPaths()
 
-function loadAudioSample() {
-  const samplePath = path.join(samplesDir, 'sample.raw')
+function loadAudioSample(filename = 'sample.raw') {
+  const samplePath = path.join(samplesDir, filename)
   if (!fs.existsSync(samplePath)) return null
   const rawBuffer = fs.readFileSync(samplePath)
   const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
@@ -38,9 +38,13 @@ async function transcribe(model, audio) {
 }
 
 async function runModelTest(t, modelType, modelPath, audio, expectations) {
+  const parakeetConfig = Object.assign(
+    { maxThreads: 4, useGPU: false },
+    expectations.parakeetConfig || {}
+  )
   const model = new ASRGgml({
     files: { model: modelPath },
-    config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
+    config: { engine: 'parakeet', parakeetConfig }
   })
   try {
     await model.load()
@@ -92,6 +96,26 @@ test('CTC desktop integration — English transcription', { timeout: 600000 }, a
   }
 })
 
+test('Unified desktop integration — English transcription', { timeout: 600000 }, async (t) => {
+  const loggerBinding = setupJsLogger(binding)
+  try {
+    const modelPath = await loadGgufOrSkip(t, 'unified')
+    if (!modelPath) return
+    const audio = loadAudioSample()
+    if (!audio) {
+      t.pass('sample.raw not found — skipping')
+      return
+    }
+    await runModelTest(t, 'unified', modelPath, audio, { minTextLength: 10 })
+  } finally {
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
+  }
+})
+
 test('EOU desktop integration — streaming transcription', { timeout: 600000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
   try {
@@ -123,6 +147,29 @@ test('Sortformer desktop integration — speaker diarization', { timeout: 600000
       return
     }
     await runModelTest(t, 'sortformer', modelPath, audio, { containsSpeaker: true })
+  } finally {
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
+  }
+})
+
+test('Indic Conformer CTC — Hindi transcription', { timeout: 600000 }, async (t) => {
+  const loggerBinding = setupJsLogger(binding)
+  try {
+    const modelPath = await loadGgufOrSkip(t, 'indicConformer')
+    if (!modelPath) return
+    const audio = loadAudioSample('sample_hi.raw')
+    if (!audio) {
+      t.pass('sample_hi.raw not found — skipping')
+      return
+    }
+    await runModelTest(t, 'indicConformer', modelPath, audio, {
+      minTextLength: 10,
+      parakeetConfig: { language: 'hi' }
+    })
   } finally {
     try {
       loggerBinding.releaseLogger()

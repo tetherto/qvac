@@ -39,6 +39,34 @@ public:
     return model.state_ ? model.state_->llmContext_.get() : nullptr;
   }
 
+  static std::optional<load_fit_normalization::NormalizedFitSnapshot>
+  normalizedFitSnapshot(const LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    if (!model.state_) {
+      return std::nullopt;
+    }
+    return model.state_->normalizedFitSnapshot_;
+  }
+
+  static void replaceNormalizedFitSnapshot(
+      LlamaModel& model,
+      load_fit_normalization::NormalizedFitSnapshot snapshot) {
+    std::unique_lock lock(model.stateMtx_);
+    if (model.state_) {
+      model.state_->normalizedFitSnapshot_ = std::move(snapshot);
+    }
+  }
+
+  static int64_t runtimeBackendDevice(const LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.runtimeBackendDevice_;
+  }
+
+  static void setRuntimeBackendDevice(LlamaModel& model, int64_t device) {
+    std::unique_lock lock(model.stateMtx_);
+    model.runtimeBackendDevice_ = device;
+  }
+
   /// The multi-job routing predicate (private static on the model).
   static bool isConcurrentEligible(const LlamaModel::Prompt& prompt) {
     return LlamaModel::isConcurrentEligible(prompt);
@@ -122,6 +150,28 @@ public:
     }
     return scheduler.slots_[seqId]->admissionId;
   }
+
+  /// Records a deferred slot cancel, then applies teardown once inside a
+  /// `TeardownDeferGuard` window and once outside it, reporting whether the
+  /// record survived each time. Drives the suspension in isolation: the
+  /// finalize unlock window holds a reference into `slots_`, so a reconcile
+  /// inside it would free the slot out from under the drain loop.
+  static std::pair<bool, bool>
+  pendingCancelSurvivesTeardown(Scheduler& scheduler) {
+    scheduler.recordPendingSlotCancel(/*seqId=*/0, /*admissionId=*/1);
+    bool survivedDeferred = false;
+    {
+      typename Scheduler::TeardownDeferGuard defer(scheduler);
+      std::scoped_lock lock(scheduler.mutex_);
+      scheduler.applyDeferredTeardownLocked();
+    }
+    survivedDeferred = scheduler.hasPendingCancels();
+    {
+      std::scoped_lock lock(scheduler.mutex_);
+      scheduler.applyDeferredTeardownLocked();
+    }
+    return {survivedDeferred, scheduler.hasPendingCancels()};
+  }
 };
 
 class MtmdLlmContextTestPeer {
@@ -132,5 +182,13 @@ public:
 
   static bool compactorRemovesThinking(const MtmdLlmContext& context) {
     return context.compactor_.removeThinkingFromContext();
+  }
+
+  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
+    return context.rollbackState_.hasReasoningBoundary();
+  }
+
+  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
+    return context.rollbackState_.reasoningBoundaryNPast();
   }
 };

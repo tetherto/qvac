@@ -1,0 +1,131 @@
+name: 'Detect fabric stack'
+description: >
+  Read-only detection for fabric-stack PRs. Sets fabric_stack=true when the PR's
+  own diff — merge base to head, never the base branch tip — touches a
+  packages/fabric file that changes the built artifact. Used to disable stale
+  prebuild reuse and to wire npm-runtime consumers to PR-built @qvac/fabric
+  prebuilds. The predicate must stay in lockstep with detect-native-changes:
+  claiming a prebuild the producer never makes leaves the consumer polling
+  until timeout.
+
+inputs:
+  github-token:
+    description: >
+      Token with contents:read, used to resolve the merge base through the
+      compare API. Callers that check out with fetch-depth 0 may pass an empty
+      string and rely on the local git merge-base fallback.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  fabric_stack:
+    description: 'true when this PR is a fabric-stack change'
+    value: ${{ steps.detect.outputs.fabric_stack }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect fabric-stack paths
+      id: detect
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+
+        if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
+           [ "$EVENT_NAME" = "workflow_call" ] || \
+           [ "$EVENT_NAME" = "push" ]; then
+          echo "Trusted event ($EVENT_NAME) — treating as fabric-stack"
+          echo "fabric_stack=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        FETCHED=false
+        if [ -n "$HEAD_SHA" ]; then
+          if git fetch origin "$HEAD_SHA" --depth=1 2>/dev/null; then
+            FETCHED=true
+          elif [ -n "$HEAD_REPO" ]; then
+            echo "SHA not fetchable from origin (likely fork PR) — trying exact SHA from $HEAD_REPO"
+            if git fetch "https://github.com/${HEAD_REPO}.git" "$HEAD_SHA" --depth=1 2>/dev/null; then
+              FETCHED_SHA=$(git rev-parse FETCH_HEAD)
+              if [ "$FETCHED_SHA" = "$HEAD_SHA" ]; then
+                FETCHED=true
+              else
+                echo "::warning::Fetched SHA $FETCHED_SHA does not match event SHA $HEAD_SHA"
+              fi
+            fi
+          fi
+        fi
+
+        if [ "$FETCHED" != "true" ]; then
+          echo "::warning::Could not fetch PR head — treating as fabric-stack (safe default)"
+          echo "fabric_stack=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # base.sha is the base branch tip at event time, not the branch point, so
+        # diffing against it also reports — in reverse — everything that landed
+        # on the base branch since. Resolve the merge base instead. `A...B` is
+        # not an option: consumers check out with the default fetch-depth of 1,
+        # and a shallow clone has no common history to walk, so three-dot exits
+        # 128 and every PR would take the fail-safe below.
+        MERGE_BASE=""
+        if [ -n "$BASE_SHA" ] && [ -n "$HEAD_SHA" ]; then
+          if [ -n "${GH_TOKEN:-}" ]; then
+            MERGE_BASE=$(gh api "repos/${REPO}/compare/${BASE_SHA}...${HEAD_SHA}" \
+              --jq '.merge_base_commit.sha' 2>/dev/null || true)
+          fi
+          if [ -z "$MERGE_BASE" ]; then
+            MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || true)
+          fi
+        fi
+
+        if [[ ! "$MERGE_BASE" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::warning::Could not resolve a merge base for $BASE_SHA...$HEAD_SHA — treating as fabric-stack (safe default)"
+          echo "fabric_stack=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if ! git cat-file -e "$MERGE_BASE" 2>/dev/null; then
+          if ! git fetch origin "$MERGE_BASE" --depth=1 2>/dev/null; then
+            if [ -n "$BASE_REPO" ]; then
+              git fetch "https://github.com/${BASE_REPO}.git" "$MERGE_BASE" --depth=1 2>/dev/null || true
+            fi
+          fi
+        fi
+
+        STACK=false
+        DIFF_FILES=$(git diff --name-only "$MERGE_BASE" "$HEAD_SHA" -- 2>&1) || {
+          echo "::warning::git diff failed — treating as fabric-stack"
+          echo "fabric_stack=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+        if [ -n "$DIFF_FILES" ]; then
+          # Only paths that change the built artifact. A `case` glob's `*`
+          # spans `/`, so `packages/fabric/*.cpp` also covers `addon/`.
+          # Docs, release notes and tests are deliberately excluded: they
+          # never produce a prebuild for the consumer to wait on. qvac-fabric
+          # itself is a registry port, not an overlay — a new port revision
+          # reaches the build only through the vcpkg manifests below, so
+          # vcpkg-overlays/ is not part of the predicate.
+          while IFS= read -r file; do
+            case "$file" in
+              packages/fabric/*.cpp|packages/fabric/*.hpp|packages/fabric/*.c|packages/fabric/*.h) STACK=true; break ;;
+              packages/fabric/*CMakeLists.txt) STACK=true; break ;;
+              packages/fabric/cmake/*) STACK=true; break ;;
+              packages/fabric/vcpkg.json|packages/fabric/vcpkg-configuration.json) STACK=true; break ;;
+              packages/fabric/binding.js|packages/fabric/exports.txt|packages/fabric/symbols.map) STACK=true; break ;;
+            esac
+          done <<< "$DIFF_FILES"
+        fi
+
+        echo "Merge base: $MERGE_BASE"
+        echo "Fabric stack: $STACK"
+        echo "fabric_stack=$STACK" >> "$GITHUB_OUTPUT"

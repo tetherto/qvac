@@ -1,5 +1,5 @@
 ---
-description: GitHub Actions conventions — pinned actions, least-privilege permissions, OIDC, hardened runners, caching, concurrency, environments, reusable workflows
+description: GitHub Actions conventions — pinned actions, least-privilege permissions, OIDC, caching, concurrency, environments, reusable workflows
 globs:
   - .github/workflows/**
   - .github/actions/**
@@ -71,12 +71,6 @@ Getting fork authorization wrong is high-impact and easy to do — the failure m
 - **OIDC role/policy must be scoped per-workflow or per-environment**, never repo-wide read-write.
 - **Document the trust relationship** in a comment near the auth step (which IdP, which role, which environment).
 
-## Hardened runners
-
-- **Sensitive workflows run `step-security/harden-runner`** as the first step, in `audit` mode initially and `block` mode once egress is characterized.
-  - Examples of sensitive: any workflow handling secrets, publishing artifacts, deploying to prod, or with `id-token: write`.
-- **Document allowed egress** in the `harden-runner` config; do not silently expand it.
-
 ## Caching
 
 - `actions/cache` keys are deterministic and prefixed:
@@ -127,6 +121,10 @@ Persistent self-hosted runners (`qvac-*` labels) reuse disk between jobs. Workfl
 - **Omit** the `if` only when the job never runs on `github-hosted` (self-hosted-only job).
 - **Omit** the whole step when the workflow no longer does a full-repo checkout at `$GITHUB_WORKSPACE` (some mobile/refactored flows).
 - Gate [`.github/actions/cache-models`](../../../.github/actions/cache-models/action.yml) with the same `runner.environment` condition.
+
+### Addon runner label catalog
+
+Specialized `runs-on` / `matrix.runner` labels for addon workflows are defined in [`.github/runners.yaml`](../../../.github/runners.yaml). `ubuntu-latest` stays hardcoded. After editing the catalog, run `node .github/scripts/sync-runner-names.mjs` and `node --test .github/scripts/test/runner-names.test.mjs`, then commit the regenerated [`.github/workflows/reusable-runner-names.yml`](../../../.github/workflows/reusable-runner-names.yml). Callers add a `runner_names` job (`uses: ./.github/workflows/reusable-runner-names.yml`) with an explicit `permissions: contents: read` block, and reference `needs.runner_names.outputs.<key>` — GitHub evaluates `runs-on` before steps, so a composite action cannot supply these labels. `validate-runner-names.mjs` fails if a `runner_names` job omits the permissions block. Full flow: [`docs/ci/SELF-HOSTED-RUNNERS.md`](../../../docs/ci/SELF-HOSTED-RUNNERS.md).
 
 ## Environments
 

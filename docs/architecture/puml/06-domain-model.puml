@@ -22,7 +22,7 @@ class ModelConstant {
     name: string
     src: string
     modelId: string
-    hyperdriveKey: string
+    blobCoreKey: string
     expectedSize: number
     sha256Checksum: string
     addon: string
@@ -30,6 +30,7 @@ class ModelConstant {
 
 class ModelSource {
     <<union>>
+    registry://path
     pear://key/path
     https://url
     /local/path
@@ -43,39 +44,36 @@ class Message {
 
 class Attachment {
     path: string
-    type: image
 }
 
 class Tool {
     name: string
-    schema: JSONSchema
+    parameters: object
 }
 
 class Response {
-    tokenStream: AsyncIterator
-    stats: object
-    toolCalls: ToolCall[]
+    events: AsyncIterable
+    final: Promise
 }
 
 class RAGWorkspace {
-    workspaceId: string
+    workspace: string
     embeddingModelId: string
 }
 
 class RAGDocument {
-    docId: string
+    id: string
     content: string
     metadata: object
 }
 
 class Provider {
-    topic: string
-    firewall: allow|deny
+    publicKey: string
+    firewall?: allow|deny
 }
 
 class Consumer {
     providerPublicKey: string
-    topic: string
 }
 
 Plugin "1" --> "0..*" Model : creates
@@ -85,12 +83,12 @@ ModelConstant --|> ModelSource : is a
 Message "0..*" --> "0..*" Attachment : contains
 Message "0..*" ..> Model : input to (llm)
 Tool "0..*" ..> Model : registered with (llm)
-Model "1" --> "1" Response : produces
+Model "1" --> "0..*" Response : produces
 
 RAGWorkspace "1" --> "1" Model : uses (embeddings)
 RAGWorkspace "1" --> "0..*" RAGDocument : stores
 
-Provider "1" --> "1" Model : exposes
-Consumer "0..*" --> "1" Provider : delegates to
+Provider "1" --> "0..*" Model : exposes
+Consumer "0..*" --> "1" Provider : delegates to by public key
 
 @enduml

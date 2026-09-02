@@ -1,9 +1,5 @@
 import { completion } from '@qvac/sdk'
-import {
-  ValidationHelpers,
-  type TestResult,
-  type Expectation
-} from '@tetherto/qvac-test-suite/mobile'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import { visionTests } from '../../vision-tests.js'
@@ -20,6 +16,9 @@ export class MobileVisionExecutor extends ModelAssetExecutor<typeof visionTests>
 
   protected handlers = Object.fromEntries(
     visionTests.map((test) => {
+      if (test.testId === 'vision-image-no-upscale') {
+        return [test.testId, this.imageNoUpscale.bind(this)]
+      }
       if (test.testId.endsWith('-streaming')) {
         return [test.testId, this.streaming.bind(this)]
       }
@@ -35,6 +34,55 @@ export class MobileVisionExecutor extends ModelAssetExecutor<typeof visionTests>
 
   constructor(resources: ResourceManager) {
     super(resources)
+  }
+
+  private async getPromptTokens(modelId: string, params: VisionParams) {
+    const history = await this.resolveAttachments(params.history)
+    return callWhenAddonIdle(async () => {
+      const result = completion({
+        modelId,
+        history,
+        stream: false,
+        ...(params.generationParams && { generationParams: params.generationParams })
+      } as never)
+      await result.text
+      const stats = await result.stats
+      if (typeof stats?.promptTokens !== 'number' || stats.promptTokens <= 0) {
+        throw new Error(`Completion stats missing promptTokens. Got: ${JSON.stringify(stats)}`)
+      }
+      return stats.promptTokens
+    })
+  }
+
+  async imageNoUpscale(params: unknown, _expectation: Expectation): Promise<TestResult> {
+    const p = params as VisionParams
+
+    try {
+      const noUpscaleModelId = await this.resources.ensureLoaded('vision')
+      const noUpscaleTokens = await this.getPromptTokens(noUpscaleModelId, p)
+
+      await this.resources.evict('vision')
+
+      const upscaleModelId = await this.resources.ensureLoaded('vision-upscale')
+      const upscaleTokens = await this.getPromptTokens(upscaleModelId, p)
+
+      if (noUpscaleTokens * 2 >= upscaleTokens) {
+        return {
+          passed: false,
+          output:
+            `image_no_upscale on (${noUpscaleTokens}) should use less than half the prompt tokens ` +
+            `of off (${upscaleTokens})`
+        }
+      }
+
+      return {
+        passed: true,
+        output: `image_no_upscale reduced prompt tokens from ${upscaleTokens} to ${noUpscaleTokens}`
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `image_no_upscale comparison failed: ${errorMsg}` }
+    }
   }
 
   private async loadImageAssets() {

@@ -11,6 +11,21 @@ async function tmpProject(t: TestContext): Promise<string> {
   return tempDir(t, 'qvac-cli-cmd-')
 }
 
+async function installFakeSdk(projectRoot: string, source: string): Promise<void> {
+  const sdkDir = join(projectRoot, 'node_modules', '@qvac', 'sdk')
+  await mkdir(sdkDir, { recursive: true })
+  await writeFile(
+    join(sdkDir, 'package.json'),
+    JSON.stringify({
+      name: '@qvac/sdk',
+      version: '0.0.0-test',
+      type: 'module',
+      exports: { '.': './index.js', './package': './package.json' }
+    })
+  )
+  await writeFile(join(sdkDir, 'index.js'), source)
+}
+
 describe('cli: version & help', () => {
   it('--version prints semver', async () => {
     const r = await runCli(['--version'])
@@ -165,7 +180,11 @@ describe('cli: doctor', () => {
   it('--help shows options', async () => {
     const r = await runCli(['doctor', '--help'])
     assert.equal(r.code, 0)
-    assert.ok(r.output.includes('--json') && r.output.includes('QVAC SDK system requirements'))
+    assert.ok(
+      r.output.includes('--deep') &&
+        r.output.includes('--json') &&
+        r.output.includes('QVAC SDK system requirements')
+    )
   })
 
   it('--json emits valid JSON with ok boolean', async () => {
@@ -174,6 +193,65 @@ describe('cli: doctor', () => {
     const doc = JSON.parse(r.stdout) as { ok: unknown; sections: unknown[] }
     assert.equal(typeof doc.ok, 'boolean')
     assert.ok(Array.isArray(doc.sections) && doc.sections.length >= 1)
+  })
+
+  it('--deep fails when the project SDK is missing', async (t) => {
+    const dir = await tmpProject(t)
+    const r = await runCli(['doctor', '--deep', '--json'], { cwd: dir })
+    assert.equal(r.code, 1)
+    const doc = JSON.parse(r.stdout) as {
+      ok: boolean
+      sections: Array<{ id: string; checks: Array<{ status: string }> }>
+    }
+    assert.equal(doc.ok, false)
+    assert.equal(doc.sections.find((section) => section.id === 'deep')?.checks[0]?.status, 'fail')
+  })
+
+  it('--deep accepts a structured heartbeat result without corrupting JSON', async (t) => {
+    const dir = await tmpProject(t)
+    await installFakeSdk(
+      dir,
+      `
+        export async function heartbeat() { console.log('fixture worker log') }
+        export async function close() {}
+      `
+    )
+    const r = await runCli(['doctor', '--deep', '--json'], { cwd: dir })
+    assert.equal(r.code, 0)
+    const doc = JSON.parse(r.stdout) as {
+      ok: boolean
+      sections: Array<{ id: string; checks: Array<{ status: string }> }>
+    }
+    assert.equal(doc.ok, true)
+    assert.equal(doc.sections.find((section) => section.id === 'deep')?.checks[0]?.status, 'pass')
+  })
+
+  it('--deep --quiet returns failure without output', async (t) => {
+    const dir = await tmpProject(t)
+    await installFakeSdk(
+      dir,
+      `
+        export async function heartbeat() { throw new Error('fixture heartbeat failure') }
+        export async function close() {}
+      `
+    )
+    const r = await runCli(['doctor', '--deep', '--quiet'], { cwd: dir })
+    assert.equal(r.code, 1)
+    assert.equal(r.stdout, '')
+  })
+
+  it('--deep --verbose includes bounded failure diagnostics', async (t) => {
+    const dir = await tmpProject(t)
+    await installFakeSdk(
+      dir,
+      `
+        export async function heartbeat() { throw new Error('fixture heartbeat failure') }
+        export async function close() {}
+      `
+    )
+    const r = await runCli(['doctor', '--deep', '--verbose'], { cwd: dir })
+    assert.equal(r.code, 1)
+    assert.match(r.stdout, /fixture heartbeat failure/)
   })
 })
 

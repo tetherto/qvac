@@ -3,7 +3,7 @@
 # Triggers SDK e2e tests via test-sdk.yml when:
 #   - "test-e2e-smoke" label applied: runs smoke suite on desktop + mobile
 #   - "test-e2e-full" label applied: runs full suite on desktop + mobile
-#   - PR opened/updated targeting release-* branch with packages/sdk/ changes: runs full suite
+#   - PR opened/updated targeting release-* branch with SDK/inference changes: runs full suite
 #
 # On success, applies "e2e-tested" label to the PR.
 #
@@ -17,6 +17,8 @@ on:
     types: [labeled, opened, synchronize]
     paths:
       - "packages/sdk/**"
+      - "packages/inference/**"
+      - "packages/test-suite/**"
 
 permissions:
   actions: read
@@ -82,8 +84,8 @@ jobs:
               echo "should-run=false" >> "$GITHUB_OUTPUT"
             fi
           elif echo "$TARGET" | grep -q '^release-'; then
-            # Path filter on the trigger already ensures packages/sdk/ changes exist
-            echo "::notice::Release branch PR with SDK changes — running full suite"
+            # Path filter already ensures SDK or inference changes exist.
+            echo "::notice::Release branch PR with SDK/inference changes — running full suite"
             echo "should-run=true" >> "$GITHUB_OUTPUT"
             echo "suite=" >> "$GITHUB_OUTPUT"
           else
@@ -99,6 +101,9 @@ jobs:
     with:
       targets: desktop + mobile
       suite: ${{ needs.resolve-config.outputs.suite }}
+      test-version: ${{ github.event.pull_request.head.sha }}
+      inference-source: branch
+      test-suite-source: branch
     secrets: inherit
 
   apply-label:

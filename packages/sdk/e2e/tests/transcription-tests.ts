@@ -1,5 +1,5 @@
 // Transcription test definitions
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 const createTranscriptionTest = (
   testId: string,

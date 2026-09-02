@@ -69,7 +69,7 @@ bool hasStatKey(
 }
 
 // Path to a GGUF that is "small enough" for unit tests (any of the
-// shipping CTC / TDT / EOU / Sortformer GGUFs is fine; the tests don't
+// shipping CTC / TDT / RNN-T / EOU / Sortformer GGUFs is fine; the tests don't
 // care which engine is loaded). Falls back to an empty string so the
 // guarded tests can skip cleanly when no model is available.
 std::string gguf_test_path() {
@@ -162,6 +162,21 @@ TEST_F(ParakeetModelTest, SetConfigUpdatesConfiguration) {
   newCfg.modelType = ModelType::EOU;
   newCfg.maxThreads = 4;
   EXPECT_NO_THROW(m.setConfig(newCfg));
+}
+
+TEST_F(ParakeetModelTest, RnntMetadataSelectsNormalAsrModel) {
+  const ModelType detected =
+      ParakeetModel::modelTypeFromMetadata("rnnt", ModelType::TDT);
+  EXPECT_EQ(detected, ModelType::RNNT);
+  EXPECT_NE(detected, ModelType::TDT);
+  EXPECT_NE(detected, ModelType::EOU);
+  EXPECT_NE(detected, ModelType::SORTFORMER);
+}
+
+TEST_F(ParakeetModelTest, UnknownMetadataPreservesModelTypeFallback) {
+  EXPECT_EQ(
+      ParakeetModel::modelTypeFromMetadata("unknown", ModelType::EOU),
+      ModelType::EOU);
 }
 
 TEST_F(ParakeetModelTest, SaveLoadParamsAcceptsConfigButIgnoresOthers) {

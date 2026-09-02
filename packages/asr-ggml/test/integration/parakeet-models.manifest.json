@@ -1,7 +1,22 @@
 {
-  "cacheEpoch": 1,
+  "cacheEpoch": 3,
   "source": "s3",
   "models": {
+    "parakeet-unified-en-0.6b.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
+      "sha256": "a9b228101e8c3eeabeb5a38f1948f2a0a1ced9262e3261fcb301a935e38c4f28",
+      "bytes": 1390644608
+    },
+    "parakeet-unified-en-0.6b.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
+      "sha256": "48102e55d61aaa827b89af03d772106e37de6ee12e8746f278f6315e71d980ad",
+      "bytes": 741330176
+    },
+    "parakeet-unified-en-0.6b.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
+      "sha256": "98651c49ef4e3dbc2606f91bbc870431b84fdad739e9ff491e958d0f61c89a97",
+      "bytes": 395029120
+    },
     "parakeet-tdt-0.6b-v3.f16.gguf": {
       "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
       "sha256": "896463ab74886d027538709f3a21d141b7a99061d4b337a2777c142926f91416",
@@ -66,6 +81,11 @@
       "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
       "sha256": "1d593b947fbf5dca16f6d17266e4c587f01fb265994b2612783287c5cd735d15",
       "bytes": 140717952
+    },
+    "indic-conformer-ctc.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
+      "sha256": "ed7df4144243f7a41cb6d057a824f22c52c3aabb5971b6654803b8d94e0f1f1a",
+      "bytes": 735323136
     }
   }
 }

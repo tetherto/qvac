@@ -2,10 +2,10 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { useServer } from '../helpers/server.js'
 import { assertError, JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
-import { probeFfmpegAvailable } from '../../../src/serve/lib/video-transcode.js'
+import { probeFfmpegAvailable } from '@/serve/lib/video-transcode'
 
 describe('serve: speech validation', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('invalid JSON returns 400', async () => {
     const res = await server().inject({
@@ -113,7 +113,7 @@ describe('serve: speech auth', () => {
 })
 
 describe('serve: audio discovery', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('GET /v1/audio/models returns empty list when no speech models loaded', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/audio/models' })

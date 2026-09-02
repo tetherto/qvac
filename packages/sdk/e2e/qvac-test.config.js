@@ -1,5 +1,5 @@
 // SDK tests configuration
-/** @type {import('@tetherto/qvac-test-suite').QvacTestConfig} */
+/** @type {import('@qvac/test-suite').QvacTestConfig} */
 export default {
   // All MQTT configuration under one object
   mqtt: {
@@ -14,6 +14,9 @@ export default {
     // Authentication
     username: { env: 'MQTT_USERNAME' },
     password: { env: 'MQTT_PASSWORD' },
+
+    // Preserve QoS 1 state across reconnects while expiring abandoned CI sessions
+    sessionExpiryInterval: process.env.GITHUB_ACTIONS === 'true' ? 2 * 60 * 60 : undefined,
 
     // Disable certificate validation for self-signed certs (testing only)
     rejectUnauthorized: true

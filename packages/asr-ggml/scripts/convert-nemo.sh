@@ -3,7 +3,7 @@
 # Convert staged Parakeet `.nemo` checkpoints into the single-file
 # `.gguf` format the ggml backend consumes. Wraps the in-tree
 # `scripts/convert-nemo-to-gguf.py` (vendored from
-# qvac-ext-lib-whisper.cpp/engines/parakeet/scripts; resync on bump).
+# qvac-fabric-speech.cpp/engines/parakeet/scripts; resync on bump).
 #
 # Requirements:
 #   - A Python venv at ./venv with `gguf`, `numpy`, `torch`, `pyyaml`
@@ -17,7 +17,7 @@
 #   ./scripts/convert-nemo.sh [flags]
 #
 # Flags:
-#   --type, -t <ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all>
+#   --type, -t <ctc|tdt|unified|eou|sortformer|sortformer-streaming-v2.1|all>
 #                                               Which model(s) (default: all)
 #   --quant, -q <f16|q8_0|q5_0|q4_0|f32>        Quant tier (default: q8_0)
 #   --python <bin>                              Python interpreter (default:
@@ -32,7 +32,7 @@
 #   --help, -h                                  Show this help
 #
 # Examples:
-#   ./scripts/convert-nemo.sh                          # all 4, q8_0
+#   ./scripts/convert-nemo.sh                          # all models, q8_0
 #   ./scripts/convert-nemo.sh -t tdt -q q4_0           # TDT q4_0 only
 #   ./scripts/convert-nemo.sh --python /usr/local/bin/python3.11
 
@@ -63,8 +63,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$TYPE" in
-  ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all) ;;
-  *) echo "Error: --type must be ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all" >&2; exit 2;;
+  ctc|tdt|unified|eou|sortformer|sortformer-streaming-v2.1|all) ;;
+  *) echo "Error: --type must be ctc|tdt|unified|eou|sortformer|sortformer-streaming-v2.1|all" >&2; exit 2;;
 esac
 case "$QUANT" in
   f32|f16|q8_0|q5_0|q4_0) ;;
@@ -127,6 +127,7 @@ nemo_filename() {
   case "$1" in
     ctc)        echo "parakeet-ctc-0.6b.nemo";;
     tdt)        echo "parakeet-tdt-0.6b-v3.nemo";;
+    unified)    echo "parakeet-unified-en-0.6b.nemo";;
     eou)        echo "parakeet_realtime_eou_120m-v1.nemo";;
     sortformer) echo "diar_sortformer_4spk-v1.nemo";;
     sortformer-streaming-v2.1) echo "diar_streaming_sortformer_4spk-v2.1.nemo";;
@@ -137,6 +138,7 @@ gguf_filename() {
   case "$t" in
     ctc)        echo "parakeet-ctc-0.6b.${q}.gguf";;
     tdt)        echo "parakeet-tdt-0.6b-v3.${q}.gguf";;
+    unified)    echo "parakeet-unified-en-0.6b.${q}.gguf";;
     eou)        echo "parakeet-eou-120m-v1.${q}.gguf";;
     sortformer) echo "sortformer-4spk-v1.${q}.gguf";;
     sortformer-streaming-v2.1) echo "diar_streaming_sortformer_4spk-v2.1.${q}.gguf";;
@@ -199,7 +201,7 @@ echo
 
 failures=0
 if [[ "$TYPE" == "all" ]]; then
-  for t in ctc tdt eou sortformer sortformer-streaming-v2.1; do
+  for t in ctc tdt unified eou sortformer sortformer-streaming-v2.1; do
     convert_one "$t" || failures=$((failures + 1))
   done
 else

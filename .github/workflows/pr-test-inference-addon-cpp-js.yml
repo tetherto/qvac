@@ -15,6 +15,11 @@ env:
   PKG_DIR: packages/inference-addon-cpp
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   authorize-js-tests:
     runs-on: ubuntu-latest
     permissions:
@@ -86,31 +91,31 @@ jobs:
           echo "allowed=false" >> "$GITHUB_OUTPUT"
 
   run-js-tests:
-    needs: authorize-js-tests
+    needs: [runner_names, authorize-js-tests]
     if: needs.authorize-js-tests.outputs.allowed == 'true'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: qvac-ubuntu2204-x64
+          - runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
             platform: linux
             arch: x64
             name: linux-x64-asan
             asan: true
             run_tests: true
-          - runner: macos-26
+          - runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
             platform: darwin
             arch: arm64
             name: darwin-arm64
             asan: false
             run_tests: true
-          - runner: macos-15-large
+          - runner: ${{ needs.runner_names.outputs.macos_15_large }}
             platform: darwin
             arch: x64
             name: darwin-x64
             asan: false
             run_tests: true
-          - runner: qvac-win25-x64
+          - runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
             platform: win32
             arch: x64
             name: win32-x64
@@ -253,3 +258,4 @@ jobs:
             echo "::error::Failed JS integration packages:$failed_packages"
             exit 1
           fi
+

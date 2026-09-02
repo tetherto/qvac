@@ -18,12 +18,10 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
-#include "model-interface/ContextSlider.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/MtmdLlmContext.hpp"
 #include "model-interface/ReasoningBlockCompactor.hpp"
 #include "model-interface/TextLlmContext.hpp"
-#include "model-interface/ToolsCompactController.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
@@ -330,9 +328,8 @@ TEST_F(TextLlmContextCancelTest, PrefillCancelAtEntryReturnsFalseOnHybrid) {
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   driver.stop();
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
@@ -355,9 +352,8 @@ TEST_F(
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   driver.stop();
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
@@ -385,10 +381,9 @@ TEST_F(
 
   // First, cancel via the high-level API.
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
   {
-    TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+    TextLlmContext driver(params, shared, /*seqId=*/0);
     driver.stop();
     std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
     const LlmContext::EvalMessageResult result = driver.evalMessageWithTools(
@@ -400,7 +395,7 @@ TEST_F(
   }
 
   // Then run a normal prefill on a fresh driver — must succeed.
-  TextLlmContext driver2(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver2(params, shared, /*seqId=*/0);
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
   const LlmContext::EvalMessageResult result = driver2.evalMessageWithTools(
       chatMsgs, {}, /*isCacheLoaded=*/false, /*prefill=*/true);
@@ -412,11 +407,11 @@ TEST_F(
 }
 
 // `onCancel` on a hybrid driver with `remove_thinking_from_context: true`:
-// after prefill (which takes the prefill-entry AND end-of-prefill
+// after prefill (which takes the prefill-entry AND reasoning-boundary
 // snapshots), calling `onCancel` directly must restore the
 // PREFILL-ENTRY snapshot — i.e. roll the cache back to the cursor that
 // existed BEFORE this request's prompt was submitted, matching the
-// "request never happened" cancel semantics. The end-of-prefill
+// "request never happened" cancel semantics. The reasoning-boundary
 // snapshot is reserved for normal thinking-block compaction and must
 // NOT be used for cancel.
 TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
@@ -426,9 +421,8 @@ TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
   driver.setRemoveThinkingFromContext(true);
 
   // Pre-request cursor before any prompt is submitted. For a freshly
@@ -456,7 +450,7 @@ TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
 
   EXPECT_EQ(driver.getNPast(), preRequestNPast)
       << "onCancel on hybrid must restore to the PRE-REQUEST cursor, not "
-         "the end-of-prefill cursor — cancel semantics is 'request never "
+         "the post-prefill cursor — cancel semantics is 'request never "
          "happened'";
   // `seq_pos_max` after a full pre-request restore: either -1 (sequence
   // is now empty) or `preRequestNPast - 1` if there were prior turns.
@@ -482,9 +476,8 @@ TEST_F(
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
   driver.setRemoveThinkingFromContext(true);
 
   const llama_pos preRequestNPast = driver.getNPast();
@@ -509,17 +502,13 @@ TEST_F(
          "hybrid cancel semantics";
 }
 
-// PR #2813 fix regression: on a pure-attention driver, the pre-request
-// rollback anchor MUST be captured AFTER `preparePrefill`. If captured
-// before, an in-prefill `trySlidePrefill` lowers `nPast_` but leaves
-// `preRequestNPast_` at the stale pre-slide cursor; a subsequent cancel
-// then under-trims `removeLastNTokens` and leaves `discard` tokens of
-// the cancelled prompt live in KV under the previous turn's
-// `firstMsgTokens_` bookkeeping — silent contamination of the next turn.
+// A prefill that does not fit throws `ContextOverflow` before any decode. The
+// throw must leave the previous turn's cache exactly as it was: no partial
+// prompt tokens resident, the cursor untouched, and the driver still usable for
+// the next request.
 TEST_F(
-    TextLlmContextCancelTest,
-    OnCancelAfterPrefillSlideRollsBackToPostSlideCursor) {
-  // Small ctx_size so the slide trigger is reachable without decoding
+    TextLlmContextCancelTest, OverflowingPrefillLeavesPreviousTurnCacheIntact) {
+  // Small ctx_size so the overflow is reachable without decoding
   // thousands of tokens per turn.
   const std::string modelPath = qwen3PureAttentionModelPath();
   if (!modelFileExists(modelPath)) {
@@ -539,11 +528,8 @@ TEST_F(
   ASSERT_TRUE(model->isLoaded());
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
-  // Non-zero discard budget so overflow slides instead of throwing.
-  driver.setNDiscarded(128);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   auto repeat = [](const std::string& unit, size_t times) {
     std::string out;
@@ -554,8 +540,7 @@ TEST_F(
     return out;
   };
 
-  // Turn 1 (small opener) keeps `firstMsgTokens_` modest so turn 3's
-  // slide budget is not dominated by the protected prefix.
+  // Turn 1 is a small opener, so turn 2 has room to fill the context.
   const LlmContext::EvalMessageResult turn1Result = driver.evalMessageWithTools(
       {makeMsg("user", "Hi")},
       {},
@@ -576,52 +561,33 @@ TEST_F(
   EXPECT_FALSE(turn2Result.cancelled);
   EXPECT_TRUE(turn2Result.rollbackOk);
   const llama_pos preRequestNPast = driver.getNPast();
-  const llama_pos preRequestFirstMsg = driver.getFirstMsgTokens();
-  ASSERT_GT(preRequestNPast, preRequestFirstMsg)
-      << "turn 2 must have advanced past the first-message prefix";
-  const int32_t preRequestSlides = driver.getNSlides();
   const llama_pos ctxSize =
       static_cast<llama_pos>(llama_n_ctx(model->getContext()));
   ASSERT_GT(preRequestNPast, ctxSize / 2)
-      << "turn 2 did not consume enough context to force a slide on "
-         "turn 3; increase the bulk repeat count. nPast="
+      << "turn 2 did not consume enough context to overflow on turn 3; "
+         "increase the bulk repeat count. nPast="
       << preRequestNPast << " ctxSize=" << ctxSize;
+  const llama_pos preRequestSeqPosMax = seqPosMax(*model);
 
-  // Turn 3 sized so `preRequestNPast + nTokens > ctx_size` forces
-  // `trySlidePrefill` to run before decode.
+  // Turn 3 sized so `preRequestNPast + nTokens` exceeds the context, so this
+  // must throw.
   const std::string overflow = repeat("Please describe. ", /*times=*/50);
-  const LlmContext::EvalMessageResult turn3Result = driver.evalMessageWithTools(
-      {makeMsg("user", overflow)},
-      {},
-      /*isCacheLoaded=*/false,
-      /*prefill=*/true);
-  ASSERT_TRUE(turn3Result.ok);
-  EXPECT_FALSE(turn3Result.cancelled);
-  EXPECT_TRUE(turn3Result.rollbackOk);
-  ASSERT_GT(driver.getNSlides(), preRequestSlides)
-      << "turn 3 must have triggered a context slide in preparePrefill "
-         "for the regression assertion to be meaningful. preRequestNPast="
-      << preRequestNPast << " ctxSize=" << ctxSize;
+  EXPECT_THROW(
+      {
+        (void)driver.evalMessageWithTools(
+            {makeMsg("user", overflow)},
+            {},
+            /*isCacheLoaded=*/false,
+            /*prefill=*/true);
+      },
+      qvac_errors::StatusError);
 
-  bool rollbackOk = false;
-  EXPECT_NO_THROW(rollbackOk = driver.onCancel([](const std::string&) {}));
-  EXPECT_TRUE(rollbackOk)
-      << "pure-attention onCancel after a slide must still report rollback-ok";
-
-  const llama_pos postCancelNPast = driver.getNPast();
-  EXPECT_LT(postCancelNPast, preRequestNPast)
-      << "onCancel after a prefill slide must restore to the POST-slide "
-         "cursor. With the pre-fix ordering (anchor captured before "
-         "`preparePrefill`) the anchor would still be `preRequestNPast` "
-         "and rollback would under-trim, leaving `discard` cancelled "
-         "prompt tokens live in KV.";
-  EXPECT_EQ(driver.getFirstMsgTokens(), preRequestFirstMsg)
-      << "the slide does not touch the first-message prefix; the "
-         "rollback must preserve `firstMsgTokens_`";
-  EXPECT_EQ(seqPosMax(*model), postCancelNPast - 1)
-      << "live KV must be trimmed to match the restored cursor after "
-         "cancel — any leftover cells past `postCancelNPast - 1` are "
-         "contamination of the next turn";
+  EXPECT_EQ(driver.getNPast(), preRequestNPast)
+      << "an overflowing prefill throws before any decode, so the cursor "
+         "must still sit at the end of turn 2";
+  EXPECT_EQ(seqPosMax(*model), preRequestSeqPosMax)
+      << "live KV must be untouched by the refused prompt — leftover cells "
+         "would contaminate the next turn";
 
   const LlmContext::EvalMessageResult recoveryResult =
       driver.evalMessageWithTools(
@@ -630,7 +596,7 @@ TEST_F(
           /*isCacheLoaded=*/false,
           /*prefill=*/true);
   EXPECT_TRUE(recoveryResult.ok)
-      << "post-cancel prefill must succeed on the rolled-back cache";
+      << "a short prefill must still succeed after the refused one";
   EXPECT_FALSE(recoveryResult.cancelled);
   EXPECT_TRUE(recoveryResult.rollbackOk);
 }
@@ -667,36 +633,31 @@ TEST_F(TextLlmContextCancelTest, FreshDriverReportsNoUserVisiblePerfSnapshot) {
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_FALSE(driver.takeUserVisiblePerfSnapshot().has_value())
       << "Newly constructed driver must report no user-visible perf snapshot";
 }
 
-// Pure-attention models do not need (and do not capture) a user-visible
-// perf snapshot in `compactThinkSpan`: the only purpose of the
-// snapshot is to freeze `n_p_eval` / `t_p_eval_ms` BEFORE the recurrent
-// replay decode inflates them, and pure-attention compaction is a pure
-// cache-edit (`seq_rm + seq_add`) with no replay. Capturing for pure-
-// attention also opens a one-token race against lazy GPU-side decode
-// telemetry, so the capture is now gated on
-// `needsRecurrentSnapshot_ && compactor_.hasOpenSpan()`. This test
-// pins the contract: a pure-attention inference must leave the
-// snapshot empty so `runtimeStats()` falls back to the live read.
+// Every model replays now, pure attention included, so every compaction runs
+// `restore + llama_decode` over the kept tokens. Those are batch decodes and
+// they land in `n_p_eval` / `t_p_eval_ms`, which would show up to the caller
+// as prompt tokens it never sent. So `compactThinkSpan` must freeze the
+// user-visible prompt counters before replaying, on every memory kind. This
+// test pins that: a pure-attention inference that compacted must leave a
+// snapshot behind.
 TEST_F(
     TextLlmContextCancelTest,
-    CompactThinkSpanLeavesPerfSnapshotEmptyForPureAttention) {
+    CompactThinkSpanCapturesPerfSnapshotForPureAttention) {
   auto model = loadTextModel(qwen3PureAttentionModelPath());
   if (!model) {
     GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
   const LlmContext::EvalMessageResult evalResult = driver.evalMessageWithTools(
@@ -706,10 +667,10 @@ TEST_F(
   EXPECT_TRUE(evalResult.rollbackOk);
   ASSERT_TRUE(driver.generateResponse([](const std::string&) {}).ok);
 
-  EXPECT_FALSE(driver.takeUserVisiblePerfSnapshot().has_value())
-      << "Pure-attention compactThinkSpan must NOT capture a snapshot — "
-         "the live read in runtimeStats is already correct and capturing "
-         "early races against lazy GPU perf telemetry";
+  EXPECT_TRUE(driver.takeUserVisiblePerfSnapshot().has_value())
+      << "pure-attention compaction replays through llama_decode now, so the "
+         "prompt-side counters must be frozen before those batch decodes "
+         "inflate them";
 }
 
 // ============================================================================
@@ -1298,271 +1259,7 @@ TEST(
 // Layer 2c: TextLlmContext reasoning-compaction failure recovery
 // ============================================================================
 
-namespace {
-
-// `IContextSliderOps` fake that rejects every `seq_rm` call and never
-// touches `seq_add`. Installed on a `ReasoningBlockCompactor` via
-// `setContextSliderOpsForTesting` so `compact()` on the pure-attention
-// path takes the `Outcome::Kind::FailedKvIntact` branch without a real
-// llama.cpp memory rejection (which is essentially impossible to
-// synthesize on a valid range).
-class RejectingSliderOps final : public IContextSliderOps {
-public:
-  llama_pos nCtx(llama_context*) const override { return 4096; }
-
-  ContextSliderMemoryHandle memory(llama_context* lctx) const override {
-    // Forward the real handle so the compactor's own diagnostics /
-    // `clearSeqOnFailure` short-circuit sensibly. Not strictly needed
-    // for the pure-attention path but keeps the fake honest.
-    return llama_get_memory(lctx);
-  }
-
-  bool seqRm(ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos)
-      const override {
-    ++seqRmCalls_;
-    return false;
-  }
-
-  void seqAdd(
-      ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos,
-      llama_pos) const override {
-    ++seqAddCalls_;
-  }
-
-  int seqRmCalls() const { return seqRmCalls_; }
-  int seqAddCalls() const { return seqAddCalls_; }
-
-private:
-  mutable int seqRmCalls_ = 0;
-  mutable int seqAddCalls_ = 0;
-};
-
-} // namespace
-
-// PR #2813 fix regression: on a pure-attention driver, a `seq_rm +
-// seq_add` rejection from `compactThinkSpan` must roll the LIVE KV
-// cache and the driver's positional bookkeeping BACK to the
-// pre-request cursor before rethrowing. Prior to the fix,
-// `TextLlmContext::compactThinkSpan`'s catch handler treated every
-// compaction failure as the hybrid "sequence was wiped" case and reset
-// `nPast_` / `firstMsgTokens_` to zero — but live KV still held the
-// previous turns' tokens, so the next request on the same driver
-// decoded from a corrupted `pos=0` while KV cells covered `[0, N)`.
-//
-// This test primes the driver with two real prefills (so
-// `preRequestNPast_` sits at a non-zero cursor N1 while `nPast_`
-// advances to N1 + N2), then forces `compactThinkSpan` down the
-// pure-attention failure branch via a `RejectingSliderOps` fake, and
-// checks:
-//   * a `StatusError` is thrown (the caller still fails the request),
-//   * `nPast_` / `firstMsgTokens_` are restored to their pre-request
-//     values (N1 / preRequestFirstMsg), NOT reset to zero,
-//   * live-KV `seq_pos_max` matches `nPast_ - 1` so the next turn
-//     decodes from a coherent baseline,
-//   * the rejection short-circuited before `seq_add` fired (protects
-//     the `FailedKvIntact` invariant on the compactor side).
-TEST_F(
-    TextLlmContextCancelTest,
-    PureAttentionCompactionFailureRollsBackToPreRequestCursor) {
-  auto model = loadTextModel(qwen3PureAttentionModelPath());
-  if (!model) {
-    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
-  }
-
-  LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
-  common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
-  driver.setRemoveThinkingFromContext(true);
-
-  // Turn 1 (warm baseline). This is the "prior turn's leftover state"
-  // that a next-turn compaction failure MUST NOT corrupt.
-  std::vector<common_chat_msg> turn1 = {makeMsg("user", "Hi there")};
-  const LlmContext::EvalMessageResult turn1Result = driver.evalMessageWithTools(
-      turn1, {}, /*isCacheLoaded=*/false, /*prefill=*/true);
-  ASSERT_TRUE(turn1Result.ok);
-  EXPECT_FALSE(turn1Result.cancelled);
-  EXPECT_TRUE(turn1Result.rollbackOk);
-  const llama_pos preRequestNPast = driver.getNPast();
-  ASSERT_GT(preRequestNPast, 0);
-  const llama_pos preRequestFirstMsg = driver.getFirstMsgTokens();
-  const llama_pos preRequestSeqMax = seqPosMax(*model);
-  ASSERT_EQ(preRequestSeqMax, preRequestNPast - 1)
-      << "live KV must match nPast_ after a clean prefill for this test "
-         "to have a meaningful baseline";
-
-  // Turn 2 (the request that will fail compaction). `evalMessageWithTools`
-  // calls `snapshotPreRequestCursor` at entry, so `preRequestNPast_` is
-  // pinned at the post-turn-1 cursor before the prefill advances
-  // `nPast_` further.
-  const LlmContext::EvalMessageResult turn2Result = driver.evalMessageWithTools(
-      {makeMsg("user", "How are you?")},
-      {},
-      /*isCacheLoaded=*/false,
-      /*prefill=*/true);
-  ASSERT_TRUE(turn2Result.ok);
-  EXPECT_FALSE(turn2Result.cancelled);
-  EXPECT_TRUE(turn2Result.rollbackOk);
-  const llama_pos postTurn2NPast = driver.getNPast();
-  ASSERT_GT(postTurn2NPast, preRequestNPast)
-      << "turn 2 prefill must advance the cursor past the pre-request "
-         "cursor for the recovery-delta assertion to be meaningful";
-
-  // Install a plausible reasoning span spanning the tail of turn 2,
-  // then force the pure-attention path with a rejecting slider ops.
-  auto& compactor = driver.compactorForTesting();
-  compactor.setReasoningEnabled(true);
-  compactor.setNeedsRecurrentSnapshot(false);
-  RejectingSliderOps rejecting;
-  compactor.setContextSliderOpsForTesting(&rejecting);
-  const llama_pos spanStart = preRequestNPast + 1;
-  const llama_pos spanEnd = postTurn2NPast - 1;
-  ASSERT_LT(spanStart, spanEnd)
-      << "turn 2 must have added enough tokens to host a non-degenerate "
-         "reasoning span";
-  compactor.setOpenSpan(spanStart);
-  compactor.requestCloseCapture();
-  compactor.onCloseCommitted(spanEnd);
-  ASSERT_TRUE(compactor.hasCapturedCloseSpanForTesting());
-
-  EXPECT_THROW(driver.compactThinkSpanForTesting(), qvac_errors::StatusError)
-      << "compactThinkSpan must still surface the compaction failure to "
-         "the caller after local rollback";
-  compactor.setContextSliderOpsForTesting(nullptr);
-
-  EXPECT_EQ(driver.getNPast(), preRequestNPast)
-      << "FailedKvIntact recovery must restore nPast_ to preRequestNPast_ "
-         "— the regression the fix guards is a reset to 0";
-  EXPECT_EQ(driver.getFirstMsgTokens(), preRequestFirstMsg)
-      << "FailedKvIntact recovery must restore firstMsgTokens_ to its "
-         "pre-request value";
-  EXPECT_EQ(seqPosMax(*model), preRequestSeqMax)
-      << "live KV must be trimmed to match nPast_ after recovery — "
-         "leftover cells past preRequestNPast_ would corrupt the next "
-         "turn's decode positions";
-  EXPECT_EQ(rejecting.seqRmCalls(), 1)
-      << "compactor must attempt the pure-attention primitive exactly once";
-  EXPECT_EQ(rejecting.seqAddCalls(), 0)
-      << "seq_rm rejection must short-circuit before seq_add fires — "
-         "otherwise the FailedKvIntact invariant (live KV unchanged) is "
-         "violated";
-
-  // Recovery: the driver must remain usable for a follow-up prefill on
-  // the pre-request baseline that we just rolled back to.
-  const LlmContext::EvalMessageResult recoveryResult =
-      driver.evalMessageWithTools(
-          {makeMsg("user", "Are you working?")},
-          {},
-          /*isCacheLoaded=*/false,
-          /*prefill=*/true);
-  EXPECT_TRUE(recoveryResult.ok)
-      << "post-recovery prefill must succeed on the rolled-back cache";
-  EXPECT_FALSE(recoveryResult.cancelled);
-  EXPECT_TRUE(recoveryResult.rollbackOk);
-  EXPECT_GT(driver.getNPast(), preRequestNPast);
-}
-
-TEST(
-    TextLlmContextCancelDuringGenerationTest,
-    SinglePromptThrownCompactionFailureInvalidatesActiveCacheSession) {
-  const std::string modelPath = qwen3PureAttentionModelPath();
-  if (!fs::exists(modelPath)) {
-    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
-  }
-
-  std::unordered_map<std::string, std::string> config;
-  config["device"] = test_common::getTestDevice();
-  config["ctx_size"] = "4096";
-  config["gpu_layers"] = test_common::getTestGpuLayers();
-  config["n_predict"] = "32";
-  config["backendsDir"] = test_common::getTestBackendsDir().string();
-
-  std::string mp = modelPath;
-  std::string proj;
-  auto model = std::make_unique<LlamaModel>(
-      std::move(mp), std::move(proj), std::move(config));
-  model->waitForLoadInitialization();
-  ASSERT_TRUE(model->isLoaded());
-
-  const fs::path cachePath =
-      fs::temp_directory_path() /
-      ("single-compaction-throw-" +
-       std::to_string(
-           std::chrono::steady_clock::now().time_since_epoch().count()) +
-       ".ggsq");
-  fs::remove(cachePath);
-
-  LlamaModel::Prompt seed;
-  seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
-  seed.prefill = true;
-  seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
-  ASSERT_NO_THROW(model->processPrompt(seed));
-  ASSERT_TRUE(fs::exists(cachePath));
-
-  const std::vector<uint8_t> before = readBinaryFile(cachePath);
-  ASSERT_FALSE(before.empty());
-
-  LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
-  ASSERT_NE(baseCtx, nullptr);
-  auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
-  ASSERT_NE(textCtx, nullptr);
-
-  RejectingSliderOps rejecting;
-  bool injectedFailure = false;
-  LlamaModel::Prompt failing;
-  failing.input = R"([{"role":"user","content":"Please answer briefly."}])";
-  failing.cacheKey = cachePath.string();
-  failing.saveCacheToDisk = true;
-  failing.generationParams.remove_thinking_from_context = true;
-  failing.outputCallback = [&](const std::string&) {
-    if (injectedFailure) {
-      return;
-    }
-    const llama_pos pos = textCtx->getNPast();
-    if (pos <= 0) {
-      return;
-    }
-    auto& compactor = textCtx->compactorForTesting();
-    compactor.setRemoveThinkingFromContext(true);
-    compactor.setReasoningEnabled(true);
-    compactor.setNeedsRecurrentSnapshot(false);
-    compactor.setContextSliderOpsForTesting(&rejecting);
-    // Seed a synthetic, resident span in the prompt tail. `compactThinkSpan`
-    // runs after generation; the rejecting slider makes that final cleanup
-    // throw through the high-level `processPrompt` path.
-    compactor.setOpenSpan(pos - 1);
-    compactor.requestCloseCapture();
-    compactor.onCloseCommitted(pos);
-    injectedFailure = true;
-  };
-
-  EXPECT_THROW(model->processPrompt(failing), qvac_errors::StatusError);
-  textCtx->compactorForTesting().setContextSliderOpsForTesting(nullptr);
-  ASSERT_TRUE(injectedFailure)
-      << "test did not reach streaming callback to inject compaction failure";
-  EXPECT_EQ(rejecting.seqRmCalls(), 1)
-      << "high-level path must actually hit the rejecting compaction primitive";
-
-  const std::vector<uint8_t> after = readBinaryFile(cachePath);
-  EXPECT_EQ(after, before)
-      << "thrown compaction failure must leave the last known-good on-disk "
-         "cache untouched";
-
-  LlamaModel::Prompt uncached;
-  uncached.input =
-      R"([{"role":"user","content":"Run after thrown compaction failure."}])";
-  ASSERT_NO_THROW(model->processPrompt(uncached));
-
-  const std::vector<uint8_t> afterUncachedTransition =
-      readBinaryFile(cachePath);
-  EXPECT_EQ(afterUncachedTransition, before)
-      << "thrown compaction failure must invalidate the active cache session; "
-         "otherwise a later prompt without cacheKey saves recovery state "
-         "over the old cache";
-
-  fs::remove(cachePath);
-}
+namespace {} // namespace
 
 TEST(
     TextLlmContextCancelDuringGenerationTest,
@@ -1610,106 +1307,4 @@ TEST(
   ASSERT_NO_THROW(model->processPrompt(uncached))
       << "explicit save failure must invalidate the active cache session; "
          "otherwise a later prompt without cacheKey retries the stale save";
-}
-
-TEST(
-    TextLlmContextCancelDuringGenerationTest,
-    SinglePromptOpenReasoningSpanFailureSkipsCacheSave) {
-  const std::string modelPath = qwen3PureAttentionModelPath();
-  if (!fs::exists(modelPath)) {
-    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
-  }
-
-  std::unordered_map<std::string, std::string> config;
-  config["device"] = test_common::getTestDevice();
-  config["ctx_size"] = "4096";
-  config["gpu_layers"] = test_common::getTestGpuLayers();
-  config["n_predict"] = "8";
-  config["backendsDir"] = test_common::getTestBackendsDir().string();
-
-  std::string mp = modelPath;
-  std::string proj;
-  auto model = std::make_unique<LlamaModel>(
-      std::move(mp), std::move(proj), std::move(config));
-  model->waitForLoadInitialization();
-  ASSERT_TRUE(model->isLoaded());
-
-  const fs::path cachePath =
-      fs::temp_directory_path() /
-      ("single-open-reasoning-failure-" +
-       std::to_string(
-           std::chrono::steady_clock::now().time_since_epoch().count()) +
-       ".ggsq");
-  fs::remove(cachePath);
-
-  LlamaModel::Prompt seed;
-  seed.input = R"([{"role":"user","content":"Remember this clean cache."}])";
-  seed.prefill = true;
-  seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
-  ASSERT_NO_THROW(model->processPrompt(seed));
-  ASSERT_TRUE(fs::exists(cachePath));
-
-  const std::vector<uint8_t> before = readBinaryFile(cachePath);
-  ASSERT_FALSE(before.empty());
-
-  LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
-  ASSERT_NE(baseCtx, nullptr);
-  auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
-  ASSERT_NE(textCtx, nullptr);
-
-  RejectingSliderOps rejecting;
-  bool injectedOpenSpan = false;
-  LlamaModel::Prompt failing;
-  failing.input =
-      R"([{"role":"user","content":"Start reasoning but stop early."}])";
-  failing.cacheKey = cachePath.string();
-  failing.saveCacheToDisk = true;
-  failing.generationParams.remove_thinking_from_context = true;
-  failing.outputCallback = [&](const std::string&) {
-    if (injectedOpenSpan) {
-      return;
-    }
-    const llama_pos pos = textCtx->getNPast();
-    if (pos <= 0) {
-      return;
-    }
-    auto& compactor = textCtx->compactorForTesting();
-    compactor.setRemoveThinkingFromContext(true);
-    compactor.setReasoningEnabled(true);
-    compactor.setNeedsRecurrentSnapshot(false);
-    compactor.setContextSliderOpsForTesting(&rejecting);
-    // Model a request that ends after `<think>` but before `</think>`:
-    // the span is open and resident, but no close capture ever commits.
-    compactor.setOpenSpan(pos - 1);
-    injectedOpenSpan = true;
-  };
-
-  EXPECT_THROW(model->processPrompt(failing), qvac_errors::StatusError);
-  textCtx->compactorForTesting().setContextSliderOpsForTesting(nullptr);
-  ASSERT_TRUE(injectedOpenSpan)
-      << "test did not reach streaming callback to seed the open span";
-  EXPECT_EQ(rejecting.seqRmCalls(), 1)
-      << "open-ended span must attempt cleanup instead of returning NoOp";
-  EXPECT_EQ(rejecting.seqAddCalls(), 0)
-      << "forced seq_rm rejection must fail before any seq_add shift";
-
-  const std::vector<uint8_t> after = readBinaryFile(cachePath);
-  EXPECT_EQ(after, before)
-      << "open reasoning span cleanup failure must not persist reasoning "
-         "state over the last known-good cache";
-
-  LlamaModel::Prompt uncached;
-  uncached.input =
-      R"([{"role":"user","content":"Run after open-span failure."}])";
-  ASSERT_NO_THROW(model->processPrompt(uncached));
-
-  const std::vector<uint8_t> afterUncachedTransition =
-      readBinaryFile(cachePath);
-  EXPECT_EQ(afterUncachedTransition, before)
-      << "open-span failure must invalidate the active cache session; "
-         "otherwise a later prompt without cacheKey saves recovery state "
-         "over the old cache";
-
-  fs::remove(cachePath);
 }

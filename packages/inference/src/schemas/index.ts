@@ -8,14 +8,12 @@ export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
-  TOOLS_MODE,
   type Tool,
   type ToolCall,
   type ToolCallError,
-  type ToolCallWithCall,
-  type ToolsMode
+  type ToolCallWithCall
 } from '@/schemas/tools'
-export * from '@/schemas/delegate'
+export * from '@/schemas/heartbeat'
 export * from '@/schemas/model-ops'
 export * from '@/schemas/download-asset'
 export * from '@/schemas/embed'
@@ -23,7 +21,6 @@ export * from '@/schemas/finetune'
 export * from '@/schemas/load-model'
 export * from '@/schemas/reload-config'
 export * from '@/schemas/logging-stream'
-export * from '@/schemas/provide'
 export * from '@/schemas/common'
 export * from '@/schemas/transcription'
 export * from '@/schemas/bci'
@@ -40,6 +37,7 @@ export * from '@/schemas/sdcpp-config'
 export * from '@/schemas/vla'
 export * from '@/schemas/classification'
 export * from '@/schemas/audio-gen'
+export * from '@/schemas/model-config-schemas'
 export * from '@/schemas/lifecycle'
 export { ERROR_CODES, REGISTRY_ERROR_CODES } from '@/schemas/errors'
 export { ERR_CODES as RAG_ERROR_CODES } from '@qvac/rag/errors'
@@ -56,7 +54,6 @@ export {
 export {
   PROFILING_KEY,
   PROFILING_TRAILER_KEY,
-  DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
   MODEL_EXECUTION_KEY,
   BACKEND_DIAGNOSTICS_KEY,
@@ -64,14 +61,12 @@ export {
   profilerGPUResourceGaugeSchema,
   profilerResourceGaugeSchema,
   serverBreakdownSchema,
-  delegationBreakdownSchema,
   operationEventSchema,
   profilingRequestMetaSchema,
   profilingResponseMetaSchema,
   perCallProfilingSchema,
   type ProfilerMode,
   type ServerBreakdown,
-  type DelegationBreakdown,
   type OperationEvent,
   type ProfilingRequestMeta,
   type ProfilingResponseMeta,
@@ -96,3 +91,5 @@ export {
 } from '@/schemas/model-types'
 export * from '@/schemas/plugin'
 export * from '@/schemas/registry'
+export * from '@/schemas/model-resource-profile'
+export * from '@/schemas/assess-model-fit'

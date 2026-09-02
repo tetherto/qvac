@@ -46,21 +46,66 @@ const noGpu = String(noGpuEnv || '').toLowerCase() === 'true'
 // CPU-only platforms (no GPU inference path today)
 const useCpu = isDarwinX64 || isLinuxArm64
 
-// The default VLM pair for every image test that does not pass its own config.
-// prestage-set: multimodal-default
-const MULTIMODAL_MODEL_CONFIG = {
-  llmModel: {
-    modelName: 'SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
-    downloadUrl:
-      'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
-  },
-  projModel: {
-    modelName: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
-    downloadUrl:
-      'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
-  },
-  ctx_size: '2048'
+// Read a string env var. Bare doesn't define `process` as a global at
+// module-init time, so try bare-os first and fall back behind a `typeof`
+// guard; `_envInt` further down is the integer twin of this. Going through
+// os.getEnv() is what makes a variable settable on Device Farm, which has no
+// `env:` block and injects values via os.setEnv() from qvacPerfConfig.txt.
+function _envStr(key) {
+  if (typeof os.getEnv === 'function') return os.getEnv(key) || ''
+  if (typeof process !== 'undefined' && process.env) return process.env[key] || ''
+  return ''
 }
+
+// The VLM pairs available to every image test that does not pass its own
+// config. Both sit inside ONE literal deliberately: validate-mobile-manifest.js
+// reads the prestage-set marker with a regex plus brace matching and takes the
+// first `{` after it, so a ternary here would silently drop the second pair
+// from the expected set. Keeping both inside makes the set their union, and
+// each consuming test opts the pair it isn't using out with prestage-ignore.
+//
+// No downloadUrl on these: ensureModel() resolves url + sha256 + bytes from
+// models.manifest.json by modelName and ignores any URL passed alongside it.
+// prestage-set: multimodal-default
+const MULTIMODAL_MODEL_CONFIGS = {
+  smolvlm2: {
+    llmModel: { modelName: 'SmolVLM2-500M-Video-Instruct-Q8_0.gguf' },
+    projModel: { modelName: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf' },
+    ctx_size: '2048',
+    batchCtxSize: '4096'
+  },
+  // VisionPsy Nano, base checkpoint. Needs no image-no-upscale key: base
+  // preprocessing is what its GGUF already declares. Only loadable against a
+  // fabric carrying the VisionPsy projector alias (qvac-fabric-llm.cpp#205),
+  // which is covered by this package's qvac-fabric dependency floor.
+  visionpsy: {
+    llmModel: { modelName: 'visionpsy-nano-460m-q8_0.gguf' },
+    projModel: { modelName: 'mmproj-visionpsy-nano-460m-q8.gguf' },
+    ctx_size: '4096',
+    batchCtxSize: '8192'
+  }
+}
+
+// QVAC_VLM_MODEL selects the pair for every test that takes the default, so the
+// same assertions can run against either model without forking them.
+//
+// VisionPsy Nano base is the default: it is the model this suite is here to
+// cover, and it exercises real idefics3 slicing. SmolVLM2 stays available as
+// QVAC_VLM_MODEL=smolvlm2 for an A/B, but note its mmproj declares no
+// clip.vision.preproc_image_size, so fabric falls back to an overview-only
+// encode — ~64 image tokens regardless of image size, against VisionPsy's ~862.
+// It is the cheaper baseline, not the equivalent one.
+//
+// A typo throws rather than falling back, because silently measuring the wrong
+// model is the worse failure — same rule as QVAC_QWEN35_MTMD_SIZE.
+const VLM_MODEL = (_envStr('QVAC_VLM_MODEL') || 'visionpsy').toLowerCase()
+if (!MULTIMODAL_MODEL_CONFIGS[VLM_MODEL]) {
+  throw new Error(
+    `QVAC_VLM_MODEL must be one of ${Object.keys(MULTIMODAL_MODEL_CONFIGS).join(', ')} ` +
+      `(got "${VLM_MODEL}")`
+  )
+}
+const MULTIMODAL_MODEL_CONFIG = MULTIMODAL_MODEL_CONFIGS[VLM_MODEL]
 
 // Opt-in larger VLM pair — only tests that import LARGE_MULTIMODAL_CONFIG and
 // pass it to setupMultimodalInference() load these.

@@ -63,6 +63,11 @@ permissions:
   packages: read
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # NOTE: continue-on-error: true mirrors the early-days landing posture
   # we use for parakeet's matching workflow.  The on-pr-tts-ggml.yml
   # merge-guard treats this job's `success || skipped` as a pass, so a
@@ -72,14 +77,18 @@ jobs:
   # change merge-guard to require `success`) once the addon's flake
   # surface is small enough to make a hard gate cheap.
   run-integration-tests:
+    needs: runner_names
     timeout-minutes: 120
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu != 'true' && '-gpu' || '' }}-integration-tests
     env:
-      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
+      # Pins the engine's GPU backend cascade on rows that name one; the
+      # engine and the tests both treat empty as unset (default cascade).
+      TTS_CPP_GPU_BACKEND: ${{ matrix.gpu_backend }}
     permissions:
       contents: read
       packages: read
@@ -87,34 +96,43 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Both linux GPU runners carry an NVIDIA card and a prebuild that
+          # bundles the CUDA and Vulkan backends; pin one runner per backend so
+          # each keeps dedicated coverage instead of both resolving to the
+          # engine's CUDA-first preference.
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+            gpu_backend: cuda
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
+            gpu_backend: vulkan
           - os: ubuntu-26.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2604 }}
             platform: linux
             arch: x64
             no_gpu: 'true'
           - os: ubuntu-24.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404_arm }}
             platform: linux
             arch: arm64
             no_gpu: 'true'
           - os: macos-26
-            runner: macos-26
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
             platform: darwin
             arch: arm64
           - os: macos-15-large
+            runner: ${{ needs.runner_names.outputs.macos_15_large }}
             platform: darwin
             arch: x64
             no_gpu: 'true'
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
 
     steps:
       - name: Setup Node.js
@@ -132,7 +150,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install NPM dependencies
         working-directory: ${{ github.workspace }}/packages/tts-ggml
@@ -234,9 +252,13 @@ jobs:
         working-directory: ${{ github.workspace }}/packages/tts-ggml
         run: npm run test:integration
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          # /usr/local/cuda/lib64: the self-hosted linux GPU runners keep the
+          # CUDA toolkit there without registering it in ldconfig; the CUDA
+          # backend module's cudart/cuBLAS DT_NEEDED entries resolve from it.
+          # Harmless where the directory does not exist.
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'linux' && ':/usr/local/cuda/lib64' || '' }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       # Benchmark leg (run_rtf_benchmarks=true, set by
@@ -255,7 +277,7 @@ jobs:
             export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic3","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr"},{"engine":"chatterbox","useGPU":false,"backendHint":"cpu","enhancer":"lavasr"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":false,"backendHint":"cpu","denoiser":"lavasr"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","enhancerVariant":"f32"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","enhancerVariant":"q8_0"}]'
           elif [ "${{ matrix.platform }}" = "darwin" ]; then
             # macOS GPU backend is Metal, not Vulkan. Needs a Metal-capable
-            # runner (macos-26); hosted macs stay CPU-only via no_gpu.
+            # runner (qvac-macos26-arm64-gpu); hosted macs stay CPU-only via no_gpu.
             export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic3","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox","useGPU":true,"backendHint":"metal"},{"engine":"chatterbox-mtl","useGPU":true,"backendHint":"metal"},{"engine":"supertonic","useGPU":true,"backendHint":"metal"},{"engine":"supertonic-mtl","useGPU":true,"backendHint":"metal"},{"engine":"supertonic3","useGPU":true,"backendHint":"metal"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr"},{"engine":"chatterbox","useGPU":false,"backendHint":"cpu","enhancer":"lavasr"},{"engine":"supertonic","useGPU":true,"backendHint":"metal","enhancer":"lavasr"},{"engine":"chatterbox","useGPU":true,"backendHint":"metal","enhancer":"lavasr"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":false,"backendHint":"cpu","denoiser":"lavasr"},{"engine":"supertonic","useGPU":true,"backendHint":"metal","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":true,"backendHint":"metal","denoiser":"lavasr"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"supertonic","useGPU":true,"backendHint":"metal","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":true,"backendHint":"metal","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","enhancerVariant":"f32"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","enhancerVariant":"q8_0"},{"engine":"supertonic","useGPU":true,"backendHint":"metal","enhancer":"lavasr","enhancerVariant":"f32"},{"engine":"supertonic","useGPU":true,"backendHint":"metal","enhancer":"lavasr","enhancerVariant":"q8_0"}]'
           else
             export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic3","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox","useGPU":true,"backendHint":"vulkan"},{"engine":"chatterbox-mtl","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic-mtl","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic3","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr"},{"engine":"chatterbox","useGPU":false,"backendHint":"cpu","enhancer":"lavasr"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan","enhancer":"lavasr"},{"engine":"chatterbox","useGPU":true,"backendHint":"vulkan","enhancer":"lavasr"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":false,"backendHint":"cpu","denoiser":"lavasr"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":true,"backendHint":"vulkan","denoiser":"lavasr"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"chatterbox","useGPU":true,"backendHint":"vulkan","enhancer":"lavasr","denoiser":"lavasr"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","enhancerVariant":"f32"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu","enhancer":"lavasr","enhancerVariant":"q8_0"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan","enhancer":"lavasr","enhancerVariant":"f32"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan","enhancer":"lavasr","enhancerVariant":"q8_0"}]'
@@ -266,7 +288,11 @@ jobs:
           QVAC_TTS_GGML_BENCHMARK_MATRIX_OVERRIDE: ${{ inputs.benchmark_matrix_json }}
           QVAC_TTS_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
           QVAC_TTS_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          # /usr/local/cuda/lib64: the self-hosted linux GPU runners keep the
+          # CUDA toolkit there without registering it in ldconfig; the CUDA
+          # backend module's cudart/cuBLAS DT_NEEDED entries resolve from it.
+          # Harmless where the directory does not exist.
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'linux' && ':/usr/local/cuda/lib64' || '' }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -319,3 +345,4 @@ jobs:
             packages/tts-ggml/benchmarks/results/streaming-benchmark-*.json
           if-no-files-found: warn
           retention-days: 30
+

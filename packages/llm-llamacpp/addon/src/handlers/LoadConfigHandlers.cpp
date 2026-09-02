@@ -36,6 +36,31 @@ static void handleImageTileMode(common_params& params, const std::string& raw) {
   }
 }
 
+// Selects the idefics3-style no-upscale preprocessing rule. Tri-state on the
+// fabric side, but the config map can only say "the caller set something", so
+// this handler only ever writes 0 or 1; leaving the key out keeps fabric's -1
+// model default. Needed because the VisionPsy base and Flash mmprojs declare
+// identical vision hparams, so without it a Flash model silently runs base
+// preprocessing.
+static void
+handleImageNoUpscale(common_params& params, const std::string& raw) {
+  std::string val = raw;
+  std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+  if (val == "1" || val == "on" || val == "true") {
+    params.image_no_upscale = 1;
+  } else if (val == "0" || val == "off" || val == "false") {
+    params.image_no_upscale = 0;
+  } else {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "image-no-upscale must be 0/off/false or 1/on/true, got: %s",
+            raw.c_str()));
+  }
+}
+
 static void
 handleImageMaxTokens(common_params& params, const std::string& raw) {
   try {
@@ -73,6 +98,8 @@ const LoadConfigHandlerList LOAD_CONFIG_HANDLERS = {
     {"image_max_tokens", handleImageMaxTokens},
     {"image-min-tokens", handleImageMinTokens},
     {"image_min_tokens", handleImageMinTokens},
+    {"image-no-upscale", handleImageNoUpscale},
+    {"image_no_upscale", handleImageNoUpscale},
 };
 
 void applyLoadConfigHandlers(

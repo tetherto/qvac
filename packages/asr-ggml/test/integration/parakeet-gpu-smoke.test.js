@@ -1,12 +1,14 @@
 'use strict'
 
-// GPU smoke tests across all 4 parakeet model types.
+// GPU smoke tests across all supported parakeet model types.
 //
 // Today every other integration test sets `useGPU: false`, so the
 // integration matrix only exercises the CPU fallback path on real
 // devices. This file flips the switch with `useGPU: true` so that on
 //   - macOS / iOS:    Metal is engaged
-//   - Linux / Windows: Vulkan is engaged
+//   - Linux / Windows: CUDA or Vulkan is engaged (the opt-in `cuda` feature
+//                      compiles CUDA in alongside Vulkan and ggml registers
+//                      CUDA first, so a CUDA build on NVIDIA reports 2)
 //   - Android:         OpenCL on Adreno 700+, Vulkan on Mali / Xclipse;
 //                      the engine routes any vendor/tier it can't drive
 //                      to CPU and flags it via stats.gpuUnsupported
@@ -100,8 +102,8 @@ function expectsGpu() {
   )
 }
 
-function loadAudioSample() {
-  const samplePath = path.join(samplesDir, 'sample.raw')
+function loadAudioSample(filename = 'sample.raw') {
+  const samplePath = path.join(samplesDir, filename)
   if (!fs.existsSync(samplePath)) return null
   const rawBuffer = fs.readFileSync(samplePath)
   const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
@@ -180,7 +182,10 @@ function assertGpuBackend(t, modelType, stats) {
   if (platform === 'darwin' || platform === 'ios') {
     t.is(id, 1, `${modelType}/${platform}: expected Metal backendId=1, got ${name}`)
   } else if (platform === 'linux' || platform === 'win32') {
-    t.is(id, 3, `${modelType}/${platform}: expected Vulkan backendId=3, got ${name}`)
+    t.ok(
+      id === 2 || id === 3,
+      `${modelType}/${platform}: expected CUDA(2) or Vulkan(3) backendId, got ${name}`
+    )
   } else if (platform === 'android') {
     t.ok(
       id === 3 || id === 4,
@@ -189,10 +194,13 @@ function assertGpuBackend(t, modelType, stats) {
   }
 }
 
-async function runGpuModelTest(t, modelType, modelPath, audio, expectations) {
+async function runGpuModelTest(t, modelType, modelPath, audio, expectations, parakeetConfig) {
   const model = new ASRGgml({
     files: { model: modelPath },
-    config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: true } }
+    config: {
+      engine: 'parakeet',
+      parakeetConfig: { maxThreads: 4, useGPU: true, ...(parakeetConfig || {}) }
+    }
   })
   try {
     await model.load()
@@ -275,6 +283,30 @@ test(
   }
 )
 
+test(
+  'Unified GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'unified')
+      if (!modelPath) return
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(t, 'unified', modelPath, audio, { minTextLength: 10 })
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+)
+
 // EOU on offline mode runs the joint-network ASR path; on a clip with
 // real speech that must produce non-empty text. minTextLength=1 catches
 // the zero-token regression triggered by ggml-metal's Q-variant
@@ -317,6 +349,69 @@ test(
         return
       }
       await runGpuModelTest(t, 'sortformer', modelPath, audio, { containsSpeaker: true })
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+)
+
+test(
+  'Indic Conformer GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'indicConformer')
+      if (!modelPath) return
+      const audio = loadAudioSample('sample_hi.raw')
+      if (!audio) {
+        t.pass('sample_hi.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(
+        t,
+        'indicConformer',
+        modelPath,
+        audio,
+        { minTextLength: 10 },
+        { language: 'hi' }
+      )
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+)
+
+// Unified is standard RNN-T (English) that reuses the TDT predictor+joint
+// code path in parakeet-cpp. On Adreno OpenCL the transducer decode is
+// routed to host via the same use_graphs=false guard TDT uses (two
+// known ggml-opencl gaps: no ARGMAX kernel, and dropped in-place
+// aliased ggml_cpy writes on the LSTM persistent state); the encoder
+// still runs on the GPU so stats.backendId stays 4 (OpenCL). No new
+// fixture — Unified is English-only, so sample.raw is used and no
+// language overlay is passed.
+test(
+  'Unified GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'unified')
+      if (!modelPath) return
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(t, 'unified', modelPath, audio, { minTextLength: 10 })
     } finally {
       try {
         loggerBinding.releaseLogger()

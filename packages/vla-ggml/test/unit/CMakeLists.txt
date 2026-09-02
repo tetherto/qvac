@@ -4,6 +4,7 @@ add_executable(
   addon-test
   test_hparams.cpp
   test_backend_selection.cpp
+  test_smolvla_mmap_gate.cpp
   test_model_factory.cpp
   test_groot_load.cpp
   test_groot_m4_1_vlfusion.cpp
@@ -59,23 +60,34 @@ target_include_directories(
 
 target_compile_features(addon-test PRIVATE cxx_std_20)
 
-# Under GGML_BACKEND_DL the CPU/GPU backends are separate libqvac-ggml-*.so
-# modules co-installed with the ggml core lib. Production loads them from the
-# addon's prebuilds dir; the unit-test env (backend_env.cpp) loads them from
-# here. There's no reliable runtime handle to that directory ($ORIGIN RUNPATH
-# leaves dladdr with a relative path), so pass the absolute ggml lib dir in.
-target_compile_definitions(
-  addon-test
-  PRIVATE GGML_BACKEND_DIR="$<TARGET_FILE_DIR:ggml::ggml>")
+# BackendSelection.cpp references BACKENDS_SUBDIR on its DL load path. The addon
+# target defines it, but addon-test compiles that TU separately. Tests preload
+# backends via backend_env.cpp from GGML_BACKEND_DIR, so the value is unused at
+# runtime — a placeholder just lets the TU compile.
+target_compile_definitions(addon-test PRIVATE BACKENDS_SUBDIR="qvac-lib-infer-vla")
 
 target_link_libraries(
   addon-test
   PRIVATE
-    ggml::ggml
+    qvac-fabric::headers
+    ${qvac_fabric_target}_module
     GTest::gtest
     GTest::gtest_main
     GTest::gmock_main
 )
+
+# GGML_BACKEND_DL/DIR, copy qvac__fabric@0.bare + backends next to the binary,
+# rpath, and the win32 delay-load helper. See qvac-addon.cmake for the details.
+qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
+
+# AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
+# addon-test dynamically links the shared @qvac/fabric runtime
+# (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
+# -static-libstdc++. See packages/classification-ggml/test/unit/CMakeLists.txt
+# for the full rationale. scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI runs.
+if(NOT WIN32)
+  target_link_libraries(addon-test PRIVATE -fsanitize=address)
+endif()
 
 add_test(NAME VlaGgmlUnit COMMAND addon-test)
 set_tests_properties(VlaGgmlUnit PROPERTIES

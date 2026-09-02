@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-29
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader; no API change for this package).
+
+## [0.12.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+## [0.11.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.10.1] - 2026-08-20
+
+### Changed
+
+- Keep `@qvac/registry-client` as a `^0.6.1` development dependency for
+  IndicTrans registry downloads. It is no longer an optional peer, so consumer
+  installs (SDK, CLI) are not pinned to `^0.4.0` / hyperdb 4.x.
+
+### Fixed
+
+- Declare all runtime modules required by the published model fetchers, mobile
+  tests, and integration tests.
+- Declare the Bergamot `bare-fetch` integration as an optional peer, report how
+  to install lazy downloaders when requested, and preserve nested missing-module
+  errors.
+
+## [0.10.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+## [0.9.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
+## [0.8.0] - 2026-08-13
+
+### Changed
+
+- Content-identical republish of 0.7.0 under a collision-free version line.
+  The package's 2025-era lineage still owns `0.7.1` on npm, so semver ranges
+  around 0.7.0 (`^`/`~`) resolve to that obsolete pre-TypeScript artifact
+  instead of the current release. `0.8.x` has no historic versions, restoring
+  normal range semantics (`^0.8.0`) for consumers. No code changes.
+
+## [0.7.0] - 2026-08-11
+
 ### Added
 
 - `TranslationResponse` public type: `run()` resolves with the streaming
@@ -39,6 +100,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `getState().weightsLoaded` is set after a successful `load()`.
 - `load()` after `destroy()` now rejects — destruction is permanent.
 - `run()` before `load()` rejects with a clear "Model not loaded" error.
+
+### Pull Requests
+
+- [#3753](https://github.com/tetherto/qvac/pull/3753) - fix[api]: address
+  translation-nmtcpp package-review findings
 
 ## [10.0.0] - 2026-08-10
 

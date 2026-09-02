@@ -1,6 +1,6 @@
 ---
 title: Profiler
-description: Measure and export timing metrics across model loading, inference, and P2P delegation.
+description: Measure and export timing metrics across model loading and inference.
 schemaType: HowTo
 ---
 
@@ -14,6 +14,10 @@ You can also enable profiling globally and use a per-call override to [opt out](
 
 <Callout type="info">
 `profiler` is a process-wide singleton — its state persists until the process exits.
+</Callout>
+
+<Callout type="info">
+**Python:** the process-wide `profiler` object is JS/TS-only and intentionally not ported. In the Python SDK, profile a single call with `profiled_call()` and the `__profiling` envelope helpers from `tetherto.qvac_sdk.profiling`, then aggregate the returned `ProfilingReport`s yourself.
 </Callout>
 
 ## `profiler`
@@ -91,8 +95,7 @@ The gauges reuse the `ResourceMetric<T>` status, source, and scope semantics
 from `getSystemResources`. Unsupported metrics stay explicit rather than
 becoming zero. `resources.sampledAt` uses the same monotonic clock as the
 profiling event's `ts`, so the timestamps can be compared directly.
-`resources.origin` distinguishes the current `local` worker from a delegated
-`provider` worker. Samples are emitted through `profiler.onRecord`; they appear
+Samples are emitted through `profiler.onRecord`; they appear
 in `exportJSON().recentEvents` only in `verbose` mode. Enabling gauges in
 `summary` mode still pays the sampling cost without retaining the samples.
 Profiling-disabled operations and calls that do not opt in perform no resource
@@ -123,7 +126,7 @@ The following SDK operations support profiling:
 
 ### Global
 
-The following script enables profiling globally, loads a model, runs a completion, and exports timing data in all available formats:
+The following script enables profiling globally, loads a model, runs a completion, and exports timing data while also capturing resource gauges and backend diagnostics:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

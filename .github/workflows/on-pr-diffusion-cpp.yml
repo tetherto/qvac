@@ -103,7 +103,7 @@ jobs:
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/diffusion-cpp
 
@@ -298,28 +298,75 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.sha }}
 
-  run-mobile-integration-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write # Allow commenting on PRs
-      id-token: write
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+  # Mobile integration tests are no longer run on PRs. They run on demand via
+  # `integration-mobile-test-diffusion-cpp.yml` (workflow_dispatch), where the
+  # dispatcher must pick a specific device. The `run-mobile-addon-tests` label /
+  # ci-router `run_mobile` output are kept for a possible future revival but no
+  # longer trigger anything here. (Benchmark / weekend / on-merge mobile runs
+  # are unaffected — they call the mobile workflow directly.)
+
+  # QVAC-23767 hard gate: the linux prebuilds' dynamic-linking layout (no
+  # hard GPU-loader / external C++ runtime NEEDED on the addon; Vulkan ships
+  # as a self-contained DL module). The integration legs run the same checks
+  # but are continue-on-error; this job is NOT, and publish-prebuild-status
+  # folds its result into the qvac/prebuild-diffusion-cpp commit status that
+  # Merge Guard's verify-prebuilds requires — so a prebuild that would abort
+  # CPU-only hosts (gh#3853) cannot merge.
+  verify-prebuild-linking:
     needs:
       - fork-approval
       - authorize
+      - ci-router
       - prebuild
       - prebuild-artifact-reuse
-      - ci-router
-    uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.sha }}
+    if: |
+      always() && !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout linking checker (trusted ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          # The artifacts under inspection are the untrusted input; the
+          # INSPECTOR must come from a trusted ref so a PR cannot edit the
+          # rule it is judged by (same policy as publish-prebuild-status).
+          # On pull_request_target the checker is always taken from the
+          # default branch. workflow_dispatch is maintainer-triggered on a
+          # ref they chose, so it validates that ref's own checker — which is
+          # also how a PR introducing checker changes proves them pre-merge.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.repository.default_branch }}
+          sparse-checkout: packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Download prebuilds (from artifacts)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/qvac-diffusion-cpp
+          merge-multiple: true
+      - name: Verify linux prebuild dynamic linking
+        run: |
+          # Bootstrap: until the PR introducing the checker merges, the
+          # default branch has no script — and a PR cannot influence the
+          # default branch, so skipping when it is absent there is safe
+          # (no trusted rule exists yet). After merge this branch is dead.
+          if [ ! -f packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs ]; then
+            echo "checker not present on the trusted ref yet (pre-merge bootstrap); nothing to enforce"
+            exit 0
+          fi
+          node packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs "${{ runner.temp }}/qvac-diffusion-cpp"
 
   combine-perf-reports:
     name: Combined Performance Report
-    needs: [fork-approval, authorize, run-integration-tests, run-mobile-integration-tests]
+    # run-mobile-integration-tests removed — only desktop perf is combined on PRs now.
+    needs: [fork-approval, authorize, run-integration-tests]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -345,8 +392,50 @@ jobs:
           artifact-pattern: perf-report-diffusion-cpp-*-${{ github.run_number }}
           report-title: 'Diffusion Performance Report (All Platforms)'
 
+  publish-prebuild-status:
+    # Posts qvac/prebuild-diffusion-cpp for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
+    # verify-prebuild-linking folds in below: a linking violation publishes failure even when the build itself passed.
+    needs: [prebuild, prebuild-artifact-reuse, ci-router, verify-prebuild-linking]
+    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      # Trusted base-branch checkout of only the prebuild-status scripts (never
+      # PR head code), so publish logic is a single, unit-tested source.
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Publish prebuild status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # A verify-prebuild-linking failure is presented as a failed build:
+          # the produced artifacts must not ship (they would abort CPU-only
+          # hosts at addon load, gh#3853). Its skip is legitimate exactly when
+          # no prebuilds exist to verify (no-label path), which the script
+          # below already fails closed on via ci-router.
+          PREBUILD_RESULT: ${{ needs.verify-prebuild-linking.result == 'failure' && 'failure' || needs.prebuild.result }}
+          REUSE_HIT: ${{ needs.verify-prebuild-linking.result == 'failure' && 'false' || needs.prebuild-artifact-reuse.outputs.reuse_hit }}
+          # A skipped prebuild is only a pass when ci-router succeeded and chose
+          # not to build (no label); a skip from an upstream failure fails closed.
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
+          # Stamps this on-pr run's URL into target_url so Merge Guard can reject a
+          # status from a superseded (e.g. pre-label) run whose timestamp looks fresh.
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/prebuild-diffusion-cpp
+        run: node .github/scripts/prebuild-status/publish.mjs
+
   merge-guard:
-    needs: [authorize, ci-router, run-integration-tests, run-mobile-integration-tests, combine-perf-reports, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, await-ts-checks]
+    # run-mobile-integration-tests removed — mobile is on-demand only now.
+    needs: [authorize, ci-router, run-integration-tests, combine-perf-reports, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, await-ts-checks, verify-prebuild-linking]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     permissions:
@@ -355,5 +444,5 @@ jobs:
       packages: read
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      build-status: ${{ (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') && needs.verify-prebuild-linking.result != 'failure' }}
       general-checks-status: ${{ github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' }}

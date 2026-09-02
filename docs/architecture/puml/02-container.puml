@@ -1,36 +1,32 @@
 @startuml
 !include <C4/C4_Container>
+HIDE_STEREOTYPE()
 
-title QVAC SDK – Container Diagram
+title QVAC SDK Family - Container Diagram
 
-Person(dev, "Application Developer", "Integrates SDK into desktop or mobile apps")
+Person(dev, "Application Developer", "Integrates QVAC into JS, Python, Bare, desktop, or mobile apps")
 
-System_Boundary(sdk, "QVAC SDK") {
-    Container(client, "@qvac/sdk Client", "TypeScript", "Public API, config loading, RPC transport")
-    Container(worker, "Worker", "TypeScript/C++ on Bare Runtime", "RPC server, plugin host, inference engines")
-    ContainerDb(cache, "Model Cache", "Filesystem", "Downloaded models (~/.qvac/models)")
+System_Boundary(sdk, "QVAC SDK Family") {
+    Container(client, "Host Client", "TypeScript / Python", "Public API, config, and RPC transport")
+    Container(worker, "Bare Worker", "TypeScript on Bare", "RPC shell and process lifecycle")
+    Container(engine, "@qvac/inference", "TypeScript on Bare", "Plugin host, models, P2P, registry, RAG")
+    ContainerDb(cache, "Model Cache", "Filesystem", "Downloaded and expanded model artifacts")
     ContainerDb(rag_store, "RAG Storage", "HyperDB / Corestore", "Vector embeddings per workspace")
 }
 
-System_Ext(dht, "Hyperswarm DHT", "P2P peer discovery")
-System_Ext(hyperdrive, "Hyperdrive Peers", "P2P model hosting")
-System_Ext(cdn, "HTTP Servers", "CDN / direct download")
-System_Ext(registry, "QVAC Model Registry", "Catalog and HTTP downloads")
-System_Ext(providers, "Remote Providers", "Delegated inference via P2P")
+System_Ext(http, "HTTP / CDN", "Direct model file downloads")
+System_Ext(p2p, "Holepunch P2P Network", "QVAC Model Registry, Hyperdrive, DHT, delegated inference")
 
-Rel_D(dev, client, "Calls SDK API")
-Rel_D(client, worker, "JSON-RPC over IPC / native bridge")
-Rel_L(worker, cache, "Reads/writes model files")
-Rel_R(worker, rag_store, "Persists/queries vectors")
-Rel_D(worker, dht, "Discovers peers via DHT")
-Rel_D(worker, hyperdrive, "Downloads models via P2P")
-Rel_D(worker, cdn, "Downloads models via HTTP")
-Rel_D(worker, registry, "Queries catalog, downloads models")
-Rel_D(worker, providers, "Delegates inference requests")
+Rel_D(dev, client, "Calls host API")
+Rel_D(client, worker, "RPC", "bare-rpc")
+Rel_D(worker, engine, "In-process engine calls")
+Rel_L(engine, cache, "Reads/writes models", "filesystem")
+Rel_R(engine, rag_store, "Persists/queries vectors", "HyperDB")
+Rel_D(engine, http, "Downloads models", "HTTPS")
+Rel_D(engine, p2p, "Catalog, blobs, sync, delegated inference", "Holepunch")
 
-Lay_R(dht, hyperdrive)
-Lay_R(hyperdrive, cdn)
-Lay_R(cdn, registry)
-Lay_R(registry, providers)
+Lay_D(client, worker)
+Lay_D(worker, engine)
+Lay_R(http, p2p)
 
 @enduml

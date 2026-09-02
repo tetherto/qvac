@@ -1,16 +1,62 @@
 {
   "name": "@qvac/rag",
-  "version": "0.6.4",
-  "main": "index.js",
+  "version": "0.8.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "imports": {
+    "#crypto": {
+      "types": "./src/shims/crypto.ts",
+      "bare": "bare-crypto",
+      "node": "node:crypto",
+      "react-native": "./dist/shims/crypto.js",
+      "default": "./dist/shims/crypto.js"
+    },
+    "#fetch": {
+      "types": "./src/shims/fetch.ts",
+      "bare": "bare-fetch",
+      "node": "./dist/shims/fetch.js",
+      "react-native": "./dist/shims/fetch.js",
+      "default": "./dist/shims/fetch.js"
+    },
+    "#fs": {
+      "types": "./src/shims/fs.ts",
+      "bare": "bare-fs",
+      "node": "node:fs",
+      "react-native": "./dist/shims/fs.js",
+      "default": "./dist/shims/fs.js"
+    },
+    "#path": {
+      "types": "./src/shims/path.ts",
+      "bare": "bare-path",
+      "node": "node:path",
+      "react-native": "./dist/shims/path.js",
+      "default": "./dist/shims/path.js"
+    }
+  },
   "scripts": {
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "lint": "lunte",
     "lint:fix": "lunte --fix",
-    "test:unit": "brittle-bare test/unit/*.test.js",
-    "test:integration": "brittle-bare test/integration/*.test.js",
-    "test": "npm run lint && npm run format && npm run test:unit && npm run test:integration",
-    "build:hyperdb-spec": "bare scripts/build-hyperdb-spec.js"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "build": "tsc -p tsconfig.build.json && bare scripts/copy-hyperspec.ts dist",
+    "prepare": "npm run build",
+    "build:test": "tsc -p test/tsconfig.build.json && bare scripts/copy-hyperspec.ts test/dist/src && bare scripts/copy-test-fixtures.ts",
+    "test:unit": "npm run build:test && brittle-bare 'test/dist/test/unit/*.test.js'",
+    "test:integration": "npm run build:test && brittle-bare 'test/dist/test/integration/*.test.js'",
+    "build:hyperdb-spec": "bare scripts/build-hyperdb-spec.ts"
   },
   "license": "Apache-2.0",
   "author": "Tether",
@@ -22,59 +68,33 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "files": [
-    "src",
-    "index.js",
-    "index.d.ts",
+    "dist",
     "LICENSE",
     "NOTICE"
   ],
-  "types": "index.d.ts",
-  "exports": {
-    "./package.json": "./package.json",
-    ".": {
-      "types": "./index.d.ts",
-      "default": "./index.js"
-    },
-    "./errors": {
-      "types": "./src/errors.d.ts",
-      "default": "./src/errors.js"
-    },
-    "./errors.js": {
-      "types": "./src/errors.d.ts",
-      "default": "./src/errors.js"
-    }
-  },
-  "imports": {
-    "#crypto": {
-      "bare": "bare-crypto",
-      "node": "node:crypto",
-      "react-native": "./src/shims/crypto.js",
-      "default": "./src/shims/crypto.js"
-    },
-    "#fetch": {
-      "bare": "bare-fetch",
-      "node": "./src/shims/fetch.js",
-      "react-native": "./src/shims/fetch.js",
-      "default": "./src/shims/fetch.js"
-    }
-  },
   "devDependencies": {
-    "@qvac/embed-llamacpp": "^0.14.0",
-    "@qvac/llm-llamacpp": "^0.16.0",
+    "@qvac/embed-llamacpp": "^0.36.0",
+    "@qvac/llm-llamacpp": "^0.47.0",
     "@qvac/registry-client": "^0.6.0",
-    "bare-fs": "^4.1.6",
-    "bare-path": "^3.0.0",
+    "@types/brittle": "^3.5.0",
+    "bare": "*",
+    "bare-abort-controller": "^1.1.2",
+    "bare-console": "*",
     "brittle": "^3.14.0",
     "corestore": "^7.4.7",
     "lunte": "^1.8.1",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
-    "test-tmp": "^1.4.0"
+    "test-tmp": "^1.4.0",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
+    "@qvac/logging": "^0.1.1",
     "bare-crypto": "^1.13.4",
     "bare-fetch": "^3.0.1",
+    "bare-fs": "^4.7.0",
+    "bare-path": "^3.0.0",
     "hyperdb": "^6.7.0",
     "hyperdht": "^6.23.0",
     "hyperschema": "^1.13.0",
