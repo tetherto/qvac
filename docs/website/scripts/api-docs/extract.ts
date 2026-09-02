@@ -575,11 +575,12 @@ function buildApiFunction(
             .filter((t: any) => t.tag === "@throws")
             .map((t: any) => {
               const text = extractComment(t.content);
-              const m = text.match(/^\{([^}]+)\}\s*(.*)/);
-              if (m) return { error: m[1], description: m[2] };
-              return { error: text, description: "" };
+              const m = text.match(/^\{([^}]+)\}\s*(.*)/s);
+              if (m) return { error: m[1], description: m[2].trim() };
+              // Classless throws: description-only, no forged error name.
+              return { error: "", description: text.trim() };
             })
-            .filter((t: any) => t.error);
+            .filter((t: any) => t.error || t.description);
     // Author-provided short label, written as `@overloadLabel "Single text"`.
     // When missing, the heading falls back to plain `Overload N`.
     const labelTag = sigBlockTags.find((t: any) => t.tag === "@overloadLabel");
@@ -758,11 +759,12 @@ function buildApiFunction(
         .filter((tag: any) => tag.tag === "@throws")
         .map((tag: any) => {
           const text = extractComment(tag.content);
-          const match = text.match(/^\{([^}]+)\}\s*(.*)/);
-          if (match) return { error: match[1], description: match[2] };
-          return { error: text, description: "" };
+          const match = text.match(/^\{([^}]+)\}\s*(.*)/s);
+          if (match) return { error: match[1], description: match[2].trim() };
+          // Classless throws: description-only, no forged error name.
+          return { error: "", description: text.trim() };
         })
-        .filter((t: any) => t.error);
+        .filter((t: any) => t.error || t.description);
     })(),
     examples: blockTags
       .filter((tag: any) => tag.tag === "@example")
@@ -1378,10 +1380,13 @@ function parseThrowsFromJsDoc(
     const error = (m[1] ?? "").trim();
     const description = (m[2] ?? "").trim();
     if (!error && !description) continue;
-    entries.push({
-      error: error || description,
-      description: error ? description : "",
-    });
+    // `@throws` without a `{ClassName}` header is valid TSDoc: the tag body is
+    // free-form. Leave `error` empty in that case so the renderer can pick a
+    // representation for classless entries (see `single-page.njk`) instead of
+    // shoehorning the description into a field that will later be wrapped in
+    // inline-code backticks — which produces MDX with mismatched fences when
+    // the description carries its own backticks or JSX-like tokens.
+    entries.push({ error, description });
   }
   return entries;
 }
