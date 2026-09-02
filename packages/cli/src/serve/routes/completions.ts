@@ -1,19 +1,19 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
-import { HttpError } from '../lib/http-error.js'
-import { initSSE, sendSSE, endSSE } from '../lib/sse.js'
-import { drainCompletion, type OpenAiFinishReason } from '../adapters/openai/completion-result.js'
-import { requireModel } from '../plugins/require-model.js'
-import { logUnsupported } from '../plugins/log-unsupported.js'
+import { HttpError } from '@/serve/lib/http-error'
+import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
+import { drainCompletion, type OpenAiFinishReason } from '@/serve/adapters/openai/completion-result'
+import { requireModel } from '@/serve/plugins/require-model'
+import { logUnsupported } from '@/serve/plugins/log-unsupported'
 import {
   completionsBody,
   COMPLETIONS_UNSUPPORTED_PARAMS,
   legacyPromptToHistory,
   InvalidPromptError,
   toSdkCompletionsArgs
-} from '../schemas/completions.js'
-import type { GenerationParams } from '../schemas/common.js'
+} from '@/serve/schemas/completions'
+import type { GenerationParams } from '@/serve/schemas/common'
 
 function randomId(): string {
   return Math.random().toString(36).slice(2, 12)

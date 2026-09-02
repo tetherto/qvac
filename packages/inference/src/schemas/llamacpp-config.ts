@@ -93,12 +93,6 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`).'
     ),
-  n_discarded: z
-    .number()
-    .optional()
-    .describe(
-      'Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`).'
-    ),
   parallel: z
     .number()
     .int()

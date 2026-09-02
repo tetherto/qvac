@@ -68,6 +68,8 @@ export interface AudioGenJobData {
     referenceAudio?: Float32Array;
     sourceAudio?: Float32Array;
     taskType?: string;
+    track?: string;
+    guidanceScale?: number;
     audioCoverStrength?: number;
     coverNoiseStrength?: number;
     maxFrames?: number;
