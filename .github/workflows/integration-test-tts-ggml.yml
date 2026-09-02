@@ -10,7 +10,11 @@ on:
         default: main
       prebuild_package:
         description: "NPM package containing prebuilds (e.g. @qvac/tts-ggml@1.0.0)"
-        required: true
+        required: false
+        type: string
+      prebuild_run_id:
+        description: "Workflow run id to download prebuild artifacts from (alternative to prebuild_package for preflight branches)"
+        required: false
         type: string
       run_integration_tests:
         description: "Run the regular integration suite"
@@ -61,6 +65,7 @@ on:
 permissions:
   contents: read
   packages: read
+  actions: read
 
 jobs:
   runner_names:
@@ -92,6 +97,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -167,11 +173,20 @@ jobs:
         shell: bash
 
       - name: Download prebuilds from artifact
-        if: ${{ !inputs.prebuild_package }}
+        if: ${{ !inputs.prebuild_package && !inputs.prebuild_run_id }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ runner.temp }}/tts-ggml
           merge-multiple: true
+
+      - name: Download prebuilds from a prior prebuild run
+        if: ${{ !inputs.prebuild_package && inputs.prebuild_run_id }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/tts-ggml
+          merge-multiple: true
+          run-id: ${{ inputs.prebuild_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - if: ${{ !inputs.prebuild_package }}
         shell: bash
