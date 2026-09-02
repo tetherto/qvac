@@ -156,18 +156,18 @@ jobs:
               const response = await github.rest.checks.listForRef({
                 ...context.repo,
                 ref: process.env.PR_HEAD_SHA,
-                check_name: 'diffusion-pr-head-ts-checks',
+                check_name: 'diffusion-pr-head-ts-checks / ts-checks',
                 filter: 'latest',
                 per_page: 100
               })
               const check = response.data.check_runs.find(
-                ({ name }) => name === 'diffusion-pr-head-ts-checks'
+                ({ name }) => name === 'diffusion-pr-head-ts-checks / ts-checks'
               )
 
               if (check?.status === 'completed') {
                 if (check.conclusion !== 'success') {
                   core.setFailed(
-                    `diffusion-pr-head-ts-checks completed with conclusion: ${check.conclusion}`
+                    `diffusion-pr-head-ts-checks / ts-checks completed with conclusion: ${check.conclusion}`
                   )
                 }
                 return
