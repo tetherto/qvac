@@ -38,6 +38,14 @@ Style guide for this PR description:
 // new code example
 ```
 
+## 🖥️ First-class products (CLI)
+
+**Delete if not applicable.**
+
+- [ ] `qvac serve` updated, or library-only (say why)
+- [ ] `qvac configure` updated if load-time `modelConfig` changed
+- [ ] CLI test and HTTP docs if the public serve surface changed
+
 ## 🔌 API Changes
 
 **Required for PRs with `[api]` tag. Delete this section if not applicable.**
