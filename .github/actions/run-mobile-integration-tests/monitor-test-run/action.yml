@@ -125,13 +125,17 @@ runs:
         aws sts get-caller-identity --output json || echo "  (sts:GetCallerIdentity failed — see error above)"
         echo ""
         PREFLIGHT_OK=false
+        PREFLIGHT_ERR="${RUNNER_TEMP:-/tmp}/devicefarm-preflight-stderr.$$"
+        : > "$PREFLIGHT_ERR"
         for _attempt in 1 2 3; do
           echo "GetRun on ${RUN_ARNS[0]} (attempt $_attempt/3):"
           if aws devicefarm get-run --arn "${RUN_ARNS[0]}" \
-               --query 'run.{status:status,result:result,name:name}' --output json; then
+               --query 'run.{status:status,result:result,name:name}' --output json \
+               2>"$PREFLIGHT_ERR"; then
             PREFLIGHT_OK=true
             break
           fi
+          cat "$PREFLIGHT_ERR"
           [ "$_attempt" -lt 3 ] && sleep 10
         done
         echo "::endgroup::"
@@ -143,6 +147,28 @@ runs:
           # and stop. Best-effort stop-run first: the run is already scheduled
           # and bills device-minutes whether or not this job stays alive, and
           # the caller's cancel step only fires on cancelled(), not failure.
+          # QVAC-24365: GitHub replaces any secret value appearing in a log line
+          # with `***`, and the Device Farm project ARN is a repo secret, so an
+          # AccessDenied prints as `on resource: ***`. That is GitHub masking a
+          # real ARN — NOT the CLI passing a `*` wildcard, and not IAM reporting
+          # one. Reading it as a wildcard sends you looking for the wrong bug, so
+          # classify it here, inside the runner where the unmasked strings exist,
+          # and print only a verdict that contains no secret.
+          _run_arn="${RUN_ARNS[0]}"
+          _proj_arn="${_run_arn%%/*}"
+          _proj_arn="${_proj_arn/:run:/:project:}"
+          echo "Which resource did IAM actually name? (classified without printing it)"
+          if grep -qF "$_proj_arn" "$PREFLIGHT_ERR"; then
+            echo "  -> the PROJECT ARN. It prints as *** only because that ARN is a"
+            echo "     repo secret. Note ListRuns/GetProject are ALLOWED on this same"
+            echo "     ARN, so the Resource block is fine and the ACTION is missing."
+          elif grep -qF "$_run_arn" "$PREFLIGHT_ERR"; then
+            echo "  -> the RUN ARN (${_run_arn})."
+            echo "     Could be a missing action OR a Resource list that omits run: ARNs."
+          else
+            echo "  -> neither the project nor the run ARN — read the raw error above."
+          fi
+          echo ""
           echo "🛑 Stopping the scheduled run(s) before bailing out"
           for ((i=0; i<RUN_COUNT; i++)); do
             if aws devicefarm stop-run --arn "${RUN_ARNS[$i]}" >/dev/null; then
