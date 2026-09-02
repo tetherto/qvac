@@ -526,8 +526,8 @@ test('completion: kv-cache survives a scheduler admission rejection between turn
     'admission-preserves-key'
   )
   t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
-  // Scheduler capacity refusals are the batch-mode overflow, so the consumer
-  // now gets the typed error with the reservation-plus-prompt total.
+  // Scheduler capacity refusals are the batch-mode overflow: the consumer
+  // gets the typed error with the reservation-plus-prompt total.
   t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused typed')
   const typed = refusal as { requiredTokens?: number; ctxSize?: number }
   t.is(typed.requiredTokens, 780, 'the total is the reservation plus the prompt')

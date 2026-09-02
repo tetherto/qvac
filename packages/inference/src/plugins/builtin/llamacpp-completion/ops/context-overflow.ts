@@ -24,7 +24,7 @@ const CONTEXT_OVERFLOW_FORMS = [
   // reports !ok); kept in case a patch revives the path.
   /^processPromptImpl: context overflow$/,
   // The batch scheduler's capacity refusals are the same out-of-context
-  // condition; the addon follow-up will give them a ContextOverflow status.
+  // condition, reported under a generic status.
   /^ContinuousBatchScheduler::submit: prompt of \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: prompt of \d+ tokens leaves no room under per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: prefill prompt of \d+ tokens exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
