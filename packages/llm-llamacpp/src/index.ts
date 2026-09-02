@@ -1050,13 +1050,14 @@ namespace LlmLlamacpp {
      */
     "split-mode"?: "none" | "layer" | "row" | "tensor";
     /**
-     * Flash attention. Defaults to `'on'` (the addon enables it unless
-     * finetuning, which forces it off). `'auto'` lets qvac-fabric decide.
+     * Flash attention. Defaults to `'on'`, except when finetuning or on a
+     * BitNet model, where it is forced off. `'auto'` lets qvac-fabric decide.
      *
      * qvac-fabric treats `'on'`, `'enabled'`, `'true'` and `'1'` as
      * equivalent, and likewise `'off'`, `'disabled'`, `'false'` and `'0'`;
      * `'auto'` is a third state, not a synonym for either. All spellings are
-     * lower-case — qvac-fabric's parser rejects mixed case.
+     * lower-case — matching is case-sensitive, and any other value is rejected
+     * with `InvalidArgument` naming the accepted spellings.
      *
      * **`'auto'` and the KV-cache default.** On a GPU backend the addon
      * defaults `cache-type-k`/`-v` to q8_0 when flash attention is on, roughly
@@ -1064,7 +1065,10 @@ namespace LlmLlamacpp {
      * default and keeps f16: a quantized V cache forces qvac-fabric to promote
      * AUTO to ENABLED, which would skip the runtime capability probe that
      * `'auto'` exists to run. Set `cache-type-k`/`-v` explicitly alongside
-     * `'auto'`, or use `'on'`, to get both.
+     * `'auto'`, or use `'on'`, to get both. The exception is
+     * `split-mode: 'tensor'`, where qvac-fabric promotes AUTO unconditionally
+     * so there is no probe to preserve — `'auto'` takes the q8_0 default there
+     * exactly as `'on'` does.
      *
      * Required by `split-mode: 'tensor'` — combining the two with a falsey
      * value is rejected with `InvalidArgument` rather than surfacing as an
@@ -1073,7 +1077,9 @@ namespace LlmLlamacpp {
      *
      * The `flash_attn` spelling is also accepted at runtime and reaches the
      * addon through the index signature below, matching how `main-gpu` and
-     * `split-mode` type only their hyphen form. Supplying both is an error.
+     * `split-mode` type only their hyphen form. Supplying both is an error and
+     * is rejected with `InvalidArgument`: both are dispatched to qvac-fabric
+     * and which one wins is unspecified.
      */
     "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
     /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */

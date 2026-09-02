@@ -120,41 +120,6 @@ bool archSupportsTensorSplit(const ModelMetaData& metadata) {
   return kUnsupported.count(*architecture) == 0;
 }
 
-// flash-attn value vocabulary, mirroring qvac-fabric's three-way split in
-// common/arg.cpp (common_arg_utils::is_truthy / is_falsey / is_autoy). The
-// --flash-attn handler at arg.cpp routes every value through those three
-// predicates and throws on anything they all reject, so a value outside all
-// three sets is invalid input, NOT a fourth state to guess at.
-//
-// Three sets rather than "on" vs. "everything else" because the addon asks two
-// DIFFERENT questions of this value and they have different answers for AUTO:
-//   - "will flash attention definitely be on?"  -> truthy only
-//   - "might flash attention be on?"            -> truthy or autoy
-// See flashAttnEnabled / flashAttnMayEnable in tuneLoadConfigMap.
-//
-// Case is normalised by the callers: the value is caller-supplied and mixed
-// case would otherwise slip past every set and be silently treated as "off".
-const std::unordered_set<std::string>& flashAttnTruthy() {
-  static const std::unordered_set<std::string> kTruthy = {
-      "on", "enabled", "true", "1"};
-  return kTruthy;
-}
-
-const std::unordered_set<std::string>& flashAttnFalsey() {
-  static const std::unordered_set<std::string> kFalsey = {
-      "off", "disabled", "false", "0"};
-  return kFalsey;
-}
-
-// "-1" is fabric's numeric spelling of AUTO (is_autoy accepts both). It is not
-// in the index.d.ts union, but the ConfigMap index signature lets it through,
-// so matching fabric here keeps the addon from disagreeing with the parser it
-// is about to hand the value to.
-const std::unordered_set<std::string>& flashAttnAutoy() {
-  static const std::unordered_set<std::string> kAutoy = {"auto", "-1"};
-  return kAutoy;
-}
-
 // Lambda form rather than a bare ::tolower: the value is caller-supplied and
 // may carry non-ASCII bytes, which are negative under a signed char and
 // undefined input to tolower.
@@ -164,6 +129,79 @@ std::string toLowerAscii(std::string value) {
         return static_cast<char>(std::tolower(character));
       });
   return value;
+}
+
+// The resolved flash-attn value, classified against qvac-fabric's own three-way
+// vocabulary. Fabric's --flash-attn handler (common/arg.cpp) routes every value
+// through is_truthy / is_falsey / is_autoy and throws on anything all three
+// reject, so a value outside them is invalid input, NOT a fourth state.
+//
+// Two flags rather than one because the guards that read this ask DIFFERENT
+// questions, and AUTO answers them differently:
+//   - "will flash attention definitely be on?"  -> enabled
+//   - "might flash attention be on?"            -> mayEnable
+struct FlashAttnState {
+  bool enabled = false;
+  bool mayEnable = false;
+};
+
+// Resolves flash-attn from BOTH key spellings, validates it, and classifies it
+// once. Callers get a value already checked against fabric's vocabulary, so no
+// guard downstream has to decide what an unrecognised string means.
+//
+// Both spellings present is a hard error. The passthrough loop emits one
+// --flash-attn per key and ConfigMap is an unordered_map, so a contradictory
+// pair hands fabric two flags whose winner is unspecified — which let a caller
+// read as "off" here while fabric applied "auto", disarming the Adreno crash
+// guard below. index.d.ts already publishes "Supplying both is an error"; this
+// is where that contract is finally enforced, matching what split-mode and
+// mmproj-use-gpu already do for their own duplicate spellings.
+//
+// The value is matched case-SENSITIVELY, deliberately. Fabric's predicates do
+// no case folding, so lowercasing here would let the addon act on a value
+// fabric then rejects — making this file more permissive than the parser it
+// feeds, and replacing fabric's accurate "unknown value" with whatever
+// downstream guard happened to fire first.
+FlashAttnState resolveFlashAttn(
+    const std::unordered_map<std::string, std::string>& configFilemap) {
+  const auto hyphenIt = configFilemap.find("flash-attn");
+  const auto underscoreIt = configFilemap.find("flash_attn");
+  if (hyphenIt != configFilemap.end() && underscoreIt != configFilemap.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: both 'flash-attn' and 'flash_attn' are present; use one or "
+            "the other. Supplying both leaves it unspecified which flash "
+            "attention value reaches qvac-fabric.\n",
+            K_LEGACY_PARSER_NAME.data()));
+  }
+
+  const auto it = (hyphenIt != configFilemap.end()) ? hyphenIt : underscoreIt;
+  if (it == configFilemap.end()) {
+    return {};
+  }
+
+  // is_autoy also accepts "-1", fabric's numeric spelling of AUTO. That is not
+  // in index.d.ts's declared union for "flash-attn", and a declared property
+  // wins over the [key: string] index signature — so a TypeScript caller can
+  // only reach "-1" through the undeclared "flash_attn" spelling. Accepted
+  // anyway, because the addon must not disagree with the parser it is about to
+  // hand the value to, and direct C++ / JS callers bypass the types entirely.
+  const std::string& value = it->second;
+  const bool truthy = common_arg_utils::is_truthy(value);
+  const bool falsey = common_arg_utils::is_falsey(value);
+  const bool autoy = common_arg_utils::is_autoy(value);
+  if (!truthy && !falsey && !autoy) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: unknown value for %s: '%s'. Accepted (lower-case): on, "
+            "enabled, true, 1, off, disabled, false, 0, auto.\n",
+            K_LEGACY_PARSER_NAME.data(),
+            it->first.c_str(),
+            value.c_str()));
+  }
+  return {.enabled = truthy, .mayEnable = truthy || autoy};
 }
 
 } // namespace
@@ -246,9 +284,16 @@ void tuneLoadConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
-    bool isMetal, bool isGpu) {
+    bool isMetal, bool isGpu, bool isTensorSplit) {
 
   const bool isFinetuning = finetuneOverrides.active;
+
+  // Validate the CALLER's value before any default is written on top of it.
+  // Order matters: the finetuning branch below erases "flash_attn" and writes
+  // "flash-attn", which would silently resolve a contradictory pair instead of
+  // rejecting it. The classified result is recomputed after the defaults, so
+  // only the validation side effect is wanted here.
+  static_cast<void>(resolveFlashAttn(configFilemap));
 
   auto notUserSet = [&](const char* hyphenKey, const char* underscoreKey) {
     return configFilemap.find(hyphenKey) == configFilemap.end() &&
@@ -368,56 +413,46 @@ void tuneLoadConfigMap(
   // The finetuning f32 KV override above runs first; the auto-default is gated
   // by !isFinetuning so it never clobbers it.
   //
-  // Shared inputs, computed once (flash-attn is already resolved above).
-  // flash-attn is read from BOTH the hyphen and underscore keys: a caller may
-  // pass flash_attn=on directly, and the underscore->hyphen normalization only
-  // happens later in the configVector loop — so check both here, otherwise the
-  // auto-default and the Adreno reject guard below would be silently skipped.
-  // The VALUE spelling matters as much as the key spelling, for the same
-  // reason the tensor-split guard in normalizeLoadForFit spells its set out:
-  // fabric accepts "enabled", "true" and "1" as synonyms for "on", so an
-  // equality test against "on" alone classifies three documented, valid values
-  // (index.d.ts) as flash-attention-off and skips both guards for them.
+  // Shared inputs, computed once. Re-resolved rather than reusing the caller's
+  // classification above, because the branches in between may have written the
+  // effective value (the "on" default, BitNet's and finetuning's force-off) —
+  // this must read what fabric will actually receive.
   constexpr int kAdrenoKvQuantThreshold = 800;
-  auto valueIn = [&](const char* hyphenKey,
-                     const char* underscoreKey,
-                     const std::unordered_set<std::string>& set) {
-    auto it = configFilemap.find(hyphenKey);
-    if (it == configFilemap.end())
-      it = configFilemap.find(underscoreKey);
-    return it != configFilemap.end() && set.count(toLowerAscii(it->second)) > 0;
-  };
-  // Two predicates, not one, because the two guards below ask different
-  // questions and AUTO answers them differently.
+  const FlashAttnState flashAttn = resolveFlashAttn(configFilemap);
+
+  // Two questions, not one, because the guards below differ on AUTO.
   //
-  // flashAttnEnabled — "flash attention will definitely be on". Truthy only.
-  // AUTO is deliberately excluded: the q8_0 KV-cache default it gates would
-  // quantize the V cache, and fabric promotes AUTO to ENABLED whenever the V
-  // cache is quantized (src/llama-context.cpp, "enabling flash_attn since it
-  // is required for quantized V cache"). Defaulting q8_0 for an AUTO caller
-  // would therefore force flash attention on and skip the runtime capability
+  // flashAttnEnabled — "flash attention will definitely be on". Truthy only,
+  // with one exception. AUTO is otherwise excluded because the q8_0 default it
+  // gates quantizes the V cache, and fabric promotes AUTO to ENABLED whenever
+  // the V cache is quantized (src/llama-context.cpp, "enabling flash_attn
+  // since it is required for quantized V cache"). Defaulting q8_0 for an AUTO
+  // caller would force flash attention on and skip the runtime capability
   // probe (llama_context::resolve, cparams.auto_fa) that AUTO exists to run —
-  // silently contradicting this package's own documented contract for the
-  // value: "'auto' lets qvac-fabric decide" (src/index.ts). An AUTO caller
-  // keeps the f16 default; an explicit cache-type-k/v still works.
+  // contradicting this package's documented contract, "'auto' lets qvac-fabric
+  // decide" (src/index.ts). An AUTO caller keeps f16; an explicit
+  // cache-type-k/v still works.
+  //
+  // The exception is split-mode 'tensor'. Fabric promotes AUTO to ENABLED for
+  // that mode unconditionally and before any KV type is read
+  // (src/llama-context.cpp, "enabling flash_attn since it is required for
+  // SPLIT_MODE_TENSOR"), so there is no probe left to protect and withholding
+  // q8_0 would cost 2x the KV cache for nothing. It lands worst there too:
+  // tensor mode force-disables auto-fit, so nothing trims ctx_size to absorb
+  // it. Falsey under tensor mode is rejected outright by the guard in
+  // normalizeLoadForFit, so it cannot reach the q8_0 block either way.
   //
   // flashAttnMayEnable — "flash attention might be on". Truthy or autoy. The
   // Adreno crash guard is defence-in-depth against a native abort, so it must
-  // fire on any value that can reach fabric with flash attention active, and
+  // fire for any value that can reach fabric with flash attention active, and
   // AUTO can: quantized V promotes it to ENABLED, and even an un-promoted AUTO
-  // resolves to enabled on any device whose probe passes. This is deliberately
-  // conservative — with a quantized K cache only, no promotion fires and the
-  // probe might have disabled flash attention on its own, but the guard runs
-  // long before the probe and cannot know the outcome.
-  //
-  // A value in NEITHER set (a typo like "yes") is invalid input, not a state
-  // to infer: both guards decline it and fabric's own parser produces the
-  // accurate "unknown value for --flash-attn" rather than this file throwing a
-  // misleading flash-attention-and-quantized-KV error.
+  // resolves to enabled wherever the probe passes. Deliberately conservative —
+  // with a quantized K cache only no promotion fires and the probe might have
+  // disabled flash attention on its own, but the guard runs long before the
+  // probe and cannot know the outcome.
   const bool flashAttnEnabled =
-      valueIn("flash-attn", "flash_attn", flashAttnTruthy());
-  const bool flashAttnMayEnable =
-      flashAttnEnabled || valueIn("flash-attn", "flash_attn", flashAttnAutoy());
+      flashAttn.enabled || (isTensorSplit && flashAttn.mayEnable);
+  const bool flashAttnMayEnable = flashAttn.mayEnable;
   // Adreno 800+ on Vulkan: coopmat1 Flash Attention is unstable with quantized
   // KV (no fabric scalar-FA fix on this branch). Adreno selects OpenCL by
   // default, so this is normally unreachable; kept as a defensive guard against
@@ -640,8 +675,7 @@ NormalizedLoad normalizeLoadForFit(
 
   // Check if tools are enabled and exclude it with jinja from the config file
   if (auto iter = configFilemap.find("tools"); iter != configFilemap.end()) {
-    std::string toolsVal = iter->second;
-    std::ranges::transform(toolsVal, toolsVal.begin(), ::tolower);
+    const std::string toolsVal = toLowerAscii(iter->second);
     if (toolsVal == "true") {
       params.use_jinja = true;
       // Remove "tools" from config, since using jinja
@@ -666,8 +700,7 @@ NormalizedLoad normalizeLoadForFit(
   std::optional<std::string> loadMode;
   for (const std::string& key : {"load-mode", "load_mode"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      std::string value = it->second;
-      std::ranges::transform(value, value.begin(), ::tolower);
+      const std::string value = toLowerAscii(it->second);
       if (loadMode.has_value() && loadMode.value() != value) {
         throw qvac_errors::StatusError(
             ADDON_ID,
@@ -732,8 +765,7 @@ NormalizedLoad normalizeLoadForFit(
   }
   if (auto it = (hIt != configFilemap.end()) ? hIt : uIt;
       it != configFilemap.end()) {
-    std::string val = it->second;
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+    const std::string val = toLowerAscii(it->second);
     if (val == "layer") {
       splitMode = LLAMA_SPLIT_MODE_LAYER;
     } else if (val == "row") {
@@ -811,8 +843,7 @@ NormalizedLoad normalizeLoadForFit(
       }
       if (auto it = (hMmproj != configFilemap.end()) ? hMmproj : uMmproj;
           it != configFilemap.end()) {
-        std::string val = it->second;
-        std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+        const std::string val = toLowerAscii(it->second);
         if (val == "true" || val == "on" || val == "1") {
           mmprojUseGpuOverride = true;
         } else if (val == "false" || val == "off" || val == "0") {
@@ -990,7 +1021,12 @@ NormalizedLoad normalizeLoadForFit(
       finetuneOverrides,
       isOpenCl,
       isMetal,
-      isGpu);
+      isGpu,
+      // params.split_mode is already assigned above (and reset to NONE on CPU
+      // fallback), so this is the mode fabric will actually see. Tensor mode
+      // changes how 'auto' is classified for the q8_0 KV default — see the
+      // comment on flashAttnEnabled.
+      params.split_mode == LLAMA_SPLIT_MODE_TENSOR);
 
   // QVAC-24253: constraints qvac-fabric places on LLAMA_SPLIT_MODE_TENSOR.
   // Keyed on params.split_mode, not the local splitMode, because that is the
@@ -1023,37 +1059,32 @@ NormalizedLoad normalizeLoadForFit(
     // error, so reject here instead of silently flipping a value the caller
     // set. AUTO is fine — fabric promotes it to ENABLED itself.
     //
-    // Both key spellings must be checked, for the same reason tuneLoadConfigMap
-    // does it above: when the caller passes flash_attn directly, none of the
-    // branches there fire, so the value is never normalised into the hyphen key
-    // and stays under the underscore one until the configVector loop rewrites
-    // it. Reading only "flash-attn" here would let flash_attn=off through.
-    // The value spelling matters as much as the key spelling: fabric's
-    // --flash-attn routes through common_arg_utils::is_falsey, which accepts
-    // "off", "disabled", "false" and "0" as equivalent. Comparing against
-    // "off" alone would let the other three reach fabric in exactly the state
-    // this guard exists to prevent. Case is normalised here too, though a
-    // mixed-case value would be rejected by fabric's own parser anyway.
-    // The set itself lives in flashAttnFalsey() at the top of this file, next
-    // to its truthy and autoy siblings, and is shared with the two guards in
-    // tuneLoadConfigMap: this guard and those must agree on what a value
-    // means, and for AUTO they previously did not.
-    // BOTH keys are checked, not just the first one found. The configVector
-    // loop below emits one --flash-attn per key, so a caller passing
-    // { "flash-attn": "on", "flash_attn": "off" } hands fabric two
-    // contradictory flags; ConfigMap is an unordered_map, so which one lands
-    // last — and therefore wins in fabric's parser — is unspecified. Stopping
-    // at the first key would let that pair skip the guard and still reach
-    // fabric with flash attention disabled, which is exactly the state this
-    // guard exists to prevent. Rejecting when EITHER key is falsey closes it
-    // deterministically.
+    // Both key spellings must be checked, for the same reason
+    // resolveFlashAttn does: when the caller passes flash_attn directly, none
+    // of tuneLoadConfigMap's default branches fire, so the value is never
+    // normalised into the hyphen key and stays under the underscore one until
+    // the configVector loop rewrites it. Reading only "flash-attn" here would
+    // let flash_attn=off through.
+    //
+    // The value spelling matters as much as the key spelling: fabric routes
+    // --flash-attn through common_arg_utils::is_falsey, which accepts "off",
+    // "disabled", "false" and "0" as equivalent, so comparing against "off"
+    // alone would let the other three reach fabric in the state this guard
+    // exists to prevent. is_falsey is called directly rather than mirrored, so
+    // this guard and the two in tuneLoadConfigMap cannot drift apart. No case
+    // folding, matching fabric — resolveFlashAttn has already rejected any
+    // value outside the three sets, mixed case included.
+    //
+    // A contradictory { "flash-attn": …, "flash_attn": … } pair is likewise
+    // already rejected by resolveFlashAttn, so at most one key is present by
+    // the time this loop runs; it iterates both only to find whichever that is
+    // and to name it accurately in the error.
     for (const char* flashAttnKey : {"flash-attn", "flash_attn"}) {
       const auto flashAttnIt = configFilemap.find(flashAttnKey);
       if (flashAttnIt == configFilemap.end()) {
         continue;
       }
-      const std::string flashAttnValue = toLowerAscii(flashAttnIt->second);
-      if (flashAttnFalsey().count(flashAttnValue) > 0) {
+      if (common_arg_utils::is_falsey(flashAttnIt->second)) {
         // Under finetuning tuneLoadConfigMap is what wrote flash-attn=off, so
         // telling the caller to remove a key they never set would misdirect
         // them.

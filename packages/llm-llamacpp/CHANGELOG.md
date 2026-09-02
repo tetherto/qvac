@@ -26,14 +26,55 @@
   documents `'auto'` as preserving — *"`'auto'` lets qvac-fabric decide"*. A caller who wants both should
   set `cache-type-k`/`-v` alongside it, or use `'on'`.
 
+- `split-mode: 'tensor'` + `flash-attn: 'auto'` now takes the q8_0 KV-cache default. It is the one mode
+  where the exclusion above does not apply: qvac-fabric promotes AUTO to ENABLED for tensor mode
+  unconditionally and before any KV type is read, so there is no capability probe to preserve, and
+  withholding q8_0 cost 2× the KV cache for nothing. Tensor mode also force-disables auto-fit, so nothing
+  was trimming `ctx_size` to absorb it.
+
+- Supplying **both** `flash-attn` and `flash_attn` is now rejected with `InvalidArgument`, implementing the
+  contract `index.d.ts` already published and matching what `split-mode` and `mmproj-use-gpu` already do.
+  Both spellings are dispatched to qvac-fabric as `--flash-attn` and which one wins is unspecified, so the
+  KV guards could read one value while qvac-fabric applied the other — leaving the Adreno crash guard
+  closed on a configuration that reaches the driver bug.
+
+- An unrecognised `flash-attn` value is now rejected with `InvalidArgument` naming the accepted spellings,
+  rather than falling out of every set and surfacing later as an unrelated error — typically the Adreno
+  quantized-KV message, which misattributes a simple typo. Matching is case-sensitive, as qvac-fabric's own
+  predicates are; the addon no longer accepts values qvac-fabric would reject. This also covers the empty
+  string, which suppressed the `'on'` default and reached the argument parser as a valueless flag.
+
+- On a BitNet model, an explicit truthy `flash-attn` now arms the q8_0 KV-cache default for every spelling,
+  not just `'on'`. BitNet's flash-attention force-off applies only when the key is unset, so setting it at
+  all has always opted out of that default; previously `'true'` silently did not. Behaviour with
+  `flash-attn` unset is unchanged — BitNet still forces it off and the q8_0 default stays closed.
+
+### Known follow-ups
+
+- **`packages/model-fit` must widen in lockstep and has not yet.** Its `flashEnabled` predicate
+  (`addon/src/fit/LlamaLoadConfig.cpp`) is still pinned to exact `"on"`, with a comment reserving the
+  widening for `llm-llamacpp` "first so both move together" — this is that move. Until it lands, `model-fit`
+  projects f16 where this addon now applies q8_0 (over-estimating KV by ~2× and trimming `ctx_size` further
+  than needed), and its Adreno 800+/Vulkan guard reports as supported a configuration this addon now
+  rejects. `model-fit`'s own CHANGELOG statement that *"`flash-attn` is recognised as enabled on `on` only,
+  as `llm-llamacpp` does"* is stale as of this entry.
+
+- **Grok on a GPU backend fails to load, and this change does not fix it.** qvac-fabric force-disables flash
+  attention for Grok, then rejects the quantized V cache the q8_0 default just applied, so context creation
+  returns null with no addon-side explanation. Pre-existing and unrelated to the value vocabulary — the
+  addon lifted qvac-fabric's spellings without lifting its architecture overrides. Needs `grok` added to the
+  q8_0 skip conditions or to the flash-attention force-off branch alongside BitNet.
+
 ### Documentation
 
 - `flash-attn` now has a row in the README config table — it had none, despite being a documented, typed
   field on `LlamaConfig`. The KV-cache auto-default section states which spellings count as "flash
-  attention on" and why `'auto'` keeps `f16`; `docs/multi-gpu.md` notes that `split-mode: 'tensor'` accepts
-  `'auto'`, and that it is the one place `'auto'` does not preserve qvac-fabric's capability probe. All
-  spellings are documented as lower-case only: qvac-fabric's value predicates are case-sensitive, so a
-  mixed-case value is rejected at argument parsing.
+  attention on", why `'auto'` keeps `f16`, and that tensor mode is the exception; `docs/multi-gpu.md` notes
+  that `split-mode: 'tensor'` accepts `'auto'`, and that it is the one place `'auto'` does not preserve
+  qvac-fabric's capability probe. All spellings are documented as lower-case only.
+
+- The documented default is now *"`'on'`, except when finetuning or on a BitNet model"* in both the README
+  row and the `LlamaConfig` field doc. Both previously named only finetuning.
 
 ## [0.49.0] - 2026-08-31
 

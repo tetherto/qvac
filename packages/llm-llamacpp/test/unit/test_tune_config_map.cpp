@@ -1137,33 +1137,80 @@ TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnOne_DefaultsQ8_0) {
   EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
 }
 
-// The value is caller-supplied, so case is normalised before matching: a
-// mixed-case value must not fall through every set and read as "off".
-// Defence-in-depth only — fabric's own predicates are case-sensitive, so such
-// a value is rejected at argument parsing and never completes a load (see
-// LoadFitNormalizationTest.TensorSplitMixedCaseFlashAttnRejected). This pins
-// the predicate, not an end-to-end capability.
-TEST_F(
-    TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnMixedCase_DefaultsQ8_0) {
-  MockModelMetaData meta(false, "llama");
-  configFilemap_["flash-attn"] = "On";
+// Matching is case-SENSITIVE, exactly as fabric's predicates are. Lowercasing
+// would make the addon act on a value fabric then rejects — more permissive
+// than the parser it feeds — so a mixed-case value is refused up front naming
+// the accepted spellings, rather than being silently read as "off" (skipping
+// both guards) or acted on and later failing with an unrelated message.
+TEST_F(TuneConfigMapTest, MixedCaseFlashAttn_Rejected) {
+  for (const char* value : {"On", "AUTO", "True", "OFF"}) {
+    std::unordered_map<std::string, std::string> configFilemap;
+    MockModelMetaData meta(false, "llama");
+    configFilemap["flash-attn"] = value;
 
-  tuneOnVulkanGpu(configFilemap_, meta);
-
-  EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
-  EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
+    try {
+      tuneOnVulkanGpu(configFilemap, meta);
+      FAIL() << "mixed-case flash-attn=" << value << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      const std::string what = error.what();
+      EXPECT_NE(what.find("unknown value"), std::string::npos) << what;
+      EXPECT_NE(what.find(value), std::string::npos) << what;
+    }
+  }
 }
 
-TEST_F(
-    TuneConfigMapTest,
-    AutoDefault_VulkanGpu_FlashAttnEnabledUnderscore_DefaultsQ8_0) {
-  MockModelMetaData meta(false, "llama");
-  configFilemap_["flash_attn"] = "enabled";
+// Every truthy synonym, under the underscore spelling too. The underscore key
+// is the one that reaches the addon through index.d.ts's index signature
+// rather than the declared union, so it is the likelier spelling to carry an
+// unusual value.
+TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_TruthyUnderscore_DefaultsQ8_0) {
+  for (const char* value : {"on", "enabled", "true", "1"}) {
+    std::unordered_map<std::string, std::string> configFilemap;
+    MockModelMetaData meta(false, "llama");
+    configFilemap["flash_attn"] = value;
+
+    tuneOnVulkanGpu(configFilemap, meta);
+
+    EXPECT_EQ(configFilemap["cache-type-k"], "q8_0")
+        << "flash_attn=" << value << " must arm the q8_0 default";
+    EXPECT_EQ(configFilemap["cache-type-v"], "q8_0")
+        << "flash_attn=" << value << " must arm the q8_0 default";
+  }
+}
+
+// BitNet force-disables flash attention only when the key is UNSET, so an
+// explicit truthy value overrides it — the caller has opted out of the safety
+// default by setting the key at all. Before this PR only 'on' did so and
+// 'true' silently did not; making them equivalent is the intended fix, not a
+// regression. Pinned because the behaviour widens on top of an arch-specific
+// default, which is easy to miss when reading the value table alone.
+TEST_F(TuneConfigMapTest, Bitnet_ExplicitTruthySynonym_ArmsQ8_0Default) {
+  for (const char* value : {"on", "true"}) {
+    std::unordered_map<std::string, std::string> configFilemap;
+    MockModelMetaData meta(true, "bitnet");
+    configFilemap["flash-attn"] = value;
+
+    tuneOnVulkanGpu(configFilemap, meta);
+
+    EXPECT_EQ(configFilemap["flash-attn"], value)
+        << "explicit flash-attn=" << value << " must survive BitNet force-off";
+    EXPECT_EQ(configFilemap["cache-type-k"], "q8_0")
+        << "flash-attn=" << value << " must arm the q8_0 default on BitNet";
+    EXPECT_EQ(configFilemap["cache-type-v"], "q8_0")
+        << "flash-attn=" << value << " must arm the q8_0 default on BitNet";
+  }
+}
+
+// The unset case is unchanged: BitNet still forces flash attention off, and
+// the q8_0 default stays closed behind it.
+TEST_F(TuneConfigMapTest, Bitnet_FlashAttnUnset_NoQ8_0Default) {
+  MockModelMetaData meta(true, "bitnet");
 
   tuneOnVulkanGpu(configFilemap_, meta);
 
-  EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
-  EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
+  EXPECT_EQ(configFilemap_["flash-attn"], "off");
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
 }
 
 // --- "auto" must NOT arm the q8_0 auto-default. ---
@@ -1248,17 +1295,44 @@ TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnZero_NotApplied) {
 }
 
 // --- A value in no set at all is invalid input, not a fourth state. ---
-// Neither guard claims it; fabric's parser produces the accurate "unknown
-// value for --flash-attn" rather than this file inventing a meaning.
+// Rejected here rather than left to fabric, so the caller is told what is
+// actually wrong. Letting it through meant the value fell out of every set,
+// silently skipped both guards, and surfaced later as whichever unrelated
+// error fired first — the Adreno quantized-KV message, typically.
+// The empty string is included because notUserSet() treats a present-but-empty
+// key as user-set, so it suppresses the "on" default and would otherwise reach
+// the passthrough loop as a valueless --flash-attn flag.
 
-TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_FlashAttnUnknown_StaysF16) {
+TEST_F(TuneConfigMapTest, UnknownFlashAttnValue_Rejected) {
+  for (const char* value : {"yes", "no", "", "on ", "enable"}) {
+    std::unordered_map<std::string, std::string> configFilemap;
+    MockModelMetaData meta(false, "llama");
+    configFilemap["flash-attn"] = value;
+
+    try {
+      tuneOnVulkanGpu(configFilemap, meta);
+      FAIL() << "flash-attn='" << value << "' must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      const std::string what = error.what();
+      EXPECT_NE(what.find("unknown value"), std::string::npos) << what;
+      EXPECT_NE(what.find("flash-attn"), std::string::npos) << what;
+    }
+  }
+}
+
+// Same rejection under the underscore spelling, and the message must name the
+// key the caller actually used.
+TEST_F(TuneConfigMapTest, UnknownFlashAttnValueUnderscore_Rejected) {
   MockModelMetaData meta(false, "llama");
-  configFilemap_["flash-attn"] = "yes";
+  configFilemap_["flash_attn"] = "yes";
 
-  tuneOnVulkanGpu(configFilemap_, meta);
-
-  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
-  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+  try {
+    tuneOnVulkanGpu(configFilemap_, meta);
+    FAIL() << "flash_attn='yes' must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    const std::string what = error.what();
+    EXPECT_NE(what.find("flash_attn"), std::string::npos) << what;
+  }
 }
 
 // ---- Adreno 800+ Vulkan crash guard: value vocabulary ----
@@ -1377,19 +1451,29 @@ TEST_F(
           /*isGpu=*/true));
 }
 
+// An unknown value on the Adreno path must produce the value error, NOT the
+// quantized-KV one. Misattributing it is exactly the diagnostic failure that
+// validating up front removes: the caller's real mistake is the spelling.
 TEST_F(
-    TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_FlashAttnUnknown_Allowed) {
+    TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_FlashAttnUnknown_Rejected) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["cache-type-k"] = "q8_0";
   configFilemap_["flash-attn"] = "yes";
 
-  EXPECT_NO_THROW(
-      load_fit_normalization::tuneLoadConfigMap(
-          configFilemap_,
-          meta,
-          830,
-          FtOverrides{},
-          /*isOpenCl=*/false,
-          /*isMetal=*/false,
-          /*isGpu=*/true));
+  try {
+    load_fit_normalization::tuneLoadConfigMap(
+        configFilemap_,
+        meta,
+        830,
+        FtOverrides{},
+        /*isOpenCl=*/false,
+        /*isMetal=*/false,
+        /*isGpu=*/true);
+    FAIL() << "unknown flash-attn value must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    const std::string what = error.what();
+    EXPECT_NE(what.find("unknown value"), std::string::npos) << what;
+    EXPECT_EQ(what.find("Adreno"), std::string::npos)
+        << "must not misattribute to the Adreno guard: " << what;
+  }
 }
