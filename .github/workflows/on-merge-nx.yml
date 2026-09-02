@@ -52,6 +52,12 @@ on:
 permissions:
   contents: read
 
+# Never cancel: this publishes to GPR/npm and cuts tags. Two pushes touching the
+# same package queue instead of racing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   detect:
     name: Detect changed packages
@@ -341,10 +347,14 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: npm install --ignore-scripts --package-lock=false
 
+      # Via env: buildStep comes from project.json read at github.sha, which on
+      # feature-*/tmp-* is anyone with write access. This job holds publish creds.
       - name: Run build step
         if: matrix.buildStep != 'none'
         working-directory: ${{ matrix.workdir }}
-        run: npm run ${{ matrix.buildStep }}
+        env:
+          BUILD_STEP: ${{ matrix.buildStep }}
+        run: npm run "$BUILD_STEP"
 
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
         if: matrix.nameTransform == 'rename-prefix'
@@ -449,10 +459,14 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: npm install --ignore-scripts --package-lock=false
 
+      # Via env: buildStep comes from project.json read at github.sha, which on
+      # feature-*/tmp-* is anyone with write access. This job holds publish creds.
       - name: Run build step
         if: matrix.buildStep != 'none'
         working-directory: ${{ matrix.workdir }}
-        run: npm run ${{ matrix.buildStep }}
+        env:
+          BUILD_STEP: ${{ matrix.buildStep }}
+        run: npm run "$BUILD_STEP"
 
       - name: Determine dist-tag
         id: dist-tag
