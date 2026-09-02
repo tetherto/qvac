@@ -70,8 +70,8 @@ export interface SpawnedServer {
   output: () => string
 }
 
-// Spawn `serve openai` on a real port, wait until it answers over the socket,
-// and register teardown.
+// Spawn the OpenAI surface on a real port, wait until it answers over the
+// socket, and register teardown.
 export async function startCliServer(
   t: TestContext,
   args: string[],
@@ -79,10 +79,14 @@ export async function startCliServer(
 ): Promise<SpawnedServer> {
   const port = await getFreePort()
   const baseUrl = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, [CLI_BIN, 'serve', 'openai', '-p', String(port), ...args], {
-    ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
-    env: process.env
-  })
+  const proc = spawn(
+    process.execPath,
+    [CLI_BIN, 'serve', '--openai', '--no-default', '-p', String(port), ...args],
+    {
+      ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
+      env: process.env
+    }
+  )
   let captured = ''
   proc.stdout.on('data', (d) => {
     captured += String(d)
@@ -140,10 +144,14 @@ export function useSpawnedServer(
     await writeFile(join(dir, 'qvac.config.json'), JSON.stringify(config))
     const port = await getFreePort()
     baseUrl = `http://127.0.0.1:${port}`
-    proc = spawn(process.execPath, [CLI_BIN, 'serve', 'openai', '-p', String(port)].concat(args), {
-      cwd: dir,
-      env: process.env
-    })
+    proc = spawn(
+      process.execPath,
+      [CLI_BIN, 'serve', '--openai', '--no-default', '-p', String(port)].concat(args),
+      {
+        cwd: dir,
+        env: process.env
+      }
+    )
     let stderr = ''
     proc.stderr?.on('data', (d) => {
       stderr += String(d)

@@ -52,6 +52,8 @@ try {
   if (sample) {
     printMetric('Used', sample.memory.usedBytes, formatBytes)
     printMetric('Total (sampled)', sample.memory.totalBytes, formatBytes)
+    printMetric('Process used', sample.memory.processUsedBytes, formatBytes)
+    printMetric('Process available', sample.memory.processAvailableBytes, formatBytes)
   }
 
   console.log('\n▸ GPUs')

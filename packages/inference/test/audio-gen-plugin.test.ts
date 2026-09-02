@@ -146,6 +146,79 @@ test('audioGen plugin operation streams progress, PCM, and terminal stats', asyn
   t.is(getRequestRegistry().get(requestId), null)
 })
 
+test('audioGen terminal diagnostics report a GPU fallback reason, or omit it', async (t) => {
+  const cases = [
+    { code: 2, reason: 'no-devices' },
+    { code: 3, reason: 'init-failed' }
+  ]
+
+  for (const { code, reason } of cases) {
+    const modelId = `audio-gen-fallback-${reason}`
+    const model = createModel(
+      createResponse([], { backendDevice: 0, backendId: 0, gpuFallbackReason: code })
+    )
+    registerAudioGenModel(modelId, model)
+    t.teardown(() => {
+      unregisterModel(modelId)
+    })
+
+    const frames = []
+    for await (const frame of audioGenStream({
+      type: 'audioGenStream',
+      requestId: `audio-gen-request-fallback-${reason}`,
+      modelId,
+      caption: 'ambient electronic music'
+    })) {
+      frames.push(frame)
+    }
+
+    t.alike(
+      frames[0]?.diagnostics,
+      {
+        selectedBackend: 'cpu',
+        selectedDevice: 'cpu',
+        fallback: { requestedDevice: 'gpu', reason }
+      },
+      `${reason} reaches the caller`
+    )
+    t.alike(
+      readBackendDiagnostics(frames[0]),
+      frames[0]?.diagnostics,
+      `${reason} also reaches the symbol`
+    )
+    t.absent('gpuFallbackReason' in (frames[0]?.stats ?? {}), 'the raw code stays off the wire')
+  }
+
+  // none / not-requested describe a run that never lost a GPU, and an
+  // unrecognised code must not become a guessed reason.
+  for (const code of [0, 1, 99]) {
+    const modelId = `audio-gen-fallback-omitted-${code}`
+    const model = createModel(
+      createResponse([], { backendDevice: 0, backendId: 0, gpuFallbackReason: code })
+    )
+    registerAudioGenModel(modelId, model)
+    t.teardown(() => {
+      unregisterModel(modelId)
+    })
+
+    const frames = []
+    for await (const frame of audioGenStream({
+      type: 'audioGenStream',
+      requestId: `audio-gen-request-fallback-omitted-${code}`,
+      modelId,
+      caption: 'ambient electronic music'
+    })) {
+      frames.push(frame)
+    }
+
+    t.alike(
+      frames[0]?.diagnostics,
+      { selectedBackend: 'cpu', selectedDevice: 'cpu' },
+      `code ${code} carries no fallback`
+    )
+  }
+})
+
 test('audioGen terminal diagnostics name the CPU backend and skip an unnamed GPU backend', async (t) => {
   const cpuModelId = 'audio-gen-diagnostics-cpu'
   const cpuModel = createModel(createResponse([], { backendDevice: 0, backendId: 0 }))
