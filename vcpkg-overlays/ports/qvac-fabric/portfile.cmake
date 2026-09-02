@@ -4,14 +4,14 @@
 # tensor-parallel, pipeline-parallel, ACCEL pipeline-device exclusion, and
 # parallel endpoint-connect fixes now merged on temp-10297. Building GGML_RPC
 # against the tag would compile the pre-#201 RPC backend: no `-sm tensor` over
-# RPC, no async/events, protocol v5 instead of v7.
+# RPC, no async/events, protocol v5 instead of v7, and no RDMA transport.
 #
 # vcpkg_from_git (not _from_github) so a branch SHA needs no tarball SHA512 and
 # the clone reuses existing git credentials for the private repo.
 vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
   URL https://github.com/tetherto/qvac-fabric-llm.cpp
-  REF 973836db91df036301a10916597808416d63ce2c
+  REF 9d181fe643481d9a1cdf241871fe5935ae407ebe
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
@@ -208,8 +208,27 @@ if(BUILD_RPC_RDMA)
     message(FATAL_ERROR "qvac-fabric: rpc-rdma feature is supported only on Linux because qvac-fabric RDMA uses libibverbs.")
   endif()
 
-  find_path(IBVERBS_INCLUDE_DIR NAMES infiniband/verbs.h)
-  find_library(IBVERBS_LIBRARY NAMES ibverbs)
+  set(IBVERBS_LIBRARY_PATHS)
+  if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
+    list(APPEND IBVERBS_LIBRARY_PATHS "/lib/aarch64-linux-gnu" "/usr/lib/aarch64-linux-gnu")
+  elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL "x64")
+    list(APPEND IBVERBS_LIBRARY_PATHS "/lib/x86_64-linux-gnu" "/usr/lib/x86_64-linux-gnu")
+  endif()
+
+  if(EXISTS "/usr/include/infiniband/verbs.h")
+    set(IBVERBS_INCLUDE_DIR "/usr/include")
+  else()
+    find_path(IBVERBS_INCLUDE_DIR NAMES infiniband/verbs.h)
+  endif()
+
+  foreach(IBVERBS_LIBRARY_PATH IN LISTS IBVERBS_LIBRARY_PATHS)
+    if(NOT IBVERBS_LIBRARY AND EXISTS "${IBVERBS_LIBRARY_PATH}/libibverbs.so")
+      set(IBVERBS_LIBRARY "${IBVERBS_LIBRARY_PATH}/libibverbs.so")
+    endif()
+  endforeach()
+  if(NOT IBVERBS_LIBRARY)
+    find_library(IBVERBS_LIBRARY NAMES ibverbs PATHS ${IBVERBS_LIBRARY_PATHS})
+  endif()
   if(NOT IBVERBS_INCLUDE_DIR OR NOT IBVERBS_LIBRARY)
     message(FATAL_ERROR "qvac-fabric: rpc-rdma feature requires libibverbs headers and library from rdma-core. Install the rdma-core development package on the build host or do not request rpc-rdma.")
   endif()

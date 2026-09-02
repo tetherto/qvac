@@ -5,6 +5,11 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
+option(RPC_RDMA "Build qvac-fabric RPC with libibverbs/RDMA auto-negotiation support" OFF)
+if(RPC_RDMA)
+  list(APPEND VCPKG_MANIFEST_FEATURES "rpc-rdma")
+endif()
+
 project(ggml-rpc-server C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

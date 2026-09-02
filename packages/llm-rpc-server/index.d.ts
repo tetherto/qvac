@@ -46,6 +46,7 @@ export interface StartRpcServerOptions {
     readonly env?: NodeJS.ProcessEnv;
     readonly cleanupOnExit?: boolean;
     readonly expectRdma?: boolean;
+    readonly allowNonLoopbackHost?: boolean;
 }
 export interface RpcServerProcess {
     readonly child: ChildProcess;
@@ -58,7 +59,10 @@ export interface RpcServerProcess {
     logs(): string;
     stop(): Promise<void>;
 }
+export interface AllocateFreePortOptions {
+    readonly allowNonLoopbackHost?: boolean;
+}
 export declare function resolveRpcServerBinaryPath(): string;
-export declare function allocateFreePort(host?: string): Promise<number>;
+export declare function allocateFreePort(host?: string, options?: AllocateFreePortOptions): Promise<number>;
 export declare function rpcServerLogsIndicateRdmaSupport(logs: string): boolean;
 export declare function startRpcServer(options?: StartRpcServerOptions): Promise<RpcServerProcess>;

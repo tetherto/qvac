@@ -27,7 +27,12 @@ exports.DEFAULT_RPC_SERVER_START_TIMEOUT_MS = 10000;
 exports.DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS = 2000;
 exports.RPC_SERVER_HEALTH_POLL_INTERVAL_MS = 100;
 const PREBUILD_MODULE_DIR = "qvac__ggml-rpc-server";
-const SUPPORTED_PREBUILD_TARGETS = new Set(["darwin-arm64", "linux-x64"]);
+const SUPPORTED_PREBUILD_TARGETS = new Set([
+  "darwin-arm64",
+  "linux-x64",
+  "linux-arm64",
+]);
+const RDMA_SUPPORT_MARKER = "RDMA auto-negotiate enabled";
 class RpcServerBinaryNotFoundError extends Error {
   constructor(path) {
     super(`ggml-rpc-server binary was not found at ${path}`);
@@ -151,8 +156,8 @@ function resolveRpcServerBinaryPath() {
   }
   return resolved;
 }
-function allocateFreePort(host = exports.DEFAULT_RPC_SERVER_HOST) {
-  assertLoopbackHost(host);
+function allocateFreePort(host = exports.DEFAULT_RPC_SERVER_HOST, options = {}) {
+  assertLoopbackHost(host, options.allowNonLoopbackHost);
   return new Promise((resolve, reject) => {
     const server = (0, node_net_1.createServer)();
     server.once("error", (err) =>
@@ -169,17 +174,53 @@ function allocateFreePort(host = exports.DEFAULT_RPC_SERVER_HOST) {
   });
 }
 function rpcServerLogsIndicateRdmaSupport(logs) {
-  return logs.includes("RDMA auto-negotiate enabled");
+  return logs.includes(RDMA_SUPPORT_MARKER);
+}
+function fileContainsRdmaSupportMarker(path) {
+  try {
+    return (0, node_fs_1.readFileSync)(path).includes(
+      Buffer.from(RDMA_SUPPORT_MARKER),
+    );
+  } catch {
+    return false;
+  }
+}
+function rpcServerBinaryIndicatesRdmaSupport(binaryPath) {
+  if (fileContainsRdmaSupportMarker(binaryPath)) {
+    return true;
+  }
+  try {
+    for (const entry of (0, node_fs_1.readdirSync)(
+      (0, node_path_1.dirname)(binaryPath),
+    )) {
+      if (!/\.(dll|dylib|so)$/.test(entry)) {
+        continue;
+      }
+      if (
+        fileContainsRdmaSupportMarker(
+          (0, node_path_1.join)((0, node_path_1.dirname)(binaryPath), entry),
+        )
+      ) {
+        return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
 }
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-function assertLoopbackHost(host) {
+function assertLoopbackHost(host, allowNonLoopbackHost = false) {
+  if (allowNonLoopbackHost) {
+    return;
+  }
   if (host === "localhost" || host === "::1") return;
   if ((0, node_net_1.isIP)(host) === 4 && host.startsWith("127.")) return;
   throw new RpcServerNonLoopbackHostError(host);
 }
-function attachOutputTail(child, maxChars = 4000) {
+function attachOutputTail(child, maxChars = 65536) {
   let tail = "";
   function append(chunk) {
     tail = (tail + chunk.toString("utf8")).slice(-maxChars);
@@ -302,10 +343,15 @@ function attachExitCleanup(child) {
 }
 async function startRpcServer(options = {}) {
   const host = options.host ?? exports.DEFAULT_RPC_SERVER_HOST;
-  assertLoopbackHost(host);
-  const port = options.port ?? (await allocateFreePort(host));
+  assertLoopbackHost(host, options.allowNonLoopbackHost);
+  const port =
+    options.port ??
+    (await allocateFreePort(host, {
+      allowNonLoopbackHost: options.allowNonLoopbackHost,
+    }));
   const device = normalizeDevice(options.device);
   const binaryPath = options.binaryPath ?? resolveRpcServerBinaryPath();
+  const binaryRdmaCapable = rpcServerBinaryIndicatesRdmaSupport(binaryPath);
   const startTimeoutMs =
     options.startTimeoutMs ?? exports.DEFAULT_RPC_SERVER_START_TIMEOUT_MS;
   const shutdownGraceMs =
@@ -338,7 +384,11 @@ async function startRpcServer(options = {}) {
       timeoutMs: startTimeoutMs,
       getTail,
     });
-    if (options.expectRdma === true && !rpcServerLogsIndicateRdmaSupport(getTail())) {
+    if (
+      options.expectRdma === true &&
+      !binaryRdmaCapable &&
+      !rpcServerLogsIndicateRdmaSupport(getTail())
+    ) {
       throw new RpcServerRdmaUnavailableError(getTail());
     }
   } catch (err) {
@@ -347,7 +397,8 @@ async function startRpcServer(options = {}) {
     throw err;
   }
   child.once("exit", detachExitCleanup);
-  const rdmaCapable = rpcServerLogsIndicateRdmaSupport(getTail());
+  const rdmaCapable =
+    binaryRdmaCapable || rpcServerLogsIndicateRdmaSupport(getTail());
   return {
     child,
     pid: child.pid,

@@ -22,9 +22,11 @@ function createFakeRpcServerBinary(options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "qvac-rpc-server-test-"));
   const binaryPath = join(dir, "fake-rpc-server.js");
   const startupLog = options.startupLog || "";
+  const binaryMarker = options.binaryMarker || "";
   writeFileSync(
     binaryPath,
     `#!/usr/bin/env node
+${binaryMarker}
 const net = require('node:net')
 
 const args = process.argv.slice(2)
@@ -74,6 +76,15 @@ test("rejects non-loopback hosts", async () => {
   );
 });
 
+test("allows non-loopback hosts only with explicit opt-in", async () => {
+  const port = await allocateFreePort("0.0.0.0", {
+    allowNonLoopbackHost: true,
+  });
+
+  assert.equal(typeof port, "number");
+  assert.ok(port > 0);
+});
+
 test("starts and stops a managed server process", async () => {
   const fixture = createFakeRpcServerBinary();
   const exitListenersBefore = process.listenerCount("exit");
@@ -105,6 +116,24 @@ test("detects RDMA-capable startup logs", async () => {
 
   const fixture = createFakeRpcServerBinary({
     startupLog: "transport      : TCP (RDMA auto-negotiate enabled)\\n",
+  });
+
+  try {
+    const server = await startRpcServer({
+      binaryPath: fixture.binaryPath,
+      expectRdma: true,
+      startTimeoutMs: 5000,
+    });
+    assert.equal(server.rdmaCapable, true);
+    await server.stop();
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("detects RDMA-capable packaged binaries", async () => {
+  const fixture = createFakeRpcServerBinary({
+    binaryMarker: "// RDMA auto-negotiate enabled\n",
   });
 
   try {

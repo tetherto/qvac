@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { connect, createServer, isIP } from 'node:net'
 import { arch, platform } from 'node:process'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 export const DEFAULT_RPC_SERVER_HOST: string = '127.0.0.1'
 export const DEFAULT_RPC_SERVER_START_TIMEOUT_MS: number = 10000
@@ -11,7 +11,8 @@ export const DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS: number = 2000
 export const RPC_SERVER_HEALTH_POLL_INTERVAL_MS: number = 100
 
 const PREBUILD_MODULE_DIR = 'qvac__ggml-rpc-server'
-const SUPPORTED_PREBUILD_TARGETS = new Set(['darwin-arm64', 'linux-x64'])
+const SUPPORTED_PREBUILD_TARGETS = new Set(['darwin-arm64', 'linux-x64', 'linux-arm64'])
+const RDMA_SUPPORT_MARKER = 'RDMA auto-negotiate enabled'
 
 export class RpcServerBinaryNotFoundError extends Error {
   constructor(path: string) {
@@ -99,6 +100,7 @@ export interface StartRpcServerOptions {
   readonly env?: NodeJS.ProcessEnv
   readonly cleanupOnExit?: boolean
   readonly expectRdma?: boolean
+  readonly allowNonLoopbackHost?: boolean
 }
 
 export interface RpcServerProcess {
@@ -111,6 +113,10 @@ export interface RpcServerProcess {
   readonly rdmaCapable: boolean
   logs(): string
   stop(): Promise<void>
+}
+
+export interface AllocateFreePortOptions {
+  readonly allowNonLoopbackHost?: boolean
 }
 
 function prebuildTarget(runtimePlatform = platform, runtimeArch = arch): string {
@@ -152,8 +158,11 @@ export function resolveRpcServerBinaryPath(): string {
   return resolved
 }
 
-export function allocateFreePort(host = DEFAULT_RPC_SERVER_HOST): Promise<number> {
-  assertLoopbackHost(host)
+export function allocateFreePort(
+  host = DEFAULT_RPC_SERVER_HOST,
+  options: AllocateFreePortOptions = {}
+): Promise<number> {
+  assertLoopbackHost(host, options.allowNonLoopbackHost)
   return new Promise((resolve, reject) => {
     const server = createServer()
     server.once('error', (err) => reject(new RpcServerPortAllocationError(err)))
@@ -169,20 +178,52 @@ export function allocateFreePort(host = DEFAULT_RPC_SERVER_HOST): Promise<number
 }
 
 export function rpcServerLogsIndicateRdmaSupport(logs: string): boolean {
-  return logs.includes('RDMA auto-negotiate enabled')
+  return logs.includes(RDMA_SUPPORT_MARKER)
+}
+
+function fileContainsRdmaSupportMarker(path: string): boolean {
+  try {
+    return readFileSync(path).includes(Buffer.from(RDMA_SUPPORT_MARKER))
+  } catch {
+    return false
+  }
+}
+
+function rpcServerBinaryIndicatesRdmaSupport(binaryPath: string): boolean {
+  if (fileContainsRdmaSupportMarker(binaryPath)) {
+    return true
+  }
+
+  try {
+    for (const entry of readdirSync(dirname(binaryPath))) {
+      if (!/\.(dll|dylib|so)$/.test(entry)) {
+        continue
+      }
+      if (fileContainsRdmaSupportMarker(join(dirname(binaryPath), entry))) {
+        return true
+      }
+    }
+  } catch {
+    return false
+  }
+
+  return false
 }
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function assertLoopbackHost(host: string): void {
+function assertLoopbackHost(host: string, allowNonLoopbackHost = false): void {
+  if (allowNonLoopbackHost) {
+    return
+  }
   if (host === 'localhost' || host === '::1') return
   if (isIP(host) === 4 && host.startsWith('127.')) return
   throw new RpcServerNonLoopbackHostError(host)
 }
 
-function attachOutputTail(child: ChildProcess, maxChars = 4000): () => string {
+function attachOutputTail(child: ChildProcess, maxChars = 65536): () => string {
   let tail = ''
   function append(chunk: Buffer): void {
     tail = (tail + chunk.toString('utf8')).slice(-maxChars)
@@ -313,10 +354,15 @@ function attachExitCleanup(child: ChildProcess): () => void {
 
 export async function startRpcServer(options: StartRpcServerOptions = {}): Promise<RpcServerProcess> {
   const host = options.host ?? DEFAULT_RPC_SERVER_HOST
-  assertLoopbackHost(host)
-  const port = options.port ?? (await allocateFreePort(host))
+  assertLoopbackHost(host, options.allowNonLoopbackHost)
+  const port =
+    options.port ??
+    (await allocateFreePort(host, {
+      allowNonLoopbackHost: options.allowNonLoopbackHost,
+    }))
   const device = normalizeDevice(options.device)
   const binaryPath = options.binaryPath ?? resolveRpcServerBinaryPath()
+  const binaryRdmaCapable = rpcServerBinaryIndicatesRdmaSupport(binaryPath)
   const startTimeoutMs = options.startTimeoutMs ?? DEFAULT_RPC_SERVER_START_TIMEOUT_MS
   const shutdownGraceMs = options.shutdownGraceMs ?? DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS
   const args = rpcServerArgs({
@@ -344,7 +390,11 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
 
   try {
     await waitForListening({ child, host, port, timeoutMs: startTimeoutMs, getTail })
-    if (options.expectRdma === true && !rpcServerLogsIndicateRdmaSupport(getTail())) {
+    if (
+      options.expectRdma === true &&
+      !binaryRdmaCapable &&
+      !rpcServerLogsIndicateRdmaSupport(getTail())
+    ) {
       throw new RpcServerRdmaUnavailableError(getTail())
     }
   } catch (err) {
@@ -354,7 +404,7 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
   }
 
   child.once('exit', detachExitCleanup)
-  const rdmaCapable = rpcServerLogsIndicateRdmaSupport(getTail())
+  const rdmaCapable = binaryRdmaCapable || rpcServerLogsIndicateRdmaSupport(getTail())
 
   return {
     child,

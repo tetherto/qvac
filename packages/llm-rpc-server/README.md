@@ -20,9 +20,10 @@ try {
 }
 ```
 
-The default host is `127.0.0.1`. Non-loopback hosts are rejected in this
-initial package because the underlying RPC listener does not provide
-authentication.
+The default host is `127.0.0.1`. Non-loopback hosts are rejected unless
+`allowNonLoopbackHost: true` is passed because the underlying RPC listener does
+not provide authentication. Only use non-loopback hosts on a trusted/private
+network with external access controls.
 
 ## RDMA-capable builds
 
@@ -39,7 +40,9 @@ managed server binary is expected to be RDMA-capable, pass `expectRdma: true`:
 ```js
 const server = await startRpcServer({
   device: 'Vulkan0',
-  expectRdma: true
+  host: '10.10.10.2',
+  expectRdma: true,
+  allowNonLoopbackHost: true
 })
 
 console.log(server.rdmaCapable)
