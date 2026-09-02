@@ -121,6 +121,15 @@ jobs:
           node --test
           .github/scripts/test/sdk-e2e-rerun.test.mjs
 
+      # Same reason as above for the impact-based smoke expansion. The mapper's
+      # own catalog loading needs esbuild, which this job does not install, so
+      # the suite feeds `analyze` a catalog and asserts the executor patterns and
+      # import graph it resolves against the real repository.
+      - name: Run SDK e2e impacted-test tests
+        run: >-
+          node --test
+          .github/scripts/test/sdk-e2e-impacted.test.mjs
+
       # The trust-policy suite asserts on workflow *text*, so it stays green even
       # when an edit destroys a job graph. on-merge-*/on-publish-* never run on a
       # PR, and pull_request_target workflows load from the base branch, so this

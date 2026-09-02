@@ -173,6 +173,103 @@ jobs:
           suite: ${{ needs.resolve-config.outputs.suite }}
           head-sha: ${{ github.event.pull_request.head.sha }}
 
+  # Extends a smoke run with the tests this PR touched, so a green smoke run also
+  # means "your changes passed". Bundles PR-authored test files to read their
+  # testIds, so it executes PR code and therefore holds no write scopes — the
+  # summary is posted by report-impacted from the JSON alone.
+  resolve-impacted:
+    needs: [resolve-config]
+    if: >-
+      needs.resolve-config.outputs.should-run == 'true'
+      && needs.resolve-config.outputs.mode == 'base'
+      && needs.resolve-config.outputs.suite == 'smoke'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      also-tests: ${{ steps.impacted.outputs.also-tests }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: packages/sdk/e2e
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: List PR files
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          script: |
+            // The files API carries the per-file patch, which gives per-line
+            // attribution without cloning the repository's history.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+            require('node:fs').writeFileSync(
+              `${process.env.GITHUB_WORKSPACE}/pr-files.json`,
+              JSON.stringify(files.map(({ filename, patch }) => ({ filename, patch })))
+            );
+            core.info(`${files.length} changed file(s) in this PR`);
+
+      # Only esbuild is needed to read the test definitions, so this skips the
+      # e2e install entirely. Pinned to keep the analysis reproducible.
+      - name: Install esbuild
+        run: npm install --no-save --no-fund --no-audit --prefix "$RUNNER_TEMP/mapper" esbuild@0.27.0
+
+      - name: Compute impacted tests
+        id: impacted
+        working-directory: packages/sdk/e2e
+        env:
+          ESBUILD_MODULE: ${{ runner.temp }}/mapper/node_modules/esbuild/lib/main.js
+        run: >-
+          node scripts/impacted-tests.mjs
+          --repo-root "$GITHUB_WORKSPACE"
+          --pr-files "$GITHUB_WORKSPACE/pr-files.json"
+          --json "$GITHUB_WORKSPACE/impacted.json"
+          --github-output "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: sdk-e2e-impacted
+          path: impacted.json
+          retention-days: 30
+
+  # Also runs when resolve-impacted failed, so a fail-open mapper says so on the
+  # PR instead of leaving a plain smoke run looking complete.
+  report-impacted:
+    needs: [resolve-impacted]
+    if: >-
+      !cancelled()
+      && (needs.resolve-impacted.result == 'success'
+          || needs.resolve-impacted.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-impacted
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          name: sdk-e2e-impacted
+
+      - uses: ./.github/actions/sdk-e2e-report-impacted
+        with:
+          impacted-json: impacted.json
+
   resolve-rerun:
     needs: [resolve-config]
     if: >-
@@ -203,6 +300,10 @@ jobs:
       - fork-approval
       - resolve-config
       - resolve-rerun
+      - resolve-impacted
+    # resolve-impacted is deliberately not gated on: if the impact mapper fails
+    # or is skipped, `also-tests` is empty and the run proceeds as a plain smoke
+    # run. A broken mapper must never block e2e.
     if: >-
       !cancelled()
       && needs.fork-approval.result == 'success'
@@ -215,6 +316,7 @@ jobs:
     with:
       targets: ${{ needs.resolve-rerun.outputs.targets || 'desktop + mobile' }}
       suite: ${{ needs.resolve-config.outputs.suite }}
+      also-tests: ${{ needs.resolve-impacted.outputs.also-tests }}
       rerun-plan: ${{ needs.resolve-rerun.outputs.rerun-plan }}
       test-version: ${{ github.event.pull_request.head.sha }}
       inference-source: branch

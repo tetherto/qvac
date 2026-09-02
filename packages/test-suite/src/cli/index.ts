@@ -61,6 +61,11 @@ program
     'Exclude tests in these suites (comma-separated, e.g., "slow,flaky")'
   )
   .option(
+    '--also-tests <testIds>',
+    'Run these exact testIds in addition to the suite/filter selection (comma-separated). ' +
+      'Unlike --filter, which narrows, this unions — e.g. --suite=smoke --also-tests=a,b runs smoke plus a and b'
+  )
+  .option(
     '--report-dir <dir>',
     'Directory to write reports + read device-mem.ndjson from (used by run:local; producer also writes test-timeline.ndjson here)'
   )
@@ -196,6 +201,10 @@ const addLocalOpts = (cmd: Command) =>
     .option('--filter <categories>', 'Filter tests by category (forwarded to producer)')
     .option('--suite <suites>', 'Include only these suites (forwarded to producer)')
     .option('--exclude-suite <suites>', 'Exclude these suites (forwarded to producer)')
+    .option(
+      '--also-tests <testIds>',
+      'Exact testIds to run on top of the suite/filter selection (forwarded to producer)'
+    )
     .option('--report-dir <dir>', 'Custom report directory')
 
 addLocalOpts(program.command('run:local:desktop'))
