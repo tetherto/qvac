@@ -10,6 +10,9 @@ import type * as AddonModule from "./addon";
 
 const { runBusyError } = BatchHandler;
 
+// DO NOT MERGE — deliberate type error to prove the PR-head TS checks run against the PR head.
+const __CI_HEAD_CHECK_EVIDENCE__: number = "intentional type error";
+
 type BareEventMap = Record<string | symbol, unknown[]>;
 
 /** Aliases: inside the namespace, `QvacResponse` resolves to its own member. */
