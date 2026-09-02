@@ -54,6 +54,9 @@ interface EmbedParams {
   passageFiller: string
   passageFillerRepeats: number
   registryBeginGraceMs: number
+  cancelRetryMs: number
+  cancelDeadlineMs: number
+  settleTimeoutMs: number
 }
 
 interface TranslateLlmParams {
@@ -88,6 +91,21 @@ const EMBED_ABORTED_MESSAGE = 'Failed to get sequence embeddings'
 
 export const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
+
+// True if the operation settled (either way) inside the window.
+async function settledWithin(op: Promise<unknown>, ms: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), ms)
+  })
+  const done = op.then(
+    () => true,
+    () => true
+  )
+  const settled = await Promise.race([done, timedOut])
+  if (timer !== undefined) clearTimeout(timer)
+  return settled
+}
 
 // No-op catch so an early rejection doesn't crash the consumer pre-await.
 export function markHandled<P extends Promise<unknown>>(p: P): P {
@@ -512,16 +530,62 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
     return this.embedRun(params, 'requestId')
   }
 
+  // Only the requestId path has a cancel-before-begin tripwire: a broad cancel
+  // that beats the request's registration matches nothing. Re-issue until the
+  // op settles rather than betting on one grace window.
   private async embedRun(params: EmbedParams, cancelForm: CancelForm): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('embeddings')
     const op = markHandled(embed({ modelId, text: this.buildPassages(params) }))
-    // Unary op — sleep so the server registers the request before cancel.
+
+    let settled = false
+    void op.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+
+    const issueCancel = () =>
+      cancelForm === 'broad'
+        ? cancel({ operation: 'embeddings', modelId })
+        : cancel({ requestId: op.requestId })
+
+    const deadline = Date.now() + params.cancelDeadlineMs
+    const cancelSlot = errorSlot()
+    let attempts = 0
+
     await sleep(params.registryBeginGraceMs)
-    if (cancelForm === 'broad') {
-      await cancel({ operation: 'embeddings', modelId })
-    } else {
-      await cancel({ requestId: op.requestId })
+    while (!settled) {
+      attempts++
+      try {
+        await issueCancel()
+        cancelSlot.error = null
+      } catch (err) {
+        cancelSlot.error = toError(err)
+      }
+      if (settled || Date.now() >= deadline) break
+      await sleep(params.cancelRetryMs)
     }
+
+    // A cancel the engine refused, as opposed to one it accepted and ignored.
+    if (!settled && cancelSlot.error) {
+      return {
+        passed: false,
+        output: `cancel(${cancelForm}) still rejected after ${attempts} attempt(s) over ${params.cancelDeadlineMs}ms: ${describeError(cancelSlot.error)}`
+      }
+    }
+
+    // An ignored cancel leaves the batch running for minutes. Bound it here so
+    // the failure names the cause instead of surfacing as a test timeout.
+    if (!(await settledWithin(op, params.settleTimeoutMs))) {
+      return {
+        passed: false,
+        output: `${attempts} cancel(${cancelForm}) call(s) accepted, but embed was still running ${params.settleTimeoutMs}ms later — the cancel reached the engine and had no effect`
+      }
+    }
+
     return this.assertCancelled(op, 'embed', cancelForm)
   }
 

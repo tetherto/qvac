@@ -7,6 +7,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-09-01
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.8.0` -> `^0.10.0`, which carries `qvac-fabric`
+  `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal
+  optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next
+  perf follow-ups and the Vulkan top-k radix-select shader). This package consumes the
+  shared runtime via npm rather than building the vcpkg port, so the range bump is what
+  picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.8.0` would
+  not have resolved `0.10.0` on its own. No API change for this package.
+
+  This bump crosses **two** fabric minors, so it also picks up `@qvac/fabric` 0.9.0's
+  ROCm/HIP compute backend — shipped as a `GGML_BACKEND_DL` module in the linux-x64
+  prebuild, loaded only on AMD hosts and otherwise skipped in favour of Vulkan/CPU.
+
+  This addon runs MobileNetV3-Small on CPU and exposes no GPU or vector-index surface,
+  so none of the above changes its own inference API. The bump keeps classification on
+  the current shared runtime rather than leaving it two minors behind on a superseded
+  fabric.
+
+- `check:generated` now compares against `git status --porcelain` instead of
+  `git diff --exit-code`, so an untracked generated wrapper is caught rather than
+  silently passing. Build-script only; no runtime effect.
+
 ## [0.22.0] - 2026-08-24
 
 ### Changed

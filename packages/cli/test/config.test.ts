@@ -1,12 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { FLUX_2_KLEIN_4B_VAE, TTS_S3GEN_EN_CHATTERBOX, WHISPER_EN_TINY_Q8_0 } from '@qvac/sdk'
-import {
-  parseServeConfig,
-  resolveExplicitServeModel,
-  resolveModelConstant
-} from '../src/serve/config.js'
-import { resolveNestedModelSrcConstants } from '../src/serve/resolve-nested-model-src.js'
+import { parseServeConfig, resolveExplicitServeModel, resolveModelConstant } from '@/serve/config'
+import { resolveNestedModelSrcConstants } from '@/serve/resolve-nested-model-src'
 
 describe('resolveExplicitServeModel', () => {
   it('maps whispercpp-audio-translation to whispercpp-transcription and audio-translation', () => {
@@ -45,7 +41,7 @@ describe('resolveExplicitServeModel', () => {
     })
     assert.equal(r.sdkType, 'whispercpp-transcription')
     assert.equal(r.endpointCategory, 'transcription')
-    assert.equal((r.config.whisperConfig as Record<string, unknown>).translate, false)
+    assert.equal((r.config['whisperConfig'] as Record<string, unknown>)['translate'], false)
   })
 })
 

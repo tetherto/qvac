@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
-import { parseSpecWithDependencies } from '../src/openai/coverage/parse-spec.js'
+import { parseSpecWithDependencies } from '@/openai/coverage/parse-spec'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const FIXTURE_SPEC = join(TEST_DIR, 'fixtures', 'openai-spec-mini.yaml')
