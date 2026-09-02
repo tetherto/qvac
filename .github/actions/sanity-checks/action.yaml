@@ -97,6 +97,15 @@ runs:
           echo "::error::Step - Generated wrappers do not match src (run 'npm run build:ts' and commit the result)"
           count=$((count + 1))
         fi
+        bundler_requires_rc=0
+        node scripts/ci/check-bundler-requires.mjs "$WORKDIR" || bundler_requires_rc=$?
+        if [ "$bundler_requires_rc" = "1" ]; then
+          echo "::error::Step - A relative require is hidden from bare-pack, so the mobile app bundle would omit it"
+          count=$((count + 1))
+        elif [ "$bundler_requires_rc" != "0" ]; then
+          echo "::error::Step - check-bundler-requires could not run (infrastructure failure, not a hidden require)"
+          count=$((count + 1))
+        fi
         if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
           echo "::error::Step - Lint or unit tests failed"
           count=$((count + 1))

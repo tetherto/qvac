@@ -1,4 +1,4 @@
-import { isLoopbackHost } from './cors.js'
+import { isLoopbackHost } from '@/serve/cors'
 
 export class ServeOptionsError extends Error {
   readonly option: string

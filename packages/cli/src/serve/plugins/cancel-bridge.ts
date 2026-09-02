@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin'
 import type { FastifyPluginAsync } from 'fastify'
-import { bindClientDisconnectCancel } from '../core/cancel-bridge.js'
+import { bindClientDisconnectCancel } from '@/serve/core/cancel-bridge'
 
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsync = async (app) => {
