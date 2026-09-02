@@ -5,9 +5,10 @@
     "on-pr": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "command": "echo 'carved out of on-pr-nx.yml; orchestrated by on-pr-vla.yml (fabric overlay needs fabric built before its consumers, which one flat prebuild matrix cannot express)'",
         "cwd": "packages/vla-ggml",
         "ci": {
+          "carveOut": true,
           "hasCppLint": true,
           "includeRocmSdk": true,
           "hasTsChecks": true,
