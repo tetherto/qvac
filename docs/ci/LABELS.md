@@ -55,7 +55,7 @@ The `verified` label is **no longer used to authorize CI**. It may still appear 
 | `publish` | Triggers a GitHub Packages publish from the PR (pre-release / dev build). | Publish workflows | Use sparingly; consumes a published version slot. |
 | `docs-deploy` | Marks docs as ready for production deploy. | Docs deploy workflows | Set when the docs changes are ready to go live alongside PR merge. |
 | `tier1`, `tier2` | Approval-bot review-tier groupings. | `approval-check-worker.yml` | The bot uses these to compute whether a PR has met its required approval tier. |
-| `test-e2e-smoke` | Runs the smoke E2E suite (currently SDK-only). | E2E test workflows | Faster subset; prefer for PR feedback. |
+| `test-e2e-smoke` | Runs the smoke E2E suite **plus the tests the PR touched** (currently SDK-only). | E2E test workflows | Faster subset; prefer for PR feedback. See [Smoke runs cover the tests a PR touched](#smoke-runs-cover-the-tests-a-pr-touched). |
 | `test-e2e-full` | Runs the full E2E suite (currently SDK-only). | E2E workflows | Long-running; use for release branches and major changes. |
 | `test-e2e-rerun-failed` | Re-runs only the tests that failed on the last smoke/full run, on the platforms where they failed. | `on-pr-test-sdk.yml` | Self-clearing — removed as soon as the run consumes it, so it can be applied again for each attempt. See [Re-running failed SDK e2e tests](#re-running-failed-sdk-e2e-tests). |
 | `e2e-tested` | Set automatically once a **base** E2E run has completed against the PR. | E2E workflows | Status indicator only; does not pass/fail by itself — see linked run. A `test-e2e-rerun-failed` run never sets it. |
@@ -71,6 +71,31 @@ The `verified` label is **no longer used to authorize CI**. It may still appear 
 > to launch a per-addon mobile run.
 
 Standard GitHub labels (`bug`, `documentation`, `enhancement`, `good first issue`, `help wanted`, `question`, `wontfix`, `duplicate`, `invalid`) and Dependabot/CodeQL labels (`dependencies`, `javascript`, `github_actions`) are unchanged.
+
+---
+
+## Smoke runs cover the tests a PR touched
+
+The smoke suite is 105 of the SDK's 509 e2e tests. A test only belongs to it if someone tagged it `suites: ['smoke']`, so tests a PR adds or changes are invisible to a smoke run unless the author remembered a manual filter — replayed against PR #4155, a green smoke run covered 4 of the 22 tests that PR touched.
+
+`test-e2e-smoke` now runs **the smoke suite plus the tests the PR touched**. Nothing to configure; `test-e2e-full` is unchanged and still runs everything.
+
+A PR comment reports what happened: tests touched, how many smoke already covered, how many the run added, and any changed file the mapper could not attribute. Three relations connect a changed file to testIds:
+
+| Changed file | Resolved via |
+|---|---|
+| `tests/*-tests.ts`, `tests/test-definitions.ts` | the testIds it declares — narrowed to the changed lines when they name tests, widened to the whole file otherwise |
+| `tests/**/executors/*.ts` | the executor's `pattern` regex |
+| anything else under `tests/` | the import graph, via the executors that reach it |
+
+Deliberate limits:
+
+- **Changes under `packages/sdk/src/**` are out of scope.** Impact analysis covers test code, not the SDK under test; the smoke suite remains the proxy for that.
+- **Unattributable files are reported, not expanded.** `tests/*/consumer.ts`, `fixtures/`, and `assets/` map to no single test — a consumer change formally touches every test on its platform. The comment lists these files so they get a human look, and nothing is added for them.
+- **The impact set is never truncated.** It is bounded by the catalog, so extending a smoke run can never cost more than `test-e2e-full` would; capping it would only reduce coverage while pushing the author to the more expensive option. The comment states the added runtime so a broad change is visible.
+- **The mapper never blocks e2e.** If it fails, the smoke run proceeds unchanged and the comment says the analysis was unavailable.
+
+Implementation: [`impacted-tests.mjs`](../../packages/sdk/e2e/scripts/impacted-tests.mjs), the `sdk-e2e-report-impacted` action, and `--also-tests` in `@qvac/test-suite`.
 
 ---
 

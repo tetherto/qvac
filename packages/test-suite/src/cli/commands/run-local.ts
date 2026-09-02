@@ -48,6 +48,7 @@ interface LocalOptions {
   filter?: string
   suite?: string
   excludeSuite?: string
+  alsoTests?: string
   reportDir?: string
 }
 
@@ -101,6 +102,7 @@ function buildProducerArgs(
   if (opts.filter) args.push(`--filter=${opts.filter}`)
   if (opts.suite) args.push(`--suite=${opts.suite}`)
   if (opts.excludeSuite) args.push(`--exclude-suite=${opts.excludeSuite}`)
+  if (opts.alsoTests) args.push(`--also-tests=${opts.alsoTests}`)
   return args
 }
 
