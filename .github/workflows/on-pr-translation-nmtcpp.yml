@@ -136,27 +136,49 @@ jobs:
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/translation-nmtcpp
 
-  ts-checks:
-    needs: [fork-approval, authorize, changes, sanity-checks]
-    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+  await-ts-checks:
+    name: Await PR-head TypeScript checks
+    if: github.event_name == 'pull_request_target'
+    needs: authorize
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PKG_DIR }}
+    timeout-minutes: 17
+    permissions:
+      checks: read
+      contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Wait for ts-checks result
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         with:
-          node-version: 20
+          script: |
+            const timeoutAt = Date.now() + 15 * 60 * 1000
 
-      - name: Install dependencies
-        run: npm install
+            while (Date.now() < timeoutAt) {
+              const response = await github.rest.checks.listForRef({
+                ...context.repo,
+                ref: process.env.PR_HEAD_SHA,
+                check_name: 'translation-nmtcpp-pr-head-ts-checks / ts-checks',
+                filter: 'latest',
+                per_page: 100
+              })
+              const check = response.data.check_runs.find(
+                ({ name }) => name === 'translation-nmtcpp-pr-head-ts-checks / ts-checks'
+              )
 
-      - name: Type declaration check
-        run: npm run test:dts
+              if (check?.status === 'completed') {
+                if (check.conclusion !== 'success') {
+                  core.setFailed(
+                    `translation-nmtcpp-pr-head-ts-checks / ts-checks completed with conclusion: ${check.conclusion}`
+                  )
+                }
+                return
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, 15_000))
+            }
+
+            core.setFailed('Timed out waiting for the PR-head Translation TypeScript checks')
 
   cpp-lint:
     needs:
@@ -359,10 +381,10 @@ jobs:
 
   merge-guard:
     # run-mobile-integration-tests removed — mobile is on-demand only now.
-    needs: [authorize, changes, ci-router, verify-fabric-lockstep, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests]
+    needs: [authorize, changes, ci-router, verify-fabric-lockstep, sanity-checks, await-ts-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests]
     if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') && needs.ts-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') && needs.await-ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
       integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
