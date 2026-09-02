@@ -28,9 +28,8 @@ const platform = os.platform()
 const arch = os.arch()
 const isDesktopGpu = (platform === 'linux' || platform === 'win32') && arch === 'x64'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
-// CI rows that pin the engine's GPU cascade (linux prebuilds bundle CUDA and
-// Vulkan) export TTS_CPP_GPU_BACKEND; the desktop assertion expects the pinned
-// backend and defaults to Vulkan when unset.
+// CI rows that pin the engine's GPU cascade export TTS_CPP_GPU_BACKEND; the
+// desktop assertion expects the pinned backend and defaults to Vulkan when unset.
 const pinnedGpuBackend = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 const expectedDesktopBackend = pinnedGpuBackend === 'cuda' ? CUDA_BACKEND : VULKAN_BACKEND
 const expectedDesktopBackendName = pinnedGpuBackend === 'cuda' ? 'CUDA' : 'Vulkan'
