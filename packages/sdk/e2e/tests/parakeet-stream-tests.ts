@@ -11,7 +11,7 @@
  * hint to parakeet-cpp's segmentation. Whisper is the only engine
  * that surfaces `vad` events.
  */
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 // The duplex runner feeds raw PCM directly into the parakeet session
 // (no FFmpegDecoder hop, unlike `transcribe()`), so the fixture itself
@@ -42,6 +42,28 @@ export const parakeetStreamHappy: TestDefinition = {
   metadata: {
     category: 'parakeet',
     dependency: 'parakeet-tdt',
+    estimatedDurationMs: 120000
+  }
+}
+
+/**
+ * Unified RNN-T streaming coverage: the `parakeet-unified-en-0.6b`
+ * checkpoint serves batch and low-latency streaming from one GGUF, so
+ * drive the same happy-path duplex stream against it to lock down the
+ * `StreamSession` path on the Unified decoder.
+ */
+export const parakeetStreamUnifiedHappy: TestDefinition = {
+  testId: 'parakeet-stream-unified-happy',
+  params: {
+    audioFileName: AUDIO_FIXTURE,
+    chunkMs: 1000,
+    emitPartials: true,
+    trailingSilenceMs: 1500
+  },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: {
+    category: 'parakeet',
+    dependency: 'parakeet-unified',
     estimatedDurationMs: 120000
   }
 }
@@ -134,6 +156,7 @@ export const parakeetStreamIteratorThrow: TestDefinition = {
 
 export const parakeetStreamTests = [
   parakeetStreamHappy,
+  parakeetStreamUnifiedHappy,
   parakeetStreamMetadataRejected,
   parakeetStreamEou,
   parakeetStreamDestroyMidUtterance,

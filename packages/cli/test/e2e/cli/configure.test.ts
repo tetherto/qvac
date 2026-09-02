@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runCli } from '../helpers/cli.js'
-import { parseServeConfig } from '../../../src/serve/config.js'
+import { parseServeConfig } from '@/serve/config'
 
 function tmp(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'qvac-configure-'))

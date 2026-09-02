@@ -792,6 +792,102 @@
           },
           "additionalProperties": false,
           "title": "AudioGenStreamResponseStats"
+        },
+        "diagnostics": {
+          "description": "Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "AudioGenStreamResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "AudioGenStreamResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "AudioGenStreamResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "AudioGenStreamResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "AudioGenStreamResponseDiagnostics"
         }
       },
       "required": ["type", "done"],
@@ -1020,20 +1116,7 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "number", "boolean", "null"]
                                 }
                               }
                             },
@@ -1990,20 +2073,7 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
@@ -2598,20 +2668,7 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
@@ -3569,6 +3626,14 @@
           "type": "boolean"
         },
         "seed": {
+          "type": "boolean"
+        },
+        "requireHttpChecksum": {
+          "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+          "type": "boolean"
+        },
+        "requireSecureTransport": {
+          "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
           "type": "boolean"
         },
         "requestId": {
@@ -8234,6 +8299,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -8536,6 +8609,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -8904,6 +8985,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -9169,6 +9258,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -9341,6 +9438,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -9461,6 +9566,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -10320,6 +10433,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -12143,6 +12264,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -12335,6 +12464,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -13834,6 +13971,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -14531,6 +14676,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -14628,6 +14781,14 @@
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
                 },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -14685,6 +14846,14 @@
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -15780,7 +15949,10 @@
                   {
                     "type": "number"
                   }
-                ]
+                ],
+                "items": false,
+                "minItems": 4,
+                "maxItems": 4
               },
               "confidence": {
                 "type": "number"

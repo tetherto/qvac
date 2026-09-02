@@ -2,8 +2,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import type { ServerResponse } from 'node:http'
-import type { Logger } from '../src/logger.js'
-import { bindClientDisconnectCancel } from '../src/serve/core/cancel-bridge.js'
+import type { Logger } from '@/logger'
+import { bindClientDisconnectCancel } from '@/serve/core/cancel-bridge'
 
 function makeLogger(): Logger & { debugs: string[] } {
   const debugs: string[] = []

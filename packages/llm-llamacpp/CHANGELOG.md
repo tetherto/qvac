@@ -1,5 +1,87 @@
 # Changelog
 
+## [0.49.0] - 2026-08-31
+
+### Added
+
+- `split-mode: 'tensor'` enables qvac-fabric's meta-device tensor parallelism, splitting weights
+  and KV cache across all visible GPUs. **EXPERIMENTAL and desktop-only** (still rejected on
+  Android/iOS with the other multi-GPU parameters). Three constraints, all enforced up front with
+  `InvalidArgument` rather than surfacing as an opaque native failure:
+  - Requires flash attention — a falsey `flash-attn` is rejected. qvac-fabric treats `off`,
+    `disabled`, `false` and `0` as equivalent, and all four are rejected under both the
+    `flash-attn` and `flash_attn` spellings. Leaving it unset is fine; it already defaults to `on`.
+  - Disables auto-fit, which qvac-fabric does not implement for this mode: `gpu_layers` then
+    defaults to every layer and `ctx_size` to the model's trained context, so **set `ctx_size`
+    explicitly for large models** or the load can OOM. The override is applied after argument
+    parsing, so an explicit `fit: 'on'` cannot silently re-enable it. Logged at WARNING.
+  - Unavailable for some architectures (Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2,
+    MiniMax, Qwen3-Next and others as of qvac-fabric v10297.1.1); rejected before loading with
+    the architecture named. `deepseek4`, `qwen35` and `qwen35moe` were unsupported at v10297.0.0
+    and are supported from v10297.1.0.
+
+  Tensor mode pins its own `--device` list. qvac-fabric selects devices for this mode with no
+  device-type filter and no deduplication, so left alone it splits weights and KV cache onto the
+  integrated GPU of any discrete + integrated host and shards a dual-registered GPU twice. The
+  addon enumerates devices itself — discrete when present, otherwise integrated, deduplicated by
+  the backend-reported `device_id` (PCI bus id), not by description: two identical cards report
+  identical descriptions. `layer` and `row` are unchanged and still let qvac-fabric choose.
+
+  **Not selectable through the SDK yet:** `@qvac/inference`'s config schema still enumerates
+  `none`/`layer`/`row`, so `'tensor'` is reachable only via direct addon `loadModel`.
+
+  Unrelated to `split-mode: 'row'`, which needs split buffers no shipped backend provides and is
+  still degraded to `'layer'`. `examples/multiGpuBenchmark.js` now benchmarks the new mode
+  alongside the existing three. See `docs/multi-gpu.md`.
+
+- `flash-attn` (and the `flash_attn` alias) is now a narrowed field on `LlamaConfig` rather than
+  reaching callers only through the `[key: string]` escape hatch, making the tensor-mode
+  requirement visible at compile time. Propagating it to the SDK schema is separate SDK-pod work.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader).
+
+## [0.48.0] - 2026-08-31
+
+### Removed
+
+- Sliding-context support. `n_discarded` is no longer consumed, so it reaches
+  qvac-fabric's own argument parser and fails model load as an unknown option.
+- `contextSlides` from the runtime stats snapshot and from `RuntimeStats` in the
+  type declarations.
+
+### Changed
+
+- A generation that fills the context window now stops with
+  `stopReason=contextOverflow` and still returns what it produced. A batched
+  sequence that fills its window reports the same, where it previously reported
+  `sequenceLimit`, which is the per-sequence cap and not what was hit.
+- Reasoning-block compaction rewinds to a boundary and re-decodes the tokens it
+  keeps, instead of removing the thinking span and shifting the tail down over
+  it. No `seq_add` remains in the addon.
+- A reasoning close marker that tokenizes to several pieces is now supported;
+  the policy previously refused it.
+- `generatedTokens` is counted where tokens are committed rather than read from
+  qvac-fabric's performance counters, which key on batch size rather than
+  meaning. A batched request that stops on EOG reports one less than before, and
+  one that stops on the prediction limit reports one more, so the batched and
+  single-prompt paths now agree at both boundaries. `TPS` shifts with it.
+- `generationParams` with a key the addon does not read now throws instead of
+  being silently ignored. Only own keys are read and forwarded.
+
+### Fixed
+
+- Time to first token on the batched path is stamped from the token the caller
+  actually receives, so a `predict: 1` request no longer returns output while
+  reporting `TTFT` 0.
+- Compaction replay runs outside the scheduler mutex, so a reasoning turn no
+  longer stalls co-tenant slots or blocks a cross-thread `cancel()` for the
+  length of the replay.
+- A multimodal reasoning turn that ends through EOS substitution now seeds the
+  close marker for replay, so the compacted cache cannot be left holding an
+  unbalanced thinking block.
+
 ## [0.47.0] - 2026-08-24
 
 ### Added

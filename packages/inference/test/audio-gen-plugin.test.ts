@@ -5,6 +5,7 @@ import { audioGenStream } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-st
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/index'
 import { ModelType } from '@/schemas/index'
+import { readBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { ModelOperationNotSupportedError } from '@/errors/index'
 
 type AudioGenResponse = Awaited<ReturnType<AudioGen['run']>>
@@ -122,19 +123,90 @@ test('audioGen plugin operation streams progress, PCM, and terminal stats', asyn
   t.is(frames[1]?.channels, 2)
   t.is(frames[1]?.bitsPerSample, 16)
   t.ok(frames[1]?.data !== undefined)
-  t.alike(frames[2], {
-    type: 'audioGenStream',
-    done: true,
-    stopReason: 'completed',
-    stats: {
-      audioDurationMs: 10,
-      totalTimeMs: 5,
-      realTimeFactor: 0.5,
-      backendDevice: 1,
-      backendId: 1
-    }
+  t.is(frames[2]?.type, 'audioGenStream')
+  t.is(frames[2]?.done, true)
+  t.is(frames[2]?.stopReason, 'completed')
+  t.alike(frames[2]?.stats, {
+    audioDurationMs: 10,
+    totalTimeMs: 5,
+    realTimeFactor: 0.5,
+    backendDevice: 1,
+    backendId: 1
   })
+  t.alike(frames[2]?.diagnostics, {
+    selectedBackend: 'metal',
+    selectedDevice: 'gpu',
+    graphicsApi: 'metal'
+  })
+  t.alike(
+    readBackendDiagnostics(frames[2]),
+    frames[2]?.diagnostics,
+    'symbol and schema field carry the same diagnostics'
+  )
   t.is(getRequestRegistry().get(requestId), null)
+})
+
+test('audioGen terminal diagnostics name the CPU backend and skip an unnamed GPU backend', async (t) => {
+  const cpuModelId = 'audio-gen-diagnostics-cpu'
+  const cpuModel = createModel(createResponse([], { backendDevice: 0, backendId: 0 }))
+  registerAudioGenModel(cpuModelId, cpuModel)
+  t.teardown(() => {
+    unregisterModel(cpuModelId)
+  })
+
+  const cpuFrames = []
+  for await (const frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId: 'audio-gen-request-diagnostics-cpu',
+    modelId: cpuModelId,
+    caption: 'ambient electronic music'
+  })) {
+    cpuFrames.push(frame)
+  }
+
+  t.alike(cpuFrames[0]?.diagnostics, {
+    selectedBackend: 'cpu',
+    selectedDevice: 'cpu'
+  })
+
+  const unknownModelId = 'audio-gen-diagnostics-unknown'
+  const unknownModel = createModel(createResponse([], { backendDevice: 1, backendId: 7 }))
+  registerAudioGenModel(unknownModelId, unknownModel)
+  t.teardown(() => {
+    unregisterModel(unknownModelId)
+  })
+
+  const unknownFrames = []
+  for await (const frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId: 'audio-gen-request-diagnostics-unknown',
+    modelId: unknownModelId,
+    caption: 'ambient electronic music'
+  })) {
+    unknownFrames.push(frame)
+  }
+
+  t.is(unknownFrames[0]?.diagnostics, undefined)
+  t.is(readBackendDiagnostics(unknownFrames[0]), undefined)
+
+  const noStatsModelId = 'audio-gen-diagnostics-no-device'
+  const noStatsModel = createModel(createResponse([], {}))
+  registerAudioGenModel(noStatsModelId, noStatsModel)
+  t.teardown(() => {
+    unregisterModel(noStatsModelId)
+  })
+
+  const noStatsFrames = []
+  for await (const frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId: 'audio-gen-request-diagnostics-no-device',
+    modelId: noStatsModelId,
+    caption: 'ambient electronic music'
+  })) {
+    noStatsFrames.push(frame)
+  }
+
+  t.is(noStatsFrames[0]?.diagnostics, undefined)
 })
 
 test('audioGen plugin operation hard-cancels and frees its registry entry', async (t) => {

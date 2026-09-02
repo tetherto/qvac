@@ -29,6 +29,7 @@ import {
 import * as catalog from '../dist/models/registry/index.js'
 import { MODEL_RESOURCE_PROFILES } from '../dist/models/registry/resource-profiles.js'
 import { kvElementBytes, kvCacheBytesForWidth } from '../dist/resources/model-fit/estimators/llm.js'
+import { fitResidentMemory } from '../dist/resources/model-fit/calibration/fit.js'
 import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js'
 import type { GgufFacts } from '../dist/schemas/model-resource-profile.js'
 import type { PlatformCalibration } from '../dist/resources/model-fit/types.js'
@@ -41,6 +42,17 @@ const SETTLE_MS = 250
 // Two contexts per model so fixed overhead and the per-token compute buffer can
 // be separated; a single point cannot tell them apart.
 const CONTEXTS = [512, 8192]
+
+// Every point is measured this many times. Single-shot loads were observed to
+// vary by up to ~100 MiB run to run; all repeats enter the fit, and the upper
+// bound is floored at the worst point seen.
+const REPEATS = 3
+
+// llama.cpp allocates the whole context at load — KV cache, engine overhead
+// and compute buffers included — so the RSS delta during a completion should
+// be near zero. A working delta above this threshold means the engine's
+// allocation behaviour changed and this methodology needs re-checking.
+const WORKING_DRIFT_WARN_BYTES = 64 * 1024 * 1024
 
 // Small, medium, large — plus one held out of the fit entirely, used only to
 // check that the derived upper bound actually holds.
@@ -57,8 +69,7 @@ interface Measurement {
 }
 
 interface FitPoint extends Measurement {
-  kv: number
-  residual: number
+  kvBytes: number
 }
 
 function rssBytes() {
@@ -195,26 +206,6 @@ async function measure(name: string, contextTokens: number): Promise<Measurement
   }
 }
 
-/**
- * Least-squares fit of `residual = fixed + perToken × context`, where the
- * residual is measured working memory minus the KV cache the estimator would
- * already have accounted for.
- */
-function fitResiduals(points: readonly FitPoint[]) {
-  const n = points.length
-  const sumX = points.reduce((total, p) => total + p.contextTokens, 0)
-  const sumY = points.reduce((total, p) => total + p.residual, 0)
-  const sumXY = points.reduce((total, p) => total + p.contextTokens * p.residual, 0)
-  const sumXX = points.reduce((total, p) => total + p.contextTokens ** 2, 0)
-
-  const denominator = n * sumXX - sumX ** 2
-  if (denominator === 0) return { fixed: sumY / n, perToken: 0 }
-
-  const perToken = (n * sumXY - sumX * sumY) / denominator
-  const fixed = (sumY - perToken * sumX) / n
-  return { fixed: Math.max(0, fixed), perToken: Math.max(0, perToken) }
-}
-
 function fixtureSource(platform: string, calibration: PlatformCalibration) {
   const json = JSON.stringify(calibration, null, 2)
     .replace(/"([a-zA-Z]+)":/g, '$1:')
@@ -238,7 +229,7 @@ async function main() {
 
   registerPlugin(llmPlugin)
 
-  // The residual is what is left after the KV cache is accounted for, so the
+  // The fit subtracts the KV cache from each load's persistent delta, so the
   // cache subtracted has to be the one the engine actually allocated. A fixed
   // f16 assumption over-subtracts by nearly 2x on a Metal or Vulkan backend —
   // and since the error scales with context, it lands in the per-token slope
@@ -252,63 +243,75 @@ async function main() {
   const device = gpuName(gpuList)
   console.log(`backend: ${backend}${device ? ` (${device})` : ''}`)
 
+  const mib = (n: number) => (n / 1024 / 1024).toFixed(0)
   const elementWidths = new Set<number>()
   const measurements: FitPoint[] = []
   for (const name of FIT_MODELS) {
     for (const contextTokens of CONTEXTS) {
-      const measurement = await measure(name, contextTokens)
-      // `.lower` is the width a GPU backend defaults to (q8_0), and equals f16
-      // when no GPU is reported — what the engine allocates in each case, not an
-      // optimistic bound borrowed from the estimator's range.
-      const bytesPerElement = kvElementBytes(measurement.facts, hasGpu).bytes.lower
-      elementWidths.add(bytesPerElement)
-      const kv = exactKvBytes(name, measurement.facts, contextTokens, bytesPerElement)
-      // Deliberately unclamped. A negative residual is the signature of
-      // subtracting a cache the engine never allocated, and clamping it here
-      // would hide exactly the failure worth catching.
-      measurements.push({ ...measurement, kv, residual: measurement.workingBytes - kv })
-      const mib = (n: number) => (n / 1024 / 1024).toFixed(0)
-      console.log(
-        `  ${name} @ ${contextTokens}: persistent ${mib(measurement.persistentBytes)} MiB, working ${mib(measurement.workingBytes)} MiB, kv ${mib(kv)} MiB`
-      )
+      for (let repeat = 0; repeat < REPEATS; repeat++) {
+        const measurement = await measure(name, contextTokens)
+        // `.lower` is the width a GPU backend defaults to (q8_0), and equals
+        // f16 when no GPU is reported — what the engine allocates in each
+        // case, not an optimistic bound borrowed from the estimator's range.
+        const bytesPerElement = kvElementBytes(measurement.facts, hasGpu).bytes.lower
+        elementWidths.add(bytesPerElement)
+        const kvBytes = exactKvBytes(name, measurement.facts, contextTokens, bytesPerElement)
+        measurements.push({ ...measurement, kvBytes })
+        console.log(
+          `  ${name} @ ${contextTokens} (${repeat + 1}/${REPEATS}): persistent ${mib(measurement.persistentBytes)} MiB, working ${mib(measurement.workingBytes)} MiB, kv ${mib(kvBytes)} MiB`
+        )
+        if (measurement.workingBytes > WORKING_DRIFT_WARN_BYTES) {
+          console.log(
+            `    warning: working delta is ${mib(measurement.workingBytes)} MiB — the engine no longer allocates everything at load, so the persistent-based fit under-describes the peak`
+          )
+        }
+      }
     }
   }
 
   if (elementWidths.size > 1) {
     console.log(
-      `\nwarning: the fit mixes KV element widths (${[...elementWidths].join(', ')} bytes), so the residuals do not describe a single cache type`
+      `\nwarning: the fit mixes KV element widths (${[...elementWidths].join(', ')} bytes), so the points do not describe a single cache type`
     )
   }
 
-  // Fail loudly rather than fitting nonsense: `fitResiduals` floors its output
-  // at zero, so a bad subtraction would otherwise emit a plausible-looking
-  // `{ lower: 0, upper: 0 }` instead of an error.
-  const negative = measurements.filter((m) => m.residual < 0)
+  // Fail loudly rather than fitting nonsense: a load that measured smaller
+  // than the KV cache it supposedly allocated means the assumed cache type
+  // does not match what the engine did.
+  const negative = measurements.filter((m) => m.persistentBytes - m.kvBytes < 0)
   if (negative.length > 0) {
     console.log(
-      `\n${negative.length} of ${measurements.length} residuals are negative: the KV cache being subtracted is larger than the working memory measured. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
+      `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
     )
     return
   }
 
-  const weightRatios = measurements.map((m) => m.persistentBytes / m.artifactBytes)
-  const fit = fitResiduals(measurements)
-
-  // The upper bound has to cover the worst point observed, not the average, or
-  // the held-out check below is meaningless.
-  const worstResidual = Math.max(...measurements.map((m) => m.residual))
+  const fit = fitResidentMemory(measurements)
+  if (!fit) {
+    console.log(
+      '\nthe measurement design cannot separate the weight ratio, fixed overhead and per-token slope (degenerate fit). No fixture written.'
+    )
+    return
+  }
+  console.log(
+    `\nfit: weightRatio ${fit.weightRatio.toFixed(3)}, fixed ${mib(fit.fixedBytes)} MiB, perToken ${fit.perTokenBytes.toFixed(0)} B, worst excess ${mib(fit.worstExcessBytes)} MiB`
+  )
 
   const calibration: PlatformCalibration = {
-    weightUpperCoeff: Number(Math.max(1, ...weightRatios).toFixed(3)),
+    weightUpperCoeff: Number(Math.max(1, fit.weightRatio).toFixed(3)),
     fixedOverheadBytes: {
-      lower: Math.round(fit.fixed * 0.8),
-      upper: Math.round(Math.max(fit.fixed, worstResidual) * 1.2)
+      lower: Math.round(fit.fixedBytes * 0.8),
+      // Floored at the worst point observed: an upper bound that does not
+      // cover a measurement is not an upper bound.
+      upper: Math.round((fit.fixedBytes + fit.worstExcessBytes) * 1.2)
     },
     computeBufferBytesPerToken: {
-      lower: Math.round(fit.perToken * 0.8),
-      upper: Math.round(fit.perToken * 1.2)
+      lower: Math.round(fit.perTokenBytes * 0.8),
+      upper: Math.round(fit.perTokenBytes * 1.2)
     },
     // Audio coefficients need a whisper pass; left at zero until that runs.
+    // `estimateWhisper` refuses to consume the zeros, so audio workloads
+    // assess as unknown rather than as a confident under-estimate.
     audioWindowBytes: { lower: 0, upper: 0 },
     audioStreamingBytes: { lower: 0, upper: 0 },
     validated: false,
@@ -322,22 +325,30 @@ async function main() {
 
   console.log('\nderived:', JSON.stringify(calibration, null, 2))
 
-  const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!)
   // Predict with the width this run actually allocated, not the estimator's f16
   // upper end. Using f16 here on a q8_0 backend would pad the prediction by the
   // whole cache-type spread and let weak coefficients through the gate; the
-  // point is to test the fit, not the conservatism of the range.
-  const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
+  // point is to test the fit, not the conservatism of the range. The held-out
+  // model is measured as many times as a fit point, against the worst total.
+  let heldOutWorstTotal = 0
+  let heldOutKv = 0
+  let heldOutArtifactBytes = 0
+  for (let repeat = 0; repeat < REPEATS; repeat++) {
+    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!)
+    const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
+    heldOutKv = exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
+    heldOutArtifactBytes = heldOut.artifactBytes
+    heldOutWorstTotal = Math.max(heldOutWorstTotal, heldOut.persistentBytes + heldOut.workingBytes)
+  }
   const predictedUpper =
-    heldOut.artifactBytes * calibration.weightUpperCoeff +
+    heldOutArtifactBytes * calibration.weightUpperCoeff +
     calibration.fixedOverheadBytes.upper +
     calibration.computeBufferBytesPerToken.upper * CONTEXTS[1]! +
-    exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
-  const measuredTotal = heldOut.persistentBytes + heldOut.workingBytes
-  const holds = measuredTotal <= predictedUpper
+    heldOutKv
+  const holds = heldOutWorstTotal <= predictedUpper
 
   console.log(
-    `\nheld-out ${HELD_OUT_MODEL}: measured ${(measuredTotal / 2 ** 30).toFixed(2)} GiB vs predicted upper ${(predictedUpper / 2 ** 30).toFixed(2)} GiB — ${holds ? 'PASS' : 'FAIL'}`
+    `\nheld-out ${HELD_OUT_MODEL}: worst measured ${(heldOutWorstTotal / 2 ** 30).toFixed(2)} GiB vs predicted upper ${(predictedUpper / 2 ** 30).toFixed(2)} GiB — ${holds ? 'PASS' : 'FAIL'}`
   )
   calibration.validated = holds
   if (!holds) {

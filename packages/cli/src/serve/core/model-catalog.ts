@@ -1,6 +1,6 @@
 import type { ModelConstant } from '@qvac/sdk'
-import { normalizeEndpointCategory } from '../config.js'
-import type { ModelRegistry, ModelState, ServeConfig } from './model-registry.js'
+import { normalizeEndpointCategory } from '@/serve/config'
+import type { ModelRegistry, ModelState, ServeConfig } from '@/serve/core/model-registry'
 
 /** A discovery-listing row. Deliberately NOT an OpenAI `model` object: a
  * `not_configured` entry is browsable but not callable on this server. */

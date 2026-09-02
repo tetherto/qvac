@@ -35,7 +35,13 @@ permissions:
   contents: read
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   test-cpp:
+    needs: runner_names
     permissions:
       contents: read
       id-token: write
@@ -46,15 +52,15 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
           - os: macos-15
             platform: darwin
             arch: arm64
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -100,7 +106,7 @@ jobs:
         run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -218,3 +224,4 @@ jobs:
         if: matrix.platform == 'linux'
         working-directory: ${{ env.WORKDIR }}
         run: npm run fuzz:run
+

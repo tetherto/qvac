@@ -573,6 +573,14 @@ cuBLAS, from a CUDA toolkit install) resolvable at load time. On hosts
 without them — including CPU-only and non-NVIDIA machines — the module is
 skipped and the addon behaves exactly as before (Vulkan or CPU).
 
+The module targets **compute capability 7.5 and newer**: native code for
+Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6), Ada (8.9), Hopper
+(9.0) and Blackwell (12.0, 12.1), and a JIT compile from the bundled 8.0 PTX
+for anything newer that the driver caches after first use. Volta and Pascal
+fall outside CUDA 13's support entirely, so they have no code path here: the
+backend skips such devices at registration and the addon falls back to Vulkan
+or CPU.
+
 > Both Chatterbox and Supertonic run on ARM Mali via Vulkan: `tts-cpp` sets
 > `allow_arm_mali=true` for both graphs. (Earlier `tts-cpp` builds declined
 > Mali for the Chatterbox / S3Gen graph and fell back to CPU there.)

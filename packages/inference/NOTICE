@@ -667,8 +667,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-env
   bare-events@2.9.1
     https://github.com/holepunchto/bare-events
-  bare-fetch@3.2.0
-    https://github.com/holepunchto/bare-fetch
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
   bare-fs@4.8.0
