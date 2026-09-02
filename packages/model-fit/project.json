@@ -61,6 +61,16 @@
         }
       }
     },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/model-fit",
+        "ci": {
+          "carveOut": true
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
