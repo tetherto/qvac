@@ -1,0 +1,220 @@
+name: SDK E2E Resolve Rerun
+description: >
+  Builds the plan for a `test-e2e-rerun-failed` run from the hidden base state
+  comment maintained by `sdk-e2e-base-state`.
+
+  The plan is always anchored to the last *base* run, never to a previous rerun,
+  so every attempt answers the same question: do all the tests that failed on
+  the base pass now? Platforms that were green on the base are dropped from the
+  run entirely.
+
+  Refuses to plan while a base run is still in flight — its failure set is not
+  known yet, and planning from the previous base would re-run the wrong tests.
+
+outputs:
+  should-run:
+    description: "true when there is at least one previously failed test to re-run"
+    value: ${{ steps.resolve.outputs.should-run }}
+  targets:
+    description: "Comma-separated family list for test-sdk.yml (e.g. 'desktop,ios')"
+    value: ${{ steps.resolve.outputs.targets }}
+  rerun-plan:
+    description: "JSON {family: {platform: [testId]}} of previously failed tests"
+    value: ${{ steps.resolve.outputs.rerun-plan }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve rerun plan
+      id: resolve
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      with:
+        script: |
+          const MARKER = '<!-- sdk-e2e-base-state -->';
+          const DATA_RE = /<!-- sdk-e2e-base-state-data:v1:([A-Za-z0-9+/=]+) -->/;
+          const PLAN_MARKER = '<!-- sdk-e2e-rerun-plan -->';
+          const FAMILY_ORDER = ['desktop', 'electron', 'snap', 'android', 'ios'];
+
+          const pr = context.payload.pull_request?.number;
+          const runUrl =
+            `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+
+          let cachedComments = null;
+          async function listComments() {
+            if (!cachedComments) {
+              cachedComments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                per_page: 100,
+              });
+            }
+            return cachedComments;
+          }
+
+          async function upsertPlanComment(body) {
+            const existing = (await listComments())
+              .filter((c) => (c.body || '').includes(PLAN_MARKER))
+              .pop();
+            const args = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${PLAN_MARKER}\n${body}`,
+            };
+            if (existing) {
+              await github.rest.issues.updateComment({ ...args, comment_id: existing.id });
+            } else {
+              await github.rest.issues.createComment({ ...args, issue_number: pr });
+            }
+          }
+
+          async function stop(heading, reason) {
+            core.setOutput('should-run', 'false');
+            core.setOutput('targets', '');
+            core.setOutput('rerun-plan', '');
+            if (pr) await upsertPlanComment(`### QVAC E2E rerun — ${heading}\n\n${reason}\n\n[View run](${runUrl})`);
+            core.notice(reason);
+            core.summary.addRaw(`### QVAC E2E rerun — ${heading}\n\n${reason}\n`);
+            await core.summary.write();
+          }
+
+          // A cancelled or dead base run leaves its `running` mark behind, so trust
+          // the run's real status rather than the mark alone.
+          async function isRunInFlight(runId) {
+            try {
+              const { data } = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId,
+              });
+              return data.status !== 'completed';
+            } catch (err) {
+              if (err.status === 404) return false;
+              throw err;
+            }
+          }
+
+          if (!pr) {
+            return stop('not a PR', 'A failed-test rerun is only available on pull requests.');
+          }
+
+          const NO_BASE =
+            'No SDK e2e base run recorded on this PR. Run `test-e2e-smoke` or `test-e2e-full` ' +
+            'first — `test-e2e-rerun-failed` re-runs the failures of that run.';
+
+          const stateComment = (await listComments())
+            .filter((c) => (c.body || '').includes(MARKER) && DATA_RE.test(c.body || ''))
+            .pop();
+          if (!stateComment) {
+            return stop('⚠️ no base run', NO_BASE);
+          }
+
+          let state;
+          try {
+            state = JSON.parse(Buffer.from(DATA_RE.exec(stateComment.body)[1], 'base64').toString('utf8'));
+          } catch (err) {
+            return stop(
+              '⚠️ unreadable base state',
+              `The base state comment could not be decoded (${err.message}). Re-run the full suite.`
+            );
+          }
+
+          if (state.running?.runId && (await isRunInFlight(state.running.runId))) {
+            const link = state.running.runUrl
+              ? `[run ${state.running.runId}](${state.running.runUrl})`
+              : `run ${state.running.runId}`;
+            return stop(
+              '⏳ base run still in progress',
+              `Base ${link} has not finished, so its failure set is not known yet. Wait for the ` +
+              '**QVAC E2E — base run recorded** comment, then apply the label again — it has ' +
+              'already been removed.'
+            );
+          }
+          if (state.running?.runId) {
+            core.warning(
+              `Base run ${state.running.runId} never recorded a result; planning from the last recorded base.`
+            );
+          }
+
+          const recorded = state.recorded;
+          if (!recorded || !Array.isArray(recorded.platforms) || recorded.platforms.length === 0) {
+            return stop('⚠️ no base run', NO_BASE);
+          }
+
+          const baseLabel =
+            `**Base:** ${recorded.runUrl ? `[run ${recorded.runId}](${recorded.runUrl})` : `run ${recorded.runId}`} · ` +
+            `suite \`${recorded.suite || 'full'}\`` +
+            (recorded.sha ? ` · sha \`${String(recorded.sha).substring(0, 7)}\`` : '');
+
+          const plan = {};
+          let testCount = 0;
+          for (const entry of recorded.platforms) {
+            const family = String(entry.family || '');
+            const platform = String(entry.platform || '');
+            const ids = Array.isArray(entry.failed)
+              ? [...new Set(entry.failed.map(String).filter(Boolean))]
+              : [];
+            if (ids.length === 0) continue;
+            if (!FAMILY_ORDER.includes(family) || !platform) {
+              core.warning(`Skipping unrecognised base entry: ${family}/${platform}`);
+              continue;
+            }
+            plan[family] = plan[family] || {};
+            plan[family][platform] = ids;
+            testCount += ids.length;
+          }
+
+          if (testCount === 0) {
+            return stop(
+              '✅ base is green',
+              `${baseLabel}\n\nThe recorded base run has no failing tests — nothing to re-run.`
+            );
+          }
+
+          const families = FAMILY_ORDER.filter((family) => plan[family]);
+          const headSha = context.payload.pull_request?.head?.sha || '';
+          const skipped = recorded.platforms
+            .filter((p) => !Array.isArray(p.failed) || p.failed.length === 0)
+            .map((p) => `\`${p.family}/${p.platform}\``);
+
+          const lines = [
+            `### QVAC E2E rerun — ${testCount} previously failed test(s)`,
+            baseLabel,
+            `**Now testing:** sha \`${headSha.substring(0, 7) || 'head'}\`` +
+              (headSha && headSha === recorded.sha
+                ? ' — same commit as the base, so this is a flakiness check.'
+                : ' — new commit since the base run.'),
+            `[View run](${runUrl})`,
+            '',
+            '| Platform | Tests | Test ids |',
+            '| --- | --- | --- |',
+          ];
+          for (const family of families) {
+            for (const platform of Object.keys(plan[family]).sort()) {
+              const ids = plan[family][platform];
+              const shown = ids.slice(0, 8).map((id) => `\`${id}\``).join(', ');
+              const rest = ids.length - 8;
+              lines.push(
+                `| \`${family}/${platform}\` | ${ids.length} | ${shown}${rest > 0 ? `, and ${rest} more` : ''} |`
+              );
+            }
+          }
+          lines.push('');
+          if (skipped.length > 0) lines.push(`Not re-run (green on the base): ${skipped.join(', ')}.`);
+          lines.push(
+            'This is a partial verification — it does not replace a full run, and it does not ' +
+            'apply the `e2e-tested` label.'
+          );
+          if (recorded.truncated) {
+            lines.push('', '> The base state was truncated; some failures are not covered by this rerun.');
+          }
+
+          const body = lines.join('\n');
+          await upsertPlanComment(body);
+          core.summary.addRaw(`${body}\n`);
+          await core.summary.write();
+
+          core.setOutput('should-run', 'true');
+          core.setOutput('targets', families.join(','));
+          core.setOutput('rerun-plan', JSON.stringify(plan));

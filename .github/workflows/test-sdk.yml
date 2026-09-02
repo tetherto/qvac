@@ -171,6 +171,13 @@ on:
       electron-platforms:
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
+      rerun-plan:
+        description: >-
+          JSON {family: {platform: [testId]}} of previously failed tests. When set,
+          the run is narrowed to exactly these platforms and each platform receives
+          its own test filter. Empty = normal run.
+        type: string
+        default: ""
       test-version:
         type: string
       inference-source:
@@ -210,6 +217,11 @@ jobs:
       run-android: ${{ steps.resolve.outputs.run-android }}
       run-ios: ${{ steps.resolve.outputs.run-ios }}
       run-e2e: ${{ steps.resolve.outputs.run-e2e }}
+      desktop-platforms: ${{ steps.plan.outputs.desktop-platforms }}
+      electron-platforms: ${{ steps.plan.outputs.electron-platforms }}
+      snap-platforms: ${{ steps.plan.outputs.snap-platforms }}
+      filter-android: ${{ steps.plan.outputs.filter-android }}
+      filter-ios: ${{ steps.plan.outputs.filter-ios }}
     steps:
       - name: Resolve configuration
         id: resolve
@@ -300,8 +312,34 @@ jobs:
                 RESOLVED_IOS=true
                 ;;
               *)
-                echo "::error::Unsupported reusable target: $TARGETS"
-                exit 1
+                # Comma-separated family list (e.g. "desktop,ios"), used by
+                # failed-test reruns where the families come from the base run.
+                REST="$TARGETS"
+                MATCHED=false
+                while [ -n "$REST" ]; do
+                  ITEM="${REST%%,*}"
+                  if [ "$ITEM" = "$REST" ]; then
+                    REST=""
+                  else
+                    REST="${REST#*,}"
+                  fi
+                  case "$ITEM" in
+                    desktop) RESOLVED_DESKTOP=true; MATCHED=true ;;
+                    electron) RESOLVED_ELECTRON=true; MATCHED=true ;;
+                    snap) RESOLVED_SNAP=true; MATCHED=true ;;
+                    android) RESOLVED_ANDROID=true; MATCHED=true ;;
+                    ios) RESOLVED_IOS=true; MATCHED=true ;;
+                    "") ;;
+                    *)
+                      echo "::error::Unsupported reusable target: $TARGETS"
+                      exit 1
+                      ;;
+                  esac
+                done
+                if [ "$MATCHED" != "true" ]; then
+                  echo "::error::Unsupported reusable target: $TARGETS"
+                  exit 1
+                fi
                 ;;
             esac
           fi
@@ -323,6 +361,78 @@ jobs:
             echo "run-ios=$RESOLVED_IOS"
             echo "run-e2e=$RESOLVED_E2E"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Apply rerun plan
+        id: plan
+        shell: node {0}
+        env:
+          RERUN_PLAN: ${{ inputs.rerun-plan }}
+          DESKTOP_PLATFORMS: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
+          ELECTRON_PLATFORMS: ${{ inputs.electron-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]' }}
+          SNAP_PLATFORMS: ${{ inputs.snap-platforms || '["qvac-ubuntu2204-x64-gpu"]' }}
+        run: |
+          const fs = require('fs');
+
+          const raw = (process.env.RERUN_PLAN || '').trim();
+          let plan = null;
+          if (raw) {
+            try {
+              plan = JSON.parse(raw);
+            } catch (err) {
+              console.log(`::error::Invalid rerun-plan JSON: ${err.message}`);
+              process.exit(1);
+            }
+          }
+
+          // Same runner-label -> platform-key mapping as test-node-sdk.yml.
+          function platformKey(label) {
+            const s = String(label).toLowerCase();
+            if (s.includes('win')) return 'windows';
+            if (s.includes('mac') || s.includes('darwin')) return 'macos';
+            return 'linux';
+          }
+
+          function narrow(family, rawRunners) {
+            const runners = JSON.parse(rawRunners);
+            if (!plan) return runners;
+
+            const wanted = plan[family];
+            if (!wanted) return [];
+
+            const kept = runners.filter((runner) => Array.isArray(wanted[platformKey(runner)]));
+            const missing = Object.keys(wanted).filter(
+              (key) => !runners.some((runner) => platformKey(runner) === key)
+            );
+            if (missing.length > 0) {
+              console.log(
+                `::warning::No ${family} runner is configured for: ${missing.join(', ')} — ` +
+                'those previously failed tests will not be re-run.'
+              );
+            }
+            if (kept.length === 0) {
+              console.log(`::error::Rerun plan targets ${family} but no configured runner matches it.`);
+              process.exit(1);
+            }
+            return kept;
+          }
+
+          function filterFor(family, platform) {
+            const ids = plan && plan[family] && plan[family][platform];
+            return Array.isArray(ids) ? ids.join(',') : '';
+          }
+
+          const outputs = {
+            'desktop-platforms': JSON.stringify(narrow('desktop', process.env.DESKTOP_PLATFORMS)),
+            'electron-platforms': JSON.stringify(narrow('electron', process.env.ELECTRON_PLATFORMS)),
+            'snap-platforms': JSON.stringify(narrow('snap', process.env.SNAP_PLATFORMS)),
+            'filter-android': filterFor('android', 'android'),
+            'filter-ios': filterFor('ios', 'ios'),
+          };
+
+          for (const [key, value] of Object.entries(outputs)) {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+            console.log(`${key}=${value}`);
+          }
 
   prepare-inference:
     name: Resolve inference source
@@ -499,7 +609,8 @@ jobs:
       consumer: desktop
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
+      platforms: ${{ needs.resolve.outputs.desktop-platforms }}
+      rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -524,7 +635,8 @@ jobs:
       consumer: electron
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.electron-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]' }}
+      platforms: ${{ needs.resolve.outputs.electron-platforms }}
+      rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -549,7 +661,8 @@ jobs:
       consumer: snap
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.snap-platforms || '["qvac-ubuntu2204-x64-gpu"]' }}
+      platforms: ${{ needs.resolve.outputs.snap-platforms }}
+      rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -580,7 +693,7 @@ jobs:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
-      filter: ${{ inputs.filter }}
+      filter: ${{ needs.resolve.outputs.filter-android || inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
@@ -613,7 +726,7 @@ jobs:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
-      filter: ${{ inputs.filter }}
+      filter: ${{ needs.resolve.outputs.filter-ios || inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}

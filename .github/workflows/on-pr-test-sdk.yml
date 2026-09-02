@@ -3,14 +3,24 @@
 # Triggers SDK e2e tests via test-sdk.yml when:
 #   - "test-e2e-smoke" label applied: runs smoke suite on desktop + mobile
 #   - "test-e2e-full" label applied: runs full suite on desktop + mobile
+#   - "test-e2e-rerun-failed" label applied: re-runs only the tests that failed
+#     on the last smoke/full run, on the platforms where they failed
 #   - PR opened/updated targeting release-* branch with SDK/inference changes: runs full suite
 #
-# On success, applies "e2e-tested" label to the PR.
+# Smoke/full/release runs are "base" runs: they record their per-platform failure
+# set (sdk-e2e-base-state) and, on success, apply the "e2e-tested" label. Reruns
+# are anchored to that base — every attempt re-runs the same set until a new base
+# run replaces it — never apply "e2e-tested", and are rejected while a base run
+# is still in flight, since its failure set is not known until it finishes.
 #
 # Uses pull_request_target for secrets access (Device Farm, MQTT).
 # Authorization gate prevents untrusted fork PRs from running.
 
 name: QVAC Tests (sdk) - PR
+run-name: >-
+  ${{ (github.event.action == 'labeled' && github.event.label.name == 'test-e2e-rerun-failed')
+    && format('SDK e2e rerun — {0}', github.event.pull_request.title)
+    || github.event.pull_request.title }}
 
 on:
   pull_request_target:
@@ -28,7 +38,16 @@ permissions:
   packages: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # One group per kind of run, so cancel-in-progress only supersedes a run of the
+  # same kind: a rerun must not cancel the base run whose failure set it consumes,
+  # and a label this workflow ignores must not cancel anything at all.
+  group: >-
+    ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{
+      github.event.action != 'labeled' && 'base'
+      || (github.event.label.name == 'test-e2e-rerun-failed' && 'rerun')
+      || (github.event.label.name == 'test-e2e-smoke' && 'base')
+      || (github.event.label.name == 'test-e2e-full' && 'base')
+      || format('ignored-{0}', github.event.label.name) }}
   cancel-in-progress: true
 
 jobs:
@@ -46,6 +65,7 @@ jobs:
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
       suite: ${{ steps.check.outputs.suite }}
+      mode: ${{ steps.check.outputs.mode }}
     steps:
       - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -72,43 +92,188 @@ jobs:
           LABEL: ${{ github.event.label.name }}
           TARGET: ${{ github.base_ref }}
         run: |
+          SHOULD_RUN=false
+          SUITE=
+          MODE=
+
           if [ "$EVENT" = "labeled" ]; then
-            if [ "$LABEL" = "test-e2e-smoke" ]; then
-              echo "should-run=true" >> "$GITHUB_OUTPUT"
-              echo "suite=smoke" >> "$GITHUB_OUTPUT"
-            elif [ "$LABEL" = "test-e2e-full" ]; then
-              echo "should-run=true" >> "$GITHUB_OUTPUT"
-              echo "suite=" >> "$GITHUB_OUTPUT"
-            else
-              echo "::notice::Ignoring unrelated label: $LABEL"
-              echo "should-run=false" >> "$GITHUB_OUTPUT"
-            fi
+            case "$LABEL" in
+              test-e2e-smoke)
+                SHOULD_RUN=true
+                SUITE=smoke
+                MODE=base
+                ;;
+              test-e2e-full)
+                SHOULD_RUN=true
+                MODE=base
+                ;;
+              test-e2e-rerun-failed)
+                echo "::notice::Re-running the tests that failed on the last base run"
+                SHOULD_RUN=true
+                MODE=rerun
+                ;;
+              *)
+                echo "::notice::Ignoring unrelated label: $LABEL"
+                ;;
+            esac
           elif echo "$TARGET" | grep -q '^release-'; then
             # Path filter already ensures SDK or inference changes exist.
             echo "::notice::Release branch PR with SDK/inference changes — running full suite"
-            echo "should-run=true" >> "$GITHUB_OUTPUT"
-            echo "suite=" >> "$GITHUB_OUTPUT"
-          else
-            echo "should-run=false" >> "$GITHUB_OUTPUT"
+            SHOULD_RUN=true
+            MODE=base
           fi
+
+          {
+            echo "should-run=$SHOULD_RUN"
+            echo "suite=$SUITE"
+            echo "mode=$MODE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Release the rerun label
+        if: steps.check.outputs.mode == 'rerun'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # 7.0.1
+        with:
+          script: |
+            // GitHub only emits `labeled` when the label is not already present,
+            // so the label has to come back off for the next attempt to trigger.
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                name: 'test-e2e-rerun-failed',
+              });
+            } catch (err) {
+              if (err.status !== 404) throw err;
+              core.info('Label already removed.');
+            }
+
+  # Marks the base run as in flight so a rerun labelled before it finishes is
+  # rejected. Deliberately not a dependency of run-tests: the base run should
+  # start even if this bookkeeping fails.
+  mark-base-running:
+    needs: [resolve-config]
+    if: >-
+      needs.resolve-config.outputs.should-run == 'true'
+      && needs.resolve-config.outputs.mode == 'base'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-base-state
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - uses: ./.github/actions/sdk-e2e-base-state
+        with:
+          phase: start
+          suite: ${{ needs.resolve-config.outputs.suite }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
+  resolve-rerun:
+    needs: [resolve-config]
+    if: >-
+      needs.resolve-config.outputs.should-run == 'true'
+      && needs.resolve-config.outputs.mode == 'rerun'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    outputs:
+      should-run: ${{ steps.plan.outputs.should-run }}
+      targets: ${{ steps.plan.outputs.targets }}
+      rerun-plan: ${{ steps.plan.outputs.rerun-plan }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-resolve-rerun
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Build rerun plan from the recorded base run
+        id: plan
+        uses: ./.github/actions/sdk-e2e-resolve-rerun
 
   run-tests:
     needs:
       - fork-approval
       - resolve-config
-    if: (needs.resolve-config.outputs.should-run == 'true')
+      - resolve-rerun
+    if: >-
+      !cancelled()
+      && needs.fork-approval.result == 'success'
+      && needs.resolve-config.result == 'success'
+      && needs.resolve-config.outputs.should-run == 'true'
+      && (needs.resolve-config.outputs.mode != 'rerun'
+          || (needs.resolve-rerun.result == 'success'
+              && needs.resolve-rerun.outputs.should-run == 'true'))
     uses: ./.github/workflows/test-sdk.yml
     with:
-      targets: desktop + mobile
+      targets: ${{ needs.resolve-rerun.outputs.targets || 'desktop + mobile' }}
       suite: ${{ needs.resolve-config.outputs.suite }}
+      rerun-plan: ${{ needs.resolve-rerun.outputs.rerun-plan }}
       test-version: ${{ github.event.pull_request.head.sha }}
       inference-source: branch
       test-suite-source: branch
     secrets: inherit
 
+  record-base:
+    # mark-base-running is a dependency purely for ordering: both jobs
+    # read-modify-write the same comment, and this one must write last.
+    needs: [resolve-config, mark-base-running, run-tests]
+    if: >-
+      !cancelled()
+      && needs.resolve-config.outputs.mode == 'base'
+      && (needs.run-tests.result == 'success' || needs.run-tests.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-base-state
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Record base failure set
+        uses: ./.github/actions/sdk-e2e-base-state
+        with:
+          phase: finish
+          suite: ${{ needs.resolve-config.outputs.suite }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
+  verify-rerun:
+    needs: [resolve-config, resolve-rerun, run-tests]
+    if: >-
+      !cancelled()
+      && needs.resolve-config.outputs.mode == 'rerun'
+      && (needs.run-tests.result == 'success' || needs.run-tests.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-verify-rerun
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Verify the rerun covered the planned tests
+        uses: ./.github/actions/sdk-e2e-verify-rerun
+        with:
+          rerun-plan: ${{ needs.resolve-rerun.outputs.rerun-plan }}
+
   apply-label:
-    needs: run-tests
-    if: success()
+    needs: [resolve-config, run-tests]
+    # Only a base run earns "e2e-tested" — a rerun verifies a subset, not the suite.
+    if: success() && needs.resolve-config.outputs.mode == 'base'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
