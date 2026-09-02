@@ -20,9 +20,19 @@
 const CONTEXT_OVERFLOW_FORMS = [
   /^\[TextLlm\] context overflow at (?:batch )?prefill step[^\r\n]*$/,
   /^\[MtmdLlm\] context overflow at (?:batch )?prefill step[^\r\n]*$/,
-  /^processPromptImpl: context overflow$/
+  // Unreachable at the pinned addon generation (generateResponse never
+  // reports !ok); kept in case a patch revives the path.
+  /^processPromptImpl: context overflow$/,
+  // The batch scheduler's capacity refusals are the same out-of-context
+  // condition; the addon follow-up will give them a ContextOverflow status.
+  /^ContinuousBatchScheduler::submit: prompt of \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
+  /^ContinuousBatchScheduler::submit: prompt of \d+ tokens leaves no room under per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
+  /^ContinuousBatchScheduler::submit: prefill prompt of \d+ tokens exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
+  /^ContinuousBatchScheduler::submit: n_predict [1-9]\d* \+ prompt \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/
 ]
 
+// Both detectors classify raw addon errors only — an already-typed QvacError
+// (numeric `code`) is deliberately rejected by the present-code gate.
 export function isAddonContextOverflowError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
   // A present status code is authoritative: exact ContextOverflow accepts,
@@ -48,7 +58,11 @@ const PRE_MUTATION_REFUSAL_FORMS = [
   /^ContinuousBatchScheduler::submit: n_predict [1-9]\d* \+ prompt \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
   /^ContinuousBatchScheduler::submit: failed to add to batch \(MultiRequestBatcher::AddStatus=[1-4]\)$/,
   /^invalid generationParams\.json_schema: [^\r\n]*$/,
-  /^failed to initialise sampler with per-request generationParams \(invalid grammar or json_schema\?\)$/
+  /^failed to initialise sampler with per-request generationParams \(invalid grammar or json_schema\?\)$/,
+  /^\[MtmdLlm\] Media buffer is empty$/,
+  /^\[MtmdLlm\] Filename is empty$/,
+  /^\[MtmdLlm\] Failed to load media from file: [^\r\n]*$/,
+  /^\[MtmdLlm\] preparePrefill: prompt must end with text after the last media item$/
 ]
 
 export function isAddonPreMutationRefusal(err: unknown): boolean {
@@ -134,6 +148,19 @@ const MESSAGE_PATTERNS: PatternEntry[] = [
     // format a cached total, not the prompt alone — promptTokens stays unset.
     pattern: /\((\d+)[ \t]+tokens,[ \t]*max[ \t]+(\d+)\)/i,
     map: ([total, ctx]) => ({ requiredTokens: total!, ctxSize: ctx! })
+  },
+  {
+    // Scheduler cap refusals: the total is cache-plus-prompt in cells or
+    // tokens, and the cap is the effective per-request ceiling.
+    pattern:
+      /prompt of (\d+) (?:KV cells|tokens) (?:exceeds|leaves no room under) per-sequence cap (\d+)/,
+    map: ([total, cap]) => ({ requiredTokens: total!, ctxSize: cap! })
+  },
+  {
+    // "n_predict P + prompt N KV cells exceeds per-sequence cap M" — the
+    // reservation plus the prompt is the space the request needs.
+    pattern: /n_predict (\d+) \+ prompt (\d+) KV cells exceeds per-sequence cap (\d+)/,
+    map: ([predict, cells, cap]) => ({ requiredTokens: predict! + cells!, ctxSize: cap! })
   }
 ]
 

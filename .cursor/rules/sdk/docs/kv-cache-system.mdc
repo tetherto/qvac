@@ -223,11 +223,13 @@ distinguish a full context from a positive `predict` cutoff — the SDK maps bot
 to `"length"` (with `predict: -1` there is no cutoff, so `"length"` can only
 mean the boundary). With `parallel >= 2` the scheduler treats a positive
 `predict` as a reservation: a budget that cannot fit the slot is rejected at
-admission instead of stopping at the boundary — and those admission refusals
-surface as generic untyped errors (the transport delivers the addon's message
-alone, without its `InvalidArgument` status), not as
-`ContextOverflowError`, until the addon gives them a structured status. Use
-`predict: -1`/`-2` or a budget within the slot there.
+admission instead of stopping at the boundary. Those admission refusals also
+surface as `ContextOverflowError` — `requiredTokens` carries the cache-plus-
+prompt total (plus the reservation on the `n_predict` form) and `ctxSize` the
+per-slot cap — recognised by wording, since the transport strips the addon's
+status; giving them a real `ContextOverflow` status addon-side is a recorded
+follow-up. Use `predict: -1`/`-2` or a budget within the slot to avoid the
+reservation refusal.
 
 **Config for long conversations:** size `ctx_size` for the whole conversation you
 intend to hold. With `parallel > 1` the window is split across slots, so each

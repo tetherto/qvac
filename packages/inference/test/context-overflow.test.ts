@@ -16,10 +16,9 @@ test("isAddonContextOverflowError: detects addon's structured codeString", (t) =
 
 test('isAddonContextOverflowError: detects message-only fallback path', (t) => {
   // `LlamaModel::processPromptImpl` emits `"<func>: context overflow\n"`
-  // with neither a structured code on the Error nor numbers in the
-  // message. The detector must still fire on the message alone so
-  // the consumer gets a typed error instead of a generic
-  // `CompletionFailedError`.
+  // with neither a structured code nor numbers. Unreachable at the pinned
+  // addon generation (generateResponse never reports !ok) — the form is
+  // kept in case a patch revives the path, and must stay recognised.
   const bareForm = new Error('processPromptImpl: context overflow\n')
   t.is(isAddonContextOverflowError(bareForm), true)
 })
@@ -75,7 +74,12 @@ test('isAddonContextOverflowError: message fallback is anchored to the emitted s
     '[MtmdLlm] context overflow at prefill step (5 tokens, max 4)',
     '[MtmdLlm] context overflow at prefill step: cached 3 positions / 6 KV cells plus 2 positions / 3 KV cells of prompt exceed the max context tokens 8',
     '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4',
-    'processPromptImpl: context overflow\n'
+    'processPromptImpl: context overflow\n',
+    // The scheduler's capacity refusals are the same condition in batch mode.
+    'ContinuousBatchScheduler::submit: prompt of 550 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
+    'ContinuousBatchScheduler::submit: prompt of 512 tokens leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',
+    'ContinuousBatchScheduler::submit: prefill prompt of 600 tokens exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
+    'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
   ]
   for (const wording of accepted) {
     t.is(isAddonContextOverflowError(new Error(wording)), true, `accepted: ${wording.slice(0, 60)}`)
@@ -123,7 +127,11 @@ test('isAddonPreMutationRefusal: recognises the enumerated refusal forms', (t) =
     'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=2)',
     "invalid generationParams.json_schema: [json.exception.parse_error.101] parse error at line 1, column 2: syntax error while parsing value - invalid literal; last read: 'no'",
-    'failed to initialise sampler with per-request generationParams (invalid grammar or json_schema?)'
+    'failed to initialise sampler with per-request generationParams (invalid grammar or json_schema?)',
+    '[MtmdLlm] Media buffer is empty\n',
+    '[MtmdLlm] Filename is empty\n',
+    '[MtmdLlm] Failed to load media from file: /tmp/attachment.png\n',
+    '[MtmdLlm] preparePrefill: prompt must end with text after the last media item'
   ]
   for (const wording of wordings) {
     t.is(isAddonPreMutationRefusal(new Error(wording)), true, `plain (async shape): ${wording}`)
@@ -155,7 +163,9 @@ test('isAddonPreMutationRefusal: recognises the enumerated refusal forms', (t) =
     'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=9)',
     'ContinuousBatchScheduler::submit: n_predict -1 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
     'ContinuousBatchScheduler::submit: prefill prompt of 5 KV cells leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
+    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4',
+    'wrapped: [MtmdLlm] Failed to load media from file: /tmp/a.png',
+    '[MtmdLlm] Failed to load media from file: /tmp/a.png\nsecond line'
   ]
   for (const wording of rejected) {
     t.is(isAddonPreMutationRefusal(new Error(wording)), false, `rejected: ${wording.slice(0, 60)}`)
@@ -163,12 +173,10 @@ test('isAddonPreMutationRefusal: recognises the enumerated refusal forms', (t) =
 })
 
 test('parseContextOverflowMessage: extracts from long-form TextLlm message', (t) => {
-  // The long form comes from
-  // `TextLlmContext.cpp` when it formats both numbers explicitly:
-  // `"[TextLlm] context overflow at prefill step: prompt tokens N,
-  //   max context tokens M\n"`.
+  // The long form comes from `TextLlmContext.cpp`, which formats both
+  // numbers explicitly (its guards emit the "batch prefill step" wording).
   const msg =
-    '[TextLlm] context overflow at prefill step: prompt tokens 5432, max context tokens 4096\n'
+    '[TextLlm] context overflow at batch prefill step: prompt tokens 5432, max context tokens 4096\n'
   t.alike(parseContextOverflowMessage(msg), {
     promptTokens: 5432,
     requiredTokens: 5432,
@@ -177,8 +185,9 @@ test('parseContextOverflowMessage: extracts from long-form TextLlm message', (t)
 })
 
 test('parseContextOverflowMessage: extracts from short-form bracketed message', (t) => {
-  // The retired short form reports a cached total, so promptTokens stays unset.
-  const text = '[TextLlm] context overflow at prefill step (8192 tokens, max 4096)\n'
+  // The retired mtmd short form reports a cached total, so promptTokens stays
+  // unset. Only MtmdLlm ever emitted it; the first probe is synthetic.
+  const text = '[MtmdLlm] context overflow at prefill step (8192 tokens, max 4096)\n'
   t.alike(parseContextOverflowMessage(text), {
     requiredTokens: 8192,
     ctxSize: 4096
@@ -275,10 +284,34 @@ test('parseContextOverflowMessage: cached overflow requires no less than the win
   }
 })
 
+test('parseContextOverflowMessage: extracts from scheduler capacity refusals', (t) => {
+  t.alike(
+    parseContextOverflowMessage(
+      'ContinuousBatchScheduler::submit: prompt of 550 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
+    ),
+    { requiredTokens: 550, ctxSize: 512 }
+  )
+  t.alike(
+    parseContextOverflowMessage(
+      'ContinuousBatchScheduler::submit: prompt of 512 tokens leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)'
+    ),
+    { requiredTokens: 512, ctxSize: 512 }
+  )
+})
+
+test('parseContextOverflowMessage: sums the reservation on the n_predict refusal', (t) => {
+  t.alike(
+    parseContextOverflowMessage(
+      'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
+    ),
+    { requiredTokens: 780, ctxSize: 512 }
+  )
+})
+
 test('parseContextOverflowMessage: empty result when numbers are absent', (t) => {
-  // `LlamaModel::processPromptImpl` emits a bare message with no
-  // numbers — every size field stays undefined so `ContextOverflowError`
-  // can fall through to the message-only constructor path.
+  // The retired `processPromptImpl` form carries no numbers — every size
+  // field stays undefined so `ContextOverflowError` can fall through to
+  // the message-only constructor path.
   t.alike(parseContextOverflowMessage('processPromptImpl: context overflow\n'), {})
   t.alike(parseContextOverflowMessage(''), {})
 })

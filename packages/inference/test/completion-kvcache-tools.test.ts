@@ -526,7 +526,45 @@ test('completion: kv-cache survives a scheduler admission rejection between turn
     'admission-preserves-key'
   )
   t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
-  t.ok(refusal instanceof Error && /per-sequence cap/.test(refusal.message), 'turn two is refused')
+  // Scheduler capacity refusals are the batch-mode overflow, so the consumer
+  // now gets the typed error with the reservation-plus-prompt total.
+  t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused typed')
+  const typed = refusal as { requiredTokens?: number; ctxSize?: number }
+  t.is(typed.requiredTokens, 780, 'the total is the reservation plus the prompt')
+  t.is(typed.ctxSize, 512, 'the cap is the effective per-request ceiling')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The addon's media-load failures reject before any decode or save — like the
+// SDK-side missing attachment, they must not destroy the committed cache.
+test('completion: kv-cache survives an addon media-load failure between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-media-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    new Error('[MtmdLlm] Failed to load media from file: /tmp/attachment.png\n')
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'media-preserves-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
+  t.ok(
+    refusal instanceof Error && /Failed to load media/.test(refusal.message),
+    'turn two fails with the media error'
+  )
   t.is(turnCalls.length, 3, 'all three turns reached the model')
   t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
 
