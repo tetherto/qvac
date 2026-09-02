@@ -279,7 +279,8 @@ const ACESTEP_GENERATE_KEYS = [
     'track',
     'guidanceScale',
     'audioCoverStrength',
-    'coverNoiseStrength'
+    'coverNoiseStrength',
+    'generateLrc'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
@@ -725,8 +726,10 @@ class AudioGen {
             if (taskType !== undefined && taskType !== 'text2music') {
                 throw invalidInput("generateLrc requires taskType 'text2music'");
             }
-            if (opts.simpleMode !== true &&
-                (opts.lyrics === undefined || opts.lyrics === '' || opts.lyrics === '[Instrumental]')) {
+            if (opts.lyrics === '[Instrumental]') {
+                throw invalidInput('generateLrc requires lyrics to align');
+            }
+            if (opts.simpleMode !== true && (opts.lyrics === undefined || opts.lyrics === '')) {
                 throw invalidInput('generateLrc requires lyrics to align');
             }
         }

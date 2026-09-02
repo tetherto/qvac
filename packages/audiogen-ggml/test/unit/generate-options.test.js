@@ -185,6 +185,11 @@ test('AudioGen.run validates and forwards generateLrc', async (t) => {
     { generateLrc: true, lyrics: '[Instrumental]' },
     /generateLrc requires lyrics to align/
   )
+  await rejectRunOptions(
+    t,
+    { generateLrc: true, simpleMode: true, lyrics: '[Instrumental]' },
+    /generateLrc requires lyrics to align/
+  )
 
   const explicit = createHarness()
   const explicitResponse = await explicit.gen.run('timed lyrics', {
