@@ -612,11 +612,14 @@ jobs:
   # Measurement wants a quiet host. The harness reads its own process RSS, so a
   # co-scheduled job does not inflate the numbers — but it can create memory
   # pressure that evicts this process's mapped pages and DEFLATES the persistent
-  # deltas, which is the dangerous direction for an upper bound. These labels
-  # are currently served by more than one agent (some sharing a host), so
-  # exclusivity is not guaranteed; until calibration gets a single-agent label,
-  # prefer dispatching when the runners are idle, and treat a fixture whose
-  # numbers look thin against a prior run as suspect.
+  # deltas, which is the dangerous direction for an upper bound. The current
+  # labels are served by more than one agent (some sharing a host), so
+  # exclusivity is not guaranteed yet. DevOps is adding calibration-labeled
+  # runners whose job hooks drain-stop the sibling agents on the host for the
+  # duration of the run and restart them afterwards; once those labels exist,
+  # the calibration-platforms default below should switch to them. Until then:
+  # dispatch during off-peak windows, and do not ship a fixture from a run the
+  # harness flagged with a busy-host warning.
   calibration:
     if: github.event_name == 'workflow_dispatch' && inputs.calibration
     strategy:
