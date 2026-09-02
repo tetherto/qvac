@@ -22,8 +22,8 @@
           "linuxExtraPackages": "libopenblas-dev liblapack-dev libfftw3-dev",
           "macBrewPackages": "openblas lapack fftw",
           "includeVulkanSdk": true,
-          "extraCmakeDefines": "-D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF",
-          "platformCmakeDefines": "darwin: -D WHISPER_USE_METAL=ON\nios: -D WHISPER_USE_METAL=ON\nlinux: -D WHISPER_USE_METAL=OFF\nandroid: -D WHISPER_USE_METAL=OFF\nwin32: -D WHISPER_USE_METAL=OFF\n"
+          "includeCuda": true,
+          "platformCmakeDefines": "linux-x64: -D ENABLE_CUDA=ON\n"
         }
       },
       "inputs": [

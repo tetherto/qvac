@@ -87,6 +87,7 @@ jobs:
       setup-python-on-windows: ${{ matrix.setupPythonOnWindows == true }}
       include-vulkan-sdk: ${{ matrix.includeVulkanSdk == true }}
       include-rocm: ${{ matrix.includeRocm == true }}
+      include-cuda: ${{ matrix.includeCuda == true }}
       extra-cmake-defines: ${{ matrix.extraCmakeDefines }}
       platform-cmake-defines: ${{ matrix.platformCmakeDefines }}
       reuse-workflow-file: ${{ inputs.reuse-workflow-file }}

@@ -30,7 +30,9 @@
           "artifactNamePrefix": "asr-ggml-",
           "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev",
           "setupPythonOnWindows": true,
-          "includeVulkanSdk": true
+          "includeVulkanSdk": true,
+          "includeCuda": true,
+          "platformCmakeDefines": "linux-x64: -D ASR_CUDA=ON\n"
         }
       },
       "inputs": [
