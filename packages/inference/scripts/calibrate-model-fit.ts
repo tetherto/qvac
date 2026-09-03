@@ -14,7 +14,8 @@
 //
 // Models are downloaded on first run and cached, so the first pass is slow and
 // needs registry access. See calibration/METHODOLOGY.md for what the numbers
-// mean and how the held-out check works.
+// mean and how the held-out check works. On Windows the run stops before any
+// load unless bare-os exposes the commit charge — see "Windows" there.
 
 import os from 'bare-os'
 import fs from 'bare-fs'
@@ -29,7 +30,7 @@ import {
 import * as catalog from '../dist/models/registry/index.js'
 import { MODEL_RESOURCE_PROFILES } from '../dist/models/registry/resource-profiles.js'
 import { kvElementBytes, kvCacheBytesForWidth } from '../dist/resources/model-fit/estimators/llm.js'
-import { fitResidentMemory } from '../dist/resources/model-fit/calibration/fit.js'
+import { fitResidentMemory, kvObservation } from '../dist/resources/model-fit/calibration/fit.js'
 import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js'
 import type { GgufFacts } from '../dist/schemas/model-resource-profile.js'
 import type { PlatformCalibration } from '../dist/resources/model-fit/types.js'
@@ -54,6 +55,12 @@ const REPEATS = 3
 // allocation behaviour changed and this methodology needs re-checking.
 const WORKING_DRIFT_WARN_BYTES = 64 * 1024 * 1024
 
+// The KV cache grows by an exactly known amount between the two contexts, so
+// the persistent deltas must grow by at least that much. A counter that sees
+// less is reporting residency, not allocation, and nothing fitted on it can be
+// an upper bound. The win32 working set measured ~0.56 (see METHODOLOGY.md).
+const KV_OBSERVATION_FLOOR = 0.9
+
 // Small, medium, large — plus one held out of the fit entirely, used only to
 // check that the derived upper bound actually holds.
 const FIT_MODELS = ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_4B_INST_Q4_K_M']
@@ -72,20 +79,61 @@ interface FitPoint extends Measurement {
   kvBytes: number
 }
 
-function rssBytes() {
-  const usage = os.memoryUsage()
-  return usage && usage.rss > 0 ? usage.rss : 0
+/**
+ * The process counter every delta in a run reads, and the load mode that lets
+ * it see the weights. Resolved once: mixing counters would fit nonsense.
+ */
+interface MemoryMeter {
+  counter: 'rss' | 'committed'
+  /** Passed on every load; absent keeps the SDK default (mmap). */
+  loadMode?: 'none'
+  read(): number
 }
 
-function createSampler() {
+function positive(value: number | undefined) {
+  return value !== undefined && value > 0 ? value : 0
+}
+
+/**
+ * darwin/linux read RSS: touched pages, file-backed weights included, and it
+ * holds once a load settles (darwin-arm64 measured weights at 1.0× artifact).
+ *
+ * win32's `rss` is `GetProcessMemoryInfo().WorkingSetSize` — pages the OS is
+ * currently keeping resident, which it trims while they stay allocated. The
+ * CPU-forced CI run saw a 1152 MiB KV cache as 717 MiB and 2.4 GiB of weights
+ * as ~0. The commit charge (`PrivateUsage`) survives trimming but never counts
+ * file-backed mappings, so Windows reads it and loads weights with `load_mode:
+ * 'none'`, which reads them into anonymous memory. The default mmap load can
+ * keep at most the artifact size resident, so a ratio measured this way stays
+ * an upper bound for what users run. Until bare-os exposes that counter the
+ * run stops here, before any load, rather than fit a counter known to undercount.
+ */
+function selectMemoryMeter(platform: string): MemoryMeter {
+  if (!platform.startsWith('win32')) {
+    return { counter: 'rss', read: () => positive(os.memoryUsage().rss) }
+  }
+  const usage = os.memoryUsage() as { rss: number; committed?: number }
+  if (typeof usage.committed !== 'number') {
+    throw new Error(
+      'win32: bare-os memoryUsage() exposes only rss, which on Windows is the working set — the pages the OS currently keeps resident, not what the engine allocated — so no delta read from it can be an upper bound. Calibration here needs the commit charge (PROCESS_MEMORY_COUNTERS_EX.PrivateUsage) exposed as memoryUsage().committed; see METHODOLOGY.md, "Windows".'
+    )
+  }
+  return {
+    counter: 'committed',
+    loadMode: 'none',
+    read: () => positive((os.memoryUsage() as { committed?: number }).committed)
+  }
+}
+
+function createSampler(meter: MemoryMeter) {
   const samples: number[] = []
   let timer: ReturnType<typeof setTimeout> | null = null
   let running = false
 
   function tick() {
     if (!running) return
-    const rss = rssBytes()
-    if (rss > 0) samples.push(rss)
+    const value = meter.read()
+    if (value > 0) samples.push(value)
     timer = setTimeout(tick, SAMPLE_INTERVAL_MS)
     if (timer && typeof timer.unref === 'function') timer.unref()
   }
@@ -98,8 +146,8 @@ function createSampler() {
     stop() {
       running = false
       if (timer) clearTimeout(timer)
-      const rss = rssBytes()
-      if (rss > 0) samples.push(rss)
+      const value = meter.read()
+      if (value > 0) samples.push(value)
       return samples.length > 0 ? Math.max(...samples) : 0
     }
   }
@@ -196,7 +244,8 @@ function forcesCpu(platform: string) {
 async function measure(
   name: string,
   contextTokens: number,
-  cpuForced: boolean
+  cpuForced: boolean,
+  meter: MemoryMeter
 ): Promise<Measurement> {
   const model = (catalog as Record<string, { sha256Checksum: string } | undefined>)[name]
   if (!model) throw new Error(`unknown catalog constant: ${name}`)
@@ -205,20 +254,24 @@ async function measure(
   if (!profile?.ggufFacts) throw new Error(`no GGUF facts for ${name}`)
 
   await settle()
-  const rssBefore = rssBytes()
+  const before = meter.read()
 
   const modelId = await withLoadTimeout(
     loadModel({
       modelSrc: model,
-      modelConfig: { ctx_size: contextTokens, ...(cpuForced && { gpu_layers: 0 }) }
+      modelConfig: {
+        ctx_size: contextTokens,
+        ...(cpuForced && { gpu_layers: 0 }),
+        ...(meter.loadMode && { load_mode: meter.loadMode })
+      }
     }),
     `loading ${name}`
   )
 
   await settle()
-  const rssAfterLoad = rssBytes()
+  const afterLoad = meter.read()
 
-  const sampler = createSampler()
+  const sampler = createSampler(meter)
   sampler.start()
   const result = completion({
     modelId,
@@ -237,8 +290,8 @@ async function measure(
     contextTokens,
     artifactBytes: profile.artifactBytes,
     facts: profile.ggufFacts,
-    persistentBytes: Math.max(0, rssAfterLoad - rssBefore),
-    workingBytes: Math.max(0, peak - rssAfterLoad)
+    persistentBytes: Math.max(0, afterLoad - before),
+    workingBytes: Math.max(0, peak - afterLoad)
   }
 }
 
@@ -262,6 +315,11 @@ async function main() {
   const write = Bare.argv.includes('--write')
   const platform = `${os.platform()}-${os.arch()}`
   console.log(`calibrating ${platform}`)
+
+  const meter = selectMemoryMeter(platform)
+  console.log(
+    `counter: ${meter.counter}${meter.loadMode ? ` (weights loaded with load_mode '${meter.loadMode}')` : ''}`
+  )
 
   registerPlugin(llmPlugin)
 
@@ -290,7 +348,7 @@ async function main() {
   for (const name of FIT_MODELS) {
     for (const contextTokens of CONTEXTS) {
       for (let repeat = 0; repeat < REPEATS; repeat++) {
-        const measurement = await measure(name, contextTokens, cpuForced)
+        const measurement = await measure(name, contextTokens, cpuForced, meter)
         // `.lower` is the width a GPU backend defaults to (q8_0), and equals
         // f16 when no GPU is reported — what the engine allocates in each
         // case, not an optimistic bound borrowed from the estimator's range.
@@ -314,6 +372,23 @@ async function main() {
     console.log(
       `\nwarning: the fit mixes KV element widths (${[...elementWidths].join(', ')} bytes), so the points do not describe a single cache type`
     )
+  }
+
+  // Judge the counter before the fit: the KV cache grows by an exactly known
+  // amount between the two contexts, and every sound counter has to see it.
+  const observation = kvObservation(measurements)
+  console.log('\nKV growth between contexts, computed vs observed:')
+  for (const growth of observation.models) {
+    const model = measurements.find((m) => m.artifactBytes === growth.artifactBytes)
+    console.log(
+      `  ${model?.name ?? mib(growth.artifactBytes) + ' MiB'}: kv +${mib(growth.kvDeltaBytes)} MiB, persistent +${mib(growth.observedDeltaBytes)} MiB (${((growth.observedDeltaBytes / growth.kvDeltaBytes) * 100).toFixed(0)}%)`
+    )
+  }
+  if (observation.ratio < KV_OBSERVATION_FLOOR) {
+    console.log(
+      `\nthe ${meter.counter} counter observed ${(observation.ratio * 100).toFixed(0)}% of the KV cache the engine allocated between the two contexts (floor ${KV_OBSERVATION_FLOOR * 100}%): it reports residency, not allocation, so nothing fitted on it is an upper bound. No fixture written.`
+    )
+    Bare.exit(1)
   }
 
   // Fail loudly rather than fitting nonsense: a load that measured smaller
@@ -390,6 +465,11 @@ async function main() {
     audioWindowBytes: { lower: 0, upper: 0 },
     audioStreamingBytes: { lower: 0, upper: 0 },
     validated: false,
+    ...(meter.counter !== 'rss' && {
+      notes: [
+        `persistent deltas read the process commit charge (${meter.counter}) with weights loaded via load_mode '${meter.loadMode}', so they were anonymous memory the counter sees; the default mmap load keeps at most the artifact size resident, so weightUpperCoeff remains an upper bound for it`
+      ]
+    }),
     measuredAt: new Date().toISOString().slice(0, 10),
     measuredOn: {
       backend,
@@ -409,7 +489,7 @@ async function main() {
   let heldOutKv = 0
   let heldOutArtifactBytes = 0
   for (let repeat = 0; repeat < REPEATS; repeat++) {
-    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced)
+    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced, meter)
     const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
     heldOutKv = exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
     heldOutArtifactBytes = heldOut.artifactBytes

@@ -88,6 +88,52 @@ a 2.4 GiB model). The committed coefficients describe warm loads and do not
 cover that transient — deliberately, because the excess is file-backed and
 evictable, so it is not memory the system has to find under pressure.
 
+### Counter tripwire
+
+Before fitting anything, the harness checks that the counter it read describes
+allocation at all. The KV cache is the one term the file sizes exactly, so
+between the two contexts every model's persistent delta must grow by at least
+the computed KV growth — the per-token compute buffers can only add to it.
+`kvObservation` (`calibration/fit.ts`, unit tested) sums that growth across
+the fit models and the run stops when the counter saw less than 90% of it.
+Summed rather than per model so a small model's growth, which sits inside
+run-to-run noise, does not decide alone, and repeats enter as their median so
+the cold page-cache transient on the run's first load (which lands on the
+small context) does not read as a shortfall. darwin-arm64 sits at ~1.0.
+
+### Windows
+
+`memoryUsage().rss` is libuv's `uv_resident_set_memory`, which on win32 returns
+`GetProcessMemoryInfo().WorkingSetSize`: the pages the OS is _currently_
+keeping resident for the process. Windows trims working sets while the memory
+stays allocated — pages move to the standby list or the compression store —
+and it does so to anonymous memory too. The first CPU-forced CI run made that
+concrete: a 2.4 GiB model read as 71–128 MiB persistent at 512 tokens, and at
+8192 tokens the exactly computed 1152 MiB f16 KV cache alone read as ~717 MiB.
+Over the three fit models the working set observed 56% of the KV growth
+between the two contexts, so the tripwire above stops the run. macOS and Linux
+RSS count touched pages and hold once a load settles; the Windows counter does
+not describe allocation, so no delta read from it can be an upper bound.
+
+The sound counter there is the commit charge —
+`PROCESS_MEMORY_COUNTERS_EX.PrivateUsage`, "Private Bytes" in perfmon, "Commit
+size" in Task Manager: committed private memory regardless of residency. It
+covers the KV cache and compute buffers exactly but never file-backed
+mappings, so under the mmap default the weights would be invisible to it. The
+harness therefore pairs it with `load_mode: 'none'`, which reads the weights
+into anonymous memory. A fixture measured that way is still an upper bound for
+the default mmap load — a mapped weight set can keep at most the artifact size
+resident, and the ratio measured on an anonymous copy is ≥ 1.0 — and the
+fixture says so in `notes`.
+
+`bare-os` does not expose the commit charge yet: `bare_os_memory_usage` in its
+`binding.c` reads only `uv_resident_set_memory` plus the JS heap statistics.
+The required change is a win32-only `GetProcessMemoryInfo` call with a
+`PROCESS_MEMORY_COUNTERS_EX`, surfacing `PrivateUsage` as
+`memoryUsage().committed` (absent on other platforms). Until then the harness
+stops on win32 before loading anything, with the reason in its message; it
+does not fall back to the working set.
+
 ## Scope of a fixture
 
 Coefficients are keyed by **platform**, while several of the buffers they cover
@@ -111,9 +157,10 @@ one.
 
 ## Status
 
-| Platform     | Coefficients                              | Validated |
-| ------------ | ----------------------------------------- | --------- |
-| darwin-arm64 | measured 2026-08-31 (Metal, Apple M4 Pro) | yes       |
+| Platform     | Coefficients                                               | Validated |
+| ------------ | ---------------------------------------------------------- | --------- |
+| darwin-arm64 | measured 2026-08-31 (Metal, Apple M4 Pro)                  | yes       |
+| win32-x64    | blocked: needs `bare-os` `memoryUsage().committed` (above) | no        |
 
 `darwin-arm64` was measured on an Apple M4 Pro against the Metal backend
 (`q8_0` KV cache): held-out Qwen3-8B landed at 5.28 GiB against a predicted

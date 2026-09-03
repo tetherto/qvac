@@ -125,7 +125,9 @@ against the Metal backend), so LLM workloads return real verdicts there. Audio
 workloads still return `unknown` on every platform: their coefficients await
 the harness's whisper pass, and the estimator refuses the unmeasured
 placeholders rather than consuming them. Every other platform returns `unknown`
-until its own run lands. See
+until its own run lands; Windows additionally waits on the runtime exposing
+the process commit charge, because the working-set counter available there
+does not describe allocation. See
 `@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
 
 **Discrete-GPU desktops.** On linux, windows and Intel-mac hosts that report a
