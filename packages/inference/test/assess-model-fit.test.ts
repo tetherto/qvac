@@ -1177,3 +1177,33 @@ test('assess: unverified GPU samples cannot form a device budget', (t) => {
   t.is(result.verdict, 'unknown')
   t.is(result.basis, 'system-memory')
 })
+
+// A card whose reading failed is still a card the engine can use, so it must
+// not drop out of the count and leave its neighbour looking unambiguous.
+test('assess: a second GPU with an unusable reading still makes the choice ambiguous', (t) => {
+  const resources = discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB })
+  const gpus = resources.capabilities.gpus
+  const samples = resources.sample!.gpus
+  if (gpus.status === 'supported' && samples.status === 'supported') {
+    gpus.value.push({ ...gpus.value[0]!, id: 'gpu1' })
+    samples.value.push({
+      ...samples.value[0]!,
+      id: 'gpu1',
+      memoryTotalBytes: { status: 'failed', reason: 'sampling failed' },
+      memoryUsedBytes: { status: 'failed', reason: 'sampling failed' }
+    })
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources,
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'system-memory', 'no device budget is formed')
+  t.is(result.verdict, 'unknown')
+})

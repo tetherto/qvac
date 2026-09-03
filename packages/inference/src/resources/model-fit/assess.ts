@@ -364,26 +364,27 @@ function resolveGpuTarget(resources: SystemResources): GpuTarget | undefined {
   const samples = resources.sample?.gpus
   if (gpus.status !== 'supported' || samples?.status !== 'supported') return undefined
 
-  const eligible = gpus.value
-    .filter((gpu) => gpu.unifiedMemory.status === 'supported' && !gpu.unifiedMemory.value)
-    .map((gpu) => ({ gpu, sample: samples.value.find((entry) => entry.id === gpu.id) }))
-    .filter(({ gpu, sample }) => {
-      if (!sample) return false
-      if (sample.memoryTotalBytes.status !== 'supported') return false
-      if (sample.memoryUsedBytes.status !== 'supported') return false
-      if (sample.memoryTotalBytes.value <= 0) return false
-      if (sample.memoryUsedBytes.value > sample.memoryTotalBytes.value) return false
-      return backendOf(gpu) !== undefined
-    })
+  // Count the cards first. Filtering on the readings would let a GPU with a
+  // failed sample drop out of the count, leaving its neighbour looking like the
+  // only candidate — while the engine remains free to use the one that dropped.
+  const candidates = gpus.value.filter(
+    (gpu) => gpu.unifiedMemory.status === 'supported' && !gpu.unifiedMemory.value
+  )
+  if (candidates.length !== 1) return undefined
 
-  if (eligible.length !== 1) return undefined
+  const gpu = candidates[0]!
+  const backend = backendOf(gpu)
+  if (!backend) return undefined
 
-  const { gpu, sample } = eligible[0]!
-  if (sample?.memoryTotalBytes.status !== 'supported') return undefined
+  const sample = samples.value.find((entry) => entry.id === gpu.id)
+  if (!sample) return undefined
+  if (sample.memoryTotalBytes.status !== 'supported') return undefined
   if (sample.memoryUsedBytes.status !== 'supported') return undefined
+  if (sample.memoryTotalBytes.value <= 0) return undefined
+  if (sample.memoryUsedBytes.value > sample.memoryTotalBytes.value) return undefined
 
   return {
-    backend: backendOf(gpu)!,
+    backend,
     totalBytes: sample.memoryTotalBytes.value,
     usedBytes: sample.memoryUsedBytes.value,
     ...(gpu.name.status === 'supported' && { device: gpu.name.value })
