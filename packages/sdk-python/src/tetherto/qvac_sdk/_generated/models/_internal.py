@@ -464,7 +464,14 @@ class AudioGenStreamResponseProgress(GeneratedBaseModel):
     )
     stage: str
     step: Annotated[int, Field(ge=0, le=9007199254740991)]
-    total: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[
+        int,
+        Field(
+            description="Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
 
 
 class AudioGenStreamResponseStopReason(Enum):
