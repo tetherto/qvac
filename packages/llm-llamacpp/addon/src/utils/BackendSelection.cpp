@@ -7,6 +7,7 @@
 #include <optional>
 #include <regex>
 #include <string_view>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -1109,6 +1110,74 @@ backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
     }
   }
   return gpuCount > 0 ? gpuCount : igpuCount;
+}
+
+std::vector<std::string>
+backend_selection::getTensorSplitDeviceNames(const BackendInterface& bckI) {
+  std::vector<std::string> discrete;
+  std::vector<std::string> integrated;
+  std::unordered_set<std::string> seenDiscrete;
+  std::unordered_set<std::string> seenIntegrated;
+
+  const size_t totalDevices = bckI.ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    const bool isDiscrete = devType == GGML_BACKEND_DEVICE_TYPE_GPU;
+    if (!isDiscrete && devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    // Skip RPC devices, matching both qvac-fabric's filtered branch and
+    // emplaceIfValidDevice above. ggml types them as GPU, so without this an
+    // iGPU + RPC host would see a non-empty `discrete` bucket and drop its own
+    // integrated GPU from the list.
+    const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+    if (reg != nullptr &&
+        bckI.ggml_backend_reg_name(reg) == std::string("RPC")) {
+      continue;
+    }
+    // Materialise each string before the next interface call. The returned
+    // pointers are not guaranteed to outlive a subsequent call on the same
+    // interface, and holding one across another call is a use-after-free
+    // against any implementation that stores results in a reallocating
+    // container. DeviceDescription above is safe for the same reason: its
+    // std::string members copy in declaration order.
+    ggml_backend_dev_props props{};
+    bckI.ggml_backend_dev_get_props(dev, &props);
+    const std::string deviceId = props.device_id != nullptr
+                                     ? std::string(props.device_id)
+                                     : std::string();
+    const char* namePtr = bckI.ggml_backend_dev_name(dev);
+    // An empty name would join into a leading or trailing comma and make the
+    // whole --device list unparseable, so it is skipped like a null one.
+    if (namePtr == nullptr || *namePtr == '\0') {
+      continue;
+    }
+    auto& bucket = isDiscrete ? discrete : integrated;
+    auto& seen = isDiscrete ? seenDiscrete : seenIntegrated;
+    // A null device_id cannot be deduped against; keep the device rather than
+    // dropping it, since omitting a real GPU is worse than a duplicate. This
+    // mirrors fabric, whose find_if only matches when both ids are non-null.
+    if (deviceId.empty() || seen.insert(deviceId).second) {
+      bucket.emplace_back(namePtr);
+    }
+  }
+  return !discrete.empty() ? discrete : integrated;
+}
+
+std::vector<std::string> backend_selection::getTensorSplitDeviceNames() {
+  BackendInterface bckI{
+      ggml_backend_dev_count,
+      ggml_backend_dev_backend_reg,
+      ggml_backend_dev_get,
+      ggml_backend_reg_name,
+      ggml_backend_dev_description,
+      ggml_backend_dev_name,
+      ggml_backend_dev_type,
+      ggml_backend_reg_get_proc_address,
+      ggml_backend_dev_get_props,
+      nullptr};
+  return getTensorSplitDeviceNames(bckI);
 }
 
 bool backend_selection::gpuBackendSupportsRowSplit(

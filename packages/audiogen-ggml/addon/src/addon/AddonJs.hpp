@@ -207,6 +207,10 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
     modelInput.lmCfgScale = static_cast<float>(*value);
   if (auto value = readOptionalBoolean(jobObject, env, "lmPhase1"))
     modelInput.lmPhase1 = *value;
+  if (auto value = readOptionalBoolean(jobObject, env, "simpleMode"))
+    modelInput.simpleMode = *value;
+  if (auto value = readOptionalBoolean(jobObject, env, "normalizeLoudness"))
+    modelInput.normalizeLoudness = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "dcwEnabled"))
     modelInput.dcwEnabled = *value;
   if (auto value = readOptionalAcestepNumber(jobObject, env, "dcwScaler"))
@@ -228,6 +232,10 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
   }
   if (auto value = readOptionalString(jobObject, env, "taskType"))
     modelInput.taskType = *value;
+  if (auto value = readOptionalString(jobObject, env, "track"))
+    modelInput.track = *value;
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "guidanceScale"))
+    modelInput.guidanceScale = static_cast<float>(*value);
   if (auto value =
           readOptionalAcestepNumber(jobObject, env, "audioCoverStrength"))
     modelInput.audioCoverStrength = static_cast<float>(*value);

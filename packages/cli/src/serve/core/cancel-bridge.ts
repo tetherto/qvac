@@ -1,6 +1,6 @@
 import type { ServerResponse } from 'node:http'
 import { cancel } from '@qvac/sdk'
-import type { Logger } from '../../logger.js'
+import type { Logger } from '@/logger'
 
 /**
  * Bind the HTTP request lifecycle to an SDK `requestId` so a client

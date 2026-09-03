@@ -400,8 +400,9 @@
         },
         "basis": {
           "type": "string",
-          "const": "system-memory",
-          "description": "The only evidence used. GPU/VRAM metrics are deliberately excluded — they are `unverified`-scoped by design."
+          "enum": ["system-memory", "process-memory"],
+          "description": "The evidence the budget was derived from — system RAM, or the per-process ceiling on iOS. GPU/VRAM metrics are deliberately excluded either way; they are `unverified`-scoped by design.",
+          "title": "AssessModelFitResponseBasis"
         },
         "execution": {
           "type": "string",
@@ -415,11 +416,11 @@
           "properties": {
             "totalBytes": {
               "type": "number",
-              "description": "Total system RAM reported by the sample."
+              "description": "Total budgetable memory under the result’s basis: system RAM, or the process ceiling (allowance plus current footprint) under process-memory."
             },
             "usedBytes": {
               "type": "number",
-              "description": "System RAM in use at sample time."
+              "description": "Memory in use at sample time under the same basis (system-wide, or this process)."
             },
             "reservedBytes": {
               "type": "number",
@@ -792,6 +793,102 @@
           },
           "additionalProperties": false,
           "title": "AudioGenStreamResponseStats"
+        },
+        "diagnostics": {
+          "description": "Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "AudioGenStreamResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "AudioGenStreamResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "AudioGenStreamResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "AudioGenStreamResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "AudioGenStreamResponseDiagnostics"
         }
       },
       "required": ["type", "done"],
@@ -7417,9 +7514,173 @@
                       "title": "GetSystemResourcesResponseSampleMemoryTotalBytesFailed"
                     }
                   ]
+                },
+                "processUsedBytes": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "supported"
+                        },
+                        "value": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "provenance": {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": ["system", "process", "device", "budget", "shared-system"],
+                              "title": "GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenanceScope"
+                            }
+                          },
+                          "required": ["source"],
+                          "additionalProperties": false,
+                          "title": "GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenance"
+                        }
+                      },
+                      "required": ["status", "value", "provenance"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupported"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnavailable"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unverified"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnverified"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "failed"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryProcessUsedBytesFailed"
+                    }
+                  ],
+                  "description": "This process’s resident footprint (RSS). Process-scoped, unlike usedBytes."
+                },
+                "processAvailableBytes": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "supported"
+                        },
+                        "value": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "provenance": {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": ["system", "process", "device", "budget", "shared-system"],
+                              "title": "GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenanceScope"
+                            }
+                          },
+                          "required": ["source"],
+                          "additionalProperties": false,
+                          "title": "GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenance"
+                        }
+                      },
+                      "required": ["status", "value", "provenance"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupported"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnavailable"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unverified"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnverified"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "failed"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryProcessAvailableBytesFailed"
+                    }
+                  ],
+                  "description": "How much more this process may allocate before the OS intervenes. On iOS this is os_proc_available_memory() — the limit jetsam enforces. Unavailable where no per-process limit is exposed."
                 }
               },
-              "required": ["usedBytes", "totalBytes"],
+              "required": ["usedBytes", "totalBytes", "processUsedBytes", "processAvailableBytes"],
               "additionalProperties": false,
               "title": "GetSystemResourcesResponseSampleMemory"
             },
@@ -8314,10 +8575,6 @@
                         "type": "string"
                       }
                     },
-                    "n_discarded": {
-                      "description": "Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`).",
-                      "type": "number"
-                    },
                     "parallel": {
                       "description": "Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding and splits the KV cache evenly across slots.",
                       "type": "integer",
@@ -8352,10 +8609,16 @@
                       ]
                     },
                     "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
                       "type": "string",
-                      "enum": ["none", "layer", "row"],
+                      "enum": ["none", "layer", "row", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
+                    },
+                    "flash-attn": {
+                      "description": "Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`.",
+                      "type": "string",
+                      "enum": ["on", "off", "auto"],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn"
                     },
                     "tensor-split": {
                       "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
@@ -10400,7 +10663,7 @@
                           "type": "string"
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "streamChunkTokens": {
@@ -11091,7 +11354,7 @@
                           "type": "number"
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
@@ -11387,7 +11650,7 @@
                           "minLength": 1
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
@@ -11545,7 +11808,7 @@
                           ]
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
@@ -11820,7 +12083,7 @@
                           "maximum": 2147483647
                         },
                         "useGPU": {
-                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {

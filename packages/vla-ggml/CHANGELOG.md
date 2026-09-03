@@ -12,6 +12,37 @@
   device is missing from that list at all. Rejected with `backend: 'auto'` or
   `'cpu'`, where there is no preference to make binding.
 
+## [0.24.0] - 2026-09-01
+
+### Changed
+
+- **This package no longer builds the `qvac-fabric` vcpkg port.** It now consumes the
+  shared runtime through the published npm package `@qvac/fabric`, resolving backends
+  from `node_modules` on desktop and staging fabric for the C++ unit tests. The
+  `qvac-fabric[hip-backend]` vcpkg dependency is gone — ROCm/HIP now arrives inside the
+  fabric prebuilds. `.github/fabric-consumers.json` lists this package under
+  `npm_runtime` accordingly, so it is no longer part of a `qvac-fabric` rollout.
+
+  This migration landed in [#3998](https://github.com/tetherto/qvac/pull/3998) with its
+  version bump and changelog entry deliberately deferred, so it is released here rather
+  than in the release it merged during.
+
+- `@qvac/fabric` dependency bumped `^0.9.0` -> `^0.10.0`, which carries `qvac-fabric`
+  `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal
+  optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next
+  perf follow-ups and the Vulkan top-k radix-select shader). Following the migration
+  above, the range bump is what picks up a new fabric. A caret on a `0.x` version locks
+  the minor, so `^0.9.0` would not have resolved `0.10.0` on its own. No API change for
+  this package.
+
+- C++ unit tests now run through `scripts/run-cpp-tests.js` rather than invoking
+  `addon-test` directly, so `ASAN_OPTIONS` relaxes `alloc-dealloc-mismatch` and leak
+  detection at the `@qvac/fabric` boundary. The previous workflow env var never reached
+  Linux CI.
+
+- Mobile test groups are validated by `scripts/lib/validate-test-groups.js`, with unit
+  coverage for the group definitions and the generator.
+
 ## [0.23.0] - 2026-08-24
 
 ### Changed

@@ -41,7 +41,12 @@ function readResources(): SystemResources {
       sample: {
         sampledAt: Date.now(),
         cpu: failed,
-        memory: { usedBytes: failed, totalBytes: failed },
+        memory: {
+          usedBytes: failed,
+          totalBytes: failed,
+          processUsedBytes: failed,
+          processAvailableBytes: failed
+        },
         gpus: failed
       }
     }

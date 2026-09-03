@@ -1,6 +1,6 @@
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
-import type { LockfilePackage } from './lockfile.js'
+import type { LockfilePackage } from '@/verify/deps/lockfile'
 
 interface PackageJson {
   addon?: boolean

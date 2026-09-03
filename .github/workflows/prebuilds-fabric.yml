@@ -49,4 +49,8 @@ jobs:
       # main, so linux-x64 would otherwise hard-fail the hip port. setup-rocm
       # prefers /opt/rocm when the host stamp matches; otherwise downloads.
       include-rocm: true
+      # QVAC-23763: cuda-backend hard-errors without nvcc, so linux x64 needs
+      # the toolkit. Compile-only. setup-cuda provisions x64 only, and merges
+      # VCPKG_KEEP_ENV_VARS rather than assigning it, so ROCm above survives.
+      include-cuda: true
     secrets: inherit

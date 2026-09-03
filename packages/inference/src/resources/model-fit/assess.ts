@@ -1,5 +1,6 @@
 import type {
   AssessModelFitResult,
+  ModelFitBasis,
   ModelFitCandidate,
   ModelFitExecution,
   ModelFitModelResult,
@@ -58,13 +59,20 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   const { models, execution, resources, platform, calibration } = options
   const resolveProfile = options.resolveProfile ?? getModelResourceProfile
 
+  const basis = resolveBasis(platform)
   const reasons: string[] = []
   const assumptions: string[] = [
     `execution mode '${execution}' is a declared assumption used for aggregation only; the SDK does not schedule, serialize, or reserve anything`,
-    'the verdict is advisory and based on system memory alone; it does not block loadModel and makes no performance claim'
+    `the verdict is advisory and based on ${basis === 'process-memory' ? 'this process’s own memory ceiling' : 'system memory'} alone; it does not block loadModel and makes no performance claim`
   ]
 
-  const budget = resolveBudget(resources, platform, reasons)
+  if (platform === 'android-arm64') {
+    assumptions.push(
+      'android budgets deliberately use system memory: the low-memory killer acts system-wide and native allocations carry no per-process cap like iOS jetsam'
+    )
+  }
+
+  const budget = resolveBudget(resources, platform, basis, reasons)
 
   if (!platform) {
     reasons.push('the runtime platform is not one this assessment covers')
@@ -114,7 +122,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
 
   return {
     verdict,
-    basis: 'system-memory',
+    basis,
     execution,
     ...(budget && { budget }),
     ...(combined && {
@@ -250,20 +258,63 @@ function hasGpu(resources: SystemResources): boolean {
 }
 
 /**
- * Derives the memory budget from the sample.
+ * Picks the budget basis for a platform.
+ *
+ * iOS is the exception: jetsam terminates an app on its own footprint against
+ * a per-process limit well below device RAM, so a system-memory budget there
+ * would defend `likely-fits` verdicts the OS does not honor. Android's
+ * low-memory killer acts system-wide and native allocations carry no
+ * per-process cap, so it deliberately keeps the system basis with the mobile
+ * reserve.
+ */
+function resolveBasis(platform: ModelFitPlatform | undefined): ModelFitBasis {
+  return platform === 'ios-arm64' ? 'process-memory' : 'system-memory'
+}
+
+/**
+ * Derives the memory budget from the sample, under the platform's basis.
  *
  * Only `sample.memory` is used: capabilities-only totals say nothing about what
- * is free right now, and a verdict without that is not worth giving.
+ * is free right now, and a verdict without that is not worth giving. Under the
+ * process basis the ceiling is reconstructed as allowance + footprint — the
+ * relation the OS enforces — so every budget field keeps the same meaning
+ * under either basis.
  */
 function resolveBudget(
   resources: SystemResources,
   platform: ModelFitPlatform | undefined,
+  basis: ModelFitBasis,
   reasons: string[]
 ): AssessModelFitResult['budget'] {
   const sample = resources.sample
   if (!sample) {
-    reasons.push('no system-memory sample was available')
+    reasons.push('no memory sample was available')
     return undefined
+  }
+
+  if (basis === 'process-memory') {
+    const available = sample.memory.processAvailableBytes
+    const used = sample.memory.processUsedBytes
+    if (available.status !== 'supported' || used.status !== 'supported') {
+      reasons.push(
+        'iOS budgets are per-process (jetsam terminates on the app’s own footprint), and the per-process allowance metric is not available on this build'
+      )
+      return undefined
+    }
+
+    const total = available.value + used.value
+    if (total <= 0) {
+      reasons.push('process-memory metrics are inconsistent')
+      return undefined
+    }
+
+    const reserved = reserveBytes(total, platform)
+    return {
+      totalBytes: total,
+      usedBytes: used.value,
+      reservedBytes: reserved,
+      availableAfterReserveBytes: Math.max(0, available.value - reserved)
+    }
   }
 
   const total = sample.memory.totalBytes

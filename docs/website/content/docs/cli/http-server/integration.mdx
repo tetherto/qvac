@@ -169,7 +169,7 @@ interface QvacManagedOptions {
 A default `createQvac()` instance with all defaults. Convenient for quick scripts; explicit `createQvac({ baseURL })` is recommended.
 
 <Callout type="warn" title="Default provider port does not match HTTP server's default port.">
-The provider defaults to `http://127.0.0.1:11435/v1`, while `qvac serve openai` listens on `11434` by default. This mismatch is intentional — `11434` collides with Ollama, so the provider ships a placeholder port until the CLI default is changed. Until then, **always pass `baseURL` explicitly** when calling `createQvac({ baseURL })`, matching the port your `qvac serve openai` instance is bound to (e.g. `http://127.0.0.1:11434/v1` for the CLI default).
+The provider defaults to `http://127.0.0.1:11435/v1`, while `qvac serve --openai` listens on `11434` by default. This mismatch is intentional — `11434` collides with Ollama, so the provider ships a placeholder port until the CLI default is changed. Until then, **always pass `baseURL` explicitly** when calling `createQvac({ baseURL })`, matching the port your `qvac serve --openai` instance is bound to (e.g. `http://127.0.0.1:11434/v1` for the CLI default).
 </Callout>
 
 ### `models`, `allModels`, `ModelConstant`, `EndpointCategory`

@@ -26,6 +26,12 @@
   implementations the same shape, and gives a future KV-cache-type feature the
   seam it needs.
 
+## [0.37.0] - 2026-08-29
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader; no API change for this package).
+
 ## [0.36.0] - 2026-08-24
 
 ### Changed

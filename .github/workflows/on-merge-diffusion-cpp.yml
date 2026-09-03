@@ -110,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.gpr_published_version }}
     permissions:
       contents: write
       packages: write
