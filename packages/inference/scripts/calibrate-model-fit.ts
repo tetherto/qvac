@@ -109,6 +109,28 @@ function settle() {
   return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
 }
 
+// A registry download can stall without erroring: one CI run hung ~3 h inside
+// a single blob download (peers went quiet mid-transfer) until the job ceiling
+// killed it. Generous — a cold 5 GiB download on the runners took under a
+// minute — but bounded, so a stalled load fails in minutes with a clear
+// message instead of eating the whole job timeout.
+const LOAD_TIMEOUT_MS = 30 * 60 * 1000
+
+function withLoadTimeout<T>(promise: Promise<T>, label: string) {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          `${label} did not finish within ${LOAD_TIMEOUT_MS / 60000} minutes — a registry download has likely stalled. Re-run; if it persists, check the registry's reachability from this host.`
+        )
+      )
+    }, LOAD_TIMEOUT_MS)
+    if (timer && typeof timer.unref === 'function') timer.unref()
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 /**
  * Best-effort label for the backend in play, from the drivers the resource
  * collector reports. Recorded with the coefficients because the buffers they
@@ -174,10 +196,13 @@ async function measure(name: string, contextTokens: number): Promise<Measurement
   await settle()
   const rssBefore = rssBytes()
 
-  const modelId = await loadModel({
-    modelSrc: model,
-    modelConfig: { ctx_size: contextTokens }
-  })
+  const modelId = await withLoadTimeout(
+    loadModel({
+      modelSrc: model,
+      modelConfig: { ctx_size: contextTokens }
+    }),
+    `loading ${name}`
+  )
 
   await settle()
   const rssAfterLoad = rssBytes()
