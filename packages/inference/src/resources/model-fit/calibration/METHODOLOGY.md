@@ -39,9 +39,11 @@ needs re-checking.
 On platforms where a GPU means discrete device memory (linux, windows,
 darwin-x64) the harness loads with `device: 'cpu'`: RSS cannot observe VRAM,
 so the coefficients describe CPU-resident execution — the case where system
-RAM is the binding constraint. Assessment on such platforms returns `unknown`
-whenever a GPU is present; GPU-memory admission is out of scope for this
-phase. It has to be the `device` key rather than `gpu_layers: 0`: the addon
+RAM is the binding constraint. A second `--gpu` pass then measures the same
+models resident on the device, against the GPU counter, and writes a fixture
+keyed by backend; assessment uses those when a GPU is present and falls back
+to `unknown` where it cannot identify the device or trust its readings.
+It has to be the `device` key rather than `gpu_layers: 0`: the addon
 derives its KV-cache default from the backend that key selects
 (`LoadFitNormalization.cpp`, `isGpu`), so `gpu_layers: 0` on a host with a
 Vulkan-capable GPU still builds a `q8_0` cache while every layer runs on the
@@ -185,13 +187,27 @@ one.
 
 ## Status
 
-| Platform     | Coefficients                              | Validated |
-| ------------ | ----------------------------------------- | --------- |
-| darwin-arm64 | measured 2026-08-31 (Metal, Apple M4 Pro) | yes       |
+| Platform            | Coefficients                                         | Validated |
+| ------------------- | ---------------------------------------------------- | --------- |
+| darwin-arm64        | measured 2026-08-31 (Metal, Apple M4 Pro)            | yes       |
+| linux-x64           | measured 2026-09-03 (CPU-forced, RTX 4000 SFF host)  | yes       |
+| win32-x64           | measured 2026-09-03 (CPU-forced, RTX 4000 SFF host)  | yes       |
+| linux-x64 \| vulkan | measured 2026-09-03 (GPU-resident, RTX 4000 SFF Ada) | yes       |
 
 `darwin-arm64` was measured on an Apple M4 Pro against the Metal backend
 (`q8_0` KV cache): held-out Qwen3-8B landed at 5.28 GiB against a predicted
-upper of 5.34 GiB. LLM workloads return real verdicts there; audio workloads
+upper of 5.34 GiB. `linux-x64` and `win32-x64` were measured on CI (run 33777205517) with the CPU backend forced and weights loaded anonymously;
+held-out Qwen3-8B landed at 5.82 GiB against 5.82 predicted, and 5.84 against
+5.94. Both hosts report a discrete GPU, so those coefficients serve CPU-only
+machines on the same platform.
+
+`linux-x64 | vulkan` is the first GPU-resident entry, measured on the same run
+against the RTX 4000's own memory: held-out Qwen3-8B at 5.25 GiB against 5.67
+predicted. It is keyed by backend because a platform can run several, and it
+applies only where a single dedicated GPU is present — with more than one the
+estimator cannot tell which card the engine will take, and returns `unknown`.
+There is no `win32-x64` GPU entry: Windows reports per-process GPU memory
+(DXGI `CurrentUsage` and `Budget`), which cannot bound a device. LLM workloads return real verdicts there; audio workloads
 still return `unknown` because the harness has no whisper pass yet, and
 `estimateWhisper` refuses the zeroed audio coefficients rather than consuming
 them. Adding a platform means: run the harness with `--write`, add the module
