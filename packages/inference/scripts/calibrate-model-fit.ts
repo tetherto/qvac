@@ -14,7 +14,8 @@
 //
 // Models are downloaded on first run and cached, so the first pass is slow and
 // needs registry access. See calibration/METHODOLOGY.md for what the numbers
-// mean and how the held-out check works.
+// mean and how the held-out check works, and "Windows" there for why that
+// platform loads weights with `load_mode: 'none'`.
 
 import os from 'bare-os'
 import fs from 'bare-fs'
@@ -29,7 +30,7 @@ import {
 import * as catalog from '../dist/models/registry/index.js'
 import { MODEL_RESOURCE_PROFILES } from '../dist/models/registry/resource-profiles.js'
 import { kvElementBytes, kvCacheBytesForWidth } from '../dist/resources/model-fit/estimators/llm.js'
-import { fitResidentMemory } from '../dist/resources/model-fit/calibration/fit.js'
+import { fitResidentMemory, kvObservation } from '../dist/resources/model-fit/calibration/fit.js'
 import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js'
 import type { GgufFacts } from '../dist/schemas/model-resource-profile.js'
 import type { PlatformCalibration } from '../dist/resources/model-fit/types.js'
@@ -54,6 +55,13 @@ const REPEATS = 3
 // allocation behaviour changed and this methodology needs re-checking.
 const WORKING_DRIFT_WARN_BYTES = 64 * 1024 * 1024
 
+// The KV cache grows by an exactly known amount between the two contexts, so
+// the persistent deltas must grow by at least that much. A shortfall means the
+// KV width assumed for the run is not what the engine allocated (the first
+// win32 run subtracted f16 against a q8_0 cache and read 56%) or the counter
+// misses allocation; either way nothing fitted on it is an upper bound.
+const KV_OBSERVATION_FLOOR = 0.9
+
 // Small, medium, large — plus one held out of the fit entirely, used only to
 // check that the derived upper bound actually holds.
 const FIT_MODELS = ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_4B_INST_Q4_K_M']
@@ -75,6 +83,20 @@ interface FitPoint extends Measurement {
 function rssBytes() {
   const usage = os.memoryUsage()
   return usage && usage.rss > 0 ? usage.rss : 0
+}
+
+/**
+ * Load mode for the calibration loads. Everywhere but Windows the SDK default
+ * (mmap) is measured as is. On win32 a mapped file is prefetched into the
+ * standby list, not the working set, so right after load RSS shows almost none
+ * of the weights (16 MiB of a 2.4 GiB model) and the weight ratio cannot be
+ * fitted. `load_mode: 'none'` reads the weights into anonymous memory instead
+ * and the working set counts them in full; a mapped weight set can keep at
+ * most the artifact size resident, so the ratio measured this way stays an
+ * upper bound for the mmap default users run.
+ */
+function calibrationLoadMode(platform: string) {
+  return platform.startsWith('win32') ? 'none' : undefined
 }
 
 function createSampler() {
@@ -185,9 +207,14 @@ function exactKvBytes(
 
 /**
  * Platforms where a reported GPU means discrete device memory. RSS cannot
- * observe VRAM, so calibration there loads with `gpu_layers: 0` and describes
+ * observe VRAM, so calibration there loads with `device: 'cpu'` and describes
  * CPU-resident execution — the case where system RAM is the binding
  * constraint. Apple silicon and mobile are unified memory and keep the GPU.
+ *
+ * `device`, not `gpu_layers: 0`: the addon picks the KV-cache default from the
+ * backend the device key selects, so `gpu_layers: 0` with a GPU present still
+ * builds a q8_0 cache while the layers run on the CPU — and the f16 this
+ * harness would then subtract is twice the cache the engine allocated.
  */
 function forcesCpu(platform: string) {
   return platform.startsWith('linux') || platform.startsWith('win32') || platform === 'darwin-x64'
@@ -196,7 +223,8 @@ function forcesCpu(platform: string) {
 async function measure(
   name: string,
   contextTokens: number,
-  cpuForced: boolean
+  cpuForced: boolean,
+  loadMode: 'none' | undefined
 ): Promise<Measurement> {
   const model = (catalog as Record<string, { sha256Checksum: string } | undefined>)[name]
   if (!model) throw new Error(`unknown catalog constant: ${name}`)
@@ -205,18 +233,22 @@ async function measure(
   if (!profile?.ggufFacts) throw new Error(`no GGUF facts for ${name}`)
 
   await settle()
-  const rssBefore = rssBytes()
+  const before = rssBytes()
 
   const modelId = await withLoadTimeout(
     loadModel({
       modelSrc: model,
-      modelConfig: { ctx_size: contextTokens, ...(cpuForced && { gpu_layers: 0 }) }
+      modelConfig: {
+        ctx_size: contextTokens,
+        ...(cpuForced && { device: 'cpu' }),
+        ...(loadMode && { load_mode: loadMode })
+      }
     }),
     `loading ${name}`
   )
 
   await settle()
-  const rssAfterLoad = rssBytes()
+  const afterLoad = rssBytes()
 
   const sampler = createSampler()
   sampler.start()
@@ -237,8 +269,8 @@ async function measure(
     contextTokens,
     artifactBytes: profile.artifactBytes,
     facts: profile.ggufFacts,
-    persistentBytes: Math.max(0, rssAfterLoad - rssBefore),
-    workingBytes: Math.max(0, peak - rssAfterLoad)
+    persistentBytes: Math.max(0, afterLoad - before),
+    workingBytes: Math.max(0, peak - afterLoad)
   }
 }
 
@@ -263,6 +295,11 @@ async function main() {
   const platform = `${os.platform()}-${os.arch()}`
   console.log(`calibrating ${platform}`)
 
+  const loadMode = calibrationLoadMode(platform)
+  if (loadMode) {
+    console.log(`weights loaded with load_mode '${loadMode}' — see METHODOLOGY.md, "Windows"`)
+  }
+
   registerPlugin(llmPlugin)
 
   // The fit subtracts the KV cache from each load's persistent delta, so the
@@ -275,8 +312,9 @@ async function main() {
   const gpus = resources.capabilities.gpus
   const gpuList = gpus.status === 'supported' ? gpus.value : []
   const cpuForced = forcesCpu(platform)
-  // What the loads will actually allocate: with `gpu_layers: 0` the engine
-  // stays CPU-resident regardless of the hardware present.
+  // What the loads will actually allocate: with `device: 'cpu'` the engine
+  // selects the CPU backend regardless of the hardware present, and with it
+  // the f16 KV default.
   const hasGpu = gpuList.length > 0 && !cpuForced
   const backend = cpuForced ? 'cpu' : detectBackend(gpuList)
   const device = gpuName(gpuList)
@@ -290,7 +328,7 @@ async function main() {
   for (const name of FIT_MODELS) {
     for (const contextTokens of CONTEXTS) {
       for (let repeat = 0; repeat < REPEATS; repeat++) {
-        const measurement = await measure(name, contextTokens, cpuForced)
+        const measurement = await measure(name, contextTokens, cpuForced, loadMode)
         // `.lower` is the width a GPU backend defaults to (q8_0), and equals
         // f16 when no GPU is reported — what the engine allocates in each
         // case, not an optimistic bound borrowed from the estimator's range.
@@ -314,6 +352,28 @@ async function main() {
     console.log(
       `\nwarning: the fit mixes KV element widths (${[...elementWidths].join(', ')} bytes), so the points do not describe a single cache type`
     )
+  }
+
+  // Judge the counter before the fit: the KV cache grows by an exactly known
+  // amount between the two contexts, and every sound counter has to see it.
+  const observation = kvObservation(measurements)
+  console.log('\nKV growth between contexts, computed vs observed:')
+  for (const growth of observation.models) {
+    const model = measurements.find((m) => m.artifactBytes === growth.artifactBytes)
+    console.log(
+      `  ${model?.name ?? mib(growth.artifactBytes) + ' MiB'}: kv +${mib(growth.kvDeltaBytes)} MiB, persistent +${mib(growth.observedDeltaBytes)} MiB (${((growth.observedDeltaBytes / growth.kvDeltaBytes) * 100).toFixed(0)}%)`
+    )
+  }
+  if (observation.ratio < KV_OBSERVATION_FLOOR) {
+    // The same shortfall read against the other width the engine could have
+    // chosen: a ratio near 1 there names the cause outright.
+    const width = Math.max(...elementWidths)
+    const other = kvElementBytes(measurements[0]!.facts, !hasGpu).bytes.lower
+    const otherRatio = (observation.ratio * width) / other
+    console.log(
+      `\nthe persistent deltas grew by ${(observation.ratio * 100).toFixed(0)}% of the KV cache computed at ${width} bytes per element (floor ${KV_OBSERVATION_FLOOR * 100}%); at ${other} bytes per element the same growth reads as ${(otherRatio * 100).toFixed(0)}%. Either the engine built a different cache type than the one subtracted, or RSS is missing allocation; nothing fitted on these points is an upper bound. No fixture written.`
+    )
+    Bare.exit(1)
   }
 
   // Fail loudly rather than fitting nonsense: a load that measured smaller
@@ -390,6 +450,11 @@ async function main() {
     audioWindowBytes: { lower: 0, upper: 0 },
     audioStreamingBytes: { lower: 0, upper: 0 },
     validated: false,
+    ...(loadMode && {
+      notes: [
+        `weights were loaded with load_mode '${loadMode}' so RSS counted them in full at load; a mapped weight set keeps at most the artifact size resident, so weightUpperCoeff remains an upper bound for the default mmap load`
+      ]
+    }),
     measuredAt: new Date().toISOString().slice(0, 10),
     measuredOn: {
       backend,
@@ -409,7 +474,7 @@ async function main() {
   let heldOutKv = 0
   let heldOutArtifactBytes = 0
   for (let repeat = 0; repeat < REPEATS; repeat++) {
-    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced)
+    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced, loadMode)
     const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
     heldOutKv = exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
     heldOutArtifactBytes = heldOut.artifactBytes

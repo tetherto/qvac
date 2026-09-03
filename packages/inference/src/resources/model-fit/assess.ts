@@ -33,7 +33,7 @@ const MOBILE_PLATFORMS: readonly ModelFitPlatform[] = ['android-arm64', 'ios-arm
  * Platforms where a reported GPU means discrete device memory. There the
  * engine executes the model in VRAM, which system-memory evidence cannot
  * bound in either direction — and their calibration fixtures describe
- * CPU-resident execution (`gpu_layers: 0`). A model on such a host assesses
+ * CPU-resident execution (`device: 'cpu'`). A model on such a host assesses
  * as `unknown` when a GPU is present; GPU-memory admission is out of scope
  * for this phase. Apple silicon and mobile are unified memory and unaffected.
  */

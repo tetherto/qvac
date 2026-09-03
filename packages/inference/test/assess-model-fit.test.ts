@@ -2,7 +2,7 @@ import test from 'brittle'
 import { estimateLlm, LLM_ESTIMATOR_VERSION } from '@/resources/model-fit/estimators/llm'
 import { estimateWhisper } from '@/resources/model-fit/estimators/whisper'
 import { assessModelFitFromResources } from '@/resources/model-fit/assess'
-import { fitResidentMemory } from '@/resources/model-fit/calibration/fit'
+import { fitResidentMemory, kvObservation } from '@/resources/model-fit/calibration/fit'
 import type { CalibrationPoint } from '@/resources/model-fit/calibration/fit'
 import type { PlatformCalibration } from '@/resources/model-fit/types'
 import type { GgufFacts, ModelResourceProfile } from '@/schemas/model-resource-profile'
@@ -921,6 +921,46 @@ test('fitResidentMemory: refuses designs that cannot separate the coefficients',
     (p) => p.contextTokens === 512
   )
   t.is(fitResidentMemory(singleContext), undefined, 'one context throughout')
+})
+
+test('kvObservation: a counter that sees every allocation scores 1; compute buffers push it above', (t) => {
+  const exact = kvObservation(syntheticPoints(1.0, 128 * MIB, 0))
+  t.is(exact.models.length, 3, 'one growth per model')
+  t.ok(Math.abs(exact.ratio - 1) < 1e-9, 'persistent grows by exactly the KV growth')
+
+  const withCompute = kvObservation(syntheticPoints(1.0, 128 * MIB, 20_000))
+  t.ok(withCompute.ratio > 1, 'per-token compute buffers only add to the growth')
+})
+
+test('kvObservation: a counter that misses allocation scores its shortfall', (t) => {
+  // Persistent carries 56% of the KV growth — what the win32 working set measured.
+  const points = syntheticPoints(1.0, 128 * MIB, 0).map((p) => ({
+    ...p,
+    persistentBytes: p.persistentBytes - 0.44 * p.kvBytes
+  }))
+  const observation = kvObservation(points)
+  t.ok(Math.abs(observation.ratio - 0.56) < 1e-6)
+  for (const model of observation.models) {
+    t.ok(model.observedDeltaBytes < model.kvDeltaBytes, 'every model shows the shortfall')
+  }
+})
+
+test('kvObservation: one cold-start repeat does not read as a shortfall, and a single context has nothing to judge', (t) => {
+  const base = syntheticPoints(1.0, 128 * MIB, 0)
+  // Three repeats per point; the very first load of the run carries a cold
+  // page-cache transient (~250 MiB observed) on the small context only. The
+  // median of the repeats ignores it, where a mean would read a 15% shortfall.
+  const repeated = [...base, ...base, ...base]
+  const first = repeated.findIndex((p) => p.contextTokens === 512)
+  repeated[first] = {
+    ...repeated[first]!,
+    persistentBytes: repeated[first]!.persistentBytes + 250 * MIB
+  }
+  t.ok(Math.abs(kvObservation(repeated).ratio - 1) < 1e-9)
+
+  const single = kvObservation(base.filter((p) => p.contextTokens === 512))
+  t.is(single.models.length, 0)
+  t.is(single.ratio, 1)
 })
 
 // ---------------------------------------------------------------------------

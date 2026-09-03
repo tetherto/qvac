@@ -109,6 +109,71 @@ export function fitResidentMemory(points: readonly CalibrationPoint[]) {
   return fit
 }
 
+/** One model's KV growth between its smallest and largest context, computed vs observed. */
+export interface KvGrowth {
+  artifactBytes: number
+  kvDeltaBytes: number
+  observedDeltaBytes: number
+}
+
+/** Whether the counter behind the measurements sees allocation at all. */
+export interface KvObservation {
+  models: readonly KvGrowth[]
+  /**
+   * Observed growth over computed growth, summed across models. Below 1 means
+   * the counter missed memory the engine allocated; `1` when no model has two
+   * contexts to compare.
+   */
+  ratio: number
+}
+
+/**
+ * Checks the measurements against the one term the file sizes exactly.
+ *
+ * Between two contexts the engine allocates a known extra amount of KV cache —
+ * anonymous memory, touched at load — plus compute buffers that can only add
+ * to it. Growth below that means the cache subtracted is not the one the
+ * engine built (the first win32 run subtracted f16 against a q8_0 cache and
+ * read 56%) or the counter misses allocation; no fit on top of either can be
+ * an upper bound. darwin-arm64's RSS reads ~1.0.
+ * Summed across models so a small model's growth, which sits inside run-to-run
+ * noise, does not decide alone; repeats enter as their median, because the
+ * first load of a run carries a cold page-cache transient that would otherwise
+ * inflate the small context and read as a shortfall.
+ */
+export function kvObservation(points: readonly CalibrationPoint[]): KvObservation {
+  const byModel = new Map<number, CalibrationPoint[]>()
+  for (const point of points) {
+    const group = byModel.get(point.artifactBytes)
+    if (group) group.push(point)
+    else byModel.set(point.artifactBytes, [point])
+  }
+
+  const models: KvGrowth[] = []
+  let kvDeltaTotal = 0
+  let observedDeltaTotal = 0
+  for (const [artifactBytes, group] of byModel) {
+    const contexts = [...new Set(group.map((p) => p.contextTokens))].sort((a, b) => a - b)
+    if (contexts.length < 2) continue
+    const low = group.filter((p) => p.contextTokens === contexts[0])
+    const high = group.filter((p) => p.contextTokens === contexts[contexts.length - 1])
+    const kvDeltaBytes = high[0]!.kvBytes - low[0]!.kvBytes
+    const observedDeltaBytes =
+      median(high.map((p) => p.persistentBytes)) - median(low.map((p) => p.persistentBytes))
+    models.push({ artifactBytes, kvDeltaBytes, observedDeltaBytes })
+    kvDeltaTotal += kvDeltaBytes
+    observedDeltaTotal += observedDeltaBytes
+  }
+
+  return { models, ratio: kvDeltaTotal > 0 ? observedDeltaTotal / kvDeltaTotal : 1 }
+}
+
+function median(values: readonly number[]) {
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2
+}
+
 /**
  * Solves a 3×3 linear system by Gaussian elimination with partial pivoting.
  *

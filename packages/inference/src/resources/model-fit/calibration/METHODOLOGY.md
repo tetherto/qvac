@@ -37,11 +37,16 @@ would mean the engine's allocation behaviour changed and this methodology
 needs re-checking.
 
 On platforms where a GPU means discrete device memory (linux, windows,
-darwin-x64) the harness loads with `gpu_layers: 0`: RSS cannot observe VRAM,
+darwin-x64) the harness loads with `device: 'cpu'`: RSS cannot observe VRAM,
 so the coefficients describe CPU-resident execution — the case where system
 RAM is the binding constraint. Assessment on such platforms returns `unknown`
 whenever a GPU is present; GPU-memory admission is out of scope for this
-phase.
+phase. It has to be the `device` key rather than `gpu_layers: 0`: the addon
+derives its KV-cache default from the backend that key selects
+(`LoadFitNormalization.cpp`, `isGpu`), so `gpu_layers: 0` on a host with a
+Vulkan-capable GPU still builds a `q8_0` cache while every layer runs on the
+CPU, and the `f16` subtracted for a CPU run would be twice what the engine
+allocated. The first Windows run failed exactly that way (see "Windows").
 
 1. For each of three models (small, medium, large) at two contexts (512 and
    8192 tokens), **three times each**: settle, read RSS, load, settle, read RSS
@@ -87,6 +92,56 @@ One observed consequence: the very first load of a freshly downloaded file ran
 a 2.4 GiB model). The committed coefficients describe warm loads and do not
 cover that transient — deliberately, because the excess is file-backed and
 evictable, so it is not memory the system has to find under pressure.
+
+### KV-growth tripwire
+
+Before fitting anything, the harness checks the points against the one term
+the file sizes exactly. Between the two contexts every model's persistent delta
+must grow by at least the computed KV growth — the per-token compute buffers
+can only add to it. `kvObservation` (`calibration/fit.ts`, unit tested) sums
+that growth across the fit models and the run stops when the deltas grew by
+less than 90% of it, printing what the same growth would read as at the other
+KV element width: a shortfall means either the engine built a different cache
+type than the one subtracted, or RSS is missing allocation, and no fit on top
+of either is an upper bound. Summed rather than per model so a small model's
+growth, which sits inside run-to-run noise, does not decide alone; repeats
+enter as their median so the cold page-cache transient on the run's first load
+(which lands on the small context) does not read as a shortfall. darwin-arm64
+sits at ~1.0.
+
+### Windows
+
+`memoryUsage().rss` is libuv's `uv_resident_set_memory`, which on win32 returns
+`GetProcessMemoryInfo().WorkingSetSize` — the pages currently resident for the
+process. Two things distinguish it from RSS on the other desktops, and only one
+of them turned out to matter.
+
+The first CPU-forced run (`gpu_layers: 0` on a host with an Intel iGPU) aborted
+with 10 of 18 points below the f16 KV cache being subtracted: a 2.4 GiB model
+read as 71–128 MiB persistent at 512 tokens, and at 8192 tokens the deltas
+were ~717 MiB against a computed 1152 MiB. A probe on the same runner that
+read `WorkingSet64` and `PrivateMemorySize64` (the commit charge, which no
+trimming can lower) side by side settled it: both counters saw the same
+growth between the contexts, 58–60% of the f16 figure — which is 105–110% of
+a `q8_0` cache. The engine had defaulted the cache to `q8_0` because the
+`device: 'gpu'` default selected the Vulkan backend regardless of
+`gpu_layers`, and the harness subtracted `f16`. Anonymous memory — KV cache
+and compute buffers — was fully present in the working set; no trimming was
+observed. `device: 'cpu'` is the fix (see the procedure above).
+
+What is genuinely different on Windows is the mapped weights. `llama_mmap`
+prefetches the file with `PrefetchVirtualMemory`, which fills the standby list
+without faulting pages into the working set, so right after a load RSS shows
+almost none of them (16 MiB of a 2.4 GiB model) and the weight ratio cannot
+be fitted. The harness therefore loads with `load_mode: 'none'` on win32,
+which reads the weights into anonymous memory; the probe measured the working
+set at artifact + KV + ~30 MiB in that mode, with the 8192-token growth at
+110% of the KV growth (the rest being compute buffers). A fixture measured
+that way is still an upper bound for the mmap default users run — a mapped
+weight set can keep at most the artifact size resident — and the fixture says
+so in `notes`. The commit charge was evaluated as an alternative counter and
+rejected: it sees the same KV growth as the working set but carries ~0.8 GiB
+of committed, never-touched backend memory that physical RAM never pays for.
 
 ## Scope of a fixture
 
