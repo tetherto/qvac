@@ -12,7 +12,7 @@
       "features": [
         {
           "name": "cuda-backend",
-          "platform": "linux & x64"
+          "platform": "linux"
         }
       ],
       "version>=": "10297.1.1#1"

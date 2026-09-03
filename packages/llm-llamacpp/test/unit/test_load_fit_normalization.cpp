@@ -869,6 +869,169 @@ TEST_F(LoadFitNormalizationTest, TensorSplitAllowsFlashAttnOnOrUnset) {
       LLAMA_SPLIT_MODE_TENSOR);
 }
 
+// The guard rejects on the falsey set, so every truthy synonym must pass — and
+// so must "auto", which fabric promotes to ENABLED for this mode itself
+// ("enabling flash_attn since it is required for SPLIT_MODE_TENSOR"). "auto"
+// is the interesting case: it is neither truthy nor falsey, and the sibling
+// guards in tuneLoadConfigMap treat it as a third state, so it is the value
+// most likely to break if the shared vocabulary changes.
+TEST_F(LoadFitNormalizationTest, TensorSplitAllowsFlashAttnTruthyOrAuto) {
+  for (const char* key : {"flash-attn", "flash_attn"}) {
+    // Lower-case only: this path runs fabric's argument parser, whose
+    // is_truthy/is_falsey/is_autoy are case-SENSITIVE, so a mixed-case value
+    // is rejected before the guard — see TensorSplitMixedCaseFlashAttnRejected.
+    for (const char* value : {"on", "enabled", "true", "1", "auto", "-1"}) {
+      auto config = baseConfig();
+      config["split-mode"] = "tensor";
+      config[key] = value;
+      EXPECT_EQ(
+          lfn::normalizeLoadForFit(
+              "/tmp/model.gguf",
+              std::move(config),
+              metadata_,
+              {},
+              backend({.type = backend_selection::GPU, .name = "vulkan0"}))
+              .params.split_mode,
+          LLAMA_SPLIT_MODE_TENSOR)
+          << "tensor split with " << key << "=" << value << " must be allowed";
+    }
+  }
+}
+
+// The addon matches case-sensitively, as fabric does, so a mixed-case value is
+// rejected up front with a message naming the accepted spellings. It failed
+// before too, but at argument parsing and with a less specific message; the
+// caller is now told which value is at fault and what is accepted.
+TEST_F(LoadFitNormalizationTest, TensorSplitMixedCaseFlashAttnRejected) {
+  for (const char* value : {"On", "AUTO", "True"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    config["flash-attn"] = value;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+      FAIL() << "mixed-case flash-attn=" << value << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("unknown value"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("flash-attn"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr(value));
+    }
+  }
+}
+
+// Duplicate spellings are a hard error, implementing the contract index.d.ts
+// already publishes ("Supplying both is an error") and matching what
+// split-mode and mmproj-use-gpu already do. Before this, the KV guards
+// resolved "hyphen, else underscore" and stopped at the first hit while the
+// passthrough loop dispatched BOTH as --flash-attn — so a contradictory pair
+// let the addon read one value while fabric applied the other, which could
+// leave the Adreno crash guard closed on a config that reaches the driver bug.
+// Rejected regardless of split-mode; the tensor case is covered separately by
+// TensorSplitRejectsContradictoryFlashAttnKeys.
+TEST_F(LoadFitNormalizationTest, RejectsBothFlashAttnSpellings) {
+  const std::vector<std::pair<std::string, std::string>> kPairs = {
+      {"on", "off"}, {"off", "auto"}, {"on", "on"}};
+  for (const auto& [hyphen, underscore] : kPairs) {
+    auto config = baseConfig();
+    config["flash-attn"] = hyphen;
+    config["flash_attn"] = underscore;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+      FAIL() << "flash-attn=" << hyphen << " + flash_attn=" << underscore
+             << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("both"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("flash-attn"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("flash_attn"));
+    }
+  }
+}
+
+// Finetuning erases "flash_attn" and rewrites "flash-attn", so without an
+// up-front check a duplicate pair would be silently resolved rather than
+// rejected. Pins that validation runs before those defaults.
+TEST_F(LoadFitNormalizationTest, RejectsBothFlashAttnSpellingsUnderFinetuning) {
+  auto config = baseConfig();
+  config["flash-attn"] = "on";
+  config["flash_attn"] = "on";
+  FinetuneConfigOverrides finetune;
+  finetune.active = true;
+  finetune.flashAttn = true;
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          finetune,
+          backend({.type = backend_selection::GPU, .name = "vulkan0"}))),
+      qvac_errors::StatusError);
+}
+
+// split-mode 'tensor' + 'auto' must take the q8_0 KV default. Fabric promotes
+// AUTO to ENABLED unconditionally for this mode, so the capability probe the
+// exclusion protects everywhere else does not exist here — and tensor mode
+// force-disables auto-fit, so a needlessly doubled KV cache has nothing to
+// trim it back.
+TEST_F(LoadFitNormalizationTest, TensorSplitWithAutoTakesQ8_0KvDefault) {
+  for (const char* value : {"auto", "-1"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    config["flash-attn"] = value;
+    const auto normalized = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+    EXPECT_EQ(normalized.params.cache_type_k, GGML_TYPE_Q8_0)
+        << "tensor + flash-attn=" << value << " must default K to q8_0";
+    EXPECT_EQ(normalized.params.cache_type_v, GGML_TYPE_Q8_0)
+        << "tensor + flash-attn=" << value << " must default V to q8_0";
+  }
+}
+
+// The non-tensor counterpart: the exclusion still applies where the probe is
+// real. This pair is what makes the tensor case above meaningful.
+TEST_F(LoadFitNormalizationTest, NonTensorWithAutoKeepsF16KvDefault) {
+  auto config = baseConfig();
+  config["flash-attn"] = "auto";
+  const auto normalized = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_NE(normalized.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_NE(normalized.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+// The documented workaround for the 'auto' KV asymmetry — recommended in the
+// CHANGELOG, the README and the index.d.ts field doc, and previously pinned
+// nowhere. An explicit cache type must survive alongside 'auto'.
+TEST_F(LoadFitNormalizationTest, AutoWithExplicitCacheTypeIsHonoured) {
+  auto config = baseConfig();
+  config["flash-attn"] = "auto";
+  config["cache-type-k"] = "q8_0";
+  config["cache-type-v"] = "q8_0";
+  const auto normalized = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(normalized.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(normalized.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
 TEST_F(LoadFitNormalizationTest, TensorSplitRejectsUnsupportedArchitecture) {
   test_common::MockModelMetaData mamba{false, "mamba2"};
   auto config = baseConfig();

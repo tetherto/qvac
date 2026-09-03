@@ -14,6 +14,20 @@ export const multiGpuConfigSmoke: TestDefinition = {
   }
 }
 
+export const multiGpuTensorConfigSmoke: TestDefinition = {
+  testId: 'multi-gpu-tensor-config-smoke',
+  params: {
+    history: [{ role: 'user', content: 'What is 2+2? Answer with only the number.' }]
+  },
+  expectation: { validation: 'contains-all', contains: ['4'] },
+  suites: ['smoke'],
+  metadata: {
+    category: 'multi-gpu',
+    dependency: 'none',
+    estimatedDurationMs: 30000
+  }
+}
+
 export const multiGpuEmbedConfigSmoke: TestDefinition = {
   testId: 'multi-gpu-embed-config-smoke',
   params: {
@@ -28,4 +42,8 @@ export const multiGpuEmbedConfigSmoke: TestDefinition = {
   }
 }
 
-export const multiGpuTests = [multiGpuConfigSmoke, multiGpuEmbedConfigSmoke]
+export const multiGpuTests = [
+  multiGpuConfigSmoke,
+  multiGpuTensorConfigSmoke,
+  multiGpuEmbedConfigSmoke
+]
