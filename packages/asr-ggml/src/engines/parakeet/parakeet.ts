@@ -1,11 +1,8 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
-import path = require("bare-path");
-/* eslint-enable @typescript-eslint/no-require-imports */
-
 import {
   ERR_CODES_PARAKEET as ERR_CODES,
   QvacErrorAddonASRGgml,
 } from "../../lib/error";
+import { resolveBackendsDir } from "../../lib/backends";
 import {
   END_OF_INPUT,
   MAX_BUFFERED_BYTES,
@@ -216,9 +213,7 @@ export class ParakeetInterface {
   ): ParakeetConfigurationParams {
     const out = { ...configurationParams };
     if (!out.backendsDir) {
-      // Generated file lives at engines/parakeet/parakeet.js; prebuilds/
-      // sits at the package root, two levels up.
-      out.backendsDir = path.join(__dirname, "..", "..", "prebuilds");
+      out.backendsDir = resolveBackendsDir();
     }
     return out;
   }

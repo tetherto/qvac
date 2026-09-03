@@ -146,6 +146,30 @@ Then:
 npm install @qvac/asr-ggml
 ```
 
+### Platform packages
+
+`@qvac/asr-ggml` is a meta package that ships the JavaScript wrapper only.
+The native prebuild for each host lives in a version-locked platform package
+selected at install time through `os`/`cpu` filtered `optionalDependencies`:
+
+| Host | Package |
+| --- | --- |
+| linux-x64 (glibc) | `@qvac/asr-ggml-linux-x64` |
+| linux-arm64 (glibc) | `@qvac/asr-ggml-linux-arm64` |
+| darwin-arm64 | `@qvac/asr-ggml-darwin-arm64` |
+| darwin-x64 | `@qvac/asr-ggml-darwin-x64` |
+| win32-x64 | `@qvac/asr-ggml-win32-x64` |
+| android-arm64 | `@qvac/asr-ggml-android-arm64` |
+| ios (device + simulators) | `@qvac/asr-ggml-ios` |
+
+Do not depend on platform packages directly. Supported installers are npm 7+,
+pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip the
+platform package and fail at require time with an error naming the missing
+package; a locally built `prebuilds/` directory in the package root always
+takes precedence. Use `require('@qvac/asr-ggml').resolveBackendsDir()` to
+locate the directory holding the host's prebuilt binaries and dynamically
+loaded ggml backends.
+
 ## Quickstart
 
 All four snippets assume:
@@ -553,7 +577,10 @@ Two paths matter on Android and Linux:
 
 - **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — root directory
   holding dynamically-loaded ggml backend libraries (CUDA, Vulkan, OpenCL,
-  per-arch CPU variants). Defaults to the package's `prebuilds/`; the native addon
+  per-arch CPU variants). Defaults to `resolveBackendsDir()`: the package's
+  own `prebuilds/` when present (local builds, mobile flatten), otherwise the
+  installed platform package (see [Platform packages](#platform-packages));
+  the native addon
   appends `<bare-target>/<module-name>` before scanning. Pass an explicit path
   when backend libraries ship elsewhere — e.g. Android's
   `ApplicationInfo.nativeLibraryDir` when they are packaged inside the APK.

@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-import path = require("bare-path");
-/* eslint-enable @typescript-eslint/no-require-imports */
 import type { QvacResponse } from "@qvac/infer-base";
 
 import {
@@ -13,6 +10,7 @@ import {
   type WhisperConfigurationParams,
 } from "./configChecker";
 import { QvacErrorAddonASRGgml, ERR_CODES } from "../../lib/error";
+import { resolveBackendsDir } from "../../lib/backends";
 import { END_OF_INPUT } from "../../lib/constants";
 import { normalizeAudioStream, type ByteFormat } from "../../lib/audio";
 import type {
@@ -31,7 +29,6 @@ import type {
   StreamingSession,
 } from "../types";
 
-const PREBUILDS_DIR = path.join(__dirname, "..", "..", "prebuilds");
 const MS_PER_SECOND = 1000;
 const DEFAULT_BYTE_FORMAT: ByteFormat = "s16le";
 /** The native wire format is pinned; all input is normalized to f32. */
@@ -416,7 +413,7 @@ export class WhisperDriver implements AsrDriver {
       backendsDir:
         typeof this.params.backendsDir === "string"
           ? this.params.backendsDir
-          : PREBUILDS_DIR,
+          : resolveBackendsDir(),
     };
   }
 

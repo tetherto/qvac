@@ -214,6 +214,39 @@ jobs:
           workdir: packages/asr-ggml
           tag: ${{ inputs.npm_tag || 'latest' }}
 
+      # Move each prebuilds/<host> dir into a per-platform package and inject
+      # the version-locked optionalDependencies into the meta package.json, so
+      # the meta tarball published below ships JS only.
+      - name: Slice platform packages
+        run: node scripts/ci/slice-platform-packages.mjs --workdir packages/asr-ggml --out-dir "${{ runner.temp }}/platform-packages"
+
+      - name: Set up Node.js for platform package publish
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "24.14.1"
+          registry-url: https://registry.npmjs.org/
+          scope: "@qvac"
+
+      # Platform packages publish first and the meta last: no npm transaction
+      # exists, so meta-last guarantees the name consumers depend on never
+      # appears without its binaries.
+      - name: Publish platform packages to NPM Package Registry
+        shell: bash
+        env:
+          DIST_TAG: ${{ steps.dist-tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for dir in "${{ runner.temp }}/platform-packages"/*/; do
+            NAME=$(node -p "require('${dir}package.json').name")
+            VERSION=$(node -p "require('${dir}package.json').version")
+            if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+              echo "${NAME}@${VERSION} already on npm, skipping"
+              continue
+            fi
+            echo "Publishing ${NAME}@${VERSION} with tag ${DIST_TAG}"
+            (cd "$dir" && npm publish --tag "$DIST_TAG" --access public --provenance)
+          done
+
       - name: Publish to NPM Package Registry
         id: publish
         uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0

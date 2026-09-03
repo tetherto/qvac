@@ -6,12 +6,31 @@
   "engines": {
     "bare": ">=1.20.0"
   },
+  "imports": {
+    "#host-addon": {
+      "linux": {
+        "x64": ["@qvac/asr-ggml-linux-x64", "./addon-unavailable.js"],
+        "arm64": ["@qvac/asr-ggml-linux-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "darwin": {
+        "arm64": ["@qvac/asr-ggml-darwin-arm64", "./addon-unavailable.js"],
+        "x64": ["@qvac/asr-ggml-darwin-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "win32": {
+        "x64": ["@qvac/asr-ggml-win32-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "default": "./addon-unavailable.js"
+    }
+  },
   "scripts": {
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" && lunte \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\"",
+    "lint:js": "prettier --check \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" \"addon-unavailable.js\" && lunte \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" \"addon-unavailable.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\"",
+    "format": "prettier --write \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" \"addon-unavailable.js\"",
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:native:cuda": "bare-make generate -D ASR_CUDA=ON && bare-make build && bare-make install",
@@ -90,6 +109,7 @@
   "files": [
     "addonLogging.js",
     "addonLogging.d.ts",
+    "addon-unavailable.js",
     "binding.js",
     "index.js",
     "index.d.ts",
@@ -192,6 +212,10 @@
       "lunte"
     ],
     "binding.js": [
+      "prettier --write",
+      "lunte"
+    ],
+    "addon-unavailable.js": [
       "prettier --write",
       "lunte"
     ]

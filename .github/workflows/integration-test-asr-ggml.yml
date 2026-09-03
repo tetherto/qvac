@@ -310,7 +310,28 @@ jobs:
           rm -rf "${{ runner.temp }}/tmp/package"
           npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
           tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
-          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
+          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
+          # meta tarball; split releases ship them in the per-host platform
+          # package under addon/prebuilds/.
+          if [ -d "${{ runner.temp }}/tmp/package/prebuilds" ]; then
+            cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
+          else
+            SPEC="${{ inputs.prebuild_package }}"
+            REST="${SPEC#?}"
+            if [ "${REST#*@}" != "$REST" ]; then
+              VERSION="${SPEC##*@}"
+              NAME="${SPEC%@"$VERSION"}"
+            else
+              VERSION=""
+              NAME="$SPEC"
+            fi
+            HOST_SPEC="${NAME}-${{ matrix.platform }}-${{ matrix.arch }}${VERSION:+@$VERSION}"
+            rm -f "${{ runner.temp }}/tmp"/*.tgz
+            rm -rf "${{ runner.temp }}/tmp/package"
+            npm pack "$HOST_SPEC" --pack-destination "${{ runner.temp }}/tmp"
+            tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+            cp -r "${{ runner.temp }}/tmp"/package/addon/prebuilds/* prebuilds/
+          fi
           find prebuilds -type f -name 'tetherto__*' | while read f; do
             mv "$f" "${f/tetherto__/qvac__}"
           done
@@ -331,7 +352,30 @@ jobs:
           Push-Location "${{ runner.temp }}\tmp"
           tar -xzf $tgz.Name
           Pop-Location
-          Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
+          # meta tarball; split releases ship them in the per-host platform
+          # package under addon/prebuilds/.
+          if (Test-Path "${{ runner.temp }}\tmp\package\prebuilds") {
+            Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          } else {
+            $spec = "${{ inputs.prebuild_package }}"
+            $atIndex = $spec.LastIndexOf('@')
+            if ($atIndex -gt 0) {
+              $name = $spec.Substring(0, $atIndex)
+              $version = $spec.Substring($atIndex + 1)
+              $hostSpec = "$name-${{ matrix.platform }}-${{ matrix.arch }}@$version"
+            } else {
+              $hostSpec = "$spec-${{ matrix.platform }}-${{ matrix.arch }}"
+            }
+            Remove-Item "${{ runner.temp }}\tmp\*.tgz" -Force
+            Remove-Item "${{ runner.temp }}\tmp\package" -Recurse -Force
+            npm pack $hostSpec --pack-destination "${{ runner.temp }}\tmp"
+            $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
+            Push-Location "${{ runner.temp }}\tmp"
+            tar -xzf $tgz.Name
+            Pop-Location
+            Copy-Item -Path "${{ runner.temp }}\tmp\package\addon\prebuilds\*" -Destination prebuilds -Recurse -Force
+          }
           Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
             $newName = $_.Name -replace 'tetherto__', 'qvac__'
             Rename-Item -Path $_.FullName -NewName $newName
