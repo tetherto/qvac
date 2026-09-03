@@ -146,6 +146,29 @@ test('audioGen plugin operation streams progress, PCM, and terminal stats', asyn
   t.is(getRequestRegistry().get(requestId), null)
 })
 
+test('audioGen plugin operation yields indeterminate LM progress', async (t) => {
+  const modelId = 'audio-gen-operation-indeterminate-progress'
+  const model = createModel(createResponse([{ progress: { stage: 'lm', step: 1, total: -1 } }], {}))
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const stream = audioGenStream({
+    type: 'audioGenStream',
+    requestId: 'audio-gen-request-indeterminate-progress',
+    modelId,
+    caption: 'ambient electronic music'
+  })
+
+  t.alike((await stream.next()).value, {
+    type: 'audioGenStream',
+    progress: { stage: 'lm', step: 1, total: -1 },
+    done: false
+  })
+  t.is((await stream.next()).value?.done, true)
+})
+
 test('audioGen terminal diagnostics report a GPU fallback reason, or omit it', async (t) => {
   const cases = [
     { code: 2, reason: 'no-devices' },
