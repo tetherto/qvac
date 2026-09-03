@@ -102,6 +102,7 @@ import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-b
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
+import { CalibrationExecutor } from '../shared/executors/calibration-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'desktop'
@@ -248,6 +249,12 @@ resources.define('classification', {
 
 resources.define('echo', {
   type: 'echo',
+  modelSrc: '',
+  skipPreDownload: true
+})
+
+resources.define('calibration', {
+  type: 'calibration',
   modelSrc: '',
   skipPreDownload: true
 })
@@ -737,7 +744,8 @@ export const executor = createExecutor({
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
-    new PluginExecutor(resources)
+    new PluginExecutor(resources),
+    new CalibrationExecutor(resources)
   ],
   profiling: {
     init: () => profiler.enable({ mode: 'summary', includeServerBreakdown: true }),

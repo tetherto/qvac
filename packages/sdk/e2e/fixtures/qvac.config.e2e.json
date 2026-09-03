@@ -12,7 +12,8 @@
     "@qvac/sdk/audiogen-ggml/plugin",
     "@qvac/sdk/ggml-vla/plugin",
     "@qvac/sdk/ggml-classification/plugin",
-    "custom-echo-plugin/plugin"
+    "custom-echo-plugin/plugin",
+    "custom-calibration-plugin/plugin"
   ],
   "registryDownloadMaxRetries": 10,
   "registryStreamTimeoutMs": 600000

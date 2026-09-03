@@ -129,8 +129,13 @@ verdicts on those. Audio
 workloads still return `unknown` on every platform: their coefficients await
 the harness's whisper pass, and the estimator refuses the unmeasured
 placeholders rather than consuming them. Every other platform returns `unknown`
-until its own run lands. See
-`@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
+until its own run lands. `android-arm64` and `ios-arm64` are measured through
+the SDK e2e consumer on a Device Farm phone (the test-sdk dispatch's
+`calibration: android|ios`), since the harness has to run where the engine
+does. A fixture is all Android needs; iOS also needs the `process-memory`
+budget's `os_proc_available_memory()` term, and returns `unknown` until that
+native metric exists however good its fixture is. See `@qvac/inference`'s
+`src/resources/model-fit/calibration/METHODOLOGY.md`.
 
 **Discrete-GPU desktops.** The engine executes the model in the GPU's own
 memory there, which system RAM cannot bound, so those platforms' `platforms`

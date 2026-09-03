@@ -42,6 +42,17 @@ import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
 import { snapStorageTests } from './snap-storage-tests.js'
 import { systemResourcesTests } from './system-resources-tests.js'
+import { calibrationTests } from './calibration-tests.js'
+
+// Model-fit calibration is opt-in: it runs for the better part of an hour and
+// wants the device to itself, so a full run never loads it. The producer opts
+// in with QVAC_E2E_CALIBRATION=1; read through globalThis because this module
+// is also bundled into the consumers, where `process` may not exist.
+function includeCalibration() {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env
+  return env?.['QVAC_E2E_CALIBRATION'] === '1'
+}
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -372,6 +383,8 @@ export const tests = [
 
   // Local hardware capabilities and on-demand usage sampling
   ...systemResourcesTests,
+  // Model-fit calibration harness (opt-in via QVAC_E2E_CALIBRATION=1)
+  ...(includeCalibration() ? calibrationTests : []),
 
   // Additional model tests
   modelSwitchLlm,

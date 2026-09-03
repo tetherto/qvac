@@ -1,0 +1,17 @@
+{
+  "name": "custom-calibration-plugin",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Runs the @qvac/inference model-fit calibration harness inside the SDK worker (e2e only)",
+  "exports": {
+    "./plugin": "./plugin.js",
+    "./client": {
+      "types": "./client.d.ts",
+      "default": "./client.js"
+    }
+  },
+  "peerDependencies": {
+    "@qvac/sdk": "*",
+    "zod": "*"
+  }
+}

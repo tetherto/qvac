@@ -122,7 +122,7 @@ on:
       # most 25 inputs and this workflow is at the ceiling. Picking a single
       # runner is what a re-run after a busy-host warning needs anyway.
       calibration:
-        description: "Run the assessModelFit calibration harness (~30 min per platform warm; first run also downloads ~7.5 GiB of models)"
+        description: "Run the assessModelFit calibration harness (~30 min per platform warm; first run also downloads ~7.5 GiB of models). android/ios run it on a Device Farm phone through the e2e consumer (~45 min, downloads ~4.8 GB) and ignore the other platform toggles."
         type: choice
         options:
           - "off"
@@ -130,6 +130,8 @@ on:
           - qvac-macos26-arm64-gpu-calibration
           - qvac-ubuntu2204-x64-gpu-calibration
           - qvac-win25-x64-gpu-calibration
+          - android
+          - ios
         default: "off"
 
   workflow_call:
@@ -210,6 +212,10 @@ jobs:
       run-android: ${{ steps.resolve.outputs.run-android }}
       run-ios: ${{ steps.resolve.outputs.run-ios }}
       run-e2e: ${{ steps.resolve.outputs.run-e2e }}
+      filter: ${{ steps.resolve.outputs.filter }}
+      device-farm-timeout: ${{ steps.resolve.outputs.device-farm-timeout }}
+      calibration-desktop: ${{ steps.resolve.outputs.calibration-desktop }}
+      calibration-mobile: ${{ steps.resolve.outputs.calibration-mobile }}
     steps:
       - name: Resolve configuration
         id: resolve
@@ -223,6 +229,8 @@ jobs:
           RUN_ANDROID: ${{ inputs.android }}
           RUN_IOS: ${{ inputs.ios }}
           RUN_CALIBRATION: ${{ inputs.calibration }}
+          FILTER: ${{ inputs.filter }}
+          DEVICE_FARM_TIMEOUT: ${{ inputs.device-farm-timeout }}
           SUITE: ${{ inputs.suite }}
           SUITE_CUSTOM: ${{ inputs.suite-custom }}
         run: |
@@ -243,6 +251,13 @@ jobs:
           RESOLVED_SNAP=false
           RESOLVED_ANDROID=false
           RESOLVED_IOS=false
+          RESOLVED_FILTER="$FILTER"
+          RESOLVED_CALIBRATION_DESKTOP=off
+          RESOLVED_CALIBRATION_MOBILE=false
+          # Device Farm caps a job at 150 min; a mobile calibration run needs
+          # most of it (21 loads plus ~4.8 GB of downloads on a device with no
+          # model cache), so the default only rises when calibration asks.
+          RESOLVED_DEVICE_FARM_TIMEOUT="${DEVICE_FARM_TIMEOUT:-120}"
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             RESOLVED_DESKTOP="$RUN_DESKTOP"
@@ -257,6 +272,27 @@ jobs:
             if [ "${RUN_CALIBRATION:-off}" != "off" ]; then
               RESOLVED_CALIBRATION=true
             fi
+
+            # Mobile calibration rides the e2e path: the harness runs inside the
+            # consumer's calibration plugin on a Device Farm phone. That means
+            # the android/ios job, only the calibration test, no desktop runner,
+            # and the other platform toggles are ignored so the device is the
+            # run's only consumer.
+            RESOLVED_CALIBRATION_DESKTOP="${RUN_CALIBRATION:-off}"
+            case "${RUN_CALIBRATION:-off}" in
+              android|ios)
+                RESOLVED_DESKTOP=false
+                RESOLVED_ELECTRON=false
+                RESOLVED_SNAP=false
+                RESOLVED_ANDROID=false
+                RESOLVED_IOS=false
+                if [ "$RUN_CALIBRATION" = "android" ]; then RESOLVED_ANDROID=true; else RESOLVED_IOS=true; fi
+                RESOLVED_CALIBRATION_DESKTOP=off
+                RESOLVED_CALIBRATION_MOBILE=true
+                RESOLVED_FILTER=calibration
+                RESOLVED_DEVICE_FARM_TIMEOUT="${DEVICE_FARM_TIMEOUT:-150}"
+                ;;
+            esac
 
             SELECTED="${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}${RESOLVED_CALIBRATION}"
             if [ "$SELECTED" = "falsefalsefalsefalsefalsefalse" ]; then
@@ -322,6 +358,10 @@ jobs:
             echo "run-android=$RESOLVED_ANDROID"
             echo "run-ios=$RESOLVED_IOS"
             echo "run-e2e=$RESOLVED_E2E"
+            echo "filter=$RESOLVED_FILTER"
+            echo "device-farm-timeout=$RESOLVED_DEVICE_FARM_TIMEOUT"
+            echo "calibration-desktop=$RESOLVED_CALIBRATION_DESKTOP"
+            echo "calibration-mobile=$RESOLVED_CALIBRATION_MOBILE"
           } >> "$GITHUB_OUTPUT"
 
   prepare-inference:
@@ -580,10 +620,11 @@ jobs:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
-      filter: ${{ inputs.filter }}
+      filter: ${{ needs.resolve.outputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
+      calibration: ${{ needs.resolve.outputs.calibration-mobile == 'true' }}
+      device-farm-timeout: ${{ fromJSON(needs.resolve.outputs.device-farm-timeout) }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
@@ -613,10 +654,11 @@ jobs:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
-      filter: ${{ inputs.filter }}
+      filter: ${{ needs.resolve.outputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
+      calibration: ${{ needs.resolve.outputs.calibration-mobile == 'true' }}
+      device-farm-timeout: ${{ fromJSON(needs.resolve.outputs.device-farm-timeout) }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
@@ -646,15 +688,18 @@ jobs:
   # GITHUB_JOB), and the run holds the whole host, so dispatch during off-peak
   # windows. The harness's busy-host warnings remain as a backstop — do not
   # ship a fixture from a warned run.
+  # android/ios resolve to `off` here: those run through android-tests /
+  # ios-tests with `calibration: true` instead.
   calibration:
-    if: github.event_name == 'workflow_dispatch' && inputs.calibration != 'off'
+    needs: resolve
+    if: github.event_name == 'workflow_dispatch' && needs.resolve.outputs.calibration-desktop != 'off'
     strategy:
       fail-fast: false
       matrix:
         platform: >-
-          ${{ fromJSON(inputs.calibration == 'all'
+          ${{ fromJSON(needs.resolve.outputs.calibration-desktop == 'all'
             && '["qvac-macos26-arm64-gpu-calibration", "qvac-ubuntu2204-x64-gpu-calibration", "qvac-win25-x64-gpu-calibration"]'
-            || format('["{0}"]', inputs.calibration)) }}
+            || format('["{0}"]', needs.resolve.outputs.calibration-desktop)) }}
     runs-on: ${{ matrix.platform }}
     # Expected completion: ~30 min warm (validated darwin-arm64 runs measured
     # ~15 min for the 21 loads, plus install and build) — the first run on a
