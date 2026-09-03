@@ -1,4 +1,4 @@
-// Calibration harness for assessModelFit (QVAC-23889).
+// Calibration harness for assessModelFit.
 //
 // Loads representative catalog models, measures resident and peak memory around
 // real operations, and derives the coefficients in
@@ -34,7 +34,7 @@ import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js
 import type { GgufFacts } from '../dist/schemas/model-resource-profile.js'
 import type { PlatformCalibration } from '../dist/resources/model-fit/types.js'
 
-declare const Bare: { argv: string[]; exit(code?: number): void }
+declare const Bare: { argv: string[]; exit(code?: number): never }
 
 const SAMPLE_INTERVAL_MS = 25
 const SETTLE_MS = 250
@@ -109,6 +109,25 @@ function settle() {
   return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
 }
 
+// Registry downloads can stall without erroring; bound each load so a stall
+// fails in minutes instead of consuming the whole job timeout.
+const LOAD_TIMEOUT_MS = 30 * 60 * 1000
+
+function withLoadTimeout<T>(promise: Promise<T>, label: string) {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          `${label} did not finish within ${LOAD_TIMEOUT_MS / 60000} minutes; a registry download has likely stalled. Check the registry's reachability from this host.`
+        )
+      )
+    }, LOAD_TIMEOUT_MS)
+    if (timer && typeof timer.unref === 'function') timer.unref()
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 /**
  * Best-effort label for the backend in play, from the drivers the resource
  * collector reports. Recorded with the coefficients because the buffers they
@@ -174,10 +193,13 @@ async function measure(name: string, contextTokens: number): Promise<Measurement
   await settle()
   const rssBefore = rssBytes()
 
-  const modelId = await loadModel({
-    modelSrc: model,
-    modelConfig: { ctx_size: contextTokens }
-  })
+  const modelId = await withLoadTimeout(
+    loadModel({
+      modelSrc: model,
+      modelConfig: { ctx_size: contextTokens }
+    }),
+    `loading ${name}`
+  )
 
   await settle()
   const rssAfterLoad = rssBytes()
@@ -280,10 +302,16 @@ async function main() {
   // does not match what the engine did.
   const negative = measurements.filter((m) => m.persistentBytes - m.kvBytes < 0)
   if (negative.length > 0) {
+    // Weights far below artifact size with a GPU present means the model went
+    // to discrete GPU memory, which process RSS cannot observe; RSS-based
+    // calibration only works on unified-memory or CPU-resident hosts.
+    const offloaded = hasGpu && measurements.some((m) => m.persistentBytes < m.artifactBytes / 2)
     console.log(
-      `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
+      offloaded
+        ? `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted: the model is in discrete GPU memory, which process RSS cannot observe. This methodology only calibrates unified-memory or CPU-resident hosts. No fixture written.`
+        : `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted: the assumed cache type does not match what the engine allocated. No fixture written.`
     )
-    return
+    Bare.exit(1)
   }
 
   const fit = fitResidentMemory(measurements)
@@ -291,11 +319,39 @@ async function main() {
     console.log(
       '\nthe measurement design cannot separate the weight ratio, fixed overhead and per-token slope (degenerate fit). No fixture written.'
     )
-    return
+    Bare.exit(1)
   }
   console.log(
     `\nfit: weightRatio ${fit.weightRatio.toFixed(3)}, fixed ${mib(fit.fixedBytes)} MiB, perToken ${fit.perTokenBytes.toFixed(0)} B, worst excess ${mib(fit.worstExcessBytes)} MiB`
   )
+
+  // Busy-host tripwires. Co-scheduled work cannot inflate this process's RSS,
+  // but memory pressure can evict its mapped pages and DEFLATE the persistent
+  // deltas — the dangerous direction for an upper bound. Deflation shows up as
+  // a weight ratio well below 1 (quiet-host runs measured ~1.0) or as repeats
+  // of the same point disagreeing; neither aborts, because a platform could
+  // legitimately page weights lazily, but a fixture from a warned run should
+  // not ship without a quiet re-run.
+  if (fit.weightRatio < 0.9) {
+    console.log(
+      `\nwarning: weightRatio ${fit.weightRatio.toFixed(3)} — resident weights landed well below artifact size. Either this platform pages weights lazily, or the host was under memory pressure during the run. Re-run on an idle host before trusting this fixture.`
+    )
+  }
+  for (const name of FIT_MODELS) {
+    for (const contextTokens of CONTEXTS) {
+      const repeats = measurements.filter(
+        (m) => m.name === name && m.contextTokens === contextTokens
+      )
+      const values = repeats.map((m) => m.persistentBytes)
+      const spread = Math.max(...values) - Math.min(...values)
+      const mean = values.reduce((total, v) => total + v, 0) / values.length
+      if (mean > 0 && spread / mean > 0.15) {
+        console.log(
+          `\nwarning: ${name} @ ${contextTokens} repeats spread ${mib(spread)} MiB (${((spread / mean) * 100).toFixed(0)}% of mean) — the host does not look idle. Re-run on a quiet machine before trusting this fixture.`
+        )
+      }
+    }
+  }
 
   const calibration: PlatformCalibration = {
     weightUpperCoeff: Number(Math.max(1, fit.weightRatio).toFixed(3)),
@@ -355,22 +411,24 @@ async function main() {
     console.log('the held-out peak exceeded the upper bound; do not ship these coefficients')
   }
 
-  if (!write) {
+  if (write) {
+    const target = path.join(
+      os.cwd(),
+      'src',
+      'resources',
+      'model-fit',
+      'calibration',
+      `${platform}.ts`
+    )
+    fs.writeFileSync(target, fixtureSource(platform, calibration))
+    console.log(`\nwrote ${target}`)
+    console.log('remember to add the platform to calibration/index.ts and run prettier')
+  } else {
     console.log('\nre-run with --write to update the fixture')
-    return
   }
 
-  const target = path.join(
-    os.cwd(),
-    'src',
-    'resources',
-    'model-fit',
-    'calibration',
-    `${platform}.ts`
-  )
-  fs.writeFileSync(target, fixtureSource(platform, calibration))
-  console.log(`\nwrote ${target}`)
-  console.log('remember to add the platform to calibration/index.ts and run prettier')
+  // Non-zero so the CI job cannot rot green on a failed gate.
+  if (!holds) Bare.exit(1)
 }
 
 main().catch((error) => {
