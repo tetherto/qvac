@@ -117,10 +117,30 @@ npm install @qvac/tts-ggml
 
 
 Requires [Bare](https://github.com/holepunchto/bare) `>=1.19.0`.
-Prebuilds are published for Linux x64/arm64, macOS x64/arm64, Windows x64,
-Android arm64, iOS arm64 devices, and iOS x64/arm64 simulators. Unsupported
-targets must [build from source](#build-from-source); installation does not
-automatically compile a local addon.
+
+`@qvac/tts-ggml` is a meta package that ships the JavaScript wrapper only.
+The native prebuild for each host lives in a version-locked platform package
+selected at install time through `os`/`cpu` filtered `optionalDependencies`:
+
+| Host | Package |
+| --- | --- |
+| linux-x64 (glibc) | `@qvac/tts-ggml-linux-x64` |
+| linux-arm64 (glibc) | `@qvac/tts-ggml-linux-arm64` |
+| darwin-arm64 | `@qvac/tts-ggml-darwin-arm64` |
+| darwin-x64 | `@qvac/tts-ggml-darwin-x64` |
+| win32-x64 | `@qvac/tts-ggml-win32-x64` |
+| android-arm64 | `@qvac/tts-ggml-android-arm64` |
+| ios (device + simulators) | `@qvac/tts-ggml-ios` |
+
+Do not depend on platform packages directly. Supported installers are npm 7+,
+pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip the
+platform package and fail at require time with an error naming the missing
+package; a locally built `prebuilds/` directory in the package root always
+takes precedence. Use `require('@qvac/tts-ggml').resolveBackendsDir()` to
+locate the directory holding the host's prebuilt binaries and dynamically
+loaded ggml backends. Unsupported targets must
+[build from source](#build-from-source); installation does not automatically
+compile a local addon.
 
 ## Model files
 
@@ -825,7 +845,7 @@ a one-off encode when a new reference recording is supplied.
 | `streamLeftContextTokens` | number     | —          | CosyVoice3-only: intended native chunk-streaming left-context tokens. Reserved / not yet effective — the pinned engine accepts but does not read it |
 | `mecabDictDir`            | string     | —          | Chatterbox MTL Japanese (`ja`): compiled MeCab/IPAdic dictionary directory |
 | `cangjieTsvPath`          | string     | —          | Chatterbox MTL Chinese (`zh`): `Cangjie5_TC` TSV path |
-| `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
+| `backendsDir`             | string     | `resolveBackendsDir()` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Defaults to the package's own `prebuilds/` when present, otherwise the installed platform package.  Required on Android when backends ship elsewhere (e.g. inside the APK); ignored on platforms that statically link the backend |
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |

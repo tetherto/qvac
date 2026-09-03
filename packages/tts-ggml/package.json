@@ -6,6 +6,25 @@
   "engines": {
     "bare": ">=1.19.0"
   },
+  "imports": {
+    "#host-addon": {
+      "linux": {
+        "x64": ["@qvac/tts-ggml-linux-x64", "./addon-unavailable.js"],
+        "arm64": ["@qvac/tts-ggml-linux-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "darwin": {
+        "arm64": ["@qvac/tts-ggml-darwin-arm64", "./addon-unavailable.js"],
+        "x64": ["@qvac/tts-ggml-darwin-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "win32": {
+        "x64": ["@qvac/tts-ggml-win32-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "default": "./addon-unavailable.js"
+    }
+  },
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
@@ -32,10 +51,10 @@
     "example:parler-enhanced": "bare examples/parler-enhanced.js \"Hello from enhanced Parler.\"",
     "example:audio8": "bare examples/audio8-tts.js \"Audio eight speaks on-device.\"",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\" && lunte \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\"",
+    "lint:js": "prettier --check \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\" \"addon-unavailable.js\" && lunte \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\" \"addon-unavailable.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\"",
+    "format": "prettier --write \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\" \"addon-unavailable.js\"",
     "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js && npm run test:node",
     "test:node": "node --test scripts/__tests__/*.test.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
@@ -62,6 +81,7 @@
   "files": [
     "addonLogging.js",
     "addonLogging.d.ts",
+    "addon-unavailable.js",
     "binding.js",
     "index.js",
     "tts.d.ts",

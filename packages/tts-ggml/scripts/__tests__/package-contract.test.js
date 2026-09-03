@@ -68,7 +68,12 @@ function externalSpecifiers(source) {
   const specifiers = []
   for (const match of source.matchAll(externalSpecifierPattern)) {
     const specifier = match[2]
-    if (!specifier.startsWith('.') && !specifier.startsWith('/') && !nodeBuiltins.has(specifier)) {
+    if (
+      !specifier.startsWith('.') &&
+      !specifier.startsWith('/') &&
+      !specifier.startsWith('#') &&
+      !nodeBuiltins.has(specifier)
+    ) {
       specifiers.push(specifier)
     }
   }
