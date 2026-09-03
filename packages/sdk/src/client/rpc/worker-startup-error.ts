@@ -6,10 +6,9 @@ export interface WorkerExit {
 }
 
 /**
- * Always returns a cause, including for a worker that is still running and has
- * written nothing. That case carries no diagnostic text, but `workerExited:
- * false` is the answer to the question this error exists to settle — a slow
- * worker may be worth waiting longer for, a dead one never is.
+ * Always returns a cause. A worker that is still running and has written
+ * nothing carries no diagnostic text, but `workerExited: false` is what tells a
+ * caller that waiting longer could still help.
  */
 export function createRPCInitTimeoutCause(
   stderrTail: string,

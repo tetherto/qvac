@@ -128,8 +128,8 @@ const clientErrorDefinitions: ErrorCodesMap = {
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED]: {
     name: 'WORKER_STARTUP_FAILED',
-    // `details` carries the wording the pre-handshake paths used before this
-    // code existed, so text already matching those sentences keeps working.
+    // `details` is the full sentence; `stderrTail` is appended under a
+    // `Worker stderr:` header when non-empty.
     message: (details: string, stderrTail: string) =>
       stderrTail ? `${details}\n\nWorker stderr:\n${stderrTail}` : details
   },

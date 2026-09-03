@@ -346,9 +346,9 @@ const CONFIG_UNRESOLVED = Symbol('config-unresolved')
  * config file is normally read after it (init-hooks). Read it early and hand
  * the same object to init-hooks so the file is not parsed twice.
  *
- * A config that fails to load is swallowed here on purpose: init-hooks re-runs
- * the resolver post-handshake and still throws the same error from the same
- * place it always has, so an unreadable config does not become a spawn failure.
+ * A config that fails to load is swallowed here. init-hooks re-runs the
+ * resolver post-handshake, so the config error surfaces there rather than as a
+ * spawn failure.
  */
 async function preresolveConfig(): Promise<QvacConfig | undefined | typeof CONFIG_UNRESOLVED> {
   try {
@@ -371,9 +371,9 @@ async function ensureRPC(): Promise<RPC> {
     envValue: process.env[RPC_INIT_TIMEOUT_ENV_VAR],
     configValue:
       preresolved === CONFIG_UNRESOLVED ? undefined : (preresolved?.rpcInitTimeoutMs ?? undefined),
-    onInvalid: (source, value) =>
+    onInvalidEnvValue: (value) =>
       logger.warn(
-        `Ignoring invalid ${source}=${value}; expected a positive integer of milliseconds`
+        `Ignoring invalid ${RPC_INIT_TIMEOUT_ENV_VAR}=${value}; expected a positive integer of milliseconds`
       )
   })
 

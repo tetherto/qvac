@@ -20,20 +20,18 @@ const TERMINATION_GRACE_MS = 2_000
 // thing that is broken.
 const DEFAULT_RPC_INIT_TIMEOUT_MS = 30_000
 const RPC_INIT_TIMEOUT_ENV_VAR = 'QVAC_RPC_INIT_TIMEOUT_MS'
-// The probe does more than the handshake — import, worker spawn, teardown — so
-// it has always allowed this much beyond the handshake budget. Preserve that
-// margin rather than inventing a new one.
+// The probe also imports, spawns and tears down, so it allows this much beyond
+// the handshake budget.
 const PROBE_TIMEOUT_HEADROOM_MS = DEFAULT_TIMEOUT_MS - DEFAULT_RPC_INIT_TIMEOUT_MS
 
 /**
  * The forked probe inherits this process's environment, so the SDK inside it
- * honours `QVAC_RPC_INIT_TIMEOUT_MS`. Without matching it here the probe's own
- * cap would kill a worker the SDK was still legitimately waiting for, and
- * report the raised budget as a timeout.
+ * honours `QVAC_RPC_INIT_TIMEOUT_MS`; this cap has to allow for the same budget
+ * or it kills a worker the SDK is still legitimately waiting for.
  *
- * Only the environment variable is read. `qvac doctor` deliberately does not
- * load the project's config, so an `rpcInitTimeoutMs` set only in
- * `qvac.config.*` does not extend the probe.
+ * Only the environment variable is read. `qvac doctor` does not load the
+ * project's config, so an `rpcInitTimeoutMs` set only in `qvac.config.*` does
+ * not extend the probe.
  */
 export function resolveProbeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const raw = env[RPC_INIT_TIMEOUT_ENV_VAR]

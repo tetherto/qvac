@@ -1,9 +1,5 @@
 import test from 'brittle'
-import {
-  DEFAULT_RPC_INIT_TIMEOUT_MS,
-  RPC_INIT_TIMEOUT_ENV_VAR,
-  resolveRPCInitTimeoutMs
-} from '@/client/rpc/init-timeout'
+import { DEFAULT_RPC_INIT_TIMEOUT_MS, resolveRPCInitTimeoutMs } from '@/client/rpc/init-timeout'
 
 test('RPC init timeout falls back to the default when nothing overrides it', (t) => {
   t.is(resolveRPCInitTimeoutMs(), DEFAULT_RPC_INIT_TIMEOUT_MS)
@@ -24,31 +20,23 @@ test('RPC init timeout ignores an unset or blank environment variable', (t) => {
 })
 
 // A mistyped tuning value must not turn into a hard initialization failure.
+// Only the environment needs this: a bad `rpcInitTimeoutMs` is rejected earlier
+// by config validation and never reaches the resolver.
 test('RPC init timeout skips a malformed environment override and reports it', (t) => {
   const rejected: string[] = []
-  const onInvalid = (source: string, value: string) => rejected.push(`${source}=${value}`)
+  const onInvalidEnvValue = (value: string) => rejected.push(value)
 
   for (const envValue of ['abc', '0', '-5', '1.5', 'Infinity']) {
-    t.is(resolveRPCInitTimeoutMs({ envValue, configValue: 120_000, onInvalid }), 120_000)
+    t.is(
+      resolveRPCInitTimeoutMs({ envValue, configValue: 120_000, onInvalidEnvValue }),
+      120_000,
+      `${envValue} falls through to the config value`
+    )
   }
 
-  t.alike(rejected, [
-    `${RPC_INIT_TIMEOUT_ENV_VAR}=abc`,
-    `${RPC_INIT_TIMEOUT_ENV_VAR}=0`,
-    `${RPC_INIT_TIMEOUT_ENV_VAR}=-5`,
-    `${RPC_INIT_TIMEOUT_ENV_VAR}=1.5`,
-    `${RPC_INIT_TIMEOUT_ENV_VAR}=Infinity`
-  ])
+  t.alike(rejected, ['abc', '0', '-5', '1.5', 'Infinity'])
 })
 
-test('RPC init timeout skips a malformed config value and reports it', (t) => {
-  const rejected: string[] = []
-  const onInvalid = (source: string, value: string) => rejected.push(`${source}=${value}`)
-
-  t.is(
-    resolveRPCInitTimeoutMs({ configValue: 0, onInvalid }),
-    DEFAULT_RPC_INIT_TIMEOUT_MS,
-    'a zero timeout would abort every start immediately'
-  )
-  t.alike(rejected, ['rpcInitTimeoutMs=0'])
+test('RPC init timeout falls back to the default when only the environment is set and bad', (t) => {
+  t.is(resolveRPCInitTimeoutMs({ envValue: 'abc' }), DEFAULT_RPC_INIT_TIMEOUT_MS)
 })

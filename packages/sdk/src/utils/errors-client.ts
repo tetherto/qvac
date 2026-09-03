@@ -123,11 +123,10 @@ export class WorkerCrashedError extends QvacErrorBase {
 }
 
 /**
- * A worker that failed before the IPC handshake. Attached as the `cause` of
- * `RPCInitTimeoutError` so callers can branch on `workerExited` (dead versus
- * merely slow) and read `exitCode` / `exitSignal` as properties instead of
- * parsing them out of a message, which is what `WorkerCrashedError` already
- * offers on the post-handshake path.
+ * A worker that failed before the IPC handshake, attached as the `cause` of
+ * `RPCInitTimeoutError`. `workerExited` separates a dead worker from a merely
+ * slow one; `exitCode` / `exitSignal` mirror what `WorkerCrashedError` carries
+ * on the post-handshake path.
  */
 export class WorkerStartupError extends QvacErrorBase {
   /** False while the process is still running and simply has not connected. */

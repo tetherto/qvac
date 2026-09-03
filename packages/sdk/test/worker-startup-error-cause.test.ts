@@ -50,8 +50,6 @@ test('RPC init timeout includes both exit status and drained stderr when availab
   t.is(cause.exitSignal, null)
 })
 
-// The exit status used to be readable only by matching the message text, which
-// is the contract this error type replaces.
 test('startup cause carries the registered error identity', (t) => {
   const cause = createRPCInitTimeoutCause('', { code: null, signal: 'SIGSEGV' })
 
