@@ -21,6 +21,15 @@ const LEXER_PACKAGE = 'bare-module-lexer'
 // picks up whatever version happens to be hoisted nearby, and the desync this
 // check hunts for differs between lexer releases.
 const BUNDLER_SPEC = 'bare-pack@^1.4.7'
+// bare-module-lexer 1.6.6 prebuilds reference node_api_is_sharedarraybuffer,
+// which Node 18 (the sanity-checks runtime) does not export, so requiring the
+// lexer kills the node process at dynamic-link time — not a catchable error.
+// Pin the last release that loads under Node 18. The pin satisfies bare-pack's
+// ^1.6.0 range, so npm hoists one copy and the scan still uses the lexer
+// bare-pack resolves; assertPinnedLexer turns any future range drift into a
+// visible infrastructure failure instead of a silently ignored pin. Drop the
+// pin once the runner moves off Node 18 or a lexer release loads there again.
+const LEXER_SPEC = 'bare-module-lexer@1.6.5'
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
 // Directory names that never enter a mobile bundle. Generators under `scripts/`
 // and fixtures under `test/` embed require-looking strings in output text
@@ -70,23 +79,34 @@ function installBundler() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bundler-requires-'))
   const result = spawnSync(
     'npm',
-    ['install', '--no-save', '--no-audit', '--no-fund', '--prefix', root, BUNDLER_SPEC],
+    ['install', '--no-save', '--no-audit', '--no-fund', '--prefix', root, BUNDLER_SPEC, LEXER_SPEC],
     { encoding: 'utf8' }
   )
   if (result.status !== 0) {
-    throw new Error(`failed to install ${BUNDLER_SPEC}: ${result.stderr || result.stdout}`)
+    throw new Error(`failed to install ${BUNDLER_SPEC} ${LEXER_SPEC}: ${result.stderr || result.stdout}`)
   }
   return path.join(root, 'node_modules', 'bare-pack', 'package.json')
+}
+
+function assertPinnedLexer(version) {
+  const pinned = LEXER_SPEC.slice(LEXER_SPEC.lastIndexOf('@') + 1)
+  if (version !== pinned) {
+    throw new Error(
+      `${BUNDLER_SPEC} resolved ${LEXER_PACKAGE}@${version} instead of the pinned ${LEXER_SPEC}; ` +
+        'the pin no longer satisfies bare-pack and must be revisited'
+    )
+  }
 }
 
 function loadLexer() {
   const bundlerManifest = installBundler()
   const lexerPath = createRequire(bundlerManifest).resolve(LEXER_PACKAGE)
-  const lexer = createRequire(import.meta.url)(lexerPath)
   const version = JSON.parse(
     fs.readFileSync(path.join(path.dirname(lexerPath), 'package.json'), 'utf8')
   ).version
-  process.stdout.write(`Using ${LEXER_PACKAGE}@${version} as resolved by ${BUNDLER_SPEC}.\n`)
+  assertPinnedLexer(version)
+  const lexer = createRequire(import.meta.url)(lexerPath)
+  process.stdout.write(`Using ${LEXER_PACKAGE}@${version} (pinned; resolved via ${BUNDLER_SPEC}).\n`)
   return lexer
 }
 
