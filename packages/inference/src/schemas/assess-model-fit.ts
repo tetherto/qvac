@@ -114,7 +114,7 @@ const byteRangeSchema = z.object({
  *   on its per-process footprint against a limit well below device RAM, so a
  *   system-wide budget there would defend verdicts the OS does not honor.
  */
-export const modelFitBasisSchema = z.enum(['system-memory', 'process-memory'])
+export const modelFitBasisSchema = z.enum(['system-memory', 'process-memory', 'device-memory'])
 
 export const modelFitBudgetSchema = z.object({
   totalBytes: z
@@ -145,7 +145,7 @@ export const modelFitModelResultSchema = z.object({
 export const assessModelFitResultSchema = z.object({
   verdict: modelFitVerdictSchema.describe('Combined verdict across every candidate.'),
   basis: modelFitBasisSchema.describe(
-    'The evidence the budget was derived from — system RAM, or the per-process ceiling on iOS. GPU/VRAM metrics are deliberately excluded either way; they are `unverified`-scoped by design.'
+    'The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, or a discrete GPU’s own memory when the model executes there and that GPU’s readings are device-scoped.'
   ),
   execution: modelFitExecutionSchema.describe('The declared execution mode this result assumed.'),
   budget: modelFitBudgetSchema.optional().describe('Absent when memory evidence was unusable.'),

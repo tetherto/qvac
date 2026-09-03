@@ -33,3 +33,22 @@ export function getPlatformCalibration(
   if (!calibration || !calibration.validated) return undefined
   return calibration
 }
+
+/**
+ * Looks up GPU-resident coefficients for a platform on a specific backend.
+ *
+ * Keyed by backend as well as platform because a `linux-x64` host may run
+ * Vulkan, CUDA or ROCm, and their buffers differ — unlike the CPU fixtures,
+ * where one platform entry is accepted as covering every backend.
+ *
+ * @returns `undefined` when that pair has not been measured, which assesses as
+ *   `unknown` rather than borrowing another backend's coefficients.
+ */
+export function getGpuCalibration(
+  platform: ModelFitPlatform,
+  backend: string
+): PlatformCalibration | undefined {
+  const calibration = CALIBRATION.gpuPlatforms?.[`${platform}:${backend}`]
+  if (!calibration || !calibration.validated) return undefined
+  return calibration
+}

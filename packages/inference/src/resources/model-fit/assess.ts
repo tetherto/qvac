@@ -6,9 +6,10 @@ import type {
   ModelFitModelResult,
   ModelFitVerdict
 } from '@/schemas/assess-model-fit'
-import type { SystemResources } from '@/schemas/system-resources'
+import type { GPUResourceCapabilities, SystemResources } from '@/schemas/system-resources'
 import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
 import { getModelResourceProfile } from '@/models/registry/resource-profiles'
+import { getGpuCalibration } from '@/resources/model-fit/calibration/index'
 import { estimateLlm } from '@/resources/model-fit/estimators/llm'
 import { estimateWhisper } from '@/resources/model-fit/estimators/whisper'
 import type {
@@ -58,6 +59,14 @@ export interface AssessModelFitOptions {
   platform: ModelFitPlatform | undefined
   /** `undefined` when the platform has no validated coefficients. */
   calibration: PlatformCalibration | undefined
+  /**
+   * Resolves GPU-resident coefficients once the target backend is known.
+   * Defaults to the built-in fixtures; injected in tests.
+   */
+  resolveGpuCalibration?: (
+    platform: ModelFitPlatform,
+    backend: string
+  ) => PlatformCalibration | undefined
   /** Defaults to the generated catalog table; injected in tests. */
   resolveProfile?: ProfileResolver
 }
@@ -73,13 +82,32 @@ export interface AssessModelFitOptions {
 export function assessModelFitFromResources(options: AssessModelFitOptions): AssessModelFitResult {
   const { models, execution, resources, platform, calibration } = options
   const resolveProfile = options.resolveProfile ?? getModelResourceProfile
+  const resolveGpuCalibration = options.resolveGpuCalibration ?? getGpuCalibration
 
-  const basis = resolveBasis(platform)
+  // On a discrete-GPU host the model executes in the GPU's own memory, so
+  // system RAM cannot bound it. Assess against the device instead, but only
+  // when that GPU's readings are device-scoped and its backend is calibrated.
+  const gpuTarget =
+    platform && DISCRETE_GPU_PLATFORMS.includes(platform) && hasGpu(resources)
+      ? resolveGpuTarget(resources)
+      : undefined
+  const gpuCalibration =
+    gpuTarget && platform ? resolveGpuCalibration(platform, gpuTarget.backend) : undefined
+  const gpuMode = gpuTarget !== undefined && gpuCalibration !== undefined
+  const effectiveCalibration = gpuMode ? gpuCalibration : calibration
+
+  const basis: ModelFitBasis = gpuMode ? 'device-memory' : resolveBasis(platform)
   const reasons: string[] = []
   const assumptions: string[] = [
     `execution mode '${execution}' is a declared assumption used for aggregation only; the SDK does not schedule, serialize, or reserve anything`,
-    `the verdict is advisory and based on ${basis === 'process-memory' ? 'this process’s own memory ceiling' : 'system memory'} alone; it does not block loadModel and makes no performance claim`
+    `the verdict is advisory and based on ${basisEvidence(basis)} alone; it does not block loadModel and makes no performance claim`
   ]
+
+  if (gpuMode && gpuTarget) {
+    assumptions.push(
+      `the model is assumed to execute on ${gpuTarget.device ?? 'the discrete GPU'} via ${gpuTarget.backend}, and the budget is that device's own memory`
+    )
+  }
 
   if (platform === 'android-arm64') {
     assumptions.push(
@@ -87,18 +115,33 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     )
   }
 
-  const budget = resolveBudget(resources, platform, basis, reasons)
+  const budget =
+    gpuMode && gpuTarget
+      ? gpuBudget(gpuTarget, platform)
+      : resolveBudget(resources, platform, basis, reasons)
+
+  // Windows pays for a GPU load in system RAM as well: loading a 2382 MiB model
+  // onto the card raised RSS by 2918 MiB there, against 868 MiB on linux. A
+  // VRAM-only bound would pass a host with the card for it but not the RAM.
+  const alsoBoundBySystemMemory =
+    gpuMode && platform === 'win32-x64'
+      ? resolveBudget(resources, platform, 'system-memory', [])
+      : undefined
 
   if (!platform) {
     reasons.push('the runtime platform is not one this assessment covers')
-  } else if (!calibration) {
-    reasons.push(`no validated calibration for ${platform}, so no estimate can be defended`)
-  } else if (calibration.measuredAt) {
-    assumptions.push(calibrationAssumption(platform, calibration))
+  } else if (!effectiveCalibration) {
+    reasons.push(
+      gpuTarget
+        ? `no validated calibration for ${platform} on ${gpuTarget.backend}, so no estimate can be defended`
+        : `no validated calibration for ${platform}, so no estimate can be defended`
+    )
+  } else if (effectiveCalibration.measuredAt) {
+    assumptions.push(calibrationAssumption(platform, effectiveCalibration))
   }
 
   const evaluated = models.map((candidate) =>
-    evaluate(candidate, platform, calibration, resources, resolveProfile)
+    evaluate(candidate, platform, effectiveCalibration, resources, resolveProfile, gpuMode)
   )
 
   for (const { result } of evaluated) {
@@ -124,8 +167,18 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     reasons.push('at least one model could not be estimated, so the combined verdict is unknown')
   }
 
-  const verdict: ModelFitVerdict =
+  let verdict: ModelFitVerdict =
     !budget || !combined ? 'unknown' : compare(combined, budget.availableAfterReserveBytes)
+
+  if (combined && alsoBoundBySystemMemory) {
+    const systemVerdict = compare(combined, alsoBoundBySystemMemory.availableAfterReserveBytes)
+    if (systemVerdict !== verdict) {
+      reasons.push(
+        'on Windows a GPU load is also paid for in system RAM, so the verdict is the more pessimistic of the device and system budgets'
+      )
+    }
+    verdict = worst(verdict, systemVerdict)
+  }
 
   if (budget && combined) {
     reasons.push(
@@ -154,7 +207,8 @@ function evaluate(
   platform: ModelFitPlatform | undefined,
   calibration: PlatformCalibration | undefined,
   resources: SystemResources,
-  resolveProfile: ProfileResolver
+  resolveProfile: ProfileResolver,
+  gpuMode: boolean
 ): { candidate: ModelFitCandidate; result: EstimatorResult } {
   if (!calibration) {
     return {
@@ -171,10 +225,10 @@ function evaluate(
     }
   }
 
-  // On these platforms the engine executes the model in the GPU's own memory,
-  // which system-memory evidence cannot bound in either direction — and the
-  // platform's coefficients describe CPU-resident execution.
-  if (platform && DISCRETE_GPU_PLATFORMS.includes(platform) && hasGpu(resources)) {
+  // The engine executes in the GPU's own memory here, which system-memory
+  // evidence cannot bound and the platform's CPU coefficients do not describe.
+  // In GPU mode both have been replaced by their device-scoped equivalents.
+  if (!gpuMode && platform && DISCRETE_GPU_PLATFORMS.includes(platform) && hasGpu(resources)) {
     return {
       candidate,
       result: {
@@ -279,13 +333,92 @@ function calibrationAssumption(
 }
 
 /**
- * Whether the device reports at least one GPU. Used only to decide which
- * KV-cache type the engine would default to — GPU memory is never part of the
- * budget, since those metrics are `unverified`-scoped by design.
+ * Whether the device reports at least one GPU. Decides which KV-cache type the
+ * engine would default to, and whether a GPU budget is worth resolving.
  */
 function hasGpu(resources: SystemResources): boolean {
   const gpus = resources.capabilities.gpus
   return gpus.status === 'supported' && gpus.value.length > 0
+}
+
+/** The GPU the engine would execute on, when its memory is device-scoped. */
+interface GpuTarget {
+  backend: string
+  totalBytes: number
+  usedBytes: number
+  device?: string
+}
+
+// Driver order is what llama.cpp prefers, so the backend matches its choice.
+const GPU_BACKENDS = ['metal', 'cuda', 'rocm', 'vulkan', 'levelZero', 'opencl'] as const
+
+function backendOf(gpu: GPUResourceCapabilities): string | undefined {
+  for (const name of GPU_BACKENDS) {
+    const driver = gpu.drivers[name]
+    if (driver.status === 'supported' && driver.value) return name
+  }
+  return undefined
+}
+
+function declaredMemory(gpu: GPUResourceCapabilities): number {
+  return gpu.memoryTotalBytes.status === 'supported' ? gpu.memoryTotalBytes.value : 0
+}
+
+/**
+ * Picks the discrete GPU whose memory can carry a budget.
+ *
+ * A unified-memory GPU is excluded: its allocation is system RAM, which the
+ * system basis already bounds. The sample metrics are only `supported` when
+ * the collector established they describe that device's own pool, so an
+ * integrated GPU reporting the shared pool never reaches here. Largest
+ * dedicated device first — a host can list an iGPU ahead of the card in use.
+ */
+function resolveGpuTarget(resources: SystemResources): GpuTarget | undefined {
+  const gpus = resources.capabilities.gpus
+  const samples = resources.sample?.gpus
+  if (gpus.status !== 'supported' || samples?.status !== 'supported') return undefined
+
+  const dedicated = gpus.value
+    .filter((gpu) => gpu.unifiedMemory.status === 'supported' && !gpu.unifiedMemory.value)
+    .sort((a, b) => declaredMemory(b) - declaredMemory(a))
+
+  for (const gpu of dedicated) {
+    const sample = samples.value.find((entry) => entry.id === gpu.id)
+    if (!sample) continue
+    if (sample.memoryTotalBytes.status !== 'supported') continue
+    if (sample.memoryUsedBytes.status !== 'supported') continue
+
+    const backend = backendOf(gpu)
+    if (!backend) continue
+    if (sample.memoryTotalBytes.value <= 0) continue
+    if (sample.memoryUsedBytes.value > sample.memoryTotalBytes.value) continue
+
+    return {
+      backend,
+      totalBytes: sample.memoryTotalBytes.value,
+      usedBytes: sample.memoryUsedBytes.value,
+      ...(gpu.name.status === 'supported' && { device: gpu.name.value })
+    }
+  }
+
+  return undefined
+}
+
+function gpuBudget(target: GpuTarget, platform: ModelFitPlatform | undefined) {
+  const reserved = reserveBytes(target.totalBytes, platform)
+  return {
+    totalBytes: target.totalBytes,
+    usedBytes: target.usedBytes,
+    reservedBytes: reserved,
+    availableAfterReserveBytes: Math.max(0, target.totalBytes - target.usedBytes - reserved)
+  }
+}
+
+/** The more pessimistic of two verdicts. */
+function worst(a: ModelFitVerdict, b: ModelFitVerdict): ModelFitVerdict {
+  if (a === 'likely-too-large' || b === 'likely-too-large') return 'likely-too-large'
+  if (a === 'unknown' || b === 'unknown') return 'unknown'
+  return 'likely-fits'
 }
 
 /**
@@ -300,6 +433,12 @@ function hasGpu(resources: SystemResources): boolean {
  */
 function resolveBasis(platform: ModelFitPlatform | undefined): ModelFitBasis {
   return platform === 'ios-arm64' ? 'process-memory' : 'system-memory'
+}
+
+function basisEvidence(basis: ModelFitBasis) {
+  if (basis === 'process-memory') return 'this process’s own memory ceiling'
+  if (basis === 'device-memory') return 'the GPU’s own memory'
+  return 'system memory'
 }
 
 /**

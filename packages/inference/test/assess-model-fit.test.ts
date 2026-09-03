@@ -1003,3 +1003,160 @@ test('assess: a discrete GPU on linux or windows assesses as unknown', (t) => {
   })
   t.ok(appleSilicon.models[0]!.estimate, 'unified-memory platforms keep verdicts with a GPU')
 })
+
+// A discrete card whose sampled memory the collector graded device-scoped.
+function discreteGpuResources(options: {
+  vramTotalBytes: number
+  vramUsedBytes: number
+  systemTotalBytes?: number
+  systemUsedBytes?: number
+}) {
+  const provenance = { source: 'test', scope: 'device' as const }
+  const system = { source: 'test', scope: 'system' as const }
+  const total = options.systemTotalBytes ?? 64 * GIB
+  const used = options.systemUsedBytes ?? 16 * GIB
+  const supported = (value: number, p: typeof provenance | typeof system) =>
+    ({ status: 'supported', value, provenance: p }) as const
+
+  const value: SystemResources = {
+    capabilities: {
+      cpu: { status: 'unavailable' },
+      memory: { totalBytes: supported(total, system) },
+      gpus: {
+        status: 'supported',
+        provenance: system,
+        value: [
+          {
+            id: 'gpu0',
+            name: { status: 'supported', value: 'Test Discrete GPU', provenance },
+            vendor: { status: 'unavailable' },
+            type: { status: 'unavailable' },
+            driverName: { status: 'unavailable' },
+            driverVersion: { status: 'unavailable' },
+            drivers: {
+              vulkan: { status: 'supported', value: true, provenance },
+              opencl: { status: 'unavailable' },
+              opengl: { status: 'unavailable' },
+              webgpu: { status: 'unavailable' },
+              metal: { status: 'unavailable' },
+              direct3d11: { status: 'unavailable' },
+              direct3d12: { status: 'unavailable' },
+              cuda: { status: 'unavailable' },
+              levelZero: { status: 'unavailable' },
+              rocm: { status: 'unavailable' }
+            },
+            unifiedMemory: { status: 'supported', value: false, provenance },
+            memoryTotalBytes: supported(options.vramTotalBytes, provenance)
+          }
+        ]
+      }
+    },
+    sample: {
+      sampledAt: 0,
+      cpu: { status: 'unavailable' },
+      memory: {
+        usedBytes: supported(used, system),
+        totalBytes: supported(total, system),
+        processUsedBytes: { status: 'unavailable' },
+        processAvailableBytes: { status: 'unavailable' }
+      },
+      gpus: {
+        status: 'supported',
+        provenance: system,
+        value: [
+          {
+            id: 'gpu0',
+            compute: { status: 'unavailable' },
+            encode: { status: 'unavailable' },
+            decode: { status: 'unavailable' },
+            memoryUsedBytes: supported(options.vramUsedBytes, provenance),
+            memoryTotalBytes: supported(options.vramTotalBytes, provenance),
+            powerWatts: { status: 'unavailable' },
+            temperatureCelsius: { status: 'unavailable' }
+          }
+        ]
+      }
+    }
+  }
+  return value
+}
+
+test('assess: a calibrated discrete GPU is budgeted against its own memory', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'device-memory')
+  t.is(result.budget?.totalBytes, 20 * GIB)
+  t.is(result.budget?.usedBytes, 1 * GIB)
+  t.ok(result.models[0]!.estimate, 'a calibrated backend produces an estimate, not unknown')
+  t.ok(result.assumptions.some((a) => a.includes('vulkan')))
+})
+
+test('assess: an uncalibrated backend stays unknown on a discrete GPU', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => undefined,
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'unknown')
+  t.is(result.basis, 'system-memory')
+  t.ok(result.models[0]!.reasons.some((r) => r.includes('GPU memory')))
+})
+
+test('assess: a GPU with too little VRAM is too large even on a roomy host', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 4 * GIB, vramUsedBytes: 1 * GIB }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'likely-too-large')
+})
+
+// Loading to VRAM on Windows also costs system RAM, so a host with the card
+// but not the RAM must not read as a fit.
+test('assess: windows takes the more pessimistic of the device and system budgets', (t) => {
+  const roomy = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(roomy.verdict, 'likely-fits')
+
+  const starvedHost = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      systemTotalBytes: 8 * GIB,
+      systemUsedBytes: 7 * GIB
+    }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(starvedHost.verdict, 'likely-too-large')
+  t.ok(starvedHost.reasons.some((r) => r.includes('system RAM')))
+})
