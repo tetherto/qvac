@@ -1,15 +1,15 @@
 import { fork, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { resolveSdkEntrypoint } from './checks/project.js'
+import { resolveSdkEntrypoint } from '@/doctor/checks/project'
 import {
   isDeepProbeMessage,
   isDeepProbeProtocolCandidate,
   type DeepProbeMessage,
   type DeepProbePhase,
   type SerializedProbeError
-} from './deep-protocol.js'
-import type { CheckResult, CheckSection } from './types.js'
+} from '@/doctor/deep-protocol'
+import type { CheckResult, CheckSection } from '@/doctor/types'
 
 const DEFAULT_TIMEOUT_MS = 45_000
 const MAX_OUTPUT_CHARS = 16_384

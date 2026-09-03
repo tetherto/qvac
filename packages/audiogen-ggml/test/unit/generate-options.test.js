@@ -105,6 +105,72 @@ test('AudioGen.run rejects MiniMax-only controls for ACE-Step', async (t) => {
   await t.exception(() => gen.run('test', { maxFrames: 10 }), /ACE-Step does not accept maxFrames/)
 })
 
+test('AudioGen.run forwards simpleMode with LM-written lyrics', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('a romantic modern salsa for a wedding', { simpleMode: true })
+  await response.await()
+
+  const job = received()
+  t.is(job.simpleMode, true)
+  t.is(job.lyrics, '')
+})
+
+test('AudioGen.run forwards simpleMode with the instrumental hint', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('a lo-fi instrumental groove', {
+    simpleMode: true,
+    lyrics: '[Instrumental]'
+  })
+  await response.await()
+
+  const job = received()
+  t.is(job.simpleMode, true)
+  t.is(job.lyrics, '[Instrumental]')
+})
+
+test('AudioGen.run keeps the instrumental default without simpleMode', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('a plain caption')
+  await response.await()
+
+  const job = received()
+  t.is(job.simpleMode, undefined)
+  t.is(job.lyrics, '[Instrumental]')
+})
+
+test('AudioGen.run forwards normalizeLoudness', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('raw output please', { normalizeLoudness: false })
+  await response.await()
+
+  t.is(received().normalizeLoudness, false)
+})
+
+test('AudioGen.run rejects invalid simpleMode combinations', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  await rejectRunOptions(t, { simpleMode: 'yes' }, /simpleMode must be a boolean/)
+  await rejectRunOptions(
+    t,
+    { simpleMode: true, taskType: 'cover-nofsq', sourceAudio },
+    /simpleMode supports only taskType 'text2music'/
+  )
+  await rejectRunOptions(
+    t,
+    { simpleMode: true, audioCodes: new Int32Array([1, 2]) },
+    /simpleMode cannot take pre-supplied audioCodes/
+  )
+  await rejectRunOptions(
+    t,
+    { simpleMode: true, lyrics: '[verse]\nwords' },
+    /simpleMode lyrics must be omitted/
+  )
+  await rejectRunOptions(t, { simpleMode: true, lmPhase1: false }, /simpleMode requires lmPhase1/)
+})
+
 test('AudioGen.run forwards reference/source audio, taskType and cover strengths', async (t) => {
   const { gen, received } = createHarness()
   const referenceAudio = new Float32Array([0.1, -0.1, 0.2, -0.2])
@@ -125,6 +191,22 @@ test('AudioGen.run forwards reference/source audio, taskType and cover strengths
   t.is(job.sourceAudio, sourceAudio)
   t.is(job.audioCoverStrength, 1)
   t.is(job.coverNoiseStrength, 0.25)
+})
+
+test('AudioGen.run forwards partial audioCoverStrength for cover-nofsq', async (t) => {
+  const { gen, received } = createHarness()
+  const sourceAudio = new Float32Array([0.3, -0.3, 0.4, -0.4])
+
+  const response = await gen.run('cover that diverges halfway', {
+    taskType: 'cover-nofsq',
+    sourceAudio,
+    audioCoverStrength: 0.5
+  })
+  await response.await()
+
+  const job = received()
+  t.is(job.taskType, 'cover-nofsq')
+  t.is(job.audioCoverStrength, 0.5)
 })
 
 test('AudioGen.run forwards text2music with optional referenceAudio only', async (t) => {
@@ -169,6 +251,71 @@ test('AudioGen.run rejects empty sourceAudio for cover', async (t) => {
     t,
     { taskType: 'cover', sourceAudio: new Float32Array(0) },
     /taskType 'cover' requires sourceAudio/
+  )
+})
+
+test('AudioGen.run forwards lego track and guidance scale', async (t) => {
+  const { gen, received } = createHarness()
+  const sourceAudio = new Float32Array([0.3, -0.3, 0.4, -0.4])
+
+  const response = await gen.run('guitar layer', {
+    taskType: 'lego',
+    track: 'guitar',
+    guidanceScale: 7,
+    sourceAudio
+  })
+  await response.await()
+
+  const job = received()
+  t.is(job.taskType, 'lego')
+  t.is(job.track, 'guitar')
+  t.is(job.guidanceScale, 7)
+  t.is(job.sourceAudio, sourceAudio)
+})
+
+test('AudioGen.run requires sourceAudio for lego', async (t) => {
+  await rejectRunOptions(
+    t,
+    { taskType: 'lego', track: 'guitar' },
+    /taskType 'lego' requires sourceAudio/
+  )
+})
+
+test('AudioGen.run requires a known lego track', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  await rejectRunOptions(t, { taskType: 'lego', sourceAudio }, /taskType 'lego' requires track/)
+  await rejectRunOptions(
+    t,
+    { taskType: 'lego', track: 'accordion', sourceAudio },
+    /taskType 'lego' requires track/
+  )
+})
+
+test('AudioGen.run rejects non-finite guidanceScale', async (t) => {
+  await rejectRunOptions(t, { guidanceScale: Number.NaN }, /guidanceScale/)
+  await rejectRunOptions(t, { guidanceScale: Number.POSITIVE_INFINITY }, /guidanceScale/)
+})
+
+test('AudioGen.run rejects a negative guidanceScale', async (t) => {
+  await rejectRunOptions(t, { guidanceScale: -2 }, /guidanceScale must be >= 0/)
+})
+
+test('AudioGen.run forwards an explicit zero guidanceScale', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('auto guidance', { guidanceScale: 0 })
+  await response.await()
+
+  t.is(received().guidanceScale, 0)
+})
+
+test('AudioGen.run rejects track outside the lego task', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  await rejectRunOptions(t, { track: 'guitar' }, /track is only valid with taskType 'lego'/)
+  await rejectRunOptions(
+    t,
+    { taskType: 'cover-nofsq', track: 'guitar', sourceAudio },
+    /track is only valid with taskType 'lego'/
   )
 })
 
