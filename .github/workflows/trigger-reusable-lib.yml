@@ -120,7 +120,7 @@ jobs:
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
       - id: logic
-        uses: tetherto/qvac-actions/npm-publish-logic@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
+        uses: tetherto/qvac-actions/npm-publish-logic@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
 
   release-merge-guard:
     name: Release Merge Guard
