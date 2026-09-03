@@ -23,6 +23,10 @@ const zlib = require('bare-zlib')
 // on CPU/CUDA/Vulkan); frames from a conditioning collapse measure 8-12.
 // Returns -1 for anything that is not an 8-bit truecolour PNG.
 function pngLuminanceStddev(png) {
+  // Frames arrive as Uint8Array from the addon's live stream but as Buffer
+  // from a disk read; normalize to Buffer (zero-copy view) so the readUInt32BE
+  // / toString helpers below work on both.
+  if (!Buffer.isBuffer(png)) png = Buffer.from(png.buffer, png.byteOffset, png.byteLength)
   let pos = 8
   let width = 0
   let height = 0
