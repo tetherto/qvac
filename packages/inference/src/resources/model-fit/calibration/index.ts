@@ -24,7 +24,8 @@ export const CALIBRATION: CalibrationFixture = {
   },
   gpuPlatforms: {
     'linux-x64:vulkan': LINUX_X64_VULKAN_CALIBRATION
-  }
+  },
+  sharedGpuPlatforms: {}
 }
 
 /**
@@ -57,6 +58,27 @@ export function getGpuCalibration(
   backend: string
 ): PlatformCalibration | undefined {
   const calibration = CALIBRATION.gpuPlatforms?.[`${platform}:${backend}`]
+  if (!calibration || !calibration.validated) return undefined
+  return calibration
+}
+
+/**
+ * Looks up integrated-GPU coefficients for a platform on a specific backend.
+ *
+ * Distinct from `getGpuCalibration` because an integrated GPU allocates out of
+ * system RAM: the buffers are the backend's, but the budget they are spent
+ * against is the system one, and no other fixture describes that combination.
+ *
+ * @returns `undefined` when that pair has not been measured. The host then
+ *   assesses as `unknown` rather than borrowing the platform's CPU-forced
+ *   coefficients, which were measured with the GPU offload disabled and do not
+ *   cover the backend's own allocations.
+ */
+export function getSharedGpuCalibration(
+  platform: ModelFitPlatform,
+  backend: string
+): PlatformCalibration | undefined {
+  const calibration = CALIBRATION.sharedGpuPlatforms?.[`${platform}:${backend}`]
   if (!calibration || !calibration.validated) return undefined
   return calibration
 }

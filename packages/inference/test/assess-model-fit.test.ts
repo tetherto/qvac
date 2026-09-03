@@ -967,10 +967,11 @@ test('kvObservation: one cold-start repeat does not read as a shortfall, and a s
 // Discrete-GPU platforms
 // ---------------------------------------------------------------------------
 
-test('assess: a discrete GPU on linux or windows assesses as unknown', (t) => {
-  // These platforms' fixtures describe CPU-resident execution; with a GPU
-  // present the model executes in VRAM, which system-memory evidence cannot
-  // bound in either direction.
+test('assess: a GPU on linux or windows needs coefficients measured on it', (t) => {
+  // These platforms' fixtures describe CPU-resident execution, measured with
+  // the GPU offload disabled. With a GPU present the engine would not run that
+  // way, so those coefficients do not describe the load — whether the card
+  // holds the model in its own memory or, as here, shares system RAM.
   const withGpu = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
@@ -981,7 +982,7 @@ test('assess: a discrete GPU on linux or windows assesses as unknown', (t) => {
   })
   t.is(withGpu.verdict, 'unknown')
   t.is(withGpu.models[0]!.verdict, 'unknown')
-  t.ok(withGpu.models[0]!.reasons.some((r) => r.includes('GPU memory')))
+  t.ok(withGpu.models[0]!.reasons.some((r) => r.includes('a GPU is present')))
 
   const cpuOnly = assessModelFitFromResources({
     models: [candidate()],
@@ -1004,6 +1005,18 @@ test('assess: a discrete GPU on linux or windows assesses as unknown', (t) => {
   t.ok(appleSilicon.models[0]!.estimate, 'unified-memory platforms keep verdicts with a GPU')
 })
 
+/** A second (or third) card on the same host, as `extraGpus` describes it. */
+interface ExtraGpu {
+  vramTotalBytes: number
+  vramUsedBytes: number
+  /** `vulkan` unless stated; a different backend makes the pair unassessable. */
+  backend?: 'vulkan' | 'rocm'
+  /** Declared memory, when it differs from the sampled total (Windows iGPU). */
+  declaredBytes?: number
+  unifiedMemory?: boolean
+  name?: string
+}
+
 // A discrete card whose sampled memory the collector graded device-scoped.
 function discreteGpuResources(options: {
   vramTotalBytes: number
@@ -1011,6 +1024,7 @@ function discreteGpuResources(options: {
   systemTotalBytes?: number
   systemUsedBytes?: number
   gpuScope?: 'device' | 'budget'
+  extraGpus?: readonly ExtraGpu[]
 }) {
   const provenance = { source: 'test', scope: options.gpuScope ?? ('device' as const) }
   const system = { source: 'test', scope: 'system' as const }
@@ -1048,7 +1062,43 @@ function discreteGpuResources(options: {
             },
             unifiedMemory: { status: 'supported', value: false, provenance },
             memoryTotalBytes: supported(options.vramTotalBytes, provenance)
-          }
+          },
+          ...(options.extraGpus ?? []).map((extra, index) => ({
+            id: `gpu${index + 1}`,
+            name: {
+              status: 'supported' as const,
+              value: extra.name ?? 'Second GPU',
+              provenance
+            },
+            vendor: { status: 'unavailable' as const },
+            type: { status: 'unavailable' as const },
+            driverName: { status: 'unavailable' as const },
+            driverVersion: { status: 'unavailable' as const },
+            drivers: {
+              vulkan:
+                (extra.backend ?? 'vulkan') === 'vulkan'
+                  ? ({ status: 'supported' as const, value: true, provenance } as const)
+                  : ({ status: 'unavailable' as const } as const),
+              opencl: { status: 'unavailable' as const },
+              opengl: { status: 'unavailable' as const },
+              webgpu: { status: 'unavailable' as const },
+              metal: { status: 'unavailable' as const },
+              direct3d11: { status: 'unavailable' as const },
+              direct3d12: { status: 'unavailable' as const },
+              cuda: { status: 'unavailable' as const },
+              levelZero: { status: 'unavailable' as const },
+              rocm:
+                extra.backend === 'rocm'
+                  ? ({ status: 'supported' as const, value: true, provenance } as const)
+                  : ({ status: 'unavailable' as const } as const)
+            },
+            unifiedMemory: {
+              status: 'supported' as const,
+              value: extra.unifiedMemory ?? false,
+              provenance
+            },
+            memoryTotalBytes: supported(extra.declaredBytes ?? extra.vramTotalBytes, provenance)
+          }))
         ]
       }
     },
@@ -1074,7 +1124,17 @@ function discreteGpuResources(options: {
             memoryTotalBytes: supported(options.vramTotalBytes, provenance),
             powerWatts: { status: 'unavailable' },
             temperatureCelsius: { status: 'unavailable' }
-          }
+          },
+          ...(options.extraGpus ?? []).map((extra, index) => ({
+            id: `gpu${index + 1}`,
+            compute: { status: 'unavailable' as const },
+            encode: { status: 'unavailable' as const },
+            decode: { status: 'unavailable' as const },
+            memoryUsedBytes: supported(extra.vramUsedBytes, provenance),
+            memoryTotalBytes: supported(extra.vramTotalBytes, provenance),
+            powerWatts: { status: 'unavailable' as const },
+            temperatureCelsius: { status: 'unavailable' as const }
+          }))
         ]
       }
     }
@@ -1113,7 +1173,7 @@ test('assess: an uncalibrated backend stays unknown on a discrete GPU', (t) => {
 
   t.is(result.verdict, 'unknown')
   t.is(result.basis, 'system-memory')
-  t.ok(result.models[0]!.reasons.some((r) => r.includes('GPU memory')))
+  t.ok(result.models[0]!.reasons.some((r) => r.includes('a GPU is present')))
 })
 
 test('assess: a GPU with too little VRAM is too large even on a roomy host', (t) => {
@@ -1130,21 +1190,60 @@ test('assess: a GPU with too little VRAM is too large even on a roomy host', (t)
   t.is(result.verdict, 'likely-too-large')
 })
 
-// The engine takes the first eligible ggml device, an order this side cannot
-// see, so a second candidate makes "which card" a guess.
-test('assess: two dedicated GPUs refuse a device budget rather than guess', (t) => {
-  const resources = discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB })
-  const gpus = resources.capabilities.gpus
-  const samples = resources.sample!.gpus
-  if (gpus.status === 'supported' && samples.status === 'supported') {
-    gpus.value.push({ ...gpus.value[0]!, id: 'gpu1' })
-    samples.value.push({ ...samples.value[0]!, id: 'gpu1' })
-  }
+// The engine pins the model to one card, and which one is a ggml enumeration
+// order this side cannot see. That makes the cards alternatives rather than
+// bounds to intersect: a fit has to hold on the smallest, a refusal on the
+// largest, and anything between the two is genuinely unknown.
+test('assess: several GPUs are assessed as alternatives, not as one budget', (t) => {
+  const assess = (options: Parameters<typeof discreteGpuResources>[0]) =>
+    assessModelFitFromResources({
+      models: [candidate()],
+      execution: 'sequential',
+      resources: discreteGpuResources(options),
+      platform: 'linux-x64',
+      calibration: calibration(),
+      resolveGpuCalibration: () => calibration(),
+      resolveProfile: () => profile()
+    })
 
+  const twoRoomy = assess({
+    vramTotalBytes: 20 * GIB,
+    vramUsedBytes: 1 * GIB,
+    extraGpus: [{ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }]
+  })
+  t.is(twoRoomy.verdict, 'likely-fits', 'it fits on either card, so which one is picked is moot')
+  t.is(twoRoomy.basis, 'device-memory')
+  t.ok(twoRoomy.assumptions.some((a) => a.includes('2 usable GPUs')))
+
+  // 1 GB of weights plus the cache: room on the 20 GiB card, none on the 4 GiB
+  // one. Neither answer holds for both, so there is no verdict.
+  const mixed = assess({
+    vramTotalBytes: 20 * GIB,
+    vramUsedBytes: 1 * GIB,
+    extraGpus: [{ vramTotalBytes: 4 * GIB, vramUsedBytes: 1 * GIB }]
+  })
+  t.is(mixed.verdict, 'unknown', 'a fit on the larger card is not a fit on the smaller')
+  t.is(mixed.budget?.totalBytes, 4 * GIB, 'the budget reported is the tightest of the candidates')
+
+  const bothTooSmall = assess({
+    vramTotalBytes: 4 * GIB,
+    vramUsedBytes: 1 * GIB,
+    extraGpus: [{ vramTotalBytes: 4 * GIB, vramUsedBytes: 2 * GIB }]
+  })
+  t.is(bothTooSmall.verdict, 'likely-too-large', 'too large on the largest is too large anywhere')
+})
+
+// One fixture describes one backend's buffers, so cards that disagree on the
+// backend cannot be assessed under a single set of coefficients.
+test('assess: GPUs on different backends have no single set of coefficients', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
-    resources,
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      extraGpus: [{ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB, backend: 'rocm' }]
+    }),
     platform: 'linux-x64',
     calibration: calibration(),
     resolveGpuCalibration: () => calibration(),
@@ -1153,6 +1252,160 @@ test('assess: two dedicated GPUs refuse a device budget rather than guess', (t) 
 
   t.is(result.verdict, 'unknown')
   t.is(result.basis, 'system-memory')
+})
+
+// The Windows shape: the Intel iGPU declares a 128 MiB carve-out of its own,
+// so DXGI types it dedicated and `unifiedMemory` is false. Nothing but that
+// size separates it from a real card — and it is no rival for a model.
+test('assess: an adapter too small to hold a model is not a rival for one', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      extraGpus: [
+        {
+          vramTotalBytes: 128 * MIB,
+          vramUsedBytes: 8 * MIB,
+          name: 'Intel(R) UHD Graphics'
+        }
+      ]
+    }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'likely-fits')
+  t.is(result.budget?.totalBytes, 20 * GIB, 'the real card carries the budget on its own')
+  t.ok(result.assumptions.some((a) => a.includes('Test Discrete GPU')))
+})
+
+// A VM's paravirtual display adapter is enumerated as a GPU by the collector,
+// but the engine has no backend for it and runs on the CPU — which is exactly
+// what these platforms' own coefficients describe. Cloud hosts and CI runners
+// are the common case, so this is where the CPU fixtures earn their keep.
+test('assess: a virtual display adapter is not a GPU the engine can use', (t) => {
+  const withVirtualGpu = resources({ gpu: true })
+  const gpus = withVirtualGpu.capabilities.gpus
+  if (gpus.status === 'supported') {
+    const provenance = { source: 'test', scope: 'device' as const }
+    gpus.value[0] = {
+      ...gpus.value[0]!,
+      name: { status: 'supported', value: 'Microsoft Basic Render Driver', provenance },
+      // gpuType.VIRTUAL
+      type: { status: 'supported', value: 3, provenance }
+    }
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: withVirtualGpu,
+    platform: 'linux-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'system-memory')
+  t.is(result.verdict, 'likely-fits', 'the platform fixture applies, as it would with no GPU')
+  t.ok(
+    result.assumptions.some((a) => a.includes('no GPU reported')),
+    'and the f16 KV default is assumed, as the engine would use'
+  )
+})
+
+// The driver flags are library-presence checks, and ggml's backends need the
+// same libraries to load. A device with none is a device the engine passes over.
+test('assess: a GPU with no graphics API the engine talks to is passed over', (t) => {
+  const noDrivers = resources({ gpu: true })
+  const gpus = noDrivers.capabilities.gpus
+  if (gpus.status === 'supported') {
+    gpus.value[0] = {
+      ...gpus.value[0]!,
+      drivers: { ...gpus.value[0]!.drivers, metal: { status: 'unavailable' } }
+    }
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: noDrivers,
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'likely-fits')
+})
+
+// ---------------------------------------------------------------------------
+// Integrated GPUs — the ordinary consumer desktop
+// ---------------------------------------------------------------------------
+
+// An integrated GPU allocates out of system RAM, so the engine runs on the GPU
+// while the system basis still bounds it. That needs coefficients measured
+// that way: the platform's own fixture was measured with the offload disabled.
+test('assess: an integrated GPU keeps the system basis, with its own coefficients', (t) => {
+  const igpuOnly = {
+    models: [candidate()],
+    execution: 'sequential' as const,
+    resources: resources({ gpu: true }),
+    platform: 'linux-x64' as const,
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  }
+
+  const measured = assessModelFitFromResources({
+    ...igpuOnly,
+    resolveSharedGpuCalibration: () => calibration()
+  })
+  t.is(measured.basis, 'system-memory')
+  t.is(measured.verdict, 'likely-fits')
+  t.ok(measured.assumptions.some((a) => a.includes('integrated GPU allocates out of system RAM')))
+
+  const unmeasured = assessModelFitFromResources({
+    ...igpuOnly,
+    resolveSharedGpuCalibration: () => undefined
+  })
+  t.is(unmeasured.verdict, 'unknown')
+  t.ok(
+    unmeasured.reasons.some((r) => r.includes('integrated metal GPU')),
+    'the refusal names the platform and backend whose fixture is missing'
+  )
+})
+
+// A dedicated card next to the integrated one is where the engine would put
+// the model: `chooseBackend` fills its GPU list before its iGPU list and takes
+// the first non-empty one.
+test('assess: a dedicated card beside an integrated one takes the device basis', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      extraGpus: [
+        {
+          vramTotalBytes: 16 * GIB,
+          vramUsedBytes: 2 * GIB,
+          unifiedMemory: true,
+          name: 'Integrated Graphics'
+        }
+      ]
+    }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveSharedGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'device-memory')
+  t.is(result.budget?.totalBytes, 20 * GIB)
+  t.ok(result.assumptions.some((a) => a.includes('Test Discrete GPU')))
 })
 
 // Windows GPU readings are per-process, so the collector never grades them

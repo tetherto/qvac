@@ -17,6 +17,7 @@ export type ModelFitPlatform =
   | 'linux-arm64'
   | 'linux-x64'
   | 'win32-x64'
+  | 'win32-arm64'
   | 'android-arm64'
   | 'ios-arm64'
 
@@ -83,6 +84,15 @@ export interface CalibrationFixture {
    * and because one platform can run several backends whose buffers differ.
    */
   gpuPlatforms?: Readonly<Record<string, PlatformCalibration>>
+  /**
+   * Coefficients for a model running on an *integrated* GPU, keyed the same
+   * `<platform>:<backend>` way. A third map rather than a flag because the
+   * numbers differ from both neighbours: the engine allocates the backend's
+   * buffers as it does in `gpuPlatforms`, but out of system RAM, so they are
+   * spent against the system budget as in `platforms`. Measured by the
+   * harness's `--igpu` pass.
+   */
+  sharedGpuPlatforms?: Readonly<Record<string, PlatformCalibration>>
 }
 
 /** What an estimator is handed for one candidate. */

@@ -176,6 +176,26 @@ function isSharedMemoryGpu(gpu: Record<string, unknown>) {
   return typeof declared === 'number' && declared < MIN_USABLE_GPU_BYTES
 }
 
+// `gpuType.VIRTUAL`. A VM's paravirtual display adapter is enumerated as a GPU
+// but has no compute backend, and the engine falls back to the CPU on such a
+// host — the hosted arm64 runner is one, and llama.cpp reports "no usable GPU
+// found" there. Mirrors `assess.ts`, so the harness's KV assumption and the
+// estimator's agree about which devices count.
+const GPU_TYPE_VIRTUAL = 3
+
+function isVirtualDisplayAdapter(gpu: Record<string, unknown>) {
+  return metricValue(gpu.type) === GPU_TYPE_VIRTUAL
+}
+
+// Ordered as `GPU_BACKENDS` in `assess.ts` is: by what the addon actually
+// builds, not by what the drivers advertise.
+const GPU_BACKENDS = ['metal', 'vulkan', 'rocm', 'cuda', 'levelZero', 'opencl'] as const
+
+function hasKnownBackend(gpu: Record<string, unknown>) {
+  const drivers = (gpu.drivers ?? {}) as Record<string, { status?: string; value?: unknown }>
+  return GPU_BACKENDS.some((name) => drivers[name]?.status === 'supported' && drivers[name]?.value)
+}
+
 // Largest dedicated GPU first. The win25 runner reports an Intel iGPU ahead of
 // its RTX 4000, and first-wins named the iGPU as the device on every fixture.
 // A `shared` pass wants the opposite order: it pins the integrated device, so
@@ -245,7 +265,7 @@ function detectBackend(gpuList: readonly Record<string, unknown>[], preferShared
       string,
       { status: string; value?: unknown } | undefined
     >
-    for (const name of ['metal', 'vulkan', 'rocm', 'cuda', 'levelZero', 'opencl']) {
+    for (const name of GPU_BACKENDS) {
       if (drivers[name]?.status === 'supported' && drivers[name].value) return name
     }
   }
@@ -455,16 +475,25 @@ async function main() {
   // design exists to isolate.
   const resources = await getSystemResources()
   const gpus = resources.capabilities.gpus
-  const gpuList = gpus.status === 'supported' ? gpus.value : []
-  const cpuForced = pass === 'cpu' && forcesCpu(platform)
-  // `device: 'cpu'` selects the CPU backend, and with it the f16 KV default.
-  const hasGpu = gpuList.length > 0 && !cpuForced
-  const shared = pass === 'shared'
+  const reported = gpus.status === 'supported' ? gpus.value : []
   // The metric helpers read fields off whatever the collector reported, so they
   // take an index-signature view of it rather than the normalized type.
-  const gpuRecords = gpuList as unknown as Record<string, unknown>[]
+  const gpuRecords = (reported as unknown as Record<string, unknown>[]).filter(
+    (gpu) => !isVirtualDisplayAdapter(gpu) && hasKnownBackend(gpu)
+  )
+  if (gpuRecords.length < reported.length) {
+    console.log(
+      `ignoring ${reported.length - gpuRecords.length} reported GPU(s) the engine cannot use: a paravirtual display adapter, or no graphics API this build talks to — the same devices \`assess.ts\` discounts`
+    )
+  }
+  const cpuForced = pass === 'cpu' && forcesCpu(platform)
+  // `device: 'cpu'` selects the CPU backend, and with it the f16 KV default.
+  const hasGpu = gpuRecords.length > 0 && !cpuForced
+  const shared = pass === 'shared'
   const backend = cpuForced ? 'cpu' : detectBackend(gpuRecords, shared)
-  const device = gpuName(gpuRecords, shared)
+  // No device on a CPU-forced fixture: naming a card the run deliberately did
+  // not use would misdescribe what the coefficients cover.
+  const device = cpuForced ? undefined : gpuName(gpuRecords, shared)
   console.log(
     `backend: ${backend}${device ? ` (${device})` : ''}${cpuForced ? ' — GPU offload disabled for calibration' : ''}`
   )
