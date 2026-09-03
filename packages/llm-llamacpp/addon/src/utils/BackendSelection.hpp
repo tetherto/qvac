@@ -285,4 +285,31 @@ std::vector<std::string> splitModeDeviceNames(
 /// @brief `splitModeDeviceNames()` against the real ggml backend registry.
 std::vector<std::string>
 splitModeDeviceNames(const std::string& selectedDeviceName);
+
+/// @brief Inputs to the CUDA PTX JIT cache check, gathered from the
+/// environment so the policy below stays testable.
+struct JitCacheEnv {
+  bool cacheDisabled = false; ///< CUDA_CACHE_DISABLE is set to something truthy
+  bool haveCacheDir = false;  ///< a cache directory could be resolved at all
+  bool cacheDirWritable = false; ///< that directory, or its nearest existing
+                                 ///< ancestor, passes a write check
+};
+
+/// @brief Whether to warn that CUDA will re-JIT its kernels on every start.
+///
+/// QVAC-24470: a device with no `-real` cubin in the build reaches the kernels
+/// by JITting the `-virtual` PTX, and the driver caches the result under
+/// `$HOME/.nv/ComputeCache`. Measured on a DGX Spark at sm_121: 27.3 s to first
+/// token cold against 143.9 ms warm. Where that cache cannot persist, a
+/// container with no writable `$HOME` being the usual case, the full cost is
+/// paid on every process start.
+///
+/// It is not a crash, so no backend guard catches it, and to a user it is
+/// indistinguishable from a hang. Warning is all this can do; removing the cost
+/// means shipping a `-real` cubin for the architecture.
+bool shouldWarnAboutJitCache(const JitCacheEnv& env);
+
+/// @brief `shouldWarnAboutJitCache()` against the real environment. Always
+/// false off linux, where this module is not built as a loadable CUDA backend.
+bool shouldWarnAboutJitCache();
 } // namespace backend_selection
