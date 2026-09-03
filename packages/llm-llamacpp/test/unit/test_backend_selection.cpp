@@ -1852,3 +1852,43 @@ TEST_F(BackendSelectionTest, TensorDevices_RpcDoesNotDisplaceLocalIgpu) {
   EXPECT_EQ(
       getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
 }
+
+// ---- CUDA PTX JIT cache warning (QVAC-24470) ----
+//
+// Only the policy is pinned here. The environment-reading overload is
+// deliberately not under test: it exists to touch getenv and the filesystem,
+// which is exactly what these tests must not do.
+
+TEST_F(BackendSelectionTest, JitCache_WritableCacheDir_NoWarning) {
+  backend_selection::JitCacheEnv env;
+  env.haveCacheDir = true;
+  env.cacheDirWritable = true;
+  EXPECT_FALSE(backend_selection::shouldWarnAboutJitCache(env));
+}
+
+TEST_F(BackendSelectionTest, JitCache_NoCacheDir_Warns) {
+  // No HOME and no CUDA_CACHE_PATH, so the driver has nowhere to persist the
+  // JIT result and re-compiles on every start.
+  backend_selection::JitCacheEnv env;
+  env.haveCacheDir = false;
+  env.cacheDirWritable = false;
+  EXPECT_TRUE(backend_selection::shouldWarnAboutJitCache(env));
+}
+
+TEST_F(BackendSelectionTest, JitCache_ReadOnlyCacheDir_Warns) {
+  // The container case: HOME resolves but nothing under it can be written.
+  backend_selection::JitCacheEnv env;
+  env.haveCacheDir = true;
+  env.cacheDirWritable = false;
+  EXPECT_TRUE(backend_selection::shouldWarnAboutJitCache(env));
+}
+
+// CUDA_CACHE_DISABLE outranks a perfectly good directory, so the disable flag
+// has to be checked before writability rather than after.
+TEST_F(BackendSelectionTest, JitCache_DisabledBeatsWritableDir_Warns) {
+  backend_selection::JitCacheEnv env;
+  env.cacheDisabled = true;
+  env.haveCacheDir = true;
+  env.cacheDirWritable = true;
+  EXPECT_TRUE(backend_selection::shouldWarnAboutJitCache(env));
+}
