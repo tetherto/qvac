@@ -116,5 +116,8 @@
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
   },
+  "overrides": {
+    "bare-module-lexer": "1.6.3"
+  },
   "types": "index.d.ts"
 }
