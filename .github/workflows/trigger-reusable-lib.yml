@@ -2,11 +2,9 @@ name: General CI/CD (libs)
 # Consolidated publish workflow for plain-shape libraries: no build step, so
 # `npm publish` ships the committed sources as-is.
 #
-# error, logging and rag are NOT here. gh#4055 gave each a `prepare` -> tsc build
-# and a dedicated prebuilt-dist pipeline, because publishing them through a
-# generic path ran tsc in a job with no node_modules and broke the publish. They
-# keep their own trigger-reusable-lib-<pkg>.yml. test-suite, cli, inference,
-# infer-base and the plugin packages are excluded for the same reason.
+# Excluded: error/logging/rag build a dist before publish (gh#4055), as do
+# test-suite, cli, ai-sdk-provider, infer-base and the plugins. inference
+# publishes via publish-sdk.yml as the sdk lockstep anchor.
 
 on:
   push:
@@ -146,16 +144,43 @@ jobs:
           package-json-path: packages/${{ matrix.package }}/package.json
           changelog-path: packages/${{ matrix.package }}/CHANGELOG.md
 
+  # qvac-ci is the only package here that gates publish on lint+test; keep it.
+  lint-and-test:
+    needs: detect
+    if: contains(fromJSON(needs.detect.outputs.packages), 'qvac-ci')
+    runs-on: ubuntu-latest
+    env:
+      WORKDIR: packages/qvac-ci
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 18
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+      - name: Lint
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run lint
+      - name: Unit tests
+        working-directory: ${{ env.WORKDIR }}
+        run: npm test
+
   # Single GPR publish for main/feature/tmp; gpr_tag resolves to dev/feature/temp
   # per branch, so one job replaces the former three.
   publish-gpr:
     needs:
       - detect
       - publish-logic
+      - lint-and-test
+    # skipped when qvac-ci is not in the run, so test the result rather than success()
     if: >-
-      needs.publish-logic.outputs.publish_main == 'true' ||
+      always() &&
+      needs.lint-and-test.result != 'failure' &&
+      needs.lint-and-test.result != 'cancelled' &&
+      (needs.publish-logic.outputs.publish_main == 'true' ||
       needs.publish-logic.outputs.publish_feature == 'true' ||
-      needs.publish-logic.outputs.publish_tmp == 'true'
+      needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -183,12 +208,13 @@ jobs:
       - detect
       - publish-logic
       - release-merge-guard
+      - lint-and-test
     permissions:
       contents: write
       packages: write
       id-token: write
     if: |-
-      (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') && needs.lint-and-test.result != 'failure' && needs.lint-and-test.result != 'cancelled')
     strategy:
       fail-fast: false
       matrix:
