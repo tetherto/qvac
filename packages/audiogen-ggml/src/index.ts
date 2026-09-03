@@ -166,6 +166,14 @@ export interface GenerateOptions {
    * instrumental requests are rejected. Requires `taskType: 'text2music'`.
    */
   generateLrc?: boolean
+  /**
+   * Teacher-forced LM quality scoring of the generated audio codes against
+   * the request: `stats.qualityScore` reports a weighted [0, 1] score
+   * (caption/lyrics PMI plus metadata recall) at the cost of extra LM
+   * forwards after code generation — made for ranking a batch of takes.
+   * Requires the LM code path, so `taskType` must be `'text2music'`.
+   */
+  computeQualityScore?: boolean
   /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
   dcwEnabled?: boolean
   /** DCW low-frequency correction strength (official default: 0.05). */
@@ -344,6 +352,12 @@ export interface AudiogenStats {
   lyricsScore?: number
   /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
   lrc?: string
+  /**
+   * Weighted quality of the generated codes against the request, in [0, 1]
+   * (caption/lyrics PMI plus metadata recall). Present only when the run set
+   * `computeQualityScore`; made for ranking a batch of takes.
+   */
+  qualityScore?: number
 }
 
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
@@ -403,6 +417,7 @@ interface NativeAudiogenData {
   gpuFallbackReason?: number
   lyricsScore?: number
   lrc?: string
+  qualityScore?: number
   progressStage?: string
   progressStep?: number
   progressTotal?: number
@@ -646,7 +661,8 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'guidanceScale',
   'audioCoverStrength',
   'coverNoiseStrength',
-  'generateLrc'
+  'generateLrc',
+  'computeQualityScore'
 ]
 
 function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boolean {
@@ -1158,6 +1174,12 @@ export class AudioGen {
         throw invalidInput('generateLrc requires lyrics to align')
       }
     }
+    if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
+      throw invalidInput('computeQualityScore must be a boolean')
+    }
+    if (opts.computeQualityScore === true && taskType !== undefined && taskType !== 'text2music') {
+      throw invalidInput("computeQualityScore requires taskType 'text2music' (the LM code path)")
+    }
     if (opts.simpleMode === true) {
       if (taskType !== undefined && taskType !== 'text2music') {
         throw invalidInput("simpleMode supports only taskType 'text2music'")
@@ -1189,6 +1211,7 @@ export class AudioGen {
       simpleMode: opts.simpleMode,
       normalizeLoudness: opts.normalizeLoudness,
       generateLrc: opts.generateLrc,
+      computeQualityScore: opts.computeQualityScore,
       seed: optionalFiniteNumber(opts.seed, 'seed', true),
       vocalLanguage: opts.vocalLanguage,
       bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
@@ -1398,7 +1421,8 @@ export class AudioGen {
           ? { gpuFallbackReason: d.gpuFallbackReason }
           : {}),
         ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
-        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
+        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
+        ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {})
       }
       this._job.end(stats, stats)
     }

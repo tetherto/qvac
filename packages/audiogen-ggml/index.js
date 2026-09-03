@@ -280,7 +280,8 @@ const ACESTEP_GENERATE_KEYS = [
     'guidanceScale',
     'audioCoverStrength',
     'coverNoiseStrength',
-    'generateLrc'
+    'generateLrc',
+    'computeQualityScore'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
@@ -733,6 +734,12 @@ class AudioGen {
                 throw invalidInput('generateLrc requires lyrics to align');
             }
         }
+        if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
+            throw invalidInput('computeQualityScore must be a boolean');
+        }
+        if (opts.computeQualityScore === true && taskType !== undefined && taskType !== 'text2music') {
+            throw invalidInput("computeQualityScore requires taskType 'text2music' (the LM code path)");
+        }
         if (opts.simpleMode === true) {
             if (taskType !== undefined && taskType !== 'text2music') {
                 throw invalidInput("simpleMode supports only taskType 'text2music'");
@@ -764,6 +771,7 @@ class AudioGen {
             simpleMode: opts.simpleMode,
             normalizeLoudness: opts.normalizeLoudness,
             generateLrc: opts.generateLrc,
+            computeQualityScore: opts.computeQualityScore,
             seed: optionalFiniteNumber(opts.seed, 'seed', true),
             vocalLanguage: opts.vocalLanguage,
             bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
@@ -950,7 +958,8 @@ class AudioGen {
                     ? { gpuFallbackReason: d.gpuFallbackReason }
                     : {}),
                 ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
-                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
+                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
+                ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {})
             };
             this._job.end(stats, stats);
         }

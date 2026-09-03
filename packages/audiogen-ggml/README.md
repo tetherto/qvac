@@ -136,11 +136,12 @@ for await (const item of response.iterate()) {
 }
 const stats = await response.await()
 // { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId,
-//   gpuFallbackReason }
+//   gpuFallbackReason, qualityScore? }
 // backendDevice:     0 = CPU, 1 = GPU
 // backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
 // lyricsScore + lrc: alignment confidence and LRC text, only with generateLrc
+// qualityScore:      [0, 1], present only when the run set computeQualityScore
 
 await gen.destroy()
 ```
@@ -317,6 +318,29 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:lrc
 ```
 
+### Quality scoring: rank a batch of takes
+
+With `computeQualityScore: true` the engine teacher-forces the generated audio
+codes back through the LM and `stats.qualityScore` reports how well the take
+matches the request as a weighted `[0, 1]` score — caption and lyrics as
+normalized PMI, set metadata fields as top-k recall. Generation varies a lot
+by seed, so generate several takes and keep the best:
+
+```js
+const response = await gen.run(caption, { computeQualityScore: true, seed })
+// ...collect the PCM...
+const stats = await response.await()
+console.log(stats.qualityScore) // e.g. 0.6661
+```
+
+Scoring costs extra LM forwards after code generation and requires the LM
+code path (`taskType: 'text2music'`). End to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:best-of
+```
+
 ### Ordered audio editing
 
 `edit()` starts a source-driven pipeline. `edit()`/`flowEdit()` and `repaint()`
@@ -483,6 +507,7 @@ wrapped by a level-gated `QvacLogger`.
 | `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
 | `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
 | `generateLrc` | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`. |
+| `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |

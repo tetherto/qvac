@@ -88,6 +88,7 @@ public:
     bool simpleMode = false;
     bool normalizeLoudness = true;
     bool generateLrc = false;
+    bool computeQualityScore = false;
     bool dcwEnabled = true;
     float dcwScaler = 0.05F;
     float dcwHighScaler = 0.02F;
@@ -162,6 +163,8 @@ private:
   std::string lrc_; // synchronized lyric timestamps of the last run
   double lyricsScore_ = 0.0;
   bool hasLyricsScore_ = false; // set per run; gates the lyricsScore stat
+  double qualityScore_ = 0.0;
+  bool hasQualityScore_ = false; // set per run; gates the qualityScore stat
   int sampleRate_ = 0; // populated from the engine result in generate()
   int channels_ = 0;   // populated from the engine result in generate()
 

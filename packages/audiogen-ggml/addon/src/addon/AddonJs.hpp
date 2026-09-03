@@ -213,6 +213,8 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
     modelInput.normalizeLoudness = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "generateLrc"))
     modelInput.generateLrc = *value;
+  if (auto value = readOptionalBoolean(jobObject, env, "computeQualityScore"))
+    modelInput.computeQualityScore = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "dcwEnabled"))
     modelInput.dcwEnabled = *value;
   if (auto value = readOptionalAcestepNumber(jobObject, env, "dcwScaler"))

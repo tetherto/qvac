@@ -13,11 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timestamps in `stats.lrc` (standard LRC text) with an alignment confidence
   in `stats.lyricsScore`. Requires lyrics — explicit or Simple-Mode written —
   and `taskType: 'text2music'`.
+- `computeQualityScore` generation control: the generated audio codes are
+  teacher-forced back through the LM and `stats.qualityScore` reports a
+  weighted `[0, 1]` match against the request (caption/lyrics PMI plus
+  metadata recall) — made for generating a batch of takes and keeping the
+  best. Requires `taskType: 'text2music'`.
 
 ### Changed
 
 - Require `speech-cpp` port revision `2026-09-02#1`, which adds the engine's
-  ACE-Step LRC generation.
+  ACE-Step LRC generation on top of the teacher-forced LM quality scoring.
 
 ## [0.3.3] - 2026-09-01
 
