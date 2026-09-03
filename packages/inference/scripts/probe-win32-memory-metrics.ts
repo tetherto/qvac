@@ -36,10 +36,19 @@ interface Counters {
   virtualBytes: number
 }
 
+let reads = 0
+
 function readCounters(): Counters {
   const rss = os.memoryUsage().rss
   const script = `$p = Get-Process -Id ${os.pid()}; Write-Output ($p.WorkingSet64, $p.PrivateMemorySize64, $p.VirtualMemorySize64 -join ' ')`
-  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script])
+  // powershell.exe waits for EOF on a redirected stdin before it exits, so
+  // stdin must be closed (ignored) and input parsing disabled, or the first
+  // read hangs the run.
+  const result = spawnSync(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-InputFormat', 'None', '-Command', script],
+    { stdio: ['ignore', 'pipe', 'pipe'] }
+  )
   if (result.status !== 0 || !result.stdout) {
     throw new Error(
       `powershell exited ${result.status}: ${result.stderr ? result.stderr.toString() : ''}`
@@ -50,6 +59,10 @@ function readCounters(): Counters {
     .trim()
     .split(/\s+/)
     .map(Number)
+  reads += 1
+  console.log(
+    `    read ${reads}: rss(uv) ${mib(rss)} MiB, ws(ps) ${mib(workingSet!)} MiB, private ${mib(privateBytes!)} MiB`
+  )
   return { rss, workingSet: workingSet!, privateBytes: privateBytes!, virtualBytes: virtualBytes! }
 }
 
