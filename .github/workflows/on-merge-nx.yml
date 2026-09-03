@@ -1,0 +1,574 @@
+name: General CI/CD (native addons, nx)
+# Consolidates the 13 on-merge-<pkg>.yml publish workflows (dorny selects the
+# changed package, matrix publishes it, no nx-affected). Excludes model-fit.
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/asr-ggml/**"
+      - "packages/audiogen-ggml/**"
+      - "packages/bci-whispercpp/**"
+      - "packages/classification-ggml/**"
+      - "packages/decoder-audio/**"
+      - "packages/diffusion-cpp/**"
+      - "packages/embed-llamacpp/**"
+      - "packages/fabric/**"
+      - "packages/llm-llamacpp/**"
+      - "packages/ocr-ggml/**"
+      - "packages/translation-nmtcpp/**"
+      - "packages/tts-ggml/**"
+      - "packages/vla-ggml/**"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to publish"
+        required: true
+        type: choice
+        options:
+          - asr-ggml
+          - audiogen-ggml
+          - bci-whispercpp
+          - classification-ggml
+          - decoder-audio
+          - diffusion-cpp
+          - embed-llamacpp
+          - fabric
+          - llm-llamacpp
+          - ocr-ggml
+          - translation-nmtcpp
+          - tts-ggml
+          - vla-ggml
+      npm_tag:
+        description: "NPM dist-tag override (release publish only, default: latest)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+# Never cancel: this publishes to GPR/npm and cuts tags. Two pushes touching the
+# same package queue instead of racing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: Detect changed packages
+    runs-on: ubuntu-latest
+    outputs:
+      any: ${{ steps.rows.outputs.any }}
+      matrix: ${{ steps.rows.outputs.matrix }}
+      prebuild-rows: ${{ steps.rows.outputs.prebuild-rows }}
+      pre-publish-rows: ${{ steps.rows.outputs.pre-publish-rows }}
+      post-integration-rows: ${{ steps.rows.outputs.post-integration-rows }}
+      verify-generated-rows: ${{ steps.rows.outputs.verify-generated-rows }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Filter changed packages
+        id: filter
+        if: github.event_name == 'push'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        with:
+          # base == this branch so dorny diffs the push delta, not against main
+          # (where these project.json don't exist yet, so all 14 would match).
+          base: ${{ github.ref_name }}
+          filters: |
+            asr-ggml: packages/asr-ggml/**
+            audiogen-ggml: packages/audiogen-ggml/**
+            bci-whispercpp: packages/bci-whispercpp/**
+            classification-ggml: packages/classification-ggml/**
+            decoder-audio: packages/decoder-audio/**
+            diffusion-cpp: packages/diffusion-cpp/**
+            embed-llamacpp: packages/embed-llamacpp/**
+            fabric: packages/fabric/**
+            llm-llamacpp: packages/llm-llamacpp/**
+            ocr-ggml: packages/ocr-ggml/**
+            translation-nmtcpp: packages/translation-nmtcpp/**
+            tts-ggml: packages/tts-ggml/**
+            vla-ggml: packages/vla-ggml/**
+
+      - name: Compute per-package config rows
+        id: rows
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          DISPATCH_PKG: ${{ inputs.package }}
+          CHANGED: ${{ steps.filter.outputs.changes }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            packages="[\"${DISPATCH_PKG}\"]"
+          else
+            packages="${CHANGED:-[]}"
+          fi
+
+          # Identity gate: a release-* branch must publish EXACTLY its named package.
+          # Closes a merge-guard gap: a same-versioned sibling could otherwise publish.
+          if [[ "$REF_NAME" == release-* ]]; then
+            if [[ "$REF_NAME" =~ ^release-(.+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              branch_pkg="${BASH_REMATCH[1]}"
+            else
+              echo "::error::Invalid release branch name — expected release-<package>-x.y.z, actual: ${REF_NAME}"
+              exit 1
+            fi
+
+            if [ ! -f "packages/${branch_pkg}/project.json" ]; then
+              echo "::error::release branch names package '${branch_pkg}' but packages/${branch_pkg}/project.json does not exist"
+              exit 1
+            fi
+
+            matches_branch_pkg=$(echo "$packages" | jq --arg p "$branch_pkg" '. == [$p]')
+            if [ "$matches_branch_pkg" != "true" ]; then
+              echo "::error::release-${branch_pkg}-* must publish exactly packages/${branch_pkg}/**; this run selected: ${packages}. No package reaches npm publish unless it is the sole package matching this release branch's name."
+              exit 1
+            fi
+          fi
+
+          rows="[]"
+          for pkg in $(echo "$packages" | jq -r '.[]'); do
+            pj="packages/${pkg}/project.json"
+            onmerge=$(jq -c '.targets["on-merge"].options.ci // {}' "$pj")
+            root=$(jq -r '.root' "$pj")
+            has_build=$(jq -r 'if .targets.build then "true" else "false" end' "$pj")
+            row=$(jq -n \
+              --arg pkg "$pkg" \
+              --arg workdir "$root" \
+              --argjson hasPrebuilds "$has_build" \
+              --argjson onmerge "$onmerge" \
+              '{package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds} + $onmerge')
+            rows=$(echo "$rows" | jq -c --argjson r "$row" '. + [$r]')
+          done
+
+          any="false"
+          [ "$(echo "$rows" | jq 'length')" -gt 0 ] && any="true"
+
+          prebuild_rows=$(echo "$rows" | jq -c '[.[] | select(.hasPrebuilds == true)]')
+          pre_publish_rows=$(echo "$rows" | jq -c '[.[] | select((.testGateMode // "") | startswith("pre-publish"))]')
+          post_integration_rows=$(echo "$rows" | jq -c '[.[] | select(.testGateMode == "post-publish-integration")]')
+          verify_generated_rows=$(echo "$rows" | jq -c '[.[] | select(.verifyGenerated == true)]')
+
+          echo "any=$any" >> "$GITHUB_OUTPUT"
+          echo "matrix=$rows" >> "$GITHUB_OUTPUT"
+          echo "prebuild-rows=$prebuild_rows" >> "$GITHUB_OUTPUT"
+          echo "pre-publish-rows=$pre_publish_rows" >> "$GITHUB_OUTPUT"
+          echo "post-integration-rows=$post_integration_rows" >> "$GITHUB_OUTPUT"
+          echo "verify-generated-rows=$verify_generated_rows" >> "$GITHUB_OUTPUT"
+
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        uses: tetherto/qvac-actions/npm-publish-logic@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+
+  release-merge-guard:
+    name: Release Merge Guard (${{ matrix.package }})
+    needs: detect
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: ${{ matrix.package }}
+          package-json-path: ${{ matrix.workdir }}/package.json
+          changelog-path: ${{ matrix.workdir }}/CHANGELOG.md
+
+  # `packages` explicit bypasses nx-affected in the leaf (owner-only, like dorny).
+  # `needs: prebuild` is ordering not gating (result is matrix-wide aggregate).
+  pre-publish-integration:
+    name: Pre-publish integration (${{ matrix.package }})
+    needs: [detect, prebuild]
+    if: >-
+      always() && !cancelled() &&
+      needs.detect.outputs.pre-publish-rows != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.pre-publish-rows) }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
+
+  # Mobile is NOT consolidated: pre/post-publish mobile gate stays on main's
+  # per-package on-merge-<pkg>.yml. on-merge-nx gates on desktop integration only.
+
+  # Same `packages` bypass: build exactly this package, not nx-affected.
+  prebuild:
+    name: Prebuild (${{ matrix.package }})
+    needs: detect
+    if: needs.detect.outputs.prebuild-rows != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.prebuild-rows) }}
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
+
+  # Wrapper drift gate. Publish no longer rebuilds the TypeScript wrappers (every
+  # gated package sets buildStep: none), so this is what proves the committed
+  # .js/.d.ts still match src. It stays a separate job on purpose: it installs and
+  # runs untrusted third-party code, and must not do that inside publish-gpr /
+  # publish-npm, which hold contents write, packages write and id-token write.
+  verify-generated:
+    name: Verify generated wrappers (${{ matrix.package }})
+    needs: detect
+    if: needs.detect.outputs.verify-generated-rows != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.verify-generated-rows) }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-generated-wrappers.yml
+    with:
+      workdir: ${{ matrix.workdir }}
+
+  # decoder-audio is the ONLY package whose mobile run blocked publish on main:
+  # on-merge-decoder-audio.yml listed mobile-integration-tests in both publish
+  # jobs' needs, so it could not reach GPR or npm until mobile passed. That file
+  # is deleted here and testGateMode: pre-publish-integration covers desktop only.
+  #
+  # A static job rather than a matrix row because `uses:` cannot take an
+  # expression, so a per-package mobile workflow can only be called from a job
+  # that names it literally. Same shape as cpp-tests-nx's carve-outs.
+  #
+  # tts-ggml also lost its mobile run, but on main that was POST-publish and
+  # informational, never a publish blocker, so it is not restored here.
+  mobile-gate-decoder-audio:
+    name: Mobile gate (decoder-audio)
+    needs: detect
+    if: contains(fromJSON(needs.detect.outputs.matrix).*.package, 'decoder-audio')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      workdir: "packages/decoder-audio"
+
+  publish-gpr:
+    name: Publish GPR (${{ matrix.package }})
+    needs:
+      - detect
+      - publish-logic
+      - prebuild
+      - pre-publish-integration
+      - verify-generated
+      - mobile-gate-decoder-audio
+    # Test gates are per-package in the steps below, not here: needs.<job>.result is
+    # the matrix-wide aggregate, and `matrix` is unavailable in a job-level `if:`.
+    #
+    # verify-generated and mobile-gate-decoder-audio are the exceptions and are
+    # enforced here, aggregate and all. Each is skipped only when this run selected
+    # no package it applies to, so `skipped` cannot mask a real result. A failure
+    # blocks every package in the run rather than just the offender, which is
+    # fail-closed and near-free: dorny normally selects one changed package per run.
+    if: >-
+      needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
+      (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
+      (always() && !cancelled() &&
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')))
+    runs-on: ubuntu-latest
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Per-package pre-publish gate (see this job's `if:`).
+      - name: Enforce this package's pre-publish test gate
+        if: startsWith(matrix.testGateMode, 'pre-publish')
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+          INTEGRATION_RESULT: ${{ needs.pre-publish-integration.result }}
+        run: |
+          set -euo pipefail
+          if [ "$INTEGRATION_RESULT" != "success" ] && [ "$INTEGRATION_RESULT" != "skipped" ]; then
+            echo "::error::${PACKAGE} gates its publish on its own pre-publish tests, which came back '$INTEGRATION_RESULT'."
+            exit 1
+          fi
+
+      # Per-package prebuild gate via this package's subtree in the shared bundle
+      # (failed build = no subtree). Action strips to prebuilds/<platform>-<arch>/.
+      - name: Materialize prebuilds
+        if: matrix.hasPrebuilds == true
+        uses: ./.github/actions/prebuild-artifact-materialize
+        with:
+          workdir: ${{ matrix.workdir }}
+          package: ${{ matrix.package }}
+
+      - name: Set up Node.js
+        if: matrix.buildStep != 'none'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        if: matrix.buildStep != 'none'
+        working-directory: ${{ matrix.workdir }}
+        run: npm install --ignore-scripts --package-lock=false
+
+      # Via env: buildStep comes from project.json read at github.sha, which on
+      # feature-*/tmp-* is anyone with write access. This job holds publish creds.
+      - name: Run build step
+        if: matrix.buildStep != 'none'
+        working-directory: ${{ matrix.workdir }}
+        env:
+          BUILD_STEP: ${{ matrix.buildStep }}
+        run: npm run "$BUILD_STEP"
+
+      - name: Rename prebuild files from qvac_ to tetherto_ prefix
+        if: matrix.nameTransform == 'rename-prefix'
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          find prebuilds -depth -name 'qvac_*' | while read -r file; do
+            dir=$(dirname "$file")
+            base=$(basename "$file")
+            newbase=$(echo "$base" | sed 's/^qvac_/tetherto_/')
+            mv "$file" "$dir/$newbase"
+          done
+
+          if [ -f binding.js ]; then
+            sed -i 's/qvac_/tetherto_/g' binding.js
+          fi
+
+      - name: Scope package as @tetherto for GPR
+        if: matrix.nameTransform == 'scope-rewrite'
+        shell: bash
+        env:
+          WORKDIR: ${{ matrix.workdir }}
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const f=process.env.WORKDIR+'/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/'+process.env.PACKAGE;if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+
+      - name: Publish to GitHub Package Registry
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: ${{ matrix.workdir }}
+          name-suffix: "-mono"
+
+  publish-npm:
+    name: Publish NPM (${{ matrix.package }})
+    needs:
+      - detect
+      - publish-logic
+      - release-merge-guard
+      - prebuild
+      - pre-publish-integration
+      - verify-generated
+      - mobile-gate-decoder-audio
+    # Test gates are per-package in the steps below (see publish-gpr's `if:`).
+    # merge-guard stays here: detect's identity gate ensures its aggregate == the
+    # one package. verify-generated and mobile-gate-decoder-audio are enforced here
+    # too, same reasoning as publish-gpr.
+    if: >-
+      needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
+      (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
+      (always() && !cancelled() &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+      needs.publish-logic.outputs.publish_release == 'true'))
+    runs-on: ubuntu-latest
+    environment: npm
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Per-package pre-publish gate (see the note on publish-gpr's `if:`).
+      - name: Enforce this package's pre-publish test gate
+        if: startsWith(matrix.testGateMode, 'pre-publish')
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+          INTEGRATION_RESULT: ${{ needs.pre-publish-integration.result }}
+        run: |
+          set -euo pipefail
+          if [ "$INTEGRATION_RESULT" != "success" ] && [ "$INTEGRATION_RESULT" != "skipped" ]; then
+            echo "::error::${PACKAGE} gates its publish on its own pre-publish tests, which came back '$INTEGRATION_RESULT'."
+            exit 1
+          fi
+
+      # Per-package prebuild gate + strip to prebuilds/<platform>-<arch>/ (see publish-gpr).
+      - name: Materialize prebuilds
+        if: matrix.hasPrebuilds == true
+        uses: ./.github/actions/prebuild-artifact-materialize
+        with:
+          workdir: ${{ matrix.workdir }}
+          package: ${{ matrix.package }}
+
+      - name: Set up Node.js
+        if: matrix.buildStep != 'none'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        if: matrix.buildStep != 'none'
+        working-directory: ${{ matrix.workdir }}
+        run: npm install --ignore-scripts --package-lock=false
+
+      # Via env: buildStep comes from project.json read at github.sha, which on
+      # feature-*/tmp-* is anyone with write access. This job holds publish creds.
+      - name: Run build step
+        if: matrix.buildStep != 'none'
+        working-directory: ${{ matrix.workdir }}
+        env:
+          BUILD_STEP: ${{ matrix.buildStep }}
+        run: npm run "$BUILD_STEP"
+
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        with:
+          workdir: ${{ matrix.workdir }}
+          tag: ${{ matrix.npmTagOverride || inputs.npm_tag }}
+
+      - name: Publish to npm
+        id: publish
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        with:
+          workdir: ${{ matrix.workdir }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
+
+  # Post-publish tests run only after a real publish. Single (non-matrixed) job
+  # because matrix-job outputs don't propagate; reads the rolled-up .result.
+  post-build-gate:
+    name: Post-build gate
+    needs:
+      - detect
+      - publish-gpr
+      - publish-npm
+    if: >-
+      always() && !cancelled() &&
+      needs.detect.outputs.post-integration-rows != '[]'
+    runs-on: ubuntu-latest
+    outputs:
+      should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
+    steps:
+      # Keyed on publish-npm only. A GPR dev publish must NOT reopen this gate:
+      # post-publish integration already ran on the PR, and merge-guard consumed
+      # its result before the merge was allowed. publish-gpr does run off
+      # release-* here, so keying on it would start the full integration matrix
+      # on every main/feature-*/tmp-* push for asr-ggml, bci-whispercpp,
+      # ocr-ggml, translation-nmtcpp and tts-ggml. main removed exactly this in
+      # #4175 (QVAC-24365); publish-gpr-skip-policy.test.mjs guards it.
+      - id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          should="false"
+          if [ "${{ needs.publish-npm.result }}" = "success" ]; then
+            should="true"
+          fi
+          echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
+
+  post-publish-integration:
+    name: Post-publish integration (${{ matrix.package }})
+    needs: [detect, post-build-gate]
+    # always() required: implicit success() walks the transitive graph, so the
+    # by-design-skipped pre-publish/merge-guard jobs would otherwise suppress this.
+    if: >-
+      always() && !cancelled() &&
+      needs.post-build-gate.outputs.should_run_tests == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.post-integration-rows) }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
+
+  # Release branches carry exactly one package (enforced in `detect`), so this
+  # matrix is size 1 and published_version resolves unambiguously.
+  create-tag:
+    name: Create tag (${{ matrix.package }})
+    needs: [detect, publish-npm]
+    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: ${{ matrix.useVTag == true && '' || matrix.repoName }}
+      tag_name: ${{ matrix.useVTag == true && format('v{0}', needs.publish-npm.outputs.published_version) || '' }}
+      published_version: ${{ needs.publish-npm.outputs.published_version }}

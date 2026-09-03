@@ -8,14 +8,23 @@
 // fail-opens (the M5 defect); every publish-npm job uses `!cancelled()`.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const WORKFLOW_DIR = join(root, '.github/workflows')
 const VERIFY_REUSABLE = './.github/workflows/verify-generated-wrappers.yml'
+// A per-package pipeline always runs its verify job, so `success` is the only
+// passing result.
 const GATE = "needs.verify-generated.result == 'success'"
+// The consolidated pipeline runs one matrix verify job for whichever packages
+// this run selected, so it must also tolerate `skipped`, which happens only when
+// the run selected no gated package at all. `success` alone would make every
+// non-gated package unpublishable. Both failure modes still block.
+const GATE_MATRIX =
+  "needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled'"
+const CONSOLIDATED = '.github/workflows/on-merge-nx.yml'
 
 function read(relativePath) {
   return readFileSync(join(root, relativePath), 'utf8')
@@ -78,12 +87,53 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
-test('wrapper publish pipelines are discovered', () => {
-  const pipelines = wrapperPipelines()
+// Packages that opt into the gate, read from the same project.json flag the
+// consolidated pipeline builds its matrix from.
+function gatedPackages() {
+  const packagesDir = join(root, 'packages')
+  return readdirSync(packagesDir).filter((name) => {
+    const projectJson = join(packagesDir, name, 'project.json')
+    if (!existsSync(projectJson)) return false
+    const project = JSON.parse(readFileSync(projectJson, 'utf8'))
+    return project?.targets?.['on-merge']?.options?.ci?.verifyGenerated === true
+  })
+}
+
+// Coverage, not pipeline count. The nine per-package on-merge-<pkg>.yml files
+// collapse into on-merge-nx.yml, so counting pipelines stopped meaning anything;
+// what still has to hold is that every package opting into the gate is reached by
+// one. Derived from project.json so a package cannot opt out by omission.
+test('every package that opts into the gate is covered by a pipeline', () => {
+  const gated = gatedPackages()
   assert.ok(
-    pipelines.length >= 9,
-    `expected at least the nine TypeScript-wrapper pipelines, found ${pipelines.length}`,
+    gated.length >= 9,
+    `expected at least the nine TypeScript-wrapper packages, found ${gated.length}`,
   )
+
+  const pipelines = wrapperPipelines()
+  assert.ok(pipelines.length > 0, 'no on-merge pipeline calls the verify reusable')
+
+  const consolidated = pipelines.includes(CONSOLIDATED)
+  if (consolidated) {
+    // The coverage claim below leans on the consolidated matrix really being
+    // driven by the flag, so assert the wiring rather than trusting the name.
+    const source = read(CONSOLIDATED)
+    assert.match(source, /verify-generated-rows: \$\{\{ steps\.rows\.outputs\.verify-generated-rows \}\}/)
+    assert.match(source, /select\(\.verifyGenerated == true\)/)
+    assert.match(
+      source,
+      /include: \$\{\{ fromJSON\(needs\.detect\.outputs\.verify-generated-rows\) \}\}/,
+    )
+    // GATE_MATRIX lets `skipped` through. That is only sound because the verify
+    // job is skipped on exactly one condition: the run selected no gated package.
+    // Any looser `if:` here would turn `skipped` into a hole in the gate.
+    assert.match(source, /^ {4}if: needs\.detect\.outputs\.verify-generated-rows != '\[\]'$/m)
+  }
+
+  const offenders = gated.filter(
+    (pkg) => !consolidated && !pipelines.includes(`.github/workflows/on-merge-${pkg}.yml`),
+  )
+  assert.deepEqual(offenders, [])
 })
 
 test('every wrapper publish job is gated on verify-generated', () => {
@@ -106,16 +156,14 @@ test('every wrapper publish job is gated on verify-generated', () => {
         offenders.push(`${path}::${job.name}: has no if: condition to carry the gate`)
         continue
       }
-      if (!cond.includes(GATE)) {
-        offenders.push(`${path}::${job.name}: if: does not test ${GATE}`)
-        continue
-      }
       // The gate must lead and the remainder must be parenthesised, so that a
       // top-level `||` in the original condition cannot out-bind the `&&`.
-      if (!cond.startsWith(`${GATE} &&`)) {
-        offenders.push(`${path}::${job.name}: gate must be the leading clause of if:`)
+      const expected = path === CONSOLIDATED ? GATE_MATRIX : GATE
+      if (!cond.startsWith(`${expected} &&`)) {
+        offenders.push(`${path}::${job.name}: if: must lead with "${expected} &&"`)
+        continue
       }
-      const remainder = cond.slice(cond.indexOf('&&') + 2).trim()
+      const remainder = cond.slice(expected.length).trim().replace(/^&&/, '').trim()
       if (!(remainder.startsWith('(') && remainder.endsWith(')'))) {
         offenders.push(
           `${path}::${job.name}: condition after the gate must be wrapped in parentheses ` +
