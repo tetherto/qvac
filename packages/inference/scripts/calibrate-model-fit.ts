@@ -161,16 +161,23 @@ function byCapability(gpuList: readonly Record<string, unknown>[]) {
 // so the calibration and the estimator agree on which device counts and on
 // whether its readings are device-scoped at all.
 async function readGpuUsedBytes() {
-  const resources = await getSystemResources()
+  // `sample: true` is required: the default response carries capabilities only.
+  const resources = await getSystemResources({ sample: true })
   const gpus = resources.capabilities.gpus
   const samples = resources.sample?.gpus
-  if (gpus.status !== 'supported' || samples?.status !== 'supported') return 0
+  if (gpus.status !== 'supported' || samples?.status !== 'supported') {
+    throw new Error('no GPU sample is available, so a GPU pass cannot be measured')
+  }
 
   for (const gpu of byCapability(gpus.value as unknown as Record<string, unknown>[])) {
     const sample = samples.value.find((entry) => entry.id === (gpu.id as string))
     if (sample?.memoryUsedBytes.status === 'supported') return sample.memoryUsedBytes.value
   }
-  return 0
+
+  // Returning 0 here would read as "nothing allocated" and quietly fit garbage.
+  throw new Error(
+    'no GPU reports device-scoped used memory, so this host cannot be calibrated for GPU residency'
+  )
 }
 
 // Label for the backend in play, recorded with the coefficients because the
