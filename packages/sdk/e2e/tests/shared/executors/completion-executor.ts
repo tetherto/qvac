@@ -1,5 +1,5 @@
-import { completion } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { completion, ContextOverflowError, deleteCache } from '@qvac/sdk'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { completionTests } from '../../completion-tests.js'
 
@@ -36,6 +36,8 @@ interface CompletionTestParams {
   tools?: ReadonlyArray<Record<string, unknown>>
   stopSequences?: ReadonlyArray<string>
   generationParams?: GenerationParams
+  /** Second-turn user message for the warm-cache overflow flow. */
+  followUpContent?: string
 }
 
 type CompletionFnParams = Parameters<typeof completion>[0]
@@ -63,11 +65,23 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       if (test.testId === 'completion-concurrent-requests') {
         return [test.testId, this.concurrentRequests.bind(this)]
       }
+      if (test.testId === 'completion-concurrent-overlap') {
+        return [test.testId, this.concurrentOverlap.bind(this)]
+      }
       if (test.testId === 'completion-seed-reproducibility') {
         return [test.testId, this.seedReproducibility.bind(this)]
       }
       if (test.testId === 'completion-stop-reason-length') {
         return [test.testId, this.stopReasonLength.bind(this)]
+      }
+      if (test.testId === 'completion-context-boundary-stop') {
+        return [test.testId, this.contextBoundaryStop.bind(this)]
+      }
+      if (test.testId === 'completion-context-overflow-prefill') {
+        return [test.testId, this.contextOverflowPrefill.bind(this)]
+      }
+      if (test.testId === 'completion-context-overflow-warm-cache') {
+        return [test.testId, this.contextOverflowWarmCache.bind(this)]
       }
       return [test.testId, this.generic.bind(this)]
     })
@@ -148,6 +162,90 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       output:
         `FIFO concurrency policy enforced: ${fulfilled.length} completed, ` +
         `${rejected.length} rejected (of ${CONCURRENCY} issued)`
+    }
+  }
+
+  // Proves concurrent scheduling on a parallel>1 model. Gates on the engine signal
+  // (avgConcurrentSeq > 1), which is authoritative for native sequence co-residency,
+  // and reports the client content-token-window overlap as a supporting diagnostic
+  // only: that client-side signal is transport-buffering sensitive, so gating on it
+  // would make the test flaky even when the server genuinely decoded concurrently.
+  async concurrentOverlap(
+    params: CompletionTestParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded('llm-batch')
+    const CONCURRENCY = 4
+
+    const intervals = await Promise.all(
+      Array.from({ length: CONCURRENCY }, async () => {
+        const run = completion({
+          modelId: llmModelId,
+          ...params,
+          stream: true
+        } as CompletionFnParams)
+        let start = 0
+        let end = 0
+        let text = ''
+        for await (const token of run.tokenStream) {
+          const now = Date.now()
+          if (start === 0) start = now
+          end = now
+          text += token
+        }
+        const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
+        return { start, end, text, avgConcurrentSeq: stats?.avgConcurrentSeq }
+      })
+    )
+
+    // Sweep line over the decode intervals: peak number live at once. Ties
+    // resolve end-before-start, so touching intervals don't count as overlap.
+    const events = intervals.flatMap(({ start, end }) => [
+      { t: start, delta: 1 },
+      { t: end, delta: -1 }
+    ])
+    events.sort((a, b) => a.t - b.t || a.delta - b.delta)
+    let live = 0
+    let peakOverlap = 0
+    for (const event of events) {
+      live += event.delta
+      if (live > peakOverlap) peakOverlap = live
+    }
+
+    const empty = intervals.filter((i) => i.text.length === 0).length
+    if (empty > 0) {
+      return {
+        passed: false,
+        output: `${empty}/${CONCURRENCY} concurrent completions produced no output`
+      }
+    }
+
+    const seqs = intervals.map((i) => i.avgConcurrentSeq)
+    const maxSeq = seqs.reduce<number>((m, s) => (typeof s === 'number' && s > m ? s : m), 0)
+    if (!seqs.some((s) => typeof s === 'number')) {
+      return {
+        passed: false,
+        output: 'Engine did not report avgConcurrentSeq; cannot prove native concurrency'
+      }
+    }
+    if (maxSeq <= 1) {
+      return {
+        passed: false,
+        output:
+          `Engine avgConcurrentSeq peaked at ${maxSeq} (<= 1): no multi-sequence ` +
+          `co-residency was observed. Content-token interval peak was ${peakOverlap}/${CONCURRENCY}.`
+      }
+    }
+    const failed = intervals
+      .map((i) => ValidationHelpers.validate(i.text, expectation))
+      .find((result) => !result.passed)
+    if (failed) {
+      return { passed: false, output: `Concurrent completion failed expectation: ${failed.output}` }
+    }
+
+    return {
+      passed: true,
+      output: `Concurrent decoding proven: engine avgConcurrentSeq peaked at ${maxSeq.toFixed(2)}, client interval peak ${peakOverlap}/${CONCURRENCY}`
     }
   }
 
@@ -233,6 +331,198 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     return {
       passed: true,
       output: `stopReason is "length" as expected`
+    }
+  }
+
+  // The predict budget exceeds what fits after the prompt, so a "length"
+  // stop under the budget proves the boundary, not prediction exhaustion.
+  async contextBoundaryStop(params: CompletionTestParams): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
+    const budget = params.generationParams?.predict ?? 0
+    const run = completion({
+      modelId: llmModelId,
+      ...params,
+      stream: false
+    } as CompletionFnParams)
+
+    const final = await run.final
+    if (final.stopReason !== 'length') {
+      return {
+        passed: false,
+        output: `Expected stopReason "length" at the context boundary, got ${JSON.stringify(final.stopReason)}`
+      }
+    }
+    const generatedTokens = final.stats?.generatedTokens
+    if (typeof generatedTokens !== 'number' || generatedTokens >= budget) {
+      return {
+        passed: false,
+        output: `Expected generatedTokens below the ${budget} budget (boundary, not prediction cutoff), got ${generatedTokens}`
+      }
+    }
+    if (final.raw.fullText.length === 0) {
+      return {
+        passed: false,
+        output: 'Expected the tokens produced before the boundary to be returned, got empty output'
+      }
+    }
+    return {
+      passed: true,
+      output: `Context boundary stop: "length" at ${generatedTokens} of ${budget} budget, ${final.raw.fullText.length} chars retained`
+    }
+  }
+
+  // A prompt that cannot fit the window is refused before any decoding with
+  // the typed ContextOverflowError carrying the parsed sizes.
+  async contextOverflowPrefill(params: CompletionTestParams): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
+    try {
+      const run = completion({
+        modelId: llmModelId,
+        ...params,
+        stream: false
+      } as CompletionFnParams)
+      await run.final
+      return { passed: false, output: 'Expected ContextOverflowError for oversized prefill' }
+    } catch (error) {
+      if (!(error instanceof ContextOverflowError)) {
+        return { passed: false, output: `Expected ContextOverflowError, got: ${error}` }
+      }
+      if (typeof error.promptTokens !== 'number' || typeof error.ctxSize !== 'number') {
+        return {
+          passed: false,
+          output: `Expected parsed sizes on the error, got promptTokens=${error.promptTokens} ctxSize=${error.ctxSize}`
+        }
+      }
+      // The addon guards trigger on `>=`, so equality is emittable; below
+      // the window means the parser extracted the wrong quantity.
+      if (error.promptTokens < error.ctxSize) {
+        return {
+          passed: false,
+          output: `Expected promptTokens of at least ctxSize, got promptTokens=${error.promptTokens} ctxSize=${error.ctxSize}`
+        }
+      }
+      // The reported window must be the configured one, not a rescaled or
+      // defaulted figure.
+      if (error.ctxSize !== 512) {
+        return {
+          passed: false,
+          output: `Expected ctxSize to equal the configured 512, got ${error.ctxSize}`
+        }
+      }
+      return {
+        passed: true,
+        output: `ContextOverflowError with promptTokens=${error.promptTokens} ctxSize=${error.ctxSize}`
+      }
+    }
+  }
+
+  // The first turn must end commit-eligible and the error must carry the
+  // warm signature (positive cachedTokens), not just the failing total.
+  async contextOverflowWarmCache(params: CompletionTestParams): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded('llm-small-ctx')
+    const kvCache = `ctx-overflow-warm-${Date.now()}`
+    // Cleanup must run even when the flow throws unexpectedly — a leaked
+    // named cache poisons retries and adjacent runs.
+    let result: TestResult
+    try {
+      result = await this.runWarmOverflow(llmModelId, kvCache, params)
+    } catch (error) {
+      result = { passed: false, output: `Warm-cache flow threw: ${error}` }
+    }
+    try {
+      await deleteCache({ kvCacheKey: kvCache, modelId: llmModelId })
+    } catch (error) {
+      const context = result.passed ? 'Test passed but cache' : `${result.output}; cache also`
+      return { passed: false, output: `${context} failed to delete: ${error}` }
+    }
+    return result
+  }
+
+  private async runWarmOverflow(
+    llmModelId: string,
+    kvCache: string,
+    params: CompletionTestParams
+  ): Promise<TestResult> {
+    const first = completion({
+      modelId: llmModelId,
+      history: params.history,
+      stream: false,
+      kvCache,
+      generationParams: params.generationParams
+    } as CompletionFnParams)
+    const firstFinal = await first.final
+    // The commit policy refuses a budget-exhausted or boundary-hit turn; a
+    // rolled-back turn one would make turn two a cold full-history resend.
+    if (firstFinal.stopReason !== undefined || firstFinal.raw.fullText.length === 0) {
+      return {
+        passed: false,
+        output: `First turn is not commit-eligible: stopReason=${JSON.stringify(firstFinal.stopReason)} textLength=${firstFinal.raw.fullText.length}`
+      }
+    }
+    const followUp = [
+      ...params.history,
+      { role: 'assistant', content: firstFinal.raw.fullText },
+      { role: 'user', content: params.followUpContent ?? '' }
+    ]
+    try {
+      const second = completion({
+        modelId: llmModelId,
+        history: followUp,
+        stream: false,
+        kvCache,
+        generationParams: params.generationParams
+      } as CompletionFnParams)
+      await second.final
+      return { passed: false, output: 'Expected ContextOverflowError on the warm-cache follow-up' }
+    } catch (error) {
+      if (!(error instanceof ContextOverflowError)) {
+        return { passed: false, output: `Expected ContextOverflowError, got: ${error}` }
+      }
+      if (error.ctxSize !== 512) {
+        return { passed: false, output: `Expected ctxSize 512, got ${error.ctxSize}` }
+      }
+      if (typeof error.requiredTokens !== 'number' || error.requiredTokens < error.ctxSize) {
+        return {
+          passed: false,
+          output: `Expected requiredTokens of at least the window, got requiredTokens=${error.requiredTokens} ctxSize=${error.ctxSize}`
+        }
+      }
+      // A fresh prime caches well under 100 tokens, the committed first turn
+      // ~370, so the floor proves the first-turn prefix itself survived.
+      if (typeof error.cachedTokens !== 'number' || error.cachedTokens < 200) {
+        return {
+          passed: false,
+          output: `Expected cachedTokens to include the committed first turn (>= 200), got cachedTokens=${error.cachedTokens}`
+        }
+      }
+      // A pre-mutation overflow must not destroy the committed cache: the
+      // same follow-up retried before cleanup has to stay warm.
+      try {
+        const retry = completion({
+          modelId: llmModelId,
+          history: followUp,
+          stream: false,
+          kvCache,
+          generationParams: params.generationParams
+        } as CompletionFnParams)
+        await retry.final
+        return { passed: false, output: 'Expected the retry to overflow warm again' }
+      } catch (retryError) {
+        if (
+          !(retryError instanceof ContextOverflowError) ||
+          typeof retryError.cachedTokens !== 'number' ||
+          retryError.cachedTokens < 200
+        ) {
+          return {
+            passed: false,
+            output: `Retry lost the warm cache: cachedTokens=${retryError instanceof ContextOverflowError ? retryError.cachedTokens : retryError}`
+          }
+        }
+      }
+      return {
+        passed: true,
+        output: `Warm-cache overflow: requiredTokens=${error.requiredTokens} cachedTokens=${error.cachedTokens} ctxSize=${error.ctxSize}, retry stayed warm`
+      }
     }
   }
 

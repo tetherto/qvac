@@ -1,0 +1,286 @@
+name: General CI/CD (error)
+# Publishes @qvac/error. Since the TS/ESM migration the package has a real build
+# step (`prepare` -> `tsc -p tsconfig.build.json`). The old generic path ran that
+# build implicitly during `npm publish` in a job with no `node_modules`, so `tsc`
+# failed and the publish broke. This workflow instead compiles `dist` once in a
+# dedicated `build` job, uploads it, and every publish job downloads that
+# prebuilt `dist` and publishes with NPM_CONFIG_IGNORE_SCRIPTS=true so
+# `npm publish` ships it as-is instead of re-running the `prepare` build.
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/error/**"
+      - ".github/workflows/trigger-reusable-lib-error.yml"
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "Optional npm dist-tag override for release branches"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  WORKDIR: packages/error
+
+jobs:
+  release-merge-guard:
+    name: Release Merge Guard
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: error
+          package-json-path: packages/error/package.json
+          changelog-path: packages/error/CHANGELOG.md
+
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+
+          publish_main="false"
+          publish_release="false"
+          publish_feature="false"
+          publish_tmp="false"
+
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ]; then
+              publish_main="true"
+            elif [[ "$ref_name" == release-* ]]; then
+              publish_release="true"
+            elif [[ "$ref_name" == feature-* ]]; then
+              publish_feature="true"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              publish_tmp="true"
+            fi
+          fi
+
+          gpr_tag="dev"
+          if [ "$ref_name" = "main" ]; then
+            gpr_tag="dev"
+          elif [[ "$ref_name" == feature-* ]]; then
+            gpr_tag="feature"
+          elif [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="temp"
+          fi
+
+          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
+          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
+          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
+  # Install deps + compile dist ONCE, then hand the built dist to every publish
+  # job so `npm publish` never has to rebuild in a node_modules-less job.
+  build:
+    name: Build @qvac/error
+    needs: [publish-logic]
+    if: >-
+      needs.publish-logic.outputs.publish_main == 'true'
+      || needs.publish-logic.outputs.publish_feature == 'true'
+      || needs.publish-logic.outputs.publish_tmp == 'true'
+      || needs.publish-logic.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: bun install
+
+      - name: Build
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run build
+
+      - name: Upload package dist
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: error-dist
+          path: packages/error/dist
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-main-gpr-dev:
+    needs:
+      - publish-logic
+      - build
+    if: (needs.publish-logic.outputs.publish_main == 'true')
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    # dist is prebuilt in the `build` job; skip lifecycle scripts so `npm publish`
+    # ships it as-is instead of re-running the `prepare` build with no node_modules.
+    env:
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Download prebuilt dist
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: error-dist
+          path: packages/error/dist
+
+      - name: Publish to GitHub Packages (dev)
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: packages/error
+          name-suffix: "-mono"
+
+  publish-release-npm:
+    needs:
+      - publish-logic
+      - release-merge-guard
+      - build
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    if: |-
+      (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+    runs-on: ubuntu-latest
+    environment: npm
+    outputs:
+      published_version: ${{ steps.publish-npm.outputs.npm_published_version }}
+    env:
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Download prebuilt dist
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: error-dist
+          path: packages/error/dist
+
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        with:
+          workdir: packages/error
+          tag: ${{ inputs.npm_tag }}
+
+      - name: Publish to NPM
+        id: publish-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        with:
+          tag: ${{ steps.dist-tag.outputs.tag }}
+          workdir: packages/error
+
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
+    needs: [publish-release-npm]
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: "error-base"
+      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
+
+  publish-feature-gpr:
+    needs:
+      - publish-logic
+      - build
+    if: (needs.publish-logic.outputs.publish_feature == 'true')
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    env:
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Download prebuilt dist
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: error-dist
+          path: packages/error/dist
+
+      - name: Publish to GitHub Packages (feature)
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: packages/error
+          name-suffix: "-mono"
+
+  publish-tmp-gpr:
+    needs:
+      - publish-logic
+      - build
+    if: (needs.publish-logic.outputs.publish_tmp == 'true')
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    env:
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Download prebuilt dist
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: error-dist
+          path: packages/error/dist
+
+      - name: Publish to GitHub Packages (tmp)
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: packages/error
+          name-suffix: "-mono"

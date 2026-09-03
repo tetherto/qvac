@@ -16,6 +16,10 @@ import {
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
 import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
+import {
+  isAddonPreMutationRefusal,
+  isAddonContextOverflowError
+} from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import {
   decideCachedHistorySlice,
@@ -178,7 +182,8 @@ async function initSystemPromptCache(
   model: AnyModel,
   cachePathToUse: string,
   systemPromptToUse: string,
-  cacheKey: string
+  cacheKey: string,
+  onResponse?: (response: { cancel(): Promise<void> }) => void
 ) {
   const primeMessages: ChatHistory[] = [{ role: 'system', content: systemPromptToUse }]
 
@@ -190,6 +195,8 @@ async function initSystemPromptCache(
     saveCacheToDisk: true,
     prefill: true
   })
+  // Register the prime so an abort during a cold-cache prefill cancels it.
+  onResponse?.(primeResponse)
 
   await primeResponse.await()
 }
@@ -257,8 +264,7 @@ function prepareMessagesForCache(
   turn: TurnHandle,
   cacheExists: boolean,
   history: HistoryMsg[],
-  tools?: Tool[],
-  toolBlockEvictable = false
+  tools?: Tool[]
 ): CachePayload {
   const toolBlock = tools?.length ? transformMessages(tools) : []
 
@@ -294,9 +300,8 @@ function prepareMessagesForCache(
   // conversation. Skip it only when the prefix is known to hold a rendered
   // one: `toolBlockCached` records that a previous turn actually got it into
   // the cache, which a committed message count does not prove. A stale
-  // boundary means we are resending the whole conversation anyway, and an
-  // evictable block can no longer be assumed present.
-  const skipToolBlock = turn.toolBlockCached && !clearStaleCount && !toolBlockEvictable
+  // boundary means we are resending the whole conversation anyway.
+  const skipToolBlock = turn.toolBlockCached && !clearStaleCount
   const blockToSend = skipToolBlock ? [] : toolBlock
 
   return {
@@ -313,7 +318,8 @@ async function* processModelResponse(
   tools?: Tool[],
   generationParams?: CompletionGenerationParams,
   cacheOptions?: CacheRunOptions,
-  dialect?: ToolDialect
+  dialect?: ToolDialect,
+  onResponse?: (response: { cancel(): Promise<void> }) => void
 ): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
   const runOptions: CacheRunOptions & {
     generationParams?: CompletionGenerationParams
@@ -330,6 +336,8 @@ async function* processModelResponse(
 
   const modelStart = nowMs()
   const response = await runModel(model, messagesToSend, hasRunOptions ? runOptions : undefined)
+  // Hand the admitted response back so the caller can cancel just this job.
+  onResponse?.(response)
 
   let accumulatedText = ''
   let producedTokens = false
@@ -393,13 +401,6 @@ export async function* completion(
   const modelConfig = getModelConfig(modelId)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
   const toolsActive = !!tools?.length && toolsEnabled
-  // Sliding is opt-in (`n_discarded` defaults to 0). Once on, the addon's
-  // discard window opens at the end of the primed prefix — which is where the
-  // tool block sits, since the prime is the system prompt alone — and nothing
-  // protects it. So while sliding is possible the block cannot be assumed to
-  // survive, and it has to travel with every turn.
-  const toolBlockEvictable = ((modelConfig as { n_discarded?: number }).n_discarded ?? 0) > 0
-
   const dialect =
     tools && tools.length > 0 ? (params.toolDialect ?? detectToolDialect(modelId)) : undefined
 
@@ -423,44 +424,35 @@ export async function* completion(
 
   const model = getModel(modelId)
 
-  // Hard-cancel wiring: when the registry aborts the request's signal,
-  // forward to the addon so the C++ work stops as soon as it can. The
-  // we still treat `signal.aborted` as the truth for cancel detection
-  // (post-completion bookkeeping below) — this listener only shortens
-  // the latency between "user clicked stop" and "addon stops decoding".
-  //
-  // Fire-and-forget by construction (event listeners can't `await`), but
-  // `addon.cancel()` returns a Promise — if it ever rejects the bare
-  // `void` would leak it as an unhandledRejection. Attach `.catch(...)`
-  // so a rejection is logged and the process stays clean; the iterator
-  // below still sees EOF/empty tokens via the addon's normal cancel path
-  // so callers aren't affected.
-  const onAbort = () => {
-    const addon = model.addon
-    if (addon?.cancel) {
-      addon.cancel.call(addon).catch((err: unknown) => {
-        requestLogger.warn(
-          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
-        )
-      })
-    }
+  // Per-request hard cancel: under continuous batching the model runs several
+  // jobs at once, so an abort must cancel only THIS request's job, not the
+  // whole model — `response.cancel()` routes to the addon's per-job cancel.
+  // `.catch(...)` keeps the fire-and-forget cancel from leaking a rejection.
+  let activeResponse: { cancel(): Promise<void> } | null = null
+  const cancelActive = () => {
+    activeResponse?.cancel().catch((err: unknown) => {
+      requestLogger.warn(
+        `[cancel] response.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    })
   }
+  // Publish each run's response as it's admitted; the `signal.aborted` re-check
+  // cancels it if the abort landed while run() was still being admitted.
+  const setActiveResponse = (response: { cancel(): Promise<void> }) => {
+    activeResponse = response
+    if (signal.aborted) cancelActive()
+  }
+  const onAbort = () => cancelActive()
   signal.addEventListener('abort', onAbort, { once: true })
-  // `addEventListener("abort", ..., { once: true })` does *not* fire if
-  // the signal is already aborted at register time — but the registry
-  // synchronously aborts a fresh controller when `parentSignal` was
-  // already aborted at `begin(...)`. Without this fall-through, the
-  // addon would keep decoding until the post-loop check notices.
-  // Re-using `onAbort` here keeps the listener body as the single
-  // source of truth for "what cancel does."
+  // `{ once: true }` won't fire for an already-aborted signal (e.g. an
+  // already-aborted parentSignal at begin), so fire once here; a no-op before
+  // any response exists.
   if (signal.aborted) onAbort()
 
-  // Detach the abort listener on every exit path (happy, throw, generator
-  // `return()` from upstream). `{ once: true }` already removes the
-  // listener if the signal fires, so the `removeEventListener` here is
-  // the cleanup hook for the signal-never-fired path.
   scope.defer(() => {
     signal.removeEventListener('abort', onAbort)
+    // Drop the ref so a late abort can't cancel an already-settled response.
+    activeResponse = null
   })
 
   if (!kvCache) {
@@ -479,16 +471,16 @@ export async function* completion(
       tools,
       mergedGenerationParams,
       undefined,
-      dialect
+      dialect,
+      setActiveResponse
     )
   }
 
-  // ---- KV-cache path. The session owns all three bookkeeping layers
-  // (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). The
-  // handler asks for a turn, registers rollback on the scope, and on
-  // the happy path calls `commitTurn` which short-circuits the deferred
-  // rollback. Cancellations / zero-token replies / rename failures all
-  // unwind through the same `scope.defer` hook. ----
+  // ---- KV-cache path. The session owns every bookkeeping layer; the
+  // handler registers one deferred unwind (`rollback`, or the non-destructive
+  // `releaseTurn` on a recognised pre-mutation refusal) that `commitTurn`
+  // short-circuits on the happy path. Cancellations / zero-token replies /
+  // rename failures all still unwind destructively through the same hook. ----
 
   const session = createKvCacheSession(modelId, { logger: requestLogger })
   const systemPromptFromHistory = extractSystemPrompt(history)
@@ -507,7 +499,8 @@ export async function* completion(
       model,
       cachePath,
       systemPromptToUse,
-      typeof kvCache === 'string' ? kvCache : 'auto'
+      typeof kvCache === 'string' ? kvCache : 'auto',
+      setActiveResponse
     )
   }
 
@@ -517,7 +510,8 @@ export async function* completion(
       kind: 'custom',
       customKey: kvCache,
       configHash,
-      primeIfMissing
+      primeIfMissing,
+      signal
     })
   } else {
     const cacheMessages: CacheMessage[] = history.map((msg) => ({
@@ -529,7 +523,8 @@ export async function* completion(
       kind: 'auto',
       configHash,
       history: cacheMessages,
-      primeIfMissing
+      primeIfMissing,
+      signal
     })
   }
 
@@ -537,31 +532,47 @@ export async function* completion(
   // flips the turn's internal `committed` flag so this becomes a no-op
   // on the happy path. Scope unwinding is LIFO — registered after the
   // `removeEventListener` defer above so rollback runs before the
-  // listener detach.
-  scope.defer(() => session.rollback(turn))
+  // listener detach. A thrown overflow, pre-mutation refusal, or pre-addon
+  // attachment failure never persists the turn; the committed cache stays valid.
+  let preserveCacheOnUnwind = false
+  scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
   // `cacheExists` is implied by `beginTurn` — the session either found
   // an existing cache or just primed one. Pass `true` to the message
   // selector so the slicing branches engage.
-  const payload = prepareMessagesForCache(
-    session,
-    turn,
-    /* cacheExists */ true,
-    history,
-    toolsActive ? tools : undefined,
-    toolBlockEvictable
-  )
+  let payload: ReturnType<typeof prepareMessagesForCache>
+  try {
+    payload = prepareMessagesForCache(
+      session,
+      turn,
+      /* cacheExists */ true,
+      history,
+      toolsActive ? tools : undefined
+    )
+  } catch (error) {
+    // A missing attachment is caller input rejected before the addon runs,
+    // so the committed cache is untouched and must survive.
+    preserveCacheOnUnwind = error instanceof AttachmentNotFoundError
+    throw error
+  }
   const messagesToSend = payload.messages
   logMessagesToAddon(messagesToSend, 'PROMPT_SEND')
 
-  const result = yield* processModelResponse(
-    model,
-    messagesToSend,
-    tools,
-    mergedGenerationParams,
-    { cacheKey: turn.cachePath, saveCacheToDisk: true },
-    dialect
-  )
+  let result
+  try {
+    result = yield* processModelResponse(
+      model,
+      messagesToSend,
+      tools,
+      mergedGenerationParams,
+      { cacheKey: turn.cachePath, saveCacheToDisk: true },
+      dialect,
+      setActiveResponse
+    )
+  } catch (error) {
+    preserveCacheOnUnwind = isAddonContextOverflowError(error) || isAddonPreMutationRefusal(error)
+    throw error
+  }
   const shouldCommitTurn = shouldCommitCachedTurn({
     aborted: signal.aborted,
     producedTokens: result.producedTokens,

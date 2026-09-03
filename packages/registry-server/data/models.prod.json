@@ -3005,6 +3005,39 @@
     "notes": "F16 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
+    "description": "Parakeet Unified English 0.6B GGUF",
+    "quantization": "f16",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "unified", "ggml", "en"],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
+    "description": "Parakeet Unified English 0.6B GGUF",
+    "quantization": "q4_0",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "unified", "ggml", "en"],
+    "notes": "Q4_0 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
+    "description": "Parakeet Unified English 0.6B GGUF",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "unified", "ggml", "en"],
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
+  },
+  {
     "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "OCR-specialized vision-language model for document understanding",
@@ -8437,7 +8470,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
     "quantization": "f16",
     "params": "600M",
@@ -8448,7 +8481,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
     "quantization": "q4_0",
     "params": "600M",
@@ -8459,7 +8492,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
     "quantization": "q8_0",
     "params": "600M",

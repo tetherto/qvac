@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
-import { createExecutor, SkipExecutor } from '@qvac/qvac-test-suite/mobile'
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import { createExecutor, SkipExecutor } from '@qvac/test-suite/mobile'
+import type { TestDefinition } from '@qvac/test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -31,10 +31,11 @@ import {
   TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_UNIFIED_0_6B_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
-  SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
   SMOLVLA_LIBERO_VISION_Q8
 } from '@qvac/sdk'
 import { ResourceManager } from '../shared/resource-manager.js'
@@ -67,7 +68,6 @@ import { MobileConfigReloadExecutor } from './executors/config-reload-executor.j
 import { MobileTtsExecutor } from './executors/tts-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { MobileDownloadResilienceExecutor } from './executors/download-resilience-executor.js'
-import { DelegatedInferenceExecutor } from '../shared/executors/delegated-inference-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
@@ -88,13 +88,19 @@ const resources = new ResourceManager({
 resources.define('llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+  config: { verbosity: 0, ctx_size: 2048 }
+})
+
+resources.define('llm-small-ctx', {
+  constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 512 }
 })
 
 resources.define('llm-batch', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llm',
-  config: { verbosity: 0, ctx_size: 4096, n_discarded: 256, parallel: 4 }
+  config: { verbosity: 0, ctx_size: 4096, parallel: 4 }
 })
 
 resources.define('tools-batch', {
@@ -184,7 +190,7 @@ resources.define('sharded-embeddings', {
 resources.define('sharded-llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
   type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+  config: { verbosity: 0, ctx_size: 2048 },
   skipPreDownload: true
 })
 
@@ -402,6 +408,12 @@ resources.define('parakeet-ctc', {
   config: {}
 })
 
+resources.define('parakeet-unified', {
+  constant: PARAKEET_UNIFIED_0_6B_Q4_0,
+  type: 'parakeet-transcription',
+  config: {}
+})
+
 resources.define('parakeet-sortformer', {
   constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   type: 'parakeet-transcription',
@@ -415,21 +427,33 @@ resources.define('parakeet-eou', {
 })
 
 resources.define('vision', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
     ctx_size: 4096,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
 resources.define('vision-batch', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
     ctx_size: 2048,
     parallel: 2,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+  }
+})
+
+resources.define('vision-upscale', {
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 4096,
+    image_no_upscale: 'off',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
@@ -557,6 +581,10 @@ export const executor = createExecutor({
     new SkipExecutor(/^http-(?:sharded|archive)-embed-/, 'HTTP test disabled on mobile (OOM)'),
     new SkipExecutor(/^finetune-/, 'Finetune tests disabled on mobile'),
     new SkipExecutor(
+      /^world-/,
+      'ABot-World disabled on mobile: a walk session needs a dedicated GPU with GBs of free VRAM, and world operations have no delegated route'
+    ),
+    new SkipExecutor(
       /^multi-gpu-/,
       'Multi-GPU tests disabled on mobile (not supported on single-GPU devices)'
     ),
@@ -592,6 +620,16 @@ export const executor = createExecutor({
     new SkipExecutor(
       /^(ocr-doctr-|model-load-ocr-doctr$)/,
       'DocTR OCR e2e is desktop-only; the pipeline/detector auto-derivation under test (QVAC-22514) is server-side Bare code identical across platforms, and the doctr resource is not defined on mobile'
+    ),
+    skipTests(
+      [
+        'tts-cosyvoice3-emotion-conditioning',
+        'tts-cosyvoice3-streaming',
+        'tts-cosyvoice3-native-streaming',
+        'tts-cosyvoice3-sentence-streaming',
+        'tts-cosyvoice3-duplex-streaming'
+      ],
+      'Redundant CosyVoice3 e2e coverage overlapping other TTS tests, and slow on Device Farm; only tts-cosyvoice3-default and tts-cosyvoice3-invalid-emotion are kept on mobile'
     ),
     ...(Platform.OS === 'android'
       ? [
@@ -657,7 +695,6 @@ export const executor = createExecutor({
     new MobileVisionExecutor(resources),
     new MobileDownloadResilienceExecutor(resolveBakedMqttHost()),
     new DownloadExecutor(),
-    new DelegatedInferenceExecutor(),
     new LifecycleExecutor(resources),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),

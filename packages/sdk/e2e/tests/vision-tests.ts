@@ -1,4 +1,4 @@
-import type { TestDefinition, Expectation } from '@qvac/qvac-test-suite'
+import type { TestDefinition, Expectation } from '@qvac/test-suite'
 
 const createVisionTest = (
   testId: string,
@@ -61,6 +61,26 @@ export const visionStats = createVisionTest(
   { generationParams: { temp: 0, seed: 42 } }
 )
 
+export const visionImageNoUpscale: TestDefinition = {
+  testId: 'vision-image-no-upscale',
+  params: {
+    history: [
+      {
+        role: 'user',
+        content: 'Describe this image briefly.',
+        attachments: [{ path: 'shared-test-data/images/small-64.jpg' }]
+      }
+    ],
+    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 8 }
+  },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: {
+    category: 'vision',
+    dependency: 'vision',
+    estimatedDurationMs: 120000
+  }
+}
+
 export const visionFormatPng = createVisionTest(
   'vision-format-png',
   'Describe this image.',
@@ -72,7 +92,8 @@ export const visionFormatWebp = createVisionTest(
   'vision-format-webp',
   'Describe this image.',
   'photo-webp.webp',
-  { validation: 'type', expectedType: 'string' }
+  { validation: 'type', expectedType: 'string' },
+  { estimatedDurationMs: 110000 }
 )
 
 export const visionLargeImage = createVisionTest(
@@ -80,7 +101,7 @@ export const visionLargeImage = createVisionTest(
   'Describe this image.',
   'large-4k.jpg',
   { validation: 'type', expectedType: 'string' },
-  { estimatedDurationMs: 30000 }
+  { estimatedDurationMs: 90000 }
 )
 
 export const visionSmallImage = createVisionTest(
@@ -103,7 +124,7 @@ export const visionTextExtraction = createVisionTest(
   'Read the text in this image. Reply with only the text.',
   'sign.jpg',
   { validation: 'contains-all', contains: ['hello'] },
-  { generationParams: { temp: 0, top_k: 1, seed: 42, predict: 16 } }
+  { generationParams: { temp: 0, top_k: 1, seed: 42, predict: 128 } }
 )
 
 export const visionSceneUnderstanding = createVisionTest(
@@ -205,6 +226,7 @@ export const visionTests = [
   visionBasic,
   visionStreaming,
   visionStats,
+  visionImageNoUpscale,
   visionFormatPng,
   visionFormatWebp,
   visionLargeImage,

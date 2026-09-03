@@ -1,5 +1,5 @@
 // Completion test definitions
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 interface GenerationParams {
   temp?: number
@@ -38,6 +38,8 @@ interface CompletionTestParams {
   responseFormat?: ResponseFormat
   tools?: Array<Record<string, unknown>>
   generationParams?: GenerationParams
+  /** Second-turn user message for the warm-cache overflow flow. */
+  followUpContent?: string
 }
 
 type CompletionExpectation =
@@ -50,7 +52,7 @@ interface CompletionTestOptions {
   estimatedDurationMs?: number
   suites?: string[]
   skip?: { reason: string }
-  dependency?: 'llm' | 'none'
+  dependency?: 'llm' | 'llm-batch' | 'llm-small-ctx' | 'none'
 }
 
 // Helper for creating completion tests with common structure
@@ -370,6 +372,22 @@ export const completionConcurrentRequests = createCompletionTest(
   { estimatedDurationMs: 15000, suites: ['smoke'] }
 )
 
+// Proves real concurrent decoding, not just eventual success: fires several
+// streamed completions at once on a parallel:4 model and asserts (in the
+// executor) that at least two decode intervals overlap. A serialized model
+// would run them one after another with zero overlap. See
+// CompletionExecutor.concurrentOverlap.
+export const completionConcurrentOverlap = createCompletionTest(
+  'completion-concurrent-overlap',
+  {
+    history: [{ role: 'user', content: 'Count from one to twenty using words.' }],
+    stream: true,
+    generationParams: { ...DETERMINISTIC, predict: 64 }
+  },
+  { validation: 'type', expectedType: 'string' },
+  { estimatedDurationMs: 20000, suites: ['smoke'], dependency: 'llm-batch' }
+)
+
 export const completionCountInWords = createCompletionTest(
   'completion-count-in-words',
   {
@@ -630,6 +648,73 @@ export const completionStats: TestDefinition = {
   metadata: { category: 'completion', dependency: 'llm', estimatedDurationMs: 10000 }
 }
 
+// The 1000 budget is far above the whole 512 window, so a "length" stop under
+// it can only be the boundary; an early EOS is a fixture diagnostic.
+export const completionContextBoundaryStop = createCompletionTest(
+  'completion-context-boundary-stop',
+  {
+    history: [
+      {
+        role: 'user',
+        content:
+          'Count upward from 1 forever, one number per line. There is no final number; never stop counting.'
+      }
+    ],
+    stream: false,
+    generationParams: { ...DETERMINISTIC, predict: 1000 }
+  },
+  { validation: 'type', expectedType: 'string' },
+  { estimatedDurationMs: 45000, dependency: 'llm-small-ctx' }
+)
+
+// A prompt that cannot fit the window is refused before any decoding with the
+// typed ContextOverflowError carrying the parsed sizes.
+export const completionContextOverflowPrefill = createCompletionTest(
+  'completion-context-overflow-prefill',
+  {
+    history: [
+      {
+        role: 'user',
+        content:
+          'The quick brown fox jumps over the lazy dog and keeps running through the field. '.repeat(
+            120
+          ) + 'After all this text, what is 4+4?'
+      }
+    ],
+    stream: false,
+    generationParams: { ...DETERMINISTIC, predict: 8 }
+  },
+  { validation: 'throws-error', errorContains: 'context' },
+  { estimatedDurationMs: 15000, dependency: 'llm-small-ctx' }
+)
+
+// Turn one fills most of the 512 window and is cached; the follow-up fits
+// the window alone but not on top of the cache.
+export const completionContextOverflowWarmCache = createCompletionTest(
+  'completion-context-overflow-warm-cache',
+  {
+    history: [
+      {
+        role: 'user',
+        content:
+          'The quick brown fox jumps over the lazy dog and keeps running through the field. '.repeat(
+            20
+          ) + 'Reply with the single word: noted.'
+      }
+    ],
+    followUpContent:
+      'The quick brown fox jumps over the lazy dog and keeps running through the field. '.repeat(
+        10
+      ) + 'After all this text, what is 4+4?',
+    stream: false,
+    // Enough budget that turn one finishes on EOS (commit-eligible) instead
+    // of tripping the prediction cutoff, while still fitting the 512 window.
+    generationParams: { ...DETERMINISTIC, predict: 48 }
+  },
+  { validation: 'throws-error', errorContains: 'context' },
+  { estimatedDurationMs: 30000, dependency: 'llm-small-ctx' }
+)
+
 export const completionTests = [
   completionStreaming,
   completionTemperature01,
@@ -655,6 +740,7 @@ export const completionTests = [
   completionSeedReproducibility,
   completionStopSequencesMultiple,
   completionConcurrentRequests,
+  completionConcurrentOverlap,
   completionCountInWords,
   completionWithWhitespace,
   completionJsonFormat,
@@ -673,5 +759,8 @@ export const completionTests = [
   completionReasoningBudgetUnrestricted,
   completionRemoveThinkingFromContext,
   completionStats,
-  completionStopReasonLength
+  completionStopReasonLength,
+  completionContextBoundaryStop,
+  completionContextOverflowPrefill,
+  completionContextOverflowWarmCache
 ]

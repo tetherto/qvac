@@ -24,6 +24,7 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
+import { type AbortSignal } from 'bare-abort-controller'
 
 // Used by cross-model paths that have no `RequestContext` (e.g.
 // `deleteKvCacheState`). Per-session call sites receive a logger from
@@ -40,9 +41,10 @@ const moduleLogger = getEngineLogger()
  * 4. `activeCachePaths` — per-path refs that block in-flight eviction.
  * 5. `.auto-cache-<key>` markers — engine-generated cache ownership.
  *
- * Every turn must finish through `commitTurn` or `rollback` so all
- * inference state stays aligned, the active-path ref is released, and
- * marker metadata follows the cache directory lifecycle.
+ * Every turn must finish through `commitTurn`, `rollback`, or the
+ * non-destructive `releaseTurn` so all inference state stays aligned,
+ * the active-path ref is released, and marker metadata follows the
+ * cache directory lifecycle.
  */
 
 // ----- module-scoped state. The session is the single mutation point
@@ -76,8 +78,9 @@ const cachedPrefixes = new Map<string, CachedPrefix>()
  * In-memory registry of caches initialized this session. The addon
  * defers disk writes, so the absence of a `.bin` file on disk isn't
  * proof that the cache hasn't been primed in this process. Keyed
- * by `${modelId}:${configHash}:${cacheKey}`, so on-disk caches from
- * older process runs still hit the lazy-load path in `beginTurn`.
+ * by the resolved cache path, so aliased keys that name one file share an
+ * entry and on-disk caches from older process runs still hit the lazy-load
+ * path in `beginTurn`.
  */
 const initializedCaches = new Set<string>()
 const activeCachePaths = new Map<string, number>()
@@ -91,8 +94,83 @@ let lastAutoCacheSweepMs = 0
 let autoCacheSweepInFlight: Promise<void> | null = null
 let cacheStateLockTail = Promise.resolve()
 
-function initRegistryKey(modelId: string, configHash: string, cacheKey: string): string {
-  return `${modelId}:${configHash}:${cacheKey}`
+// Per-path write locks: same file serialises, different files run concurrently.
+// FIFO queue so an aborted waiter drops out instead of holding its admission slot.
+type CacheLockWaiter = { grant: () => void; drop: (reason: Error) => void }
+type CacheLock = { held: boolean; waiters: CacheLockWaiter[] }
+const cachePathLocks = new Map<string, CacheLock>()
+
+// Internal sentinel so acquisition paths prune directories/markers only when a
+// queued lock wait was aborted, not when lock acquisition failed for another
+// reason.
+class CacheLockAbortError extends Error {
+  constructor(cause?: unknown) {
+    super('cache lock wait aborted', cause !== undefined ? { cause } : undefined)
+    this.name = 'CacheLockAbortError'
+  }
+}
+
+// Case-fold the lock-map key so case-only path variants (e.g. "Session" vs
+// "session"), which name the SAME file on case-insensitive filesystems (default
+// macOS/Windows), serialise on one lock and can't interleave writes. Over-locks
+// case-only variants on case-sensitive filesystems, which is safe. NOTE: the
+// other per-path bookkeeping (activeCachePaths, cachedPrefixes, retention)
+// stays case-sensitive, so case-only key variants are otherwise unsupported —
+// see the KV-cache system doc.
+function lockKeyFor(cachePath: string): string {
+  return cachePath.toLowerCase()
+}
+
+function releaseCachePathWriteLock(lockKey: string): void {
+  const lock = cachePathLocks.get(lockKey)
+  if (!lock) return
+  const next = lock.waiters.shift()
+  if (next) {
+    next.grant()
+    return
+  }
+  lock.held = false
+  cachePathLocks.delete(lockKey)
+}
+
+// Returns the release fn. Aborting while queued rejects and removes the waiter.
+async function acquireCachePathWriteLock(
+  cachePath: string,
+  signal?: AbortSignal
+): Promise<() => void> {
+  const lockKey = lockKeyFor(cachePath)
+  let lock = cachePathLocks.get(lockKey)
+  if (!lock) {
+    lock = { held: false, waiters: [] }
+    cachePathLocks.set(lockKey, lock)
+  }
+  if (!lock.held) {
+    lock.held = true
+    return () => releaseCachePathWriteLock(lockKey)
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const waiter: CacheLockWaiter = {
+      grant: () => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve()
+      },
+      drop: (reason: Error) => reject(reason)
+    }
+    const onAbort = () => {
+      const index = lock.waiters.indexOf(waiter)
+      if (index !== -1) lock.waiters.splice(index, 1)
+      waiter.drop(new CacheLockAbortError(signal?.reason))
+    }
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
+    lock.waiters.push(waiter)
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+
+  return () => releaseCachePathWriteLock(lockKey)
 }
 
 function markCachePathActive(cachePath: string): void {
@@ -107,6 +185,11 @@ function releaseCachePath(cachePath: string): void {
     return
   }
   activeCachePaths.set(cachePath, count - 1)
+}
+
+// Paths in-flight turns hold, so pruning skips a directory still in use.
+function snapshotActivePaths(): string[] {
+  return Array.from(activeCachePaths.keys())
 }
 
 function isCacheKeyActive(cacheKey: string): boolean {
@@ -229,6 +312,12 @@ export interface BeginCustomTurnInput {
    * module has no dependency on the model registry / addon.
    */
   primeIfMissing: (cachePath: string) => Promise<void>
+  /**
+   * Request abort signal. When it aborts while this turn is queued behind a
+   * same-file peer's write lock, the wait is abandoned so the request's scope
+   * unwinds and releases its admission slot instead of blocking on the holder.
+   */
+  signal?: AbortSignal
 }
 
 export interface BeginAutoTurnInput {
@@ -239,6 +328,8 @@ export interface BeginAutoTurnInput {
   history: CacheMessage[]
   /** See `BeginCustomTurnInput.primeIfMissing`. */
   primeIfMissing: (cachePath: string) => Promise<void>
+  /** See `BeginCustomTurnInput.signal`. */
+  signal?: AbortSignal
 }
 
 export type BeginTurnInput = BeginCustomTurnInput | BeginAutoTurnInput
@@ -304,6 +395,12 @@ export interface KvCacheSession {
    * itself via `commitTurn`).
    */
   rollback(turn: TurnHandle): Promise<void>
+  /**
+   * Non-destructive counterpart of `rollback`: releases locks and refs but
+   * keeps the committed disk cache and its recorded prefix valid for a retry.
+   * A cache freshly primed by this same turn rolls back instead.
+   */
+  releaseTurn(turn: TurnHandle): Promise<void>
 
   /**
    * Forget the in-memory saved-message count for the turn's path
@@ -317,12 +414,17 @@ export interface KvCacheSession {
 
 interface InternalTurnState {
   cachePath: string
-  registryKey: string
   autoCacheKey?: string
+  /** Request abort signal, so commit's target-lock wait stays abortable. */
+  signal?: AbortSignal
+  /** Releases this turn's per-cache-path write lock; idempotent. */
+  releaseWriteLock: () => void
   /** Flipped by `commitTurn`; consulted at the top of `rollback`. */
   committed: boolean
   /** Flipped at the end of `rollback`; protects against double-rollback. */
   rolledBack: boolean
+  /** True when this turn primed the cache (nothing committed exists to keep). */
+  freshlyPrimed: boolean
 }
 
 // ----- factory -----
@@ -343,7 +445,12 @@ export function createKvCacheSession(
   // the reference; the module-scoped maps above survive.
   const turnState = new WeakMap<TurnHandle, InternalTurnState>()
 
-  function makeHandle(cachePath: string, registryKey: string, autoCacheKey?: string): TurnHandle {
+  function makeHandle(
+    cachePath: string,
+    autoCacheKey?: string,
+    releaseWriteLock: () => void = () => {},
+    signal?: AbortSignal
+  ): TurnHandle {
     const cached = cachedPrefixes.get(cachePath)
     const handle: TurnHandle = {
       cachePath,
@@ -352,10 +459,12 @@ export function createKvCacheSession(
     }
     turnState.set(handle, {
       cachePath,
-      registryKey,
       ...(autoCacheKey !== undefined && { autoCacheKey }),
+      ...(signal !== undefined && { signal }),
+      releaseWriteLock,
       committed: false,
-      rolledBack: false
+      rolledBack: false,
+      freshlyPrimed: false
     })
     markCachePathActive(cachePath)
     return handle
@@ -363,20 +472,41 @@ export function createKvCacheSession(
 
   async function beginCustom(input: BeginCustomTurnInput): Promise<TurnHandle> {
     const cachePath = await getCacheFilePath(modelId, input.configHash, input.customKey)
-    const registryKey = initRegistryKey(modelId, input.configHash, input.customKey)
-    const handle = makeHandle(cachePath, registryKey)
+    // Held for the whole turn so a same-file peer can't interleave writes.
+    // Released on commit/rollback/error; throws if aborted while queued.
+    let releaseWriteLock: () => void
+    try {
+      releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
+    } catch (error) {
+      // Aborted while queued: no lock is held to release, and getCacheFilePath
+      // already mkdir'd this key's parent (a distinct dir under a case variant),
+      // so prune it before the cancellation propagates.
+      if (error instanceof CacheLockAbortError) {
+        await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
+      }
+      throw error
+    }
+    // A turn cancelled by the time it holds the lock must not prime (native work).
+    // getCacheFilePath already mkdir'd the parent, so prune it before surfacing
+    // the cancellation the plugin rides.
+    if (input.signal?.aborted) {
+      await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
+      releaseWriteLock()
+      throw new CacheLockAbortError(input.signal.reason)
+    }
+    const handle = makeHandle(cachePath, undefined, releaseWriteLock, input.signal)
 
     try {
       // In-memory registry check first — the addon defers disk writes, so
       // a freshly-primed cache may not yet exist on disk. If the
       // in-memory flag isn't set, fall back to a filesystem probe so
       // caches surviving across process restarts still hit the reuse path.
-      let exists = initializedCaches.has(registryKey)
+      let exists = initializedCaches.has(cachePath)
       if (!exists) {
         try {
           await fsPromises.access(cachePath)
           exists = true
-          initializedCaches.add(registryKey)
+          initializedCaches.add(cachePath)
         } catch {
           exists = false
         }
@@ -384,53 +514,112 @@ export function createKvCacheSession(
       logCacheStatus(input.customKey, exists)
 
       if (!exists) {
+        // Recreate the parent dir if a same-key peer's rollback pruned it after our lock wait.
+        await fsPromises.mkdir(path.dirname(cachePath), { recursive: true })
+        // The access probe / mkdir above yielded, so a cancel may have landed
+        // since the acquire-time check — re-check right before native priming.
+        // The catch below prunes the directory just created.
+        if (input.signal?.aborted) throw new CacheLockAbortError(input.signal.reason)
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
-        initializedCaches.add(registryKey)
+        initializedCaches.add(cachePath)
+        turnState.get(handle)!.freshlyPrimed = true
       }
 
       return handle
     } catch (error) {
       releaseCachePath(cachePath)
+      await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
+      releaseWriteLock()
       throw error
     }
   }
 
   async function beginAuto(input: BeginAutoTurnInput): Promise<TurnHandle> {
-    // The pre-response cache key is derived from
-    // `history.slice(0, -1)` — `findMatchingCache` does that
-    // internally. The post-response key (used after a successful turn)
-    // is computed by the caller and passed to `commitTurn` as
-    // `targetCachePath`.
-    const setup = await withCacheStateLock(async () => {
+    // The path comes from a history lookup, so: discover it, lock it (outside
+    // the state lock, or commitTurn's rename could deadlock a waiter), then
+    // re-check existence under the lock in case a same-file peer just renamed it.
+    const discovered = await withCacheStateLock(async () => {
       const existingCache = await findMatchingCache(modelId, input.configHash, input.history)
       const cacheInfo =
         existingCache ?? (await getCurrentCacheInfo(modelId, input.configHash, input.history))
-      const registryKey = initRegistryKey(modelId, input.configHash, cacheInfo.cacheKey)
       return {
-        cacheExists: existingCache !== null,
         cachePath: cacheInfo.cachePath,
-        cacheKey: cacheInfo.cacheKey,
-        registryKey,
-        handle: makeHandle(cacheInfo.cachePath, registryKey, cacheInfo.cacheKey)
+        cacheKey: cacheInfo.cacheKey
       }
     })
 
-    const { cacheExists, cachePath, cacheKey, registryKey, handle } = setup
+    const { cachePath, cacheKey } = discovered
+    let releaseWriteLock: () => void
+    try {
+      releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
+    } catch (error) {
+      // Aborted while queued: no lock is held to release. Discovery already
+      // mkdir'd the parent and wrote the auto marker; clean both before the
+      // cancellation propagates.
+      if (error instanceof CacheLockAbortError) {
+        await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
+        await removeAutoCacheMarkerIfMissing(cacheKey)
+      }
+      throw error
+    }
+    // A turn cancelled by the time it holds the lock must not prime (native work).
+    // Discovery already mkdir'd the parent and wrote the auto marker; clean both
+    // before surfacing the cancellation.
+    if (input.signal?.aborted) {
+      await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
+      await removeAutoCacheMarkerIfMissing(cacheKey)
+      releaseWriteLock()
+      throw new CacheLockAbortError(input.signal.reason)
+    }
+
+    let handle: TurnHandle
+    let cacheExists: boolean
+    try {
+      const resolved = await withCacheStateLock(async () => {
+        // Mark the path active under the state lock so retention can't evict it.
+        const h = makeHandle(cachePath, cacheKey, releaseWriteLock, input.signal)
+        let exists = initializedCaches.has(cachePath)
+        if (!exists) {
+          try {
+            await fsPromises.access(cachePath)
+            exists = true
+            initializedCaches.add(cachePath)
+          } catch {
+            exists = false
+          }
+        }
+        return { h, exists }
+      })
+      handle = resolved.h
+      cacheExists = resolved.exists
+    } catch (error) {
+      releaseWriteLock()
+      throw error
+    }
+
     logCacheStatus('auto', cacheExists)
 
     try {
       if (!cacheExists) {
+        // Recreate the parent dir if a same-file peer's rename pruned it.
+        await fsPromises.mkdir(path.dirname(cachePath), { recursive: true })
+        // The discovery / mkdir above yielded, so a cancel may have landed since
+        // the acquire-time check — re-check right before native priming. The
+        // catch below prunes the directory and auto marker.
+        if (input.signal?.aborted) throw new CacheLockAbortError(input.signal.reason)
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
-        initializedCaches.add(registryKey)
+        initializedCaches.add(cachePath)
+        turnState.get(handle)!.freshlyPrimed = true
       }
 
       return handle
     } catch (error) {
       releaseCachePath(cachePath)
-      await pruneEmptyCacheDirectories(cachePath)
+      await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
       await removeAutoCacheMarkerIfMissing(cacheKey)
+      releaseWriteLock()
       throw error
     }
   }
@@ -469,63 +658,89 @@ export function createKvCacheSession(
       }
       state.committed = true
       releaseCachePath(state.cachePath)
+      state.releaseWriteLock()
       return
     }
 
     const sourceCachePath = state.cachePath
     const sourceCacheKey = state.autoCacheKey
     const targetCacheKey = path.basename(path.dirname(path.dirname(result.targetCachePath)))
-    const renamed = await withCacheStateLock(async () => {
-      markCachePathActive(result.targetCachePath)
-      await fsPromises.mkdir(path.dirname(result.targetCachePath), { recursive: true })
-      await markAutoCacheKey(targetCacheKey)
-
-      if (!(await renameCacheFile(sourceCachePath, result.targetCachePath))) {
-        releaseCachePath(result.targetCachePath)
-        await pruneEmptyCacheDirectories(result.targetCachePath)
-        await removeAutoCacheMarkerIfMissing(targetCacheKey)
-        return false
+    // Hold the target's lock across the rename AND commit verification, so a peer
+    // resolving to the same file can't observe it before its saved count is
+    // published. Abortable: a cancel while waiting for the lock rejects here.
+    const releaseTargetLock = await acquireCachePathWriteLock(result.targetCachePath, state.signal)
+    try {
+      // A cancel that landed while we waited for the target lock must not commit.
+      if (state.signal?.aborted) {
+        await runRollback(state)
+        return
       }
 
-      releaseCachePath(sourceCachePath)
-      state.cachePath = result.targetCachePath
-      state.autoCacheKey = targetCacheKey
-      await pruneEmptyCacheDirectories(sourceCachePath)
-      if (sourceCacheKey !== undefined) {
-        await removeAutoCacheMarkerIfMissing(sourceCacheKey)
-      }
-      cachedPrefixes.delete(sourceCachePath)
-      initializedCaches.delete(state.registryKey)
-      return true
-    })
+      const renamed = await withCacheStateLock(async () => {
+        markCachePathActive(result.targetCachePath)
+        try {
+          await fsPromises.mkdir(path.dirname(result.targetCachePath), { recursive: true })
+          await markAutoCacheKey(targetCacheKey)
 
-    if (!renamed) {
-      logger.warn(
-        `[kv-cache] Auto cache rename failed; rolling back. from=${sourceCachePath} to=${result.targetCachePath}`
+          if (!(await renameCacheFile(sourceCachePath, result.targetCachePath))) {
+            releaseCachePath(result.targetCachePath)
+            await pruneEmptyCacheDirectories(result.targetCachePath, snapshotActivePaths())
+            await removeAutoCacheMarkerIfMissing(targetCacheKey)
+            return false
+          }
+        } catch (setupError) {
+          // mkdir/markAutoCacheKey/rename threw after the target active-ref was
+          // taken: release it (first, so it can't leak) and prune any directory
+          // or marker created above, then propagate.
+          releaseCachePath(result.targetCachePath)
+          await pruneEmptyCacheDirectories(result.targetCachePath, snapshotActivePaths())
+          await removeAutoCacheMarkerIfMissing(targetCacheKey)
+          throw setupError
+        }
+
+        releaseCachePath(sourceCachePath)
+        state.cachePath = result.targetCachePath
+        state.autoCacheKey = targetCacheKey
+        await pruneEmptyCacheDirectories(sourceCachePath, snapshotActivePaths())
+        if (sourceCacheKey !== undefined) {
+          await removeAutoCacheMarkerIfMissing(sourceCacheKey)
+        }
+        cachedPrefixes.delete(sourceCachePath)
+        // state.cachePath was just reassigned to the target; clear the SOURCE
+        // entry, not the freshly-valid target.
+        initializedCaches.delete(sourceCachePath)
+        return true
+      })
+
+      if (!renamed) {
+        logger.warn(
+          `[kv-cache] Auto cache rename failed; rolling back. from=${sourceCachePath} to=${result.targetCachePath}`
+        )
+        await runRollback(state)
+        return
+      }
+      const ok = await verifySaveAndRecord(
+        result.targetCachePath,
+        result.messageCount,
+        result.toolBlockCached
       )
-      await runRollback(state)
-      return
-    }
+      if (!ok) {
+        // Rename succeeded but the file isn't where we expected. Roll back via
+        // the target path instead of the (now-empty) source.
+        await runRollback(state)
+        return
+      }
 
-    const ok = await verifySaveAndRecord(
-      result.targetCachePath,
-      result.messageCount,
-      result.toolBlockCached
-    )
-    if (!ok) {
-      // Rename succeeded but the file isn't where we expected. Roll
-      // back via the target path instead of the (now-empty) source.
-      await runRollback(state)
-      return
+      // Successful auto-rename. The handle's `cachePath` field still points at
+      // the (now-gone) source path — fine, the handle is committed and won't
+      // roll back. Future turns compute fresh paths.
+      state.committed = true
+      releaseCachePath(state.cachePath)
+      state.releaseWriteLock()
+      scheduleAutoCacheSweep(logger)
+    } finally {
+      releaseTargetLock()
     }
-
-    // Successful auto-rename. The handle's `cachePath` field still
-    // points at the (now-gone) source path — that's fine, the handle
-    // is committed and won't roll back. Future turns compute fresh
-    // paths.
-    state.committed = true
-    releaseCachePath(state.cachePath)
-    scheduleAutoCacheSweep(logger)
   }
 
   async function rollback(turn: TurnHandle): Promise<void> {
@@ -533,6 +748,22 @@ export function createKvCacheSession(
     if (!state) return
     if (state.committed || state.rolledBack) return
     await runRollback(state)
+  }
+
+  async function releaseTurn(turn: TurnHandle): Promise<void> {
+    const state = turnState.get(turn)
+    if (!state) return
+    if (state.committed || state.rolledBack) return
+    // A cache this same turn primed has no committed state to keep — a failed
+    // first turn must not leave its own prime behind.
+    if (state.freshlyPrimed) {
+      await runRollback(state)
+      return
+    }
+    releaseCachePath(state.cachePath)
+    state.rolledBack = true
+    state.releaseWriteLock()
+    if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
   }
 
   async function runRollback(state: InternalTurnState): Promise<void> {
@@ -547,14 +778,17 @@ export function createKvCacheSession(
         `[kv-cache] Failed to remove cache file during rollback; next turn may load stale KV state. path=${state.cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
       )
     }
-    await pruneEmptyCacheDirectories(state.cachePath)
+    // Release before pruning so an empty parent can go; a sibling still holding
+    // the path keeps it in the active snapshot and protects the directory.
+    releaseCachePath(state.cachePath)
+    await pruneEmptyCacheDirectories(state.cachePath, snapshotActivePaths())
     if (state.autoCacheKey !== undefined) {
       await removeAutoCacheMarkerIfMissing(state.autoCacheKey)
     }
-    initializedCaches.delete(state.registryKey)
+    initializedCaches.delete(state.cachePath)
     cachedPrefixes.delete(state.cachePath)
-    releaseCachePath(state.cachePath)
     state.rolledBack = true
+    state.releaseWriteLock()
     if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
   }
 
@@ -568,6 +802,7 @@ export function createKvCacheSession(
     beginTurn,
     commitTurn,
     rollback,
+    releaseTurn,
     dropStaleSavedCount
   }
 }
@@ -592,17 +827,19 @@ export function createKvCacheSession(
  *      tree (or wipes and recreates the root for `all: true`).
  *   2. `cachedPrefixes`: prefix-cleanup by the removed directory
  *      so any per-cache count under the deleted tree is forgotten.
- *   3. `initializedCaches`: scope clear by `(kvCacheKey[, modelId])`,
- *      matching the on-disk scope.
+ *   3. `initializedCaches`: prefix-cleanup by the same removed
+ *      directory, since it is keyed by the resolved cache path.
  *
- * Concurrency with in-flight turns: this delete is wire-async with
- * respect to any turn currently holding a `TurnHandle` for the same
- * cache key. Worst case the on-disk `.bin` is removed while a turn is
- * mid-write; the turn's eventual `commitTurn(...)` then fails the
- * `verifySaveAndRecord` probe (file gone) and rolls back idempotently.
- * No coordination primitive is needed because every layer's mutation
- * is idempotent (`unlink` no-ops if missing, `Map.delete` / `Set.delete`
- * no-op on absent keys).
+ * Concurrency with in-flight turns: this delete does not take the
+ * per-cache-path write locks, so it races any turn holding a `TurnHandle`
+ * for the same key. Deleting a key that is in active use is unsupported.
+ * Each individual mutation is idempotent (`unlink` no-ops if missing,
+ * `Map.delete` / `Set.delete` no-op on absent keys), but the layers are
+ * cleared without a lock, so an interleaving that lands the delete's
+ * in-memory cleanup after a concurrent turn has already renamed/committed
+ * its file splits state: the file stays on disk while its saved-count and
+ * init flag are cleared, so the next turn sees the file, skips priming, and
+ * reports `savedCount=0`. Callers must not delete a key that is in active use.
  */
 export async function deleteKvCacheState(
   target: { kvCacheKey: string; modelId?: string } | { all: true }
@@ -622,7 +859,11 @@ export async function deleteKvCacheState(
     ...(target.modelId !== undefined && { modelId: target.modelId })
   })
   if (target.modelId === undefined) {
-    await removeAutoCacheMarker(target.kvCacheKey)
+    // Remove the marker by the root-relative key: an alias like "./<16hex>"
+    // still resolves to the canonical auto key, while a nested key such as
+    // "tenant/<16hex>" stays distinct — path.basename would wrongly collapse it
+    // onto the unrelated top-level auto marker.
+    await removeAutoCacheMarker(path.relative(getKVCacheDir(), removedPath))
   }
 
   // Prefix-cleanup the in-memory counts. The on-disk directory tree
@@ -631,13 +872,9 @@ export async function deleteKvCacheState(
   // or sits beneath it must go.
   clearCachedMessageCountsByPrefix(removedPath, path.sep)
 
-  // The in-memory init-set keys are
-  // `${modelId}:${configHash}:${kvCacheKey}` — clear by the user-
-  // facing kvCacheKey (and optionally narrow by modelId).
-  clearInitializedCachesByScope({
-    cacheKey: target.kvCacheKey,
-    ...(target.modelId !== undefined && { modelId: target.modelId })
-  })
+  // initializedCaches is keyed by the resolved cachePath too, so clear it by
+  // the same removed-directory prefix as cachedPrefixes above.
+  clearInitializedCachesByPrefix(removedPath, path.sep)
 }
 
 // ----- private helpers -----
@@ -680,7 +917,7 @@ async function verifyPrimedFile(cachePath: string, logger: Logger): Promise<void
   } catch (statError) {
     // ENOENT is the common case here — addon prime returned without
     // calling save (most often: signal abort during prefill).
-    await pruneEmptyCacheDirectories(cachePath)
+    await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
     throw new Error(
       `[kv-cache] prime closure resolved but no cache file was written. path=${cachePath} cause=${statError instanceof Error ? statError.message : String(statError)}`
     )
@@ -691,7 +928,7 @@ async function verifyPrimedFile(cachePath: string, logger: Logger): Promise<void
     // primary "prime didn't persist" condition.
     try {
       await fsPromises.unlink(cachePath)
-      await pruneEmptyCacheDirectories(cachePath)
+      await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
     } catch (unlinkError) {
       logger.warn(
         `[kv-cache] Failed to remove empty primed cache file. path=${cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
@@ -743,27 +980,13 @@ function clearCachedMessageCountsByPrefix(prefix: string, sep: string): void {
   }
 }
 
-function clearInitializedCachesByScope(scope: {
-  cacheKey?: string | undefined
-  modelId?: string | undefined
-}): void {
-  if (scope.cacheKey === undefined && scope.modelId === undefined) {
+function clearInitializedCachesByPrefix(prefix: string, sep: string): void {
+  if (!prefix) {
     initializedCaches.clear()
     return
   }
   for (const key of initializedCaches) {
-    const firstSep = key.indexOf(':')
-    const secondSep = key.indexOf(':', firstSep + 1)
-    if (firstSep === -1 || secondSep === -1) continue
-    const entryModelId = key.slice(0, firstSep)
-    const entryCacheKey = key.slice(secondSep + 1)
-    if (scope.cacheKey !== undefined && entryCacheKey !== scope.cacheKey) {
-      continue
-    }
-    if (scope.modelId !== undefined && entryModelId !== scope.modelId) {
-      continue
-    }
-    initializedCaches.delete(key)
+    if (key === prefix || key.startsWith(prefix + sep)) initializedCaches.delete(key)
   }
 }
 
@@ -788,11 +1011,11 @@ export const __kvCacheSessionTestHooks = {
   getToolBlockCachedForTest(cachePath: string): boolean {
     return cachedPrefixes.get(cachePath)?.toolBlock ?? false
   },
-  hasInitializedKey(modelId: string, configHash: string, cacheKey: string): boolean {
-    return initializedCaches.has(initRegistryKey(modelId, configHash, cacheKey))
+  hasInitializedPath(cachePath: string): boolean {
+    return initializedCaches.has(cachePath)
   },
-  markInitializedForTest(modelId: string, configHash: string, cacheKey: string): void {
-    initializedCaches.add(initRegistryKey(modelId, configHash, cacheKey))
+  getActivePathCountForTest(cachePath: string): number {
+    return activeCachePaths.get(cachePath) ?? 0
   },
   getLastAutoCacheSweepMsForTest(): number {
     return lastAutoCacheSweepMs
@@ -807,6 +1030,7 @@ export const __kvCacheSessionTestHooks = {
     lastAutoCacheSweepMs = 0
     autoCacheSweepInFlight = null
     cacheStateLockTail = Promise.resolve()
+    cachePathLocks.clear()
   },
   waitForAutoCacheSweepForTest(): Promise<void> {
     return autoCacheSweepInFlight ?? Promise.resolve()

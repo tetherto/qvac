@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.17.1",
+  "version": "0.18.2",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -55,119 +55,130 @@
     "whisper"
   ],
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "require": "./dist/src/index.js"
     },
     "./package": "./package.json",
+    "./dist/src/worker/index.js": {
+      "import": "./dist/src/worker/index.js",
+      "require": "./dist/src/worker/index.js"
+    },
     "./dist/server/worker.js": {
-      "import": "./dist/server/worker.js",
-      "require": "./dist/server/worker.js"
+      "import": "./dist/src/worker/legacy-worker-entry.js"
     },
     "./llamacpp-completion/plugin": {
-      "types": "./dist/server/bare/plugins/llamacpp-completion/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/llamacpp-completion/plugin.js"
+      "types": "./dist/src/worker/plugins/llamacpp-completion.d.ts",
+      "import": "./dist/src/worker/plugins/llamacpp-completion.js"
     },
     "./llamacpp-embedding/plugin": {
-      "types": "./dist/server/bare/plugins/llamacpp-embedding/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/llamacpp-embedding/plugin.js"
+      "types": "./dist/src/worker/plugins/llamacpp-embedding.d.ts",
+      "import": "./dist/src/worker/plugins/llamacpp-embedding.js"
     },
     "./whispercpp-transcription/plugin": {
-      "types": "./dist/server/bare/plugins/whispercpp-transcription/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/whispercpp-transcription/plugin.js"
+      "types": "./dist/src/worker/plugins/whispercpp-transcription.d.ts",
+      "import": "./dist/src/worker/plugins/whispercpp-transcription.js"
     },
     "./bci-whispercpp-transcription/plugin": {
-      "types": "./dist/server/bare/plugins/bci-whispercpp-transcription/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/bci-whispercpp-transcription/plugin.js"
+      "types": "./dist/src/worker/plugins/bci-whispercpp-transcription.d.ts",
+      "import": "./dist/src/worker/plugins/bci-whispercpp-transcription.js"
     },
     "./parakeet-transcription/plugin": {
-      "types": "./dist/server/bare/plugins/parakeet-transcription/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/parakeet-transcription/plugin.js"
+      "types": "./dist/src/worker/plugins/parakeet-transcription.d.ts",
+      "import": "./dist/src/worker/plugins/parakeet-transcription.js"
     },
     "./nmtcpp-translation/plugin": {
-      "types": "./dist/server/bare/plugins/nmtcpp-translation/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/nmtcpp-translation/plugin.js"
+      "types": "./dist/src/worker/plugins/nmtcpp-translation.d.ts",
+      "import": "./dist/src/worker/plugins/nmtcpp-translation.js"
     },
     "./tts-ggml/plugin": {
-      "types": "./dist/server/bare/plugins/tts-ggml/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/tts-ggml/plugin.js"
+      "types": "./dist/src/worker/plugins/tts-ggml.d.ts",
+      "import": "./dist/src/worker/plugins/tts-ggml.js"
     },
     "./onnx-tts/plugin": {
-      "types": "./dist/server/bare/plugins/tts-ggml/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/tts-ggml/plugin.js"
+      "types": "./dist/src/worker/plugins/tts-ggml.d.ts",
+      "import": "./dist/src/worker/plugins/tts-ggml.js"
     },
     "./ggml-ocr/plugin": {
-      "types": "./dist/server/bare/plugins/ggml-ocr/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/ggml-ocr/plugin.js"
+      "types": "./dist/src/worker/plugins/ggml-ocr.d.ts",
+      "import": "./dist/src/worker/plugins/ggml-ocr.js"
     },
     "./sdcpp-generation/plugin": {
-      "types": "./dist/server/bare/plugins/sdcpp-generation/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/sdcpp-generation/plugin.js"
+      "types": "./dist/src/worker/plugins/sdcpp-generation.d.ts",
+      "import": "./dist/src/worker/plugins/sdcpp-generation.js"
     },
     "./audiogen-ggml/plugin": {
-      "types": "./dist/server/bare/plugins/audiogen-ggml/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/audiogen-ggml/plugin.js"
+      "types": "./dist/src/worker/plugins/audiogen-ggml.d.ts",
+      "import": "./dist/src/worker/plugins/audiogen-ggml.js"
     },
     "./ggml-vla/plugin": {
-      "types": "./dist/server/bare/plugins/ggml-vla/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/ggml-vla/plugin.js"
+      "types": "./dist/src/worker/plugins/ggml-vla.d.ts",
+      "import": "./dist/src/worker/plugins/ggml-vla.js"
     },
     "./ggml-classification/plugin": {
-      "types": "./dist/server/bare/plugins/ggml-classification/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/ggml-classification/plugin.js"
+      "types": "./dist/src/worker/plugins/ggml-classification.d.ts",
+      "import": "./dist/src/worker/plugins/ggml-classification.js"
     },
     "./plugin-utils": {
-      "types": "./dist/schemas/plugin.d.ts",
-      "import": "./dist/schemas/plugin.js"
+      "types": "./dist/src/plugin-utils.d.ts",
+      "import": "./dist/src/plugin-utils.js"
     },
-    "./expo-plugin": "./dist/expo/plugins/index.js",
+    "./schemas": {
+      "types": "./dist/src/schemas/public.d.ts",
+      "import": "./dist/src/schemas/public.js",
+      "require": "./dist/src/schemas/public.js"
+    },
+    "./expo-plugin": "./dist/src/expo/plugins/index.js",
     "./electron-forge": {
-      "require": "./electron-forge/index.cjs",
-      "import": "./electron-forge/index.cjs",
-      "default": "./electron-forge/index.cjs"
+      "require": "./src/electron-forge/index.cjs",
+      "import": "./src/electron-forge/index.cjs",
+      "default": "./src/electron-forge/index.cjs"
     },
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
+    "./worker-lifecycle": {
+      "import": "./dist/src/worker/lifecycle.js"
+    },
     "./worker-core": {
-      "import": "./dist/server/worker-core.js"
+      "import": "./dist/src/worker/worker-core.js"
     },
     "./plugins": {
-      "import": "./dist/server/plugins/index.js"
+      "import": "./dist/src/server/plugins/index.js"
     },
     "./logging": {
-      "import": "./dist/logging/index.js"
+      "import": "./dist/src/logging/index.js"
     },
     "./commands": {
-      "types": "./dist/commands/index.d.ts",
-      "import": "./dist/commands/index.js"
+      "types": "./dist/src/commands/index.d.ts",
+      "import": "./dist/src/commands/index.js"
     },
     "./models": {
-      "types": "./dist/models/registry/index.d.ts",
-      "import": "./dist/models/registry/index.js",
-      "require": "./dist/models/registry/index.js"
+      "types": "./dist/src/models/registry/index.d.ts",
+      "import": "./dist/src/models/registry/index.js",
+      "require": "./dist/src/models/registry/index.js"
     },
-    "./pear-pre": "./dist/pear/pre.js"
+    "./pear-pre": "./dist/src/pear/pre.js"
   },
   "imports": {
     "#rpc": {
-      "react-native": "./dist/client/rpc/expo-rpc-client.js",
-      "bare": "./dist/client/rpc/bare-client.js",
-      "default": "./dist/client/rpc/node-rpc-client.js"
+      "react-native": "./dist/src/client/rpc/expo-rpc-client.js",
+      "bare": "./dist/src/client/rpc/bare-client.js",
+      "default": "./dist/src/client/rpc/node-rpc-client.js"
     }
   },
   "expo": {
     "plugins": [
-      "./dist/expo/plugins/index.js"
+      "./dist/src/expo/plugins/index.js"
     ]
   },
   "files": [
     "bare-imports.json",
     "dist/**/*",
-    "electron-forge/**/*",
-    "expo/plugins/patches/**/*",
+    "src/electron-forge/**/*",
+    "src/expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
     "!**/yarn.lock",
@@ -179,55 +190,49 @@
   ],
   "scripts": {
     "test:unit": "bun run scripts/run-unit-tests.ts",
-    "build:bare": "tsc -p test/bare/tsconfig.json && tsc-alias -p test/bare/tsconfig.json",
-    "make:test:bare": "brittle-make-test test/dist/test/bare/all.mjs \"test/dist/test/bare/**/*.test.js\"",
-    "test:bare": "bun run build:bare && bun run make:test:bare && brittle-bare test/dist/test/bare/all.mjs",
-    "test:security": "bun run scripts/run-security-tests.ts",
-    "test:security:bare": "bun run build:bare && brittle-bare \"test/dist/test/bare/path-security*.test.js\"",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "lint": "eslint . --max-warnings=0",
-    "lint:fix": "eslint . --fix",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "lunte && npm run enforce-inference-peer-dependencies",
+    "lint:fix": "lunte --fix",
+    "enforce-inference-peer-dependencies": "bun scripts/enforce-inference-peer-dependencies.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.types.json",
     "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
     "build:pack": "bun run build && bun pm pack --destination dist/",
     "sdk-source:workspace": "bun run ./scripts/link-workspace-inference.ts",
-    "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
+    "watch": "nodemon --watch src --ext ts --exec 'bun run build'",
     "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
     "bare:ensureprebuilds:asr": "cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-ia32 && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-arm && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-x64",
     "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",
     "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:asr && bun run bare:ensureprebuilds:embeddings",
     "prepare:husky": "bun run husky",
-    "bare:example": "bare ./scripts/bare-bootstrap.js",
     "contract:export": "tsx ./scripts/export-contract.ts",
     "contract:check": "tsx ./scripts/export-contract.ts --check",
     "check:resource-collectors": "tsx ./scripts/check-resource-collectors-packaging.ts",
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
-    "@qvac/audiogen-ggml": "^0.2.1",
-    "@qvac/asr-ggml": "^0.3.0",
-    "@qvac/bci-whispercpp": "^0.7.1",
-    "@qvac/classification-ggml": "^0.18.0",
+    "@qvac/audiogen-ggml": "^0.3.2",
+    "@qvac/asr-ggml": "^0.3.1",
+    "@qvac/bci-whispercpp": "^0.8.0",
+    "@qvac/classification-ggml": "^0.23.0",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.17.0",
-    "@qvac/embed-llamacpp": "^0.32.0",
+    "@qvac/diffusion-cpp": "^0.21.0",
+    "@qvac/embed-llamacpp": "^0.37.0",
     "@qvac/error": "^0.1.1",
+    "@qvac/inference": "^0.18.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.43.0",
+    "@qvac/llm-llamacpp": "^0.49.1",
     "@qvac/logging": "^0.1.0",
-    "@qvac/ocr-ggml": "^0.16.0",
-    "@qvac/rag": "^0.6.4",
+    "@qvac/ocr-ggml": "^0.21.0",
     "@qvac/registry-client": "^0.6.1",
-    "@qvac/translation-nmtcpp": "^0.8.0",
-    "@qvac/tts-ggml": "^0.7.0",
-    "@qvac/vla-ggml": "^0.19.0",
+    "@qvac/translation-nmtcpp": "^0.13.0",
+    "@qvac/tts-ggml": "^0.8.0",
+    "@qvac/vla-ggml": "^0.24.0",
     "bare-abort-controller": "^1.0.0",
     "bare-cpu-info": "0.1.1",
     "bare-crypto": "^1.15.0",
     "bare-env": "^3.0.0",
-    "bare-fetch": "^3.0.1",
     "bare-fs": "^4.5.1",
     "bare-gpu-info": "0.1.1",
     "bare-net": "^2.3.2",
@@ -260,22 +265,18 @@
     "@types/semver": "^7.7.1",
     "@types/tar-stream": "^3.1.4",
     "ajv": "8.20.0",
-    "bare-process": "^4.4.1",
     "bare-readline": "^1.2.0",
     "bare-stdio": "^1.0.2",
     "bare-subprocess": "^6.1.0",
     "bare-url": "^2.4.3",
     "brittle": "^4.0.0",
     "chromadb": "^3.0.14",
-    "eslint": "^9.33.0",
-    "eslint-import-resolver-typescript": "^4.4.4",
-    "eslint-plugin-import": "^2.30.0",
-    "eslint-plugin-react": "^7.37.5",
     "events": "^3.3.0",
     "expo": "^54.0.33",
     "expo-device": "^8.0.10",
     "expo-file-system": "^19.0.21",
     "husky": "^9.1.7",
+    "lunte": "^1.8.4",
     "mongodb": "^7.5.0",
     "pear-pipe": "^1.0.6",
     "prettier": "^3.9.4",
@@ -284,7 +285,6 @@
     "tsc-alias": "^1.8.17",
     "tsx": "4.23.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.39.0",
     "@qvac/infer-base": "0.4.2"
   },
   "peerDependencies": {

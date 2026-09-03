@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 export const kvCacheDeleteAll: TestDefinition = {
   testId: 'kv-cache-delete-all',
@@ -213,7 +213,10 @@ export const kvCacheRemoveThinkingCompaction: TestDefinition = {
     messages: [
       'Think step by step, then answer: what is 17 multiplied by 23?',
       'Now add 100 to that result.'
-    ]
+    ],
+    // Bounded, not disabled: the assertion needs a reasoning block, and a
+    // positive budget still force-emits the closing think tag.
+    generationParams: { reasoning_budget: 128, predict: 256, temp: 0, seed: 42 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
@@ -277,7 +280,59 @@ export const kvCacheCancelThenNewPrompt: TestDefinition = {
   }
 }
 
+// Two completions sharing one kvCache key are fired at once on a parallel:4
+// model. They must serialize — the per-cache-path lock in the KV-cache session
+// makes the second wait for the first to commit, so their decode intervals
+// never overlap even though the model is otherwise concurrent (proven by
+// completion-concurrent-overlap on the same resource). Both must still succeed.
+export const kvCacheConcurrentSameKey: TestDefinition = {
+  testId: 'kv-cache-concurrent-same-key',
+  params: {
+    history: [
+      { role: 'system', content: 'You are a helpful assistant. Be brief.' },
+      { role: 'user', content: 'Count from one to twenty using words.' }
+    ],
+    kvCache: 'concurrent-same-key-session',
+    generationParams: { temp: 0, seed: 42, predict: 64 }
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
+}
+
+// Same serialization guarantee for the automatic (history-derived) cache path:
+// two kvCache:true completions with identical history resolve to one cache file
+// and must serialize on the per-cache-path lock — which, for the auto path, is
+// acquired outside the global cache-state lock so the auto-rename commit can't
+// deadlock against it. Both must succeed; their decode intervals must not overlap.
+export const kvCacheConcurrentSameKeyAuto: TestDefinition = {
+  testId: 'kv-cache-concurrent-same-key-auto',
+  params: {
+    history: [
+      { role: 'system', content: 'You are a helpful assistant. Be brief.' },
+      { role: 'user', content: 'Count from one to twenty using words.' }
+    ],
+    kvCache: true,
+    generationParams: { temp: 0, seed: 42, predict: 64 }
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
+}
+
+// Different-history auto turns decode concurrently — with each other and with
+// plain completions. The regression guard for auto-cache serialization and slot
+// starvation: a cached-only phase proves native cached-vs-cached concurrency,
+// then a mixed phase proves plain completions aren't starved behind cached ones.
+export const kvCacheAutoConcurrency: TestDefinition = {
+  testId: 'kv-cache-auto-concurrency',
+  params: { generationParams: { temp: 0, seed: 42, predict: 48 } },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 60000 }
+}
+
 export const kvCacheTests = [
+  kvCacheConcurrentSameKey,
+  kvCacheConcurrentSameKeyAuto,
+  kvCacheAutoConcurrency,
   kvCacheDeleteAll,
   kvCacheDeleteByKey,
   kvCacheDeleteByModel,

@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.17.x (latest)
+title: API Summary — v0.18.x (latest)
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -12,7 +12,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 51 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 52 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -46,6 +46,16 @@ for await (const progress of run.progressStream) {
 }
 const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
 const stats = await run.stats;
+
+// Re-render an existing song with a new caption (cover) and a timbre reference:
+const cover = audioGen({
+  modelId,
+  caption: "orchestral arrangement with dramatic strings",
+  taskType: "cover-nofsq",
+  sourceAudio: "/path/to/source.wav",
+  referenceAudio: "/path/to/reference.mp3",
+  coverNoiseStrength: 0.75,
+});
 ```
 
 ---
@@ -700,6 +710,13 @@ const modelId = await loadModel({
   modelType: "llamacpp-completion",
   logger // Pass logger in options
 });
+
+// Catalog model with an alternate source used when the registry is unreachable
+import { LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
+const resilientId = await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+  fallbackSrc: "https://mirror.example.com/llama-3.2-1b-instruct-q4_0.gguf"
+});
 ```
 
 #### Overload 3 — Custom plugin
@@ -889,6 +906,8 @@ const chunks = await ragChunk({
 
 ### `ragCloseWorkspace`
 
+> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
 
 **Workspace lifecycle:** Workspaces are implicitly opened.
@@ -918,6 +937,8 @@ await ragCloseWorkspace({ workspace: "my-docs", deleteOnClose: true });
 
 ### `ragDeleteEmbeddings`
 
+> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Deletes document embeddings from the RAG vector database.
 
 **Workspace lifecycle:** This operation requires an existing workspace.
@@ -944,6 +965,8 @@ await ragDeleteEmbeddings({
 
 ### `ragDeleteWorkspace`
 
+> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Deletes a RAG workspace and all its data.
 The workspace must not be currently loaded/in-use.
 
@@ -965,6 +988,8 @@ await ragDeleteWorkspace({ workspace: "my-docs" });
 ---
 
 ### `ragIngest`
+
+> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
 
 Ingests documents into the RAG vector database.
 Full pipeline: chunk → embed → save
@@ -1006,6 +1031,8 @@ const result = await ragIngest({
 
 ### `ragListWorkspaces`
 
+> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Lists all RAG workspaces with their open status.
 
 Returns all workspaces that exist on disk. The `open` field indicates whether
@@ -1031,6 +1058,8 @@ const workspaces = await ragListWorkspaces();
 ---
 
 ### `ragReindex`
+
+> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
 
 Reindexes the RAG database to optimize search performance.
 For HyperDB, this rebalances centroids using k-means clustering.
@@ -1077,6 +1106,8 @@ const result = await ragReindex({
 
 ### `ragSaveEmbeddings`
 
+> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Saves pre-embedded documents to the RAG vector database.
 Part of the segregated flow: chunk() → embed() → saveEmbeddings()
 
@@ -1113,6 +1144,8 @@ const result = await ragSaveEmbeddings({
 ---
 
 ### `ragSearch`
+
+> 🧪 **Prototype only**: The built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
 
 Searches for similar documents in the RAG vector database.
 
@@ -1504,7 +1537,7 @@ Supports both NMT (Neural Machine Translation) and LLM models.
 **Signature**:
 
 ```ts
-function translate(params: TranslateClientParams, options?: RPCOptions): { stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string> };
+function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string> };
 ```
 
 **Throws**:
@@ -1748,6 +1781,44 @@ function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, 
 
 ---
 
+### `vlaSetEmbodiment`
+
+Switch a loaded multi-embodiment GR00T model to another embodiment shipped
+in the same GGUF — no reload, only that embodiment's weight rows are re-read.
+
+The returned hparams follow the newly active embodiment: re-read
+`numCameras` (and re-size buffers if needed) before the next `vla()` call.
+`selectedEmbodimentTag` / `selectedEmbodimentCatId` report what was
+resolved. Selecting by `catId` reports that id's canonical tag, which may
+differ from the alias used to select — the id is the stable identity.
+
+Rejects (leaving the current embodiment active) for a non-GR00T or
+single-embodiment model, an unknown tag or `cat_id`, one not stored in the
+GGUF, an embodiment with no known camera count and no `numCameras`
+override, or while an inference response is still pending — await the
+in-flight `vla()` call first.
+
+**Signature**:
+
+```ts
+function vlaSetEmbodiment(params: { embodiment: VlaEmbodimentSelection; modelId: string }): Promise<{ hparams: VlaHparams }>;
+```
+
+**Example**:
+```ts
+import { loadModel, vlaSetEmbodiment, vlaHparams } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: "/path/to/groot-multi.gguf",
+  modelType: "vla",
+  modelConfig: { embodiment: "libero_sim" }, // initial selection at load
+});
+const { hparams } = await vlaSetEmbodiment({ modelId, embodiment: "real_droid" });
+console.log(hparams.selectedEmbodimentTag, hparams.numCameras);
+```
+
+---
+
 ## Objects
 
 ### `profiler`
@@ -1886,6 +1957,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `INFERENCE_CANCELLED` | 52419 | Inference request "…" was cancelled before it could complete |
 | `REQUEST_REJECTED_BY_POLICY` | 52420 | Request "…" (kind: …, modelId: …) was rejected by registry concurrency policy: … |
 | `CONTEXT_OVERFLOW` | 52421 | … prompt tokens |
+| `INVALID_AUDIO_INPUT` | 52422 | Invalid audio input… |
 | `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
 | `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
 | `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |

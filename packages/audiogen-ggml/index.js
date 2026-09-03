@@ -11,17 +11,62 @@
 // streams the engine's output (progress ticks + one interleaved-Int16 PCM
 // chunk) and resolves with the run stats.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.ENGINE_ACESTEP = void 0;
+exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_GPU_FALLBACK_REASONS = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
+exports.audiogenBackendName = audiogenBackendName;
+exports.audiogenGpuFallbackReason = audiogenGpuFallbackReason;
+exports.detectEngineType = detectEngineType;
 const infer_base_1 = require("@qvac/infer-base");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
 const QvacLogger = require("@qvac/logging");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path is a CommonJS module.
 const path = require("bare-path");
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-os is a CommonJS module.
+const os = require("bare-os");
 const audiogen_1 = require("./audiogen");
 const models_1 = require("./models");
 const audio_format_1 = require("./lib/audio-format");
 const error_1 = require("./error");
 exports.ENGINE_ACESTEP = 'acestep';
+exports.ENGINE_MINIMAX = 'minimax';
+const SUPPORTED_ENGINES = [exports.ENGINE_ACESTEP, exports.ENGINE_MINIMAX];
+exports.MINIMAX_FRAMES_PER_SECOND = 25;
+exports.MINIMAX_DEFAULT_MAX_FRAMES = 300;
+const MINIMAX_MIN_FRAMES = 1;
+const MINIMAX_MAX_INFERENCE_STEPS = 1000;
+const INT32_MAX = 2147483647;
+const FLOAT32_MAX = 3.4028234663852886e38;
+const FLOAT32_MIN_POSITIVE = 1.401298464324817e-45;
+/** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
+exports.AUDIOGEN_BACKEND_NAMES = {
+    0: 'cpu',
+    1: 'metal',
+    2: 'cuda',
+    3: 'vulkan',
+    4: 'opencl',
+    99: 'other'
+};
+/** `undefined` for an unset or unrecognised id, never a guessed name. */
+function audiogenBackendName(backendId) {
+    if (backendId === undefined)
+        return undefined;
+    return exports.AUDIOGEN_BACKEND_NAMES[backendId];
+}
+/**
+ * `AudiogenStats.gpuFallbackReason` codes, named. Codes match
+ * `tts_cpp::GpuFallbackReason` in the engine.
+ */
+exports.AUDIOGEN_GPU_FALLBACK_REASONS = {
+    0: 'none',
+    1: 'not-requested',
+    2: 'no-devices',
+    3: 'init-failed'
+};
+/** `undefined` for an unset or unrecognised code, never a guessed reason. */
+function audiogenGpuFallbackReason(code) {
+    if (code === undefined)
+        return undefined;
+    return exports.AUDIOGEN_GPU_FALLBACK_REASONS[code];
+}
 function asNativeData(data) {
     if (typeof data !== 'object' || data === null)
         return null;
@@ -45,7 +90,49 @@ function requireFiniteNumber(value, name, integer = false) {
 function optionalFiniteNumber(value, name, integer = false) {
     return value === undefined ? undefined : requireFiniteNumber(value, name, integer);
 }
-const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq']);
+function requireSafeInteger(value, name) {
+    requireFiniteNumber(value, name, true);
+    if (!Number.isSafeInteger(value)) {
+        throw invalidInput(`${name} must be a safe integer, got ${value}`);
+    }
+    return value;
+}
+function requireMinimaxInferenceSteps(value) {
+    const steps = requireSafeInteger(value, 'inferenceSteps');
+    if (steps < 0 || steps > MINIMAX_MAX_INFERENCE_STEPS) {
+        throw invalidInput(`inferenceSteps must be between 0 and ${MINIMAX_MAX_INFERENCE_STEPS}`);
+    }
+    return steps;
+}
+function requireNonNegativeInt32(value, name) {
+    const integer = requireSafeInteger(value, name);
+    if (integer < 0 || integer > INT32_MAX) {
+        throw invalidInput(`${name} must be between 0 and ${INT32_MAX}`);
+    }
+    return integer;
+}
+function requireMinimaxCfgScale(value) {
+    const scale = requireFiniteNumber(value, 'cfgScale');
+    if (scale < 0 || scale > FLOAT32_MAX || (scale > 0 && scale < FLOAT32_MIN_POSITIVE)) {
+        throw invalidInput('cfgScale must be 0 or a positive float32 value');
+    }
+    return scale;
+}
+const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq', 'lego']);
+const LEGO_TRACKS = new Set([
+    'vocals',
+    'backing_vocals',
+    'drums',
+    'bass',
+    'guitar',
+    'keyboard',
+    'percussion',
+    'strings',
+    'synth',
+    'fx',
+    'brass',
+    'woodwinds'
+]);
 const AUDIO_LATENT_RATE = 25;
 const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE;
 const REPAINT_RANGE_EPSILON_SECONDS = 1e-5;
@@ -54,7 +141,7 @@ function optionalTaskType(value) {
     if (value === undefined)
         return undefined;
     if (typeof value !== 'string' || !GENERATE_TASK_TYPES.has(value)) {
-        throw invalidInput('taskType must be one of text2music|cover|cover-nofsq');
+        throw invalidInput('taskType must be one of text2music|cover|cover-nofsq|lego');
     }
     return value;
 }
@@ -156,11 +243,131 @@ function requirePrompt(prompt, name) {
 function isCoverTask(taskType) {
     return taskType === 'cover' || taskType === 'cover-nofsq';
 }
+function taskRequiresSourceAudio(taskType) {
+    return isCoverTask(taskType) || taskType === 'lego';
+}
 function invalidInput(message) {
     return new error_1.QvacErrorAudioGen({ code: error_1.ERR_CODES.INVALID_INPUT, adds: message });
 }
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
+}
+const ACESTEP_FILE_KEYS = [
+    'textEncModel',
+    'ditModel',
+    'ditVariant',
+    'vaeModel'
+];
+const ACESTEP_GENERATE_KEYS = [
+    'vocalLanguage',
+    'bpm',
+    'keyscale',
+    'timesignature',
+    'augmentCaptionWithMetadata',
+    'lmTemperature',
+    'lmTopP',
+    'lmTopK',
+    'lmCfgScale',
+    'lmPhase1',
+    'dcwEnabled',
+    'dcwScaler',
+    'dcwHighScaler',
+    'audioCodes',
+    'referenceAudio',
+    'sourceAudio',
+    'taskType',
+    'track',
+    'guidanceScale',
+    'audioCoverStrength',
+    'coverNoiseStrength'
+];
+function hasAnyFile(files, keys) {
+    return keys.some((key) => files[key] !== undefined);
+}
+function quoteEngine(engine) {
+    return `'${engine}'`;
+}
+function supportedEnginesMessage() {
+    return SUPPORTED_ENGINES.map(quoteEngine).join(' or ');
+}
+function validateEngineType(engine) {
+    if (engine !== undefined && !SUPPORTED_ENGINES.includes(engine)) {
+        throw invalidInput(`engine must be ${supportedEnginesMessage()}`);
+    }
+}
+function detectEngineType(files = {}, explicitEngine) {
+    validateEngineType(explicitEngine);
+    if (explicitEngine !== undefined)
+        return explicitEngine;
+    if (files.synthModel !== undefined)
+        return exports.ENGINE_MINIMAX;
+    return exports.ENGINE_ACESTEP;
+}
+function validateMinimaxFiles(files) {
+    if (hasAnyFile(files, ACESTEP_FILE_KEYS)) {
+        throw invalidInput('MiniMax does not accept ACE-Step text encoder, DiT, or VAE files');
+    }
+    const hasDirectory = typeof files.modelDir === 'string' && files.modelDir.length > 0;
+    const hasPair = typeof files.lmModel === 'string' &&
+        files.lmModel.length > 0 &&
+        typeof files.synthModel === 'string' &&
+        files.synthModel.length > 0;
+    if (!hasDirectory && !hasPair) {
+        throw invalidInput('MiniMax requires modelDir or both lmModel and synthModel');
+    }
+}
+function validateAcestepOptions(files, config) {
+    if (files.synthModel !== undefined) {
+        throw invalidInput('ACE-Step does not accept synthModel');
+    }
+    if (config.cfgScale !== undefined) {
+        throw invalidInput('ACE-Step does not accept cfgScale');
+    }
+}
+function validateMinimaxConfig(config) {
+    if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
+        throw invalidInput('useGPU must be a boolean');
+    }
+    if (config.shift !== undefined || config.nGpuLayers !== undefined) {
+        throw invalidInput('MiniMax does not accept shift or nGpuLayers');
+    }
+}
+function assertNoAcestepGenerateOptions(options) {
+    for (const key of ACESTEP_GENERATE_KEYS) {
+        if (options[key] !== undefined) {
+            throw invalidInput(`MiniMax does not accept ${key}`);
+        }
+    }
+}
+function assertNoMinimaxGenerateOptions(options) {
+    if (options.maxFrames !== undefined ||
+        options.inferenceSteps !== undefined ||
+        options.cfgScale !== undefined) {
+        throw invalidInput('ACE-Step does not accept maxFrames, inferenceSteps, or cfgScale per run');
+    }
+}
+function resolveMinimaxMaxFrames(options) {
+    if (options.maxFrames !== undefined && options.duration !== undefined) {
+        throw invalidInput('MiniMax accepts either maxFrames or duration, not both');
+    }
+    if (options.maxFrames !== undefined) {
+        const frames = requireSafeInteger(options.maxFrames, 'maxFrames');
+        if (frames < MINIMAX_MIN_FRAMES)
+            throw invalidInput('maxFrames must be at least 1');
+        return frames;
+    }
+    if (options.duration !== undefined) {
+        const duration = requireFiniteNumber(options.duration, 'duration');
+        if (duration <= 0)
+            throw invalidInput('duration must be greater than 0');
+        const frames = Math.max(MINIMAX_MIN_FRAMES, Math.round(duration * exports.MINIMAX_FRAMES_PER_SECOND));
+        return requireSafeInteger(frames, 'duration-derived maxFrames');
+    }
+    return exports.MINIMAX_DEFAULT_MAX_FRAMES;
+}
+function isMobilePlatform() {
+    const platform = os.platform();
+    return platform === 'android' || platform === 'ios';
 }
 /**
  * Fluent, ordered edit pipeline. Every call appends one operation; operations
@@ -270,52 +477,71 @@ class AudioGen {
         noAdditionalDownload: true
     };
     static ENGINE_ACESTEP = exports.ENGINE_ACESTEP;
+    static ENGINE_MINIMAX = exports.ENGINE_MINIMAX;
     addon;
     _job;
     _runExclusive;
     _configuration;
     _logger;
+    _engineType;
+    _defaultInferenceSteps;
+    _defaultCfgScale;
     _ditVariant;
     _lifecycleRevision;
     _destroyed;
     _cancelPromise;
     _cancellingResponse;
+    _cancelTerminalResolve;
     constructor(options = {}) {
         this._logger = new QvacLogger(options.logger);
         const files = options.files ?? {};
         const config = options.config ?? {};
+        this._engineType = detectEngineType(files, options.engine);
+        const backendsDir = config.backendsDir ?? path.join(__dirname, 'prebuilds');
+        const threads = requireNonNegativeInt32(config.threads ?? 0, 'threads');
         this._ditVariant = files.ditVariant;
-        // DiT selection: an explicit `ditModel` path always wins; otherwise a
-        // `ditVariant` enum picks which DiT GGUF to load from `modelDir` (the three
-        // other stages are fixed, so the variant is the only real choice).
-        const ditModelPath = (0, models_1.resolveDitModelPath)({
-            modelDir: files.modelDir,
-            ditModel: files.ditModel,
-            ditVariant: files.ditVariant
-        });
-        // The native side carries NO defaults: it requires every numeric/bool field
-        // and throws if one is missing. JS is the single place that decides defaults.
-        // 0 for inferenceSteps/shift/threads means "auto"; nGpuLayers 99 = all layers
-        // (only applied by the engine when useGPU is true).
-        const useGpu = config.useGPU ?? false;
-        this._configuration = {
-            engineType: exports.ENGINE_ACESTEP,
-            modelDir: files.modelDir,
-            textEncModelPath: files.textEncModel,
-            lmModelPath: files.lmModel,
-            ditModelPath,
-            vaeModelPath: files.vaeModel,
-            inferenceSteps: requireFiniteNumber(config.inferenceSteps ?? 0, 'inferenceSteps', true),
-            shift: requireFiniteNumber(config.shift ?? 0, 'shift'),
-            useGPU: useGpu,
-            nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
-            threads: requireFiniteNumber(config.threads ?? 0, 'threads', true),
-            // Where the native engine dlopens the ggml backend modules staged next to
-            // the `.bare`. Default to the package's own prebuilds dir; the C++ side
-            // appends the per-target BACKENDS_SUBDIR. Required on arm64 (per-microarch
-            // MODULE CPU backends); harmless on static desktop / Apple builds.
-            backendsDir: config.backendsDir ?? path.join(__dirname, 'prebuilds')
-        };
+        if (this._engineType === exports.ENGINE_MINIMAX) {
+            if (isMobilePlatform()) {
+                throw invalidInput('MiniMax-Music3 is available on desktop only');
+            }
+            validateMinimaxFiles(files);
+            validateMinimaxConfig(config);
+            this._defaultInferenceSteps = requireMinimaxInferenceSteps(config.inferenceSteps ?? 0);
+            this._defaultCfgScale = requireMinimaxCfgScale(config.cfgScale ?? 0);
+            this._configuration = {
+                engineType: exports.ENGINE_MINIMAX,
+                modelDir: files.modelDir,
+                lmModelPath: files.lmModel,
+                synthModelPath: files.synthModel,
+                threads,
+                useGPU: config.useGPU ?? false,
+                backendsDir
+            };
+        }
+        else {
+            validateAcestepOptions(files, config);
+            this._defaultInferenceSteps = requireFiniteNumber(config.inferenceSteps ?? 0, 'inferenceSteps', true);
+            this._defaultCfgScale = 0;
+            const ditModelPath = (0, models_1.resolveDitModelPath)({
+                modelDir: files.modelDir,
+                ditModel: files.ditModel,
+                ditVariant: files.ditVariant
+            });
+            this._configuration = {
+                engineType: exports.ENGINE_ACESTEP,
+                modelDir: files.modelDir,
+                textEncModelPath: files.textEncModel,
+                lmModelPath: files.lmModel,
+                ditModelPath,
+                vaeModelPath: files.vaeModel,
+                inferenceSteps: this._defaultInferenceSteps,
+                shift: requireFiniteNumber(config.shift ?? 0, 'shift'),
+                useGPU: config.useGPU ?? false,
+                nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
+                threads,
+                backendsDir
+            };
+        }
         this.addon = null;
         this._job = (0, infer_base_1.createJobHandler)({
             cancel: () => this.addon?.cancel() ?? Promise.resolve()
@@ -325,8 +551,9 @@ class AudioGen {
         this._destroyed = false;
         this._cancelPromise = null;
         this._cancellingResponse = null;
+        this._cancelTerminalResolve = null;
     }
-    /** Create the native engine and load every stage GGUF. Idempotent. */
+    /** Create the native engine and load its GGUF files. Idempotent. */
     async load() {
         const revision = this._lifecycleRevision;
         return this._runExclusive(() => this._load(revision));
@@ -337,7 +564,7 @@ class AudioGen {
         }
         if (this.addon)
             return;
-        this._logger.info('audiogen-ggml: loading ACE-Step engine');
+        this._logger.info(`audiogen-ggml: loading ${this._engineType} engine`);
         const addon = this._createAddon(this._configuration, this._addonOutputCallback.bind(this));
         this.addon = addon;
         // If activation fails, tear down the half-initialized native handle and
@@ -385,6 +612,9 @@ class AudioGen {
      * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
      */
     edit(source) {
+        if (this._engineType === exports.ENGINE_MINIMAX) {
+            throw invalidInput('MiniMax-Music3 does not support audio editing');
+        }
         return new AudioEditSession(source, async (audio, operations, options) => this._runEdit(audio, operations, options), !isSftDit(this._ditVariant, this._configuration.ditModelPath));
     }
     async _runEdit(source, operations, options) {
@@ -439,8 +669,33 @@ class AudioGen {
             throw invalidInput('caption must be a non-empty string');
         }
         this._logger.debug(`audiogen-ggml: run (caption ${caption.length} chars, lyrics=${opts.lyrics ? 'yes' : 'no'})`);
+        if (this._engineType === exports.ENGINE_MINIMAX) {
+            return this._createMinimaxJobData(caption, opts);
+        }
+        return this._createAcestepJobData(caption, opts);
+    }
+    _createMinimaxJobData(caption, opts) {
+        assertNoAcestepGenerateOptions(opts);
+        return {
+            type: 'text',
+            input: caption,
+            lyrics: opts.lyrics ?? '[Instrumental]',
+            seed: opts.seed === undefined ? undefined : requireSafeInteger(opts.seed, 'seed'),
+            maxFrames: resolveMinimaxMaxFrames(opts),
+            inferenceSteps: opts.inferenceSteps === undefined
+                ? this._defaultInferenceSteps
+                : requireMinimaxInferenceSteps(opts.inferenceSteps),
+            cfgScale: opts.cfgScale === undefined ? this._defaultCfgScale : requireMinimaxCfgScale(opts.cfgScale)
+        };
+    }
+    _createAcestepJobData(caption, opts) {
+        assertNoMinimaxGenerateOptions(opts);
         if (opts.lmPhase1 !== undefined && typeof opts.lmPhase1 !== 'boolean') {
             throw invalidInput('lmPhase1 must be a boolean');
+        }
+        if (opts.augmentCaptionWithMetadata !== undefined &&
+            typeof opts.augmentCaptionWithMetadata !== 'boolean') {
+            throw invalidInput('augmentCaptionWithMetadata must be a boolean');
         }
         if (opts.dcwEnabled !== undefined && typeof opts.dcwEnabled !== 'boolean') {
             throw invalidInput('dcwEnabled must be a boolean');
@@ -451,18 +706,52 @@ class AudioGen {
         const taskType = optionalTaskType(opts.taskType);
         const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio');
         const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio');
-        if (isCoverTask(taskType) && (sourceAudio === undefined || sourceAudio.length === 0)) {
+        if (taskRequiresSourceAudio(taskType) &&
+            (sourceAudio === undefined || sourceAudio.length === 0)) {
             throw invalidInput(`taskType '${taskType}' requires sourceAudio`);
+        }
+        if (opts.simpleMode !== undefined && typeof opts.simpleMode !== 'boolean') {
+            throw invalidInput('simpleMode must be a boolean');
+        }
+        if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
+            throw invalidInput('normalizeLoudness must be a boolean');
+        }
+        if (opts.simpleMode === true) {
+            if (taskType !== undefined && taskType !== 'text2music') {
+                throw invalidInput("simpleMode supports only taskType 'text2music'");
+            }
+            if (opts.audioCodes !== undefined) {
+                throw invalidInput('simpleMode cannot take pre-supplied audioCodes');
+            }
+            if (opts.lyrics !== undefined && opts.lyrics !== '' && opts.lyrics !== '[Instrumental]') {
+                throw invalidInput("simpleMode lyrics must be omitted (the LM writes them) or '[Instrumental]'");
+            }
+            if (opts.lmPhase1 === false) {
+                throw invalidInput('simpleMode requires lmPhase1');
+            }
+        }
+        if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
+            throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`);
+        }
+        if (opts.track !== undefined && taskType !== 'lego') {
+            throw invalidInput("track is only valid with taskType 'lego'");
+        }
+        const guidanceScale = optionalFiniteNumber(opts.guidanceScale, 'guidanceScale');
+        if (guidanceScale !== undefined && guidanceScale < 0) {
+            throw invalidInput('guidanceScale must be >= 0 (0 = engine default)');
         }
         return {
             type: 'text',
             input: caption,
-            lyrics: opts.lyrics ?? '[Instrumental]',
+            lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
+            simpleMode: opts.simpleMode,
+            normalizeLoudness: opts.normalizeLoudness,
             seed: optionalFiniteNumber(opts.seed, 'seed', true),
             vocalLanguage: opts.vocalLanguage,
             bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
             keyscale: opts.keyscale,
             timesignature: opts.timesignature,
+            augmentCaptionWithMetadata: opts.augmentCaptionWithMetadata,
             duration: optionalFiniteNumber(opts.duration, 'duration'),
             lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
             lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
@@ -476,6 +765,8 @@ class AudioGen {
             referenceAudio,
             sourceAudio,
             taskType,
+            track: opts.track,
+            guidanceScale,
             audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
             coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
         };
@@ -498,12 +789,22 @@ class AudioGen {
                 this._cancelPromise = null;
             if (this._cancellingResponse === response)
                 this._cancellingResponse = null;
+            this._cancelTerminalResolve = null;
         }
     }
     async _cancelActiveResponse(response) {
         this._cancellingResponse = response;
+        const terminal = new Promise((resolve) => {
+            this._cancelTerminalResolve = resolve;
+        });
+        // A job that never reached the native engine emits no terminal event —
+        // runJob can reject or be refused, and unload/destroy settles the active
+        // response directly. Racing the response's own settlement keeps cancel()
+        // from waiting forever on a terminal event that cannot arrive.
+        const settled = response.await().then(() => undefined, () => undefined);
         try {
             await (this.addon?.cancel() ?? Promise.resolve());
+            await Promise.race([terminal, settled]);
         }
         catch (error) {
             const failedError = this._failedCancelError(error);
@@ -578,8 +879,17 @@ class AudioGen {
         return new audiogen_1.AudioGenInterface(binding, configuration, outputCallback);
     }
     _addonOutputCallback(_handle, _event, data, error) {
-        if (this._cancellingResponse)
+        if (this._cancellingResponse) {
+            const cancelledData = asNativeData(data);
+            const terminalError = typeof error === 'string' && error.length > 0;
+            const terminalStats = cancelledData !== null &&
+                (typeof cancelledData.audioDurationMs === 'number' ||
+                    typeof cancelledData.totalTimeMs === 'number');
+            if (terminalError || terminalStats) {
+                this._cancelTerminalResolve?.();
+            }
             return;
+        }
         if (typeof error === 'string' && error.length > 0) {
             this._logger.error(`audiogen-ggml: engine error: ${error}`);
             this._job.fail(new error_1.QvacErrorAudioGen({
@@ -615,7 +925,10 @@ class AudioGen {
                 ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
                 ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {}),
                 ...(typeof d.backendDevice === 'number' ? { backendDevice: d.backendDevice } : {}),
-                ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {})
+                ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
+                ...(typeof d.gpuFallbackReason === 'number'
+                    ? { gpuFallbackReason: d.gpuFallbackReason }
+                    : {})
             };
             this._job.end(stats, stats);
         }

@@ -11,7 +11,7 @@ import {
   logMqttConnectionSecurity,
   startNodeMemoryPoller,
   type TestDefinition
-} from '@qvac/qvac-test-suite'
+} from '@qvac/test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -43,11 +43,12 @@ import {
   TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_UNIFIED_0_6B_Q4_0,
   PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
-  SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED
@@ -102,13 +103,19 @@ const resources = new ResourceManager({
 resources.define('llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+  config: { verbosity: 0, ctx_size: 2048 }
+})
+
+resources.define('llm-small-ctx', {
+  constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 512 }
 })
 
 resources.define('llm-batch', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llm',
-  config: { verbosity: 0, ctx_size: 4096, n_discarded: 256, parallel: 4 }
+  config: { verbosity: 0, ctx_size: 4096, parallel: 4 }
 })
 
 resources.define('tools-batch', {
@@ -202,7 +209,7 @@ resources.define('sharded-embeddings', {
 resources.define('sharded-llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
   type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
+  config: { verbosity: 0, ctx_size: 2048 },
   skipPreDownload: true
 })
 
@@ -403,6 +410,12 @@ resources.define('parakeet-ctc', {
   config: {}
 })
 
+resources.define('parakeet-unified', {
+  constant: PARAKEET_UNIFIED_0_6B_Q4_0,
+  type: 'parakeet-transcription',
+  config: {}
+})
+
 resources.define('parakeet-indic-conformer', {
   constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   type: 'parakeet-transcription',
@@ -434,21 +447,33 @@ resources.define('bci', {
 })
 
 resources.define('vision', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
-    ctx_size: 1024,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    ctx_size: 4096,
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
 resources.define('vision-batch', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
     ctx_size: 2048,
     parallel: 2,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+  }
+})
+
+resources.define('vision-upscale', {
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 4096,
+    image_no_upscale: 'off',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
@@ -526,12 +551,12 @@ export const executor = createExecutor({
       'Electron skips diffusion tests because image generation takes too long for the stable Electron pass'
     ),
     new SkipExecutor(
-      /^audio-gen-/,
-      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
+      /^world-/,
+      'Electron skips ABot-World: a walk session needs a dedicated GPU and the 13.3 GB model set is far beyond the stable Electron pass'
     ),
     new SkipExecutor(
-      /^delegated-/,
-      'Electron skips delegated inference tests because provider startup and peer connectivity need separate packaged-app coverage'
+      /^audio-gen-/,
+      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
     ),
     new SkipExecutor(
       /^finetune-/,

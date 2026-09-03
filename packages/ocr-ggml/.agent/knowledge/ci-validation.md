@@ -31,14 +31,14 @@ Each addon has a full suite of per-package workflows:
 
 ### SDK Pod (TypeScript packages)
 
-Packages: `qvac-sdk`, `qvac-cli`, `rag`, `logging`, `error-base`, `docs`
+Packages: `sdk`, `bare-sdk`, `inference`, `cli`, `rag`, `logging`, `error`, `ai-sdk-provider`
 
 | Workflow | File | Purpose |
 |----------|------|---------|
 | PR validation | `pr-validation-sdk-pod.yml` | Validate PR title/body format |
 | PR checks | `pr-checks-sdk-pod.yml` | Lint, typecheck, build, unit tests (dynamic matrix of changed packages) |
-| Publish | `publish-qvac-sdk.yml` | Build + publish SDK to GPR/npm |
-| Desktop tests | `test-qvac-sdk.yml` | GPU integration tests (currently workflow_dispatch only) |
+| Publish | `publish-sdk.yml` | Build + publish SDK to GPR/npm |
+| Desktop tests | `test-sdk.yml` | GPU integration tests (currently workflow_dispatch only) |
 | Release notes | `release-notes-check-<pkg>.yml` | Verify CHANGELOG matches version bumps |
 | GitHub release | `create-github-release-<pkg>.yml` | Create GitHub release on npm publish |
 
@@ -303,8 +303,8 @@ Replace `<pkg>` with the package directory name (e.g., `llm-llamacpp`):
 |------|------|
 | PR format validation | `pr-validation-sdk-pod.yml` |
 | PR checks (lint, build, test) | `pr-checks-sdk-pod.yml` |
-| Publish | `publish-qvac-sdk.yml` |
-| Desktop GPU tests | `test-qvac-sdk.yml` |
+| Publish | `publish-sdk.yml` |
+| Desktop GPU tests | `test-sdk.yml` |
 
 ### Simple libraries
 

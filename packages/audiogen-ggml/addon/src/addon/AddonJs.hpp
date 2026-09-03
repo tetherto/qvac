@@ -3,6 +3,8 @@
 #include <any>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -21,13 +23,79 @@
 #include <js.h>
 
 #include "js-interface/JSAdapter.hpp"
+#include "model-interface/AudioGenProgress.hpp"
 #include "model-interface/acestep/AcestepModel.hpp"
+#ifdef AUDIOGEN_HAS_MINIMAX
+#include "model-interface/minimax/MinimaxModel.hpp"
+#endif
 
 namespace qvac::audiogenggml::addon_js {
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 
 using acestep::AcestepModel;
+#ifdef AUDIOGEN_HAS_MINIMAX
+using minimax::MinimaxModel;
+#endif
+
+inline constexpr double K_MAXIMUM_SAFE_INTEGER = 9007199254740991.0;
+inline constexpr int K_MAXIMUM_MINIMAX_INFERENCE_STEPS = 1000;
+
+inline std::optional<double>
+readOptionalNumber(js::Object object, js_env_t* env, const char* name) {
+  js_value_t* raw = object.getProperty(env, name);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return std::nullopt;
+  }
+  if (!js::is<js::Number>(env, raw)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string(name) + " must be a number");
+  }
+  return js::Number::fromValue(raw).as<double>(env);
+}
+
+inline int64_t checkedSafeInteger(double value, const char* name) {
+  if (!std::isfinite(value) || std::trunc(value) != value ||
+      std::fabs(value) > K_MAXIMUM_SAFE_INTEGER) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string(name) + " must be a safe integer");
+  }
+  return static_cast<int64_t>(value);
+}
+
+inline int64_t checkedPositiveSafeInteger(double value, const char* name) {
+  const int64_t integer = checkedSafeInteger(value, name);
+  if (integer <= 0) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string(name) + " must be at least 1");
+  }
+  return integer;
+}
+
+inline int checkedMinimaxInferenceSteps(double value) {
+  const int64_t integer = checkedSafeInteger(value, "inferenceSteps");
+  if (integer < 0 || integer > K_MAXIMUM_MINIMAX_INFERENCE_STEPS) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "inferenceSteps must be between 0 and 1000");
+  }
+  return static_cast<int>(integer);
+}
+
+inline float checkedMinimaxCfgScale(double value) {
+  const double maximum = std::numeric_limits<float>::max();
+  const double minimum = std::numeric_limits<float>::denorm_min();
+  if (!std::isfinite(value) || value < 0.0 || value > maximum ||
+      (value > 0.0 && value < minimum)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "cfgScale must be 0 or a positive float32 value");
+  }
+  return static_cast<float>(value);
+}
 
 inline std::vector<int>
 copyAudioCodes(js_env_t* env, js::TypedArray<int32_t> array) {
@@ -61,6 +129,120 @@ copyFloat32Pcm(js_env_t* env, js::TypedArray<float> array, const char* name) {
     throw std::runtime_error(std::string(name) + " must be a Float32Array");
   }
   return {data, data + len};
+}
+
+inline std::optional<std::string>
+readOptionalString(js::Object object, js_env_t* env, const char* name) {
+  return object.getOptionalPropertyAs<js::String, std::string>(env, name);
+}
+
+inline std::optional<double>
+readOptionalAcestepNumber(js::Object object, js_env_t* env, const char* name) {
+  js_value_t* raw = object.getProperty(env, name);
+  if (!js::is<js::Number>(env, raw))
+    return std::nullopt;
+  return js::Number::fromValue(raw).as<double>(env);
+}
+
+inline std::optional<bool>
+readOptionalBoolean(js::Object object, js_env_t* env, const char* name) {
+  js_value_t* raw = object.getProperty(env, name);
+  if (!js::is<js::Boolean>(env, raw))
+    return std::nullopt;
+  return js::Boolean{env, raw}.as<bool>(env);
+}
+
+#ifdef AUDIOGEN_HAS_MINIMAX
+inline MinimaxModel::AnyInput
+buildMinimaxInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
+  MinimaxModel::AnyInput modelInput;
+  modelInput.caption = js::String(env, input).as<std::string>(env);
+  if (auto value = readOptionalString(jobObject, env, "lyrics")) {
+    modelInput.lyrics = *value;
+  }
+  if (auto value = readOptionalNumber(jobObject, env, "seed")) {
+    modelInput.seed = checkedSafeInteger(*value, "seed");
+  }
+  if (auto value = readOptionalNumber(jobObject, env, "maxFrames")) {
+    modelInput.maxFrames = checkedPositiveSafeInteger(*value, "maxFrames");
+  }
+  if (auto value = readOptionalNumber(jobObject, env, "inferenceSteps")) {
+    modelInput.inferenceSteps = checkedMinimaxInferenceSteps(*value);
+  }
+  if (auto value = readOptionalNumber(jobObject, env, "cfgScale")) {
+    modelInput.cfgScale = checkedMinimaxCfgScale(*value);
+  }
+  return modelInput;
+}
+#endif
+
+inline AcestepModel::AnyInput
+buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
+  AcestepModel::AnyInput modelInput;
+  modelInput.caption = js::String(env, input).as<std::string>(env);
+  if (auto value = readOptionalString(jobObject, env, "lyrics"))
+    modelInput.lyrics = *value;
+  if (auto value = readOptionalString(jobObject, env, "vocalLanguage"))
+    modelInput.vocalLanguage = *value;
+  if (auto value = readOptionalString(jobObject, env, "keyscale"))
+    modelInput.keyscale = *value;
+  if (auto value = readOptionalString(jobObject, env, "timesignature"))
+    modelInput.timesignature = *value;
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "seed"))
+    modelInput.seed = static_cast<long long>(*value);
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "bpm"))
+    modelInput.bpm = static_cast<int>(*value);
+  if (auto value =
+          readOptionalBoolean(jobObject, env, "augmentCaptionWithMetadata"))
+    modelInput.augmentCaptionWithMetadata = *value;
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "duration"))
+    modelInput.duration = static_cast<float>(*value);
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "lmTemperature"))
+    modelInput.lmTemperature = static_cast<float>(*value);
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "lmTopP"))
+    modelInput.lmTopP = static_cast<float>(*value);
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "lmTopK"))
+    modelInput.lmTopK = static_cast<int>(*value);
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "lmCfgScale"))
+    modelInput.lmCfgScale = static_cast<float>(*value);
+  if (auto value = readOptionalBoolean(jobObject, env, "lmPhase1"))
+    modelInput.lmPhase1 = *value;
+  if (auto value = readOptionalBoolean(jobObject, env, "simpleMode"))
+    modelInput.simpleMode = *value;
+  if (auto value = readOptionalBoolean(jobObject, env, "normalizeLoudness"))
+    modelInput.normalizeLoudness = *value;
+  if (auto value = readOptionalBoolean(jobObject, env, "dcwEnabled"))
+    modelInput.dcwEnabled = *value;
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "dcwScaler"))
+    modelInput.dcwScaler = static_cast<float>(*value);
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "dcwHighScaler"))
+    modelInput.dcwHighScaler = static_cast<float>(*value);
+  if (auto codes = jobObject.getOptionalProperty<js::TypedArray<int32_t>>(
+          env, "audioCodes")) {
+    modelInput.audioCodes = copyAudioCodes(env, *codes);
+  }
+  if (auto reference = jobObject.getOptionalProperty<js::TypedArray<float>>(
+          env, "referenceAudio")) {
+    modelInput.referenceAudio =
+        copyFloat32Pcm(env, *reference, "referenceAudio");
+  }
+  if (auto source = jobObject.getOptionalProperty<js::TypedArray<float>>(
+          env, "sourceAudio")) {
+    modelInput.sourceAudio = copyFloat32Pcm(env, *source, "sourceAudio");
+  }
+  if (auto value = readOptionalString(jobObject, env, "taskType"))
+    modelInput.taskType = *value;
+  if (auto value = readOptionalString(jobObject, env, "track"))
+    modelInput.track = *value;
+  if (auto value = readOptionalAcestepNumber(jobObject, env, "guidanceScale"))
+    modelInput.guidanceScale = static_cast<float>(*value);
+  if (auto value =
+          readOptionalAcestepNumber(jobObject, env, "audioCoverStrength"))
+    modelInput.audioCoverStrength = static_cast<float>(*value);
+  if (auto value =
+          readOptionalAcestepNumber(jobObject, env, "coverNoiseStrength"))
+    modelInput.coverNoiseStrength = static_cast<float>(*value);
+  return modelInput;
 }
 
 inline std::string
@@ -167,19 +349,16 @@ parseEditOperations(js_env_t* env, js::Array& operations) {
   return result;
 }
 
-// Emits the generated track as interleaved stereo Int16 + sample rate, mirror
-// of ttsggml::JsAudioOutputHandler. The rate/channels are sourced from the
-// model (which reads them from the engine's decode result) rather than
-// hardcoded, so the values reported alongside the PCM always match the runtime
-// stats. PCM is emitted once, after generate() completes, so the model already
-// holds the real engine values by the time this runs.
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
-  explicit JsAudioOutputHandler(const AcestepModel* model)
+  JsAudioOutputHandler(
+      std::function<int()> sampleRate, std::function<int()> channels)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<int16_t>>(
-            [this, model](const std::vector<int16_t>& data) -> js_value_t* {
+            [this, sampleRate = std::move(sampleRate),
+             channels = std::move(channels)](
+                const std::vector<int16_t>& data) -> js_value_t* {
               auto result = js::Object::create(this->env_);
               std::span<const int16_t> outputSpan(data.data(), data.size());
               auto typedArray =
@@ -188,40 +367,36 @@ struct JsAudioOutputHandler
               result.setProperty(
                   this->env_,
                   "sampleRate",
-                  js::Number::create(this->env_, model->sampleRate()));
+                  js::Number::create(this->env_, sampleRate()));
               result.setProperty(
                   this->env_,
                   "channels",
-                  js::Number::create(this->env_, model->channels()));
+                  js::Number::create(this->env_, channels()));
               return result;
             }) {}
 };
 
-// Emits a mid-generation progress tick as { progressStage, progressStep,
-// progressTotal }. The JS side (plugin sink) distinguishes it from PCM/stats by
-// the presence of `progressTotal`.
 struct JsProgressOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-          acestep::AcestepProgress> {
+          AudioGenProgress> {
   JsProgressOutputHandler()
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-            acestep::AcestepProgress>(
-            [this](const acestep::AcestepProgress& p) -> js_value_t* {
-              auto result = js::Object::create(this->env_);
-              result.setProperty(
-                  this->env_,
-                  "progressStage",
-                  js::String::create(this->env_, p.stage));
-              result.setProperty(
-                  this->env_,
-                  "progressStep",
-                  js::Number::create(this->env_, p.step));
-              result.setProperty(
-                  this->env_,
-                  "progressTotal",
-                  js::Number::create(this->env_, p.total));
-              return result;
-            }) {}
+            AudioGenProgress>([this](const AudioGenProgress& p) -> js_value_t* {
+          auto result = js::Object::create(this->env_);
+          result.setProperty(
+              this->env_,
+              "progressStage",
+              js::String::create(this->env_, p.stage));
+          result.setProperty(
+              this->env_,
+              "progressStep",
+              js::Number::create(this->env_, p.step));
+          result.setProperty(
+              this->env_,
+              "progressTotal",
+              js::Number::create(this->env_, p.total));
+          return result;
+        }) {}
 };
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
@@ -232,13 +407,45 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto configurationParams = args.getJsObject(1, "configurationParams");
 
   JSAdapter adapter;
-  auto cfg = adapter.buildAcestepConfig(configurationParams, env);
+  const EngineType engineType =
+      adapter.readEngineType(configurationParams, env);
+  unique_ptr<model::IModel> model;
+  function<int()> sampleRate;
+  function<int()> channels;
+  function<void(function<void(const AudioGenProgress&)>)> setProgressSink;
 
-  auto model = make_unique<AcestepModel>(std::move(cfg));
-  AcestepModel* modelPtr = model.get();
+  if (engineType == EngineType::Minimax) {
+#ifdef AUDIOGEN_HAS_MINIMAX
+    auto minimaxModel = make_unique<MinimaxModel>(
+        adapter.buildMinimaxConfig(configurationParams, env));
+    MinimaxModel* modelPtr = minimaxModel.get();
+    sampleRate = [modelPtr]() { return modelPtr->sampleRate(); };
+    channels = [modelPtr]() { return modelPtr->channels(); };
+    setProgressSink = [modelPtr](function<void(const AudioGenProgress&)> sink) {
+      modelPtr->setProgressSink(std::move(sink));
+    };
+    model = std::move(minimaxModel);
+#else
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "MiniMax-Music3 is available on desktop builds only");
+#endif
+  } else {
+    auto acestepModel = make_unique<AcestepModel>(
+        adapter.buildAcestepConfig(configurationParams, env));
+    AcestepModel* modelPtr = acestepModel.get();
+    sampleRate = [modelPtr]() { return modelPtr->sampleRate(); };
+    channels = [modelPtr]() { return modelPtr->channels(); };
+    setProgressSink = [modelPtr](function<void(const AudioGenProgress&)> sink) {
+      modelPtr->setProgressSink(std::move(sink));
+    };
+    model = std::move(acestepModel);
+  }
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(make_shared<JsAudioOutputHandler>(modelPtr));
+  outHandlers.add(
+      make_shared<JsAudioOutputHandler>(
+          std::move(sampleRate), std::move(channels)));
   outHandlers.add(make_shared<JsProgressOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
@@ -247,12 +454,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       std::move(outHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
-
-  // Route per-step engine progress into the output queue so it reaches JS via
-  // the same output callback as PCM/stats. The model runs on the job worker
-  // thread; OutputQueue::queueResult is thread-safe (locks + uv_async_send).
   auto outputQueue = addon->addonCpp->outputQueue;
-  modelPtr->setProgressSink([outputQueue](const acestep::AcestepProgress& p) {
+  setProgressSink([outputQueue](const AudioGenProgress& p) {
     outputQueue->queueResult(std::any(p));
   });
 
@@ -273,87 +476,22 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         "Unknown input type: " + type);
   }
 
-  // The caption is the primary text input. Generation metadata, LM sampler
-  // controls and optional frozen semantic codes are per-call overrides on the
-  // same job object the framework hands us at arg index 1.
-  auto jobObj = args.getJsObject(1, "inputObj");
-  auto optStr = [&](const char* key) -> std::optional<std::string> {
-    return jobObj.getOptionalPropertyAs<js::String, std::string>(env, key);
-  };
-  auto optNum = [&](const char* key) -> std::optional<double> {
-    js_value_t* raw = jobObj.getProperty(env, key);
-    if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
-      return std::nullopt;
-    }
-    if (js::is<js::Number>(env, raw)) {
-      return js::Number::fromValue(raw).as<double>(env);
-    }
-    return std::nullopt;
-  };
-  auto optBool = [&](const char* key) -> std::optional<bool> {
-    js_value_t* raw = jobObj.getProperty(env, key);
-    if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
-      return std::nullopt;
-    }
-    if (js::is<js::Boolean>(env, raw)) {
-      return js::Boolean{env, raw}.as<bool>(env);
-    }
-    return std::nullopt;
-  };
+  auto jobObject = args.getJsObject(1, "inputObj");
 
-  AcestepModel::AnyInput modelInput;
-  if (type == "text") {
-    modelInput.caption = js::String(env, jsInput).as<std::string>(env);
+#ifdef AUDIOGEN_HAS_MINIMAX
+  if (dynamic_cast<MinimaxModel*>(&instance.addonCpp->model.get())) {
+    if (type != "text") {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "MiniMax-Music3 does not support audio editing");
+    }
+    return instance.runJob(
+        std::any(buildMinimaxInput(env, jobObject, jsInput)));
   }
-  if (auto v = optStr("lyrics"))
-    modelInput.lyrics = *v;
-  if (auto v = optStr("vocalLanguage"))
-    modelInput.vocalLanguage = *v;
-  if (auto v = optStr("keyscale"))
-    modelInput.keyscale = *v;
-  if (auto v = optStr("timesignature"))
-    modelInput.timesignature = *v;
-  if (auto v = optNum("seed"))
-    modelInput.seed = static_cast<long long>(*v);
-  if (auto v = optNum("bpm"))
-    modelInput.bpm = static_cast<int>(*v);
-  if (auto v = optNum("duration"))
-    modelInput.duration = static_cast<float>(*v);
-  if (auto v = optNum("lmTemperature"))
-    modelInput.lmTemperature = static_cast<float>(*v);
-  if (auto v = optNum("lmTopP"))
-    modelInput.lmTopP = static_cast<float>(*v);
-  if (auto v = optNum("lmTopK"))
-    modelInput.lmTopK = static_cast<int>(*v);
-  if (auto v = optNum("lmCfgScale"))
-    modelInput.lmCfgScale = static_cast<float>(*v);
-  if (auto v = optBool("lmPhase1"))
-    modelInput.lmPhase1 = *v;
-  if (auto v = optBool("dcwEnabled"))
-    modelInput.dcwEnabled = *v;
-  if (auto v = optNum("dcwScaler"))
-    modelInput.dcwScaler = static_cast<float>(*v);
-  if (auto v = optNum("dcwHighScaler"))
-    modelInput.dcwHighScaler = static_cast<float>(*v);
-  if (auto codes = jobObj.getOptionalProperty<js::TypedArray<int32_t>>(
-          env, "audioCodes")) {
-    modelInput.audioCodes = copyAudioCodes(env, *codes);
-  }
-  if (auto ref = jobObj.getOptionalProperty<js::TypedArray<float>>(
-          env, "referenceAudio")) {
-    modelInput.referenceAudio = copyFloat32Pcm(env, *ref, "referenceAudio");
-  }
-  if (auto src = jobObj.getOptionalProperty<js::TypedArray<float>>(
-          env, "sourceAudio")) {
-    modelInput.sourceAudio = copyFloat32Pcm(env, *src, "sourceAudio");
-  }
-  if (auto v = optStr("taskType"))
-    modelInput.taskType = *v;
-  if (auto v = optNum("audioCoverStrength"))
-    modelInput.audioCoverStrength = static_cast<float>(*v);
-  if (auto v = optNum("coverNoiseStrength"))
-    modelInput.coverNoiseStrength = static_cast<float>(*v);
+#endif
 
+  AcestepModel::AnyInput modelInput =
+      buildAcestepInput(env, jobObject, jsInput);
   if (type == "edit") {
     if (modelInput.sourceAudio.empty()) {
       throw qvac_errors::StatusError(
@@ -361,7 +499,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           "Audio edit requires non-empty sourceAudio");
     }
     auto operations =
-        jobObj.getOptionalProperty<js::Array>(env, "editOperations");
+        jobObject.getOptionalProperty<js::Array>(env, "editOperations");
     if (!operations || operations->size(env) == 0) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
@@ -392,19 +530,44 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto configurationParams = args.getJsObject(1, "configurationParams");
   JSAdapter adapter;
-  auto newCfg = adapter.buildAcestepConfig(configurationParams, env);
+  const EngineType engineType =
+      adapter.readEngineType(configurationParams, env);
 
+  if (engineType == EngineType::Minimax) {
+#ifdef AUDIOGEN_HAS_MINIMAX
+    auto newConfig = adapter.buildMinimaxConfig(configurationParams, env);
+    return js::JsAsyncTask::run(
+        env,
+        [addonCpp = instance.addonCpp,
+         newConfig = std::move(newConfig)]() mutable {
+          auto* model = dynamic_cast<MinimaxModel*>(&addonCpp->model.get());
+          if (model == nullptr) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InvalidArgument,
+                "reload cannot change the audiogen engine type");
+          }
+          model->reload(std::move(newConfig));
+        });
+#else
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "MiniMax-Music3 is available on desktop builds only");
+#endif
+  }
+
+  auto newConfig = adapter.buildAcestepConfig(configurationParams, env);
   return js::JsAsyncTask::run(
       env,
-      [addonCpp = instance.addonCpp, newCfg = std::move(newCfg)]() mutable {
-        auto* m = dynamic_cast<AcestepModel*>(&addonCpp->model.get());
-        if (m == nullptr) {
+      [addonCpp = instance.addonCpp,
+       newConfig = std::move(newConfig)]() mutable {
+        auto* model = dynamic_cast<AcestepModel*>(&addonCpp->model.get());
+        if (model == nullptr) {
           throw qvac_errors::StatusError(
-              qvac_errors::general_error::InternalError,
-              "reload: model is not an AcestepModel");
+              qvac_errors::general_error::InvalidArgument,
+              "reload cannot change the audiogen engine type");
         }
-        m->setConfig(std::move(newCfg));
-        m->reload();
+        model->setConfig(std::move(newConfig));
+        model->reload();
       });
 }
 JSCATCH

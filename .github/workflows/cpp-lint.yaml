@@ -23,6 +23,15 @@ on:
         type: boolean
         required: false
         default: true
+      build-testing:
+        description: >-
+          Configure with BUILD_TESTING=ON so unit-test translation units land in
+          compile_commands.json and are analysed like any other changed source.
+          Packages whose tests are guarded by BUILD_TESTING (off by default)
+          need this, or a changed test file is silently skipped by clang-tidy.
+        type: boolean
+        required: false
+        default: false
       include-rocm-sdk:
         description: >-
           Install the ROCm (TheRock) SDK before generating the build system.
@@ -92,12 +101,15 @@ jobs:
       # hip-backend feature is installed/resolved (setup-rocm exports
       # VCPKG_KEEP_ENV_VARS=ROCM_PATH;HIP_PATH so the hip package is cache-keyed
       # per ROCm prefix and its hip-config resolves at find_dependency time).
+      # Omit `with:` so version/gfx/sha256 all come from the action defaults
+      # and match /opt/rocm/.qvac-rocm on self-hosted linux-x64 images.
+      # Passing only rocm-version would keep the default sha256 and miss the stamp.
       - if: ${{ inputs.include-rocm-sdk }}
         name: Setup ROCm SDK for HIP cross-compile
         uses: ./.github/actions/setup-rocm
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -143,7 +155,7 @@ jobs:
       - name: Generate build system
         id: bare_make_generate
         working-directory: ${{ env.WORKDIR }}
-        run: bare-make generate -D ENABLE_VULKAN=OFF
+        run: bare-make generate -D ENABLE_VULKAN=OFF ${{ inputs.build-testing && '-D BUILD_TESTING=ON' || '' }}
 
       - name: Check C++ files format
         id: cpp_files_fmt

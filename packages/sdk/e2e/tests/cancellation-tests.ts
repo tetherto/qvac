@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 export const cancelMidStreamCompletion: TestDefinition = {
   testId: 'cancel-mid-stream-completion',
@@ -51,7 +51,10 @@ export const cancelBroadEmbeddings: TestDefinition = {
     passageFiller:
       'machine learning natural language processing transformer architecture attention mechanism gradient descent ',
     passageFillerRepeats: 16,
-    registryBeginGraceMs: 50
+    registryBeginGraceMs: 50,
+    cancelRetryMs: 250,
+    cancelDeadlineMs: 30000,
+    settleTimeoutMs: 45000
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: {
@@ -94,6 +97,38 @@ export const serializeConcurrentCompletion: TestDefinition = {
   }
 }
 
+export const cancelIsolatesConcurrentBatches: TestDefinition = {
+  testId: 'cancel-isolates-concurrent-batches',
+  params: {
+    doomedPredict: 256,
+    // Long survivor: it must still be decoding when the doomed cancel lands, so a
+    // whole-model cancel can't pass this by killing only the still-live doomed
+    // batch while an already-finished survivor stays successful.
+    survivorPredict: 256
+  },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: {
+    category: 'cancellation',
+    dependency: 'llm-batch',
+    estimatedDurationMs: 80000
+  }
+}
+
+export const cancelQueuedNativeBatch: TestDefinition = {
+  testId: 'cancel-queued-native-batch',
+  params: {
+    promptCount: 8,
+    parallel: 4,
+    predict: 256
+  },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: {
+    category: 'cancellation',
+    dependency: 'llm-batch',
+    estimatedDurationMs: 30000
+  }
+}
+
 export const cancelByRequestIdEmbed: TestDefinition = {
   testId: 'cancel-by-requestid-embed',
   params: {
@@ -101,7 +136,10 @@ export const cancelByRequestIdEmbed: TestDefinition = {
     passageFiller:
       'machine learning natural language processing transformer architecture attention mechanism gradient descent ',
     passageFillerRepeats: 16,
-    registryBeginGraceMs: 50
+    registryBeginGraceMs: 50,
+    cancelRetryMs: 250,
+    cancelDeadlineMs: 30000,
+    settleTimeoutMs: 45000
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: {
@@ -150,6 +188,8 @@ export const cancellationTests = [
   cancelBroadEmbeddings,
   cancelBroadTranslateLlm,
   serializeConcurrentCompletion,
+  cancelIsolatesConcurrentBatches,
+  cancelQueuedNativeBatch,
   cancelByRequestIdEmbed,
   cancelByRequestIdTranscribe,
   cancelByRequestIdRagIngest

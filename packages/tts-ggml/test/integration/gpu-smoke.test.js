@@ -49,8 +49,13 @@ const { recordTtsStats } = require('../utils/perf-helper')
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isApple = platform === 'darwin' || platform === 'ios'
+const GPU_BACKEND_IDS = { metal: 1, cuda: 2, vulkan: 3, opencl: 4 }
+// CI rows that pin the engine's GPU cascade export TTS_CPP_GPU_BACKEND;
+// the assertions expect whatever the row pinned and fall back to the
+// platform's cascade default when unset.
+const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 // Parler GPU coverage is validated on Apple and the Android Device Farm.
-// Keep desktop Vulkan out until dedicated Linux/Windows runs prove it there.
+// Keep desktop Vulkan out until dedicated Linux and Windows runs prove it.
 const isParlerGpuPlatform = isApple || platform === 'android'
 // CosyVoice3's tts-cpp allowlist is Metal (Apple), OpenCL/Adreno (Android),
 // and Vulkan on desktop hosts, so the strict GPU leg runs everywhere the
@@ -84,10 +89,10 @@ function backendIdToName(id) {
   }
 }
 
-// Which platforms wire up a GPU backend in tts-cpp's vcpkg port
-// today (default-features in qvac-registry-vcpkg/ports/tts-cpp/vcpkg.json):
+// Which platforms wire up a GPU backend in the speech-cpp vcpkg port
+// today (features in qvac-registry-vcpkg/ports/speech-cpp/vcpkg.json):
 //   - darwin / ios:        metal
-//   - linux / win32:       vulkan
+//   - linux / win32:       vulkan (CUDA only when built with ENABLE_CUDA)
 //   - android:             vulkan + opencl
 function expectsGpu() {
   return (
@@ -145,7 +150,12 @@ function assertGpuBackend(t, engineTag, stats, allowPolicyCpu = false) {
   if (platform === 'darwin' || platform === 'ios') {
     t.is(id, 1, `${engineTag}/${platform}: expected Metal backendId=1, got ${name}`)
   } else if (platform === 'linux' || platform === 'win32') {
-    t.is(id, 3, `${engineTag}/${platform}: expected Vulkan backendId=3, got ${name}`)
+    const expectedId = GPU_BACKEND_IDS[PINNED_GPU_BACKEND] || GPU_BACKEND_IDS.vulkan
+    t.is(
+      id,
+      expectedId,
+      `${engineTag}/${platform}: expected ${backendIdToName(expectedId)} backendId=${expectedId}, got ${name}`
+    )
   } else if (platform === 'android') {
     t.ok(
       id === 3 || id === 4,

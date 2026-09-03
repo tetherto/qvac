@@ -19,7 +19,7 @@ build step handles this; the test scripts don't re-build.
 ### 1. In-process, via Fastify `app.inject()` — **default for `/v1/*` routes**
 
 Helpers: `helpers/server.ts` (`createServer`, `useServer`, `useModelServer`).
-Builds the _same_ server code `qvac serve openai` runs (`buildServer`) and injects
+Builds the _same_ server code `qvac serve --openai` runs (`buildServer`) and injects
 requests without opening a socket. Fast, deterministic, no port.
 
 Use for HTTP API behavior: routing, request/response shape, validation + error
@@ -56,8 +56,10 @@ test/e2e/
   helpers/            config · server (in-process) · cli (spawned) · http · fixtures
   smoke.test.ts       harness smoke
   helpers.test.ts     harness self-tests (incl. SSE-via-inject)
-  http/               /v1/* route tests, in-process & modelless
-    *-validation.test.ts, models, routing-cors-auth, audio-*
+  core/               shape-agnostic server behavior, in-process & modelless
+    routing-cors-auth.test.ts, model-load-config.test.ts
+  openai/             /v1/* route tests, in-process & modelless
+    *-validation.test.ts, models, models-catalog, audio-*
   cli/                commands, serve lifecycle & flag behavior (spawned binary)
   model/              everything that loads a real model — runs serially (see below)
     real-model.test.ts            in-process: LLM / embed / whisper

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "addon": true,
   "scripts": {
@@ -26,7 +26,7 @@
     "test:ltx": "npm run build:ts && bare test/integration/generate-video-ltx.test.js --exit",
     "generate:img2vid": "bare examples/img2vid-wan.js",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js video.js world.js addon.js addonLogging.js index.d.ts video.d.ts world.d.ts addon.d.ts addonLogging.d.ts",
+    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js video.js world.js addon.js addonLogging.js index.d.ts video.d.ts world.d.ts addon.d.ts addonLogging.d.ts) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy sd prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy sd prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy sd prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
     "lint": "npm run lint:js && npm run lint:ts",
     "lint:fix": "npm run lint:js:fix && npm run lint:ts:fix",

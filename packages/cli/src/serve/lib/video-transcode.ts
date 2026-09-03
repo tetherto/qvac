@@ -3,7 +3,7 @@ import {
   FfmpegFailedError,
   FfmpegTimeoutError,
   type FfmpegRunOptions
-} from './ffmpeg.js'
+} from '@/serve/lib/ffmpeg'
 
 export type TranscodeOptions = FfmpegRunOptions
 export { FfmpegFailedError as TranscodeFailedError, FfmpegTimeoutError as TranscodeTimeoutError }
@@ -49,4 +49,4 @@ export async function transcodeAviToMp4(
   return await runFfmpeg([...TRANSCODE_ARGS], input, opts)
 }
 
-export { probeFfmpegAvailable } from './ffmpeg.js'
+export { probeFfmpegAvailable } from '@/serve/lib/ffmpeg'

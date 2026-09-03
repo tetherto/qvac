@@ -1,18 +1,9 @@
-// Thin JS <-> C++ boundary for the ACE-Step music addon, mirroring
-// tts-ggml/src/tts.ts. `AudioGenInterface` owns the native handle and forwards
-// createInstance / activate / runJob / cancel / destroyInstance to the binding.
-
-/**
- * Flat native configuration object, read 1:1 by the C++ JSAdapter
- * (buildAcestepConfig). Either `modelDir` (auto-classify the four GGUFs) or the
- * explicit per-stage paths are set. The numeric/bool fields are REQUIRED by the
- * native side (it carries no defaults); the high-level class fills them in.
- */
 export interface AudioGenConfigurationParams {
   engineType?: string
   modelDir?: string
   textEncModelPath?: string
   lmModelPath?: string
+  synthModelPath?: string
   ditModelPath?: string
   vaeModelPath?: string
   inferenceSteps?: number
@@ -67,12 +58,15 @@ export interface AudioGenJobData {
   bpm?: number
   keyscale?: string
   timesignature?: string
+  augmentCaptionWithMetadata?: boolean
   duration?: number
   lmTemperature?: number
   lmTopP?: number
   lmTopK?: number
   lmCfgScale?: number
   lmPhase1?: boolean
+  simpleMode?: boolean
+  normalizeLoudness?: boolean
   dcwEnabled?: boolean
   dcwScaler?: number
   dcwHighScaler?: number
@@ -80,8 +74,13 @@ export interface AudioGenJobData {
   referenceAudio?: Float32Array
   sourceAudio?: Float32Array
   taskType?: string
+  track?: string
+  guidanceScale?: number
   audioCoverStrength?: number
   coverNoiseStrength?: number
+  maxFrames?: number
+  inferenceSteps?: number
+  cfgScale?: number
   editOperations?: AudioEditOperationJobData[]
 }
 

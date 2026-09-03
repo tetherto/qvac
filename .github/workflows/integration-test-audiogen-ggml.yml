@@ -64,12 +64,18 @@ permissions:
   packages: read
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # NOTE: continue-on-error: true mirrors the early-days landing posture the
   # sibling addons use (tts-ggml / parakeet). The on-pr-audiogen-ggml.yml
   # merge-guard treats this job's `success || skipped` as a pass, so a flake in
   # the generation suite does NOT block a merge yet. Tighten this gate (drop
   # `continue-on-error`) once the addon's flake surface is small enough.
   run-integration-tests:
+    needs: runner_names
     # The benchmark leg sweeps three DiT variants (and doubles that on a GPU
     # runner) with multi-minute renders each, so it needs far more headroom than
     # the functional suite.
@@ -88,34 +94,38 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux GPU runners exercise the published Vulkan desktop backend.
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
           - os: ubuntu-26.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2604 }}
             platform: linux
             arch: x64
             no_gpu: 'true'
           - os: ubuntu-24.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404_arm }}
             platform: linux
             arch: arm64
             no_gpu: 'true'
           - os: macos-26
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
             platform: darwin
             arch: arm64
           - os: macos-15-large
+            runner: ${{ needs.runner_names.outputs.macos_15_large }}
             platform: darwin
             arch: x64
             no_gpu: 'true'
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
 
     steps:
       - name: Setup Node.js
@@ -336,3 +346,4 @@ jobs:
           path: packages/audiogen-ggml/benchmarks/results/rtf-benchmark-*.json
           if-no-files-found: warn
           retention-days: 30
+

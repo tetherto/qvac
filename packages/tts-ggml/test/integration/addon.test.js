@@ -133,6 +133,51 @@ test(
       })
     }
 
+    // Streaming input + streaming PCM output on the SAME loaded model
+    // (previously a standalone test that repeated the ensureChatterboxModels +
+    // loadChatterboxTTS construction). Both use loadChatterboxTTS({modelDir,
+    // language:'en'}), so the streaming assertions can piggyback here. Must run
+    // BEFORE model.unload() below — do not move.
+    const streamingPhrases = [
+      'First phrase arrives from the upstream text stream.',
+      'A short pause could sit between chunks.',
+      'Each yield is one discrete synthesis job.'
+    ]
+    const streamingExpectation = {
+      minSamples: 15000,
+      maxSamples: 5000000,
+      minDurationMs: 400,
+      maxDurationMs: 300000
+    }
+    const streamingWavPath = !isMobile
+      ? path.join(baseDir, 'test', 'output', 'chatterbox-streaming.wav')
+      : undefined
+    console.log(
+      `\n=== Running Chatterbox IO stream synthesis (runStreaming, ${streamingPhrases.length} phrases) ===`
+    )
+    const streamingResult = await runChatterboxStreaming(
+      model,
+      { phrases: streamingPhrases, saveWav: !isMobile, wavOutputPath: streamingWavPath },
+      streamingExpectation
+    )
+    console.log(streamingResult.output)
+    t.ok(streamingResult.passed, 'Streaming synthesis should pass expectations')
+    t.ok(streamingResult.data.sampleCount > 0, 'Streaming should produce audio samples')
+    t.is(streamingResult.data.reportedSampleRate, 24000, 'Streaming sample rate is native 24 kHz')
+    t.is(
+      streamingResult.data.streamChunkCount,
+      streamingPhrases.length,
+      'runStreaming should emit one chunk per yielded phrase'
+    )
+    t.is(streamingResult.data.sentenceChunks.length, streamingPhrases.length)
+    for (let i = 0; i < streamingPhrases.length; i++) {
+      t.is(
+        streamingResult.data.sentenceChunks[i],
+        streamingPhrases[i],
+        `chunk ${i} sentenceChunk should match the streamed-in phrase`
+      )
+    }
+
     await model.unload()
     t.pass('Chatterbox model unloaded')
 
@@ -361,78 +406,5 @@ test(
 
     await model.unload()
     t.pass('Model unloaded after native streaming')
-  }
-)
-
-test(
-  'Chatterbox TTS (ggml): streaming input + streaming PCM output (runStreaming + onUpdate)',
-  { timeout: 1800000 },
-  async (t) => {
-    const baseDir = getBaseDir()
-    const modelsDir = path.join(baseDir, 'models')
-
-    console.log('\n=== Ensuring Chatterbox GGUFs (streaming) ===')
-    const download = await ensureChatterboxModels({ targetDir: modelsDir })
-    if (!download.success) {
-      t.fail(
-        'Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
-      )
-      return
-    }
-    t.ok(download.success, 'Chatterbox GGUFs should be available')
-
-    const model = await loadChatterboxTTS({
-      modelDir: download.targetDir,
-      language: 'en'
-    })
-    t.ok(model, 'Chatterbox (ggml) model should be loaded')
-
-    const phrases = [
-      'First phrase arrives from the upstream text stream.',
-      'A short pause could sit between chunks.',
-      'Each yield is one discrete synthesis job.'
-    ]
-
-    const expectation = {
-      minSamples: 15000,
-      maxSamples: 5000000,
-      minDurationMs: 400,
-      maxDurationMs: 300000
-    }
-
-    const saveWav = !isMobile
-    const wavOutputPath = saveWav
-      ? path.join(baseDir, 'test', 'output', 'chatterbox-streaming.wav')
-      : undefined
-
-    console.log(
-      `\n=== Running Chatterbox IO stream synthesis (runStreaming, ${phrases.length} phrases) ===`
-    )
-    const result = await runChatterboxStreaming(
-      model,
-      { phrases, saveWav, wavOutputPath },
-      expectation
-    )
-    console.log(result.output)
-
-    t.ok(result.passed, 'Streaming synthesis should pass expectations')
-    t.ok(result.data.sampleCount > 0, 'Streaming should produce audio samples')
-    t.is(result.data.reportedSampleRate, 24000, 'Streaming sample rate is native 24 kHz')
-    t.is(
-      result.data.streamChunkCount,
-      phrases.length,
-      'runStreaming should emit one chunk per yielded phrase'
-    )
-    t.is(result.data.sentenceChunks.length, phrases.length)
-    for (let i = 0; i < phrases.length; i++) {
-      t.is(
-        result.data.sentenceChunks[i],
-        phrases[i],
-        `chunk ${i} sentenceChunk should match the streamed-in phrase`
-      )
-    }
-
-    await model.unload()
-    t.pass('Chatterbox model unloaded')
   }
 )

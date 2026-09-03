@@ -6,7 +6,7 @@ schemaType: TechArticle
 
 ## Overview
 
-The SDK supports multiple JS runtimes, but its [underlying components](https://github.com/tetherto/qvac/tree/main/packages) run only on [Bare](https://bare.pears.com). When the SDK runs in a runtime other than Bare, it spawns a Bare worker where all AI operations will take place. The worker is started lazily on the first RPC call and can be explicitly shut down with `close()`.
+The SDK supports multiple JS runtimes, but its [underlying components](https://github.com/tetherto/qvac/tree/main/packages) run only on [Bare](https://bare.pears.com). The SDK spawns a Bare worker where all AI operations take place, talking to it over `bare-rpc`. The worker is started lazily on the first RPC call and can be explicitly shut down with `close()`. For in-process Bare with no worker, use [`@qvac/inference`](https://github.com/tetherto/qvac/tree/main/packages/inference).
 
 ## Phase 1: initialization
 
@@ -19,13 +19,13 @@ sequenceDiagram
 
     App->>SDK: Call loadModel() (or any API)
     SDK->>RPC: getRPC() (create runtime-specific RPC client)
-    RPC->>Worker: Spawn worker (Node/Expo) or connect in-process (Bare)
+    RPC->>Worker: Spawn worker
     RPC->>Worker: Send __init_config (first call only)
     Worker->>Worker: Store config in memory
     Worker->>RPC: Init ack
 ```
 
-The first time you call `loadModel()` (or any function other than `close()`), the SDK performs a complete initialization sequence. It initializes a runtime-specific RPC client and sends configuration to the worker via the internal `__init_config` message. The worker process is spawned once and reused for subsequent calls until you explicitly close it. In Bare runtime, no separate worker process is spawned; requests are handled in-process.
+The first time you call `loadModel()` (or any function other than `close()`), the SDK performs a complete initialization sequence. It initializes a runtime-specific RPC client and sends configuration to the worker via the internal `__init_config` message. The worker process is spawned once and reused for subsequent calls until you explicitly close it.
 
 ## Phase 2: model loading
 
@@ -81,12 +81,12 @@ sequenceDiagram
 
     App->>SDK: Call close()
     SDK->>RPC: Close RPC client
-    RPC->>Worker: Terminate worker process (Node/Expo)
+    RPC->>Worker: Terminate worker process
     Worker->>Worker: Cleanup (unload models, stop swarms, close RAG)
     Worker->>RPC: Exit
 ```
 
-`close()` explicitly shuts down the worker and releases the RPC connection. In Node/Expo, this terminates the worker process; in Bare, the call is a no-op since there is no separate worker process. After `close()`, the next SDK call will reinitialize the RPC client and spawn a fresh worker.
+`close()` explicitly shuts down the worker and releases the RPC connection. This terminates the worker process. After `close()`, the next SDK call will reinitialize the RPC client and spawn a fresh worker.
 
 <Callout title="Tip" type="success">
 `unloadModel()` will automatically close the RPC connection when there are no active models or providers, but `close()` is the explicit way to shut down the SDK instance.

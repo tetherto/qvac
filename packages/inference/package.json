@@ -1,6 +1,6 @@
 {
   "name": "@qvac/inference",
-  "version": "0.17.1",
+  "version": "0.18.2",
   "description": "Bare-only in-process core of the QVAC SDK. Runs inference directly on the Bare runtime with explicit plugin assembly and no RPC, worker, or subprocess layer.",
   "license": "Apache-2.0",
   "repository": {
@@ -82,6 +82,10 @@
       "types": "./dist/models/registry/index.d.ts",
       "import": "./dist/models/registry/index.js"
     },
+    "./model-resource-profiles": {
+      "types": "./dist/models/registry/resource-profiles.d.ts",
+      "import": "./dist/models/registry/resource-profiles.js"
+    },
     "./llamacpp-completion/plugin": {
       "types": "./dist/plugins/builtin/llamacpp-completion/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-completion/plugin.js"
@@ -151,7 +155,7 @@
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
     "test:bare": "npm run test",
     "check-models": "bare ./dist/models/update-models/index.js --check",
-    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts"
+    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts"
   },
   "engines": {
     "bare": "^1.30.3"
@@ -159,16 +163,17 @@
   "dependencies": {
     "@qvac/error": "^0.1.1",
     "@qvac/logging": "^0.1.1",
-    "@qvac/rag": "^0.6.4",
+    "@qvac/rag": "^0.8.0",
     "@qvac/registry-client": "^0.6.1",
     "bare-abort-controller": "^1.1.2",
     "bare-buffer": "^3.6.2",
     "bare-cpu-info": "0.1.1",
     "bare-crypto": "^1.15.3",
     "bare-env": "^3.0.1",
-    "bare-fetch": "^3.0.1",
     "bare-fs": "^4.7.4",
     "bare-gpu-info": "0.1.1",
+    "bare-http1": "^4.5.9",
+    "bare-https": "^3.0.0",
     "bare-os": "^3.9.3",
     "bare-path": "^3.1.1",
     "bare-rpc": "^1.3.8",
@@ -185,19 +190,19 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@qvac/asr-ggml": "^0.1.0",
-    "@qvac/audiogen-ggml": "^0.1.0",
-    "@qvac/bci-whispercpp": "^0.6.0",
-    "@qvac/classification-ggml": "^0.15.1",
+    "@qvac/asr-ggml": "^0.3.1",
+    "@qvac/audiogen-ggml": "^0.3.2",
+    "@qvac/bci-whispercpp": "^0.8.0",
+    "@qvac/classification-ggml": "^0.23.0",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.17.0",
-    "@qvac/embed-llamacpp": "^0.30.1",
+    "@qvac/diffusion-cpp": "^0.21.0",
+    "@qvac/embed-llamacpp": "^0.37.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.43.0",
-    "@qvac/ocr-ggml": "^0.13.1",
-    "@qvac/translation-nmtcpp": "^8.3.0",
-    "@qvac/tts-ggml": "^0.6.0",
-    "@qvac/vla-ggml": "^0.17.0"
+    "@qvac/llm-llamacpp": "^0.49.1",
+    "@qvac/ocr-ggml": "^0.21.0",
+    "@qvac/translation-nmtcpp": "^0.13.0",
+    "@qvac/tts-ggml": "^0.8.0",
+    "@qvac/vla-ggml": "^0.24.0"
   },
   "peerDependenciesMeta": {
     "@qvac/asr-ggml": {
@@ -241,19 +246,19 @@
     }
   },
   "devDependencies": {
-    "@qvac/asr-ggml": "^0.1.0",
-    "@qvac/audiogen-ggml": "^0.1.0",
-    "@qvac/bci-whispercpp": "^0.6.0",
-    "@qvac/classification-ggml": "^0.15.1",
+    "@qvac/asr-ggml": "^0.3.1",
+    "@qvac/audiogen-ggml": "^0.3.2",
+    "@qvac/bci-whispercpp": "^0.8.0",
+    "@qvac/classification-ggml": "^0.23.0",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.17.0",
-    "@qvac/embed-llamacpp": "^0.30.1",
+    "@qvac/diffusion-cpp": "^0.21.0",
+    "@qvac/embed-llamacpp": "^0.37.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.43.0",
-    "@qvac/ocr-ggml": "^0.13.1",
-    "@qvac/translation-nmtcpp": "^8.3.0",
-    "@qvac/tts-ggml": "^0.6.0",
-    "@qvac/vla-ggml": "^0.17.0",
+    "@qvac/llm-llamacpp": "^0.49.1",
+    "@qvac/ocr-ggml": "^0.21.0",
+    "@qvac/translation-nmtcpp": "^0.13.0",
+    "@qvac/tts-ggml": "^0.8.0",
+    "@qvac/vla-ggml": "^0.24.0",
     "@types/brittle": "^3.5.0",
     "bare": "*",
     "bare-console": "*",
