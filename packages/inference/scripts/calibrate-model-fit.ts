@@ -109,11 +109,8 @@ function settle() {
   return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
 }
 
-// A registry download can stall without erroring: one CI run hung ~3 h inside
-// a single blob download (peers went quiet mid-transfer) until the job ceiling
-// killed it. Generous — a cold 5 GiB download on the runners took under a
-// minute — but bounded, so a stalled load fails in minutes with a clear
-// message instead of eating the whole job timeout.
+// Registry downloads can stall without erroring; bound each load so a stall
+// fails in minutes instead of consuming the whole job timeout.
 const LOAD_TIMEOUT_MS = 30 * 60 * 1000
 
 function withLoadTimeout<T>(promise: Promise<T>, label: string) {
@@ -122,7 +119,7 @@ function withLoadTimeout<T>(promise: Promise<T>, label: string) {
     timer = setTimeout(() => {
       reject(
         new Error(
-          `${label} did not finish within ${LOAD_TIMEOUT_MS / 60000} minutes — a registry download has likely stalled. Re-run; if it persists, check the registry's reachability from this host.`
+          `${label} did not finish within ${LOAD_TIMEOUT_MS / 60000} minutes; a registry download has likely stalled. Check the registry's reachability from this host.`
         )
       )
     }, LOAD_TIMEOUT_MS)
@@ -305,17 +302,14 @@ async function main() {
   // does not match what the engine did.
   const negative = measurements.filter((m) => m.persistentBytes - m.kvBytes < 0)
   if (negative.length > 0) {
-    // Two known causes. Weights measuring far below artifact size alongside a
-    // GPU is the discrete-VRAM signature (observed on a CUDA/Vulkan linux-x64
-    // host: a 2.4 GiB model left ~300 MiB of RSS): the engine offloaded
-    // weights and KV to device memory that process RSS cannot see, and this
-    // RSS-based methodology cannot calibrate such a host at all. Otherwise the
-    // subtracted cache type does not match what the engine allocated.
+    // Weights far below artifact size with a GPU present means the model went
+    // to discrete GPU memory, which process RSS cannot observe; RSS-based
+    // calibration only works on unified-memory or CPU-resident hosts.
     const offloaded = hasGpu && measurements.some((m) => m.persistentBytes < m.artifactBytes / 2)
     console.log(
       offloaded
-        ? `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted, and weights landed far below artifact size with a GPU present: the engine offloaded the model to discrete GPU memory, which process RSS cannot observe. This methodology only calibrates unified-memory or CPU-resident hosts. No fixture written.`
-        : `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
+        ? `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted: the model is in discrete GPU memory, which process RSS cannot observe. This methodology only calibrates unified-memory or CPU-resident hosts. No fixture written.`
+        : `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted: the assumed cache type does not match what the engine allocated. No fixture written.`
     )
     Bare.exit(1)
   }

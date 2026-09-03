@@ -704,9 +704,8 @@ jobs:
           # available when it exits non-zero.
           PLATFORM=$(node -p "process.platform + '-' + process.arch")
           echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM.ts" >> "$GITHUB_OUTPUT"
-          # Invoke the locally installed bare by path: `npx bare` resolved a
-          # stale global bare on the Windows runner, which predates TypeScript
-          # type-stripping and dies on the script's first type annotation.
+          # Invoke the repo-pinned bare by path: npx/PATH can resolve a global
+          # bare too old for TypeScript type-stripping.
           node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write
 
       - name: Upload fixture
