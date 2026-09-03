@@ -271,9 +271,10 @@ async function measure(
 }
 
 function fixtureSource(platform: string, calibration: PlatformCalibration) {
-  const json = JSON.stringify(calibration, null, 2)
-    .replace(/"([a-zA-Z]+)":/g, '$1:')
-    .replace(/"/g, "'")
+  // Unquote the keys only. Values stay JSON-quoted, which is already valid
+  // TypeScript; replacing every quote breaks any value containing one, and
+  // prettier settles the house quote style afterwards anyway.
+  const json = JSON.stringify(calibration, null, 2).replace(/"([a-zA-Z]+)":/g, '$1:')
   return `import type { PlatformCalibration } from '@/resources/model-fit/types'
 
 /**
