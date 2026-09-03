@@ -96,7 +96,11 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   const gpuMode = gpuTarget !== undefined && gpuCalibration !== undefined
   const effectiveCalibration = gpuMode ? gpuCalibration : calibration
 
-  const basis: ModelFitBasis = gpuMode ? 'device-memory' : resolveBasis(platform)
+  const basis: ModelFitBasis = gpuMode
+    ? gpuTarget!.scope === 'budget'
+      ? 'device-budget'
+      : 'device-memory'
+    : resolveBasis(platform)
   const reasons: string[] = []
   const assumptions: string[] = [
     `execution mode '${execution}' is a declared assumption used for aggregation only; the SDK does not schedule, serialize, or reserve anything`,
@@ -119,6 +123,9 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     gpuMode && gpuTarget
       ? gpuBudget(gpuTarget, platform)
       : resolveBudget(resources, platform, basis, reasons)
+
+  // A GPU load also consumes system RAM, so the system budget bounds it too.
+  const alsoBoundBy = gpuMode ? resolveBudget(resources, platform, 'system-memory', []) : undefined
 
   if (!platform) {
     reasons.push('the runtime platform is not one this assessment covers')
@@ -143,7 +150,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   }
 
   const modelResults: ModelFitModelResult[] = evaluated.map(({ candidate, result }) =>
-    toModelResult(candidate, result, budget)
+    toModelResult(candidate, result, budget, alsoBoundBy)
   )
 
   const estimates = evaluated
@@ -160,7 +167,13 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   }
 
   const verdict: ModelFitVerdict =
-    !budget || !combined ? 'unknown' : compare(combined, budget.availableAfterReserveBytes)
+    !budget || !combined ? 'unknown' : verdictAgainst(combined, budget, alsoBoundBy)
+
+  if (gpuMode && combined && alsoBoundBy) {
+    reasons.push(
+      'a GPU load is also paid for in system RAM, so every verdict is the more pessimistic of the GPU and system budgets'
+    )
+  }
 
   if (budget && combined) {
     reasons.push(
@@ -323,12 +336,28 @@ function hasGpu(resources: SystemResources): boolean {
   return gpus.status === 'supported' && gpus.value.length > 0
 }
 
-/** The GPU the engine would execute on, when its memory is device-scoped. */
+/** The GPU the engine would execute on, when its memory can carry a budget. */
 interface GpuTarget {
   backend: string
   totalBytes: number
   usedBytes: number
+  /** `device` is the card's own memory; `budget` is this process's allowance. */
+  scope: 'device' | 'budget'
   device?: string
+}
+
+// An adapter too small to hold any model we assess is not a candidate for one.
+// Windows classifies the Intel iGPU as dedicated because it declares 128 MiB of
+// its own, which is otherwise indistinguishable from a real card by type.
+const MIN_USABLE_GPU_BYTES = GIB
+
+// Only excludes a card when the declared memory says so. An unreported total
+// leaves it counted, so an unknown device makes the choice ambiguous rather
+// than silently disappearing from it.
+function tooSmallToHostAModel(gpu: GPUResourceCapabilities) {
+  return (
+    gpu.memoryTotalBytes.status === 'supported' && gpu.memoryTotalBytes.value < MIN_USABLE_GPU_BYTES
+  )
 }
 
 // Ordered by the backends the addon actually builds, not by what the device's
@@ -367,9 +396,12 @@ function resolveGpuTarget(resources: SystemResources): GpuTarget | undefined {
   // Count the cards first. Filtering on the readings would let a GPU with a
   // failed sample drop out of the count, leaving its neighbour looking like the
   // only candidate — while the engine remains free to use the one that dropped.
-  const candidates = gpus.value.filter(
-    (gpu) => gpu.unifiedMemory.status === 'supported' && !gpu.unifiedMemory.value
-  )
+  // Only a device property may exclude a card from the count, never a reading:
+  // an adapter that cannot hold a model is not a rival for one.
+  const candidates = gpus.value.filter((gpu) => {
+    if (gpu.unifiedMemory.status !== 'supported' || gpu.unifiedMemory.value) return false
+    return !tooSmallToHostAModel(gpu)
+  })
   if (candidates.length !== 1) return undefined
 
   const gpu = candidates[0]!
@@ -383,10 +415,13 @@ function resolveGpuTarget(resources: SystemResources): GpuTarget | undefined {
   if (sample.memoryTotalBytes.value <= 0) return undefined
   if (sample.memoryUsedBytes.value > sample.memoryTotalBytes.value) return undefined
 
+  const scope = sample.memoryTotalBytes.provenance.scope === 'budget' ? 'budget' : 'device'
+
   return {
     backend,
     totalBytes: sample.memoryTotalBytes.value,
     usedBytes: sample.memoryUsedBytes.value,
+    scope,
     ...(gpu.name.status === 'supported' && { device: gpu.name.value })
   }
 }
@@ -401,12 +436,30 @@ function gpuBudget(target: GpuTarget, platform: ModelFitPlatform | undefined) {
   }
 }
 
-// Windows is deliberately absent from the GPU basis: its GPU readings are
-// per-process (DXGI CurrentUsage and Budget), so the collector never grades
-// them device-scoped and no GPU target resolves there. When it does become
-// available, note that a GPU load there is also paid for in system RAM —
-// loading a 2382 MiB model onto the card raised RSS by 2918 MiB, against
-// 868 MiB on linux — so it will need both bounds, on every verdict.
+/**
+ * A verdict against the GPU budget and, when one applies, system memory too.
+ *
+ * A GPU load is paid for in system RAM as well — a 2382 MiB model raised RSS
+ * by 2918 MiB on win32 and 868 MiB on linux — so a host with the card for it
+ * but not the RAM must not read as a fit. Applied to every verdict, per model
+ * and combined alike, so the two can never disagree.
+ */
+function verdictAgainst(
+  estimate: ByteRange,
+  budget: NonNullable<AssessModelFitResult['budget']>,
+  alsoBoundBy: AssessModelFitResult['budget']
+): ModelFitVerdict {
+  const primary = compare(estimate, budget.availableAfterReserveBytes)
+  if (!alsoBoundBy) return primary
+  return worst(primary, compare(estimate, alsoBoundBy.availableAfterReserveBytes))
+}
+
+/** The more pessimistic of two verdicts. */
+function worst(a: ModelFitVerdict, b: ModelFitVerdict): ModelFitVerdict {
+  if (a === 'likely-too-large' || b === 'likely-too-large') return 'likely-too-large'
+  if (a === 'unknown' || b === 'unknown') return 'unknown'
+  return 'likely-fits'
+}
 
 /**
  * Picks the budget basis for a platform.
@@ -425,6 +478,7 @@ function resolveBasis(platform: ModelFitPlatform | undefined): ModelFitBasis {
 function basisEvidence(basis: ModelFitBasis) {
   if (basis === 'process-memory') return 'this process’s own memory ceiling'
   if (basis === 'device-memory') return 'the GPU’s own memory'
+  if (basis === 'device-budget') return 'the GPU memory this process is budgeted'
   return 'system memory'
 }
 
@@ -541,7 +595,8 @@ function compare(estimate: ByteRange, budget: number): ModelFitVerdict {
 function toModelResult(
   candidate: ModelFitCandidate,
   result: EstimatorResult,
-  budget: AssessModelFitResult['budget']
+  budget: AssessModelFitResult['budget'],
+  alsoBoundBy: AssessModelFitResult['budget']
 ): ModelFitModelResult {
   if (result.kind === 'unknown') {
     return {
@@ -558,7 +613,7 @@ function toModelResult(
 
   return {
     name: candidate.model.name,
-    verdict: budget ? compare(total, budget.availableAfterReserveBytes) : 'unknown',
+    verdict: budget ? verdictAgainst(total, budget, alsoBoundBy) : 'unknown',
     estimate: { lowerBoundBytes: total.lower, upperBoundBytes: total.upper },
     estimatorVersion: result.estimatorVersion,
     reasons: budget

@@ -1010,8 +1010,9 @@ function discreteGpuResources(options: {
   vramUsedBytes: number
   systemTotalBytes?: number
   systemUsedBytes?: number
+  gpuScope?: 'device' | 'budget'
 }) {
-  const provenance = { source: 'test', scope: 'device' as const }
+  const provenance = { source: 'test', scope: options.gpuScope ?? ('device' as const) }
   const system = { source: 'test', scope: 'system' as const }
   const total = options.systemTotalBytes ?? 64 * GIB
   const used = options.systemUsedBytes ?? 16 * GIB
@@ -1176,6 +1177,103 @@ test('assess: unverified GPU samples cannot form a device budget', (t) => {
 
   t.is(result.verdict, 'unknown')
   t.is(result.basis, 'system-memory')
+})
+
+// DXGI gives a per-process budget, not the device's memory. It still answers
+// the question admission asks — what may this process allocate — so it gets
+// its own basis rather than being discarded.
+test('assess: windows budgets against the GPU allowance it is granted', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      gpuScope: 'budget'
+    }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'device-budget')
+  t.is(result.verdict, 'likely-fits')
+  t.ok(result.models[0]!.estimate)
+})
+
+// The bound that a GPU load also costs system RAM has to reach the per-model
+// verdicts, not just the combined one, or the two contradict each other.
+test('assess: the system bound reaches per-model verdicts as well as the combined one', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      systemTotalBytes: 8 * GIB,
+      systemUsedBytes: 7 * GIB,
+      gpuScope: 'budget'
+    }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'likely-too-large', 'plenty of VRAM, no system RAM')
+  t.is(result.models[0]!.verdict, 'likely-too-large', 'and the model agrees with the whole')
+  t.ok(result.reasons.some((r) => r.includes('system RAM')))
+})
+
+// Windows classifies the Intel iGPU as dedicated because it declares 128 MiB
+// of its own, so the count alone would refuse a host with one real card.
+test('assess: an adapter too small to hold a model is not a rival candidate', (t) => {
+  const resources = discreteGpuResources({
+    vramTotalBytes: 20 * GIB,
+    vramUsedBytes: 1 * GIB,
+    gpuScope: 'budget'
+  })
+  const gpus = resources.capabilities.gpus
+  const samples = resources.sample!.gpus
+  if (gpus.status === 'supported' && samples.status === 'supported') {
+    gpus.value.push({
+      ...gpus.value[0]!,
+      id: 'igpu',
+      memoryTotalBytes: {
+        status: 'supported',
+        value: 128 * 1024 * 1024,
+        provenance: { source: 'test', scope: 'device' }
+      }
+    })
+    samples.value.push({
+      ...samples.value[0]!,
+      id: 'igpu',
+      memoryTotalBytes: {
+        status: 'supported',
+        value: 128 * 1024 * 1024,
+        provenance: { source: 'test', scope: 'budget' }
+      },
+      memoryUsedBytes: {
+        status: 'supported',
+        value: 0,
+        provenance: { source: 'test', scope: 'budget' }
+      }
+    })
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources,
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'device-budget', 'the real card still resolves')
+  t.is(result.budget?.totalBytes, 20 * GIB)
 })
 
 // A card whose reading failed is still a card the engine can use, so it must

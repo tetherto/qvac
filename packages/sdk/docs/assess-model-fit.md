@@ -139,16 +139,22 @@ switches to a `device-memory` basis and the backend's own coefficients — today
 `linux-x64` on Vulkan — and reports the GPU's total, used and reserve in
 `budget` as usual.
 
-It returns `unknown` instead whenever that evidence is not defensible:
+On Windows the readings are per-process rather than device-wide (DXGI
+`CurrentUsage` and `Budget`), so the basis is `device-budget` instead: the GPU
+memory the OS grants _this process_. It answers the same admission question.
 
-- **Windows.** GPU memory there is per-process (DXGI `CurrentUsage` and
-  `Budget`), not device-wide, so no VRAM budget can be formed. Note that a GPU
-  load on Windows also consumes system RAM — a 2382 MiB model raised RSS by
-  2918 MiB, against 868 MiB on linux — so a future device budget there will
-  need both bounds.
-- **More than one dedicated GPU.** The engine takes the first eligible ggml
+Both device bases additionally require the **system-memory** budget to hold, on
+every verdict — a GPU load is paid for in system RAM too (a 2382 MiB model
+raised RSS by 2918 MiB on Windows, 868 MiB on linux), so a machine with the
+card for it but not the RAM does not read as a fit.
+
+It returns `unknown` instead whenever the evidence is not defensible:
+
+- **More than one usable GPU.** The engine takes the first eligible ggml
   device, an order the SDK cannot observe, so the card cannot be identified.
-- **An uncalibrated backend**, or a GPU whose readings are not device-scoped.
+  Adapters too small to hold any model are not counted as rivals — Windows
+  classifies an Intel iGPU as dedicated because it declares 128 MiB of its own.
+- **An uncalibrated backend**, or a GPU whose readings carry no usable scope.
 
 Apple silicon is unaffected: its memory is unified, so a GPU allocation is
 system RAM and the system basis already covers it.

@@ -87,10 +87,16 @@ itself, per device, and reports `unverified` wherever it cannot:
   system RAM, which the memory budget already accounts for. Apple readings are
   `unverified` for this reason, and are a working-set recommendation rather
   than a device pool (an M4 Max reports 81% of system RAM).
-- Otherwise a sample is trusted only when its total agrees with the memory the
-  device declares for itself, within 10%. A discrete card agrees (measured 1.00
-  and 0.96); an Intel iGPU declares 128 MiB and samples half of system RAM,
-  because it is reporting the shared pool.
+- On Windows the values come from DXGI's `QueryVideoMemoryInfo` — `CurrentUsage`
+  and `Budget`, which are what this process uses and may use. They are reported
+  under the `budget` scope rather than discarded: what a process is allowed to
+  allocate is what an admission decision needs. They are not device totals, and
+  on an idle machine `Budget` is indistinguishable from VRAM, so no value-level
+  check can separate them.
+- Otherwise a sample is trusted as `device` only when its total agrees with the
+  memory the device declares for itself, within 10%. A discrete card agrees
+  (measured 1.00 and 0.96); an Intel iGPU declares 128 MiB and samples half of
+  system RAM, because it is reporting the shared pool.
 
 Declared memory (`capabilities`) is therefore `supported` on any non-unified
 GPU, while the per-sample readings additionally require that agreement.

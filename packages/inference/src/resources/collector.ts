@@ -34,8 +34,12 @@ const GPU_UNIFIED_MEMORY_REASON =
 // DXGI reports CurrentUsage and Budget, which are what this process is using
 // and may use — not what the device holds. An idle machine makes Budget look
 // like VRAM, so no value-level check can separate them; only the platform can.
-const GPU_PROCESS_SCOPE_REASON =
-  'Windows reports per-process GPU usage and budget, not device-wide memory'
+// Reported under the `budget` scope rather than discarded: what a process may
+// allocate is exactly what an admission decision needs.
+const gpuBudgetProvenance = {
+  source: GPU_SOURCE,
+  scope: 'budget'
+} as const
 
 // A sampled total that matches what the device declares for itself is
 // describing that device's own pool. Measured: a discrete card agrees within a
@@ -106,14 +110,15 @@ function normalizeDeclaredGPUMemory(value: unknown, unified: unknown): ResourceM
 
 function normalizeSampledGPUMemory(
   value: unknown,
-  deviceScoped: boolean,
+  scope: 'device' | 'budget' | undefined,
   reason: string
 ): ResourceMetric<number> {
   if (value === undefined || value === null) return unavailableMetric()
-  const normalized = normalizeNonNegativeMetric(value, gpuDeviceProvenance)
+  const provenance = scope === 'budget' ? gpuBudgetProvenance : gpuDeviceProvenance
+  const normalized = normalizeNonNegativeMetric(value, provenance)
   if (normalized.status !== 'supported') return normalized
 
-  return deviceScoped ? normalized : unverifiedMetric(reason)
+  return scope ? normalized : unverifiedMetric(reason)
 }
 
 function normalizeDriverCapabilities(drivers: NativeGPUCapabilities['drivers']) {
@@ -196,11 +201,16 @@ function normalizeGPUSample(
   device: GPUMemoryFacts | undefined,
   platform: string
 ) {
-  const processScoped = platform === 'win32'
-  const deviceScoped =
-    !processScoped &&
-    gpuMemoryIsDeviceScoped(device?.declaredMemory, device?.unifiedMemory, usage.memoryTotal)
-  const scopeReason = processScoped ? GPU_PROCESS_SCOPE_REASON : GPU_MEMORY_SCOPE_REASON
+  // win32 values come from DXGI's per-process query, so they describe this
+  // process's budget rather than the device — real, but a different quantity.
+  const scope: 'device' | 'budget' | undefined =
+    platform === 'win32'
+      ? device?.unifiedMemory === false
+        ? 'budget'
+        : undefined
+      : gpuMemoryIsDeviceScoped(device?.declaredMemory, device?.unifiedMemory, usage.memoryTotal)
+        ? 'device'
+        : undefined
 
   return {
     id,
@@ -209,10 +219,10 @@ function normalizeGPUSample(
     decode: normalizeUtilizationMetric(usage.decode, gpuDeviceProvenance),
     memoryUsedBytes: normalizeSampledGPUMemory(
       usage.memoryUsed,
-      deviceScoped,
-      processScoped ? GPU_PROCESS_SCOPE_REASON : 'GPU memory usage scope is unverified'
+      scope,
+      'GPU memory usage scope is unverified'
     ),
-    memoryTotalBytes: normalizeSampledGPUMemory(usage.memoryTotal, deviceScoped, scopeReason),
+    memoryTotalBytes: normalizeSampledGPUMemory(usage.memoryTotal, scope, GPU_MEMORY_SCOPE_REASON),
     powerWatts: normalizeNonNegativeMetric(usage.power, gpuDeviceProvenance),
     temperatureCelsius: normalizeNonNegativeMetric(usage.temperature, gpuDeviceProvenance)
   } satisfies GPUResourceSample

@@ -331,10 +331,11 @@ test('rejects sampled GPU memory that disagrees with the declared memory', (t) =
   }
 })
 
-// DXGI reports what this process uses and may use, not what the device holds.
-// On an idle machine Budget looks exactly like VRAM, so the agreement check
-// cannot catch it — only the platform can.
-test('rejects sampled GPU memory on windows however well it agrees', (t) => {
+// DXGI reports what this process uses and may use, so the readings are real
+// but describe a budget rather than the device. Reported under that scope
+// instead of discarded — the agreement check cannot separate them, because on
+// an idle machine Budget looks exactly like VRAM.
+test('scopes sampled GPU memory as a budget on windows', (t) => {
   const collector = createSystemResourceCollector(
     createFixture({
       platform: 'win32',
@@ -347,10 +348,23 @@ test('rejects sampled GPU memory on windows however well it agrees', (t) => {
   t.is(gpus.status, 'supported')
   if (gpus.status === 'supported') {
     t.alike(gpus.value[0]?.memoryTotalBytes, {
-      status: 'unverified',
-      reason: 'Windows reports per-process GPU usage and budget, not device-wide memory'
+      status: 'supported',
+      value: 8_000,
+      provenance: { source: 'bare-gpu-info', scope: 'budget' }
     })
-    t.is(gpus.value[0]?.memoryUsedBytes.status, 'unverified')
+    t.is(gpus.value[0]?.memoryUsedBytes.status, 'supported')
+  }
+})
+
+test('keeps windows unified-memory GPUs unverified', (t) => {
+  const collector = createSystemResourceCollector(
+    createFixture({ platform: 'win32', gpuUnifiedMemory: true }).dependencies
+  )
+  const { gpus } = collector.sample()
+
+  t.is(gpus.status, 'supported')
+  if (gpus.status === 'supported') {
+    t.is(gpus.value[0]?.memoryTotalBytes.status, 'unverified')
   }
 })
 
