@@ -181,7 +181,7 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
     find_program(NVCC_EXECUTABLE nvcc PATHS /usr/local/cuda/bin NO_DEFAULT_PATH)
   endif()
   if(NOT NVCC_EXECUTABLE)
-    message(FATAL_ERROR "qvac-fabric: cuda-backend feature requires a CUDA toolkit — install one providing nvcc (checked CUDACXX, CUDA_PATH/bin, PATH and /usr/local/cuda/bin). Do not request cuda-backend on a host without nvcc.")
+    message(FATAL_ERROR "qvac-fabric: cuda-backend feature requires a CUDA toolkit. Install one providing nvcc (checked CUDACXX, CUDA_PATH/bin, PATH and /usr/local/cuda/bin). Do not request cuda-backend on a host without nvcc.")
   endif()
   message(STATUS "qvac-fabric: cuda-backend using nvcc at ${NVCC_EXECUTABLE}")
 
@@ -249,15 +249,15 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # which would build sm_80 only and not fail until something ran on a 5090.
   #
   # Tiered by target architecture: an arm64 package has no use for the x64
-  # cubins and vice versa. No consumer requests cuda-backend on arm64 yet --
-  # llm-llamacpp and embed-llamacpp both gate the feature on "linux & x64" --
-  # so the arm64 tier is correct but unexercised.
+  # cubins and vice versa. QVAC-24442 widened llm-llamacpp and embed-llamacpp
+  # from "linux & x64" to "linux", so the arm64 tier is now exercised by their
+  # linux-arm64 prebuild.
   if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
     set(QVAC_CUDA_ARCHS "87-real\;80-virtual")
   else()
     set(QVAC_CUDA_ARCHS "86-real\;120a-real\;80-virtual")
   endif()
-  message(STATUS "qvac-fabric: cuda-backend ON — building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
+  message(STATUS "qvac-fabric: cuda-backend ON, building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
   list(APPEND PLATFORM_OPTIONS
     -DGGML_CUDA=ON
     "-DCMAKE_CUDA_ARCHITECTURES=${QVAC_CUDA_ARCHS}"
