@@ -40,6 +40,11 @@ on:
         description: "Exclude suites (comma-separated)"
         required: false
         type: string
+      also-tests:
+        description: "Exact testIds to run on top of the suite/filter selection (comma-separated)"
+        required: false
+        type: string
+        default: ""
       rerun-plan:
         description: >-
           JSON {family: {platform: [testId]}} of previously failed tests. When set,
@@ -627,14 +632,17 @@ jobs:
         shell: node {0}
         env:
           TEST_FILTER: ${{ steps.leg-filter.outputs.filter }}
+          ALSO_TESTS: ${{ inputs.also-tests }}
         run: |
           (async () => {
             const { spawn, spawnSync } = require('child_process');
             const fs = require('fs');
 
-            // Read via env: a rerun filter is a long comma-separated test-id list.
+            // Read via env: both lists are long, comma-separated test-id lists.
             const filter = process.env.TEST_FILTER || '';
             const filterArgs = filter ? ['--filter=' + filter] : [];
+            const alsoTests = process.env.ALSO_TESTS || '';
+            const alsoTestsArgs = alsoTests ? ['--also-tests=' + alsoTests] : [];
             const suite = '${{ inputs.suite }}';
             const suiteArgs = suite ? ['--suite=' + suite] : [];
             const excludeSuite = '${{ inputs.exclude-suite }}';
@@ -698,7 +706,8 @@ jobs:
               '--report-dir=./reports',
               ...filterArgs,
               ...suiteArgs,
-              ...excludeSuiteArgs
+              ...excludeSuiteArgs,
+              ...alsoTestsArgs
             ];
             console.log('Producer command: npx ' + producerArgs.join(' '));
 

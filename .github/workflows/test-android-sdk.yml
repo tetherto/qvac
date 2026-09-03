@@ -31,6 +31,11 @@ on:
         description: "Exclude suites (comma-separated)"
         required: false
         type: string
+      also-tests:
+        description: "Exact testIds to run on top of the suite/filter selection (comma-separated)"
+        required: false
+        type: string
+        default: ""
       device-farm-timeout:
         description: "Maximum time in minutes to keep Device Farm session alive."
         required: false
@@ -855,6 +860,9 @@ jobs:
 
       - name: Run producer
         working-directory: ${{ inputs.working-directory }}
+        env:
+          # Read via env, not interpolation: the id list is derived from the PR diff.
+          ALSO_TESTS: ${{ inputs.also-tests }}
         run: |
           echo "Starting producer..."
           echo "   Run ID: ${{ needs.build.outputs.runId }}"
@@ -878,11 +886,14 @@ jobs:
             EXCLUDE_SUITE_ARG="--exclude-suite=${{ inputs.exclude-suite }}"
           fi
 
+          # Passed unconditionally and quoted: an empty value is ignored by the
+          # CLI, so no unquoted word splitting is needed to omit the flag.
           npx qvac-test run:producer \
             --runId "${{ needs.build.outputs.runId }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
             --config . \
             --report-dir=./reports \
+            "--also-tests=$ALSO_TESTS" \
             $FILTER_ARG \
             $SUITE_ARG \
             $EXCLUDE_SUITE_ARG

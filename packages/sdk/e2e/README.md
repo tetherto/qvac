@@ -165,7 +165,16 @@ other's bundle.
 
 See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-test-sdk.yml).
 
-- `test-e2e-smoke` — runs the `smoke` suite on desktop and mobile consumers.
+- `test-e2e-smoke` — runs the `smoke` suite **plus the tests this PR touched**, on desktop and
+  mobile consumers. The smoke suite is ~105 of 509 tests, so without this a green smoke run says
+  nothing about tests the PR added or changed. A PR comment reports what was added, and anything
+  the impact mapper could not attribute. See
+  [Smoke runs cover the tests a PR touched](../../../docs/ci/LABELS.md#smoke-runs-cover-the-tests-a-pr-touched).
+  To check locally what a smoke run would add for your branch:
+
+  ```bash
+  node scripts/impacted-tests.mjs --base main --head HEAD
+  ```
 - `test-e2e-full` — runs the full catalog on desktop and mobile consumers.
 - Both labels build `packages/inference` and test it together with `packages/sdk` from the authorized PR HEAD.
 - Release-branch PRs with SDK or inference changes auto-run the same desktop and mobile suite.

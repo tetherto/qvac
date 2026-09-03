@@ -1,0 +1,137 @@
+name: SDK E2E Report Impacted
+description: >
+  Posts the coverage summary for an impact-extended smoke run: which tests the
+  PR touched, which of them the smoke suite already covered, and which this run
+  added. Consumes only the JSON produced by scripts/impacted-tests.mjs, so it
+  never executes PR-authored code and can safely hold pull-requests: write.
+
+inputs:
+  impacted-json:
+    description: "Path to the impacted-tests JSON report"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Post impact summary
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      env:
+        IMPACTED_JSON: ${{ inputs.impacted-json }}
+      with:
+        script: |
+          const fs = require('fs');
+
+          const pr = context.payload.pull_request?.number;
+          if (!pr) {
+            core.info('No pull_request context; skipping impact summary.');
+            return;
+          }
+
+          const MARKER = '<!-- sdk-e2e-impacted -->';
+          const E2E_PREFIX = 'packages/sdk/e2e/';
+          const short = (file) => file.startsWith(E2E_PREFIX) ? file.slice(E2E_PREFIX.length) : file;
+
+          async function upsert(body) {
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              per_page: 100,
+            });
+            const existing = comments.filter((c) => (c.body || '').includes(MARKER)).pop();
+            const args = { owner: context.repo.owner, repo: context.repo.repo, body: `${MARKER}\n${body}` };
+            if (existing) {
+              await github.rest.issues.updateComment({ ...args, comment_id: existing.id });
+            } else {
+              await github.rest.issues.createComment({ ...args, issue_number: pr });
+            }
+            core.summary.addRaw(`${body}\n`);
+            await core.summary.write();
+          }
+
+          // The mapper is fail-open so it can never block e2e, which means a
+          // failure must be said out loud — otherwise a plain smoke run looks
+          // like it covered the PR's tests.
+          const reportPath = process.env.IMPACTED_JSON;
+          if (!fs.existsSync(reportPath)) {
+            return upsert(
+              '### QVAC E2E — impact analysis unavailable\n\n' +
+              '⚠️ The impact mapper did not produce a report, so this is a plain smoke run: ' +
+              'tests this PR added or changed may not have run. Check the `resolve-impacted` job, ' +
+              'or apply `test-e2e-full`.'
+            );
+          }
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+
+          if (report.changedFilesInScope === 0) {
+            core.info('PR changes no e2e test files; nothing to report.');
+            return;
+          }
+
+          const affected = report.affected?.length ?? 0;
+          const covered = report.coveredBySmoke?.length ?? 0;
+          const added = report.alsoTests?.length ?? 0;
+
+          const lines = ['### QVAC E2E — tests changed by this PR', ''];
+
+          if (added > 0) {
+            lines.push(
+              `This smoke run additionally covers **${added}** test(s) that are not tagged ` +
+              `\`smoke\`, adding roughly **${report.addedMinutes} min**.`
+            );
+          } else if (affected > 0) {
+            lines.push('Every test this PR touched is already covered by the smoke suite.');
+          } else {
+            lines.push('No test could be attributed to the changed files listed below.');
+          }
+
+          lines.push(
+            '',
+            `**Catalog:** ${report.catalog} tests · **smoke:** ${report.smoke} · ` +
+            `**touched by this PR:** ${affected} (${covered} already in smoke)`,
+            ''
+          );
+
+          if (report.attribution?.length > 0) {
+            lines.push('| Changed file | Matched via | Tests |', '| --- | --- | --- |');
+            for (const entry of report.attribution) {
+              lines.push(`| \`${short(entry.file)}\` | ${entry.via} | ${entry.tests} |`);
+            }
+            lines.push('');
+          }
+
+          if (added > 0) {
+            const SHOWN = 50;
+            const shown = report.alsoTests.slice(0, SHOWN);
+            const rest = added - shown.length;
+            lines.push(
+              `<details><summary>${added} added test id(s)</summary>`,
+              '',
+              '```',
+              ...shown,
+              ...(rest > 0 ? [`… and ${rest} more`] : []),
+              '```',
+              '',
+              '</details>',
+              ''
+            );
+          }
+
+          if (report.unmapped?.length > 0) {
+            lines.push(
+              'These changed files map to no test, so nothing was added for them — review by hand ' +
+              'if they affect behaviour:',
+              ...report.unmapped.map((file) => `- \`${short(file)}\``),
+              ''
+            );
+          }
+
+          if (report.rejectedIds?.length > 0) {
+            lines.push(
+              `⚠️ ${report.rejectedIds.length} affected test id(s) were rejected as unsafe to pass ` +
+              'on a command line and were not added.',
+              ''
+            );
+          }
+
+          await upsert(lines.join('\n'));

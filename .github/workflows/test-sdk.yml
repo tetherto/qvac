@@ -171,6 +171,12 @@ on:
       electron-platforms:
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
+      also-tests:
+        description: >-
+          Exact testIds to run in addition to the suite/filter selection
+          (comma-separated). Used to extend a smoke run with the tests a PR touched.
+        type: string
+        default: ""
       rerun-plan:
         description: >-
           JSON {family: {platform: [testId]}} of previously failed tests. When set,
@@ -611,6 +617,7 @@ jobs:
       working-directory: "packages/sdk/e2e"
       platforms: ${{ needs.resolve.outputs.desktop-platforms }}
       rerun-plan: ${{ inputs.rerun-plan }}
+      also-tests: ${{ inputs.also-tests }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -637,6 +644,7 @@ jobs:
       working-directory: "packages/sdk/e2e"
       platforms: ${{ needs.resolve.outputs.electron-platforms }}
       rerun-plan: ${{ inputs.rerun-plan }}
+      also-tests: ${{ inputs.also-tests }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -663,6 +671,7 @@ jobs:
       working-directory: "packages/sdk/e2e"
       platforms: ${{ needs.resolve.outputs.snap-platforms }}
       rerun-plan: ${{ inputs.rerun-plan }}
+      also-tests: ${{ inputs.also-tests }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -696,6 +705,7 @@ jobs:
       filter: ${{ needs.resolve.outputs.filter-android || inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
+      also-tests: ${{ inputs.also-tests }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
@@ -729,6 +739,7 @@ jobs:
       filter: ${{ needs.resolve.outputs.filter-ios || inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
+      also-tests: ${{ inputs.also-tests }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
