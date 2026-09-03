@@ -714,6 +714,10 @@ export class ConsumerBase {
           duration: result.skipped ? 0 : duration,
           timestamp: new Date().toISOString(),
           error: result.skipped ? result.output : result.passed ? undefined : result.output,
+          // A passing test's output was dropped here, so `output` in the report
+          // was only ever populated for failures. A test that returns data
+          // rather than just passing needs it either way.
+          ...(result.passed && !result.skipped && result.output ? { output: result.output } : {}),
           ...(retried && { retried: true, retryPassed, retryOutput, attempt1DurationMs })
         }),
         { qos: 1 }

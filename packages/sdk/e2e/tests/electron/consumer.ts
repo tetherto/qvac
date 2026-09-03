@@ -91,6 +91,7 @@ import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
+import { CalibrationExecutor } from '../shared/executors/calibration-executor.js'
 import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
 import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
 
@@ -196,6 +197,12 @@ resources.define('classification', {
 
 resources.define('echo', {
   type: 'echo',
+  modelSrc: '',
+  skipPreDownload: true
+})
+
+resources.define('calibration', {
+  type: 'calibration',
   modelSrc: '',
   skipPreDownload: true
 })
@@ -609,7 +616,8 @@ export const executor = createExecutor({
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
-    new PluginExecutor(resources)
+    new PluginExecutor(resources),
+    new CalibrationExecutor(resources)
   ],
   profiling: {
     init: () => profiler.enable({ mode: 'summary', includeServerBreakdown: true }),

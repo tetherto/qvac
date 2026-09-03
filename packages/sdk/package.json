@@ -127,6 +127,10 @@
       "types": "./dist/src/plugin-utils.d.ts",
       "import": "./dist/src/plugin-utils.js"
     },
+    "./model-fit-calibration": {
+      "types": "./dist/src/model-fit-calibration.d.ts",
+      "import": "./dist/src/model-fit-calibration.js"
+    },
     "./schemas": {
       "types": "./dist/src/schemas/public.d.ts",
       "import": "./dist/src/schemas/public.js",

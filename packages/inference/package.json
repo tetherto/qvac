@@ -86,6 +86,10 @@
       "types": "./dist/models/registry/resource-profiles.d.ts",
       "import": "./dist/models/registry/resource-profiles.js"
     },
+    "./model-fit-calibration": {
+      "types": "./dist/resources/model-fit/calibration/harness.d.ts",
+      "import": "./dist/resources/model-fit/calibration/harness.js"
+    },
     "./llamacpp-completion/plugin": {
       "types": "./dist/plugins/builtin/llamacpp-completion/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-completion/plugin.js"

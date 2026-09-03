@@ -134,6 +134,16 @@ the same way a real app would add a third-party or in-repo custom plugin. `Plugi
 own client wrapper (`custom-echo-plugin/client`) for the happy-path tests, mirroring how a real consumer would
 use a custom plugin rather than calling `invokePlugin` directly.
 
+[`fixtures/calibration-plugin/`](./fixtures/calibration-plugin) uses the same mechanism for a different job: its
+`calibrate` handler runs `@qvac/inference`'s model-fit calibration harness (via `@qvac/sdk/model-fit-calibration`)
+inside the worker, streams progress, and returns the run. `CalibrationExecutor` turns that into the
+`calibration-model-fit` test's output, which is how a fixture leaves a Device Farm phone. The test is opt-in —
+every run except a calibration dispatch drops it producer-side with `--exclude-suite calibration` — because it
+takes ~45 minutes and wants the device to itself. Its **definition** ships in every bundle regardless: a consumer
+resolves incoming testIds against that list, so a definition hidden from the consumer fails the test on the device
+rather than skipping it. The test-sdk dispatch's `calibration: android|ios` does all of that and publishes
+`calibration-fixture-<platform>-<runId>`.
+
 Both `qvac.config.*` files list built-in plugins explicitly, not just `custom-echo-plugin/plugin`: an empty
 or missing `plugins` array bundles all built-ins by default, but as soon as it's non-empty only the listed
 plugins are included (see `resolvePluginSpecifiers` in `@qvac/sdk/commands/bundle`). Omitting the built-ins here
