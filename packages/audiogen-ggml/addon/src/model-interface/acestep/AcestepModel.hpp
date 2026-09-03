@@ -159,7 +159,7 @@ private:
   double audioDurationMs_ = 0.0;
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
-  std::string lrc_;              // synchronized lyric timestamps of the last run
+  std::string lrc_; // synchronized lyric timestamps of the last run
   double lyricsScore_ = 0.0;
   bool hasLyricsScore_ = false; // set per run; gates the lyricsScore stat
   int sampleRate_ = 0; // populated from the engine result in generate()

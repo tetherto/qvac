@@ -355,14 +355,12 @@ struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
   JsAudioOutputHandler(
-      std::function<int()> sampleRate,
-      std::function<int()> channels,
+      std::function<int()> sampleRate, std::function<int()> channels,
       std::function<std::string()> lrc = nullptr)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<int16_t>>(
             [this, sampleRate = std::move(sampleRate),
-             channels = std::move(channels),
-             lrc = std::move(lrc)](
+             channels = std::move(channels), lrc = std::move(lrc)](
                 const std::vector<int16_t>& data) -> js_value_t* {
               auto result = js::Object::create(this->env_);
               std::span<const int16_t> outputSpan(data.data(), data.size());
