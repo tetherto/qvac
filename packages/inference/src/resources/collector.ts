@@ -29,6 +29,16 @@ import type {
 const CPU_SOURCE = 'bare-cpu-info'
 const GPU_SOURCE = 'bare-gpu-info'
 const GPU_MEMORY_SCOPE_REASON = 'GPU memory scope is unverified'
+const GPU_UNIFIED_MEMORY_REASON =
+  'GPU shares system memory, so its reading is not a separate device pool'
+
+// A sampled total that matches what the device declares for itself is
+// describing that device's own pool. Measured: a discrete card agrees within a
+// few percent (1.00 on linux, 0.96 on win32), while an Intel iGPU declares
+// 128 MiB and samples 31891 MiB — half of system RAM — so nothing near this
+// band can confuse the two.
+const GPU_MEMORY_AGREEMENT_MIN = 0.9
+const GPU_MEMORY_AGREEMENT_MAX = 1.1
 
 const cpuSystemProvenance = {
   source: CPU_SOURCE,
@@ -57,15 +67,48 @@ function supportedMetric<T>(value: T, provenance: ResourceProvenance): ResourceM
   return { status: 'supported', value, provenance }
 }
 
-function normalizeAmbiguousNonNegativeMetric(
+/** What the inventory said about a device, kept so its samples can be graded. */
+interface GPUMemoryFacts {
+  declaredMemory: unknown
+  unifiedMemory: unknown
+}
+
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
+/**
+ * Whether a GPU's sampled memory describes that device's own pool rather than
+ * some other quantity under the same name. A unified-memory GPU is excluded
+ * outright: its allocation is system RAM, which the memory budget already
+ * covers. For the rest, the sample has to agree with what the device declares.
+ */
+function gpuMemoryIsDeviceScoped(declared: unknown, unified: unknown, sampledTotal: unknown) {
+  if (unified !== false) return false
+  if (!isPositiveNumber(declared) || !isPositiveNumber(sampledTotal)) return false
+  const ratio = sampledTotal / declared
+  return ratio >= GPU_MEMORY_AGREEMENT_MIN && ratio <= GPU_MEMORY_AGREEMENT_MAX
+}
+
+/** The device's own declared memory, trusted unless it shares system RAM. */
+function normalizeDeclaredGPUMemory(value: unknown, unified: unknown): ResourceMetric<number> {
+  if (value === undefined || value === null) return unavailableMetric()
+  const normalized = normalizeNonNegativeMetric(value, gpuDeviceProvenance)
+  if (normalized.status !== 'supported') return normalized
+
+  return unified === false ? normalized : unverifiedMetric(GPU_UNIFIED_MEMORY_REASON)
+}
+
+function normalizeSampledGPUMemory(
   value: unknown,
+  deviceScoped: boolean,
   reason: string
 ): ResourceMetric<number> {
   if (value === undefined || value === null) return unavailableMetric()
   const normalized = normalizeNonNegativeMetric(value, gpuDeviceProvenance)
   if (normalized.status !== 'supported') return normalized
 
-  return unverifiedMetric(reason)
+  return deviceScoped ? normalized : unverifiedMetric(reason)
 }
 
 function normalizeDriverCapabilities(drivers: NativeGPUCapabilities['drivers']) {
@@ -114,7 +157,7 @@ function normalizeGPUCapabilities(
     driverVersion: normalizeStringMetric(gpu.driverVersion, gpuDeviceProvenance),
     drivers: normalizeDriverCapabilities(gpu.drivers),
     unifiedMemory: normalizeBooleanMetric(gpu.unifiedMemory, gpuDeviceProvenance),
-    memoryTotalBytes: normalizeAmbiguousNonNegativeMetric(gpu.memory, GPU_MEMORY_SCOPE_REASON)
+    memoryTotalBytes: normalizeDeclaredGPUMemory(gpu.memory, gpu.unifiedMemory)
   } satisfies GPUResourceCapabilities
 }
 
@@ -142,18 +185,26 @@ function failedGPUSample(id: string, reason: string) {
   } satisfies GPUResourceSample
 }
 
-function normalizeGPUSample(id: string, usage: NativeGPUUsage) {
+function normalizeGPUSample(id: string, usage: NativeGPUUsage, device: GPUMemoryFacts | undefined) {
+  const deviceScoped = gpuMemoryIsDeviceScoped(
+    device?.declaredMemory,
+    device?.unifiedMemory,
+    usage.memoryTotal
+  )
+
   return {
     id,
     compute: normalizeUtilizationMetric(usage.compute, gpuDeviceProvenance),
     encode: normalizeUtilizationMetric(usage.encode, gpuDeviceProvenance),
     decode: normalizeUtilizationMetric(usage.decode, gpuDeviceProvenance),
-    memoryUsedBytes: normalizeAmbiguousNonNegativeMetric(
+    memoryUsedBytes: normalizeSampledGPUMemory(
       usage.memoryUsed,
+      deviceScoped,
       'GPU memory usage scope is unverified'
     ),
-    memoryTotalBytes: normalizeAmbiguousNonNegativeMetric(
+    memoryTotalBytes: normalizeSampledGPUMemory(
       usage.memoryTotal,
+      deviceScoped,
       GPU_MEMORY_SCOPE_REASON
     ),
     powerWatts: normalizeNonNegativeMetric(usage.power, gpuDeviceProvenance),
@@ -173,6 +224,7 @@ export function createSystemResourceCollector(dependencies: ResourceCollectorDep
   let cpuContext: CPUInfoContext | undefined
   let gpuContext: GPUInfoContext | undefined
   let gpuIds: string[] = []
+  let gpuMemoryFacts: GPUMemoryFacts[] = []
   let destroyed = false
 
   let cpuCapabilities: SystemResourceCapabilities['cpu']
@@ -215,6 +267,10 @@ export function createSystemResourceCollector(dependencies: ResourceCollectorDep
         normalizeGPUCapabilities(gpu, dependencies.createGPUId(), dependencies.gpuTypes)
       )
       gpuIds = normalized.map((gpu) => gpu.id)
+      gpuMemoryFacts = gpus.map((gpu) => ({
+        declaredMemory: gpu.memory,
+        unifiedMemory: gpu.unifiedMemory
+      }))
       gpuCapabilities = supportedMetric(normalized, gpuProvenance)
     }
   } catch {
@@ -259,7 +315,7 @@ export function createSystemResourceCollector(dependencies: ResourceCollectorDep
     const context = gpuContext
     const samples = gpuIds.map((id, index) => {
       try {
-        return normalizeGPUSample(id, context.sample(index))
+        return normalizeGPUSample(id, context.sample(index), gpuMemoryFacts[index])
       } catch {
         return failedGPUSample(id, 'GPU resource sampling failed')
       }
@@ -309,6 +365,7 @@ export function createSystemResourceCollector(dependencies: ResourceCollectorDep
     cpuContext = undefined
     gpuContext = undefined
     gpuIds = []
+    gpuMemoryFacts = []
   }
 
   return {
