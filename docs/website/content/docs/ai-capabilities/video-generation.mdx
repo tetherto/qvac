@@ -25,17 +25,61 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 ### `video()`
 
-Generates a video from a `prompt` in one of two modes:
+Generates a video from a `prompt` in one of two modes.
 
-- **`txt2vid`** — generate a video from a text prompt alone.
-- **`img2vid`** — animate a still image. Pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) and optionally `strength` (0–1) to control how much the output diverges from the first frame. With WAN this requires a model loaded with `clipVisionModelSrc` (OpenCLIP ViT-H/14); LTX-2 conditions on the first frame through its video VAE and needs no CLIP-vision encoder.
+#### Modes
 
-Generation knobs: `video_frames` (must satisfy `4k + 1`, e.g. `17`, `33`, `49`, `81`), `fps`, `cfg_scale`, and `flow_shift` (for Wan 2.1 T2V, `3.0` is recommended — higher values can produce near-static frames). LTX-2 adds `temporal_tiling` — tile the video VAE decode along the time axis to cap peak VRAM on HD / long clips (no effect on WAN, whose VAE is spatial-only).
+- **`txt2vid`** — generate a video from a text prompt alone. Supported by all families.
+- **`img2vid`** — animate a still image. Supported by WAN (load the model with `clipVisionModelSrc`, an OpenCLIP ViT-H/14 encoder) and LTX-2 (no CLIP-vision encoder needed).
 
-Wan 2.2 A14B (dual-expert / mixture-of-experts) adds a second set of knobs that route to the high-noise expert: `high_noise_steps`, `high_noise_sample_method`, `high_noise_scheduler`, `high_noise_cfg_scale`, `high_noise_flow_shift`, and `moe_boundary`. These require a model loaded with `modelConfig.highNoiseDiffusionModelSrc` and are rejected before generation on single-expert layouts (Wan 2.1, Wan 2.2 TI2V-5B) with `PluginRequestValidationFailedError`.
+`img2vid` takes two extra params:
+
+- `init_image` — PNG or JPEG bytes (`Uint8Array`) of the first frame. Required.
+- `strength` — a value in `0–1`. Use higher values when you want the output to diverge more from the first frame.
+
+#### Generation knobs
+
+Common to all families:
+
+- `video_frames` — number of frames to generate. Must satisfy `4k + 1` (e.g. `17`, `33`, `49`, `81`).
+- `fps` — output frame rate.
+- `cfg_scale` — classifier-free guidance strength. Higher values follow the prompt more closely.
+- `flow_shift` — flow-matching shift. For Wan 2.1 T2V, use `3.0`; higher values can produce near-static frames.
+
+LTX-2 adds:
+
+- `temporal_tiling` — set to `true` to cap peak VRAM on HD or long clips. No effect on WAN.
+
+#### LTX-2 reference conditioning (IC-LoRA)
+
+Available in `txt2vid` only. Pass a composite reference sheet together with an Ingredients LoRA so the generated video inherits a specific character or style:
+
+- `scheduler` — set to `'ltx2'`.
+- `reference_images` — one composite reference sheet as a `Uint8Array`. Required to enable reference conditioning.
+- `lora` — worker-local absolute path to an Ingredients LoRA adapter. Required alongside `reference_images`.
+- `lora_strength` — controls how strongly the LoRA steers appearance.
+- `reference_attention_strength` — controls how closely the video follows the reference.
+- `stg_scale`, `stg_block` — optional; tune them to refine output.
+- `reference_downscale_factor` — must be `1`.
+
+#### Wan 2.2 A14B dual-expert knobs
+
+Wan 2.2 A14B routes a second set of knobs to its high-noise expert. They require a model loaded with `modelConfig.highNoiseDiffusionModelSrc` and are rejected on single-expert layouts (Wan 2.1, Wan 2.2 TI2V-5B) with `PluginRequestValidationFailedError`:
+
+- `high_noise_steps` — steps for the high-noise expert.
+- `high_noise_sample_method` — sampling method for the high-noise expert.
+- `high_noise_scheduler` — scheduler for the high-noise expert.
+- `high_noise_cfg_scale` — classifier-free guidance strength for the high-noise expert.
+- `high_noise_flow_shift` — flow-matching shift for the high-noise expert.
+- `moe_boundary` — boundary at which sampling switches from the high-noise expert to the low-noise expert.
 
 <Callout type="warn">
-`width` and `height` must be positive multiples of **16**. Values that are multiples of 8 but not 16 (e.g. `264`, `520`) are rejected at the SDK boundary for both `txt2vid` and `img2vid`. **LTX-2** and **Wan 2.2 TI2V-5B** are stricter: `width` and `height` must be multiples of **32**. LTX-2 also requires `video_frames` to satisfy `8*k + 1` (e.g. `25`, `121`, `241`) with a maximum of **257**, validated against the loaded model before generation; the TI2V-5B 32-pixel grid is enforced natively (derived from the loaded GGUF), so a non-conforming size fails at generation time rather than at load.
+Size and frame constraints:
+
+- `width` and `height` must be positive multiples of **16**.
+- On **LTX-2** and **Wan 2.2 TI2V-5B**, `width` and `height` must be multiples of **32**.
+- On **LTX-2**, `video_frames` must satisfy `8*k + 1` (e.g. `25`, `121`, `241`), with a maximum of **257**.
+- On **LTX-2** with `reference_images`, the minimum `video_frames` rises to **121**.
 </Callout>
 
 The returned `stats` includes `hasAudio` (`true` when the output AVI carries a muxed audio track) and `audioSampleRate` (Hz of that track, `0` when there is no audio).
@@ -163,6 +207,28 @@ The following script animates a first-frame `init_image` with LTX-2. Unlike WAN 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-img2vid-ltx.ts title="diffusion-img2vid-ltx.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Reference-conditioned text-to-video (LTX-2 IC-LoRA)
+
+The following script conditions LTX-2 on a composite reference sheet so the generated video inherits a specific character or style. Load LTX-2 with `lora_apply_mode: 'at_runtime'`, then pass the reference sheet in `reference_images` alongside an Ingredients LoRA in `lora`. Reference conditioning requires at least **121** frames, so `video_frames` is set to `217`:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-ic-lora-ltx.js title="diffusion-ic-lora-ltx.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-ic-lora-ltx.ts title="diffusion-ic-lora-ltx.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>
