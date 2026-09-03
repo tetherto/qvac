@@ -24,17 +24,28 @@ for the per-layer accounting.
 
 ## Procedure
 
-`scripts/calibrate-model-fit.ts` on the platform being calibrated (bare ≥ 1.30
-runs it directly via type-stripping):
+The procedure is `calibration/harness.ts`, exported as
+`@qvac/inference/model-fit-calibration`. On desktop,
+`scripts/calibrate-model-fit.ts` runs it on the platform being calibrated (bare
+≥ 1.30 runs the script directly via type-stripping) and writes the fixture. On
+a phone the same module runs inside the SDK e2e consumer's calibration plugin
+and the fixture comes back as the test output — see "Mobile" below.
 
 llama.cpp allocates **everything at load** — weights, KV cache, engine
 overhead and the context-scaled compute buffers — so a load's RSS delta is the
-whole cost and the delta during a completion is ~0. The first real runs on
-Apple silicon confirmed this, which is why the fit reads persistent deltas
-rather than working samples. The harness still samples RSS across one
-completion per point and warns if that working delta grows past 64 MiB: that
-would mean the engine's allocation behaviour changed and this methodology
-needs re-checking.
+whole cost and the delta during a completion should be ~0, which is why the fit
+reads persistent deltas rather than working samples. The harness still samples
+RSS across one 128-token completion per point and warns if that working delta
+grows past 64 MiB: that would mean the engine's allocation behaviour changed
+and this methodology needs re-checking. The script that measured every fixture
+below awaited `response`, which `CompletionRun` does not expose, and passed
+`maxTokens`, which is not a generation parameter — so its samplers covered no
+generation and the ~0 working delta they printed was not evidence. The module
+awaits `run.text` with `generationParams.predict`; the working term stays
+unmeasured on each platform until it is re-run. Persistent deltas are read
+before generation starts and are unaffected, and so is the GPU pass, which
+reads device memory and never sampled — though the "every CPU point measured 0"
+it rests on comes from those same empty samplers.
 
 On platforms where a GPU means discrete device memory (linux, windows,
 darwin-x64) the harness loads with `device: 'cpu'`: RSS cannot observe VRAM,
@@ -50,10 +61,15 @@ Vulkan-capable GPU still builds a `q8_0` cache while every layer runs on the
 CPU, and the `f16` subtracted for a CPU run would be twice what the engine
 allocated. The first Windows run failed exactly that way (see "Windows").
 
-1. For each of three models (small, medium, large) at two contexts (512 and
-   8192 tokens), **three times each**: settle, read RSS, load, settle, read RSS
-   again — the difference is **persistent**. Single-shot loads were observed to
-   vary by up to ~100 MiB run to run, so every repeat enters the fit.
+1. For each of three models (small, medium, large) at two contexts, **three
+   times each**: settle, read RSS, load, settle, read RSS again — the
+   difference is **persistent**. Single-shot loads were observed to vary by up
+   to ~100 MiB run to run, so every repeat enters the fit. The model set and
+   contexts come from a per-platform-family profile in the harness: desktop
+   uses 600M/1B/4B at 512/8192 with 8B held out; mobile uses 600M/1B/1.7B at
+   512/4096 with 4B held out, because every load must stay well under a phone's
+   per-process ceiling — iOS jetsam kills near it, and a killed harness
+   measures nothing (needs a device with at least 6 GB of RAM).
 2. Subtract the KV cache from each persistent delta — the cache the engine
    _actually allocated_, taken from the estimator's own `kvElementBytes` rather
    than assumed. On a Metal or Vulkan backend the default is `q8_0`, so a fixed
@@ -164,6 +180,46 @@ Measured under `device: 'gpu'` linux reads ~1.0 (2415 MiB for the same
 artifact), because no CPU-backend copy exists there. That number does not
 transfer to a CPU-forced run, and reading it across cost a calibration round.
 
+## Mobile
+
+A phone has no shell to run the script from, and `@qvac/sdk` reaches the
+engine only through its worker, so the harness runs where the engine lives:
+the SDK e2e consumer bundles a `custom-calibration-plugin` whose single
+streaming handler calls `runModelFitCalibration` inside the worker and relays
+its log lines and result. The e2e test `calibration-model-fit` (category
+`calibration`) drives it and returns the run — coefficients, held-out check,
+warnings and the `<platform>.ts` source — as its output, so the producer's
+`results-<runId>.json` carries the fixture off the device without parsing
+logcat. The test is only loaded when the producer runs with
+`QVAC_E2E_CALIBRATION=1`; a full e2e run never includes it.
+
+Two hosts run that test: `npx qvac-test run:local:android|ios` against an idle
+physical device plugged in with a registry-reachable network, or the test-sdk
+dispatch with `calibration: android|ios`, which builds the consumer, uploads it
+to a Device Farm pool, runs only that test, and publishes the fixture as a
+`calibration-fixture-<platform>-<runId>` artifact. Device Farm gives each run
+a device to itself, so there is no equivalent of the desktop drain-stop hook to
+arrange; the busy-host warnings still apply and a warned fixture still does not
+ship.
+
+What RSS means there differs by OS. Android's counter is the same Linux RSS as
+desktop. On iOS `uv_resident_set_memory` reads `task_info` resident size, which
+counts touched file-backed pages; jetsam's budget is `phys_footprint`, which
+does not. RSS therefore reads at or above what jetsam charges for the same
+load, so a fixture measured on it stays an upper bound for the per-process
+budget `assessModelFit` compares against on iOS — conservative, not
+optimistic. Per-process measurement also means the app hosting the worker is
+part of the baseline; every delta subtracts a settled reading taken in the same
+process, so the host's own footprint cancels.
+
+A calibrated iOS fixture is necessary but not sufficient. iOS assesses on the
+`process-memory` basis, whose budget is `os_proc_available_memory()` plus the
+current footprint, and no native source supplies the first term today —
+`resolveBudget` returns `unknown` before calibration is ever consulted. So an
+iOS run here is worth doing (the coefficients are what they will be), but iOS
+keeps returning `unknown` until that native metric lands. Android has no such
+gap: it assesses on `system-memory`, and only the fixture is missing.
+
 ## Scope of a fixture
 
 Coefficients are keyed by **platform**, while several of the buffers they cover
@@ -187,12 +243,14 @@ one.
 
 ## Status
 
-| Platform            | Coefficients                                         | Validated |
-| ------------------- | ---------------------------------------------------- | --------- |
-| darwin-arm64        | measured 2026-08-31 (Metal, Apple M4 Pro)            | yes       |
-| linux-x64           | measured 2026-09-03 (CPU-forced, RTX 4000 SFF host)  | yes       |
-| win32-x64           | measured 2026-09-03 (CPU-forced, RTX 4000 SFF host)  | yes       |
-| linux-x64 \| vulkan | measured 2026-09-03 (GPU-resident, RTX 4000 SFF Ada) | yes       |
+| Platform            | Coefficients                                           | Validated |
+| ------------------- | ------------------------------------------------------ | --------- |
+| darwin-arm64        | measured 2026-08-31 (Metal, Apple M4 Pro)              | yes       |
+| linux-x64           | measured 2026-09-03 (CPU-forced, RTX 4000 SFF host)    | yes       |
+| win32-x64           | measured 2026-09-03 (CPU-forced, RTX 4000 SFF host)    | yes       |
+| linux-x64 \| vulkan | measured 2026-09-03 (GPU-resident, RTX 4000 SFF Ada)   | yes       |
+| android-arm64       | pending: run via the e2e calibration plugin ("Mobile") | no        |
+| ios-arm64           | pending: run via the e2e calibration plugin ("Mobile") | no        |
 
 `darwin-arm64` was measured on an Apple M4 Pro against the Metal backend
 (`q8_0` KV cache): held-out Qwen3-8B landed at 5.28 GiB against a predicted
@@ -210,5 +268,7 @@ There is no `win32-x64` GPU entry: Windows reports per-process GPU memory
 (DXGI `CurrentUsage` and `Budget`), which cannot bound a device. LLM workloads return real verdicts there; audio workloads
 still return `unknown` because the harness has no whisper pass yet, and
 `estimateWhisper` refuses the zeroed audio coefficients rather than consuming
-them. Adding a platform means: run the harness with `--write`, add the module
-to `calibration/index.ts`, run prettier, and update the table above.
+them. Adding a platform means: run the harness with `--write` (on a phone, copy
+the `<platform>.ts` out of the e2e run's `calibration-fixture-*` artifact
+verbatim), add the module to `calibration/index.ts`, run prettier, and update
+the table above.
