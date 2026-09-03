@@ -93,6 +93,13 @@ a 2.4 GiB model). The committed coefficients describe warm loads and do not
 cover that transient — deliberately, because the excess is file-backed and
 evictable, so it is not memory the system has to find under pressure.
 
+The same effect shows up per process, not just per download: the first load of
+a run reads high whatever the page cache holds. Measured, it appeared on every
+desktop platform as a first repeat well above the next two, which agreed with
+each other exactly (linux 857 / 645 / 645 MiB) — reported by the repeat check
+as a busy host, and enough to skew the linux weight ratio to 1.7. The harness
+therefore performs one unmeasured warm-up load before the measurement loop.
+
 ### KV-growth tripwire
 
 Before fitting anything, the harness checks the points against the one term

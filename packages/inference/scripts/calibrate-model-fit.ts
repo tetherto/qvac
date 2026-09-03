@@ -318,6 +318,14 @@ async function main() {
   )
 
   const mib = (n: number) => (n / 1024 / 1024).toFixed(0)
+
+  // The first load in a process reads high — arenas and caches that later loads
+  // reuse — and these coefficients describe warm loads. Left in, it landed as a
+  // 30% spread the repeat check reported as a busy host, and skewed the linux
+  // weight ratio to 1.7. Warm up on the smallest model and throw it away.
+  console.log('warm-up load (not measured)')
+  await measure(FIT_MODELS[0]!, CONTEXTS[0]!, cpuForced, loadMode)
+
   const elementWidths = new Set<number>()
   const measurements: FitPoint[] = []
   for (const name of FIT_MODELS) {
