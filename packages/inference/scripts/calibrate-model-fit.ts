@@ -131,20 +131,20 @@ function settle() {
   return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
 }
 
-// Registry downloads can stall without erroring; bound each load so a stall
-// fails in minutes instead of consuming the whole job timeout.
+// Registry downloads can stall without erroring, and an engine call can wedge
+// just as silently. These jobs hold an exclusive drained host, so every phase
+// is bounded rather than only the load: an unbounded `completion()` or
+// `unloadModel()` consumed 2.5 hours of a macOS host before it was cancelled.
 const LOAD_TIMEOUT_MS = 30 * 60 * 1000
+const COMPLETION_TIMEOUT_MS = 15 * 60 * 1000
+const UNLOAD_TIMEOUT_MS = 5 * 60 * 1000
 
-function withLoadTimeout<T>(promise: Promise<T>, label: string) {
+function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs: number, hint: string) {
   let timer: ReturnType<typeof setTimeout>
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      reject(
-        new Error(
-          `${label} did not finish within ${LOAD_TIMEOUT_MS / 60000} minutes; a registry download has likely stalled. Check the registry's reachability from this host.`
-        )
-      )
-    }, LOAD_TIMEOUT_MS)
+      reject(new Error(`${label} did not finish within ${timeoutMs / 60000} minutes; ${hint}`))
+    }, timeoutMs)
     if (timer && typeof timer.unref === 'function') timer.unref()
   })
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
@@ -235,7 +235,7 @@ async function measure(
   await settle()
   const before = rssBytes()
 
-  const modelId = await withLoadTimeout(
+  const modelId = await withTimeout(
     loadModel({
       modelSrc: model,
       modelConfig: {
@@ -244,7 +244,9 @@ async function measure(
         ...(loadMode && { load_mode: loadMode })
       }
     }),
-    `loading ${name}`
+    `loading ${name}`,
+    LOAD_TIMEOUT_MS,
+    "a registry download has likely stalled. Check the registry's reachability from this host."
   )
 
   await settle()
@@ -252,16 +254,30 @@ async function measure(
 
   const sampler = createSampler()
   sampler.start()
-  const result = completion({
-    modelId,
-    history: [{ role: 'user', content: 'Summarize the history of cartography.' }],
-    stream: false,
-    params: { maxTokens: 128 }
-  })
-  await result.response
-  const peak = sampler.stop()
+  let peak = 0
+  try {
+    const result = completion({
+      modelId,
+      history: [{ role: 'user', content: 'Summarize the history of cartography.' }],
+      stream: false,
+      params: { maxTokens: 128 }
+    })
+    await withTimeout(
+      result.response,
+      `completion for ${name}`,
+      COMPLETION_TIMEOUT_MS,
+      'the weights loaded, so this is a wedged engine call rather than a download stall.'
+    )
+  } finally {
+    peak = sampler.stop()
+  }
 
-  await unloadModel({ modelId })
+  await withTimeout(
+    unloadModel({ modelId }),
+    `unloading ${name}`,
+    UNLOAD_TIMEOUT_MS,
+    'the engine call is wedged.'
+  )
   await settle()
 
   return {
