@@ -7,7 +7,7 @@ ggml-based ASR engines behind a single class, `ASRGgml`:
 | Engine | Native library | Good for |
 | --- | --- | --- |
 | **Whisper** | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Multilingual offline transcription, translation, Silero-VAD-segmented live capture |
-| **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) through the `speech-cpp` umbrella port (NVIDIA Parakeet / Sortformer) | Low-latency streaming ASR, native end-of-turn detection, 4-speaker diarization |
+| **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-fabric-speech.cpp) through the `speech-cpp` umbrella port (NVIDIA Parakeet / Sortformer) | Low-latency streaming ASR, native end-of-turn detection, 4-speaker diarization |
 
 This package replaces `@qvac/transcription-whispercpp` and
 `@qvac/transcription-parakeet`. See [CHANGELOG.md](CHANGELOG.md) for the
@@ -120,7 +120,7 @@ SDK code — see [Engine Selection](#engine-selection).
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA via `build:cuda` / `ASR_CUDA=ON` |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
@@ -507,6 +507,38 @@ GPU backends are selected per platform via `vcpkg.json` features; no
 - **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
 - **macOS / iOS** — Metal, statically linked
 
+**CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
+gated behind the `ASR_CUDA` CMake option. The published linux-x64 prebuild
+does not enable it; build it yourself with `npm run build:cuda` (or
+`bare-make generate -D ASR_CUDA=ON`), which adds the `cuda` feature to the
+`speech-cpp` dependency and turns on `GGML_CUDA`. On linux-x64 the cuda
+feature flips ggml into hybrid dynamically-loaded backend mode: the
+CPU-variant, Vulkan, and CUDA backends ship as `.so` modules next to the
+addon, and only the CUDA module depends on the CUDA runtime. Engaging CUDA
+requires the NVIDIA driver (`libcuda.so.1`) plus the CUDA 13 runtime libraries
+(`libcudart` / `libcublas` / `libcublasLt`) resolvable at load time; hosts
+that cannot resolve them — including CPU-only and non-NVIDIA machines — skip
+the module and fall back to Vulkan or CPU instead of failing to load the
+addon. CUDA is compiled *alongside* Vulkan rather than replacing it; ggml
+registers CUDA ahead of Vulkan, so a `use_gpu` / `useGPU` request lands on
+CUDA when a supported device is present and falls back to Vulkan otherwise.
+Both engines report the winner through `getBackendInfo()` as `backendId: 2`
+(`BackendId.CUDA`).
+
+A CUDA build's module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
+Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
+Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
+path here: the backend skips such devices at registration and the addon falls
+back to Vulkan or CPU.
+
+The addon takes no direct CUDA linkage — the CUDA module carries its own CUDA
+`DT_NEEDED` entries, which is what makes the graceful fallback possible — and
+nvcc's clang host-compiler setup lives in
+`vcpkg-overlays/toolchains/linux-clang.cmake`, shared by every addon that
+compiles the CUDA backend.
+
 Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
 parakeet needs `parakeetConfig.useGPU: true`.
 
@@ -517,11 +549,11 @@ Core ML sidecar drove the encoder). Whisper additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
-Two paths matter on mobile:
+Two paths matter on Android and Linux:
 
 - **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — root directory
-  holding dynamically-loaded ggml backend libraries (Vulkan, OpenCL, per-arch
-  CPU variants). Defaults to the package's `prebuilds/`; the native addon
+  holding dynamically-loaded ggml backend libraries (CUDA, Vulkan, OpenCL,
+  per-arch CPU variants). Defaults to the package's `prebuilds/`; the native addon
   appends `<bare-target>/<module-name>` before scanning. Pass an explicit path
   when backend libraries ship elsewhere — e.g. Android's
   `ApplicationInfo.nativeLibraryDir` when they are packaged inside the APK.
@@ -606,7 +638,10 @@ rationale.
   `VCPKG_ROOT=/path/to/vcpkg`
 - Optional GPU SDKs: [Vulkan SDK](https://vulkan.lunarg.com/) on
   Linux/Windows (`vulkan-tools libvulkan-dev vulkan-utility-libraries-dev
-  spirv-tools` on Ubuntu/Debian); Metal needs nothing on macOS/iOS
+  spirv-tools` on Ubuntu/Debian); Metal needs nothing on macOS/iOS; the
+  opt-in CUDA build additionally needs the
+  [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) (`nvcc`) on
+  Linux/Windows
 
 ### Build
 
@@ -616,10 +651,12 @@ cd qvac/packages/asr-ggml
 git submodule update --init --recursive
 npm install
 npm run build          # build:ts (TypeScript) + build:native (bare-make)
+npm run build:cuda     # same, with the CUDA backend compiled in (needs nvcc)
 ```
 
 `build:native` runs `bare-make generate` → `bare-make build` →
-`bare-make install`.
+`bare-make install`. `build:native:cuda` is the same chain with
+`-D ASR_CUDA=ON` on the generate step.
 
 ### Test
 

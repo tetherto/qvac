@@ -13,7 +13,7 @@ description: One-page reference of all public functions and objects exported by 
 > For per-parameter and per-field details, hover symbols in your IDE or open
 > `node_modules/@qvac/sdk/dist`. This page is intentionally a high-level index.
 >
-> **Fields shown**: description, signature, throws, examples, deprecation.
+> **Fields shown**: description, signature, throws, examples, deprecation, prototype.
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
@@ -30,6 +30,10 @@ description: One-page reference of all public functions and objects exported by 
 > ⚠️ **Deprecated**: {{ fn.deprecated }}
 
 {% endif %}
+{% if fn.prototype %}
+> 🧪 **Prototype only**: {{ fn.prototype }}
+
+{% endif %}
 {% if fn.overloads and fn.overloads.length > 1 %}
 Has {{ fn.overloads.length }} overloads.
 
@@ -38,6 +42,10 @@ Has {{ fn.overloads.length }} overloads.
 
 {% if ov.deprecated %}
 > ⚠️ **Deprecated**: {{ ov.deprecated }}
+
+{% endif %}
+{% if ov.prototype %}
+> 🧪 **Prototype only**: {{ ov.prototype }}
 
 {% endif %}
 {% if ov.description %}

@@ -65,6 +65,8 @@ export interface AudioGenJobData {
   lmTopK?: number
   lmCfgScale?: number
   lmPhase1?: boolean
+  simpleMode?: boolean
+  normalizeLoudness?: boolean
   dcwEnabled?: boolean
   dcwScaler?: number
   dcwHighScaler?: number
@@ -72,6 +74,8 @@ export interface AudioGenJobData {
   referenceAudio?: Float32Array
   sourceAudio?: Float32Array
   taskType?: string
+  track?: string
+  guidanceScale?: number
   audioCoverStrength?: number
   coverNoiseStrength?: number
   maxFrames?: number

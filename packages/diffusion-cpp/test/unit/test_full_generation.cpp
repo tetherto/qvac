@@ -100,16 +100,20 @@ TEST_F(SdFullGenerationTest, Txt2ImgMatchesIntegrationConfig) {
   EXPECT_GT(progressTicks.size(), 0u)
       << "Must receive at least 1 progress tick";
 
-  // Diffusion emits total == 10, followed by VAE/post-processing ticks
-  // with their own totals. Assert that the configured diffusion phase completed
-  // instead of assuming its tick is the final callback overall.
-  const bool sawDiffusionCompletion = std::any_of(
+  // Besides the sampler, the engine may tick VAE tiling passes (text
+  // encoders never tick; the model loader ticks during load() since the
+  // addon loads eagerly), so the last tick is not necessarily the sampler's.
+  // Assert the sampler sequence ran to completion instead: some tick must
+  // report step==total==10 (the configured step count).
+  // Progress JSON shape: {"step":N,"total":M,"elapsed_ms":T}
+  const bool sawCompletedDenoise = std::any_of(
       progressTicks.begin(), progressTicks.end(), [](const std::string& tick) {
-        return tick.find("\"step\":10") != std::string::npos &&
-               tick.find("\"total\":10") != std::string::npos;
+        return tick.find("\"step\":10,\"total\":10") != std::string::npos;
       });
-  EXPECT_TRUE(sawDiffusionCompletion)
-      << "Expected a completed diffusion progress tick with total=10";
+  EXPECT_TRUE(sawCompletedDenoise)
+      << "Expected a completed sampler sequence tick (step=10,total=10); "
+         "last tick: "
+      << progressTicks.back();
 
   // -- Save output to output/ -------------------------------------------------
 #ifdef PROJECT_ROOT

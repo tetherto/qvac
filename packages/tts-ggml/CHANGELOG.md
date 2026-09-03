@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-09-01
+
+### Changed
+
+- Drop CUDA from the published linux-x64 prebuild so the npm tarball stays
+  under the registry size limit. `useGPU: true` uses Vulkan on Linux. CUDA
+  remains opt-in at build time via `ENABLE_CUDA=ON`.
+
+- Raise the `speech-cpp` floor to 2026-09-01#2, which brings in ggml-speech
+  2026-09-02. The CUDA backend now skips, at registration, GPUs whose
+  compute capability has no compiled code in the fatbin, so a
+  `useGPU: true` run on such a card (Turing and older) falls back to Vulkan
+  or CPU instead of failing at the first kernel launch. The CUDA fatbin
+  now carries native code for every architecture the prebuilds target —
+  Turing (7.5), Ampere (8.0, 8.6), Ada (8.9), Hopper (9.0) and Blackwell
+  (12.0, 12.1) — with 8.0 PTX for anything newer, so Turing is supported
+  again and Blackwell no longer pays a first-use JIT. The roll also brings
+  the compute-buffer OOM handling and k-quant GET_ROWS fixes, and fixes two
+  multi-GPU faults on a host that mixes supported and unsupported NVIDIA
+  cards: backend initialisation no longer aborts when the unsupported card
+  enumerates first, and a row-split buffer no longer allocates on the
+  skipped card.
+
+## [0.8.0] - 2026-08-28
+
+### Added
+
+- CUDA GPU acceleration on linux x64: the prebuild now bundles the CUDA
+  backend alongside Vulkan as runtime-loaded modules, and `useGPU: true`
+  prefers CUDA on NVIDIA hosts (all five engines). CUDA engages where the
+  NVIDIA driver and CUDA 13 runtime libraries (cudart, cuBLAS) are present;
+  on every other host the CUDA module is skipped and the addon behaves as
+  before (Vulkan or CPU). `TTS_CPP_GPU_BACKEND` pins the backend on
+  dual-backend hosts.
+
+### Changed
+
+- Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
+  `qvac-fabric-speech.cpp` in the package documentation, following the
+  upstream repository rename. Old GitHub links keep working via redirect.
+
+- Raise the `speech-cpp` floor to 2026-08-28, which brings in ggml-speech
+  2026-08-28. Unused IQ / Q1_0 / MXFP4 / NVFP4 and training Vulkan shader
+  payloads are replaced with tiny no-ops so the published natives stay
+  under the npm tarball size limit. CUDA fatbins keep Ampere and Ada
+  (`80-virtual;86-real;89-real`) and drop Turing sm75 and Blackwell
+  sm120/121.
+
+- Raise the `speech-cpp` floor to 2026-08-26#1, aligning all speech addons
+  (`asr-ggml`, `tts-ggml`, `audiogen-ggml`, `bci-whispercpp`) on the same
+  port and ggml-speech cut. Relative to 2026-08-26 the bundled ggml computes
+  explicit-f32-precision matmuls in true f32 on CUDA and adds CONCAT support
+  for all scalar and quantized types. The earlier 2026-08-26 bump gave the
+  engine CUDA paths for Chatterbox, Supertonic, Parler-TTS, CosyVoice3 and
+  Audio8, built into the linux-x64 prebuild via the new `cuda` feature, and
+  on the ggml side added Vulkan `im2col`/`col2im` tiling, CUDA kernels and
+  launch guards for the `conv_transpose_1d`, `im2col` and `pad` paths, the
+  CUDA transpose-copy strided-destination fix, and Adreno OpenCL launch
+  validation with GEMV work-group limits.
+
+### Fixed
+
+- Vulkan device-loss and fence failures now return a graph-compute error
+  instead of aborting the process or continuing with an unusable device.
+  Pending compute state is unwound after the failure.
+
+- Expose `binding.js` through the package `exports` map
+  (`@qvac/tts-ggml/binding.js`), so mobile bundlers that resolve the native
+  binding through exports can load the addon.
+
 ## [0.7.5] - 2026-08-20
 
 ### Changed
@@ -359,7 +429,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `maxFrames`, `minNewTokens`, `normalizeNumbers`, `seed`, `threads`,
   `config.outputSampleRate` (addon-side resample from the native
   44.1 kHz), all optional with the GGUF's generation defaults. Requires a
-  `tts-cpp` pin that ships the parler engine (qvac-ext-lib-whisper.cpp
+  `tts-cpp` pin that ships the parler engine (qvac-fabric-speech.cpp
   PR #92). New `examples/parler-tts.js`, integration/unit suites, C++
   config tests, and a `parler` model-download group (mini q8_0).
 
@@ -384,7 +454,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through `ChatterboxConfig::cfgRate` → `JSAdapter` → `EngineOptions::s3gen_cfg_rate`
   and exposed on the JS surface (`index.d.ts` `TTSGgmlOptions.cfgRate`), with
   C++ validation/mapping unit tests and a JS param-forwarding test. Requires the
-  `tts-cpp` pin bump to `2026-07-13#1` (qvac-ext-lib-whisper.cpp PR #88), which
+  `tts-cpp` pin bump to `2026-07-13#1` (qvac-fabric-speech.cpp PR #88), which
   adds `EngineOptions::s3gen_cfg_rate` / `s3gen_synthesize_opts::cfg_rate`.
 - **LavaSR enhancer GPU acceleration.** The 48 kHz bandwidth-extension enhancer
   now runs on the GPU when the model is constructed with the GPU enabled (the
@@ -481,7 +551,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supplied via `files.cangjieTsvPath` — when it is missing, `tts-cpp` throws a
   clear error at load instead of silently degrading. Bumps the `tts-cpp`
   requirement to `2026-07-03#0`, the registry port that adds `zh` to
-  `mtl_tokenizer::supported_languages()` (qvac-ext-lib-whisper.cpp PR #77).
+  `mtl_tokenizer::supported_languages()` (qvac-fabric-speech.cpp PR #77).
   The multilingual integration suite replaces its previous `zh` rejection
   assertion with a real Chinese synthesis test (mirroring the Japanese/MeCab
   test), and `downloadModel.js` gains `ensureCangjieTsv()` to stage/convert the
@@ -509,7 +579,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scripts/convert-lavasr-enhancer-to-gguf.py` (f32 or f16). Examples:
   `examples/supertonic-enhanced.js`, `examples/chatterbox-enhanced.js`.
   Requires the `tts-cpp` pin that ships `tts_cpp::lavasr::Enhancer`
-  (qvac-ext-lib-whisper.cpp PR #68). The denoiser stage is wired below.
+  (qvac-fabric-speech.cpp PR #68). The denoiser stage is wired below.
 
 - **LavaSR denoiser wiring.** The addon now exposes the second LavaSR
   stage — the UL-UNAS speech **denoiser**, which cleans the signal *before* the
@@ -529,7 +599,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The denoiser is rate-preserving and runs before the enhancer on the batch
   path (both engines). The tts-cpp UL-UNAS forward is implemented in
-  qvac-ext-lib-whisper.cpp PR #78 (`tts_cpp::lavasr::Denoiser`, scalar CPU port
+  qvac-fabric-speech.cpp PR #78 (`tts_cpp::lavasr::Denoiser`, scalar CPU port
   validated bit-close to the ONNX reference). With no denoiser path, output is
   byte-identical (full backward compat). Denoiser + Chatterbox native chunk
   streaming (`streamChunkTokens`) is rejected up front — a stateful streaming
@@ -540,7 +610,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runtime config) now resamples the synthesized audio to the requested rate,
   and `TTSOutputChunk.sampleRate` reports it. Without the enhancer the tts-cpp
   engine resamples (batch once / streaming per-chunk, seam-free;
-  `EngineOptions::output_sample_rate`, qvac-ext-lib-whisper.cpp PR #69); with
+  `EngineOptions::output_sample_rate`, qvac-fabric-speech.cpp PR #69); with
   the enhancer active the 48 kHz enhanced signal is resampled to the requested
   rate afterwards. Omit it to keep the engine's native rate (default, zero
   behaviour change).
@@ -572,7 +642,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `chatterbox-mtl.test.js`. (Chinese `zh` synthesis is now enabled — see the
   Added section above.)
 - **Chatterbox now synthesizes correctly on both ARM CPU and the ARM Mali Vulkan
-  GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-ext-lib-whisper.cpp`
+  GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-fabric-speech.cpp`
   master `586268bf`, PR #67), consumed from `qvac-registry-vcpkg` (#214), which
   in turn requires `ggml-speech 2026-06-26` (`qvac-ext-ggml` speech `f5727c32`,
   PR #30); the `default-registry` baseline advances to `162f8f7c` so the new pins
@@ -608,13 +678,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   available opt-in via `kvCacheType: 'q8_0'` for memory-constrained CPU/CUDA
   hosts that implement the op. A proper backend-aware fix (extend
   `chatterbox_resolve_kv_type` to probe `CONT` support, not just flash-attn)
-  belongs in `qvac-ext-lib-whisper.cpp` and would let Metal keep `q8_0` storage.
+  belongs in `qvac-fabric-speech.cpp` and would let Metal keep `q8_0` storage.
 
 ## [0.3.5] - 2026-06-24
 
 ### Changed
 
-- **Bump the `tts-cpp` pin to `2026-06-24`** (`qvac-ext-lib-whisper.cpp` master
+- **Bump the `tts-cpp` pin to `2026-06-24`** (`qvac-fabric-speech.cpp` master
   `46921668`, PR #65), consumed from `qvac-registry-vcpkg`. Brings QVAC-19557
   **S3TokenizerV2 host-mirror elimination**: the Chatterbox voice-conditioning
   bake no longer holds the ~458 MB S3Tokenizer encoder weights in a host
@@ -656,7 +726,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hotter than batch) with a collapsing tail. The engine now floors the
   streaming CFM step count to the model's `n_timesteps` for standard-CFM
   models; Turbo's meanflow 2-step sampler and the batch step count are
-  unaffected. Consumes `tts-cpp` `2026-06-22` (`qvac-ext-lib-whisper.cpp`
+  unaffected. Consumes `tts-cpp` `2026-06-22` (`qvac-fabric-speech.cpp`
   PR #62).
 
 ## Pull Requests
@@ -709,13 +779,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `kvCacheType: "f32"` restores the bit-exact pre-quantisation
   behaviour; negative `nCtx` and unknown `kvCacheType` values are
   rejected at construction.  Upstream validation
-  (qvac-ext-lib-whisper.cpp#43): Turbo greedy token sequences are
+  (qvac-fabric-speech.cpp#43): Turbo greedy token sequences are
   byte-identical across f32/f16/q8_0 on CPU and Metal, and Metal
   decode is 20-30% faster from the KV bandwidth saving.
 
 ### Changed
 
-- **`tts-cpp` pinned to `2026-06-19`** (`qvac-ext-lib-whisper.cpp` PR #43 on
+- **`tts-cpp` pinned to `2026-06-19`** (`qvac-fabric-speech.cpp` PR #43 on
   top of master `b95ad447`) for `EngineOptions::kv_cache_type` and the streamed
   (no host-staging) chatterbox GGUF loads. The Android `GGML_BACKEND_DL` symbol
   routing (`ggml_backend_is_cpu` / `ggml_get_type_traits_cpu` → backend registry
@@ -746,7 +816,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bump the `tts-cpp` pin to `2026-06-18` (`qvac-ext-lib-whisper.cpp` master
+- Bump the `tts-cpp` pin to `2026-06-18` (`qvac-fabric-speech.cpp` master
   `b95ad447`), consumed straight from `qvac-registry-vcpkg`. Carries QVAC-20616
   (the EOS fix above, PR #53) and QVAC-20557 Supertonic Android GPU (PR #54:
   Adreno OpenCL + Xclipse/Mali Vulkan). The latter reroutes the direct
@@ -764,7 +834,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `modelDir` auto-detect / path-resolve paths (the v3 GGUFs are published per
   quant tier with the quant in the filename, e.g. `supertonic3-f16.gguf` /
   `supertonic3-q8_0.gguf`, so the lookup matches any `supertonic3[-<quant>].gguf`).
-  The v3 model/inference code lands in `tts-cpp` (`qvac-ext-lib-whisper.cpp` PR
+  The v3 model/inference code lands in `tts-cpp` (`qvac-fabric-speech.cpp` PR
   #42, `master` @ `24eeb028`); `vcpkg.json` bumps the `tts-cpp` pin to
   `2026-06-12`.
 - **Supertonic 3 GGUF tooling.** `convert-supertonic2-to-gguf.py --arch
@@ -816,7 +886,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Android: revert the `tts-cpp` `2026-06-05` bump (introduced in 0.2.1)
   that crashed the addon at `dlopen` during bootstrap, taking down every
   Android e2e run.** `tts-cpp` `2026-06-05` pins upstream
-  `qvac-ext-lib-whisper.cpp@128dae42` (the QVAC-19254 "sched + cpu_backend
+  `qvac-fabric-speech.cpp@128dae42` (the QVAC-19254 "sched + cpu_backend
   refactor"), which added direct `ggml_backend_is_cpu` /
   `ggml_get_type_traits_cpu` calls inside the statically-linked `tts-cpp`
   library. On Android the shared `ggml-speech` port builds the CPU backend

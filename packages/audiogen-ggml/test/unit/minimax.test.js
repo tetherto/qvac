@@ -192,6 +192,11 @@ test('AudioGen rejects unsupported MiniMax generation options', async (t) => {
     () => gen.run('test', { augmentCaptionWithMetadata: true }),
     /MiniMax does not accept augmentCaptionWithMetadata/
   )
+  await t.exception(() => gen.run('test', { track: 'guitar' }), /MiniMax does not accept track/)
+  await t.exception(
+    () => gen.run('test', { guidanceScale: 7 }),
+    /MiniMax does not accept guidanceScale/
+  )
   await t.exception(
     () => gen.run('test', { duration: 2, maxFrames: 50 }),
     /either maxFrames or duration/

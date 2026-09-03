@@ -26,8 +26,8 @@ You get the audio as **interleaved Int16 PCM** through an output callback
 (a single PCM payload once generation completes; progress ticks stream during
 the run), followed by a final stats event. The addon never
 downloads anything: you give it **local file paths** to the model GGUFs and it
-opens them. GPU (Metal / Vulkan, including Vulkan on Android Mali devices) is
-used when you ask for it, with a CPU fallback.
+opens them. GPU (Metal / CUDA / Vulkan, including Vulkan on Android Mali
+devices) is used when you ask for it, with a CPU fallback.
 
 ## Install
 
@@ -39,6 +39,24 @@ Published prebuilds cover Linux x64/arm64, macOS x64/arm64, Windows x64,
 Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
 [Models](#models)); point the addon at the folder that holds them.
 MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
+
+The published linux-x64 prebuild ships Vulkan. CUDA is opt-in at build time
+via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host).
+When CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend
+mode: the CPU-variant, Vulkan, and CUDA backends ship as `.so` modules beside
+the addon, and only the CUDA module depends on the CUDA runtime. Engaging
+CUDA needs the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
+cuBLAS) resolvable at load time; hosts that cannot resolve them skip the
+module and fall back to Vulkan or CPU. The engine prefers CUDA when both GPU
+backends are usable.
+
+A CUDA build's module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
+Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
+Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
+path here: the backend skips such devices at registration and the addon falls
+back to Vulkan or CPU.
 
 To build the native addon from source in a repository checkout:
 
@@ -117,9 +135,11 @@ for await (const item of response.iterate()) {
   }
 }
 const stats = await response.await()
-// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId }
-// backendDevice: 0 = CPU, 1 = GPU
-// backendId:     0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId,
+//   gpuFallbackReason }
+// backendDevice:     0 = CPU, 1 = GPU
+// backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+// gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
 
 await gen.destroy()
 ```
@@ -128,7 +148,13 @@ await gen.destroy()
 > one PCM item after generation, not incremental audio chunks. `await()` resolves
 > with terminal stats. `backendDevice` /
 > `backendId` report the backend the engine *resolved to*, not the one requested,
-> so a `useGPU: true` run that fell back to the CPU is detectable.
+> so a `useGPU: true` run that fell back to the CPU is detectable. Use
+> `audiogenBackendName(stats.backendId)` rather than copying the code table
+> above; it returns `undefined` for an id this version does not know.
+> When a `useGPU: true` run resolves to the CPU, `gpuFallbackReason` says which
+> half of the acquisition failed - no GPU device was enumerated, or one was and
+> every attempt to initialise it failed. Name it with
+> `audiogenGpuFallbackReason(stats.gpuFallbackReason)`.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
 
 ### 2. A song with lyrics + rhythm
@@ -192,9 +218,44 @@ Both PCM inputs must be `Float32Array` values containing finite, normalized
 samples in interleaved stereo order (`L, R, L, R, ...`) at 48 kHz. The addon
 does not resample, convert channels, or normalize input PCM. Keep samples in
 the conventional `[-1, 1]` range. `sourceAudio` is required for cover tasks.
-`cover-nofsq` currently requires `audioCoverStrength: 1`;
-`coverNoiseStrength` controls the source/noise blend from `0` to `1`. The
-full FSQ-based `cover` task is reserved but not implemented.
+`audioCoverStrength` sets the fraction of the run that follows the source:
+`1` (the default) keeps the source structure throughout, while lower values
+let the generation finish freely after that point — `0.5` starts as a cover
+and diverges halfway. `coverNoiseStrength` controls the source/noise blend
+from `0` to `1`. The full FSQ-based `cover` task is reserved but not
+implemented.
+
+Use `lego` to generate a new isolated instrument layer that follows the
+source (tempo, key, groove). The result is only the new stem, ready to mix
+over the source. Lego requires the base DiT variant (turbo and sft are
+rejected) and a `track` name:
+
+```js
+const response = await gen.run('clean electric guitar with syncopated fills', {
+  lyrics: '[Instrumental]',
+  taskType: 'lego',
+  track: 'guitar',
+  sourceAudio
+})
+```
+
+Valid `track` names: `vocals`, `backing_vocals`, `drums`, `bass`, `guitar`,
+`keyboard`, `percussion`, `strings`, `synth`, `fx`, `brass`, `woodwinds`.
+Output length locks to the source length. Takes vary per seed; generate a few
+and keep the best. The base DiT is not in the registry `ditVariant` set yet,
+so pass it as an explicit `files.ditModel` path next to `modelDir` (which
+still resolves the three fixed stages).
+
+See [`examples/generate-lego.js`](examples/generate-lego.js) for a runnable
+stem example using raw stereo 48 kHz float PCM input:
+
+```bash
+ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  AUDIOGEN_BASE_DIT_MODEL=/path/to/acestep-v15-base-Q8_0.gguf \
+  AUDIOGEN_SOURCE_PCM=source.f32le \
+  npm run example:lego
+```
 
 See [`examples/generate-cover.js`](examples/generate-cover.js) for a runnable
 cover example using raw stereo 48 kHz float PCM input.
@@ -204,6 +265,29 @@ ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
 AUDIOGEN_MODEL_DIR=/path/to/models \
   AUDIOGEN_SOURCE_PCM=source.f32le \
   npm run example:cover
+```
+
+### Simple Mode: one sentence in, a full song out
+
+With `simpleMode: true` the caption is a short natural-language query and the
+LM composes the complete request before synthesis — a detailed caption, full
+lyrics, and every metadata field you left unset (BPM, key/scale, time
+signature, vocal language, and duration when `duration` is `0`). Anything you
+set is kept. Leave `lyrics` unset for LM-written vocals, or pass
+`'[Instrumental]'` for an instrumental song.
+
+```js
+const response = await gen.run(
+  'a romantic modern salsa with male lead vocals for a wedding',
+  { simpleMode: true, duration: 0, seed: 4242 }
+)
+```
+
+Or end to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:simple
 ```
 
 ### Ordered audio editing
@@ -343,7 +427,7 @@ runnable end-to-end script (`npm run example`).
 
 | Option | Meaning |
 |--------|---------|
-| `useGPU` | Run on GPU (Metal / Vulkan, including Android Mali); falls back to CPU. |
+| `useGPU` | Run on GPU (Metal / CUDA / Vulkan, including Android Mali); falls back to CPU. |
 | `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
 | `cfgScale` | Default MiniMax flow guidance scale; `0` uses the model default. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
@@ -369,12 +453,16 @@ wrapped by a level-gated `QvacLogger`.
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
+| `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
+| `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |
-| `sourceAudio` | Source PCM in the same format; required by cover tasks. |
-| `taskType` | `text2music` (default), `cover-nofsq`, or reserved `cover`. |
-| `audioCoverStrength` | Source-context strength from `0` to `1`; currently must be `1` for `cover-nofsq`. |
+| `sourceAudio` | Source PCM in the same format; required by cover and lego tasks. |
+| `taskType` | `text2music` (default), `cover-nofsq`, `lego`, or reserved `cover`. |
+| `track` | Lego target layer; required when `taskType` is `lego`. |
+| `guidanceScale` | DiT classifier-free guidance; `0` (default) auto-resolves to `1.0` on turbo and `7.0` on base/sft. |
+| `audioCoverStrength` | Fraction of the run that follows the source, from `0` to `1` (default `1`). |
 | `coverNoiseStrength` | Initial source/noise blend from `0` to `1`. |
 
 ## Models

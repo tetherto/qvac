@@ -1,5 +1,5 @@
 // SDK tests configuration
-/** @type {import('@qvac/qvac-test-suite').QvacTestConfig} */
+/** @type {import('@qvac/test-suite').QvacTestConfig} */
 export default {
   // All MQTT configuration under one object
   mqtt: {

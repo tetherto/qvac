@@ -1,6 +1,12 @@
 {
   "methods": [
     {
+      "name": "assessModelFit",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/assessModelFit.request",
+      "responseSchema": "schema.json#/$defs/assessModelFit.response"
+    },
+    {
       "name": "audioGenStream",
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/audioGenStream.request",
@@ -163,12 +169,6 @@
       "responseSchema": "schema.json#/$defs/pluginInvokeStream.response"
     },
     {
-      "name": "provide",
-      "callShape": "request-reply",
-      "requestSchema": "schema.json#/$defs/provide.request",
-      "responseSchema": "schema.json#/$defs/provide.response"
-    },
-    {
       "name": "rag",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/rag.request",
@@ -189,12 +189,6 @@
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/state.request",
       "responseSchema": "schema.json#/$defs/state.response"
-    },
-    {
-      "name": "stopProvide",
-      "callShape": "request-reply",
-      "requestSchema": "schema.json#/$defs/stopProvide.request",
-      "responseSchema": "schema.json#/$defs/stopProvide.response"
     },
     {
       "name": "suspend",
@@ -249,6 +243,18 @@
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/videoStream.request",
       "responseSchema": "schema.json#/$defs/videoStream.response"
+    },
+    {
+      "name": "worldSceneStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/worldSceneStream.request",
+      "responseSchema": "schema.json#/$defs/worldSceneStream.response"
+    },
+    {
+      "name": "worldStepStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/worldStepStream.request",
+      "responseSchema": "schema.json#/$defs/worldStepStream.response"
     }
   ]
 }

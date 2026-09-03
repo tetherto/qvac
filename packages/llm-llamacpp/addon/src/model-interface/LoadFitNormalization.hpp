@@ -84,13 +84,15 @@ using BackendResolver = std::function<SelectedBackend(
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
   std::function<bool()> gpuBackendSupportsRowSplit;
+  /// Devices to pin LLAMA_SPLIT_MODE_TENSOR to. Consulted only for tensor
+  /// mode; see backend_selection::getTensorSplitDeviceNames.
+  std::function<std::vector<std::string>()> tensorSplitDeviceNames;
 };
 
 struct NormalizedLoad {
   common_params params;
   NormalizedFitSnapshot fitSnapshot;
   std::optional<int> adrenoVersion;
-  llama_pos configuredNDiscarded = 0;
   int64_t runtimeBackendDevice = 0;
 };
 
@@ -104,7 +106,8 @@ void tuneLoadConfigMap(
     ConfigMap& configFilemap, const ModelMetaData& metadata,
     const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides = {},
-    bool isOpenCl = false, bool isMetal = false, bool isGpu = false);
+    bool isOpenCl = false, bool isMetal = false, bool isGpu = false,
+    bool isTensorSplit = false);
 
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,

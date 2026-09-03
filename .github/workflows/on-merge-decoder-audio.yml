@@ -93,12 +93,21 @@ jobs:
       ref: ${{ github.sha }}
       workdir: "packages/decoder-audio"
 
+  verify-generated:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-generated-wrappers.yml
+    with:
+      workdir: packages/decoder-audio
+
   publish-gpr:
     needs:
       - publish-logic
       - run-integration-tests
       - mobile-integration-tests
+      - verify-generated
     if: |-
+      needs.verify-generated.result == 'success' &&
       (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     environment: release
@@ -126,7 +135,9 @@ jobs:
       - release-merge-guard
       - run-integration-tests
       - mobile-integration-tests
+      - verify-generated
     if: |-
+      needs.verify-generated.result == 'success' &&
       (!cancelled() && needs.publish-logic.outputs.publish_release == 'true' && needs.release-merge-guard.result == 'success')
     runs-on: ubuntu-latest
     environment: npm

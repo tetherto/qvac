@@ -13,8 +13,6 @@ export { embed } from '@/api/embed'
 export { finetune, type FinetuneHandle } from '@/api/finetune'
 export { translate } from '@/api/translate'
 export { cancel } from '@/api/cancel'
-export { startQVACProvider } from '@/api/provide'
-export { stopQVACProvider } from '@/api/stop-provider'
 export {
   ragChunk,
   ragIngest,
@@ -30,6 +28,7 @@ export { textToSpeech, textToSpeechStream } from '@/api/text-to-speech'
 export { getModelInfo } from '@/api/get-model-info'
 export { getLoadedModelInfo } from '@/api/get-loaded-model-info'
 export { getSystemResources } from '@/api/get-system-resources'
+export { assessModelFit } from '@/api/assess-model-fit'
 export { ocr } from '@/api/ocr'
 export { invokePlugin, invokePluginStream } from '@/api/invoke-plugin'
 export { diffusion, type DiffusionProgressTick } from '@/api/diffusion'
@@ -37,6 +36,13 @@ export { audioGen } from '@/api/audio-gen'
 export { classify } from '@/api/classify'
 export { video, type VideoProgressTick } from '@/api/video'
 export { upscale } from '@/api/upscale'
+export { worldCreateScene, worldStep } from '@/api/world'
+export {
+  type WorldStepResult,
+  type WorldStepProgressTick,
+  type WorldSceneResult,
+  type WorldSceneResultWithPack
+} from '@/api/world-result'
 export {
   modelRegistryList,
   modelRegistrySearch,

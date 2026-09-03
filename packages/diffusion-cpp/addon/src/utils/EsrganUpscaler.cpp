@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <utility>
 
 #include <inference-addon-cpp/Errors.hpp>
@@ -33,7 +34,9 @@ void freeSdImageData(sd_image_t& image) noexcept {
     return;
   }
 
-  // stable-diffusion.cpp returns malloc-owned sd_image_t::data from upscale().
+  // Frees ADDON-owned pixel copies only (see upscaleImage: engine output is
+  // deep-copied and released with free_sd_images; the input image belongs to
+  // the caller and is never freed here).
   // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
   free(image.data);
   image.data = nullptr;
@@ -196,25 +199,43 @@ sd_image_t EsrganUpscaler::upscaleImage(
       throw errors::makeCancelledError();
     }
 
-    // The current stable-diffusion.cpp C API returns an owned image batch via
-    // out-parameters. Upscaling one input must yield exactly one output.
-    int nextImageCount = 0;
-    sd_image_t* nextImages = nullptr;
-    const bool upscaled =
-        upscale(ctx, current, factor, &nextImages, &nextImageCount);
-    if (!upscaled || nextImages == nullptr || nextImageCount != 1) {
-      freeSdImageBatch(nextImages, nextImageCount);
+    sd_image_t* outImages = nullptr;
+    int outCount = 0;
+    const bool ok = upscale(ctx, current, factor, &outImages, &outCount);
+    if (!ok || outCount < 1 || outImages == nullptr ||
+        outImages[0].data == nullptr) {
+      if (outImages != nullptr) {
+        free_sd_images(outImages, outCount);
+      }
       if (currentOwned) {
         freeSdImageData(current);
       }
       throw StatusError(general_error::InternalError, "ESRGAN upscale failed");
     }
-
-    // Transfer the pixel buffer out of the one-element output array, then
-    // release that array. The next pass (or caller) retains pixel ownership.
-    sd_image_t next = nextImages[0];
-    nextImages[0].data = nullptr;
-    free(nextImages);
+    // The engine owns the returned array and every pixel buffer in it; the
+    // matching deallocator is free_sd_images(). Deep-copy the first image
+    // into addon-owned memory before releasing the whole batch, so no
+    // engine allocation is ever passed to the addon's free() (allocator/CRT
+    // boundaries differ on Windows prebuilds and mixing them corrupts the
+    // heap).
+    sd_image_t next = outImages[0];
+    const size_t nextBytes = static_cast<size_t>(next.width) *
+                             static_cast<size_t>(next.height) *
+                             static_cast<size_t>(next.channel);
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
+    auto* copied = static_cast<uint8_t*>(malloc(nextBytes));
+    if (copied == nullptr) {
+      free_sd_images(outImages, outCount);
+      if (currentOwned) {
+        freeSdImageData(current);
+      }
+      throw StatusError(
+          general_error::InternalError,
+          "ESRGAN upscale: failed to allocate the result copy");
+    }
+    memcpy(copied, next.data, nextBytes);
+    next.data = copied;
+    free_sd_images(outImages, outCount);
 
     if (currentOwned) {
       freeSdImageData(current);

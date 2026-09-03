@@ -66,7 +66,12 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`"
     ),
-  no_mmap: z.boolean().optional().describe('Disable memory-mapped model loading. Default false.'),
+  load_mode: z
+    .enum(['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'])
+    .optional()
+    .describe(
+      "Model loading mode: `'none'`, `'mmap'`, `'mlock'`, `'mmap+mlock'`, or `'dio'`. Unset uses the addon's default (`'mmap'`)."
+    ),
   verbosity: verbositySchema
     .optional()
     .describe('Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.'),
@@ -87,12 +92,6 @@ export const llmConfigBaseSchema = z.object({
     .optional()
     .describe(
       'Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`).'
-    ),
-  n_discarded: z
-    .number()
-    .optional()
-    .describe(
-      'Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`).'
     ),
   parallel: z
     .number()
@@ -125,10 +124,16 @@ export const llmConfigBaseSchema = z.object({
       "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class."
     ),
   'split-mode': z
-    .enum(['none', 'layer', 'row'])
+    .enum(['none', 'layer', 'row', 'tensor'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism)."
+      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
+    ),
+  'flash-attn': z
+    .enum(['on', 'off', 'auto'])
+    .optional()
+    .describe(
+      "Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`."
     ),
   'tensor-split': z
     .string()

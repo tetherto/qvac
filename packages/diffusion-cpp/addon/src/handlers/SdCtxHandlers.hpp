@@ -93,15 +93,17 @@ struct SdCtxConfig {
   // "dedicated" (the discrete GPU with the most VRAM). Empty = let the backend
   // choose. Resolved to a concrete ggml device backend name in SdModel::load().
   std::string mainGpu;
-  bool keepClipOnCpu =
-      false; // keep_clip_on_cpu:      keep CLIP encoder in CPU RAM
-  bool keepVaeOnCpu =
-      false; // keep_vae_on_cpu:       keep VAE decoder in CPU RAM
+  bool keepClipOnCpu = false;      // clip_on_cpu: keep CLIP encoder in CPU RAM
+                                   // (params_backend spec "clip=cpu")
+  bool keepVaeOnCpu = false;       // vae_on_cpu:  keep VAE decoder in CPU RAM
+                                   // (params_backend spec "vae=cpu")
   bool vaeAutoCpuFallback = false; // preflight oversized VAE GPU graphs
   float vaeAutoCpuFallbackMemoryRatio = 0.9f;
-  // Upstream defaults to true to save memory for pure text-to-image, but the
-  // addon supports image-conditioned jobs through a reusable context. Keep the
-  // encoder available so img2img/fusion/hires paths can encode input images.
+  // Addon-level contract: when true, encoder-dependent jobs (e.g. LTX
+  // reference conditioning) are rejected before dispatch. The 2026-08-11
+  // engine always keeps VAE encoder weights (its sd_ctx_params_t has no
+  // vae_decode_only), so this no longer saves memory; it is parsed for
+  // config-surface stability and addon-side validation only.
   bool vaeDecodeOnly = false;
 
   // -- Precision -------------------------------------------------------------
@@ -121,11 +123,12 @@ struct SdCtxConfig {
   //   EPS_PRED        -> SD1.x
   //   V_PRED          -> SD2.x
   //   FLOW_PRED       -> SD3 (flow matching)
-  //   FLUX_FLOW_PRED  -> FLUX / FLUX.2 [klein]
   prediction_t prediction = PREDICTION_COUNT; // auto
-  // August unifies FLUX and FLUX.2 under FLUX_FLOW_PRED. Retain this input
-  // distinction for QVAC's multi-reference request validation.
-  bool usesFlux2Flow = false;
+  // prediction='flux2_flow' is accepted for config-surface stability: the
+  // engine auto-detects FLUX.2 from the weights (no prediction override
+  // exists for it any more), and this flag keeps driving the addon's FLUX.2
+  // in-context reference handling (ref_images / fusion mode).
+  bool flux2Requested = false;
 
   // -- LoRA (Low-Rank Adaptation) apply mode ---------------------------------
   lora_apply_mode_t loraApplyMode = LORA_APPLY_AUTO;
@@ -173,10 +176,10 @@ struct SdCtxConfig {
   std::string backendsDir; // directory containing DL backend .so modules
 
   // -- Internal --------------------------------------------------------------
-  // Upstream defaults to true, which frees model weight buffers after each
-  // generate_image_internal() call. The addon reuses a single sd_ctx across
-  // multiple generations, so freeing params after the first run causes a
-  // use-after-free SIGSEGV on the second run (including cancel-then-rerun).
+  // Historical knob from engines whose sd_ctx_params_t had
+  // free_params_immediately. The 2026-08-11 engine keeps params resident for
+  // the sd_ctx lifetime on its own, so this is parsed for config-surface
+  // stability but no longer forwarded.
   bool freeParamsImmediately = false;
 };
 

@@ -612,6 +612,12 @@ by 4x; two passes scale by 16x.
 All three wrappers return a `QvacResponse`.
 
 - Progress updates are JSON strings like `{"step":1,"total":20,"elapsed_ms":...}`.
+  The stream is multi-phase: sampler sequences (one per image batch item /
+  video expert, `total` = its step count) and, when `vae_tiling` is enabled,
+  VAE tile passes (`total` = tile count). Each sequence restarts at
+  `step: 0`, so a bar renderer should key on `total` changes rather than
+  assume a single monotonic sequence. Model weights load eagerly at
+  `load()`, not inside generation.
 - Image generation and ESRGAN emit PNG `Uint8Array` values.
 - Video generation emits one MJPG AVI `Uint8Array`.
 - If `opts.stats` is enabled, a `stats` event is emitted before completion.
@@ -648,6 +654,10 @@ During ESRGAN upscale, cancellation is honored between repeat passes.
 - Wan dimensions must be multiples of 16; LTX dimensions must be multiples of 32.
 - Wan frame counts use `(4*k + 1)`; LTX frame counts use `(8*k + 1)`.
 - LTX audio is muxed into AVI as IEEE-float PCM at 48 kHz.
+- On Linux the shipped prebuild must not hard-link any GPU loader
+  (`libvulkan`/`libOpenCL`/`libcuda`) — an integration test asserts this. For
+  local custom builds that legitimately do (e.g. `SD_CUDA=ON`), skip it with
+  `QVAC_SKIP_PREBUILD_LINK_CHECK=true`.
 
 ## Credits
 

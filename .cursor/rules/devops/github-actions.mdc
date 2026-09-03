@@ -122,6 +122,10 @@ Persistent self-hosted runners (`qvac-*` labels) reuse disk between jobs. Workfl
 - **Omit** the whole step when the workflow no longer does a full-repo checkout at `$GITHUB_WORKSPACE` (some mobile/refactored flows).
 - Gate [`.github/actions/cache-models`](../../../.github/actions/cache-models/action.yml) with the same `runner.environment` condition.
 
+### Addon runner label catalog
+
+Specialized `runs-on` / `matrix.runner` labels for addon workflows are defined in [`.github/runners.yaml`](../../../.github/runners.yaml). `ubuntu-latest` stays hardcoded. After editing the catalog, run `node .github/scripts/sync-runner-names.mjs` and `node --test .github/scripts/test/runner-names.test.mjs`, then commit the regenerated [`.github/workflows/reusable-runner-names.yml`](../../../.github/workflows/reusable-runner-names.yml). Callers add a `runner_names` job (`uses: ./.github/workflows/reusable-runner-names.yml`) with an explicit `permissions: contents: read` block, and reference `needs.runner_names.outputs.<key>` — GitHub evaluates `runs-on` before steps, so a composite action cannot supply these labels. `validate-runner-names.mjs` fails if a `runner_names` job omits the permissions block. Full flow: [`docs/ci/SELF-HOSTED-RUNNERS.md`](../../../docs/ci/SELF-HOSTED-RUNNERS.md).
+
 ## Environments
 
 - **Production deployments target a GitHub Environment** with required reviewers configured in the GitHub UI, not in YAML.

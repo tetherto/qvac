@@ -31,6 +31,8 @@ enum LlmErrorCode : uint32_t {
   UnableToLoadMetadata = 23,
   ReloadNotSupportedForStreamedModel = 24,
   UnableToSaveSessionFile = 25,
+  // Retired with sliding-context support and never thrown now. Kept so a new
+  // code does not reuse 26, which builds up to 0.45.0 still emit.
   ContextSlideFailed = 26,
   Cancelled = 27,
   // mode llm spesific errors here

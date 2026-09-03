@@ -211,24 +211,6 @@
       "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
-  "runMropeSlidingContextTest": [
-    {
-      "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
-    },
-    {
-      "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
-    },
-    {
-      "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
-    },
-    {
-      "name": "llama-3.2-3b-instruct-q4_0.gguf",
-      "url": "https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/b86ea0e9be1406b59f11a8cf458ae96daaabf5bf/llama-3.2-3b-instruct-q4_0.gguf"
-    }
-  ],
   "runMultiGpuTest": [
     {
       "name": "Qwen3-0.6B-Q8_0.gguf",
@@ -383,12 +365,6 @@
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
       "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
-    }
-  ],
-  "runSlidingContextTest": [
-    {
-      "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
   "runToolCallingTest": [

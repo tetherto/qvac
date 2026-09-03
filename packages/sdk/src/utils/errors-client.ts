@@ -128,50 +128,6 @@ export class WorkerShutdownError extends QvacErrorBase {
   }
 }
 
-// ============== Provider/Delegation Errors ==============
-
-export class ProviderStartFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.PROVIDER_START_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
-export class ProviderStopFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.PROVIDER_STOP_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
-export class DelegateNoFinalResponseError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE, undefined, cause))
-  }
-}
-
-export class DelegateProviderError extends QvacErrorBase {
-  constructor(details: string, cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.DELEGATE_PROVIDER_ERROR, [details], cause))
-  }
-}
-
-export class DelegateConnectionFailedError extends QvacErrorBase {
-  constructor(details: string, cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.DELEGATE_CONNECTION_FAILED, [details], cause))
-  }
-}
-
 // ============== Build/Bundle Errors ==============
 
 export class SDKNotFoundInNodeModulesError extends QvacErrorBase {

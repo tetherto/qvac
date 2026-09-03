@@ -155,15 +155,12 @@ safeTest(
         })
         .await()
 
-      const diffusionTicks = progressTicks.filter((tick) => tick.total === 2)
+      t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
       t.ok(
-        diffusionTicks.length > 0,
-        `Received diffusion progress ticks (got ${diffusionTicks.length})`
-      )
-      t.is(
-        diffusionTicks[diffusionTicks.length - 1].step,
-        2,
-        'Diffusion progress reaches 2 total steps'
+        // The 2026-08-11 engine also ticks encoder/VAE phases, so the final
+        // tick belongs to the VAE; assert the sampler ran to completion instead.
+        progressTicks.some((p) => p.step === 2 && p.total === 2),
+        'Sampler sequence completed (step=2/total=2)'
       )
 
       t.is(images.length, 1, 'Received exactly 1 image')
