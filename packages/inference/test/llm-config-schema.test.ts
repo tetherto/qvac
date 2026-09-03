@@ -16,10 +16,22 @@ test('llmConfigBaseSchema: accepts valid split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'none' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'layer' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'row' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'tensor' }).success, true)
 })
 
 test('llmConfigBaseSchema: rejects invalid split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'column' }).success, false)
+})
+
+test('llmConfigBaseSchema: accepts valid flash-attn values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': 'on' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': 'off' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': 'auto' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects invalid flash-attn values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': 'enabled' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'flash-attn': true }).success, false)
 })
 
 test('llmConfigBaseSchema: split-mode is optional', (t) => {
@@ -125,6 +137,13 @@ test('loadModelOptionsToRequestSchema: accepts split-mode for LLM', (t) => {
     modelConfig: { 'split-mode': 'layer' }
   })
   t.is(result.success, true)
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { 'split-mode': 'tensor', 'flash-attn': 'on', ctx_size: 8192 }
+    }).success,
+    true
+  )
 })
 
 test('loadModelOptionsToRequestSchema: accepts main-gpu integer and named GPUs for LLM', (t) => {

@@ -42,7 +42,4 @@ jobs:
       linux-extra-packages: libopenblas-dev liblapack-dev libfftw3-dev
       mac-brew-packages: openblas lapack fftw
       include-vulkan-sdk: true
-      include-cuda: true
-      platform-cmake-defines: |
-        linux-x64: -D ENABLE_CUDA=ON
     secrets: inherit
