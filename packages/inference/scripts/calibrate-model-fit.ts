@@ -11,6 +11,8 @@
 //   npm run build
 //   bare scripts/calibrate-model-fit.ts            # measure and print
 //   bare scripts/calibrate-model-fit.ts --write    # also rewrite the fixture
+//   bare scripts/calibrate-model-fit.ts --gpu      # model resident on a discrete GPU
+//   bare scripts/calibrate-model-fit.ts --igpu     # model on an integrated GPU
 //
 // Models are downloaded on first run and cached, so the first pass is slow and
 // needs registry access. See calibration/METHODOLOGY.md for what the numbers
@@ -64,6 +66,18 @@ const KV_OBSERVATION_FLOOR = 0.9
 const FIT_MODELS = ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_4B_INST_Q4_K_M']
 const HELD_OUT_MODEL = 'QWEN3_8B_INST_Q4_K_M'
 
+/**
+ * What the run measures, and against which counter.
+ *
+ * - `cpu`: CPU-resident execution (the platform fixture). RSS.
+ * - `gpu`: weights resident in a discrete GPU's own memory. Device memory.
+ * - `shared`: weights resident on an integrated GPU, whose memory *is* system
+ *   RAM — so the engine runs on the GPU while RSS still sees the allocation.
+ *   The basis stays system memory, which is why this is a separate fixture
+ *   from `gpu` rather than a variant of it.
+ */
+type Pass = 'cpu' | 'gpu' | 'shared'
+
 interface Measurement {
   name: string
   contextTokens: number
@@ -71,6 +85,8 @@ interface Measurement {
   facts: GgufFacts
   persistentBytes: number
   workingBytes: number
+  /** What the engine reported executing on, when the addon supplies it. */
+  backendDevice?: 'cpu' | 'gpu'
 }
 
 interface FitPoint extends Measurement {
@@ -145,15 +161,34 @@ function metricValue(metric: unknown) {
   return m?.status === 'supported' ? m.value : undefined
 }
 
+// An adapter this small holds no model: Windows types its Intel iGPU as
+// dedicated because it declares 128 MiB of its own, so declared memory is the
+// only field that separates the two there. Same floor as `MIN_USABLE_GPU_BYTES`
+// in `assess.ts`.
+const MIN_USABLE_GPU_BYTES = 1024 * 1024 * 1024
+
+// Whether this device's memory is system RAM: an integrated GPU, or the
+// Windows iGPU case above. Such a device is what a `shared` pass measures, and
+// what `assess.ts` keeps on the system basis.
+function isSharedMemoryGpu(gpu: Record<string, unknown>) {
+  if (metricValue(gpu.unifiedMemory) !== false) return true
+  const declared = metricValue(gpu.memoryTotalBytes)
+  return typeof declared === 'number' && declared < MIN_USABLE_GPU_BYTES
+}
+
 // Largest dedicated GPU first. The win25 runner reports an Intel iGPU ahead of
 // its RTX 4000, and first-wins named the iGPU as the device on every fixture.
-function byCapability(gpuList: readonly Record<string, unknown>[]) {
+// A `shared` pass wants the opposite order: it pins the integrated device, so
+// the backend and name recorded on the fixture have to be that device's.
+function byCapability(gpuList: readonly Record<string, unknown>[], preferShared = false) {
   return [...gpuList].sort((a, b) => {
-    const dedicated = (gpu: Record<string, unknown>) =>
-      metricValue(gpu.unifiedMemory) === false ? 1 : 0
+    const rank = (gpu: Record<string, unknown>) => {
+      const shared = isSharedMemoryGpu(gpu)
+      return (preferShared ? shared : !shared) ? 1 : 0
+    }
     const memory = (gpu: Record<string, unknown>) =>
       (metricValue(gpu.memoryTotalBytes) as number) ?? 0
-    return dedicated(b) - dedicated(a) || memory(b) - memory(a)
+    return rank(b) - rank(a) || memory(b) - memory(a)
   })
 }
 
@@ -204,8 +239,8 @@ async function settledGpuUsedBytes() {
 // fixture key. Must stay in step with `GPU_BACKENDS` in `assess.ts`: the
 // estimator derives the same key the same way, and a fixture filed under a
 // backend the engine does not use would be served to hosts it never measured.
-function detectBackend(gpuList: readonly Record<string, unknown>[]) {
-  for (const gpu of byCapability(gpuList)) {
+function detectBackend(gpuList: readonly Record<string, unknown>[], preferShared = false) {
+  for (const gpu of byCapability(gpuList, preferShared)) {
     const drivers = (gpu.drivers ?? {}) as Record<
       string,
       { status: string; value?: unknown } | undefined
@@ -217,8 +252,8 @@ function detectBackend(gpuList: readonly Record<string, unknown>[]) {
   return 'cpu'
 }
 
-function gpuName(gpuList: readonly Record<string, unknown>[]) {
-  for (const gpu of byCapability(gpuList)) {
+function gpuName(gpuList: readonly Record<string, unknown>[], preferShared = false) {
+  for (const gpu of byCapability(gpuList, preferShared)) {
     const name = metricValue(gpu.name)
     if (typeof name === 'string' && name) return name
   }
@@ -263,13 +298,15 @@ async function measure(
   contextTokens: number,
   cpuForced: boolean,
   loadMode: 'none' | undefined,
-  gpuPass: boolean
+  pass: Pass
 ): Promise<Measurement> {
   const model = (catalog as Record<string, { sha256Checksum: string } | undefined>)[name]
   if (!model) throw new Error(`unknown catalog constant: ${name}`)
 
   const profile = MODEL_RESOURCE_PROFILES[model.sha256Checksum]
   if (!profile?.ggufFacts) throw new Error(`no GGUF facts for ${name}`)
+
+  const gpuPass = pass === 'gpu'
 
   await settle()
   const before = gpuPass ? await settledGpuUsedBytes() : rssBytes()
@@ -280,6 +317,11 @@ async function measure(
       modelConfig: {
         ctx_size: contextTokens,
         ...(cpuForced && { device: 'cpu' }),
+        // Pin the class of device rather than an index: `chooseBackend` then
+        // considers only integrated ggml devices, so a host with a discrete
+        // card as well still measures the integrated one — the case ordinary
+        // laptops are in.
+        ...(pass === 'shared' && { 'main-gpu': 'integrated' as const }),
         ...(loadMode && { load_mode: loadMode })
       }
     }),
@@ -298,19 +340,23 @@ async function measure(
   const sampler = gpuPass ? undefined : createSampler()
   sampler?.start()
   let peak = afterLoad
+  let backendDevice: 'cpu' | 'gpu' | undefined
   try {
     const result = completion({
       modelId,
       history: [{ role: 'user', content: 'Summarize the history of cartography.' }],
       stream: false,
-      params: { maxTokens: 128 }
+      generationParams: { predict: 128 }
     })
-    await withTimeout(
-      result.response,
+    // `final`, not `text`: it carries the stats the device check reads, and it
+    // is the promise that resolves when generation has actually finished.
+    const final = await withTimeout(
+      result.final,
       `completion for ${name}`,
       COMPLETION_TIMEOUT_MS,
       'the weights loaded, so this is a wedged engine call rather than a download stall.'
     )
+    backendDevice = final.stats?.backendDevice
   } finally {
     if (sampler) peak = sampler.stop()
   }
@@ -329,7 +375,32 @@ async function measure(
     artifactBytes: profile.artifactBytes,
     facts: profile.ggufFacts,
     persistentBytes: Math.max(0, afterLoad - before),
-    workingBytes: Math.max(0, peak - afterLoad)
+    workingBytes: Math.max(0, peak - afterLoad),
+    ...(backendDevice && { backendDevice })
+  }
+}
+
+/**
+ * Aborts when the engine did not execute where the pass assumes it did.
+ *
+ * Each pass measures a different counter, and the counter is only the right
+ * one for a particular kind of execution: a `shared` pass on a host with no
+ * integrated device falls back to the CPU inside `chooseBackend`, and would
+ * otherwise file CPU numbers under a GPU backend key. The addon reports only
+ * `cpu`/`gpu`, which is exactly the distinction that matters here.
+ */
+function checkBackendDevice(measurement: Measurement, expected: 'cpu' | 'gpu' | undefined) {
+  if (!expected) return
+  if (!measurement.backendDevice) {
+    console.log(
+      `    warning: the addon reported no backendDevice, so this run cannot confirm the model executed on the ${expected}`
+    )
+    return
+  }
+  if (measurement.backendDevice !== expected) {
+    throw new Error(
+      `${measurement.name} executed on the ${measurement.backendDevice}, but this pass measures ${expected}-resident execution. No fixture written.`
+    )
   }
 }
 
@@ -352,13 +423,24 @@ export const ${platform.toUpperCase().replace(/-/g, '_')}_CALIBRATION: PlatformC
 
 async function main() {
   const write = Bare.argv.includes('--write')
-  // `--gpu` calibrates the same models resident on the GPU instead: no device
+  // `--gpu` calibrates the same models resident on a discrete GPU: no device
   // override, the SDK's own load mode, and device memory as the counter.
-  const gpuPass = Bare.argv.includes('--gpu')
+  // `--igpu` pins the integrated GPU instead and keeps RSS as the counter,
+  // because an integrated device allocates out of system RAM.
+  const pass: Pass = Bare.argv.includes('--gpu')
+    ? 'gpu'
+    : Bare.argv.includes('--igpu') || Bare.argv.includes('--shared')
+      ? 'shared'
+      : 'cpu'
   const platform = `${os.platform()}-${os.arch()}`
-  console.log(`calibrating ${platform}${gpuPass ? ' (GPU-resident)' : ''}`)
+  const passLabel = {
+    cpu: '',
+    gpu: ' (GPU-resident)',
+    shared: ' (integrated GPU, system memory)'
+  }[pass]
+  console.log(`calibrating ${platform}${passLabel}`)
 
-  const loadMode = gpuPass ? undefined : calibrationLoadMode(platform)
+  const loadMode = pass === 'cpu' ? calibrationLoadMode(platform) : undefined
   if (loadMode) {
     console.log(`weights loaded with load_mode '${loadMode}' — see METHODOLOGY.md, "Windows"`)
   }
@@ -374,14 +456,49 @@ async function main() {
   const resources = await getSystemResources()
   const gpus = resources.capabilities.gpus
   const gpuList = gpus.status === 'supported' ? gpus.value : []
-  const cpuForced = !gpuPass && forcesCpu(platform)
+  const cpuForced = pass === 'cpu' && forcesCpu(platform)
   // `device: 'cpu'` selects the CPU backend, and with it the f16 KV default.
   const hasGpu = gpuList.length > 0 && !cpuForced
-  const backend = cpuForced ? 'cpu' : detectBackend(gpuList)
-  const device = gpuName(gpuList)
+  const shared = pass === 'shared'
+  // The metric helpers read fields off whatever the collector reported, so they
+  // take an index-signature view of it rather than the normalized type.
+  const gpuRecords = gpuList as unknown as Record<string, unknown>[]
+  const backend = cpuForced ? 'cpu' : detectBackend(gpuRecords, shared)
+  const device = gpuName(gpuRecords, shared)
   console.log(
     `backend: ${backend}${device ? ` (${device})` : ''}${cpuForced ? ' — GPU offload disabled for calibration' : ''}`
   )
+
+  // A shared pass is only meaningful where two things hold, and both are
+  // properties of the host rather than of the run: there has to be an
+  // integrated device for `main-gpu: 'integrated'` to select, and the
+  // platform's own fixture has to describe CPU-resident execution. Where it
+  // does not — Apple silicon — the platform fixture is already a GPU-resident
+  // measurement against system memory, and this pass would only duplicate it.
+  if (shared) {
+    if (!forcesCpu(platform)) {
+      console.log(
+        `\n${platform} calibrates on its GPU already: its platform fixture is measured with the GPU active and RSS as the counter, because unified memory makes that the system basis. A separate integrated-GPU pass would measure the same thing. No fixture written.`
+      )
+      Bare.exit(1)
+    }
+    const integrated = gpuRecords.filter((gpu) => isSharedMemoryGpu(gpu))
+    if (integrated.length === 0) {
+      console.log(
+        `\nno integrated GPU is reported on this host, so 'main-gpu: integrated' has nothing to select and the engine would fall back to the CPU. This pass needs a host with integrated graphics. No fixture written.`
+      )
+      Bare.exit(1)
+    }
+  }
+
+  // What the engine must report executing on for the counter this pass reads to
+  // be the right one. Left unconstrained only where the platform fixture is not
+  // CPU-forced and no GPU is reported at all.
+  const expectedDevice: 'cpu' | 'gpu' | undefined = cpuForced
+    ? 'cpu'
+    : gpuList.length > 0
+      ? 'gpu'
+      : undefined
 
   const mib = (n: number) => (n / 1024 / 1024).toFixed(0)
 
@@ -390,14 +507,20 @@ async function main() {
   // 30% spread the repeat check reported as a busy host, and skewed the linux
   // weight ratio to 1.7. Warm up on the smallest model and throw it away.
   console.log('warm-up load (not measured)')
-  await measure(FIT_MODELS[0]!, CONTEXTS[0]!, cpuForced, loadMode, gpuPass)
+  // Checked on the warm-up too, so a host that cannot honour this pass fails
+  // before spending half an hour measuring the wrong thing.
+  checkBackendDevice(
+    await measure(FIT_MODELS[0]!, CONTEXTS[0]!, cpuForced, loadMode, pass),
+    expectedDevice
+  )
 
   const elementWidths = new Set<number>()
   const measurements: FitPoint[] = []
   for (const name of FIT_MODELS) {
     for (const contextTokens of CONTEXTS) {
       for (let repeat = 0; repeat < REPEATS; repeat++) {
-        const measurement = await measure(name, contextTokens, cpuForced, loadMode, gpuPass)
+        const measurement = await measure(name, contextTokens, cpuForced, loadMode, pass)
+        checkBackendDevice(measurement, expectedDevice)
         // `.lower` is the width a GPU backend defaults to (q8_0), and equals
         // f16 when no GPU is reported — what the engine allocates in each
         // case, not an optimistic bound borrowed from the estimator's range.
@@ -501,6 +624,18 @@ async function main() {
     }
   }
 
+  const notes: string[] = []
+  if (loadMode) {
+    notes.push(
+      `weights were loaded with load_mode '${loadMode}' so RSS counted them in full at load; a mapped weight set keeps at most the artifact size resident, so weightUpperCoeff remains an upper bound for the default mmap load`
+    )
+  }
+  if (shared) {
+    notes.push(
+      "measured with 'main-gpu: integrated' and the SDK's default load mode, against process RSS: an integrated GPU allocates out of system RAM, so these coefficients belong to the system-memory basis and not to a device budget"
+    )
+  }
+
   const calibration: PlatformCalibration = {
     weightUpperCoeff: Number(Math.max(1, fit.weightRatio).toFixed(3)),
     fixedOverheadBytes: {
@@ -519,11 +654,7 @@ async function main() {
     audioWindowBytes: { lower: 0, upper: 0 },
     audioStreamingBytes: { lower: 0, upper: 0 },
     validated: false,
-    ...(loadMode && {
-      notes: [
-        `weights were loaded with load_mode '${loadMode}' so RSS counted them in full at load; a mapped weight set keeps at most the artifact size resident, so weightUpperCoeff remains an upper bound for the default mmap load`
-      ]
-    }),
+    ...(notes.length > 0 && { notes }),
     measuredAt: new Date().toISOString().slice(0, 10),
     measuredOn: {
       backend,
@@ -543,7 +674,8 @@ async function main() {
   let heldOutKv = 0
   let heldOutArtifactBytes = 0
   for (let repeat = 0; repeat < REPEATS; repeat++) {
-    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced, loadMode, gpuPass)
+    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced, loadMode, pass)
+    checkBackendDevice(heldOut, expectedDevice)
     const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
     heldOutKv = exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
     heldOutArtifactBytes = heldOut.artifactBytes
@@ -566,8 +698,15 @@ async function main() {
 
   if (write) {
     // A GPU pass is keyed by backend as well as platform, so it neither
-    // overwrites the CPU fixture nor claims to cover another backend.
-    const fixtureKey = gpuPass ? `${platform}-${backend}` : platform
+    // overwrites the CPU fixture nor claims to cover another backend. A shared
+    // pass is keyed the same way plus a `-shared` suffix: same platform, same
+    // backend, but a system-memory basis rather than a device one.
+    const fixtureKey =
+      pass === 'gpu'
+        ? `${platform}-${backend}`
+        : pass === 'shared'
+          ? `${platform}-${backend}-shared`
+          : platform
     const target = path.join(
       os.cwd(),
       'src',

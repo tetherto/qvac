@@ -130,6 +130,13 @@ on:
           - qvac-macos26-arm64-gpu-calibration
           - qvac-ubuntu2204-x64-gpu-calibration
           - qvac-win25-x64-gpu-calibration
+          # darwin-x64 and linux-arm64 have no self-hosted host, and do not need
+          # one: a hosted runner is a fresh VM, which is the isolation the
+          # `*-calibration` labels exist to buy on the shared hosts. These two
+          # labels are where `@qvac/llm-llamacpp` already runs its own
+          # integration tests, so the engine is known to work on them.
+          - macos-15-large
+          - ubuntu-22.04-arm
         default: "off"
 
   workflow_call:
@@ -646,6 +653,12 @@ jobs:
   # GITHUB_JOB), and the run holds the whole host, so dispatch during off-peak
   # windows. The harness's busy-host warnings remain as a backstop — do not
   # ship a fixture from a warned run.
+  #
+  # The hosted labels in the matrix (macos-15-large for darwin-x64,
+  # ubuntu-22.04-arm for linux-arm64) need none of that: a hosted runner is a
+  # fresh VM per job and already owns its machine. They exist because those two
+  # platforms have no self-hosted host, and waiting for one would leave two of
+  # the six desktop rows uncalibrated indefinitely.
   calibration:
     if: github.event_name == 'workflow_dispatch' && inputs.calibration != 'off'
     strategy:
@@ -653,7 +666,7 @@ jobs:
       matrix:
         platform: >-
           ${{ fromJSON(inputs.calibration == 'all'
-            && '["qvac-macos26-arm64-gpu-calibration", "qvac-ubuntu2204-x64-gpu-calibration", "qvac-win25-x64-gpu-calibration"]'
+            && '["qvac-macos26-arm64-gpu-calibration", "qvac-ubuntu2204-x64-gpu-calibration", "qvac-win25-x64-gpu-calibration", "macos-15-large", "ubuntu-22.04-arm"]'
             || format('["{0}"]', inputs.calibration)) }}
     runs-on: ${{ matrix.platform }}
     # Expected completion: ~30 min warm (validated darwin-arm64 runs measured
@@ -720,6 +733,18 @@ jobs:
         shell: bash
         working-directory: packages/inference
         run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --gpu
+
+      # Third pass, for the ordinary consumer desktop: the model pinned to the
+      # host's integrated GPU, which allocates out of system RAM, so RSS is
+      # still the right counter and the basis stays system memory. Run on every
+      # host — the harness exits immediately, before any load, on one with no
+      # integrated device or whose platform fixture is already GPU-resident
+      # (Apple silicon), so the cost of asking is a few seconds.
+      - name: Run integrated-GPU calibration harness
+        continue-on-error: true
+        shell: bash
+        working-directory: packages/inference
+        run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --igpu
 
       - name: Upload fixture
         # A failed gate still writes a fixture (`validated: false`), and that is
