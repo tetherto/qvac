@@ -1,0 +1,56 @@
+# Consolidates the 13 auto-firing on-pr-close-<pkg>.yml files (GPR pr-<n> cleanup).
+# transcription-parakeet, transcription-whispercpp and translation-nmtcpp are
+# excluded on purpose: their stubs are dispatch-only (#3552).
+name: On PR Close (cleanup)
+
+on:
+  pull_request:
+    types:
+      - closed
+    paths:
+      - "packages/**"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific version to target for deletion"
+        required: false
+        type: string
+      pr-number:
+        description: "PR number to target for deletion"
+        required: false
+        type: string
+      pattern:
+        description: "Pattern to target for deletion"
+        required: false
+        type: string
+      packages:
+        description: "Packages to target for deletion, space separated"
+        required: false
+        type: string
+        default: "asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml tts-ggml vla"
+      dry-run:
+        description: "Is dry run? If true, lists versions without deleting."
+        type: boolean
+        default: true
+
+run-name: >-
+  Delete NPM Versions v=${{ inputs.version }} pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }} dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  delete-npm-versions-trigger:
+    permissions:
+      packages: write
+    uses: ./.github/workflows/public-delete-npm-versions.yml
+    with:
+      version: ${{ inputs.version }}
+      pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
+      pattern: ${{ inputs.pattern }}
+      packages: ${{ inputs.packages || 'asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml tts-ggml vla' }}
+      dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}

@@ -210,7 +210,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: 'packages/model-fit'
           addon-npm-name: '@qvac/model-fit'
-          prebuild-artifact-prefix: 'model-fit-'
+          prebuild-artifact-prefix: 'prebuild-model-fit-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           # Manual dispatch (inputs.platform set). An empty `package` does NOT test
           # this branch's native code: a standalone dispatch produces no prebuild

@@ -316,7 +316,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/asr-ggml' }}
           addon-npm-name: '@qvac/asr-ggml'
-          prebuild-artifact-prefix: 'asr-ggml-'
+          prebuild-artifact-prefix: 'prebuild-asr-ggml-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           # workflow_call uses prebuild_package; workflow_dispatch exposes the
           # equivalent package_spec input. Pin either path explicitly.

@@ -1,0 +1,312 @@
+# Consolidates all 6 benchmark-performance-<pkg>.yml files.
+name: "Benchmark Performance (nx)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+      repository:
+        description: "Repository to benchmark"
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+        type: string
+      run_desktop:
+        description: "Run desktop (CPU/GPU) RTF benchmarks"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile (Android/iOS) RTF benchmarks on Device Farm"
+        required: false
+        type: boolean
+        default: true
+      prebuild_package:
+        description: "Published NPM package spec (name@version) to benchmark instead of building prebuilds in-run. When set, the prebuild job is skipped and desktop/mobile pull this package."
+        required: false
+        type: string
+        default: ""
+      qvac_perf_runs:
+        description: "QVAC_PERF_RUNS — counted iterations per perf test"
+        required: false
+        type: string
+      qvac_perf_warmup_runs:
+        description: "QVAC_PERF_WARMUP_RUNS — warmup iterations before measurement"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  matrix:
+    name: Determine affected packages (nx project.json, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - id: compute
+        uses: ./.github/actions/nx-project-matrix
+        with:
+          target: benchmark
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+
+  context:
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="${INPUT_REPO:-$REPO}"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs: [matrix, context]
+    if: needs.matrix.outputs.any == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+      # prebuilds-nx's prebuild job requests actions: read (reuse action lists
+      # prior runs); the calling job must grant at least that or startup fails.
+      actions: read
+    uses: ./.github/workflows/prebuilds-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      base-ref: ${{ inputs.base-ref }}
+      head-ref: ${{ inputs.head-ref }}
+
+  desktop-benchmarks:
+    needs: [matrix, context, prebuild]
+    if: needs.matrix.outputs.any == 'true' && !cancelled() && inputs.run_desktop && needs.prebuild.result == 'success'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      base-ref: ${{ inputs.base-ref }}
+      head-ref: ${{ inputs.head-ref }}
+
+  # Mobile RTF benchmarks: one static reusable call per package (GitHub can't
+  # matrix-template `uses:`), each gated on its package being nx-affected.
+
+  mobile-asr-ggml:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"asr-ggml"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-asr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+      run_rtf_benchmarks: true
+
+  mobile-audiogen-ggml:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"audiogen-ggml"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+
+  mobile-bci-whispercpp:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"bci-whispercpp"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+
+  mobile-diffusion-cpp:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"diffusion-cpp"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+
+  mobile-llm-llamacpp:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"llm-llamacpp"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      addon_npm_version: ${{ inputs.prebuild_package }}
+      qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
+      qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
+      qvac_perf_only: true
+
+  mobile-ocr-ggml:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"ocr-ggml"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-ocr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+
+  mobile-tts-ggml:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"tts-ggml"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-tts-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+      # Legacy tts source passed inputs.mobile_run_rtf_benchmarks (default true);
+      # benchmark-nx does not define that input, so pin to its default.
+      run_rtf_benchmarks: true
+
+  summarize:
+    needs:
+      - matrix
+      - context
+      - desktop-benchmarks
+      - mobile-asr-ggml
+      - mobile-audiogen-ggml
+      - mobile-bci-whispercpp
+      - mobile-diffusion-cpp
+      - mobile-llm-llamacpp
+      - mobile-ocr-ggml
+      - mobile-tts-ggml
+    if: always() && needs.matrix.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          path: artifacts/all
+
+      - name: Generate consolidated benchmark reports (one per affected package)
+        shell: bash
+        env:
+          AFFECTED_JSON: ${{ needs.matrix.outputs.matrix }}
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+
+          echo "$AFFECTED_JSON" | jq -c '.[]' | while read -r pkg_json; do
+            pkg=$(echo "$pkg_json" | jq -r '.package')
+            script=$(echo "$pkg_json" | jq -r '.aggregateScript')
+            manual=$(echo "$pkg_json" | jq -r '.manualDir')
+            echo "=== Summarizing $pkg ==="
+            if [ ! -f "$script" ]; then
+              echo "::warning::$script not found for $pkg, skipping"
+              continue
+            fi
+            node "$script" \
+              --dir artifacts/all \
+              --manual-dir "$manual" \
+              --output "benchmark-artifacts/$pkg-performance-findings.md" \
+              --output-json "benchmark-artifacts/$pkg-performance-findings.json" \
+              || echo "::warning::aggregate script failed for $pkg (likely no matching artifacts this run)"
+          done
+
+      - name: Add combined summary
+        shell: bash
+        run: |
+          echo "## Benchmark Performance Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          for f in benchmark-artifacts/*-performance-findings.md; do
+            if [ -f "$f" ]; then
+              cat "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Upload consolidated benchmark reports
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: benchmark-performance-findings
+          path: benchmark-artifacts/
+          if-no-files-found: ignore
+          retention-days: 30

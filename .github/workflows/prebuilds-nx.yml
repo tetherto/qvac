@@ -1,0 +1,97 @@
+# Consolidates the 13 prebuilds-<pkg>.yml files.
+name: "Prebuilds (nx)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+      reuse-workflow-file:
+        description: "Enables cross-run prebuild reuse (pass the calling on-pr workflow basename, e.g. on-pr-nx.yml). Empty = always build fresh."
+        required: false
+        type: string
+        default: ""
+      packages:
+        description: "JSON array of explicit package short-names to build, bypassing nx-affected (no transitive dependents). Used by on-merge-nx for per-package publish. Empty = normal nx-affected."
+        required: false
+        type: string
+        default: "[]"
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: Determine affected packages (nx project.json, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - id: compute
+        uses: ./.github/actions/nx-project-matrix
+        with:
+          target: build
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+          packages: ${{ inputs.packages }}
+
+  prebuild:
+    name: Prebuild (${{ matrix.package }})
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+      # actions: read lets the reuse action (in reusable-prebuilds) list prior
+      # runs + download their prebuilds artifacts without exceeding the grant.
+      actions: read
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ matrix.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository || 'tetherto/qvac' }}
+      # No artifact naming passed: the reusable derives both the per-leg and merged
+      # bundle names from the package, so several packages can build in one run.
+      linux-extra-packages: ${{ matrix.linuxExtraPackages }}
+      mac-brew-packages: ${{ matrix.macBrewPackages }}
+      setup-python-on-windows: ${{ matrix.setupPythonOnWindows == true }}
+      include-vulkan-sdk: ${{ matrix.includeVulkanSdk == true }}
+      include-rocm: ${{ matrix.includeRocm == true }}
+      include-cuda: ${{ matrix.includeCuda == true }}
+      extra-cmake-defines: ${{ matrix.extraCmakeDefines }}
+      platform-cmake-defines: ${{ matrix.platformCmakeDefines }}
+      reuse-workflow-file: ${{ inputs.reuse-workflow-file }}
+    secrets: inherit
+
+  # No merge job here on purpose: the reusable merges each package's legs into
+  # prebuilds-<package>. A merge at this level would run per-call and race in on-merge.

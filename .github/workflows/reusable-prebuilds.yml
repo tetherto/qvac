@@ -27,9 +27,10 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
+      # Ignored. Names derive from the package: legs prebuild-<pkg>-<platform>-<arch>,
+      # bundle prebuilds-<pkg>. Kept so an out-of-repo caller does not hard-fail.
       artifact-name-prefix:
-        description: >-
-          Optional prefix for the per-matrix prebuild artifact name. The merged artifact is always uploaded under the well-known name `prebuilds`, but downstream mobile-integration test workflows download per-matrix artifacts via glob patterns built from this prefix (see PREBUILD_ARTIFACT_PREFIX in integration-mobile-test-*.yml), so it must match the convention expected by the consumer. It also scopes the merge job's download: a caller that publishes any other artifact in the same run (`fabric-overlay-artifact`) must set it, or that artifact is merged into the bundle.
+        description: "Deprecated and ignored. Artifact names are derived from the package."
         type: string
         required: false
         default: ""
@@ -137,6 +138,11 @@ on:
         type: boolean
         required: false
         default: false
+      reuse-workflow-file:
+        description: "When set (e.g. on-pr-nx.yml), enables cross-run prebuild reuse: a PR push that didn't touch native files re-publishes a prior run's prebuilds-<pkg> instead of rebuilding. Empty disables reuse."
+        type: string
+        required: false
+        default: ""
       fabric-overlay-artifact:
         description: >-
           When set, download this workflow-run artifact after npm install and overlay
@@ -155,8 +161,55 @@ jobs:
       contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
+  # Cross-run reuse gate (reuse-workflow-file): if this PR push didn't touch the
+  # package's native tree, re-publish its prior prebuilds-<pkg> and skip the build.
+  detect-reuse:
+    runs-on: ubuntu-latest
+    # No explicit permissions block: a reusable job can't request a scope its
+    # caller lacks (startup_failure), so inherit; on-pr-nx grants actions: read.
+    outputs:
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Resolve package name from workdir
+        id: pkg
+        shell: bash
+        env:
+          WORKDIR: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          name="$(basename "$WORKDIR")"
+          if [ -z "$name" ] || [ "$name" = "." ] || [ "$name" = "/" ]; then
+            echo "::error::Cannot derive a package name from workdir '$WORKDIR'."
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - name: Checkout (base) for reuse actions
+        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Detect native changes
+        id: detect
+        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: ${{ inputs.workdir }}
+      - name: Reuse prior prebuilds (no native change)
+        id: reuse
+        if: inputs.reuse-workflow-file != '' && steps.detect.outputs.native_changed == 'false'
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: ${{ inputs.reuse-workflow-file }}
+          native-hash: ${{ steps.detect.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-${{ steps.pkg.outputs.name }}
+
   prebuild:
-    needs: runner_names
+    needs: [detect-reuse, runner_names]
+    if: needs.detect-reuse.outputs.reuse_hit != 'true'
+    # Backstop so a hung leg can't hold the matrix up to GitHub's 6h cap, which
+    # would block every downstream `needs: prebuild` job. Real legs finish well under.
+    timeout-minutes: 120
     permissions:
       contents: write
       pull-requests: write
@@ -231,8 +284,26 @@ jobs:
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
 
+      # Single source of truth for artifact identity: per-leg and merged bundle
+      # names both derive from this value, so no caller maintains a prefix.
+      - name: Resolve package name from workdir
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="$(basename "$WORKDIR")"
+          if [ -z "$name" ] || [ "$name" = "." ] || [ "$name" = "/" ]; then
+            echo "::error::Cannot derive a package name from workdir '$WORKDIR'."
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "package=$name"
+
       - name: Setup build host (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
+        # Fast fail: this is just apt + toolchain env (< 5m); a stall is a
+        # github-hosted apt-lock hang, so bound it instead of hanging the job.
+        timeout-minutes: 20
         uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
         with:
           platform: ${{ matrix.platform }}
@@ -584,45 +655,65 @@ jobs:
 
           Write-Output "OK: no dynamic C/C++ runtime dependency in Windows prebuilds"
 
+      # Name carries the package, so two packages in one run never collide.
+      # Content stays FLAT (<platform>-<arch>/) as the runtime + tarball require.
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: ${{ inputs.artifact-name-prefix }}${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
 
   merge:
     runs-on: ubuntu-latest
-    needs: prebuild
+    needs: [prebuild, detect-reuse]
+    # Skipped on a reuse hit (the reuse action already re-published
+    # prebuilds-<pkg>); otherwise runs once the platform builds succeed.
+    if: always() && needs.detect-reuse.outputs.reuse_hit != 'true' && needs.prebuild.result == 'success'
     permissions:
       contents: write
     steps:
-      # The scoping below is only real when the prefix is set. A caller that
-      # overlays PR fabric without one would silently ship the fabric tree
-      # inside its own bundle, so fail instead.
-      - name: Verify the merge scope is bounded
-        if: ${{ inputs.fabric-overlay-artifact != '' && inputs.artifact-name-prefix == '' }}
+      - name: Checkout reuse action (for marker save)
+        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+
+      # Same derivation as the build job — the package is the single source of
+      # truth for artifact identity.
+      - name: Resolve package name from workdir
+        id: pkg
         shell: bash
+        env:
+          WORKDIR: ${{ inputs.workdir }}
         run: |
           set -euo pipefail
-          echo "::error::fabric-overlay-artifact is set but artifact-name-prefix is empty — the merge would absorb the fabric tree into the prebuilds bundle"
-          exit 1
+          name="$(basename "$WORKDIR")"
+          if [ -z "$name" ] || [ "$name" = "." ] || [ "$name" = "/" ]; then
+            echo "::error::Cannot derive a package name from workdir '$WORKDIR'."
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
 
-      - name: Download this workflow's build artifacts
+      # Pattern-scoped to THIS package's derived legs. A prefix-named or
+      # fabric-overlay artifact won't match, so it is never folded into the bundle.
+      - name: Download this package's build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          # Scoped to the matrix uploads above. Unscoped, this takes every
-          # artifact in the run and flattens it into the shipped bundle —
-          # including the PR fabric tree a caller publishes for
-          # fabric-overlay-artifact, which lands in the addon's own prebuilds
-          # directory and hides whether the addon resolves @qvac/fabric from
-          # node_modules. Callers that leave artifact-name-prefix empty keep the
-          # previous unscoped behaviour.
-          pattern: ${{ inputs.artifact-name-prefix }}*
+          pattern: prebuild-${{ steps.pkg.outputs.name }}-*
           path: prebuilds
           merge-multiple: true
 
       - name: Upload merged artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: prebuilds
+          name: prebuilds-${{ steps.pkg.outputs.name }}
           path: prebuilds
 
+      # Tag this run so a later no-native-change push of the same PR can reuse the
+      # prebuilds-<pkg> just uploaded. native_hash keeps the marker per-package.
+      - name: Save prebuild reuse marker
+        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.detect-reuse.outputs.native_hash != ''
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-reuse.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}

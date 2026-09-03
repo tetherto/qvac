@@ -1,0 +1,99 @@
+name: Stage integration models (S3)
+description: |
+  Stages models from the private S3 bucket via OIDC per a JSON manifest (project.json options.ci.modelS3) of { src, dest, recursive } entries copying s3://<bucket>/<src> -> <workdir>/<dest>.
+
+inputs:
+  workdir:
+    description: Package directory (e.g. packages/translation-nmtcpp).
+    required: true
+  s3-manifest:
+    description: JSON array of {src, dest, recursive, skipOnCacheHit} entries. Empty array is a no-op.
+    required: false
+    default: "[]"
+  cache-hit:
+    description: "cache-hit output of the model cache; when 'true', entries marked skipOnCacheHit are skipped (entries without the flag always download)."
+    required: false
+    default: ""
+  aws-role:
+    description: OIDC role ARN to assume (secrets.AWS_OIDC_ROLE_ARN).
+    required: true
+  aws-region:
+    description: AWS region.
+    required: false
+    default: eu-central-1
+  bucket:
+    description: S3 bucket name (secrets.MODEL_S3_BUCKET).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Self-hosted macOS runners don't ship the AWS CLI; install it user-local.
+    # No-op elsewhere or if aws already resolves.
+    - name: Ensure AWS CLI (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v aws >/dev/null 2>&1; then
+          echo "aws already on PATH"; exit 0
+        fi
+        for c in /opt/homebrew/bin/aws /usr/local/bin/aws "$HOME/.local/aws-cli/aws"; do
+          if [ -x "$c" ]; then
+            echo "$(dirname "$c")" >> "$GITHUB_PATH"; echo "found $c"; exit 0
+          fi
+        done
+        echo "Installing AWS CLI user-local"
+        curl -fsSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
+        pkgutil --expand-full /tmp/AWSCLIV2.pkg /tmp/awscli-pkg
+        mkdir -p "$HOME/.local"
+        rm -rf "$HOME/.local/aws-cli"
+        mv /tmp/awscli-pkg/*/Payload/aws-cli "$HOME/.local/aws-cli"
+        echo "$HOME/.local/aws-cli" >> "$GITHUB_PATH"
+
+    - name: Configure AWS credentials via OIDC
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      with:
+        role-to-assume: ${{ inputs.aws-role }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Stage models from S3
+      shell: bash
+      env:
+        S3_MANIFEST: ${{ inputs.s3-manifest }}
+        BUCKET: ${{ inputs.bucket }}
+        WORKDIR: ${{ inputs.workdir }}
+        CACHE_HIT: ${{ inputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        count=$(printf '%s' "$S3_MANIFEST" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const a=JSON.parse(s||"[]");console.log(a.length)})')
+        if [ "$count" = "0" ]; then
+          echo "empty S3 manifest, nothing to stage"; exit 0
+        fi
+        # Emit one tab-separated line per entry: dest<TAB>recursive<TAB>skip<TAB>src
+        printf '%s' "$S3_MANIFEST" | node -e '
+          let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+            for (const e of JSON.parse(s||"[]")) {
+              process.stdout.write([e.dest, e.recursive ? "1" : "0", e.skipOnCacheHit ? "1" : "0", e.src].join("\t") + "\n");
+            }
+          })' > "${RUNNER_TEMP:-/tmp}/s3-manifest.tsv"
+        cd "$GITHUB_WORKSPACE/$WORKDIR"
+        while IFS=$'\t' read -r dest recursive skip src; do
+          [ -z "$dest" ] && continue
+          if [ "$skip" = "1" ] && [ "${CACHE_HIT:-}" = "true" ]; then
+            echo "cache hit, skipping $src"; continue
+          fi
+          destdir="$dest"
+          case "$dest" in
+            */) destdir="$dest" ;;
+            *)  if [ "$recursive" = "1" ]; then destdir="$dest"; else destdir="$(dirname "$dest")"; fi ;;
+          esac
+          mkdir -p "$destdir"
+          if [ "$recursive" = "1" ]; then
+            echo "aws s3 cp (recursive) s3://$BUCKET/$src -> $dest"
+            aws s3 cp "s3://$BUCKET/$src" "$dest" --recursive
+          else
+            echo "aws s3 cp s3://$BUCKET/$src -> $dest"
+            aws s3 cp "s3://$BUCKET/$src" "$dest"
+          fi
+        done < "${RUNNER_TEMP:-/tmp}/s3-manifest.tsv"

@@ -1,0 +1,525 @@
+# Merges cpp-tests-<pkg>.yml + cpp-test-coverage-<pkg>.yml (7 packages).
+name: "CPP Tests (nx)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+      packages:
+        description: "JSON array of explicit package short-names, bypassing nx-affected. Empty = normal nx-affected."
+        required: false
+        type: string
+        default: "[]"
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: Determine affected packages (nx project.json, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+      carveouts: ${{ steps.compute.outputs.carveouts }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - id: compute
+        uses: ./.github/actions/nx-project-matrix
+        with:
+          target: test:cpp
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+          packages: ${{ inputs.packages }}
+
+  test-cpp:
+    name: cpp-tests-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.arch }}
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+      checks: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    env:
+      BUILD_TYPE: Debug
+      ENABLE_COVERAGE: ON
+      # Matches main per lane: coverage caches at the workspace root, standard
+      # per package. Without it the whole matrix loses its vcpkg binary cache.
+      VCPKG_BINARY_SOURCES: ${{ matrix.mode == 'coverage' && format('clear;files,{0}/vcpkg/cache,readwrite', github.workspace) || format('clear;files,{0}/{1}/vcpkg/cache,readwrite', github.workspace, matrix.workdir) }}
+    steps:
+      - name: Manual Workspace Cleanup
+        if: matrix.mode == 'standard' && runner.environment != 'github-hosted'
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+
+      - name: Setup build host (github-hosted runners only)
+        if: matrix.mode == 'standard' && runner.environment == 'github-hosted'
+        uses: tetherto/qvac/.github/actions/setup-build-host@6e8d3c306a462a58589396cda428d65e015f0d8b
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Coverage lanes (asr/tts/bci) carry LFS test fixtures; legacy set
+          # lfs:true on those checkouts.
+          lfs: ${{ matrix.mode == 'coverage' }}
+
+      - name: Setup AWS + Windows CLI
+        if: matrix.mode == 'standard'
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - if: matrix.mode == 'standard' && matrix.os == matrix.vulkan.os && matrix.vulkan.shell == 'bash'
+        name: Set Vulkan SDK Path (bash)
+        shell: bash
+        run: echo "VULKAN_SDK=${{ matrix.vulkan.path }}" >> $GITHUB_ENV
+
+      - if: matrix.mode == 'standard' && matrix.os == matrix.vulkan.os && matrix.vulkan.shell == 'pwsh'
+        name: Set Vulkan SDK Path (pwsh)
+        shell: pwsh
+        run: echo "VULKAN_SDK=${{ matrix.vulkan.path }}" >> $Env:GITHUB_ENV
+
+      - name: Setup vcpkg (composite)
+        if: matrix.mode == 'standard'
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Setup vcpkg (system-preinstalled)
+        if: matrix.mode == 'coverage'
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf "$VCPKG_ROOT/buildtrees"/*
+          rm -rf "$VCPKG_ROOT/packages"/*
+          if [ "${{ matrix.mode }}" = "coverage" ]; then
+            rm -rf "$VCPKG_ROOT/downloads/git-tmp"
+          fi
+
+      - name: Setup ccache
+        if: matrix.hasCcache
+        run: |
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - name: Get ccache cache
+        if: matrix.hasCcache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ccache-cpp-${{ matrix.package }}-${{ hashFiles(format('{0}/vcpkg.json', matrix.workdir)) }}
+          path: ~/.cache/ccache
+          restore-keys: ccache-cpp-${{ matrix.package }}-
+
+      - name: Setup Node.js
+        if: matrix.mode == 'coverage'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Setup Bare tooling (composite)
+        if: matrix.mode == 'standard'
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        with:
+          shell_type: ${{ (matrix.platform == 'win32' || matrix.platform == 'windows') && 'powershell' || 'bash' }}
+
+      - name: Install bare tooling (global)
+        if: matrix.mode == 'coverage'
+        run: npm install -g --force bare bare-make
+
+      - name: Setup Apple Clang
+        if: matrix.mode == 'standard' && matrix.platform == 'darwin'
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
+
+      # Dual-registry auth (options.ci.dualRegistry) — vla pulls @tetherto GPR
+      # deps; needs .npmrc + git insteadOf before npm install.
+      - name: Configure dual registry (Unix)
+        if: matrix.dualRegistry && matrix.platform != 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${GPR_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+      - name: Configure dual registry (Windows)
+        if: matrix.dualRegistry && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          @"
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
+          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
+          "@ | Out-File -FilePath .npmrc -Encoding utf8
+          $pat = if ($env:GIT_PAT) { $env:GIT_PAT } else { $env:GPR_TOKEN }
+          git config --global url."https://${pat}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${pat}:@github.com/".insteadOf "git@github.com:"
+
+      - name: Install npm dependencies
+        working-directory: ${{ matrix.workdir }}
+        run: ${{ matrix.mode == 'standard' && 'npm install --ignore-scripts' || 'npm install' }}
+
+      # ROCm SDK (options.ci.installRocm) — vla HIP cross-compile on ubuntu-24.04.
+      - name: Setup ROCm SDK for HIP cross-compile
+        if: matrix.installRocm && matrix.os == 'ubuntu-24.04'
+        uses: ./.github/actions/setup-rocm
+
+      # Windows CMake generator (options.ci.windowsVsGenerator) — diffusion/embed/vla
+      # override the default generator on windows-2025.
+      - name: Configure CMake generator on Windows
+        if: matrix.windowsVsGenerator && matrix.os == 'windows-2025'
+        shell: powershell
+        run: |
+          "CMAKE_GENERATOR=Visual Studio 17 2022" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8
+          "CMAKE_GENERATOR_PLATFORM=x64" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8
+
+      # diffusion-cpp SD2 GGUF (options.ci.needsSd2Model). Test reads it via the
+      # SD_TEST_MODEL_PATH testEnvVar. Uses the package's own download script.
+      - name: Download SD2 model (Unix)
+        if: matrix.needsSd2Model && matrix.platform != 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/download-model-sd2.sh
+          MODEL_PATH=$(find . -name "stable-diffusion-v2-1-Q8_0.gguf" | head -n 1)
+          mkdir -p ./test/model
+          cp "$MODEL_PATH" ./test/model/stable-diffusion-v2-1-Q8_0.gguf
+
+      - name: Download SD2 model (Windows)
+        if: matrix.needsSd2Model && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        run: |
+          & .\scripts\download-model-sd2.ps1
+          $model = Get-ChildItem -Recurse -Filter stable-diffusion-v2-1-Q8_0.gguf | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path .\test\model | Out-Null
+          Copy-Item $model.FullName .\test\model\stable-diffusion-v2-1-Q8_0.gguf -Force
+
+      # embed-llamacpp unit-test GGUF (options.ci.needsEmbedModel). Found by path
+      # convention (models/unit-test/test-model.gguf), no env var.
+      - name: Download embed unit-test model
+        if: matrix.needsEmbedModel
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p models/unit-test
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
+            -o models/unit-test/test-model.gguf \
+            "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf"
+
+      # --- asr-ggml: HuggingFace whisper models (curl, no cache) ---
+      - name: Download whisper test models
+        if: matrix.needsWhisperHfModels
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          mkdir -p models
+          curl -L -o models/ggml-tiny.bin \
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 300
+          curl -L -o models/ggml-silero-v5.1.2.bin \
+            "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 300
+
+      # --- asr-ggml: parakeet GGUF from S3 via AWS OIDC (cached) ---
+      - name: Configure AWS credentials via OIDC
+        if: matrix.needsParakeetS3Gguf
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Cache Parakeet sortformer q4 GGUF
+        if: matrix.needsParakeetS3Gguf
+        id: cache-parakeet-models
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ matrix.workdir }}/models/sortformer-4spk-v1.q4_0.gguf
+          key: ${{ matrix.package }}-cpp-q4-sortformer-v1-${{ hashFiles('.github/workflows/cpp-tests-nx.yml') }}
+          restore-keys: ${{ matrix.package }}-cpp-q4-sortformer-v1-
+
+      - name: Download sortformer q4_0 GGUF from QVAC registry (cache miss)
+        if: matrix.needsParakeetS3Gguf && steps.cache-parakeet-models.outputs.cache-hit != 'true'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          mkdir -p models
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf" models/
+
+      - name: Verify parakeet GGUF for C++ tests
+        if: matrix.needsParakeetS3Gguf
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s models/sortformer-4spk-v1.q4_0.gguf ]; then
+            echo "ERROR: missing or empty models/sortformer-4spk-v1.q4_0.gguf" >&2
+            exit 1
+          fi
+
+      # --- tts-ggml: Python-venv HF->GGUF conversion pipeline (cached) ---
+      - name: Cache TTS venv + q4 GGUFs
+        if: matrix.needsTtsVenvModels
+        id: cache-tts-models
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: |
+            ${{ matrix.workdir }}/venv
+            ${{ matrix.workdir }}/models/chatterbox-t3-mtl.gguf
+            ${{ matrix.workdir }}/models/chatterbox-s3gen-mtl.gguf
+            ${{ matrix.workdir }}/models/supertonic.gguf
+          key: ${{ matrix.package }}-cpp-mtl-supertonic-en-q4-v1-${{ hashFiles(format('{0}/scripts/convert-models.sh', matrix.workdir), format('{0}/scripts/setup-venv.sh', matrix.workdir), format('{0}/scripts/requirements.txt', matrix.workdir)) }}
+          restore-keys: ${{ matrix.package }}-cpp-mtl-supertonic-en-q4-v1-
+
+      - name: Convert HF -> q4_0 GGUFs (cache miss)
+        if: matrix.needsTtsVenvModels && steps.cache-tts-models.outputs.cache-hit != 'true'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/setup-venv.sh
+          bash scripts/convert-models.sh -t multilingual -q q4_0
+          bash scripts/convert-models.sh -t supertonic-en -q q4_0
+
+      - name: Verify TTS GGUFs for C++ tests
+        if: matrix.needsTtsVenvModels
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          for f in chatterbox-t3-mtl.gguf chatterbox-s3gen-mtl.gguf supertonic.gguf; do
+            if [ ! -s "models/$f" ]; then
+              echo "WARN: missing or empty models/$f -- gated tests will skip" >&2
+            fi
+          done
+
+      - name: Build C++ tests
+        working-directory: ${{ matrix.workdir }}
+        run: ${{ matrix.mode == 'coverage' && 'npm run coverage:cpp:build' || 'npm run test:cpp:build' }}
+
+      - name: Deterministic tier (must pass)
+        if: matrix.hardGateCommand
+        working-directory: ${{ matrix.workdir }}
+        run: ${{ matrix.hardGateCommand }}
+
+      # Export testEnvVars as absolute paths into $GITHUB_ENV (run step's cwd is
+      # the workdir). node not jq: self-hosted Windows git-bash has no jq.
+      - name: Resolve C++ test env vars
+        if: matrix.testEnvVars
+        shell: bash
+        env:
+          TEST_ENV_VARS: ${{ toJSON(matrix.testEnvVars) }}
+          WS: ${{ github.workspace }}
+          WD: ${{ matrix.workdir }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${TEST_ENV_VARS:-[]}" | node -e '
+            let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+              const a=JSON.parse(s||"[]"); const fs=require("fs");
+              for(const r of a) fs.appendFileSync(process.env.GITHUB_ENV, r.name+"="+process.env.WS+"/"+process.env.WD+"/"+r.path+"\n");
+            })'
+
+      - name: Run C++ tests
+        working-directory: ${{ matrix.workdir }}
+        # bash: consistent shell across linux/windows self-hosted (git-bash).
+        shell: bash
+        # options.ci.continueOnError: coverage lanes (asr/bci) historically did
+        # not fail CI on a C++ test failure (surfaced via the results check only).
+        continue-on-error: ${{ matrix.continueOnError == true }}
+        env:
+          ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ matrix.workdir }}/.lsan-suppressions.txt
+          # test:cpp:run uses POSIX syntax (./addon-test); npm's default Windows
+          # script-shell is cmd which chokes on `./`, so force bash (git-bash).
+          npm_config_script_shell: bash
+        run: |
+          set -uo pipefail
+          npm run test:cpp:run
+
+      - name: Generate Coverage Report
+        if: matrix.mode == 'coverage'
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          npm run coverage:cpp:report
+          COVERAGE=$(grep 'TOTAL' "${{ matrix.buildOutputDir }}/coverage-summary.txt" | awk '{print $10}' || echo "0.0")
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+
+      - name: Show ccache statistics
+        if: matrix.hasCcache
+        run: ccache -s
+
+      - name: Archive Coverage Results
+        if: matrix.mode == 'coverage'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: coverage-report-${{ matrix.package }}
+          path: |
+            ${{ matrix.workdir }}/${{ matrix.buildOutputDir }}/coverage-html/
+            ${{ matrix.workdir }}/${{ matrix.buildOutputDir }}/lcov.info
+            ${{ matrix.workdir }}/${{ matrix.buildOutputDir }}/coverage-summary.txt
+            ${{ matrix.workdir }}/${{ matrix.buildOutputDir }}/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Coverage Summary
+        if: matrix.mode == 'coverage'
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          echo "## Coverage Summary (${{ matrix.package }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f "${{ matrix.buildOutputDir }}/coverage-summary.txt" ]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat "${{ matrix.buildOutputDir }}/coverage-summary.txt" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Carve-out packages have bespoke C++ test flows; routed to their own reusable
+  # when nx flags them affected via options.ci carveOut:true.
+  cpp-tests-llm:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'llm-llamacpp')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/cpp-tests-llm.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  cpp-tests-audiogen:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'audiogen-ggml')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/cpp-test-coverage-audiogen-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  # Added on main in #3930; its only caller there is deleted by the cleanup PR.
+  cpp-tests-model-fit:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'model-fit')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    uses: ./.github/workflows/cpp-tests-model-fit.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  cpp-tests-translation:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'translation-nmtcpp')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+      pull-requests: write
+    uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  coverage-report:
+    permissions:
+      contents: read
+      actions: read
+    needs: test-cpp
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: coverage-report-*
+          path: coverage-reports
+        continue-on-error: true
+
+      - name: Combine Coverage Reports
+        run: |
+          echo "## C++ Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for report in coverage-reports/*/coverage-summary.txt; do
+            if [ -f "$report" ]; then
+              pkg=$(basename $(dirname "$report"))
+              echo "### $pkg" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              cat "$report" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

@@ -1,0 +1,532 @@
+# Consolidates 10 of the 12 integration-test-<pkg>.yml files.
+name: "Integration Tests (nx)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+      pin_model_manifest:
+        description: "Regenerate the pinned model manifest for packages that support it (diffusion-cpp)"
+        type: boolean
+        required: false
+        default: false
+      overrides:
+        description: "JSON object of {package: {ciField: value}} to override per-run (e.g. flip runRtfBenchmarks on for one package)"
+        type: string
+        required: false
+        default: "{}"
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+      prebuild_package:
+        type: string
+        required: false
+      overrides:
+        type: string
+        required: false
+        default: "{}"
+      packages:
+        description: "JSON array of explicit package short-names to test, bypassing nx-affected (no transitive dependents). Used by on-merge-nx for per-package pre-publish tests. Empty = normal nx-affected."
+        required: false
+        type: string
+        default: "[]"
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  matrix:
+    name: Determine affected packages (nx project.json, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+      carveouts: ${{ steps.compute.outputs.carveouts }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - id: compute
+        uses: ./.github/actions/nx-project-matrix
+        with:
+          target: test:integration
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+          overrides: ${{ inputs.overrides }}
+          packages: ${{ inputs.packages }}
+
+  # Carve-outs asr-ggml and llm-llamacpp have bespoke integration flows; routed to
+  # their own reusable when nx flags them affected (options.ci carveOut:true).
+  run-integration-asr:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'asr-ggml')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-asr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  run-integration-llm:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'llm-llamacpp')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  pin-model-manifest:
+    name: Pin model manifest (${{ matrix.package }})
+    needs: [matrix, runner_names]
+    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    # Non-GPU: downloads and hashes only, no native binary (#4102).
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      # matrix isn't available in a job-level if:, so gating is per-step.
+      - name: Manual Workspace Cleanup
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+      - name: Checkout code
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Node.js
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Generate pins from fresh downloads
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        working-directory: ${{ matrix.workdir }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: node scripts/generate-model-manifest.mjs --force
+      - name: Upload pinned model manifest
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ matrix.package }}-model-manifest
+          path: ${{ matrix.workdir }}/test/integration/models.manifest.json
+          if-no-files-found: error
+
+  run-integration-tests:
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests-${{ matrix.package }}
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    # options.ci.timeoutMinutes — default 540 gives model-heavy legs headroom;
+    # packages override per row.
+    timeout-minutes: ${{ matrix.timeoutMinutes || 540 }}
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Dual-registry auth (options.ci.dualRegistry) — packages with @tetherto
+      # (GitHub Packages) deps need an .npmrc + git insteadOf before npm install.
+      - name: Configure dual registry (Unix)
+        if: matrix.dualRegistry && matrix.platform != 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${GPR_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+      - name: Configure dual registry (Windows)
+        if: matrix.dualRegistry && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          @"
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
+          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
+          "@ | Out-File -FilePath .npmrc -Encoding utf8
+          $pat = if ($env:GIT_PAT) { $env:GIT_PAT } else { $env:GPR_TOKEN }
+          git config --global url."https://${pat}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${pat}:@github.com/".insteadOf "git@github.com:"
+
+      # Windows-only git creds (options.ci.windowsGitCreds) — lighter than
+      # dualRegistry: longpaths + insteadOf so private deps resolve on win32.
+      - name: Configure Windows git credentials
+        if: matrix.windowsGitCreds && matrix.platform == 'win32'
+        shell: powershell
+        env:
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global core.longpaths true
+          git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "git@github.com:"
+
+      - name: Setup Bare runtime
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        with:
+          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
+
+      # Linux arm64 runtime libs (options.ci.linuxArmApt) — Vulkan ICD / OpenMP /
+      # BLAS the self-hosted arm images lack.
+      - name: Install Linux arm64 runtime packages
+        if: matrix.linuxArmApt && matrix.arch == 'arm64' && (matrix.platform == 'linux' || matrix.platform == 'android')
+        shell: bash
+        env:
+          APT_PKGS: ${{ join(matrix.linuxArmApt, ' ') }}
+        run: |
+          sudo apt-get update
+          # shellcheck disable=SC2086 # deliberate word-splitting: APT_PKGS is a package list
+          sudo apt-get install -y $APT_PKGS
+
+      - name: Install npm dependencies
+        working-directory: ${{ matrix.workdir }}
+        run: npm install --ignore-scripts
+
+      # Compared POSITIVELY on purpose: GitHub casts null and false to 0, so
+      # `matrix.x != false` would wrongly skip the step for every row missing `x`.
+      - name: Materialize prebuilds
+        if: '!inputs.prebuild_package && matrix.hasPrebuilds == true'
+        uses: ./.github/actions/prebuild-artifact-materialize
+        with:
+          workdir: ${{ matrix.workdir }}
+          package: ${{ matrix.package }}
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Download prebuilds from package (Linux/macOS)
+        if: 'inputs.prebuild_package && matrix.platform != ''win32'''
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack "${{ inputs.prebuild_package }}" --ignore-scripts
+          tar -xzf *.tgz
+          mv package/prebuilds ./prebuilds
+          rm -rf package *.tgz
+
+      - name: Download prebuilds from package (Windows)
+        if: 'inputs.prebuild_package && matrix.platform == ''win32'''
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        run: |
+          npm pack "${{ inputs.prebuild_package }}" --ignore-scripts
+          $TARBALL = Get-ChildItem -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty Name
+          tar -xzf $TARBALL
+          Move-Item package/prebuilds ./prebuilds
+          Remove-Item -Recurse -Force package
+          Remove-Item $TARBALL
+
+      # Windows Vulkan loader (options.ci.windowsVulkan) — set SDK env, optionally
+      # add Bin to PATH and copy vulkan-1.dll next to the .bare so the loader resolves.
+      - name: Stage Windows Vulkan loader
+        if: matrix.windowsVulkan && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        run: |
+          $cfg = '${{ toJson(matrix.windowsVulkan) }}' | ConvertFrom-Json
+          if ($cfg.setSdk) { "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8 }
+          if ($cfg.addPath) { "C:\VulkanSDK\Bin" | Out-File -FilePath $Env:GITHUB_PATH -Append -Encoding utf8 }
+          if ($cfg.visibleDevices) { "GGML_VK_VISIBLE_DEVICES=1" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8 }
+          if ($cfg.copyLoaderDll) {
+            $vk = "$Env:WINDIR\System32\vulkan-1.dll"
+            if (!(Test-Path $vk)) { $vk = "$Env:VULKAN_SDK\Bin\vulkan-1.dll" }
+            if (!(Test-Path $vk)) { $vk = (Get-ChildItem -Path 'C:\VulkanSDK' -Recurse -Filter vulkan-1.dll -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }
+            $dir = (Get-ChildItem -Path 'prebuilds\win32-x64' -Recurse -Filter '*.bare' -ErrorAction SilentlyContinue | Select-Object -First 1).Directory.FullName
+            if ($vk -and $dir) { Copy-Item -Path $vk -Destination $dir -Force; Write-Host "copied $vk -> $dir" }
+            else { Write-Host "vulkan-1.dll or addon dir not found; skipping copy" }
+          }
+
+      # gh CLI on GitHub-hosted arm64 ubuntu images (options.ci.linuxArmGhCli) —
+      # those images ship without it; the manifest warm-download needs it. Best-effort.
+      - name: Install gh CLI (linux arm64)
+        if: matrix.linuxArmGhCli && matrix.arch == 'arm64' && matrix.platform == 'linux'
+        continue-on-error: true
+        shell: bash
+        run: |
+          type -p wget >/dev/null || { sudo apt-get update && sudo apt-get install -y wget; }
+          sudo mkdir -p -m 755 /etc/apt/keyrings
+          out=$(mktemp)
+          wget -nv -O "$out" https://cli.github.com/packages/githubcli-archive-keyring.gpg
+          sudo install -m 0644 "$out" /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y gh
+          gh --version
+
+      # Model cache (options.ci.modelCache) — `uses:` can't loop, so the array is
+      # consumed by index (3 slots). Gated off self-hosted (they front a local cache).
+      - name: Cache + warm models (slot 0)
+        id: model-cache-0
+        if: matrix.modelCache[0] && runner.environment != 'github-hosted'
+        uses: ./.github/actions/cache-models
+        with:
+          package: ${{ matrix.package }}
+          group: ${{ matrix.modelCache[0].group || '' }}
+          cache-key-suffix: ${{ matrix.modelCache[0].cacheKeySuffix || '' }}
+          cache-version: ${{ matrix.modelCache[0].cacheVersion || 'v1' }}
+          paths: ${{ matrix.modelCache[0].paths || '' }}
+          hash-files-glob: ${{ matrix.modelCache[0].hashFilesGlob || '' }}
+          enable-cross-os: ${{ matrix.modelCache[0].enableCrossOs || 'true' }}
+          warm: ${{ matrix.modelCache[0].warm || 'true' }}
+
+      - name: Cache + warm models (slot 1)
+        id: model-cache-1
+        if: matrix.modelCache[1] && runner.environment != 'github-hosted'
+        uses: ./.github/actions/cache-models
+        with:
+          package: ${{ matrix.package }}
+          group: ${{ matrix.modelCache[1].group || '' }}
+          cache-key-suffix: ${{ matrix.modelCache[1].cacheKeySuffix || '' }}
+          cache-version: ${{ matrix.modelCache[1].cacheVersion || 'v1' }}
+          paths: ${{ matrix.modelCache[1].paths || '' }}
+          hash-files-glob: ${{ matrix.modelCache[1].hashFilesGlob || '' }}
+          enable-cross-os: ${{ matrix.modelCache[1].enableCrossOs || 'true' }}
+          warm: ${{ matrix.modelCache[1].warm || 'true' }}
+
+      - name: Cache + warm models (slot 2)
+        id: model-cache-2
+        if: matrix.modelCache[2] && runner.environment != 'github-hosted'
+        uses: ./.github/actions/cache-models
+        with:
+          package: ${{ matrix.package }}
+          group: ${{ matrix.modelCache[2].group || '' }}
+          cache-key-suffix: ${{ matrix.modelCache[2].cacheKeySuffix || '' }}
+          cache-version: ${{ matrix.modelCache[2].cacheVersion || 'v1' }}
+          paths: ${{ matrix.modelCache[2].paths || '' }}
+          hash-files-glob: ${{ matrix.modelCache[2].hashFilesGlob || '' }}
+          enable-cross-os: ${{ matrix.modelCache[2].enableCrossOs || 'true' }}
+          warm: ${{ matrix.modelCache[2].warm || 'true' }}
+
+      # Model staging via S3 (options.ci.modelS3) — OIDC + aws s3 cp loop.
+      - name: Stage integration models (S3)
+        if: matrix.modelS3
+        uses: ./.github/actions/stage-integration-models
+        with:
+          workdir: ${{ matrix.workdir }}
+          s3-manifest: ${{ toJson(matrix.modelS3) }}
+          cache-hit: ${{ steps.model-cache-0.outputs.cache-hit }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
+
+      # Model staging via npm script (options.ci.modelDownloadScript). continueOnError
+      # and skipOnCacheHit mirror the legacy bci / tts / audiogen gates.
+      - name: Download models (npm)
+        if: >-
+          matrix.modelDownloadScript &&
+          !(matrix.modelDownloadSkipOnCacheHit && steps.model-cache-0.outputs.cache-hit == 'true')
+        working-directory: ${{ matrix.workdir }}
+        continue-on-error: ${{ matrix.modelDownloadContinueOnError == true }}
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run ${{ matrix.modelDownloadScript }}
+
+      # Export model-path + runtime env (options.ci.modelEnv, NO_GPU) into
+      # $GITHUB_ENV. Tokens {workspace}/{workdir}/{platform}/{arch} are substituted.
+      - name: Export model and runtime env
+        if: matrix.modelEnv || matrix.noGpu
+        shell: bash
+        env:
+          MODEL_ENV: ${{ toJson(matrix.modelEnv) }}
+          NO_GPU_VAL: ${{ matrix.noGpu }}
+          WS: ${{ github.workspace }}
+          WD: ${{ matrix.workdir }}
+          PLAT: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NO_GPU_VAL:-}" ]; then echo "NO_GPU=${NO_GPU_VAL}" >> "$GITHUB_ENV"; fi
+          printf '%s' "${MODEL_ENV:-null}" | node -e '
+            let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+              const o=JSON.parse(s||"null"); if(!o) process.exit(0);
+              const sub=v=>String(v)
+                .split("{workspace}").join(process.env.WS)
+                .split("{workdir}").join(process.env.WD)
+                .split("{platform}").join(process.env.PLAT)
+                .split("{arch}").join(process.env.ARCH);
+              const fs=require("fs");
+              for(const [k,v] of Object.entries(o)) fs.appendFileSync(process.env.GITHUB_ENV, k+"="+sub(v)+"\n");
+            })'
+
+      - name: Run integration tests (Unix, tee'd)
+        if: matrix.useTeeLogging && matrix.platform != 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        env:
+          QVAC_ENV_NAME: ${{ matrix.envVarName }}
+          QVAC_ENV_VALUE: ${{ matrix.envSecretName && secrets[matrix.envSecretName] }}
+          QVAC_PERF_RUNS: ${{ matrix.qvacPerfRuns }}
+          QVAC_PERF_WARMUP_RUNS: ${{ matrix.qvacPerfWarmupRuns }}
+        run: |
+          [ -n "${QVAC_ENV_NAME:-}" ] && export "${QVAC_ENV_NAME}=${QVAC_ENV_VALUE}"
+          if [ "${{ matrix.hasGenerateStep }}" = "true" ]; then
+            npm run test:integration:generate
+          fi
+          set +e
+          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} 2>&1 | tee test-output.log
+          EXIT=${PIPESTATUS[0]}
+          if [ "$EXIT" -eq 0 ]; then exit 0; fi
+          # options.ci.tolerateSigsegv: known ggml/Vulkan static-destructor crash
+          # at teardown (exit 139) after a full pass is treated as success (vla).
+          if [ "${{ matrix.tolerateSigsegv }}" = "true" ] && [ "$EXIT" -eq 139 ] && grep -qE '^# ok$' test-output.log && grep -qE '^# tests = [0-9]+/[0-9]+ pass$' test-output.log; then
+            echo "::warning::Tests passed but process crashed at teardown with SIGSEGV (exit 139). Known ggml/Vulkan static-destructor issue; treating as pass."
+            exit 0
+          fi
+          exit "$EXIT"
+
+      - name: Run integration tests (Windows, tee'd)
+        if: matrix.useTeeLogging && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        env:
+          QVAC_PERF_RUNS: ${{ matrix.qvacPerfRuns }}
+          QVAC_PERF_WARMUP_RUNS: ${{ matrix.qvacPerfWarmupRuns }}
+        run: |
+          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} | Tee-Object test-output.log
+
+      - name: Run integration tests
+        if: '!matrix.useTeeLogging'
+        working-directory: ${{ matrix.workdir }}
+        env:
+          QVAC_ENV_NAME: ${{ matrix.envVarName }}
+          QVAC_ENV_VALUE: ${{ matrix.envSecretName && secrets[matrix.envSecretName] }}
+        shell: bash
+        run: |
+          [ -n "${QVAC_ENV_NAME:-}" ] && export "${QVAC_ENV_NAME}=${QVAC_ENV_VALUE}"
+          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }}
+
+      - name: Upload performance report
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: ${{ matrix.package }}-perf-report-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ matrix.workdir }}/test/results/performance-report.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # RTF benchmark leg: benchmarkMatrixJson is the fully expanded per-platform
+      # matrix (hand-rolled in project.json), just set under the runner's env var.
+      - name: Set RTF benchmark matrix env var
+        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        shell: bash
+        env:
+          # options.ci.rtfBenchmark.env — optional {VAR: value} map of extra
+          # benchmark tuning vars a package's runner reads (e.g. audiogen's RUNS).
+          RTF_EXTRA_ENV: ${{ toJson(matrix.rtfBenchmark.env) }}
+        run: |
+          echo "${{ matrix.rtfBenchmark.matrixEnvVar }}=${{ toJson(matrix.benchmarkMatrixJson) }}" >> "$GITHUB_ENV"
+          if [ -n "${RTF_EXTRA_ENV:-}" ] && [ "$RTF_EXTRA_ENV" != "null" ]; then
+            node -e 'const e=JSON.parse(process.env.RTF_EXTRA_ENV||"{}");for(const[k,v]of Object.entries(e))require("fs").appendFileSync(process.env.GITHUB_ENV,`${k}=${v}\n`)'
+          fi
+
+      - name: Run RTF benchmark
+        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        continue-on-error: true
+        working-directory: ${{ matrix.workdir }}
+        run: ${{ matrix.rtfBenchmark.command }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Loud gate: the runner above is continue-on-error, so a run producing ZERO
+      # artifacts would otherwise pass silently.
+      - name: Verify RTF benchmark output exists
+        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(benchmarks/results/rtf-benchmark-*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error title=No RTF benchmark output::no benchmarks/results/rtf-benchmark-*.json produced"
+            exit 1
+          fi
+          echo "RTF benchmark produced ${#files[@]} result file(s)"
+
+      - name: Upload RTF benchmark results
+        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-${{ matrix.runner || matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ matrix.workdir }}/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: ignore

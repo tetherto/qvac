@@ -1,0 +1,174 @@
+name: 'Nx project.json-driven matrix'
+description: 'Builds the matrix from each affected package''s project.json options.ci (read from base only, never PR head), with optional per-run overrides validated against each package''s own declared fields.'
+
+inputs:
+  target:
+    description: 'nx target name whose options.ci to extract, e.g. test:cpp'
+    required: true
+  base-ref:
+    description: 'Base ref for nx affected + the trusted options.ci source, when not resolvable from a pull_request event'
+    required: false
+    default: 'main'
+  head-ref:
+    description: 'Head ref for nx affected when not resolvable from a pull_request event'
+    required: false
+    default: 'HEAD'
+  config-ref:
+    description: 'Trusted ref to read each package''s options.ci from (git show). Defaults to the affected base when empty.'
+    required: false
+    default: ''
+  overrides:
+    description: 'JSON object of {package: {ciField: value}} to override per-run. Each field must already exist in that package''s own options.ci for this target.'
+    required: false
+    default: '{}'
+  packages:
+    description: 'JSON array of explicit package short-names (no @qvac/ prefix). When non-empty, skips nx-affected entirely and builds the matrix from exactly these packages — no transitive expansion. For callers that already know which package(s) to act on (e.g. on-merge-nx''s per-package publish) and must not pull in dependents.'
+    required: false
+    default: '[]'
+
+outputs:
+  matrix:
+    description: 'JSON array of flattened (package, platform) rows, sourced from each affected project''s options.ci'
+    value: ${{ steps.compute.outputs.matrix }}
+  any:
+    description: '"true" if the matrix is non-empty, else "false"'
+    value: ${{ steps.compute.outputs.any }}
+  carveouts:
+    description: 'JSON array of affected package short-names whose options.ci is flagged carveOut:true (routed to their own bespoke reusable by the caller, not the generic matrix job)'
+    value: ${{ steps.compute.outputs.carveouts }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    # On dispatch/call there's no nx-set-shas and the checkout holds only the head
+    # ref, so fetch base (+ config-ref) into local branches over unauthenticated origin.
+    - if: github.event_name != 'pull_request'
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base-ref }}
+        CONFIG_REF: ${{ inputs.config-ref }}
+      run: |
+        set -euo pipefail
+        fetch_ref() {
+          ref="$1"
+          [ -z "$ref" ] && return 0
+          [ "$ref" = "HEAD" ] && return 0
+          git rev-parse --verify --quiet "refs/heads/${ref}" >/dev/null 2>&1 && return 0
+          git fetch --no-tags --depth=1 origin "+refs/heads/${ref}:refs/heads/${ref}"
+        }
+        fetch_ref "$BASE_REF"
+        fetch_ref "$CONFIG_REF"
+    - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: lts/*
+    - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+    # --ignore-scripts: the affected graph only needs the nx CLI + project.json,
+    # not built packages; running every package's prepare is wasteful and flaky here.
+    - shell: bash
+      run: pnpm install --frozen-lockfile --ignore-scripts
+    - if: github.event_name == 'pull_request'
+      uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
+    - id: compute
+      shell: bash
+      env:
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_BASE_REF: ${{ inputs.base-ref }}
+        INPUT_HEAD_REF: ${{ inputs.head-ref }}
+        INPUT_CONFIG_REF: ${{ inputs.config-ref }}
+        INPUT_OVERRIDES: ${{ inputs.overrides }}
+        INPUT_PACKAGES: ${{ inputs.packages }}
+      run: |
+        set -euo pipefail
+        TARGET="$INPUT_TARGET"
+        BASE="${NX_BASE:-$INPUT_BASE_REF}"
+        HEAD="${NX_HEAD:-$INPUT_HEAD_REF}"
+        CONFIG="${INPUT_CONFIG_REF:-$BASE}"
+
+        echo "$INPUT_PACKAGES" | jq -e 'type == "array"' >/dev/null || {
+          echo "::error::packages must be a JSON array, got: $INPUT_PACKAGES"
+          exit 1
+        }
+
+        # Explicit packages override: build from exactly these, skipping nx-affected
+        # (no transitive dependents). on-merge-nx uses it for per-package publish.
+        if [ "$(echo "$INPUT_PACKAGES" | jq 'length')" -gt 0 ]; then
+          AFFECTED=$(echo "$INPUT_PACKAGES" | jq -c 'map(sub("^@qvac/"; ""))')
+          echo "Explicit packages ($TARGET, no affected computation): $AFFECTED"
+        else
+          AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --base="$BASE" --head="$HEAD" --json \
+            | tail -n1 \
+            | jq -c 'map(sub("^@qvac/"; ""))')
+          echo "Affected ($TARGET, transitive): $AFFECTED"
+        fi
+
+        # Resolve a git-showable ref for CONFIG (the trusted options.ci source):
+        # try as-is, fall back to origin/<ref> (git show needs a locally-resolving ref).
+        show_base() {
+          local path="$1"
+          git show "${CONFIG}:${path}" 2>/dev/null || git show "origin/${CONFIG}:${path}" 2>/dev/null
+        }
+
+        ROWS='[]'
+        for pkg in $(echo "$AFFECTED" | jq -r '.[]'); do
+          PROJECT_JSON=$(show_base "packages/${pkg}/project.json") || {
+            echo "::warning::packages/${pkg}/project.json not found on config ref '${CONFIG}' — skipping (new package needs onboarding to base first, see plan)"
+            continue
+          }
+          CI=$(echo "$PROJECT_JSON" | jq -c --arg t "$TARGET" '.targets[$t].options.ci // empty')
+          if [ -z "$CI" ] || [ "$CI" = "null" ]; then
+            continue
+          fi
+          ROOT=$(echo "$PROJECT_JSON" | jq -r '.root')
+          # hasPrebuilds is DERIVED (not declared): a package has prebuilds exactly
+          # when build.options.ci exists, so transitive consumers need no flag.
+          HAS_PREBUILDS=$(echo "$PROJECT_JSON" | jq -c 'if .targets.build.options.ci then true else false end')
+          PKG_ROWS=$(echo "$CI" | jq -c --arg pkg "$pkg" --arg workdir "$ROOT" --argjson hasPrebuilds "$HAS_PREBUILDS" '
+            (.platforms // [{}]) as $platforms
+            | (del(.platforms)) as $rest
+            | $platforms
+            | map({package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds} + $rest + .)
+          ')
+          ROWS=$(jq -c --argjson new "$PKG_ROWS" '. + $new' <<< "$ROWS")
+        done
+
+        # Per-run overrides: a key is valid only if already declared in that
+        # package's options.ci. From dispatch/call input, never PR-head project.json.
+        OVERRIDES="$INPUT_OVERRIDES"
+        echo "$OVERRIDES" | jq -e 'type == "object"' >/dev/null || {
+          echo "::error::overrides must be a JSON object, got: $OVERRIDES"
+          exit 1
+        }
+
+        for pkg in $(echo "$OVERRIDES" | jq -r 'keys[]'); do
+          PKG_ROW_COUNT=$(echo "$ROWS" | jq --arg p "$pkg" '[.[] | select(.package == $p)] | length')
+          if [ "$PKG_ROW_COUNT" -eq 0 ]; then
+            echo "::error::overrides references package '$pkg', which is not affected or has no $TARGET options.ci"
+            exit 1
+          fi
+          for key in $(echo "$OVERRIDES" | jq -r --arg p "$pkg" '.[$p] | keys[]'); do
+            KEY_EXISTS=$(echo "$ROWS" | jq --arg p "$pkg" --arg k "$key" '[.[] | select(.package == $p) | has($k)] | any')
+            if [ "$KEY_EXISTS" != "true" ]; then
+              echo "::error::overrides key '$key' for package '$pkg' is not a declared options.ci field for target $TARGET"
+              exit 1
+            fi
+          done
+        done
+
+        ROWS=$(jq -c --argjson overrides "$OVERRIDES" '
+          map(. as $row | $row * ($overrides[$row.package] // {}))
+        ' <<< "$ROWS")
+
+        # Partition: carveOut rows go to the caller's bespoke reusable, so keep
+        # them out of the generic matrix and surface just their package names.
+        CARVEOUTS=$(echo "$ROWS" | jq -c '[.[] | select(.carveOut == true) | .package] | unique')
+        ROWS=$(echo "$ROWS" | jq -c '[.[] | select(.carveOut != true)]')
+
+        echo "Matrix ($TARGET): $ROWS"
+        echo "Carve-outs ($TARGET): $CARVEOUTS"
+        echo "matrix=$ROWS" >> "$GITHUB_OUTPUT"
+        echo "any=$([ "$ROWS" != "[]" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        echo "carveouts=$CARVEOUTS" >> "$GITHUB_OUTPUT"

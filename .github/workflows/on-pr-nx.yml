@@ -1,0 +1,507 @@
+# Consolidates the 14 on-pr-<pkg>.yml orchestrators.
+name: On PR Trigger (nx)
+
+on:
+  # Fork-safe: matrix loads the action + options.ci from the trusted default branch
+  # (never PR head); code-running jobs gate on fork-approval + authorize.
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+    paths:
+      - "packages/**"
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repo to build (owner/name). Defaults to this repo."
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA). Defaults to current ref."
+        required: false
+        type: string
+      run_verify:
+        description: "Run all CI stages (prebuild + integration)."
+        required: false
+        type: boolean
+        default: true
+      config_ref_override:
+        description: "Override the trusted config ref (e.g. pnpm-monorepo-foundation) for interim testing before foundation lands on main."
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  checks: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fork-approval:
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+      run_coload: ${{ steps.route.outputs.run_coload }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
+  authorize:
+    needs: [fork-approval]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: read
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout authorize-pr (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  # Affected packages + on-pr flags, plus pre-filtered sublists for flag-gated
+  # jobs (a uses: job can't gate per matrix row, so it runs over a filtered list).
+  matrix:
+    needs: [authorize]
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+      cpplint: ${{ steps.filter.outputs.cpplint }}
+      tschecks: ${{ steps.filter.outputs.tschecks }}
+      fabric: ${{ steps.filter.outputs.fabric }}
+      coload: ${{ steps.filter.outputs.coload }}
+      coloadmobile: ${{ steps.filter.outputs.coloadmobile }}
+      perfcomposite: ${{ steps.filter.outputs.perfcomposite }}
+      perfrtf: ${{ steps.filter.outputs.perfrtf }}
+      prebuilds: ${{ steps.filter.outputs.prebuilds }}
+      packages: ${{ steps.filter.outputs.packages }}
+      linking: ${{ steps.filter.outputs.linking }}
+    steps:
+      # Load the action + options.ci ONLY from the trusted default branch (never
+      # PR head). Full checkout: sparse config leaks into the action and breaks the pnpm pin.
+      - name: Checkout nx-project-matrix composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - id: compute
+        uses: ./.github/actions/nx-project-matrix
+        with:
+          target: on-pr
+          config-ref: ${{ inputs.config_ref_override || github.event.repository.default_branch }}
+      - id: filter
+        shell: bash
+        env:
+          M: ${{ steps.compute.outputs.matrix }}
+        run: |
+          {
+            echo "cpplint=$(echo "$M" | jq -c '[.[] | select(.hasCppLint == true)]')"
+            echo "tschecks=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true)]')"
+            echo "fabric=$(echo "$M" | jq -c '[.[] | select(.hasFabricLockstep == true)]')"
+            echo "coload=$(echo "$M" | jq -c '[.[] | select(.hasCoload == true and .coloadActive == true)]')"
+            # asr-ggml/tts-ggml are hardcoded: they are the only two packages that carry mobile coload on main.
+            echo "coloadmobile=$(echo "$M" | jq -c '[.[] | select(.hasCoload == true and .coloadActive == true and (.package == "asr-ggml" or .package == "tts-ggml"))]')"
+            echo "perfcomposite=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "composite" and .perfReportPattern != null)]')"
+            echo "perfrtf=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "rtf")]')"
+            # One qvac/prebuild-<key> status per affected prebuild package. statusKey
+            # maps the vla-ggml nx project -> "vla" (Merge Guard's key); unique_by dedupes rows.
+            echo "prebuilds=$(echo "$M" | jq -c '[.[] | select(.hasPrebuilds == true) | {package, statusKey: (if .package == "vla-ggml" then "vla" else .package end)}] | unique_by(.package)')"
+            # Passed to the leaves as their explicit `packages:`; each would otherwise
+            # self-affect against its own target and miss the on-pr carveOut.
+            echo "packages=$(echo "$M" | jq -c '[.[] | .package] | unique')"
+            echo "linking=$(echo "$M" | jq -c '[.[] | select(.prebuildLinkingScript != null) | {package, workdir, prebuildLinkingScript}] | unique_by(.package)')"
+          } >> "$GITHUB_OUTPUT"
+
+  # Leaves get the on-pr package list explicitly so carved-out packages (fabric,
+  # classification-ggml, vla-ggml) are not built here as well as by their own
+  # orchestrators. The list is already transitive.
+  prebuild:
+    needs: [fork-approval, authorize, ci-router, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && needs.matrix.outputs.packages != '[]'
+    # actions: read required down the chain: the reuse action lists prior runs +
+    # downloads artifacts (else the reusable's request exceeds the grant -> startup_failure).
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+      actions: read
+    uses: ./.github/workflows/prebuilds-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      packages: ${{ needs.matrix.outputs.packages }}
+      # Enable cross-run prebuild reuse: a PR push that doesn't touch a
+      # package's native tree reuses that package's prior prebuilds-<pkg>.
+      reuse-workflow-file: on-pr-nx.yml
+
+  cpp-tests:
+    needs: [fork-approval, authorize, ci-router, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.matrix.outputs.packages != '[]'
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/cpp-tests-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      packages: ${{ needs.matrix.outputs.packages }}
+
+  run-integration-tests:
+    needs: [fork-approval, authorize, ci-router, prebuild, matrix]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_desktop == 'true' && needs.prebuild.result != 'cancelled' && needs.matrix.outputs.packages != '[]'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      packages: ${{ needs.matrix.outputs.packages }}
+
+  # Mobile integration tests are NOT run on PRs (QVAC-23665 moved them to on-demand
+  # dispatch). ci-router's run_mobile output is retained but triggers nothing here.
+
+  # Flag-gated per-package jobs, driven by the on-pr fold map. sanity runs for
+  # every affected package; the rest run over their pre-filtered sublist.
+  sanity-checks:
+    name: sanity-checks (${{ matrix.package }})
+    needs: [fork-approval, authorize, ci-router, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.matrix.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - name: Run Sanity checks
+        uses: ./.github/actions/sanity-checks
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: ${{ matrix.workdir }}
+
+  cpp-lint:
+    name: cpp-lint (${{ matrix.package }})
+    needs: [fork-approval, authorize, ci-router, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.matrix.outputs.cpplint != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.cpplint || '[]') }}
+    uses: ./.github/workflows/cpp-lint.yaml
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: ${{ matrix.workdir }}
+      include-rocm-sdk: ${{ matrix.includeRocmSdk == true }}
+
+  ts-checks:
+    name: ts-checks (${{ matrix.package }})
+    needs: [fork-approval, authorize, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.tschecks || '[]') }}
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - name: Install dependencies
+        working-directory: ${{ matrix.workdir }}
+        run: npm install
+      - name: Type declaration check
+        working-directory: ${{ matrix.workdir }}
+        run: npm run test:dts
+      - name: Run lint and unit tests
+        if: matrix.tsChecksMode == 'dts+lint'
+        uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: ${{ matrix.workdir }}
+
+  fabric-lockstep:
+    name: fabric-lockstep (${{ matrix.package }})
+    needs: [fork-approval, authorize, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.fabric != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.fabric || '[]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Verify qvac-fabric versions are lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+  coload-smoke:
+    name: coload-smoke (${{ matrix.package }})
+    needs: [fork-approval, authorize, ci-router, matrix, prebuild]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && needs.prebuild.result != 'cancelled'
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.coload || '[]') }}
+    uses: ./.github/workflows/coload-smoke.yml
+    secrets: inherit
+    with:
+      addon: ${{ matrix.package }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
+  coload-smoke-mobile:
+    name: coload-smoke-mobile (${{ matrix.package }})
+    needs: [fork-approval, authorize, ci-router, matrix, prebuild]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_coload == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.matrix.outputs.coloadmobile != '[]' && needs.prebuild.result != 'cancelled'
+    permissions:
+      actions: read
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.coloadmobile || '[]') }}
+    uses: ./.github/workflows/coload-smoke-mobile.yml
+    secrets: inherit
+    with:
+      addon: ${{ matrix.package }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
+  # Perf reports (informational, not a merge gate). Composite variant
+  # (ocr/diffusion) via combine-perf-reports; rtf variant (asr) via its own aggregator.
+  perf-report:
+    name: perf-report (${{ matrix.package }})
+    needs: [fork-approval, authorize, matrix, run-integration-tests]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfcomposite != '[]'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.perfcomposite || '[]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo (composites + perf scripts)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+            scripts/perf-report
+            ${{ matrix.perfReportMediaDir }}
+          sparse-checkout-cone-mode: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Combine performance reports
+        uses: ./.github/actions/run-mobile-integration-tests/combine-perf-reports
+        with:
+          artifact-pattern: ${{ matrix.perfReportPattern }}-${{ github.run_number }}
+          report-title: ${{ matrix.perfReportTitle }}
+          exclude: ${{ matrix.perfReportExclude }}
+
+  perf-report-rtf:
+    name: perf-report-rtf (${{ matrix.package }})
+    needs: [fork-approval, authorize, matrix, run-integration-tests]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfrtf != '[]'
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.perfrtf || '[]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download desktop RTF artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: ${{ matrix.perfReportDesktopPattern }}
+          path: benchmark-artifacts/desktop
+          merge-multiple: false
+      - name: Generate unified performance report
+        run: |
+          node "${{ matrix.perfReportScript }}" \
+            --dir benchmark-artifacts \
+            --manual-dir "${{ matrix.perfReportManualDir }}" \
+            --output "benchmark-artifacts/${{ matrix.perfReportOutputStem }}.md" \
+            --output-json "benchmark-artifacts/${{ matrix.perfReportOutputStem }}.json" \
+            --output-html "benchmark-artifacts/${{ matrix.perfReportOutputStem }}.html"
+      - name: Add unified performance summary
+        run: node -e "process.stdout.write(require('fs').readFileSync('benchmark-artifacts/${{ matrix.perfReportOutputStem }}.md', 'utf8'))" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload unified performance report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ matrix.perfReportOutputStem }}
+          path: |
+            benchmark-artifacts/${{ matrix.perfReportOutputStem }}.md
+            benchmark-artifacts/${{ matrix.perfReportOutputStem }}.json
+            benchmark-artifacts/${{ matrix.perfReportOutputStem }}.html
+          retention-days: 30
+
+  # A prebuild that would abort CPU-only hosts (gh#3853) must not merge. The
+  # checker comes from a trusted ref so a PR cannot edit the rule it is judged by;
+  # the artifacts under inspection are the untrusted input.
+  verify-prebuild-linking:
+    name: Verify prebuild linking (${{ matrix.package }})
+    needs: [fork-approval, authorize, ci-router, matrix, prebuild]
+    if: >-
+      always() && !cancelled() && needs.authorize.outputs.allowed == 'true' &&
+      needs.matrix.outputs.linking != '[]' && needs.prebuild.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.linking || '[]') }}
+    steps:
+      - name: Checkout linking checker (trusted ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.repository.default_branch }}
+          sparse-checkout: ${{ matrix.prebuildLinkingScript }}
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Download prebuilds (from artifacts)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: prebuild-${{ matrix.package }}-*
+          path: ${{ runner.temp }}/qvac-${{ matrix.package }}
+          merge-multiple: true
+      - name: Verify linux prebuild dynamic linking
+        env:
+          CHECKER: ${{ matrix.prebuildLinkingScript }}
+          ARTIFACTS: ${{ runner.temp }}/qvac-${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          # Bootstrap: the checker may not be on the trusted ref yet. A PR cannot
+          # influence the default branch, so skipping when absent there is safe.
+          if [ ! -f "$CHECKER" ]; then
+            echo "checker not present on the trusted ref yet; nothing to enforce"
+            exit 0
+          fi
+          node "$CHECKER" "$ARTIFACTS"
+
+  # Posts the qvac/prebuild-<key> statuses Merge Guard's verify-prebuilds reads,
+  # once per affected package. PREBUILD_RESULT is the aggregate result: fail-closed.
+  publish-prebuild-status:
+    needs: [prebuild, ci-router, matrix, verify-prebuild-linking]
+    if: always() && !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.matrix.outputs.prebuilds != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.prebuilds || '[]') }}
+    steps:
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Publish prebuild status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # A linking failure must red the status, same fold main uses.
+          PREBUILD_RESULT: ${{ needs.verify-prebuild-linking.result == 'failure' && 'failure' || needs.prebuild.result }}
+          REUSE_HIT: ''
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/prebuild-${{ matrix.statusKey }}
+        run: node .github/scripts/prebuild-status/publish.mjs
+
+  merge-guard:
+    needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, verify-prebuild-linking, cpp-tests, run-integration-tests, coload-smoke, coload-smoke-mobile]
+    if: always() && !cancelled()
+    uses: ./.github/workflows/public-pr.yml
+    with:
+      sanity-checks-status: ${{ (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
+      build-status: ${{ (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') && needs.verify-prebuild-linking.result != 'failure' }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

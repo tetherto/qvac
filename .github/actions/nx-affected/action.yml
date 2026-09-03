@@ -1,0 +1,61 @@
+name: 'Nx affected matrix'
+description: 'Shared nx-affected matrix computation for the *-nx.yml consolidated workflows.'
+
+inputs:
+  config:
+    description: 'YAML list of per-package config objects; must include a `package` key on each entry'
+    required: true
+  base-ref:
+    description: 'Base ref for nx affected when not resolvable from a pull_request event'
+    required: false
+    default: 'main'
+  head-ref:
+    description: 'Head ref for nx affected when not resolvable from a pull_request event'
+    required: false
+    default: 'HEAD'
+
+outputs:
+  matrix:
+    description: 'JSON array: config entries whose `package` is in the nx-affected set'
+    value: ${{ steps.compute.outputs.matrix }}
+  any:
+    description: '"true" if the matrix is non-empty, else "false"'
+    value: ${{ steps.compute.outputs.any }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: lts/*
+    - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+    - shell: bash
+      run: pnpm install --frozen-lockfile
+    - if: github.event_name == 'pull_request'
+      uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
+    - id: compute
+      shell: bash
+      env:
+        NX_CONFIG: ${{ inputs.config }}
+        INPUT_BASE_REF: ${{ inputs.base-ref }}
+        INPUT_HEAD_REF: ${{ inputs.head-ref }}
+      run: |
+        set -euo pipefail
+        BASE="${NX_BASE:-$INPUT_BASE_REF}"
+        HEAD="${NX_HEAD:-$INPUT_HEAD_REF}"
+
+        AFFECTED=$(pnpm exec nx show projects --affected --base="$BASE" --head="$HEAD" --json \
+          | tail -n1 \
+          | jq -c 'map(sub("^@qvac/"; ""))')
+        echo "Affected (transitive): $AFFECTED"
+
+        CONFIG_JSON=$(yq -o=json -I=0 e '.' <<< "$NX_CONFIG")
+
+        MATRIX=$(jq -c --argjson affected "$AFFECTED" '[.[] | select(.package as $p | $affected | index($p) != null)]' <<< "$CONFIG_JSON")
+        echo "Matrix (config ∩ affected): $MATRIX"
+        echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+        echo "any=$([ "$MATRIX" != "[]" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"

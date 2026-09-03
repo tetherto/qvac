@@ -38,7 +38,6 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: asr-ggml-
       # Union of whisper's BLAS/FFTW set and parakeet/tts's x11/pkg-config set:
       # the merged addon links both engine libraries.
       linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev

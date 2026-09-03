@@ -1,0 +1,125 @@
+name: 'Prebuild artifact materialize'
+description: >
+  Downloads a package's prebuild bundle (prebuilds-<package>) into <workdir>/prebuilds/<platform>-<arch>/, the only layout the runtime and npm tarball accept. Single source of truth for that placement — do NOT inline per workflow.
+
+inputs:
+  workdir:
+    description: 'Package working directory, e.g. packages/asr-ggml'
+    required: true
+  package:
+    description: 'Package short-name (packages/<dir>). Used to build the artifact name. Defaults to basename(workdir).'
+    required: false
+    default: ''
+  platform:
+    description: 'Place only this platform (pair with arch). Empty places every platform.'
+    required: false
+    default: ''
+  arch:
+    description: 'Place only this arch (pair with platform).'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve package and artifact name
+      id: id
+      shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        PACKAGE: ${{ inputs.package }}
+      run: |
+        set -euo pipefail
+        pkg="${PACKAGE:-$(basename "$WORKDIR")}"
+        if [ -z "$pkg" ] || [ "$pkg" = "." ] || [ "$pkg" = "/" ]; then
+          echo "::error::Cannot determine the package for workdir '$WORKDIR'."
+          exit 1
+        fi
+        echo "package=$pkg" >> "$GITHUB_OUTPUT"
+        echo "artifact=prebuilds-$pkg" >> "$GITHUB_OUTPUT"
+        echo "package=$pkg artifact=prebuilds-$pkg"
+
+    - name: Download prebuilds bundle
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: ${{ steps.id.outputs.artifact }}
+        path: ${{ runner.temp }}/prebuilds-staging
+
+    # Two implementations: Git Bash mangles RUNNER_TEMP on Windows ("C:\a\_temp",
+    # \a/\_ read as escapes) and the copy silently no-ops, so win32 uses PowerShell.
+    - name: Place prebuilds (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        PACKAGE: ${{ steps.id.outputs.package }}
+        PLATFORM: ${{ inputs.platform }}
+        ARCH: ${{ inputs.arch }}
+      run: |
+        set -euo pipefail
+        STAGING="${RUNNER_TEMP}/prebuilds-staging"
+        DEST="${WORKDIR}/prebuilds"
+        mkdir -p "$DEST"
+
+        if [ -n "$PLATFORM" ] && [ -n "$ARCH" ]; then
+          SRC="${STAGING}/${PLATFORM}-${ARCH}"
+          if [ ! -d "$SRC" ]; then
+            echo "::error::No '${PLATFORM}-${ARCH}/' directory in the prebuilds bundle for '${PACKAGE}'. Its prebuild did not produce one."
+            exit 1
+          fi
+          cp -r "$SRC" "${DEST}/"
+        else
+          if [ ! -d "$STAGING" ] || [ -z "$(ls -A "$STAGING")" ]; then
+            echo "::error::Prebuilds bundle for '${PACKAGE}' is missing or empty."
+            exit 1
+          fi
+          cp -r "${STAGING}/." "${DEST}/"
+        fi
+
+        # require.addon() resolves prebuilds/<platform>-<arch>/<name>.bare, so any
+        # extra directory level would break every consumer at runtime. Fail instead.
+        for d in "$DEST"/*/; do
+          base="$(basename "$d")"
+          case "$base" in
+            *-*) : ;;
+            *) echo "::error::'${base}/' is not a <platform>-<arch> directory. prebuilds/ must contain platform directories only."; exit 1 ;;
+          esac
+        done
+        ls -A "$DEST"
+
+    - name: Place prebuilds (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        PACKAGE: ${{ steps.id.outputs.package }}
+        PLATFORM: ${{ inputs.platform }}
+        ARCH: ${{ inputs.arch }}
+      run: |
+        $ErrorActionPreference = "Stop"
+        $staging = Join-Path $env:RUNNER_TEMP "prebuilds-staging"
+        $dest = Join-Path $env:WORKDIR "prebuilds"
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+
+        if ($env:PLATFORM -and $env:ARCH) {
+          $src = Join-Path $staging "$($env:PLATFORM)-$($env:ARCH)"
+          if (-not (Test-Path $src)) {
+            Write-Output "::error::No '$($env:PLATFORM)-$($env:ARCH)/' directory in the prebuilds bundle for '$($env:PACKAGE)'."
+            exit 1
+          }
+          Copy-Item -Recurse -Force $src $dest
+        } else {
+          if (-not (Test-Path $staging) -or -not (Get-ChildItem -Force $staging)) {
+            Write-Output "::error::Prebuilds bundle for '$($env:PACKAGE)' is missing or empty."
+            exit 1
+          }
+          Copy-Item -Recurse -Force (Join-Path $staging "*") $dest
+        }
+
+        foreach ($d in Get-ChildItem -Directory $dest) {
+          if ($d.Name -notlike "*-*") {
+            Write-Output "::error::'$($d.Name)/' is not a <platform>-<arch> directory. prebuilds/ must contain platform directories only."
+            exit 1
+          }
+        }
+        Get-ChildItem $dest
