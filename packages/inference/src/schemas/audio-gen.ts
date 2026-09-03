@@ -357,8 +357,8 @@ export type AudioGenProgress = {
   stage: string
   step: number
   /**
-   * Total steps when greater than zero. A value less than or equal to zero means the progress is
-   * indeterminate and should not be rendered as a `step / total` determinate progress bar.
+   * Total number of steps when greater than zero. Values less than or equal to zero mean
+   * indeterminate progress and must not be rendered as a `step / total` determinate progress value.
    */
   total: number
 }
@@ -366,7 +366,12 @@ export type AudioGenProgress = {
 export const audioGenProgressSchema = z.object({
   stage: z.string(),
   step: z.number().int().nonnegative(),
-  total: z.number().int()
+  total: z
+    .number()
+    .int()
+    .describe(
+      'Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.'
+    )
 }) satisfies z.ZodType<AudioGenProgress>
 
 export const audioGenStatsSchema = z.object({
