@@ -143,6 +143,11 @@ so in `notes`. The commit charge was evaluated as an alternative counter and
 rejected: it sees the same KV growth as the working set but carries ~0.8 GiB
 of committed, never-touched backend memory that physical RAM never pays for.
 
+This treatment is win32-only. Linux hit the same `q8_0`/`f16` abort and needed
+the same `device: 'cpu'` fix, but its RSS does count mapped weights at load —
+a 2382 MiB artifact read as 2415 MiB persistent — so calibration there
+measures the mmap default users actually run.
+
 ## Scope of a fixture
 
 Coefficients are keyed by **platform**, while several of the buffers they cover
