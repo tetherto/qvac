@@ -464,7 +464,7 @@ class AudioGenStreamResponseProgress(GeneratedBaseModel):
     )
     stage: str
     step: Annotated[int, Field(ge=0, le=9007199254740991)]
-    total: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
 
 
 class AudioGenStreamResponseStopReason(Enum):
