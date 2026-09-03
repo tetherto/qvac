@@ -331,8 +331,12 @@ interface GpuTarget {
   device?: string
 }
 
-// Driver order is what llama.cpp prefers, so the backend matches its choice.
-const GPU_BACKENDS = ['metal', 'cuda', 'rocm', 'vulkan', 'levelZero', 'opencl'] as const
+// Ordered by the backends the addon actually builds, not by what the device's
+// drivers advertise: the NVIDIA calibration host advertises both CUDA and
+// Vulkan, and every load on it reports `ggml_vulkan`, never `ggml_cuda`. The
+// engine's own choice is not observable from here (`chooseBackend` is C++ and
+// only reaches the llama log), so this order has to track the addon's build.
+const GPU_BACKENDS = ['metal', 'vulkan', 'rocm', 'cuda', 'levelZero', 'opencl'] as const
 
 function backendOf(gpu: GPUResourceCapabilities): string | undefined {
   for (const name of GPU_BACKENDS) {

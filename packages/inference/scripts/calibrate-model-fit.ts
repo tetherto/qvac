@@ -200,15 +200,17 @@ async function settledGpuUsedBytes() {
 }
 
 // Label for the backend in play, recorded with the coefficients because the
-// buffers they measure are allocated by the backend. Driver order is what
-// llama.cpp prefers, so the label matches the likely choice.
+// buffers they measure are allocated by the backend, and used as the GPU
+// fixture key. Must stay in step with `GPU_BACKENDS` in `assess.ts`: the
+// estimator derives the same key the same way, and a fixture filed under a
+// backend the engine does not use would be served to hosts it never measured.
 function detectBackend(gpuList: readonly Record<string, unknown>[]) {
   for (const gpu of byCapability(gpuList)) {
     const drivers = (gpu.drivers ?? {}) as Record<
       string,
       { status: string; value?: unknown } | undefined
     >
-    for (const name of ['metal', 'cuda', 'rocm', 'vulkan', 'levelZero', 'opencl']) {
+    for (const name of ['metal', 'vulkan', 'rocm', 'cuda', 'levelZero', 'opencl']) {
       if (drivers[name]?.status === 'supported' && drivers[name].value) return name
     }
   }
