@@ -18,8 +18,6 @@ import {
 } from '@qvac/infer-base'
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
 import QvacLogger = require('@qvac/logging')
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path is a CommonJS module.
-import path = require('bare-path')
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-os is a CommonJS module.
 import os = require('bare-os')
 
@@ -39,6 +37,7 @@ import {
   type EncodedAudio,
   type OutputFormat
 } from './lib/audio-format'
+import { resolveBackendsDir } from './lib/backends'
 import { ERR_CODES, QvacErrorAudioGen } from './error'
 
 export const ENGINE_ACESTEP = 'acestep'
@@ -94,9 +93,11 @@ export interface AudioGenRuntimeConfig {
   threads?: number
   /**
    * Override the prebuilds root the native engine scans for dlopen'd ggml
-   * backend modules. Defaults to `<addon>/prebuilds` (correct for the shipped
-   * package); only set this for a non-standard prebuilds layout. Needed on
-   * arm64, where the CPU backend is a set of per-microarch MODULE .so files.
+   * backend modules. Defaults to `resolveBackendsDir()`: the package's own
+   * `prebuilds/` when present, otherwise the installed platform package
+   * (`@qvac/audiogen-ggml-<platform>-<arch>`). Only set this for a
+   * non-standard prebuilds layout. Needed on arm64, where the CPU backend is
+   * a set of per-microarch MODULE .so files.
    */
   backendsDir?: string
 }
@@ -866,7 +867,7 @@ export class AudioGen {
     const files = options.files ?? {}
     const config = options.config ?? {}
     this._engineType = detectEngineType(files, options.engine)
-    const backendsDir = config.backendsDir ?? path.join(__dirname, 'prebuilds')
+    const backendsDir = config.backendsDir ?? resolveBackendsDir()
     const threads = requireNonNegativeInt32(config.threads ?? 0, 'threads')
     this._ditVariant = files.ditVariant
 
@@ -1401,6 +1402,7 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format'
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format'
+export { resolveBackendsDir } from './lib/backends'
 export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error'
 export { AudioEditOperationType, RepaintMode } from './audiogen'
 

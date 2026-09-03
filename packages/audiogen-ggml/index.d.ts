@@ -45,9 +45,11 @@ export interface AudioGenRuntimeConfig {
     threads?: number;
     /**
      * Override the prebuilds root the native engine scans for dlopen'd ggml
-     * backend modules. Defaults to `<addon>/prebuilds` (correct for the shipped
-     * package); only set this for a non-standard prebuilds layout. Needed on
-     * arm64, where the CPU backend is a set of per-microarch MODULE .so files.
+     * backend modules. Defaults to `resolveBackendsDir()`: the package's own
+     * `prebuilds/` when present, otherwise the installed platform package
+     * (`@qvac/audiogen-ggml-<platform>-<arch>`). Only set this for a
+     * non-standard prebuilds layout. Needed on arm64, where the CPU backend is
+     * a set of per-microarch MODULE .so files.
      */
     backendsDir?: string;
 }
@@ -367,6 +369,7 @@ export { REGISTRY_SOURCE, REGISTRY_PREFIX, FIXED_MODELS, DIT_VARIANTS, DEFAULT_D
 export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOptions } from './models';
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format';
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format';
+export { resolveBackendsDir } from './lib/backends';
 export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error';
 export { AudioEditOperationType, RepaintMode } from './audiogen';
 export type { AudioGenConfigurationParams, AudioGenJobData, AudioGenBinding, AudioGenOutputCallback } from './audiogen';

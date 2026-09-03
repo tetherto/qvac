@@ -175,7 +175,27 @@ jobs:
         run: |
           npm pack ${{ inputs.prebuild_package }}
           tar -xzf *.tgz
-          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
+          # meta tarball; split releases ship them in the per-host platform
+          # package under addon/prebuilds/.
+          if [ -d ./package/prebuilds ]; then
+            cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+          else
+            SPEC="${{ inputs.prebuild_package }}"
+            REST="${SPEC#?}"
+            if [ "${REST#*@}" != "$REST" ]; then
+              VERSION="${SPEC##*@}"
+              NAME="${SPEC%@"$VERSION"}"
+            else
+              VERSION=""
+              NAME="$SPEC"
+            fi
+            HOST_SPEC="${NAME}-${{ matrix.platform }}-${{ matrix.arch }}${VERSION:+@$VERSION}"
+            rm -rf ./package ./*.tgz
+            npm pack "$HOST_SPEC"
+            tar -xzf *.tgz
+            cp -r ./package/addon/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+          fi
 
       - name: Rename prebuilds from tetherto_ to qvac_ prefix
         if: ${{ inputs.prebuild_package }}
