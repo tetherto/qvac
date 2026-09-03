@@ -116,7 +116,7 @@ void tuneLoadConfigMap(
     const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides = {},
     bool isOpenCl = false, bool isMetal = false, bool isGpu = false,
-    bool isCuda = false);
+    bool isCuda = false, bool isTensorSplit = false);
 
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,

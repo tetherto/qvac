@@ -1,4 +1,4 @@
-// Calibration harness for assessModelFit (QVAC-23889).
+// Calibration harness for assessModelFit.
 //
 // Loads representative catalog models, measures resident and peak memory around
 // real operations, and derives the coefficients in
@@ -34,7 +34,7 @@ import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js
 import type { GgufFacts } from '../dist/schemas/model-resource-profile.js'
 import type { PlatformCalibration } from '../dist/resources/model-fit/types.js'
 
-declare const Bare: { argv: string[]; exit(code?: number): void }
+declare const Bare: { argv: string[]; exit(code?: number): never }
 
 const SAMPLE_INTERVAL_MS = 25
 const SETTLE_MS = 250
@@ -283,7 +283,7 @@ async function main() {
     console.log(
       `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
     )
-    return
+    Bare.exit(1)
   }
 
   const fit = fitResidentMemory(measurements)
@@ -291,11 +291,39 @@ async function main() {
     console.log(
       '\nthe measurement design cannot separate the weight ratio, fixed overhead and per-token slope (degenerate fit). No fixture written.'
     )
-    return
+    Bare.exit(1)
   }
   console.log(
     `\nfit: weightRatio ${fit.weightRatio.toFixed(3)}, fixed ${mib(fit.fixedBytes)} MiB, perToken ${fit.perTokenBytes.toFixed(0)} B, worst excess ${mib(fit.worstExcessBytes)} MiB`
   )
+
+  // Busy-host tripwires. Co-scheduled work cannot inflate this process's RSS,
+  // but memory pressure can evict its mapped pages and DEFLATE the persistent
+  // deltas — the dangerous direction for an upper bound. Deflation shows up as
+  // a weight ratio well below 1 (quiet-host runs measured ~1.0) or as repeats
+  // of the same point disagreeing; neither aborts, because a platform could
+  // legitimately page weights lazily, but a fixture from a warned run should
+  // not ship without a quiet re-run.
+  if (fit.weightRatio < 0.9) {
+    console.log(
+      `\nwarning: weightRatio ${fit.weightRatio.toFixed(3)} — resident weights landed well below artifact size. Either this platform pages weights lazily, or the host was under memory pressure during the run. Re-run on an idle host before trusting this fixture.`
+    )
+  }
+  for (const name of FIT_MODELS) {
+    for (const contextTokens of CONTEXTS) {
+      const repeats = measurements.filter(
+        (m) => m.name === name && m.contextTokens === contextTokens
+      )
+      const values = repeats.map((m) => m.persistentBytes)
+      const spread = Math.max(...values) - Math.min(...values)
+      const mean = values.reduce((total, v) => total + v, 0) / values.length
+      if (mean > 0 && spread / mean > 0.15) {
+        console.log(
+          `\nwarning: ${name} @ ${contextTokens} repeats spread ${mib(spread)} MiB (${((spread / mean) * 100).toFixed(0)}% of mean) — the host does not look idle. Re-run on a quiet machine before trusting this fixture.`
+        )
+      }
+    }
+  }
 
   const calibration: PlatformCalibration = {
     weightUpperCoeff: Number(Math.max(1, fit.weightRatio).toFixed(3)),
@@ -355,22 +383,24 @@ async function main() {
     console.log('the held-out peak exceeded the upper bound; do not ship these coefficients')
   }
 
-  if (!write) {
+  if (write) {
+    const target = path.join(
+      os.cwd(),
+      'src',
+      'resources',
+      'model-fit',
+      'calibration',
+      `${platform}.ts`
+    )
+    fs.writeFileSync(target, fixtureSource(platform, calibration))
+    console.log(`\nwrote ${target}`)
+    console.log('remember to add the platform to calibration/index.ts and run prettier')
+  } else {
     console.log('\nre-run with --write to update the fixture')
-    return
   }
 
-  const target = path.join(
-    os.cwd(),
-    'src',
-    'resources',
-    'model-fit',
-    'calibration',
-    `${platform}.ts`
-  )
-  fs.writeFileSync(target, fixtureSource(platform, calibration))
-  console.log(`\nwrote ${target}`)
-  console.log('remember to add the platform to calibration/index.ts and run prettier')
+  // Non-zero so the CI job cannot rot green on a failed gate.
+  if (!holds) Bare.exit(1)
 }
 
 main().catch((error) => {
