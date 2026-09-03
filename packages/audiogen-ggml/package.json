@@ -17,6 +17,7 @@
     "example:lego": "bare examples/generate-lego.js",
     "example:simple": "bare examples/generate-simple-mode.js",
     "example:best-of": "bare examples/generate-best-of.js",
+    "example:understand": "bare examples/understand-audio.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "node scripts/check-generated.mjs",
     "test:dts": "tsc --noEmit -p tsconfig.dts.json",

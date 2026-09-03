@@ -361,6 +361,59 @@ test(
 )
 
 test(
+  'AudioGen (ggml): understand describes generated audio',
+  { timeout: INTEGRATION_TIMEOUT_MS },
+  async (t) => {
+    const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
+    if (!download.success) {
+      t.fail('ACE-Step models unavailable')
+      return
+    }
+
+    const gen = await loadAudioGen({
+      modelDir: download.modelDir,
+      ditVariant: VARIANT,
+      useGPU: !NO_GPU
+    })
+    t.teardown(() => gen.destroy())
+
+    const generated = await runAudioGen(gen, {
+      caption: 'acoustic understand integration test',
+      opts: { lyrics: '[Instrumental]', duration: 4, seed: 42 }
+    })
+    t.ok(generated.data.sampleCount > 0, 'generated the clip to describe')
+
+    const pcm = new Float32Array(generated.data.sampleCount)
+    let offset = 0
+    for (const chunk of generated.data.chunks) {
+      for (let i = 0; i < chunk.length; i++) pcm[offset + i] = chunk[i] / 32768
+      offset += chunk.length
+    }
+
+    const response = await gen.understand(pcm, { seed: 42 })
+    const items = []
+    for await (const item of response.iterate()) items.push(item)
+    const stats = await response.await()
+
+    const understood = items.find((item) => item.understand)
+    t.ok(understood, 'streamed the understand item')
+    t.ok(understood.understand.caption.length > 0, 'caption is non-empty')
+    const latentFrames = Math.floor(pcm.length / 2 / 1920)
+    const expectedCodes = Math.ceil(latentFrames / 5)
+    t.is(understood.understand.audioCodes.length, expectedCodes, 'recovered one code per group')
+    t.ok(
+      items.some((item) => item.progress?.stage === 'understand'),
+      'streamed understand progress'
+    )
+    t.is(stats.understand.caption, understood.understand.caption, 'stats repeat the description')
+
+    const hinted = await gen.understand(pcm, { seed: 42, vocalLanguage: 'es' })
+    const hintedStats = await hinted.await()
+    t.is(hintedStats.understand.vocalLanguage, 'es', 'language hint is echoed')
+  }
+)
+
+test(
   'AudioGen (ggml): immediate ACE-Step cancellation is terminal',
   { timeout: INTEGRATION_TIMEOUT_MS },
   async (t) => {
