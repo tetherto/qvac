@@ -84,7 +84,7 @@ What "total" and "in use" mean depends on the result's `basis`:
 - **`device-memory`** — a discrete GPU's own memory, used when the model will
   execute there. Only for a GPU whose readings the collector established are
   device-scoped; everything else keeps the system basis or returns `unknown`.
-  See [discrete-GPU desktops](#supported-surface) below and the
+  See [desktops with a GPU](#supported-surface) below and the
   [system resources support matrix](./system-resources-support-matrix.md).
 
 ## Why the estimate is a range
@@ -132,14 +132,28 @@ placeholders rather than consuming them. Every other platform returns `unknown`
 until its own run lands. See
 `@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
 
-**Discrete-GPU desktops.** The engine executes the model in the GPU's own
-memory there, which system RAM cannot bound, so those platforms' `platforms`
-fixtures describe CPU-only machines. When a GPU is present the assessment
-switches to a `device-memory` basis and the backend's own coefficients — today
-`linux-x64` on Vulkan — and reports the GPU's total, used and reserve in
-`budget` as usual.
+**Desktops with a GPU.** On linux, Windows and Intel macOS the platform's own
+coefficients describe CPU-resident execution, so when a GPU is present the
+assessment first works out where the model would actually go. Devices the
+engine cannot use are discounted: a VM's paravirtual display adapter, and any
+device with no graphics API the build talks to. What remains decides the basis.
 
-On Windows the readings are per-process rather than device-wide (DXGI
+- **A card with its own memory** → `device-memory`, the backend's own
+  coefficients, and the GPU's total, used and reserve in `budget` as usual.
+  Where several cards qualify, they are alternatives rather than one pool: the
+  engine pins the model to one and which one is not observable, so a
+  `likely-fits` has to hold on the smallest and a `likely-too-large` on the
+  largest. In between the answer is `unknown`. Adapters too small to hold any
+  model are not counted as rivals — Windows classifies an Intel iGPU as
+  dedicated because it declares 128 MiB of its own.
+- **Only integrated GPUs** → the model runs on the GPU, but an integrated
+  device allocates out of system RAM, so the basis stays `system-memory`. The
+  coefficients are still the backend's, measured on an integrated device;
+  without such a fixture for that platform and backend the result is `unknown`
+  rather than the platform's CPU-forced numbers, which do not describe a GPU
+  load.
+
+On Windows a card's readings are per-process rather than device-wide (DXGI
 `CurrentUsage` and `Budget`), so the basis is `device-budget` instead: the GPU
 memory the OS grants _this process_. It answers the same admission question.
 
@@ -148,13 +162,9 @@ every verdict — a GPU load is paid for in system RAM too (a 2382 MiB model
 raised RSS by 2918 MiB on Windows, 868 MiB on linux), so a machine with the
 card for it but not the RAM does not read as a fit.
 
-It returns `unknown` instead whenever the evidence is not defensible:
-
-- **More than one usable GPU.** The engine takes the first eligible ggml
-  device, an order the SDK cannot observe, so the card cannot be identified.
-  Adapters too small to hold any model are not counted as rivals — Windows
-  classifies an Intel iGPU as dedicated because it declares 128 MiB of its own.
-- **An uncalibrated backend**, or a GPU whose readings carry no usable scope.
+It returns `unknown` whenever the evidence is not defensible: **an uncalibrated
+backend** for the placement in play, a GPU whose readings carry no usable
+scope, or cards that disagree on the backend or on the scope of their readings.
 
 Apple silicon is unaffected: its memory is unified, so a GPU allocation is
 system RAM and the system basis already covers it.

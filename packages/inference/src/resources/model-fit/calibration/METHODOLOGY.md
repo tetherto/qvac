@@ -43,6 +43,22 @@ RAM is the binding constraint. A second `--gpu` pass then measures the same
 models resident on the device, against the GPU counter, and writes a fixture
 keyed by backend; assessment uses those when a GPU is present and falls back
 to `unknown` where it cannot identify the device or trust its readings.
+
+A third `--igpu` pass covers the host in between, and the most common one: a
+machine whose only GPU is integrated. There the engine runs on the GPU, but an
+integrated device allocates out of system RAM, so RSS is still the right
+counter and the budget is still the system one. The pass pins the class of
+device with `main-gpu: 'integrated'` — the class, not an index, so a host that
+also has a discrete card still measures the integrated one — keeps the SDK's
+default load mode, and writes `<platform>-<backend>-shared.ts`. Its
+coefficients are not interchangeable with either neighbour's: the buffers are
+the backend's, as in a `--gpu` pass, but they are spent against the system
+budget, as in a CPU-forced one.
+
+Every pass asserts what the engine reported executing on (`backendDevice` in
+the completion stats) before it accepts a point. A `--igpu` pass on a host with
+no integrated ggml device would otherwise fall back to the CPU inside
+`chooseBackend` and file CPU numbers under a GPU backend key.
 It has to be the `device` key rather than `gpu_layers: 0`: the addon
 derives its KV-cache default from the backend that key selects
 (`LoadFitNormalization.cpp`, `isGpu`), so `gpu_layers: 0` on a host with a
@@ -163,6 +179,45 @@ copy alone.
 Measured under `device: 'gpu'` linux reads ~1.0 (2415 MiB for the same
 artifact), because no CPU-backend copy exists there. That number does not
 transfer to a CPU-forced run, and reading it across cost a calibration round.
+
+## Which fixture a host gets
+
+`assess.ts` classifies the GPUs the collector reports before it picks
+coefficients, because the classification decides both the budget and which
+fixture describes the load. Two kinds of reported device are discounted first,
+both because `chooseBackend` would pass them over and fall back to the CPU: a
+paravirtual display adapter (`type` is `VIRTUAL` — the virtio / VMware /
+Hyper-V device a VM or cloud host exposes; the hosted arm64 runner is one, and
+llama.cpp reports "no usable GPU found" there), and a device with no graphics
+API this build talks to. The driver flags are library-presence checks —
+`libvulkan.so.1`, `vulkan-1.dll` — which is what ggml's own backend needs in
+order to load, so their absence is evidence about the engine and not only
+about the collector.
+
+What remains decides the placement:
+
+| Host                              | Basis                   | Fixture                       |
+| --------------------------------- | ----------------------- | ----------------------------- |
+| No usable GPU                     | system memory           | `<platform>`                  |
+| Only integrated GPUs              | system memory           | `<platform>-<backend>-shared` |
+| One or more cards with own memory | device memory or budget | `<platform>-<backend>`        |
+
+An integrated GPU is one that says so (`unifiedMemory`) or one whose declared
+memory is under 1 GiB — the Windows iGPU declares a 128 MiB carve-out of its
+own and is therefore typed dedicated, and nothing but that size separates it
+from a real card.
+
+Where several cards have their own memory, all of them are carried. The engine
+pins the model to one (`--device`, with split mode `none` by default) and which
+one is a ggml enumeration order the SDK cannot see, so the cards are
+alternatives rather than bounds to intersect: a fit has to hold on the smallest
+and a refusal on the largest, and anything between the two is `unknown`. Cards
+that disagree on the backend, or on whether their readings are device- or
+process-scoped, have no single set of coefficients and yield `unknown`.
+
+A discrete-GPU verdict is additionally bound by system memory, because that
+load is paid for in RAM as well — a 2382 MiB model raised RSS by 2918 MiB on
+win32 and 868 MiB on linux.
 
 ## Scope of a fixture
 

@@ -525,7 +525,7 @@ async function main() {
   // CPU-forced and no GPU is reported at all.
   const expectedDevice: 'cpu' | 'gpu' | undefined = cpuForced
     ? 'cpu'
-    : gpuList.length > 0
+    : gpuRecords.length > 0
       ? 'gpu'
       : undefined
 
