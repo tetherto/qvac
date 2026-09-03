@@ -55,16 +55,17 @@ coefficients are not interchangeable with either neighbour's: the buffers are
 the backend's, as in a `--gpu` pass, but they are spent against the system
 budget, as in a CPU-forced one.
 
-Every pass asserts what the engine reported executing on (`backendDevice` in
-the completion stats) before it accepts a point. A `--igpu` pass on a host with
-no integrated ggml device would otherwise fall back to the CPU inside
-`chooseBackend` and file CPU numbers under a GPU backend key.
-It has to be the `device` key rather than `gpu_layers: 0`: the addon
-derives its KV-cache default from the backend that key selects
+Forcing the CPU has to use the `device` key rather than `gpu_layers: 0`: the
+addon derives its KV-cache default from the backend that key selects
 (`LoadFitNormalization.cpp`, `isGpu`), so `gpu_layers: 0` on a host with a
 Vulkan-capable GPU still builds a `q8_0` cache while every layer runs on the
 CPU, and the `f16` subtracted for a CPU run would be twice what the engine
 allocated. The first Windows run failed exactly that way (see "Windows").
+
+Every pass asserts what the engine reported executing on (`backendDevice` in
+the completion stats) before it accepts a point. A `--igpu` pass on a host with
+no integrated ggml device would otherwise fall back to the CPU inside
+`chooseBackend` and file CPU numbers under a GPU backend key.
 
 1. For each of three models (small, medium, large) at two contexts (512 and
    8192 tokens), **three times each**: settle, read RSS, load, settle, read RSS

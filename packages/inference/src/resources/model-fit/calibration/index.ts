@@ -4,6 +4,7 @@ import type {
   PlatformCalibration
 } from '@/resources/model-fit/types'
 import { DARWIN_ARM64_CALIBRATION } from '@/resources/model-fit/calibration/darwin-arm64'
+import { LINUX_ARM64_CALIBRATION } from '@/resources/model-fit/calibration/linux-arm64'
 import { LINUX_X64_CALIBRATION } from '@/resources/model-fit/calibration/linux-x64'
 import { LINUX_X64_VULKAN_CALIBRATION } from '@/resources/model-fit/calibration/linux-x64-vulkan'
 import { WIN32_X64_CALIBRATION } from '@/resources/model-fit/calibration/win32-x64'
@@ -19,6 +20,7 @@ export const CALIBRATION: CalibrationFixture = {
   schemaVersion: 1,
   platforms: {
     'darwin-arm64': DARWIN_ARM64_CALIBRATION,
+    'linux-arm64': LINUX_ARM64_CALIBRATION,
     'linux-x64': LINUX_X64_CALIBRATION,
     'win32-x64': WIN32_X64_CALIBRATION
   },

@@ -61,6 +61,18 @@ const WORKING_DRIFT_WARN_BYTES = 64 * 1024 * 1024
 // must too. A shortfall means the wrong KV width, or a counter missing memory.
 const KV_OBSERVATION_FLOOR = 0.9
 
+// The weight ratio multiplies the largest term in the estimate and used to ship
+// with no margin at all: a fitted 0.995 became exactly 1.000, claiming resident
+// weights never exceed the artifact by a byte, while every other coefficient
+// carries ±20%. It cost a held-out failure — linux-x64 measured 5.83 GiB
+// against a predicted 5.82 (run 33795110381), with a fitted intercept of ~0
+// that left nothing to absorb the extrapolation from a 2.5 GB largest fit point
+// to a 4.7 GB held-out model. 1% is the scale the fitted slope actually moves
+// by between runs on one host (0.995 / 0.997 on linux, 1.078 / 1.079 on arm),
+// and 1% of a large model is still two orders of magnitude inside the 2 GiB
+// interactive reserve.
+const WEIGHT_UPPER_SLACK = 1.01
+
 // Small, medium, large — plus one held out of the fit entirely, used only to
 // check that the derived upper bound actually holds.
 const FIT_MODELS = ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_4B_INST_Q4_K_M']
@@ -653,6 +665,12 @@ async function main() {
     }
   }
 
+  // The transient peak a completion adds on top of the resident cost. The fit
+  // reads persistent deltas only, so this is measured directly: the worst delta
+  // observed, plus the same 20% the fitted terms carry. Its lower bound is 0
+  // because points genuinely measured 0 — nothing says a completion must add
+  // anything.
+  const worstWorking = Math.max(...measurements.map((m) => m.workingBytes))
   const notes: string[] = []
   if (loadMode) {
     notes.push(
@@ -666,7 +684,8 @@ async function main() {
   }
 
   const calibration: PlatformCalibration = {
-    weightUpperCoeff: Number(Math.max(1, fit.weightRatio).toFixed(3)),
+    weightUpperCoeff: Number((Math.max(1, fit.weightRatio) * WEIGHT_UPPER_SLACK).toFixed(3)),
+    workingPeakBytes: { lower: 0, upper: Math.round(worstWorking * 1.2) },
     fixedOverheadBytes: {
       lower: Math.round(fit.fixedBytes * 0.8),
       // Floored at the worst point observed: an upper bound that does not
@@ -714,6 +733,7 @@ async function main() {
     heldOutArtifactBytes * calibration.weightUpperCoeff +
     calibration.fixedOverheadBytes.upper +
     calibration.computeBufferBytesPerToken.upper * CONTEXTS[1]! +
+    (calibration.workingPeakBytes?.upper ?? 0) +
     heldOutKv
   const holds = heldOutWorstTotal <= predictedUpper
 

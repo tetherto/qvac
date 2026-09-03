@@ -350,6 +350,40 @@ test('estimateLlm: weights use the artifact size as the floor', (t) => {
   t.ok(result.assumptions.some((a) => a.includes('file-backed and evictable')))
 })
 
+// A completion was long assumed to add nothing on top of the load, and the
+// harness's own sampler was broken in a way that agreed. It is measured now, so
+// it lands in `working`: released after the operation, which is what
+// `sequential` counts once and `concurrent` counts per model.
+test('estimateLlm: the measured working peak is a peak, not resident memory', (t) => {
+  const withPeak = estimateLlm({
+    profile: profile({ artifactBytes: 0 }),
+    workload: { kind: 'llm', contextTokens: 512 },
+    extraArtifactBytes: 0,
+    calibration: calibration({ workingPeakBytes: { lower: 0, upper: 80 * MIB } }),
+    hasGpu: false
+  })
+  const without = estimateLlm({
+    profile: profile({ artifactBytes: 0 }),
+    workload: { kind: 'llm', contextTokens: 512 },
+    extraArtifactBytes: 0,
+    calibration: calibration(),
+    hasGpu: false
+  })
+
+  t.is(withPeak.kind, 'estimate')
+  t.is(without.kind, 'estimate')
+  if (withPeak.kind !== 'estimate' || without.kind !== 'estimate') return
+
+  t.is(withPeak.working.upper, 80 * MIB)
+  t.is(withPeak.working.lower, 0)
+  t.is(
+    withPeak.persistent.upper,
+    without.persistent.upper,
+    'the peak is not also counted as resident'
+  )
+  t.is(without.working.upper, 0, 'a fixture measured before the peak was sampled contributes none')
+})
+
 test('estimateLlm: refuses without GGUF facts or on the wrong workload', (t) => {
   const noFacts = estimateLlm({
     profile: { schemaVersion: 1, engine: 'llamacpp-completion', artifactBytes: 1 },

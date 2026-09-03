@@ -49,6 +49,18 @@ export interface PlatformCalibration {
   weightUpperCoeff: number
   fixedOverheadBytes: ByteRange
   computeBufferBytesPerToken: ByteRange
+  /**
+   * Transient peak one operation adds on top of the resident cost, measured as
+   * the worst RSS delta across a completion.
+   *
+   * Optional because the fixtures measured before the harness sampled
+   * generation at all do not carry it; those contribute nothing, which is the
+   * behaviour they shipped with. A completion was long assumed to add nothing —
+   * llama.cpp allocates the context at load — and on most platforms it adds
+   * only a few MiB, but darwin-x64 measured 73 MiB, above the harness's own
+   * drift threshold.
+   */
+  workingPeakBytes?: ByteRange
   audioWindowBytes: ByteRange
   audioStreamingBytes: ByteRange
   validated: boolean
