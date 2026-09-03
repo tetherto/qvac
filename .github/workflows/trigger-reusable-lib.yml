@@ -1,6 +1,12 @@
 name: General CI/CD (libs)
-# Consolidated publish workflow for plain-shape libraries; excludes
-# cli/inference/plugin/infer-base packages (non-standard shapes).
+# Consolidated publish workflow for plain-shape libraries: no build step, so
+# `npm publish` ships the committed sources as-is.
+#
+# error, logging and rag are NOT here. gh#4055 gave each a `prepare` -> tsc build
+# and a dedicated prebuilt-dist pipeline, because publishing them through a
+# generic path ran tsc in a job with no node_modules and broke the publish. They
+# keep their own trigger-reusable-lib-<pkg>.yml. test-suite, cli, inference,
+# infer-base and the plugin packages are excluded for the same reason.
 
 on:
   push:
@@ -10,15 +16,13 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/rag/**"
       - "packages/dl-base/**"
       - "packages/dl-filesystem/**"
       - "packages/dl-hyperdrive/**"
-      - "packages/logging/**"
-      - "packages/error/**"
       - "packages/diagnostics/**"
       - "packages/langdetect-text/**"
       - "packages/qvac-ci/**"
+      - ".github/workflows/trigger-reusable-lib.yml"
   workflow_dispatch:
     inputs:
       package:
@@ -26,12 +30,9 @@ on:
         required: true
         type: choice
         options:
-          - rag
           - dl-base
           - dl-filesystem
           - dl-hyperdrive
-          - logging
-          - error
           - diagnostics
           - langdetect-text
           - qvac-ci
@@ -63,12 +64,9 @@ jobs:
           # diverged feature/tmp branch matches every lib and over-publishes.
           base: ${{ github.ref_name }}
           filters: |
-            rag: packages/rag/**
             dl-base: packages/dl-base/**
             dl-filesystem: packages/dl-filesystem/**
             dl-hyperdrive: packages/dl-hyperdrive/**
-            logging: packages/logging/**
-            error: packages/error/**
             diagnostics: packages/diagnostics/**
             langdetect-text: packages/langdetect-text/**
             qvac-ci: packages/qvac-ci/**
@@ -214,5 +212,5 @@ jobs:
         package: ${{ fromJSON(needs.detect.outputs.packages) }}
     uses: ./.github/workflows/create-release-tag.yml
     with:
-      repo_name: ${{ matrix.package == 'error' && 'error-base' || matrix.package }}
+      repo_name: ${{ matrix.package }}
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
