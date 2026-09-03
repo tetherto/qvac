@@ -6,7 +6,7 @@ export function registerOpenAiCommand(program: Command): void {
 
   openaiCmd
     .command('coverage')
-    .description('Show OpenAI endpoint coverage for qvac serve openai')
+    .description('Show OpenAI endpoint coverage for qvac serve --openai')
     .option('--json', 'Output JSON report')
     .option('--unsupported', 'List only unsupported endpoints')
     .option('--unknown', 'List only uncategorized (unknown) endpoints')
@@ -44,7 +44,7 @@ export function registerOpenAiCommand(program: Command): void {
 
   openaiCmd
     .command('spec')
-    .description('Emit the OpenAPI spec for qvac serve openai (without starting the server)')
+    .description('Emit the OpenAPI spec for qvac serve --openai (without starting the server)')
     .option('-o, --output <path>', 'Write to file instead of stdout')
     .option('--yaml', 'Emit YAML instead of JSON')
     .action(async (options: { output?: string; yaml?: boolean }) => {
