@@ -20,19 +20,10 @@ const LEXER_PACKAGE = 'bare-module-lexer'
 // one `bare-pack` itself resolves. Reading it out of an ambient `node_modules`
 // picks up whatever version happens to be hoisted nearby, and the desync this
 // check hunts for differs between lexer releases.
-//
-// `bare-pack` is pinned to an exact version: with a floating range npm re-resolves
-// on every CI run against whatever was last published, so a routine Holepunch
-// release lands here with no PR and no lockfile. Bump it in lockstep with the
-// mobile app's `bare-pack` so this check keeps scanning with the same lexer the
-// shipped bundle is actually built with.
+// Exact pin: a floating range re-resolves against the latest publish on every run.
 const BUNDLER_SPEC = 'bare-pack@1.5.1'
-// `bare-pack` pulls `bare-module-lexer` transitively (via `bare-module-traverse`),
-// so it is pinned through an npm override in the temp install. 1.6.6 (2026-09-03)
-// ships prebuilds that call node_api_is_sharedarraybuffer, which Node added only
-// in 22.21.0 / 24.9.0; 1.6.3 is the last release that loads on every Node this
-// repo's CI uses, so it stays pinned until upstream ships a build that does not
-// need the symbol.
+// Transitive via bare-module-traverse, so pinned with an override. 1.6.6 needs
+// node_api_is_sharedarraybuffer (Node >= 22.21); 1.6.3 predates it (pin from #4218).
 const LEXER_OVERRIDES = { [LEXER_PACKAGE]: '1.6.3' }
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
 // Directory names that never enter a mobile bundle. Generators under `scripts/`
