@@ -132,6 +132,7 @@ class AssessModelFitResponseVerdict(Enum):
 class AssessModelFitResponseBasis(Enum):
     system_memory = "system-memory"
     process_memory = "process-memory"
+    device_memory = "device-memory"
 
 
 class AssessModelFitResponseExecution(Enum):
@@ -232,7 +233,7 @@ class AssessModelFitResponse(GeneratedBaseModel):
     basis: Annotated[
         AssessModelFitResponseBasis,
         Field(
-            description="The evidence the budget was derived from — system RAM, or the per-process ceiling on iOS. GPU/VRAM metrics are deliberately excluded either way; they are `unverified`-scoped by design.",
+            description="The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, or a discrete GPU’s own memory when the model executes there and that GPU’s readings are device-scoped.",
             title="AssessModelFitResponseBasis",
         ),
     ]
