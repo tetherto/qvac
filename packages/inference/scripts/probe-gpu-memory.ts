@@ -62,6 +62,8 @@ async function main() {
     console.log(`      capabilities.memory = ${mib(gpu.memory)}  drivers=${drivers}`)
   }
 
+  registerPlugin(llmPlugin)
+
   // How the SDK currently grades those same numbers.
   const resources = await getSystemResources()
   const gpus = resources.capabilities.gpus
