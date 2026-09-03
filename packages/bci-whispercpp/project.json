@@ -21,9 +21,7 @@
           "artifactNamePrefix": "bci-whispercpp-",
           "linuxExtraPackages": "libopenblas-dev liblapack-dev libfftw3-dev",
           "macBrewPackages": "openblas lapack fftw",
-          "includeVulkanSdk": true,
-          "includeCuda": true,
-          "platformCmakeDefines": "linux-x64: -D ENABLE_CUDA=ON\n"
+          "includeVulkanSdk": true
         }
       },
       "inputs": [

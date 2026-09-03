@@ -18,6 +18,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Drop CUDA from the published linux-x64 prebuild so the npm tarball stays
+  under the registry size limit. `use_gpu` / `useGPU: true` uses Vulkan on
+  Linux. CUDA remains opt-in at build time via `ASR_CUDA=ON`.
+
 - Raise the `speech-cpp` floor to 2026-09-01#2, which brings in ggml-speech
   2026-09-02. The CUDA backend now skips, at registration, GPUs whose
   compute capability has no compiled code in the fatbin, so a
