@@ -301,13 +301,30 @@ const serverErrorDefinitions: ErrorCodesMap = {
   },
   [SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW]: {
     name: 'CONTEXT_OVERFLOW',
-    message: (promptTokens: string, ctxSize: string, modelId: string) => {
-      const prompt = promptTokens ? `${promptTokens} prompt tokens` : 'prompt'
-      const ctx = ctxSize
-        ? ` exceeds the ${ctxSize}-token context window`
-        : " exceeds the model's context window"
+    message: (
+      promptTokens: string,
+      ctxSize: string,
+      modelId: string,
+      cachedTokens?: string,
+      requiredTokens?: string
+    ) => {
       const model = modelId ? ` for model "${modelId}"` : ''
-      return `${prompt}${ctx}${model}. Reduce the prompt size or start a new conversation.`
+      // Ambiguous totals can be KV cells, and the guards trigger at equality —
+      // unit-neutral wording, phrased as leaving no room rather than exceeding.
+      const capacity = ctxSize
+        ? `the effective context capacity (${ctxSize} units)`
+        : "the model's context capacity"
+      if (requiredTokens && cachedTokens) {
+        return `Conversation uses ${requiredTokens} context units (${cachedTokens} already cached) and leaves no room to generate within ${capacity}${model}. Start a new conversation or raise ctx_size.`
+      }
+      if (requiredTokens) {
+        return `Request uses ${requiredTokens} context units and leaves no room to generate within ${capacity}${model}. Reduce the prompt size, start a new conversation, or raise ctx_size.`
+      }
+      const window = ctxSize ? `the ${ctxSize}-token context window` : "the model's context window"
+      // The prompt-only branch below is reachable only through the public
+      // constructors — the parser always pairs promptTokens with requiredTokens.
+      const prompt = promptTokens ? `${promptTokens} prompt tokens` : 'prompt'
+      return `${prompt} exceeds ${window}${model}. Reduce the prompt size or start a new conversation.`
     }
   },
   [SDK_SERVER_ERROR_CODES.INVALID_AUDIO_INPUT]: {

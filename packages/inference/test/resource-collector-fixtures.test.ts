@@ -134,6 +134,9 @@ function createFixture(options?: {
     createGPUId() {
       calls.gpuIds++
       return `opaque-${calls.gpuIds}`
+    },
+    sampleProcessMemory() {
+      return { usedBytes: 2048, availableBytes: undefined }
     }
   }
 
