@@ -374,11 +374,17 @@ function generateDiffusionName({
   modelName,
   quantization,
   params,
-  tags
+  tags,
+  tagType
 }: BaseNameInput): string {
   if (tags.includes('vae')) {
-    const name = modelName || 'SD'
-    return `${cleanPart(name)}_VAE`
+    const name = cleanPart(modelName || 'SD')
+    // Related VAEs can share a model name (LTX ships audio + video VAEs), so
+    // splice in the type tag. Skip it when it repeats the family name, as in
+    // WAN's ['vae', 'wan'].
+    const type = cleanPart(tagType)
+    const role = type && !`_${name}_`.includes(`_${type}_`) ? `_${type}` : ''
+    return `${name}${role}_VAE`
   }
 
   let family = filename
