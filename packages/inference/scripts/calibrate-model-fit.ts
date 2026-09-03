@@ -109,6 +109,25 @@ function settle() {
   return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
 }
 
+// Registry downloads can stall without erroring; bound each load so a stall
+// fails in minutes instead of consuming the whole job timeout.
+const LOAD_TIMEOUT_MS = 30 * 60 * 1000
+
+function withLoadTimeout<T>(promise: Promise<T>, label: string) {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          `${label} did not finish within ${LOAD_TIMEOUT_MS / 60000} minutes; a registry download has likely stalled. Check the registry's reachability from this host.`
+        )
+      )
+    }, LOAD_TIMEOUT_MS)
+    if (timer && typeof timer.unref === 'function') timer.unref()
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 /**
  * Best-effort label for the backend in play, from the drivers the resource
  * collector reports. Recorded with the coefficients because the buffers they
@@ -174,10 +193,13 @@ async function measure(name: string, contextTokens: number): Promise<Measurement
   await settle()
   const rssBefore = rssBytes()
 
-  const modelId = await loadModel({
-    modelSrc: model,
-    modelConfig: { ctx_size: contextTokens }
-  })
+  const modelId = await withLoadTimeout(
+    loadModel({
+      modelSrc: model,
+      modelConfig: { ctx_size: contextTokens }
+    }),
+    `loading ${name}`
+  )
 
   await settle()
   const rssAfterLoad = rssBytes()
@@ -280,8 +302,14 @@ async function main() {
   // does not match what the engine did.
   const negative = measurements.filter((m) => m.persistentBytes - m.kvBytes < 0)
   if (negative.length > 0) {
+    // Weights far below artifact size with a GPU present means the model went
+    // to discrete GPU memory, which process RSS cannot observe; RSS-based
+    // calibration only works on unified-memory or CPU-resident hosts.
+    const offloaded = hasGpu && measurements.some((m) => m.persistentBytes < m.artifactBytes / 2)
     console.log(
-      `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
+      offloaded
+        ? `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted: the model is in discrete GPU memory, which process RSS cannot observe. This methodology only calibrates unified-memory or CPU-resident hosts. No fixture written.`
+        : `\n${negative.length} of ${measurements.length} points measured less persistent memory than the KV cache being subtracted: the assumed cache type does not match what the engine allocated. No fixture written.`
     )
     Bare.exit(1)
   }

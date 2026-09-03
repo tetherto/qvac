@@ -87,6 +87,7 @@ public:
     bool lmPhase1 = true;
     bool simpleMode = false;
     bool normalizeLoudness = true;
+    bool computeQualityScore = false;
     bool dcwEnabled = true;
     float dcwScaler = 0.05F;
     float dcwHighScaler = 0.02F;
@@ -157,6 +158,8 @@ private:
   double audioDurationMs_ = 0.0;
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
+  double qualityScore_ = 0.0;
+  bool hasQualityScore_ = false; // set per run; gates the qualityScore stat
   int sampleRate_ = 0; // populated from the engine result in generate()
   int channels_ = 0;   // populated from the engine result in generate()
 
