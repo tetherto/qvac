@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Drop CUDA from the published linux-x64 prebuild so the npm tarball stays
+  under the registry size limit. `useGPU: true` uses Vulkan on Linux. CUDA
+  remains opt-in at build time via `ENABLE_CUDA=ON`.
+
 - Raise the `speech-cpp` floor to 2026-08-31, which brings in the ACE-Step
   Multi-Track (lego) task and base-model guided sampling.
 - Raise the `speech-cpp` floor further to 2026-09-01#2, which brings in

@@ -7079,6 +7079,13 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode(Enum):
     none = "none"
     layer = "layer"
     row = "row"
+    tensor = "tensor"
+
+
+class LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn(Enum):
+    on = "on"
+    off = "off"
+    auto = "auto"
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(Enum):
@@ -7338,8 +7345,16 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
+        ),
+    ] = None
+    flash_attn: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn | None,
+        Field(
+            alias="flash-attn",
+            description="Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`.",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn",
         ),
     ] = None
     tensor_split: Annotated[
