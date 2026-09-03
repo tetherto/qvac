@@ -6,12 +6,7 @@ try {
     modelConfig: {
       engine: 'Bergamot',
       from: 'en',
-      to: 'fr',
-      beamsize: 1,
-      normalize: 1,
-      temperature: 0.2,
-      norepeatngramsize: 3,
-      lengthpenalty: 1.2
+      to: 'fr'
     },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
@@ -23,7 +18,6 @@ try {
 
   console.log(`▸ Bergamot model loaded: ${modelId}`)
 
-  // Test with array of texts for batch processing
   const texts = [
     'Hello world',
     'How are you today?',
@@ -31,22 +25,22 @@ try {
     'The weather is nice'
   ]
 
-  console.log('▸ Translating batch of texts:')
-  texts.forEach((text, i) => console.log(`▸   ${i + 1}. ${text}`))
+  console.log('▸ Streaming a batch, one translation per token:')
 
   const result = translate({
     modelId,
-    text: texts, // Pass array for batch processing
+    text: texts,
     modelType: 'nmtcpp-translation',
-    stream: false
+    stream: true
   })
 
-  const translations = await result.translations
+  let index = 0
+  for await (const translation of result.tokenStream) {
+    console.log(`  ${index + 1}. ${texts[index]} -> "${translation}"`)
+    index++
+  }
 
-  console.log('▸ Translations:')
-  translations.forEach((translation, i) => {
-    console.log(`  ${i + 1}. ${texts[i]} -> "${translation}"`)
-  })
+  console.log(`▸ Translated ${index} texts`)
 
   await unloadModel({ modelId })
 } catch (error) {

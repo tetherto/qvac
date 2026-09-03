@@ -26,7 +26,7 @@ function coerceParamValue(raw: string, schema?: { type?: string }): unknown {
       return n
     }
     case 'boolean': {
-      // Qwen3.5/3.6 intermittently emit Python-style capitalised booleans
+      // Qwen3.5/3.6/3.8 intermittently emit Python-style capitalised booleans
       // (`True`/`False`); accept any casing so a valid call isn't dropped.
       const v = trimmed.toLowerCase()
       if (v === 'true') return true
@@ -41,7 +41,7 @@ function coerceParamValue(raw: string, schema?: { type?: string }): unknown {
   }
 }
 
-// Parses Qwen3.5/3.6 Pythonic-XML tool-call format:
+// Parses Qwen3.5/3.6/3.8 Pythonic-XML tool-call format:
 //   <tool_call>
 //   <function=NAME>
 //   <parameter=KEY>VALUE</parameter>
