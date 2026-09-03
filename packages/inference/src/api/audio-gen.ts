@@ -37,7 +37,7 @@ function concatenateChunks(chunks: Uint8Array[]) {
  * ```typescript
  * const { progressStream, audio } = audioGen({ modelId, caption: "lo-fi hip hop, mellow piano" });
  * for await (const { stage, step, total } of progressStream) {
- *   console.log(`${stage} ${step}/${total}`);
+ *   console.log(total > 0 ? `${stage} ${step}/${total}` : `${stage} ${step} (indeterminate)`);
  * }
  * const { pcm, sampleRate, channels, bitsPerSample } = await audio;
  * ```

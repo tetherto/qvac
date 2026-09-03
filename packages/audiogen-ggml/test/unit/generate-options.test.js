@@ -171,6 +171,26 @@ test('AudioGen.run rejects invalid simpleMode combinations', async (t) => {
   await rejectRunOptions(t, { simpleMode: true, lmPhase1: false }, /simpleMode requires lmPhase1/)
 })
 
+test('AudioGen.run validates and forwards computeQualityScore', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  await rejectRunOptions(t, { computeQualityScore: 'yes' }, /computeQualityScore must be a boolean/)
+  await rejectRunOptions(
+    t,
+    { computeQualityScore: true, taskType: 'cover-nofsq', sourceAudio },
+    /computeQualityScore requires taskType 'text2music'/
+  )
+  await rejectRunOptions(
+    t,
+    { computeQualityScore: true, taskType: 'lego', track: 'drums', sourceAudio },
+    /computeQualityScore requires taskType 'text2music'/
+  )
+
+  const { gen, received } = createHarness()
+  const response = await gen.run('scored take', { computeQualityScore: true })
+  await response.await()
+  t.is(received().computeQualityScore, true)
+})
+
 test('AudioGen.run forwards reference/source audio, taskType and cover strengths', async (t) => {
   const { gen, received } = createHarness()
   const referenceAudio = new Float32Array([0.1, -0.1, 0.2, -0.2])

@@ -21,17 +21,19 @@ const LEXER_PACKAGE = 'bare-module-lexer'
 // picks up whatever version happens to be hoisted nearby, and the desync this
 // check hunts for differs between lexer releases.
 //
-// Both specs are pinned to exact versions. With a floating range npm re-resolves
+// `bare-pack` is pinned to an exact version: with a floating range npm re-resolves
 // on every CI run against whatever was last published, so a routine Holepunch
-// release lands here with no PR and no lockfile: on 2026-09-03 `bare-module-lexer`
-// floated to a minor whose linux-x64 prebuild needed a Node-API symbol the CI
-// node did not export, and the checker aborted before scanning any package.
-// `bare-pack` pulls the lexer transitively (via `bare-module-traverse@^1.4.0`),
-// so the lexer is pinned explicitly at the top level to force the resolved copy.
-// Bump both in lockstep with the mobile app's `bare-pack` so this check keeps
-// scanning with the same lexer the shipped bundle is actually built with.
+// release lands here with no PR and no lockfile. Bump it in lockstep with the
+// mobile app's `bare-pack` so this check keeps scanning with the same lexer the
+// shipped bundle is actually built with.
 const BUNDLER_SPEC = 'bare-pack@1.5.1'
-const LEXER_SPEC = 'bare-module-lexer@1.6.6'
+// `bare-pack` pulls `bare-module-lexer` transitively (via `bare-module-traverse`),
+// so it is pinned through an npm override in the temp install. 1.6.6 (2026-09-03)
+// ships prebuilds that call node_api_is_sharedarraybuffer, which Node added only
+// in 22.21.0 / 24.9.0; 1.6.3 is the last release that loads on every Node this
+// repo's CI uses, so it stays pinned until upstream ships a build that does not
+// need the symbol.
+const LEXER_OVERRIDES = { [LEXER_PACKAGE]: '1.6.3' }
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
 // Directory names that never enter a mobile bundle. Generators under `scripts/`
 // and fixtures under `test/` embed require-looking strings in output text
@@ -79,15 +81,17 @@ function collectScripts(directory) {
 
 function installBundler() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bundler-requires-'))
+  fs.writeFileSync(
+    path.join(root, 'package.json'),
+    JSON.stringify({ name: 'bundler-requires', private: true, overrides: LEXER_OVERRIDES })
+  )
   const result = spawnSync(
     'npm',
-    ['install', '--no-save', '--no-audit', '--no-fund', '--prefix', root, BUNDLER_SPEC, LEXER_SPEC],
+    ['install', '--no-save', '--no-audit', '--no-fund', '--prefix', root, BUNDLER_SPEC],
     { encoding: 'utf8' }
   )
   if (result.status !== 0) {
-    throw new Error(
-      `failed to install ${BUNDLER_SPEC} ${LEXER_SPEC}: ${result.stderr || result.stdout}`
-    )
+    throw new Error(`failed to install ${BUNDLER_SPEC}: ${result.stderr || result.stdout}`)
   }
   return path.join(root, 'node_modules', 'bare-pack', 'package.json')
 }
