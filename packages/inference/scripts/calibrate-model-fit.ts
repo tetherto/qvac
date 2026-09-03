@@ -505,8 +505,10 @@ async function main() {
     console.log('\nre-run with --write to update the fixture')
   }
 
-  // Non-zero so the CI job cannot rot green on a failed gate.
-  if (!holds) Bare.exit(1)
+  // Exit explicitly either way. The registry client keeps handles open, so a
+  // returning main() leaves the process alive until the job times out — and the
+  // fixture, already written, never reaches the upload step.
+  Bare.exit(holds ? 0 : 1)
 }
 
 main().catch((error) => {
