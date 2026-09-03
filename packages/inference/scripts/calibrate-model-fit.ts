@@ -180,6 +180,25 @@ async function readGpuUsedBytes() {
   )
 }
 
+// The driver frees device memory asynchronously, so a fixed settle can read a
+// baseline that still holds the previous load: one repeat measured 1781 MiB
+// against 690 for the same model. Wait for two readings to agree instead.
+const GPU_SETTLE_TOLERANCE_BYTES = 16 * 1024 * 1024
+const GPU_SETTLE_ATTEMPTS = 40
+
+async function settledGpuUsedBytes() {
+  let previous = await readGpuUsedBytes()
+  for (let attempt = 0; attempt < GPU_SETTLE_ATTEMPTS; attempt++) {
+    await settle()
+    const current = await readGpuUsedBytes()
+    if (Math.abs(current - previous) <= GPU_SETTLE_TOLERANCE_BYTES) return current
+    previous = current
+  }
+  throw new Error(
+    `GPU memory did not settle within ${(GPU_SETTLE_ATTEMPTS * SETTLE_MS) / 1000}s; the device is not idle enough to calibrate`
+  )
+}
+
 // Label for the backend in play, recorded with the coefficients because the
 // buffers they measure are allocated by the backend. Driver order is what
 // llama.cpp prefers, so the label matches the likely choice.
@@ -251,7 +270,7 @@ async function measure(
   if (!profile?.ggufFacts) throw new Error(`no GGUF facts for ${name}`)
 
   await settle()
-  const before = gpuPass ? await readGpuUsedBytes() : rssBytes()
+  const before = gpuPass ? await settledGpuUsedBytes() : rssBytes()
 
   const modelId = await withTimeout(
     loadModel({
@@ -268,7 +287,7 @@ async function measure(
   )
 
   await settle()
-  const afterLoad = gpuPass ? await readGpuUsedBytes() : rssBytes()
+  const afterLoad = gpuPass ? await settledGpuUsedBytes() : rssBytes()
 
   // The RSS sampler cannot follow device memory — that counter is only readable
   // through an async collector call. It costs nothing to skip: llama.cpp

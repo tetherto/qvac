@@ -120,14 +120,6 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
       ? gpuBudget(gpuTarget, platform)
       : resolveBudget(resources, platform, basis, reasons)
 
-  // Windows pays for a GPU load in system RAM as well: loading a 2382 MiB model
-  // onto the card raised RSS by 2918 MiB there, against 868 MiB on linux. A
-  // VRAM-only bound would pass a host with the card for it but not the RAM.
-  const alsoBoundBySystemMemory =
-    gpuMode && platform === 'win32-x64'
-      ? resolveBudget(resources, platform, 'system-memory', [])
-      : undefined
-
   if (!platform) {
     reasons.push('the runtime platform is not one this assessment covers')
   } else if (!effectiveCalibration) {
@@ -167,18 +159,8 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     reasons.push('at least one model could not be estimated, so the combined verdict is unknown')
   }
 
-  let verdict: ModelFitVerdict =
+  const verdict: ModelFitVerdict =
     !budget || !combined ? 'unknown' : compare(combined, budget.availableAfterReserveBytes)
-
-  if (combined && alsoBoundBySystemMemory) {
-    const systemVerdict = compare(combined, alsoBoundBySystemMemory.availableAfterReserveBytes)
-    if (systemVerdict !== verdict) {
-      reasons.push(
-        'on Windows a GPU load is also paid for in system RAM, so the verdict is the more pessimistic of the device and system budgets'
-      )
-    }
-    verdict = worst(verdict, systemVerdict)
-  }
 
   if (budget && combined) {
     reasons.push(
@@ -360,48 +342,48 @@ function backendOf(gpu: GPUResourceCapabilities): string | undefined {
   return undefined
 }
 
-function declaredMemory(gpu: GPUResourceCapabilities): number {
-  return gpu.memoryTotalBytes.status === 'supported' ? gpu.memoryTotalBytes.value : 0
-}
-
 /**
- * Picks the discrete GPU whose memory can carry a budget.
+ * Picks the discrete GPU whose memory can carry a budget, or nothing.
  *
  * A unified-memory GPU is excluded: its allocation is system RAM, which the
  * system basis already bounds. The sample metrics are only `supported` when
  * the collector established they describe that device's own pool, so an
- * integrated GPU reporting the shared pool never reaches here. Largest
- * dedicated device first — a host can list an iGPU ahead of the card in use.
+ * integrated GPU reporting the shared pool never reaches here.
+ *
+ * Refuses outright when more than one dedicated GPU qualifies. The engine
+ * picks the first eligible ggml device (`chooseBackend`), an order this side
+ * cannot see, so choosing between them here risks budgeting one card while
+ * inference runs on another. One candidate is the only unambiguous case.
  */
 function resolveGpuTarget(resources: SystemResources): GpuTarget | undefined {
   const gpus = resources.capabilities.gpus
   const samples = resources.sample?.gpus
   if (gpus.status !== 'supported' || samples?.status !== 'supported') return undefined
 
-  const dedicated = gpus.value
+  const eligible = gpus.value
     .filter((gpu) => gpu.unifiedMemory.status === 'supported' && !gpu.unifiedMemory.value)
-    .sort((a, b) => declaredMemory(b) - declaredMemory(a))
+    .map((gpu) => ({ gpu, sample: samples.value.find((entry) => entry.id === gpu.id) }))
+    .filter(({ gpu, sample }) => {
+      if (!sample) return false
+      if (sample.memoryTotalBytes.status !== 'supported') return false
+      if (sample.memoryUsedBytes.status !== 'supported') return false
+      if (sample.memoryTotalBytes.value <= 0) return false
+      if (sample.memoryUsedBytes.value > sample.memoryTotalBytes.value) return false
+      return backendOf(gpu) !== undefined
+    })
 
-  for (const gpu of dedicated) {
-    const sample = samples.value.find((entry) => entry.id === gpu.id)
-    if (!sample) continue
-    if (sample.memoryTotalBytes.status !== 'supported') continue
-    if (sample.memoryUsedBytes.status !== 'supported') continue
+  if (eligible.length !== 1) return undefined
 
-    const backend = backendOf(gpu)
-    if (!backend) continue
-    if (sample.memoryTotalBytes.value <= 0) continue
-    if (sample.memoryUsedBytes.value > sample.memoryTotalBytes.value) continue
+  const { gpu, sample } = eligible[0]!
+  if (sample?.memoryTotalBytes.status !== 'supported') return undefined
+  if (sample.memoryUsedBytes.status !== 'supported') return undefined
 
-    return {
-      backend,
-      totalBytes: sample.memoryTotalBytes.value,
-      usedBytes: sample.memoryUsedBytes.value,
-      ...(gpu.name.status === 'supported' && { device: gpu.name.value })
-    }
+  return {
+    backend: backendOf(gpu)!,
+    totalBytes: sample.memoryTotalBytes.value,
+    usedBytes: sample.memoryUsedBytes.value,
+    ...(gpu.name.status === 'supported' && { device: gpu.name.value })
   }
-
-  return undefined
 }
 
 function gpuBudget(target: GpuTarget, platform: ModelFitPlatform | undefined) {
@@ -414,12 +396,12 @@ function gpuBudget(target: GpuTarget, platform: ModelFitPlatform | undefined) {
   }
 }
 
-/** The more pessimistic of two verdicts. */
-function worst(a: ModelFitVerdict, b: ModelFitVerdict): ModelFitVerdict {
-  if (a === 'likely-too-large' || b === 'likely-too-large') return 'likely-too-large'
-  if (a === 'unknown' || b === 'unknown') return 'unknown'
-  return 'likely-fits'
-}
+// Windows is deliberately absent from the GPU basis: its GPU readings are
+// per-process (DXGI CurrentUsage and Budget), so the collector never grades
+// them device-scoped and no GPU target resolves there. When it does become
+// available, note that a GPU load there is also paid for in system RAM —
+// loading a 2382 MiB model onto the card raised RSS by 2918 MiB, against
+// 868 MiB on linux — so it will need both bounds, on every verdict.
 
 /**
  * Picks the budget basis for a platform.

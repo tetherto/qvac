@@ -32,6 +32,7 @@ function createFixture(options?: {
   gpuUnifiedMemory?: boolean
   gpuSampleMemoryTotal?: number
   emptyGPUInventory?: boolean
+  platform?: string
 }) {
   const calls = {
     createCPU: 0,
@@ -118,6 +119,7 @@ function createFixture(options?: {
   const dependencies = {
     cpuArchitectures: options?.cpuArchitectures ?? [1, 2, 3, 4],
     gpuTypes: options?.gpuTypes ?? [1, 2, 3, 4],
+    platform: options?.platform ?? 'linux',
     createCPUInfo() {
       calls.createCPU++
       if (options?.missingCPUCollector) return undefined
@@ -326,6 +328,29 @@ test('rejects sampled GPU memory that disagrees with the declared memory', (t) =
       status: 'unverified',
       reason: 'GPU memory usage scope is unverified'
     })
+  }
+})
+
+// DXGI reports what this process uses and may use, not what the device holds.
+// On an idle machine Budget looks exactly like VRAM, so the agreement check
+// cannot catch it — only the platform can.
+test('rejects sampled GPU memory on windows however well it agrees', (t) => {
+  const collector = createSystemResourceCollector(
+    createFixture({
+      platform: 'win32',
+      gpuUnifiedMemory: false,
+      gpuSampleMemoryTotal: 8_000
+    }).dependencies
+  )
+  const { gpus } = collector.sample()
+
+  t.is(gpus.status, 'supported')
+  if (gpus.status === 'supported') {
+    t.alike(gpus.value[0]?.memoryTotalBytes, {
+      status: 'unverified',
+      reason: 'Windows reports per-process GPU usage and budget, not device-wide memory'
+    })
+    t.is(gpus.value[0]?.memoryUsedBytes.status, 'unverified')
   }
 })
 

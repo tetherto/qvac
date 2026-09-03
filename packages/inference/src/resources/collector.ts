@@ -31,6 +31,11 @@ const GPU_SOURCE = 'bare-gpu-info'
 const GPU_MEMORY_SCOPE_REASON = 'GPU memory scope is unverified'
 const GPU_UNIFIED_MEMORY_REASON =
   'GPU shares system memory, so its reading is not a separate device pool'
+// DXGI reports CurrentUsage and Budget, which are what this process is using
+// and may use — not what the device holds. An idle machine makes Budget look
+// like VRAM, so no value-level check can separate them; only the platform can.
+const GPU_PROCESS_SCOPE_REASON =
+  'Windows reports per-process GPU usage and budget, not device-wide memory'
 
 // A sampled total that matches what the device declares for itself is
 // describing that device's own pool. Measured: a discrete card agrees within a
@@ -185,12 +190,17 @@ function failedGPUSample(id: string, reason: string) {
   } satisfies GPUResourceSample
 }
 
-function normalizeGPUSample(id: string, usage: NativeGPUUsage, device: GPUMemoryFacts | undefined) {
-  const deviceScoped = gpuMemoryIsDeviceScoped(
-    device?.declaredMemory,
-    device?.unifiedMemory,
-    usage.memoryTotal
-  )
+function normalizeGPUSample(
+  id: string,
+  usage: NativeGPUUsage,
+  device: GPUMemoryFacts | undefined,
+  platform: string
+) {
+  const processScoped = platform === 'win32'
+  const deviceScoped =
+    !processScoped &&
+    gpuMemoryIsDeviceScoped(device?.declaredMemory, device?.unifiedMemory, usage.memoryTotal)
+  const scopeReason = processScoped ? GPU_PROCESS_SCOPE_REASON : GPU_MEMORY_SCOPE_REASON
 
   return {
     id,
@@ -200,13 +210,9 @@ function normalizeGPUSample(id: string, usage: NativeGPUUsage, device: GPUMemory
     memoryUsedBytes: normalizeSampledGPUMemory(
       usage.memoryUsed,
       deviceScoped,
-      'GPU memory usage scope is unverified'
+      processScoped ? GPU_PROCESS_SCOPE_REASON : 'GPU memory usage scope is unverified'
     ),
-    memoryTotalBytes: normalizeSampledGPUMemory(
-      usage.memoryTotal,
-      deviceScoped,
-      GPU_MEMORY_SCOPE_REASON
-    ),
+    memoryTotalBytes: normalizeSampledGPUMemory(usage.memoryTotal, deviceScoped, scopeReason),
     powerWatts: normalizeNonNegativeMetric(usage.power, gpuDeviceProvenance),
     temperatureCelsius: normalizeNonNegativeMetric(usage.temperature, gpuDeviceProvenance)
   } satisfies GPUResourceSample
@@ -315,7 +321,12 @@ export function createSystemResourceCollector(dependencies: ResourceCollectorDep
     const context = gpuContext
     const samples = gpuIds.map((id, index) => {
       try {
-        return normalizeGPUSample(id, context.sample(index), gpuMemoryFacts[index])
+        return normalizeGPUSample(
+          id,
+          context.sample(index),
+          gpuMemoryFacts[index],
+          dependencies.platform
+        )
       } catch {
         return failedGPUSample(id, 'GPU resource sampling failed')
       }

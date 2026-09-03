@@ -1129,34 +1129,51 @@ test('assess: a GPU with too little VRAM is too large even on a roomy host', (t)
   t.is(result.verdict, 'likely-too-large')
 })
 
-// Loading to VRAM on Windows also costs system RAM, so a host with the card
-// but not the RAM must not read as a fit.
-test('assess: windows takes the more pessimistic of the device and system budgets', (t) => {
-  const roomy = assessModelFitFromResources({
-    models: [candidate()],
-    execution: 'sequential',
-    resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
-    platform: 'win32-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
-  })
-  t.is(roomy.verdict, 'likely-fits')
+// The engine takes the first eligible ggml device, an order this side cannot
+// see, so a second candidate makes "which card" a guess.
+test('assess: two dedicated GPUs refuse a device budget rather than guess', (t) => {
+  const resources = discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB })
+  const gpus = resources.capabilities.gpus
+  const samples = resources.sample!.gpus
+  if (gpus.status === 'supported' && samples.status === 'supported') {
+    gpus.value.push({ ...gpus.value[0]!, id: 'gpu1' })
+    samples.value.push({ ...samples.value[0]!, id: 'gpu1' })
+  }
 
-  const starvedHost = assessModelFitFromResources({
+  const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
-    resources: discreteGpuResources({
-      vramTotalBytes: 20 * GIB,
-      vramUsedBytes: 1 * GIB,
-      systemTotalBytes: 8 * GIB,
-      systemUsedBytes: 7 * GIB
-    }),
+    resources,
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'unknown')
+  t.is(result.basis, 'system-memory')
+})
+
+// Windows GPU readings are per-process, so the collector never grades them
+// device-scoped and no GPU budget can form.
+test('assess: unverified GPU samples cannot form a device budget', (t) => {
+  const resources = discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB })
+  const samples = resources.sample!.gpus
+  if (samples.status === 'supported') {
+    samples.value[0]!.memoryTotalBytes = { status: 'unverified' }
+    samples.value[0]!.memoryUsedBytes = { status: 'unverified' }
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources,
     platform: 'win32-x64',
     calibration: calibration(),
     resolveGpuCalibration: () => calibration(),
     resolveProfile: () => profile()
   })
-  t.is(starvedHost.verdict, 'likely-too-large')
-  t.ok(starvedHost.reasons.some((r) => r.includes('system RAM')))
+
+  t.is(result.verdict, 'unknown')
+  t.is(result.basis, 'system-memory')
 })
