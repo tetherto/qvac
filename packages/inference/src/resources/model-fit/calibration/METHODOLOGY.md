@@ -27,14 +27,20 @@ for the per-layer accounting.
 `scripts/calibrate-model-fit.ts` on the platform being calibrated (bare ≥ 1.30
 runs it directly via type-stripping):
 
-llama.cpp allocates **everything at load** — weights, KV cache, engine
+llama.cpp allocates **almost everything at load** — weights, KV cache, engine
 overhead and the context-scaled compute buffers — so a load's RSS delta is the
-whole cost and the delta during a completion is ~0. The first real runs on
-Apple silicon confirmed this, which is why the fit reads persistent deltas
-rather than working samples. The harness still samples RSS across one
-completion per point and warns if that working delta grows past 64 MiB: that
-would mean the engine's allocation behaviour changed and this methodology
-needs re-checking.
+bulk of the cost, and the fit reads persistent deltas rather than working
+samples.
+
+What a completion adds on top is measured separately, into
+`workingPeakBytes`, and is not part of the fit. It was long believed to be
+zero, on evidence that turned out to be a bug: the harness awaited a property
+`CompletionRun` does not have, so the sampler stopped before any token was
+generated and every point recorded 0. With that fixed it is 2–7 MiB on linux
+and windows, and 73 MiB on darwin-x64 — above the harness's own 64 MiB drift
+threshold, which had therefore never fired. It belongs in `working` rather than
+in the resident terms because it is released afterwards: `sequential`
+aggregation counts it once, `concurrent` counts it per model.
 
 On platforms where a GPU means discrete device memory (linux, windows,
 darwin-x64) the harness loads with `device: 'cpu'`: RSS cannot observe VRAM,
@@ -87,11 +93,34 @@ no integrated ggml device would otherwise fall back to the CPU inside
    artifact sizes pin the ratio.
 4. Bounds are set at ±20% of the fit, with the fixed-overhead upper bound
    additionally floored at the worst point observed above the fitted plane — an
-   upper bound that does not cover an observed point is not an upper bound.
+   upper bound that does not cover an observed point is not an upper bound. The
+   weight ratio carries 1% rather than 20%, because it multiplies the largest
+   term: 20% of a 5 GB model would be a gigabyte of invented headroom, and 0%
+   is what cost linux-x64 a held-out failure (below).
 5. **Held-out check.** A fourth model, excluded from the fit, is measured the
-   same three times. `validated` is set only when its worst measured total
-   lands at or below the predicted upper bound. A failing held-out check means
-   the coefficients do not ship.
+   same three times, and its predicted upper bound is assembled the way the
+   estimator assembles one — the working peak included. `validated` is set only
+   when the worst measured total lands at or below it. A failing held-out check
+   means the coefficients do not ship.
+
+### Why the weight ratio needs a margin of its own
+
+`weightUpperCoeff` shipped as `max(1, fittedRatio)`, so a fitted 0.995 became
+exactly 1.000: a claim that resident weights never exceed the artifact by a
+single byte, while every other coefficient carried ±20%.
+
+linux-x64 failed its held-out check on that (run 33795110381): 5.83 GiB
+measured against 5.82 predicted. The fit there put the intercept at ~0 —
+correctly, since an anonymous load makes resident ≈ artifact + cache almost
+exactly — which left nothing to absorb the extrapolation from a 2.5 GB largest
+fit point to a 4.7 GB held-out model, whose real fixed cost measured ~21 MiB.
+Two earlier runs on the same host passed by 0.2% and 1%, so the gate was a coin
+flip rather than a bound.
+
+1% is the scale the fitted slope moves by between runs on one host (0.995 and
+0.997 on linux, 1.078 and 1.079 on arm). On a 5 GB model it is ~50 MiB, against
+an interactive reserve of 2 GiB — two orders of magnitude inside the headroom
+the policy already keeps.
 
 ## RSS and mmap
 
