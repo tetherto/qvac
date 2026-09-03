@@ -108,11 +108,11 @@ reported in `assumptions`.
 
 ## Supported surface
 
-|           | Phase 1                                                                 |
-| --------- | ----------------------------------------------------------------------- |
-| Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription` |
-| Workloads | `llm`, `audio`                                                          |
-| Platforms | `darwin-arm64` — see the calibration status below                       |
+|           | Phase 1                                                                     |
+| --------- | --------------------------------------------------------------------------- |
+| Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription`     |
+| Workloads | `llm`, `audio`                                                              |
+| Platforms | `darwin-arm64`, `linux-x64`, `win32-x64` — see the calibration status below |
 
 Everything outside this table assesses as `unknown`. Parakeet, translation, TTS,
 OCR, diffusion, and the vision projector (`mmproj-*`) half of a multimodal load
@@ -121,7 +121,10 @@ are phase 2.
 **Calibration status.** A platform only reports estimates once its coefficients
 have been measured on real hardware and a held-out model has validated inside
 the bounds. `darwin-arm64` has cleared that (measured on an Apple M4 Pro
-against the Metal backend), so LLM workloads return real verdicts there. Audio
+against the Metal backend), so LLM workloads return real verdicts there.
+`linux-x64` and `win32-x64` have cleared it too, measured with the CPU backend
+forced — they return real verdicts on CPU-only machines, and `unknown` on any
+host reporting a discrete GPU (see below). Audio
 workloads still return `unknown` on every platform: their coefficients await
 the harness's whisper pass, and the estimator refuses the unmeasured
 placeholders rather than consuming them. Every other platform returns `unknown`

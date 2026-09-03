@@ -4,6 +4,8 @@ import type {
   PlatformCalibration
 } from '@/resources/model-fit/types'
 import { DARWIN_ARM64_CALIBRATION } from '@/resources/model-fit/calibration/darwin-arm64'
+import { LINUX_X64_CALIBRATION } from '@/resources/model-fit/calibration/linux-x64'
+import { WIN32_X64_CALIBRATION } from '@/resources/model-fit/calibration/win32-x64'
 
 /**
  * Every platform this feature has coefficients for.
@@ -15,7 +17,9 @@ import { DARWIN_ARM64_CALIBRATION } from '@/resources/model-fit/calibration/darw
 export const CALIBRATION: CalibrationFixture = {
   schemaVersion: 1,
   platforms: {
-    'darwin-arm64': DARWIN_ARM64_CALIBRATION
+    'darwin-arm64': DARWIN_ARM64_CALIBRATION,
+    'linux-x64': LINUX_X64_CALIBRATION,
+    'win32-x64': WIN32_X64_CALIBRATION
   }
 }
 

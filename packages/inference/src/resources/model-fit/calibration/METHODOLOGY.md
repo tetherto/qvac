@@ -185,13 +185,19 @@ one.
 
 ## Status
 
-| Platform     | Coefficients                              | Validated |
-| ------------ | ----------------------------------------- | --------- |
-| darwin-arm64 | measured 2026-08-31 (Metal, Apple M4 Pro) | yes       |
+| Platform     | Coefficients                                         | Validated |
+| ------------ | ---------------------------------------------------- | --------- |
+| darwin-arm64 | measured 2026-08-31 (Metal, Apple M4 Pro)            | yes       |
+| linux-x64    | measured 2026-09-03 (CPU-forced, RTX 4000 SFF host)  | yes       |
+| win32-x64    | measured 2026-09-03 (CPU-forced, Intel UHD 770 host) | yes       |
 
 `darwin-arm64` was measured on an Apple M4 Pro against the Metal backend
 (`q8_0` KV cache): held-out Qwen3-8B landed at 5.28 GiB against a predicted
-upper of 5.34 GiB. LLM workloads return real verdicts there; audio workloads
+upper of 5.34 GiB. `linux-x64` and `win32-x64` were measured on CI (run 33758709253) with the CPU backend forced and weights loaded anonymously;
+held-out Qwen3-8B landed at 5.82 GiB against 5.83 predicted, and 5.84 GiB
+against 5.93, respectively. Both hosts report a discrete GPU, so those
+coefficients serve CPU-only machines on the same platform — a host with a GPU
+assesses as `unknown` regardless. LLM workloads return real verdicts there; audio workloads
 still return `unknown` because the harness has no whisper pass yet, and
 `estimateWhisper` refuses the zeroed audio coefficients rather than consuming
 them. Adding a platform means: run the harness with `--write`, add the module
