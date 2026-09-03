@@ -87,6 +87,14 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
+    # Rows sharing one self-hosted label (the two per-backend win32 GPU rows)
+    # land on runner slots of the same physical box; run them one at a time
+    # within a run so two full suites do not starve each other past the
+    # per-test timeout on the shared GPU and CPUs. Distinct labels get
+    # distinct groups and stay fully parallel.
+    concurrency:
+      group: tts-ggml-integration-${{ github.run_id }}-${{ matrix.runner || matrix.os }}
+      cancel-in-progress: false
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu != 'true' && '-gpu' || '' }}-integration-tests
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
