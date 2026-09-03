@@ -140,16 +140,28 @@ function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs: number, h
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
-/**
- * Best-effort label for the backend in play, from the drivers the resource
- * collector reports. Recorded with the coefficients because the buffers they
- * measure are allocated by the backend, while the fixture is keyed by platform.
- *
- * Ordered by what llama.cpp prefers, so the label matches the likely choice
- * rather than whichever driver happens to be listed first.
- */
+function metricValue(metric: unknown) {
+  const m = metric as { status?: string; value?: unknown } | undefined
+  return m?.status === 'supported' ? m.value : undefined
+}
+
+// Largest dedicated GPU first. The win25 runner reports an Intel iGPU ahead of
+// its RTX 4000, and first-wins named the iGPU as the device on every fixture.
+function byCapability(gpuList: readonly Record<string, unknown>[]) {
+  return [...gpuList].sort((a, b) => {
+    const dedicated = (gpu: Record<string, unknown>) =>
+      metricValue(gpu.unifiedMemory) === false ? 1 : 0
+    const memory = (gpu: Record<string, unknown>) =>
+      (metricValue(gpu.memoryTotalBytes) as number) ?? 0
+    return dedicated(b) - dedicated(a) || memory(b) - memory(a)
+  })
+}
+
+// Label for the backend in play, recorded with the coefficients because the
+// buffers they measure are allocated by the backend. Driver order is what
+// llama.cpp prefers, so the label matches the likely choice.
 function detectBackend(gpuList: readonly Record<string, unknown>[]) {
-  for (const gpu of gpuList) {
+  for (const gpu of byCapability(gpuList)) {
     const drivers = (gpu.drivers ?? {}) as Record<
       string,
       { status: string; value?: unknown } | undefined
@@ -162,9 +174,9 @@ function detectBackend(gpuList: readonly Record<string, unknown>[]) {
 }
 
 function gpuName(gpuList: readonly Record<string, unknown>[]) {
-  for (const gpu of gpuList) {
-    const name = gpu.name as { status: string; value?: string } | undefined
-    if (name?.status === 'supported' && name.value) return name.value
+  for (const gpu of byCapability(gpuList)) {
+    const name = metricValue(gpu.name)
+    if (typeof name === 'string' && name) return name
   }
   return undefined
 }
