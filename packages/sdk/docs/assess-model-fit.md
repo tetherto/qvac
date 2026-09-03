@@ -114,7 +114,7 @@ reported in `assumptions`.
 | --------- | --------------------------------------------------------------------------- |
 | Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription`     |
 | Workloads | `llm`, `audio`                                                              |
-| Platforms | `darwin-arm64`, `linux-x64`, `win32-x64` — see the calibration status below |
+| Platforms | every desktop except `win32-arm64` — see the calibration status below   |
 
 Everything outside this table assesses as `unknown`. Parakeet, translation, TTS,
 OCR, diffusion, and the vision projector (`mmproj-*`) half of a multimodal load
@@ -122,15 +122,15 @@ are phase 2.
 
 **Calibration status.** A platform only reports estimates once its coefficients
 have been measured on real hardware and a held-out model has validated inside
-the bounds. `darwin-arm64` (Apple M4 Pro, Metal), `linux-x64` and `win32-x64`
-have all cleared that for CPU-resident execution, and `linux-x64` on Vulkan has
-cleared it for GPU-resident execution too, so LLM workloads return real
-verdicts on those. Audio
-workloads still return `unknown` on every platform: their coefficients await
-the harness's whisper pass, and the estimator refuses the unmeasured
-placeholders rather than consuming them. Every other platform returns `unknown`
-until its own run lands. See
-`@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
+the bounds. `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64` and
+`win32-x64` have all cleared that, and `linux-x64` and `win32-x64` have cleared
+it for their GPUs as well, so LLM workloads return real verdicts there.
+`win32-arm64` cannot: no engine addon is built for it. Audio workloads still
+return `unknown` on every platform — their coefficients await the harness's
+whisper pass, and the estimator refuses the unmeasured placeholders rather than
+consuming them. See `@qvac/inference`'s
+`src/resources/model-fit/calibration/METHODOLOGY.md` for the per-platform
+numbers and for the GPU shapes that are still uncovered.
 
 **Desktops with a GPU.** On linux, Windows and Intel macOS the platform's own
 coefficients describe CPU-resident execution, so when a GPU is present the

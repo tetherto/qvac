@@ -513,9 +513,14 @@ function resolveGpuPlacement(resources: SystemResources): GpuPlacement | undefin
 
   if (deviceBacked.length === 0) {
     const shared = gpus[0]!
+    const backend = backendOf(shared)!
+    // Two integrated devices on different backends would need two fixtures and
+    // the engine picks one, so the same rule applies as for cards: no single
+    // set of coefficients, no estimate. They share the budget either way.
+    if (gpus.some((gpu) => backendOf(gpu) !== backend)) return undefined
     return {
       kind: 'shared',
-      backend: backendOf(shared)!,
+      backend,
       ...(shared.name.status === 'supported' && { device: shared.name.value })
     }
   }

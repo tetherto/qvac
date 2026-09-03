@@ -4,10 +4,13 @@ import type {
   PlatformCalibration
 } from '@/resources/model-fit/types'
 import { DARWIN_ARM64_CALIBRATION } from '@/resources/model-fit/calibration/darwin-arm64'
+import { DARWIN_X64_CALIBRATION } from '@/resources/model-fit/calibration/darwin-x64'
 import { LINUX_ARM64_CALIBRATION } from '@/resources/model-fit/calibration/linux-arm64'
 import { LINUX_X64_CALIBRATION } from '@/resources/model-fit/calibration/linux-x64'
 import { LINUX_X64_VULKAN_CALIBRATION } from '@/resources/model-fit/calibration/linux-x64-vulkan'
 import { WIN32_X64_CALIBRATION } from '@/resources/model-fit/calibration/win32-x64'
+import { WIN32_X64_VULKAN_CALIBRATION } from '@/resources/model-fit/calibration/win32-x64-vulkan'
+import { WIN32_X64_VULKAN_SHARED_CALIBRATION } from '@/resources/model-fit/calibration/win32-x64-vulkan-shared'
 
 /**
  * Every platform this feature has coefficients for.
@@ -20,14 +23,18 @@ export const CALIBRATION: CalibrationFixture = {
   schemaVersion: 1,
   platforms: {
     'darwin-arm64': DARWIN_ARM64_CALIBRATION,
+    'darwin-x64': DARWIN_X64_CALIBRATION,
     'linux-arm64': LINUX_ARM64_CALIBRATION,
     'linux-x64': LINUX_X64_CALIBRATION,
     'win32-x64': WIN32_X64_CALIBRATION
   },
   gpuPlatforms: {
-    'linux-x64:vulkan': LINUX_X64_VULKAN_CALIBRATION
+    'linux-x64:vulkan': LINUX_X64_VULKAN_CALIBRATION,
+    'win32-x64:vulkan': WIN32_X64_VULKAN_CALIBRATION
   },
-  sharedGpuPlatforms: {}
+  sharedGpuPlatforms: {
+    'win32-x64:vulkan': WIN32_X64_VULKAN_SHARED_CALIBRATION
+  }
 }
 
 /**
@@ -70,6 +77,9 @@ export function getGpuCalibration(
  * Distinct from `getGpuCalibration` because an integrated GPU allocates out of
  * system RAM: the buffers are the backend's, but the budget they are spent
  * against is the system one, and no other fixture describes that combination.
+ * The measured gap is large — `win32-x64:vulkan` fits a weight ratio of 1.02
+ * against the card's own memory and 2.04 against system RAM on the same host,
+ * because an integrated load holds the weights mapped and copied at once.
  *
  * @returns `undefined` when that pair has not been measured. The host then
  *   assesses as `unknown` rather than borrowing the platform's CPU-forced

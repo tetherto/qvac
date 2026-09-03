@@ -15,6 +15,7 @@ load can tell you. A platform without validated coefficients here assesses as
 | KV cache                  | Computed from `ggufFacts` and the requested context        |
 | Fixed runtime overhead    | Measured (`fixedOverheadBytes`)                            |
 | Compute/graph buffers     | Measured, per context token (`computeBufferBytesPerToken`) |
+| One operation's peak      | Measured (`workingPeakBytes`)                              |
 | Whisper 30 s window       | Measured (`audioWindowBytes`)                              |
 | Whisper streaming session | Measured (`audioStreamingBytes`)                           |
 
@@ -36,9 +37,9 @@ What a completion adds on top is measured separately, into
 `workingPeakBytes`, and is not part of the fit. It was long believed to be
 zero, on evidence that turned out to be a bug: the harness awaited a property
 `CompletionRun` does not have, so the sampler stopped before any token was
-generated and every point recorded 0. With that fixed it is 2–7 MiB on linux
-and windows, and 73 MiB on darwin-x64 — above the harness's own 64 MiB drift
-threshold, which had therefore never fired. It belongs in `working` rather than
+generated and every point recorded 0. With that fixed it is 3–9 MiB on linux,
+windows and Apple silicon, and 73 MiB on darwin-x64 — above the harness's own
+64 MiB drift threshold, which had therefore never fired. It belongs in `working` rather than
 in the resident terms because it is released afterwards: `sequential`
 aggregation counts it once, `concurrent` counts it per model.
 
@@ -272,28 +273,41 @@ one.
 
 ## Status
 
-| Platform            | Coefficients                                         | Validated |
-| ------------------- | ---------------------------------------------------- | --------- |
-| darwin-arm64        | measured 2026-08-31 (Metal, Apple M4 Pro)            | yes       |
-| linux-x64           | measured 2026-09-03 (CPU-forced, RTX 4000 SFF host)  | yes       |
-| win32-x64           | measured 2026-09-03 (CPU-forced, RTX 4000 SFF host)  | yes       |
-| linux-x64 \| vulkan | measured 2026-09-03 (GPU-resident, RTX 4000 SFF Ada) | yes       |
+| Platform                    | Measured                                     | Held-out Qwen3-8B, measured / predicted | Run         |
+| --------------------------- | -------------------------------------------- | --------------------------------------- | ----------- |
+| darwin-arm64                | Metal, Apple M4 Max                          | 5.28 / 5.41 GiB                         | 33796876756 |
+| darwin-x64                  | CPU-forced, macos-15-large (hosted)          | 5.92 / 6.07 GiB                         | 33796616019 |
+| linux-arm64                 | CPU-forced, ubuntu-22.04-arm (hosted)        | 5.87 / 6.45 GiB                         | 33796582408 |
+| linux-x64                   | CPU-forced, RTX 4000 SFF host                | 5.81 / 5.89 GiB                         | 33796564146 |
+| win32-x64                   | CPU-forced, RTX 4000 SFF host                | 5.87 / 5.99 GiB                         | 33796554816 |
+| linux-x64 \| vulkan         | GPU-resident, RTX 4000 SFF Ada               | 5.25 / 5.71 GiB                         | 33796564146 |
+| win32-x64 \| vulkan         | GPU-resident, RTX 4000 SFF Ada (DXGI budget) | 5.25 / 5.70 GiB                         | 33796554816 |
+| win32-x64 \| vulkan, shared | Integrated, Intel UHD Graphics 770           | 9.72 / 10.53 GiB                        | 33796554816 |
 
-`darwin-arm64` was measured on an Apple M4 Pro against the Metal backend
-(`q8_0` KV cache): held-out Qwen3-8B landed at 5.28 GiB against a predicted
-upper of 5.34 GiB. `linux-x64` and `win32-x64` were measured on CI (run 33777205517) with the CPU backend forced and weights loaded anonymously;
-held-out Qwen3-8B landed at 5.82 GiB against 5.82 predicted, and 5.84 against
-5.94. Both hosts report a discrete GPU, so those coefficients serve CPU-only
-machines on the same platform.
+Every row is `validated: true`: its held-out model landed inside the bound, and
+no run shipped from a log carrying a busy-host warning.
 
-`linux-x64 | vulkan` is the first GPU-resident entry, measured on the same run
-against the RTX 4000's own memory: held-out Qwen3-8B at 5.25 GiB against 5.67
-predicted. It is keyed by backend because a platform can run several, and it
-applies only where a single dedicated GPU is present — with more than one the
-estimator cannot tell which card the engine will take, and returns `unknown`.
-There is no `win32-x64` GPU entry: Windows reports per-process GPU memory
-(DXGI `CurrentUsage` and `Budget`), which cannot bound a device. LLM workloads return real verdicts there; audio workloads
-still return `unknown` because the harness has no whisper pass yet, and
-`estimateWhisper` refuses the zeroed audio coefficients rather than consuming
-them. Adding a platform means: run the harness with `--write`, add the module
-to `calibration/index.ts`, run prettier, and update the table above.
+Two of the rows are worth reading twice.
+
+`win32-x64 | vulkan, shared` fits a weight ratio of **2.04** where the same
+host's device-resident row fits 1.02 and its CPU row 1.01. An integrated GPU
+allocates out of system RAM, so a load holds the weights mapped _and_ copied
+into the Vulkan buffers at once, and its held-out peak is 9.72 GiB where the
+CPU coefficients would have predicted 5.9. That is why an integrated host gets
+its own fixture rather than the platform's.
+
+`darwin-x64` is the one platform whose working peak matters: a completion added
+72–73 MiB there on Llama-3.2-1B, against 2–13 MiB everywhere else.
+
+### Not covered, and what each needs
+
+| Gap                         | What it needs                                                                                                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| linux-x64, linux-arm64 iGPU | a CI host with integrated graphics; both linux runners have discrete NVIDIA cards                                                                                                                   |
+| darwin-x64 GPU              | a real Intel Mac. `macos-15-large` is a VM whose Metal device reports as "Apple Paravirtual device" with `hasUnifiedMemory: false`, so calibrating it would describe a hypervisor rather than a GPU |
+| win32-arm64                 | an engine addon built for it; `@qvac/llm-llamacpp` ships nine prebuild targets and that is not one                                                                                                  |
+| CUDA, ROCm, Level Zero      | the addon does not build them — `prebuilds-llm-llamacpp.yml` enables the Vulkan SDK only                                                                                                            |
+| Audio, every platform       | a whisper pass in the harness. `estimateWhisper` refuses the zeroed audio coefficients rather than consuming them                                                                                   |
+
+Adding a platform means: run the harness with `--write`, add the module to
+`calibration/index.ts`, run prettier, and update the table above.

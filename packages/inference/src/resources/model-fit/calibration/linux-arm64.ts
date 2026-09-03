@@ -7,10 +7,14 @@ import type { PlatformCalibration } from '@/resources/model-fit/types'
  * to this file for how the numbers are derived and validated.
  */
 export const LINUX_ARM64_CALIBRATION: PlatformCalibration = {
-  weightUpperCoeff: 1.079,
+  weightUpperCoeff: 1.088,
+  workingPeakBytes: {
+    lower: 0,
+    upper: 8178893
+  },
   fixedOverheadBytes: {
-    lower: 101181294,
-    upper: 233635543
+    lower: 108926309,
+    upper: 238075911
   },
   computeBufferBytesPerToken: {
     lower: 0,
