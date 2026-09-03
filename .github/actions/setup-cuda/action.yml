@@ -33,7 +33,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.os }}-${{ runner.arch }}-r1
+        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.os }}-${{ runner.arch }}-r2
 
     - name: Download + verify + assemble CUDA toolkit
       if: steps.cache-cuda.outputs.cache-hit != 'true'
@@ -83,17 +83,36 @@ runs:
         esac
 
         prefix="$RUNNER_TEMP/cuda/toolkit"
+        # git-bash tools want POSIX paths: GNU tar parses the drive colon in
+        # C:\... as a remote-host spec ("Cannot connect to C"). The exported
+        # CUDA_PATH/CUDACXX keep the Windows form CMake needs.
+        if command -v cygpath >/dev/null 2>&1; then
+          prefix="$(cygpath -u "$prefix")"
+          dl_dir="$(cygpath -u "$RUNNER_TEMP")"
+        else
+          dl_dir="$RUNNER_TEMP"
+        fi
         mkdir -p "$prefix"
+        # The Windows components are .zip, which GNU tar cannot read, and
+        # which of the two tars a runner's bash resolves varies by machine.
+        # Use the system bsdtar explicitly on Windows (zip-capable, native
+        # Windows paths); plain tar handles the Linux .tar.xz archives.
+        extract_archive() {
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            /c/Windows/System32/tar.exe -xf "$(cygpath -w "$1")" \
+              --strip-components=1 -C "$(cygpath -w "$prefix")"
+          else
+            tar -xf "$1" --strip-components=1 -C "$prefix"
+          fi
+        }
         echo "$COMPONENTS" | while read -r rel sha; do
           [ -z "$rel" ] && continue
           url="https://developer.download.nvidia.com/compute/cuda/redist/$rel"
-          out="$RUNNER_TEMP/$(basename "$rel")"
+          out="$dl_dir/$(basename "$rel")"
           echo "Downloading $url"
           curl -fsSL --retry 3 "$url" -o "$out"
           echo "$sha  $out" | sha256sum -c -
-          # tar auto-detects: GNU tar handles the Linux .tar.xz archives and
-          # the Windows runner's bsdtar handles the .zip ones.
-          tar -xf "$out" --strip-components=1 -C "$prefix"
+          extract_archive "$out"
           rm -f "$out"
         done
         # Redist archives ship lib/, not lib64/; some Linux consumers look
