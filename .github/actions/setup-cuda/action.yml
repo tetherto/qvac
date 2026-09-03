@@ -18,8 +18,11 @@ inputs:
       and part of the cache key; changing the components means updating the
       COMPONENTS list in this action, from
       https://developer.download.nvidia.com/compute/cuda/redist/redistrib_<version>.json.
+
+      QVAC-24470: this is deliberately NOT the newest release. Read the PTX note
+      on the COMPONENTS block before bumping it.
     required: false
-    default: "13.2.0"
+    default: "13.0.3"
 
 runs:
   using: composite
@@ -43,13 +46,13 @@ runs:
       uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r2
+        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r3
 
     - name: Download + verify + assemble CUDA toolkit
       if: steps.cache-cuda.outputs.cache-hit != 'true'
       shell: bash
       run: |
-        # Pinned against redistrib_13.2.0.json (supply-chain pin: a silent
+        # Pinned against redistrib_13.0.3.json (supply-chain pin: a silent
         # re-upload fails the sha256 check). nvcc + libnvvm (cicc lives
         # there in the 13.x split) + crt + cudart + cccl + culibos + cublas
         # is the minimal set that compiles and links the ggml CUDA backend;
@@ -65,23 +68,50 @@ runs:
         esac
         echo "Assembling the $REDIST_ARCH toolkit"
 
+        # QVAC-24470: PINNED TO 13.0.3 ON PURPOSE. DO NOT BUMP TO THE NEWEST.
+        #
+        # A card with no -real entry in CMAKE_CUDA_ARCHITECTURES runs from the
+        # -virtual PTX, and the DRIVER, not the runtime, JITs that PTX. A driver
+        # only accepts PTX from its own release or older, so the nvcc used here
+        # sets the minimum driver version every such card needs.
+        #
+        # Measured 2026-09-03 on both DGX Spark boxes, GB10 sm_121, driver
+        # 580.173.02, with a 13.2.51 build:
+        #
+        #   CUDA error: the provided PTX was compiled with an unsupported toolchain
+        #     in ggml_cuda_kernel_can_use_pdl, cudaFuncGetAttributes
+        #   [exit 134]
+        #
+        # sm_121 is above every entry in the arm64 tier, so it had to JIT, and
+        # the driver refused PTX newer than itself. That box has CUDA 13.3
+        # installed and it made no difference: a runtime library and the driver's
+        # PTX JIT are separate things.
+        #
+        # 13.0.3 ships cuda_cudart 13.0.96, which is exactly what those boxes
+        # carry, so its PTX is what their driver was built to take. Going older
+        # is not free either: sm_120a needs CUDA 13, so 12.x would drop the 5090.
+        #
+        # Bumping this is a COMPATIBILITY decision, not a chore. It raises the
+        # minimum driver for every JIT-served card, and nothing in CI catches it
+        # because the runners' drivers are new. Re-run the arch sweep on the
+        # Spark boxes before changing it.
         COMPONENTS_linux_x86_64="\
-        cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-13.2.51-archive.tar.xz 706b996fefc59dc8d64d317fdf48d0aa84c4ae004eff43009dd918f40c5cc66a
-        libnvvm/linux-x86_64/libnvvm-linux-x86_64-13.2.51-archive.tar.xz e013fce38130d2337ea695aadc5ddd5dcfb78f9107903d72492b9819539749bb
-        cuda_crt/linux-x86_64/cuda_crt-linux-x86_64-13.2.51-archive.tar.xz fbc31fed55b7255591f3a19f575ca078827f5e6757d317d009f7ec1e69fcde4b
-        cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-13.2.51-archive.tar.xz 539edc1056e44d319f2112e9971c6415d78d4dde04b3f6ffbd20ec808e718526
-        cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-13.2.27-archive.tar.xz 56e1bafb29faa87375b0484814870046530b88c0a421909096892f027ec1927b
-        cuda_culibos/linux-x86_64/cuda_culibos-linux-x86_64-13.2.51-archive.tar.xz dece3cdb7954d276e07eb23bee882a24627f431654cdeeef2bcee2d22669d93c
-        libcublas/linux-x86_64/libcublas-linux-x86_64-13.3.0.5-archive.tar.xz 9f3c23d55b098d9159c435db59f228df79493152a778d4d367e7d60470d8c64b"
+        cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-13.0.88-archive.tar.xz 48e35be3cfbf4b4fbc16828eaec8a7048ee789403049dc409f7b643d6259cf7a
+        libnvvm/linux-x86_64/libnvvm-linux-x86_64-13.0.88-archive.tar.xz 17ef1665b63670887eeba7d908da5669fa8c66bb73b5b4c1367f49929c086353
+        cuda_crt/linux-x86_64/cuda_crt-linux-x86_64-13.0.88-archive.tar.xz 5a3279a049ffc1cdb951c44cb95206acfdde9e9ae5e87825fc18d7e4a6878bb0
+        cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-13.0.96-archive.tar.xz 25b8071951baba827be1580b841d363464f6ee6c39f48d33a81646f90cc95ed1
+        cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-13.0.85-archive.tar.xz ed845eae8c1767706b6ee91e40c608a03f6f633551a849b63f7346d32d73ee60
+        cuda_culibos/linux-x86_64/cuda_culibos-linux-x86_64-13.0.85-archive.tar.xz 98fca11f9ab89be61385a67eee686c1ebf76fad9c7269d0cf9090edfcdb8a8ac
+        libcublas/linux-x86_64/libcublas-linux-x86_64-13.1.1.3-archive.tar.xz 980cbd746a63566602d1699e2ade005c49408bd95618a57d0888f475e5c721a4"
 
         COMPONENTS_linux_sbsa="\
-        cuda_nvcc/linux-sbsa/cuda_nvcc-linux-sbsa-13.2.51-archive.tar.xz 28d201ffc46627abd919d623d85e721f33c92cf02749e023cd66d6fa0f1206a7
-        libnvvm/linux-sbsa/libnvvm-linux-sbsa-13.2.51-archive.tar.xz 366da4383992b8d13df63ffecd3a8315815955f50da0c0288ca5123212f67e02
-        cuda_crt/linux-sbsa/cuda_crt-linux-sbsa-13.2.51-archive.tar.xz 04f8fd03bc5a99507f5d531cc65452881c8949311bc5cc87bc1fe05a7607fd9e
-        cuda_cudart/linux-sbsa/cuda_cudart-linux-sbsa-13.2.51-archive.tar.xz 379363621c59c8d6faeea2f7a527eae91fc7db8cb2121cb42fe7972a48462f67
-        cuda_cccl/linux-sbsa/cuda_cccl-linux-sbsa-13.2.27-archive.tar.xz 1587f83b92aef54414cd118723ec1e4c118e14c70ac7779e13caa941f8030faf
-        cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.2.51-archive.tar.xz 35244c4d90e5b1aa48fb98d655f6dfa3f9e4f7d0ac220266ebf85c0928a7524b
-        libcublas/linux-sbsa/libcublas-linux-sbsa-13.3.0.5-archive.tar.xz edadce2ec8d997ffb08f5a1c4ee6b1d14a2c883f2aa11e1d3208b4f077d9225f"
+        cuda_nvcc/linux-sbsa/cuda_nvcc-linux-sbsa-13.0.88-archive.tar.xz 01b01e10aa2662ad1b3aeab3317151d7d6d4a650eeade55ded504f6b7fced18e
+        libnvvm/linux-sbsa/libnvvm-linux-sbsa-13.0.88-archive.tar.xz f94feb1a0da0c55ceb5c7f039c1f0ffad5d162e0fedfb565efb87771187ddcfd
+        cuda_crt/linux-sbsa/cuda_crt-linux-sbsa-13.0.88-archive.tar.xz c03b92941ba7bf58a4992231ceb572477784ef450ce678f6545bed02392cae50
+        cuda_cudart/linux-sbsa/cuda_cudart-linux-sbsa-13.0.96-archive.tar.xz e2c78564330a09d890f98a066a2082a32c78256ffcc6bccca1696bd2abbaf445
+        cuda_cccl/linux-sbsa/cuda_cccl-linux-sbsa-13.0.85-archive.tar.xz eca22ded176804a78afcba3fe1909e7d473366ee1cb9f3784080df23bc8e74d5
+        cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.0.85-archive.tar.xz ab5ecee37c8adc7efbc2a88ab091de9d978924c4d7f66c3e0c42f23983a1beb3
+        libcublas/linux-sbsa/libcublas-linux-sbsa-13.1.1.3-archive.tar.xz 88b4d3d94d536d9a122eb149af01dc524699336ba3c0b33d019e175d177235fb"
 
         # Same seven components and release either way, only the path and hash
         # differ. An explicit case rather than an indirect expansion: it fails
@@ -122,7 +152,7 @@ runs:
       uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r2
+        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r3
 
     - name: Export CUDA environment
       shell: bash
