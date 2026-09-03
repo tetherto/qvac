@@ -121,7 +121,7 @@ reported in `assumptions`.
 | --------- | ----------------------------------------------------------------------- |
 | Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription` |
 | Workloads | `llm`, `audio`                                                          |
-| Platforms | every desktop except `win32-arm64` — see the calibration status below   |
+| Platforms | every desktop except `win32-arm64`, plus `android-arm64` — see below    |
 
 Everything outside this table assesses as `unknown`. Parakeet, translation, TTS,
 OCR, diffusion, and the vision projector (`mmproj-*`) half of a multimodal load
@@ -138,6 +138,17 @@ whisper pass, and the estimator refuses the unmeasured placeholders rather than
 consuming them. See `@qvac/inference`'s
 `src/resources/model-fit/calibration/METHODOLOGY.md` for the per-platform
 numbers and for the GPU shapes that are still uncovered.
+
+**Mobile.** `android-arm64` and `ios-arm64` are measured through the SDK e2e
+consumer on a Device Farm phone (the test-sdk dispatch's `calibration:
+android|ios`), since the harness has to run where the engine does.
+`android-arm64` has cleared calibration and returns real verdicts for LLM
+workloads. Its coefficients describe CPU-resident execution: RSS does not
+follow a GPU-resident load there, so the harness pins `device: 'cpu'` — a phone
+running the model on its GPU is not covered. `ios-arm64` has no fixture, and a
+fixture alone would not be enough: its `process-memory` budget needs
+`os_proc_available_memory()`, and without that native metric iOS returns
+`unknown` regardless.
 
 **Desktops with a GPU.** On linux, Windows and Intel macOS the platform's own
 coefficients describe CPU-resident execution, so when a GPU is present the

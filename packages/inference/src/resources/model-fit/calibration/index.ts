@@ -3,6 +3,7 @@ import type {
   ModelFitPlatform,
   PlatformCalibration
 } from '@/resources/model-fit/types'
+import { ANDROID_ARM64_CALIBRATION } from '@/resources/model-fit/calibration/android-arm64'
 import { DARWIN_ARM64_CALIBRATION } from '@/resources/model-fit/calibration/darwin-arm64'
 import { DARWIN_X64_CALIBRATION } from '@/resources/model-fit/calibration/darwin-x64'
 import { LINUX_ARM64_CALIBRATION } from '@/resources/model-fit/calibration/linux-arm64'
@@ -22,6 +23,7 @@ import { WIN32_X64_VULKAN_SHARED_CALIBRATION } from '@/resources/model-fit/calib
 export const CALIBRATION: CalibrationFixture = {
   schemaVersion: 1,
   platforms: {
+    'android-arm64': ANDROID_ARM64_CALIBRATION,
     'darwin-arm64': DARWIN_ARM64_CALIBRATION,
     'darwin-x64': DARWIN_X64_CALIBRATION,
     'linux-arm64': LINUX_ARM64_CALIBRATION,
