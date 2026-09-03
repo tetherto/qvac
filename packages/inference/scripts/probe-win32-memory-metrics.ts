@@ -202,7 +202,14 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error('probe failed:', error)
-  Bare.exit(1)
-})
+main()
+  .then(() => {
+    // The first run printed its summary and then never exited (an engine
+    // handle keeps the loop alive), holding the runner until the job was
+    // cancelled.
+    Bare.exit(0)
+  })
+  .catch((error) => {
+    console.error('probe failed:', error)
+    Bare.exit(1)
+  })
