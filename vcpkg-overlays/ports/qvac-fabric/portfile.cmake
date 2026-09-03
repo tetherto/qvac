@@ -164,10 +164,26 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # pass it explicitly, the same way ports/ggml-speech does.
   # Order matters. An explicitly provisioned toolkit wins over whatever the host
   # happens to have at /usr/local/cuda: CI's setup-cuda assembles a pinned
-  # 13.2.0 and exports CUDACXX and CUDA_PATH, and `120a-real` below needs CUDA
+  # toolkit and exports CUDACXX and CUDA_PATH, and `120a-real` below needs CUDA
   # 13, so a GPU runner or dev box carrying an older system toolkit must not
   # silently shadow the pin. Searching /usr/local/cuda/bin first with
   # NO_DEFAULT_PATH did exactly that.
+  #
+  # QVAC-24470: THE TOOLKIT VERSION IS NOT IN THE VCPKG BINARY-CACHE ABI, so
+  # changing it does NOT invalidate a cached build of this port. CUDACXX arrives
+  # through VCPKG_KEEP_ENV_VARS, which is untracked passthrough, and
+  # CMAKE_CUDA_COMPILER is a path that setup-cuda keeps constant across
+  # versions. Proven on 2026-09-03: the 13.2.0 -> 13.0.3 pin change produced a
+  # byte-identical artifact and the same package ABI
+  # 84a16511416c2a7956ed305e7682052f063dfb60415e3de074e4f0787a972eab, because
+  # vcpkg restored the old binary. The run was green and had rebuilt nothing.
+  #
+  # QVAC_FABRIC_CUDA_TOOLKIT below exists to close that hole. It is otherwise
+  # unused, and its only job is to be part of this portfile's content so that
+  # editing it changes the ABI and forces a rebuild. KEEP IT IN STEP WITH
+  # setup-cuda's cuda-version, or a toolkit change ships stale binaries and the
+  # only symptom is a crash on hardware CI does not have.
+  set(QVAC_FABRIC_CUDA_TOOLKIT "13.0.3")
   if(DEFINED ENV{CUDACXX} AND EXISTS "$ENV{CUDACXX}")
     set(NVCC_EXECUTABLE "$ENV{CUDACXX}")
   endif()
@@ -183,7 +199,15 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   if(NOT NVCC_EXECUTABLE)
     message(FATAL_ERROR "qvac-fabric: cuda-backend feature requires a CUDA toolkit. Install one providing nvcc (checked CUDACXX, CUDA_PATH/bin, PATH and /usr/local/cuda/bin). Do not request cuda-backend on a host without nvcc.")
   endif()
-  message(STATUS "qvac-fabric: cuda-backend using nvcc at ${NVCC_EXECUTABLE}")
+  # Log the version, not just the path. The path is identical whichever toolkit
+  # setup-cuda assembled, so a log line carrying only the path cannot tell you
+  # which nvcc a given build actually used.
+  execute_process(
+    COMMAND "${NVCC_EXECUTABLE}" --version
+    OUTPUT_VARIABLE QVAC_NVCC_VERSION_OUT
+    ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+  string(REGEX MATCH "release [0-9]+\\.[0-9]+, V[0-9.]+" QVAC_NVCC_VERSION "${QVAC_NVCC_VERSION_OUT}")
+  message(STATUS "qvac-fabric: cuda-backend using nvcc at ${NVCC_EXECUTABLE} (${QVAC_NVCC_VERSION}, port expects ${QVAC_FABRIC_CUDA_TOOLKIT})")
 
   # CMAKE_CUDA_ARCHITECTURES is pinned to what we actually ship to. ggml picks
   # its own list when the variable is undefined, but that list is much wider
