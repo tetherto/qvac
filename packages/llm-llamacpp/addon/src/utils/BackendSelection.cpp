@@ -11,6 +11,15 @@
 #include <variant>
 #include <vector>
 
+// Only the linux overload of shouldWarnAboutJitCache() reads the environment,
+// so these stay inside the guard rather than looking unused elsewhere.
+#if defined(__linux__)
+#include <cstdlib>
+#include <filesystem>
+
+#include <unistd.h>
+#endif
+
 #include <common/log.h>
 #include <ggml-backend.h>
 
@@ -1124,6 +1133,61 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   return {choice.type, choice.name};
 };
 
+bool backend_selection::shouldWarnAboutJitCache(const JitCacheEnv& env) {
+  if (env.cacheDisabled) {
+    return true;
+  }
+  return !env.haveCacheDir || !env.cacheDirWritable;
+}
+
+#if defined(__linux__)
+bool backend_selection::shouldWarnAboutJitCache() {
+  JitCacheEnv env;
+
+  // The driver treats any value other than "0" as disabling the cache.
+  if (const char* disable = std::getenv("CUDA_CACHE_DISABLE");
+      disable != nullptr && *disable != '\0' &&
+      std::string_view(disable) != "0") {
+    env.cacheDisabled = true;
+  }
+
+  // CUDA_CACHE_PATH wins, otherwise the driver's default.
+  std::filesystem::path dir;
+  if (const char* explicitPath = std::getenv("CUDA_CACHE_PATH");
+      explicitPath != nullptr && *explicitPath != '\0') {
+    dir = explicitPath;
+  } else if (
+      const char* home = std::getenv("HOME");
+      home != nullptr && *home != '\0') {
+    dir = std::filesystem::path(home) / ".nv" / "ComputeCache";
+  }
+  env.haveCacheDir = !dir.empty();
+
+  // Walk up to the nearest ancestor that exists and ask whether it is writable.
+  // Checking the leaf alone reports "missing" for the common first-run case,
+  // where the driver would simply create it. Nothing is created here: probing
+  // must not have side effects on a host that turns out to be read-only anyway.
+  if (env.haveCacheDir) {
+    std::error_code ec;
+    std::filesystem::path probe = dir;
+    while (!probe.empty() && !std::filesystem::exists(probe, ec)) {
+      const std::filesystem::path parent = probe.parent_path();
+      if (parent == probe) {
+        break;
+      }
+      probe = parent;
+    }
+    env.cacheDirWritable = !probe.empty() &&
+                           std::filesystem::exists(probe, ec) &&
+                           ::access(probe.c_str(), W_OK) == 0;
+  }
+
+  return shouldWarnAboutJitCache(env);
+}
+#else
+bool backend_selection::shouldWarnAboutJitCache() { return false; }
+#endif
+
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
@@ -1141,15 +1205,34 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_get_props,
       llamaLogcallback,
       ::productionSupportsKvCacheType};
-  return backend_selection::chooseBackend(
-      preferredBackendType,
-      bckI,
-      metadata,
-      mainGpu,
-      outAdrenoVersion,
-      isFinetuning,
-      outIsMaliGpu,
-      backendOverride);
+  std::pair<BackendType, std::string> selected =
+      backend_selection::chooseBackend(
+          preferredBackendType,
+          bckI,
+          metadata,
+          mainGpu,
+          outAdrenoVersion,
+          isFinetuning,
+          outIsMaliGpu,
+          backendOverride);
+
+  // Only on the real path, and only once a CUDA device actually won: the inner
+  // overload is what the unit tests drive, and it must not touch the
+  // filesystem. The device name is checked rather than the bucket, because a
+  // unified-memory card such as the GB10 registers CUDA as an iGPU and is
+  // selected through the iGPU branch.
+  if (selected.first == BackendType::GPU &&
+      selected.second.find("cuda") != std::string::npos &&
+      shouldWarnAboutJitCache()) {
+    llamaLogcallback(
+        GGML_LOG_LEVEL_WARN,
+        "CUDA PTX JIT cache is unwritable or disabled; if this GPU has no "
+        "precompiled kernels in this build, every process start pays the full "
+        "JIT cost (measured at 27s on sm_121) instead of only the first. Set "
+        "CUDA_CACHE_PATH to a writable path that survives restarts.",
+        nullptr);
+  }
+  return selected;
 }
 
 size_t
