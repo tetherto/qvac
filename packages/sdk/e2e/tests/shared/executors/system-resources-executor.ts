@@ -76,6 +76,7 @@ function assertSample(resources: SystemResources) {
 }
 
 export class SystemResourcesExecutor extends BaseExecutor<typeof systemResourcesTests> {
+  // Matches the ids declared in system-resources-tests.ts.
   pattern = /^system-resources-/
 
   protected handlers = {

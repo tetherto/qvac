@@ -1,5 +1,8 @@
 import type { TestDefinition } from '@qvac/test-suite'
 
+// These probe locally reported hardware capabilities, so they load no model
+// (`dependency: 'none'`) and stay in the seconds range.
+
 export const systemResourcesCapabilities = {
   testId: 'system-resources-capabilities',
   params: { sample: false },
