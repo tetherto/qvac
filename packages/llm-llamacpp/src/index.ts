@@ -1035,15 +1035,60 @@ namespace LlmLlamacpp {
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- `NumericLike` documents the expected form; any string is accepted.
     "main-gpu"?: NumericLike | string;
     /**
-     * How to split the model across GPUs: 'none' (default, single GPU), 'layer'
-     * (pipeline parallelism), 'row' (tensor parallelism).
+     * How to split the model across GPUs.
      *
-     * 'row' needs split buffers, which only the SYCL backend provides as of
-     * qvac-fabric v10069 — no backend this package ships does. It is accepted but
-     * degraded to 'layer' at load with a WARNING, so it behaves like 'layer'. See
-     * docs/multi-gpu.md.
+     * - 'none' (default) — pin the whole model to a single GPU.
+     * - 'layer' — pipeline parallelism; each GPU holds a contiguous slice of
+     *   layers. The compatible choice, effective on every backend shipped here.
+     * - 'row' — legacy tensor parallelism. Needs split buffers, which only the
+     *   SYCL backend provides as of qvac-fabric v10069 and no backend this
+     *   package ships does, so it is accepted but degraded to 'layer' at load
+     *   with a WARNING.
+     * - 'tensor' — EXPERIMENTAL tensor parallelism via qvac-fabric's meta
+     *   device; weights *and* KV cache are split across every visible GPU.
+     *   Desktop only (rejected on Android/iOS). Requires flash attention, so
+     *   'flash-attn': 'off' is rejected with InvalidArgument. Disables auto-fit
+     *   — gpu_layers then defaults to every layer and ctx_size to the model's
+     *   trained context, so set ctx_size explicitly for large models. Not
+     *   available for every architecture; unsupported ones are rejected up
+     *   front with the architecture named.
+     *
+     * See docs/multi-gpu.md.
      */
-    "split-mode"?: "none" | "layer" | "row";
+    "split-mode"?: "none" | "layer" | "row" | "tensor";
+    /**
+     * Flash attention. Defaults to `'on'`, except when finetuning or on a
+     * BitNet model, where it is forced off. `'auto'` lets qvac-fabric decide.
+     *
+     * qvac-fabric treats `'on'`, `'enabled'`, `'true'` and `'1'` as
+     * equivalent, and likewise `'off'`, `'disabled'`, `'false'` and `'0'`;
+     * `'auto'` is a third state, not a synonym for either. All spellings are
+     * lower-case — matching is case-sensitive, and any other value is rejected
+     * with `InvalidArgument` naming the accepted spellings.
+     *
+     * **`'auto'` and the KV-cache default.** On a GPU backend the addon
+     * defaults `cache-type-k`/`-v` to q8_0 when flash attention is on, roughly
+     * halving KV-cache memory. `'auto'` deliberately does *not* trigger that
+     * default and keeps f16: a quantized V cache forces qvac-fabric to promote
+     * AUTO to ENABLED, which would skip the runtime capability probe that
+     * `'auto'` exists to run. Set `cache-type-k`/`-v` explicitly alongside
+     * `'auto'`, or use `'on'`, to get both. The exception is
+     * `split-mode: 'tensor'`, where qvac-fabric promotes AUTO unconditionally
+     * so there is no probe to preserve — `'auto'` takes the q8_0 default there
+     * exactly as `'on'` does.
+     *
+     * Required by `split-mode: 'tensor'` — combining the two with a falsey
+     * value is rejected with `InvalidArgument` rather than surfacing as an
+     * opaque native failure. All four falsey spellings are rejected; `'auto'`
+     * is accepted, since qvac-fabric promotes it to ENABLED for that mode.
+     *
+     * The `flash_attn` spelling is also accepted at runtime and reaches the
+     * addon through the index signature below, matching how `main-gpu` and
+     * `split-mode` type only their hyphen form. Supplying both is an error and
+     * is rejected with `InvalidArgument`: both are dispatched to qvac-fabric
+     * and which one wins is unspecified.
+     */
+    "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
     /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
     "tensor-split"?: string;
     "cache-type-k"?: string;

@@ -16,6 +16,125 @@
   CPU, which would be far slower than the `device: 'gpu'` that was asked for.
   The error names each device that was passed over and why.
 
+## [0.49.1] - 2026-09-02
+
+### Fixed
+
+- `flash-attn` values other than the literal `'on'` are no longer treated as flash-attention-*off* by the
+  KV-cache policy. The predicate behind the q8_0 KV-cache auto-default and the Adreno 800+/Vulkan crash
+  guard was an exact string comparison against `'on'`, so `'enabled'`, `'true'` and `'1'` — all documented
+  and accepted on `LlamaConfig['flash-attn']` — silently skipped both. Values are now matched against
+  qvac-fabric's own three-way vocabulary (`is_truthy` / `is_falsey` / `is_autoy`) under both the
+  `flash-attn` and `flash_attn` spellings.
+
+  Concretely, with `flash-attn` set to `'enabled'`, `'true'` or `'1'` on a Metal or non-Adreno Vulkan GPU:
+  the KV cache now defaults to q8_0 as it already did for `'on'` (roughly halving KV-cache memory), and the
+  Adreno 800+/Vulkan quantized-KV combination is now rejected with `InvalidArgument` instead of reaching
+  the driver bug it guards against.
+
+- `flash-attn: 'auto'` now arms the Adreno 800+/Vulkan crash guard. A quantized `cache-type-k`/`-v` makes
+  qvac-fabric promote AUTO to ENABLED, so the coopmat1 driver crash was reachable with a value the guard
+  did not recognise. Callers get a clean `InvalidArgument` instead.
+
+  `'auto'` deliberately continues **not** to trigger the q8_0 KV-cache auto-default, and still resolves to
+  f16 unless `cache-type-k`/`-v` is set explicitly. Quantizing the V cache would force qvac-fabric to
+  promote AUTO to ENABLED and skip the runtime capability probe, which is precisely what this package
+  documents `'auto'` as preserving — *"`'auto'` lets qvac-fabric decide"*. A caller who wants both should
+  set `cache-type-k`/`-v` alongside it, or use `'on'`.
+
+- `split-mode: 'tensor'` + `flash-attn: 'auto'` now takes the q8_0 KV-cache default. It is the one mode
+  where the exclusion above does not apply: qvac-fabric promotes AUTO to ENABLED for tensor mode
+  unconditionally and before any KV type is read, so there is no capability probe to preserve, and
+  withholding q8_0 cost 2× the KV cache for nothing. Tensor mode also force-disables auto-fit, so nothing
+  was trimming `ctx_size` to absorb it.
+
+- Supplying **both** `flash-attn` and `flash_attn` is now rejected with `InvalidArgument`, implementing the
+  contract `index.d.ts` already published and matching what `split-mode` and `mmproj-use-gpu` already do.
+  Both spellings are dispatched to qvac-fabric as `--flash-attn` and which one wins is unspecified, so the
+  KV guards could read one value while qvac-fabric applied the other — leaving the Adreno crash guard
+  closed on a configuration that reaches the driver bug.
+
+- An unrecognised `flash-attn` value is now rejected with `InvalidArgument` naming the accepted spellings,
+  rather than falling out of every set and surfacing later as an unrelated error — typically the Adreno
+  quantized-KV message, which misattributes a simple typo. Matching is case-sensitive, as qvac-fabric's own
+  predicates are; the addon no longer accepts values qvac-fabric would reject. This also covers the empty
+  string, which suppressed the `'on'` default and reached the argument parser as a valueless flag.
+
+- On a BitNet model, an explicit truthy `flash-attn` now arms the q8_0 KV-cache default for every spelling,
+  not just `'on'`. BitNet's flash-attention force-off applies only when the key is unset, so setting it at
+  all has always opted out of that default; previously `'true'` silently did not. Behaviour with
+  `flash-attn` unset is unchanged — BitNet still forces it off and the q8_0 default stays closed.
+
+### Known follow-ups
+
+- **`packages/model-fit` must widen in lockstep and has not yet.** Its `flashEnabled` predicate
+  (`addon/src/fit/LlamaLoadConfig.cpp`) is still pinned to exact `"on"`, with a comment reserving the
+  widening for `llm-llamacpp` "first so both move together" — this is that move. Until it lands, `model-fit`
+  projects f16 where this addon now applies q8_0 (over-estimating KV by ~2× and trimming `ctx_size` further
+  than needed), and its Adreno 800+/Vulkan guard reports as supported a configuration this addon now
+  rejects. `model-fit`'s own CHANGELOG statement that *"`flash-attn` is recognised as enabled on `on` only,
+  as `llm-llamacpp` does"* is stale as of this entry. Tracked in
+  [#4223](https://github.com/tetherto/qvac/pull/4223), open as of this release.
+
+- **Grok on a GPU backend fails to load, and this change does not fix it.** qvac-fabric force-disables flash
+  attention for Grok, then rejects the quantized V cache the q8_0 default just applied, so context creation
+  returns null with no addon-side explanation. Pre-existing and unrelated to the value vocabulary — the
+  addon lifted qvac-fabric's spellings without lifting its architecture overrides. Needs `grok` added to the
+  q8_0 skip conditions or to the flash-attention force-off branch alongside BitNet.
+
+### Documentation
+
+- `flash-attn` now has a row in the README config table — it had none, despite being a documented, typed
+  field on `LlamaConfig`. The KV-cache auto-default section states which spellings count as "flash
+  attention on", why `'auto'` keeps `f16`, and that tensor mode is the exception; `docs/multi-gpu.md` notes
+  that `split-mode: 'tensor'` accepts `'auto'`, and that it is the one place `'auto'` does not preserve
+  qvac-fabric's capability probe. All spellings are documented as lower-case only.
+
+- The documented default is now *"`'on'`, except when finetuning or on a BitNet model"* in both the README
+  row and the `LlamaConfig` field doc. Both previously named only finetuning.
+
+## [0.49.0] - 2026-08-31
+
+### Added
+
+- `split-mode: 'tensor'` enables qvac-fabric's meta-device tensor parallelism, splitting weights
+  and KV cache across all visible GPUs. **EXPERIMENTAL and desktop-only** (still rejected on
+  Android/iOS with the other multi-GPU parameters). Three constraints, all enforced up front with
+  `InvalidArgument` rather than surfacing as an opaque native failure:
+  - Requires flash attention — a falsey `flash-attn` is rejected. qvac-fabric treats `off`,
+    `disabled`, `false` and `0` as equivalent, and all four are rejected under both the
+    `flash-attn` and `flash_attn` spellings. Leaving it unset is fine; it already defaults to `on`.
+  - Disables auto-fit, which qvac-fabric does not implement for this mode: `gpu_layers` then
+    defaults to every layer and `ctx_size` to the model's trained context, so **set `ctx_size`
+    explicitly for large models** or the load can OOM. The override is applied after argument
+    parsing, so an explicit `fit: 'on'` cannot silently re-enable it. Logged at WARNING.
+  - Unavailable for some architectures (Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2,
+    MiniMax, Qwen3-Next and others as of qvac-fabric v10297.1.1); rejected before loading with
+    the architecture named. `deepseek4`, `qwen35` and `qwen35moe` were unsupported at v10297.0.0
+    and are supported from v10297.1.0.
+
+  Tensor mode pins its own `--device` list. qvac-fabric selects devices for this mode with no
+  device-type filter and no deduplication, so left alone it splits weights and KV cache onto the
+  integrated GPU of any discrete + integrated host and shards a dual-registered GPU twice. The
+  addon enumerates devices itself — discrete when present, otherwise integrated, deduplicated by
+  the backend-reported `device_id` (PCI bus id), not by description: two identical cards report
+  identical descriptions. `layer` and `row` are unchanged and still let qvac-fabric choose.
+
+  **Not selectable through the SDK yet:** `@qvac/inference`'s config schema still enumerates
+  `none`/`layer`/`row`, so `'tensor'` is reachable only via direct addon `loadModel`.
+
+  Unrelated to `split-mode: 'row'`, which needs split buffers no shipped backend provides and is
+  still degraded to `'layer'`. `examples/multiGpuBenchmark.js` now benchmarks the new mode
+  alongside the existing three. See `docs/multi-gpu.md`.
+
+- `flash-attn` (and the `flash_attn` alias) is now a narrowed field on `LlamaConfig` rather than
+  reaching callers only through the `[key: string]` escape hatch, making the tensor-mode
+  requirement visible at compile time. Propagating it to the SDK schema is separate SDK-pod work.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader).
+
 ## [0.48.0] - 2026-08-31
 
 ### Removed

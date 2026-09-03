@@ -1,4 +1,4 @@
-import type { CoverageCategory, SpecEntry, UnknownLabelCount } from './types.js'
+import type { CoverageCategory, SpecEntry, UnknownLabelCount } from '@/openai/coverage/types'
 
 /** OpenAPI operation tags (title case in spec). Matched case-insensitively. */
 const PRIMARY_TAGS = [

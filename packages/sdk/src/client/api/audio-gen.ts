@@ -16,7 +16,7 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * @param params.taskType - `"text2music"` (default) or `"cover-nofsq"`.
  * @param params.audioCoverStrength - Source-context strength for cover tasks (0..1).
  * @param params.coverNoiseStrength - Initial source/noise blend for cover tasks (0..1).
- * @returns A run with a synchronous request ID, generation progress stream, PCM audio promise, and stats promise.
+ * @returns A run with a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise describing the backend the run resolved to.
  *
  * @example
  * ```typescript

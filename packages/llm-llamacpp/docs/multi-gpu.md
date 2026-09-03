@@ -18,15 +18,30 @@ Controls how the model is distributed across GPUs.
 |----------|----------|
 | `'none'` | **Default.** Pin the entire model to a single GPU selected by `main-gpu` (or auto-detected). No multi-GPU. |
 | `'layer'`| **Pipeline parallelism.** Each transformer layer is assigned to a GPU. Layers flow sequentially through GPUs. Best for large batch or long-context workloads where layer count exceeds single-GPU VRAM. |
-| `'row'`  | **Accepted, but not effective on any shipped backend.** Degraded to `'layer'` at load with a warning, because no backend this package ships provides the split buffers row-split requires. **See [backend limitations](#tensor-parallelism-is-unavailable-in-shipped-builds) below.** |
+| `'row'`  | **Legacy tensor parallelism. Accepted, but not effective on any shipped backend.** Degraded to `'layer'` at load with a warning, because no backend this package ships provides the split buffers row-split requires. **See [two kinds of tensor parallelism](#two-kinds-of-tensor-parallelism) below.** |
+| `'tensor'`| **EXPERIMENTAL tensor parallelism** via qvac-fabric's meta device — weights *and* KV cache are split across every visible GPU. Desktop only. Requires flash attention, disables auto-fit, and is unavailable for some architectures. **See [two kinds of tensor parallelism](#two-kinds-of-tensor-parallelism) below.** |
 
 Accepts both `split-mode` (hyphen) and `split_mode` (underscore). Providing both throws an error. Case-insensitive (`'LAYER'` works).
 
-#### Tensor parallelism is unavailable in shipped builds
+#### Two kinds of tensor parallelism
 
-True tensor parallelism (`row` mode) requires a "split buffer" that slices each weight tensor across GPUs, exposed by a backend as `ggml_backend_split_buffer_type`. As of **qvac-fabric v10069, only the SYCL backend provides it** — CUDA dropped split buffers and moved tensor parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR`, which this package does not expose. Vulkan, Metal and OpenCL never provided it.
+`row` and `tensor` are two different mechanisms with the same goal. Only `tensor` works on the backends this package ships.
+
+**`row` — split buffers (legacy, never effective here).** Row-split requires a "split buffer" that slices each weight tensor across GPUs, exposed by a backend as `ggml_backend_split_buffer_type`. As of **qvac-fabric v10069, only the SYCL backend provides it** — CUDA dropped split buffers and moved tensor parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR`. Vulkan, Metal and OpenCL never provided it.
 
 This package ships Metal (Apple), Vulkan (Linux/Windows/Android), OpenCL (Android) and optionally HIP — **none of them, so `split-mode: 'row'` is never effective in a shipped build.**
+
+**`tensor` — the meta device (supported, experimental).** `split-mode: 'tensor'` selects `LLAMA_SPLIT_MODE_TENSOR`, which distributes the model through qvac-fabric's meta-device abstraction instead of split buffers. It needs no backend-specific buffer type, so it is available on every shipped backend. Three constraints apply:
+
+- **Flash attention is mandatory.** qvac-fabric fails context creation without it, so the addon rejects a falsey `flash-attn` together with `split-mode: 'tensor'` up front (`InvalidArgument`). qvac-fabric treats `off`, `disabled`, `false` and `0` as equivalent, and all four are rejected under both the `flash-attn` and `flash_attn` spellings. Leaving it unset is fine — it already defaults to `on`. `'auto'` is accepted too, since qvac-fabric promotes it to ENABLED for this mode itself — but note that makes tensor mode the one place `'auto'` does *not* preserve the runtime capability probe, because the mode requires flash attention unconditionally.
+- **Auto-fit is disabled.** qvac-fabric's memory fitting is not implemented for this mode, so the addon turns it off explicitly and logs a WARNING. The override is applied after argument parsing, so an explicit `fit: 'on'` cannot re-enable it. `gpu_layers` then defaults to every layer and `ctx_size` to the model's trained context. **Set `ctx_size` explicitly for large models**, or the load can OOM where auto-fit would have trimmed the context.
+- **Not every architecture is supported.** qvac-fabric implements the tensor split per architecture; unsupported ones are rejected before loading with the architecture named. Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2, MiniMax, Qwen3-Next and several others are excluded as of v10297.1.1. The list shrinks as well as grows — `deepseek4`, `qwen35` and `qwen35moe` were excluded at v10297.0.0 and are supported from v10297.1.0. Common dense and MoE architectures (`llama`, `qwen2`, `qwen3`, `qwen3moe`, `gemma2`, `gemma3`, `phi3`, `mistral3`) are supported. Note the architecture names are the GGUF `general.architecture` values, not model marketing names — most Mistral GGUFs report `llama`, and `mistral4` is on the unsupported list.
+
+**Device selection is pinned explicitly.** `layer` and `row` omit `--device` and let qvac-fabric pick, which is safe because its filtered selection path excludes integrated GPUs when discrete ones exist and deduplicates a physical GPU registered by two backends. `LLAMA_SPLIT_MODE_TENSOR` takes a different path in qvac-fabric that does neither — left to itself it would split weights and the KV cache onto the iGPU of any discrete + integrated host, pacing the whole model by the weakest participant, and would shard a dual-registered GPU (Vulkan + HIP under `GGML_BACKEND_DL`) twice. The addon therefore enumerates the devices itself for tensor mode and passes an explicit `--device` list: discrete GPUs when any are present, otherwise the integrated ones, deduplicated by the backend-reported `device_id` (the PCI bus id). Description is deliberately **not** used for this: two identical cards report identical descriptions, so deduplicating on it would collapse a 2× RTX 4090 host to a single GPU. `main-gpu` still cannot select among them — qvac-fabric's `main_gpu` pruning is gated on `split-mode: 'none'`.
+
+**`'tensor'` is not selectable through the SDK.** `@qvac/inference`'s `llamacppCompletionConfigSchema` still enumerates `'none' | 'layer' | 'row'`, so an SDK `loadModel` call with `'tensor'` fails Zod validation before it reaches the addon. For now the mode is reachable only through direct addon `loadModel`. Widening the SDK schema is separate SDK-pod work.
+
+qvac-fabric documents `LLAMA_SPLIT_MODE_TENSOR` as **EXPERIMENTAL** and expects good performance primarily on multi-GPU CUDA. CUDA is not shipped here, and none of the shipped backends provide a tuned all-reduce — they use the meta backend's generic fallback reduction. It is correct, but do not assume it is faster than `layer` without measuring.
 
 Two things changed in the v10069 rebase:
 
@@ -35,16 +50,18 @@ Two things changed in the v10069 rebase:
 
 The degrade requires *every* GPU device to lack split buffers to be skipped, matching what qvac-fabric checks: it builds a split buffer for each device it distributes over and throws on the first one that cannot. A single unsupported backend registered in the process is enough.
 
-This applies to both inference and finetuning. Only pipeline (layer) parallelism is effective, regardless of the `split-mode` value.
+The `row` degrade applies to both inference and finetuning. Between `layer` and `row` alone, only pipeline (layer) parallelism is effective — `tensor` is the route to real tensor parallelism here.
 
-| Backend | `'layer'` | `'row'` |
-|---------|-----------|---------|
-| SYCL (not shipped) | Layer parallelism | True tensor parallelism (split buffers) |
-| CUDA (linux x64) | Layer parallelism | Degraded to layer parallelism — split buffers dropped at v10069 |
-| Vulkan  | Layer parallelism | Degraded to layer parallelism |
-| Metal   | Layer parallelism | Degraded to layer parallelism |
-| OpenCL  | Layer parallelism | Degraded to layer parallelism |
-| HIP     | Layer parallelism | Degraded to layer parallelism |
+| Backend | `'layer'` | `'row'` | `'tensor'` |
+|---------|-----------|---------|------------|
+| SYCL (not shipped) | Layer parallelism | True tensor parallelism (split buffers) | Meta device, generic all-reduce |
+| CUDA (linux x64) | Layer parallelism | Degraded to layer parallelism — split buffers dropped at v10069 | Meta device, backend-specific all-reduce (the tuned path upstream vouches for) |
+| Vulkan  | Layer parallelism | Degraded to layer parallelism | Meta device, generic all-reduce |
+| Metal   | Layer parallelism | Degraded to layer parallelism | Meta device, generic all-reduce |
+| OpenCL  | Layer parallelism | Degraded to layer parallelism | Meta device, generic all-reduce |
+| HIP     | Layer parallelism | Degraded to layer parallelism | Meta device, generic all-reduce |
+
+"Generic all-reduce" means the meta backend reduces with ordinary ggml graph ops rather than a backend-native collective. Every backend shipped here takes that path.
 
 ### `tensor-split`
 
@@ -104,15 +121,21 @@ device ─── 'cpu' ──> All GPU params ignored, CPU inference
                         │   Model pinned to single chosen GPU via --device
                         │   tensor-split has no effect
                         │
-                        └── split-mode = 'layer' | 'row'
-                            one GPU backend:  --device is NOT passed
+                        └── split-mode = 'layer' | 'row' | 'tensor'
+                            layer/row, one GPU backend:
+                                              --device is NOT passed
                                               (so qvac-fabric sees all GPUs)
-                            two or more:      --device lists every discrete GPU,
+                            layer/row, two or more:
+                                              --device lists every discrete GPU,
                                               deduplicated by PCI bus id
+                            tensor:           --device lists the GPUs fabric's
+                                              tensor branch would not filter
                             tensor-split proportions forwarded as --tensor-split
                             main-gpu (integer only) forwarded as --main-gpu
                               row: selects GPU for intermediate results and KV
                               layer: not used for placement
+                            tensor: additionally requires flash-attn on and a
+                              supported architecture; auto-fit is disabled
 ```
 
 ### Interaction with `device` and backend selection
@@ -184,6 +207,20 @@ const config = {
 
 `main-gpu` designates GPU 0 for intermediate results and KV cache. On a split-buffer backend weight tensors would also be split row-wise across the 2 GPUs; on every shipped backend the request is degraded to `layer`.
 
+### Two-GPU tensor parallelism (EXPERIMENTAL)
+
+```js
+const config = {
+  device: 'gpu',
+  gpu_layers: '999',
+  'split-mode': 'tensor',
+  'tensor-split': '1,1',
+  ctx_size: '4096' // set explicitly: auto-fit is disabled in tensor mode
+}
+```
+
+Splits both the weights and the KV cache across the 2 GPUs via the meta device. `ctx_size` is set explicitly on purpose — without it the context defaults to the model's full trained context, which can OOM on a large model where auto-fit would have trimmed it. Leave `flash-attn` unset (it defaults to `on`); passing `'flash-attn': 'off'` here is rejected with `InvalidArgument`.
+
 ### Single GPU (explicit)
 
 ```js
@@ -217,6 +254,14 @@ Skips integrated GPUs during backend selection. Falls back to CPU if no discrete
 | `split-mode: 'layer'` with `main-gpu: 'dedicated'` | `'dedicated'`/`'integrated'` still filters the device list during backend selection — on an iGPU-only system this causes CPU fallback (split-mode reset, tensor-split erased). If a matching GPU is found, a warning is logged and the string value is not forwarded to qvac-fabric; use an integer index |
 | `split-mode: 'none'` with `tensor-split` set | `tensor-split` has no effect (only one GPU is used) |
 | Invalid `split-mode` value | Throws `InvalidArgument` error |
+| `split-mode: 'tensor'` with an unsupported architecture | Throws `InvalidArgument` before loading, naming the architecture and suggesting `'layer'` |
+| `split-mode: 'tensor'` with a falsey `flash-attn` (`off`, `disabled`, `false`, `0`, under either spelling) | Throws `InvalidArgument` (qvac-fabric requires flash attention for this mode) |
+| `split-mode: 'tensor'` on Android / iOS | Throws `InvalidArgument` — all multi-GPU params are rejected on mobile |
+| `split-mode: 'tensor'` with `ctx_size` unset | Loads at the model's full trained context; auto-fit is disabled in this mode, so a large model can OOM |
+| `split-mode: 'tensor'` with `fit: 'on'` | `fit` is ignored — the tensor-mode override is applied after argument parsing, because qvac-fabric cannot fit this mode at all |
+| `split-mode: 'tensor'` on a discrete + integrated GPU host | Only the discrete GPUs participate; the addon passes an explicit `--device` list because qvac-fabric's tensor path would otherwise include the iGPU |
+| `split-mode: 'tensor'` with no enumerable GPU device | Falls back to qvac-fabric's own device selection with a warning, rather than passing an empty `--device` |
+| `split-mode: 'tensor'` through the SDK | Rejected by `@qvac/inference`'s Zod schema, which still enumerates `none`/`layer`/`row`; use direct addon `loadModel` |
 | Both `split-mode` and `split_mode` provided | Throws `InvalidArgument` error |
 | Both `main-gpu` and `main_gpu` provided | Throws `InvalidArgument` error |
 
@@ -235,19 +280,21 @@ Options:
 - `--ctx-size=4096` — context size
 - `--gpu-layers=999` — layers to offload
 
-The benchmark runs all three modes (none, layer, row) on the same model and prints a comparison summary with TTFT and TPS metrics.
+The benchmark runs all four modes (none, layer, row, tensor) on the same model and prints a comparison summary with TTFT and TPS metrics. Note that `row` is degraded to `layer` on every shipped backend, so its numbers should match the `layer` row.
 
 ## Choosing a split strategy
 
 The `row` column describes what tensor parallelism would give on a split-buffer backend; it is kept for reference, not as available behaviour.
 
-| Factor | `layer` (pipeline) | `row` (tensor) |
-|--------|-------------------|----------------|
-| GPU interconnect | Works over PCIe | Benefits from NVLink / fast PCIe |
-| Latency | Higher per-token (sequential pipeline) | Lower per-token (parallel computation) |
-| Throughput | Good for large batches | Good for interactive / low-latency |
-| VRAM distribution | Even if layers are uniform | Even split of every layer |
-| Complexity | Simpler scheduling | Requires cross-GPU communication per layer |
-| Backend support | All backends | **SYCL only** (not shipped) — every shipped backend degrades to layer mode |
+| Factor | `layer` (pipeline) | `row` (legacy tensor) | `tensor` (meta device) |
+|--------|-------------------|----------------|------------------------|
+| GPU interconnect | Works over PCIe | Benefits from NVLink / fast PCIe | Benefits from NVLink / fast PCIe |
+| Latency | Higher per-token (sequential pipeline) | Lower per-token (parallel computation) | Lower per-token (parallel computation) |
+| Throughput | Good for large batches | Good for interactive / low-latency | Good for interactive / low-latency |
+| VRAM distribution | Even if layers are uniform | Even split of every layer | Even split of every layer, KV cache included |
+| Complexity | Simpler scheduling | Requires cross-GPU communication per layer | Requires cross-GPU communication per layer |
+| Backend support | All backends | **SYCL only** (not shipped) — every shipped backend degrades to layer mode | All backends, via the meta device |
+| Maturity | Stable | Stable where available | **EXPERIMENTAL**; upstream vouches for it mainly on multi-GPU CUDA |
+| Auto-fit | Supported | Supported | **Not available** — set `ctx_size` explicitly |
 
-`layer` is the only effective strategy on every backend this package ships. `row` can be set but is degraded to `layer` at load with a warning — see [above](#tensor-parallelism-is-unavailable-in-shipped-builds). Start with `layer` mode and equal `tensor-split`.
+**Start with `layer` and an equal `tensor-split`** — it is the compatible, mature default and the only one that works on mobile. Reach for `tensor` when single-stream latency matters more than throughput and you have a fast interconnect, and measure it against `layer` on your own hardware before committing: none of the shipped backends has a tuned all-reduce, so the win is not a given. `row` can still be set but is degraded to `layer` at load with a warning — see [two kinds of tensor parallelism](#two-kinds-of-tensor-parallelism).

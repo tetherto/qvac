@@ -9,9 +9,9 @@ tocMaxDepth: 3
 
 For OpenCode, use the published [`@qvac/opencode-plugin`](https://www.npmjs.com/package/@qvac/opencode-plugin). The plugin starts a local managed QVAC server for the project, registers the `qvac` provider, selects the default local model, and cleans up when OpenCode exits.
 
-For OpenClaw, use the published [`@qvac/openclaw-plugin`](https://www.npmjs.com/package/@qvac/openclaw-plugin). The plugin registers the `qvac` provider, exposes the QVAC model catalog, and uses OpenClaw's `localService` support to start `qvac serve openai` when the local provider is used.
+For OpenClaw, use the published [`@qvac/openclaw-plugin`](https://www.npmjs.com/package/@qvac/openclaw-plugin). The plugin registers the `qvac` provider, exposes the QVAC model catalog, and uses OpenClaw's `localService` support to start `qvac serve --openai` when the local provider is used.
 
-Manual HTTP-server setup is still available for other OpenAI-compatible tools, or for users who want to run `qvac serve openai` themselves. In that mode, the model name requested by the tool must match an alias declared in `serve.models`, and the tool's base URL must point to the running server (`http://localhost:11434/v1` by default).
+Manual HTTP-server setup is still available for other OpenAI-compatible tools, or for users who want to run `qvac serve --openai` themselves. In that mode, the model name requested by the tool must match an alias declared in `serve.models`, and the tool's base URL must point to the running server (`http://localhost:11434/v1` by default).
 
 ## OpenCode quickstart
 
@@ -176,7 +176,7 @@ For example:
 }
 ```
 
-Start `qvac serve openai` with that config, register an OpenClaw custom provider whose model id is `gemma4-2b`, and select `qvac/gemma4-2b` in OpenClaw. The raw SDK constant belongs in `qvac.config.json`; the OpenClaw-facing model name should use the alias.
+Start `qvac serve --openai` with that config, register an OpenClaw custom provider whose model id is `gemma4-2b`, and select `qvac/gemma4-2b` in OpenClaw. The raw SDK constant belongs in `qvac.config.json`; the OpenClaw-facing model name should use the alias.
 
 ## Compatible tools
 
@@ -236,7 +236,7 @@ Consult your tool's documentation for where it stores custom-provider settings (
 
 ### OpenCode manual provider
 
-If you are not using the plugin, configure `opencode.json` with a full `qvac` provider block and point it at the `qvac serve openai` instance you started yourself:
+If you are not using the plugin, configure `opencode.json` with a full `qvac` provider block and point it at the `qvac serve --openai` instance you started yourself:
 
 ```json title="opencode.json"
 {
