@@ -128,9 +128,11 @@ endif()
 # CUDA backend — opt-in via the 'cuda-backend' feature (Linux + NVIDIA only).
 # Mirrors hip-backend: builds libqvac-ggml-cuda.so as a standalone DL module
 # alongside Vulkan, so the addon dlopen's whichever GPU backend it picks at
-# runtime. Both x64 (RTX 30xx/50xx, Tesla) and arm64 (Jetson Orin) are in
-# scope, unlike HIP which is x64-only. Windows is deliberately excluded: it has
-# no GGML_BACKEND_DL support, so a second GPU backend cannot be stacked there.
+# runtime. Both x64 (RTX 30xx/50xx, Tesla) and arm64 are in scope, unlike HIP
+# which is x64-only. On arm64 that means the DGX Spark and NOT the Jetson Orin,
+# whose driver caps at CUDA 12.6 while this builds against 13; see the arch-list
+# comment below. Windows is deliberately excluded: it has no GGML_BACKEND_DL
+# support, so a second GPU backend cannot be stacked there.
 #
 # DETERMINISTIC, same reasoning as hip-backend above: requesting cuda-backend
 # REQUIRES nvcc at build time. A host-dependent skip would produce a no-CUDA
@@ -223,9 +225,26 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   #
   #   86-real     RTX 3090, the qvac-ubuntu*-x64-gpu CI runners        (x64)
   #   120a-real   RTX 5090                                             (x64)
-  #   87-real     Nvidia Jetson Orin                                   (arm64)
   #   80-virtual  PTX floor, both tiers. JITs onto sm_89, sm_90, sm_12x
   #               and anything newer that is not pinned above.
+  #
+  # QVAC-24470: `87-real` was here for the Jetson Orin and has been REMOVED,
+  # because it never reached one. The Orin's driver caps at CUDA 12.6 and it has
+  # only libcudart.so.12, while this module is built against CUDA 13 and links
+  # libcudart.so.13. A CUDA soname is major-versioned, so the module cannot load
+  # there at all and those cubins shipped to the single arm64 machine that could
+  # not open the file containing them. Verified on the device 2026-09-03: L4T
+  # R36.4.7, JetPack 6.2.1, driver 540.4.0, and no cuda-toolkit-13-0 in any
+  # configured source including jetson/t234, Orin's own SoC repo.
+  #
+  # Removing it changes no runtime behaviour. The Orin ran Vulkan before and runs
+  # Vulkan now; it only stops paying about 16 MiB for unreachable code.
+  #
+  # Supporting Jetson CUDA is still possible and is a product decision, not a
+  # packaging one: it means building arm64 against CUDA 12.x, which the Orin has
+  # natively. The DGX Spark boxes would then need a CUDA 12 runtime installed,
+  # since they ship with 13 only, though their driver is backward compatible.
+  # Put `87-real` back at the same time as that build, not before.
   #
   # THE LOWEST ENTRY MUST STAY -virtual, ON BOTH TIERS.
   #
@@ -277,7 +296,10 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # from "linux & x64" to "linux", so the arm64 tier is now exercised by their
   # linux-arm64 prebuild.
   if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
-    set(QVAC_CUDA_ARCHS "87-real\;80-virtual")
+    # 80-virtual alone. The only arm64 CUDA hardware that can load this module is
+    # the DGX Spark at sm_121, which has no -real entry either way and reaches the
+    # kernels by JIT. The floor stays virtual so the registration guard is armed.
+    set(QVAC_CUDA_ARCHS "80-virtual")
   else()
     set(QVAC_CUDA_ARCHS "86-real\;120a-real\;80-virtual")
   endif()
