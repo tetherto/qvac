@@ -157,6 +157,22 @@ function byCapability(gpuList: readonly Record<string, unknown>[]) {
   })
 }
 
+// Bytes resident on the GPU the engine would pick. Read through the collector
+// so the calibration and the estimator agree on which device counts and on
+// whether its readings are device-scoped at all.
+async function readGpuUsedBytes() {
+  const resources = await getSystemResources()
+  const gpus = resources.capabilities.gpus
+  const samples = resources.sample?.gpus
+  if (gpus.status !== 'supported' || samples?.status !== 'supported') return 0
+
+  for (const gpu of byCapability(gpus.value as unknown as Record<string, unknown>[])) {
+    const sample = samples.value.find((entry) => entry.id === (gpu.id as string))
+    if (sample?.memoryUsedBytes.status === 'supported') return sample.memoryUsedBytes.value
+  }
+  return 0
+}
+
 // Label for the backend in play, recorded with the coefficients because the
 // buffers they measure are allocated by the backend. Driver order is what
 // llama.cpp prefers, so the label matches the likely choice.
@@ -218,7 +234,8 @@ async function measure(
   name: string,
   contextTokens: number,
   cpuForced: boolean,
-  loadMode: 'none' | undefined
+  loadMode: 'none' | undefined,
+  gpuPass: boolean
 ): Promise<Measurement> {
   const model = (catalog as Record<string, { sha256Checksum: string } | undefined>)[name]
   if (!model) throw new Error(`unknown catalog constant: ${name}`)
@@ -227,7 +244,7 @@ async function measure(
   if (!profile?.ggufFacts) throw new Error(`no GGUF facts for ${name}`)
 
   await settle()
-  const before = rssBytes()
+  const before = gpuPass ? await readGpuUsedBytes() : rssBytes()
 
   const modelId = await withTimeout(
     loadModel({
@@ -244,11 +261,15 @@ async function measure(
   )
 
   await settle()
-  const afterLoad = rssBytes()
+  const afterLoad = gpuPass ? await readGpuUsedBytes() : rssBytes()
 
-  const sampler = createSampler()
-  sampler.start()
-  let peak = 0
+  // The RSS sampler cannot follow device memory — that counter is only readable
+  // through an async collector call. It costs nothing to skip: llama.cpp
+  // allocates the whole context at load, and every CPU point measured a working
+  // delta of 0.
+  const sampler = gpuPass ? undefined : createSampler()
+  sampler?.start()
+  let peak = afterLoad
   try {
     const result = completion({
       modelId,
@@ -263,7 +284,7 @@ async function measure(
       'the weights loaded, so this is a wedged engine call rather than a download stall.'
     )
   } finally {
-    peak = sampler.stop()
+    if (sampler) peak = sampler.stop()
   }
 
   await withTimeout(
@@ -303,10 +324,13 @@ export const ${platform.toUpperCase().replace(/-/g, '_')}_CALIBRATION: PlatformC
 
 async function main() {
   const write = Bare.argv.includes('--write')
+  // `--gpu` calibrates the same models resident on the GPU instead: no device
+  // override, the SDK's own load mode, and device memory as the counter.
+  const gpuPass = Bare.argv.includes('--gpu')
   const platform = `${os.platform()}-${os.arch()}`
-  console.log(`calibrating ${platform}`)
+  console.log(`calibrating ${platform}${gpuPass ? ' (GPU-resident)' : ''}`)
 
-  const loadMode = calibrationLoadMode(platform)
+  const loadMode = gpuPass ? undefined : calibrationLoadMode(platform)
   if (loadMode) {
     console.log(`weights loaded with load_mode '${loadMode}' — see METHODOLOGY.md, "Windows"`)
   }
@@ -322,7 +346,7 @@ async function main() {
   const resources = await getSystemResources()
   const gpus = resources.capabilities.gpus
   const gpuList = gpus.status === 'supported' ? gpus.value : []
-  const cpuForced = forcesCpu(platform)
+  const cpuForced = !gpuPass && forcesCpu(platform)
   // `device: 'cpu'` selects the CPU backend, and with it the f16 KV default.
   const hasGpu = gpuList.length > 0 && !cpuForced
   const backend = cpuForced ? 'cpu' : detectBackend(gpuList)
@@ -338,14 +362,14 @@ async function main() {
   // 30% spread the repeat check reported as a busy host, and skewed the linux
   // weight ratio to 1.7. Warm up on the smallest model and throw it away.
   console.log('warm-up load (not measured)')
-  await measure(FIT_MODELS[0]!, CONTEXTS[0]!, cpuForced, loadMode)
+  await measure(FIT_MODELS[0]!, CONTEXTS[0]!, cpuForced, loadMode, gpuPass)
 
   const elementWidths = new Set<number>()
   const measurements: FitPoint[] = []
   for (const name of FIT_MODELS) {
     for (const contextTokens of CONTEXTS) {
       for (let repeat = 0; repeat < REPEATS; repeat++) {
-        const measurement = await measure(name, contextTokens, cpuForced, loadMode)
+        const measurement = await measure(name, contextTokens, cpuForced, loadMode, gpuPass)
         // `.lower` is the width a GPU backend defaults to (q8_0), and equals
         // f16 when no GPU is reported — what the engine allocates in each
         // case, not an optimistic bound borrowed from the estimator's range.
@@ -491,7 +515,7 @@ async function main() {
   let heldOutKv = 0
   let heldOutArtifactBytes = 0
   for (let repeat = 0; repeat < REPEATS; repeat++) {
-    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced, loadMode)
+    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced, loadMode, gpuPass)
     const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
     heldOutKv = exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
     heldOutArtifactBytes = heldOut.artifactBytes
@@ -513,15 +537,18 @@ async function main() {
   }
 
   if (write) {
+    // A GPU pass is keyed by backend as well as platform, so it neither
+    // overwrites the CPU fixture nor claims to cover another backend.
+    const fixtureKey = gpuPass ? `${platform}-${backend}` : platform
     const target = path.join(
       os.cwd(),
       'src',
       'resources',
       'model-fit',
       'calibration',
-      `${platform}.ts`
+      `${fixtureKey}.ts`
     )
-    fs.writeFileSync(target, fixtureSource(platform, calibration))
+    fs.writeFileSync(target, fixtureSource(fixtureKey, calibration))
     console.log(`\nwrote ${target}`)
     console.log('remember to add the platform to calibration/index.ts and run prettier')
   } else {
