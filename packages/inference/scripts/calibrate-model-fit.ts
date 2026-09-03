@@ -55,11 +55,8 @@ const REPEATS = 3
 // allocation behaviour changed and this methodology needs re-checking.
 const WORKING_DRIFT_WARN_BYTES = 64 * 1024 * 1024
 
-// The KV cache grows by an exactly known amount between the two contexts, so
-// the persistent deltas must grow by at least that much. A shortfall means the
-// KV width assumed for the run is not what the engine allocated (the first
-// win32 run subtracted f16 against a q8_0 cache and read 56%) or the counter
-// misses allocation; either way nothing fitted on it is an upper bound.
+// The KV cache grows by a known amount between the two contexts, so the deltas
+// must too. A shortfall means the wrong KV width, or a counter missing memory.
 const KV_OBSERVATION_FLOOR = 0.9
 
 // Small, medium, large — plus one held out of the fit entirely, used only to
@@ -85,16 +82,9 @@ function rssBytes() {
   return usage && usage.rss > 0 ? usage.rss : 0
 }
 
-/**
- * Load mode for the calibration loads. Everywhere but Windows the SDK default
- * (mmap) is measured as is. On win32 a mapped file is prefetched into the
- * standby list, not the working set, so right after load RSS shows almost none
- * of the weights (16 MiB of a 2.4 GiB model) and the weight ratio cannot be
- * fitted. `load_mode: 'none'` reads the weights into anonymous memory instead
- * and the working set counts them in full; a mapped weight set can keep at
- * most the artifact size resident, so the ratio measured this way stays an
- * upper bound for the mmap default users run.
- */
+// win32 prefetches mapped weights into the standby list, not the working set, so
+// RSS sees 16 MiB of a 2.4 GiB model. An anonymous load still bounds the mmap
+// default, which keeps at most the artifact size resident.
 function calibrationLoadMode(platform: string) {
   return platform.startsWith('win32') ? 'none' : undefined
 }
@@ -131,10 +121,8 @@ function settle() {
   return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
 }
 
-// Registry downloads can stall without erroring, and an engine call can wedge
-// just as silently. These jobs hold an exclusive drained host, so every phase
-// is bounded rather than only the load: an unbounded `completion()` or
-// `unloadModel()` consumed 2.5 hours of a macOS host before it was cancelled.
+// A stalled download or a wedged engine call would otherwise run to the job
+// timeout while holding an exclusive drained host, so every phase is bounded.
 const LOAD_TIMEOUT_MS = 30 * 60 * 1000
 const COMPLETION_TIMEOUT_MS = 15 * 60 * 1000
 const UNLOAD_TIMEOUT_MS = 5 * 60 * 1000
@@ -205,17 +193,9 @@ function exactKvBytes(
   return kv.lower
 }
 
-/**
- * Platforms where a reported GPU means discrete device memory. RSS cannot
- * observe VRAM, so calibration there loads with `device: 'cpu'` and describes
- * CPU-resident execution — the case where system RAM is the binding
- * constraint. Apple silicon and mobile are unified memory and keep the GPU.
- *
- * `device`, not `gpu_layers: 0`: the addon picks the KV-cache default from the
- * backend the device key selects, so `gpu_layers: 0` with a GPU present still
- * builds a q8_0 cache while the layers run on the CPU — and the f16 this
- * harness would then subtract is twice the cache the engine allocated.
- */
+// RSS cannot observe VRAM, so these platforms calibrate CPU-resident execution.
+// Must be `device`, not `gpu_layers: 0`: the addon takes its KV default from the
+// backend `device` selects, so a GPU device builds q8_0 against a subtracted f16.
 function forcesCpu(platform: string) {
   return platform.startsWith('linux') || platform.startsWith('win32') || platform === 'darwin-x64'
 }
@@ -328,9 +308,7 @@ async function main() {
   const gpus = resources.capabilities.gpus
   const gpuList = gpus.status === 'supported' ? gpus.value : []
   const cpuForced = forcesCpu(platform)
-  // What the loads will actually allocate: with `device: 'cpu'` the engine
-  // selects the CPU backend regardless of the hardware present, and with it
-  // the f16 KV default.
+  // `device: 'cpu'` selects the CPU backend, and with it the f16 KV default.
   const hasGpu = gpuList.length > 0 && !cpuForced
   const backend = cpuForced ? 'cpu' : detectBackend(gpuList)
   const device = gpuName(gpuList)

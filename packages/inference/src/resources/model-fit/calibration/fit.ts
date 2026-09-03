@@ -119,27 +119,16 @@ export interface KvGrowth {
 /** Whether the counter behind the measurements sees allocation at all. */
 export interface KvObservation {
   models: readonly KvGrowth[]
-  /**
-   * Observed growth over computed growth, summed across models. Below 1 means
-   * the counter missed memory the engine allocated; `1` when no model has two
-   * contexts to compare.
-   */
+  /** Observed over computed growth; `1` when no model has two contexts. */
   ratio: number
 }
 
 /**
- * Checks the measurements against the one term the file sizes exactly.
- *
- * Between two contexts the engine allocates a known extra amount of KV cache —
- * anonymous memory, touched at load — plus compute buffers that can only add
- * to it. Growth below that means the cache subtracted is not the one the
- * engine built (the first win32 run subtracted f16 against a q8_0 cache and
- * read 56%) or the counter misses allocation; no fit on top of either can be
- * an upper bound. darwin-arm64's RSS reads ~1.0.
- * Summed across models so a small model's growth, which sits inside run-to-run
- * noise, does not decide alone; repeats enter as their median, because the
- * first load of a run carries a cold page-cache transient that would otherwise
- * inflate the small context and read as a shortfall.
+ * Checks the measurements against the one term the file sizes exactly: the KV
+ * cache grows by a known amount between contexts, and compute buffers only add
+ * to it. Growth below that means the wrong cache type was subtracted, or a
+ * counter that misses allocation. Summed across models, repeats as medians so a
+ * cold first load does not read as a shortfall.
  */
 export function kvObservation(points: readonly CalibrationPoint[]): KvObservation {
   const byModel = new Map<number, CalibrationPoint[]>()
