@@ -114,10 +114,12 @@ on:
         description: "Advanced: Electron runners (JSON array)"
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
-      snap-platforms:
-        description: "Advanced: Snap runners (JSON array)"
+      # TEST-ONLY on this throwaway branch: workflow_dispatch is capped at 25
+      # inputs and test-sdk.yml is already at the cap, so `snap-platforms` is
+      # swapped out to make room for `also-tests`. Not for merge.
+      also-tests:
+        description: "Exact testIds to add on top of the suite/filter selection (comma-separated)"
         type: string
-        default: '["qvac-ubuntu2204-x64-gpu"]'
       # One input, not a boolean plus a runner list: workflow_dispatch allows at
       # most 25 inputs and this workflow is at the ceiling. Picking a single
       # runner is what a re-run after a busy-host warning needs anyway.
@@ -375,7 +377,8 @@ jobs:
           RERUN_PLAN: ${{ inputs.rerun-plan }}
           DESKTOP_PLATFORMS: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
           ELECTRON_PLATFORMS: ${{ inputs.electron-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]' }}
-          SNAP_PLATFORMS: ${{ inputs.snap-platforms || '["qvac-ubuntu2204-x64-gpu"]' }}
+          # TEST-ONLY: the snap-platforms input is swapped out on this branch.
+          SNAP_PLATFORMS: '["qvac-ubuntu2204-x64-gpu"]'
         run: |
           const fs = require('fs');
 
