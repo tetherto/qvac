@@ -183,7 +183,21 @@ function exactKvBytes(
   return kv.lower
 }
 
-async function measure(name: string, contextTokens: number): Promise<Measurement> {
+/**
+ * Platforms where a reported GPU means discrete device memory. RSS cannot
+ * observe VRAM, so calibration there loads with `gpu_layers: 0` and describes
+ * CPU-resident execution — the case where system RAM is the binding
+ * constraint. Apple silicon and mobile are unified memory and keep the GPU.
+ */
+function forcesCpu(platform: string) {
+  return platform.startsWith('linux') || platform.startsWith('win32') || platform === 'darwin-x64'
+}
+
+async function measure(
+  name: string,
+  contextTokens: number,
+  cpuForced: boolean
+): Promise<Measurement> {
   const model = (catalog as Record<string, { sha256Checksum: string } | undefined>)[name]
   if (!model) throw new Error(`unknown catalog constant: ${name}`)
 
@@ -196,7 +210,7 @@ async function measure(name: string, contextTokens: number): Promise<Measurement
   const modelId = await withLoadTimeout(
     loadModel({
       modelSrc: model,
-      modelConfig: { ctx_size: contextTokens }
+      modelConfig: { ctx_size: contextTokens, ...(cpuForced && { gpu_layers: 0 }) }
     }),
     `loading ${name}`
   )
@@ -260,10 +274,15 @@ async function main() {
   const resources = await getSystemResources()
   const gpus = resources.capabilities.gpus
   const gpuList = gpus.status === 'supported' ? gpus.value : []
-  const hasGpu = gpuList.length > 0
-  const backend = detectBackend(gpuList)
+  const cpuForced = forcesCpu(platform)
+  // What the loads will actually allocate: with `gpu_layers: 0` the engine
+  // stays CPU-resident regardless of the hardware present.
+  const hasGpu = gpuList.length > 0 && !cpuForced
+  const backend = cpuForced ? 'cpu' : detectBackend(gpuList)
   const device = gpuName(gpuList)
-  console.log(`backend: ${backend}${device ? ` (${device})` : ''}`)
+  console.log(
+    `backend: ${backend}${device ? ` (${device})` : ''}${cpuForced ? ' — GPU offload disabled for calibration' : ''}`
+  )
 
   const mib = (n: number) => (n / 1024 / 1024).toFixed(0)
   const elementWidths = new Set<number>()
@@ -271,7 +290,7 @@ async function main() {
   for (const name of FIT_MODELS) {
     for (const contextTokens of CONTEXTS) {
       for (let repeat = 0; repeat < REPEATS; repeat++) {
-        const measurement = await measure(name, contextTokens)
+        const measurement = await measure(name, contextTokens, cpuForced)
         // `.lower` is the width a GPU backend defaults to (q8_0), and equals
         // f16 when no GPU is reported — what the engine allocates in each
         // case, not an optimistic bound borrowed from the estimator's range.
@@ -390,7 +409,7 @@ async function main() {
   let heldOutKv = 0
   let heldOutArtifactBytes = 0
   for (let repeat = 0; repeat < REPEATS; repeat++) {
-    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!)
+    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced)
     const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
     heldOutKv = exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
     heldOutArtifactBytes = heldOut.artifactBytes

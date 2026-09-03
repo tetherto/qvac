@@ -36,6 +36,13 @@ completion per point and warns if that working delta grows past 64 MiB: that
 would mean the engine's allocation behaviour changed and this methodology
 needs re-checking.
 
+On platforms where a GPU means discrete device memory (linux, windows,
+darwin-x64) the harness loads with `gpu_layers: 0`: RSS cannot observe VRAM,
+so the coefficients describe CPU-resident execution — the case where system
+RAM is the binding constraint. Assessment on such platforms returns `unknown`
+whenever a GPU is present; GPU-memory admission is out of scope for this
+phase.
+
 1. For each of three models (small, medium, large) at two contexts (512 and
    8192 tokens), **three times each**: settle, read RSS, load, settle, read RSS
    again — the difference is **persistent**. Single-shot loads were observed to

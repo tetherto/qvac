@@ -29,6 +29,21 @@ const ESTIMATORS = {
 
 const MOBILE_PLATFORMS: readonly ModelFitPlatform[] = ['android-arm64', 'ios-arm64']
 
+/**
+ * Platforms where a reported GPU means discrete device memory. There the
+ * engine executes the model in VRAM, which system-memory evidence cannot
+ * bound in either direction — and their calibration fixtures describe
+ * CPU-resident execution (`gpu_layers: 0`). A model on such a host assesses
+ * as `unknown` when a GPU is present; GPU-memory admission is out of scope
+ * for this phase. Apple silicon and mobile are unified memory and unaffected.
+ */
+const DISCRETE_GPU_PLATFORMS: readonly ModelFitPlatform[] = [
+  'darwin-x64',
+  'linux-arm64',
+  'linux-x64',
+  'win32-x64'
+]
+
 /** Resolves a checksum to its catalog resource profile. */
 export type ProfileResolver = (sha256Checksum: string) => ModelResourceProfile | undefined
 
@@ -151,6 +166,22 @@ function evaluate(
           platform
             ? `no validated calibration for ${platform}`
             : 'the runtime platform is not one this assessment covers'
+        ]
+      }
+    }
+  }
+
+  // On these platforms the engine executes the model in the GPU's own memory,
+  // which system-memory evidence cannot bound in either direction — and the
+  // platform's coefficients describe CPU-resident execution.
+  if (platform && DISCRETE_GPU_PLATFORMS.includes(platform) && hasGpu(resources)) {
+    return {
+      candidate,
+      result: {
+        kind: 'unknown',
+        estimatorVersion: 'none',
+        reasons: [
+          'a discrete GPU is present, so the model executes in GPU memory that system-memory evidence cannot bound; GPU-memory admission is out of scope in this phase'
         ]
       }
     }

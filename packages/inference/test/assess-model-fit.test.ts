@@ -922,3 +922,44 @@ test('fitResidentMemory: refuses designs that cannot separate the coefficients',
   )
   t.is(fitResidentMemory(singleContext), undefined, 'one context throughout')
 })
+
+// ---------------------------------------------------------------------------
+// Discrete-GPU platforms
+// ---------------------------------------------------------------------------
+
+test('assess: a discrete GPU on linux or windows assesses as unknown', (t) => {
+  // These platforms' fixtures describe CPU-resident execution; with a GPU
+  // present the model executes in VRAM, which system-memory evidence cannot
+  // bound in either direction.
+  const withGpu = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ gpu: true }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(withGpu.verdict, 'unknown')
+  t.is(withGpu.models[0]!.verdict, 'unknown')
+  t.ok(withGpu.models[0]!.reasons.some((r) => r.includes('GPU memory')))
+
+  const cpuOnly = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources(),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.ok(cpuOnly.models[0]!.estimate, 'without a GPU the CPU-resident fixture applies')
+
+  const appleSilicon = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ gpu: true }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.ok(appleSilicon.models[0]!.estimate, 'unified-memory platforms keep verdicts with a GPU')
+})

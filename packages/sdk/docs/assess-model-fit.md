@@ -128,6 +128,13 @@ placeholders rather than consuming them. Every other platform returns `unknown`
 until its own run lands. See
 `@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
 
+**Discrete-GPU desktops.** On linux, windows and Intel-mac hosts that report a
+GPU, LLM workloads return `unknown` regardless of calibration: the engine
+executes the model in the GPU's own memory, which system-memory evidence
+cannot bound in either direction, and GPU-memory admission is out of scope for
+this phase. Those platforms' fixtures describe CPU-only machines — the ones
+where system RAM genuinely is the constraint.
+
 ## Relationship to `@qvac/model-fit`
 
 `assessModelFit` is the zero-download tier: metadata only, available before a
