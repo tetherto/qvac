@@ -394,10 +394,12 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
+      actions: read
+    uses: ./.github/workflows/prebuilds-nx.yml
     with:
       ref: ${{ needs.context.outputs.ref }}
       repository: ${{ needs.context.outputs.repository }}
+      packages: '["llm-llamacpp"]'
     secrets: inherit
 
   matrix-desktop:

@@ -78,10 +78,11 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-model-fit.yml
+      actions: read
+    uses: ./.github/workflows/prebuilds-nx.yml
     secrets: inherit
     with:
-      workdir: "packages/model-fit"
+      packages: '["model-fit"]'
 
   # Publish to GitHub Package Registry (GPR) for non-release branches
   publish-gpr:

@@ -248,11 +248,8 @@ jobs:
       packages: ${{ format('["{0}"]', matrix.package) }}
     secrets: inherit
 
-  # Wrapper drift gate. Publish no longer rebuilds the TypeScript wrappers (every
-  # gated package sets buildStep: none), so this is what proves the committed
-  # .js/.d.ts still match src. It stays a separate job on purpose: it installs and
-  # runs untrusted third-party code, and must not do that inside publish-gpr /
-  # publish-npm, which hold contents write, packages write and id-token write.
+  # Wrapper drift gate (#3850). Separate from publish on purpose: it installs and
+  # runs untrusted code, which must not happen in a credentialed job.
   verify-generated:
     name: Verify generated wrappers (${{ matrix.package }})
     needs: detect
@@ -267,17 +264,8 @@ jobs:
     with:
       workdir: ${{ matrix.workdir }}
 
-  # decoder-audio is the ONLY package whose mobile run blocked publish on main:
-  # on-merge-decoder-audio.yml listed mobile-integration-tests in both publish
-  # jobs' needs, so it could not reach GPR or npm until mobile passed. That file
-  # is deleted here and testGateMode: pre-publish-integration covers desktop only.
-  #
-  # A static job rather than a matrix row because `uses:` cannot take an
-  # expression, so a per-package mobile workflow can only be called from a job
-  # that names it literally. Same shape as cpp-tests-nx's carve-outs.
-  #
-  # tts-ggml also lost its mobile run, but on main that was POST-publish and
-  # informational, never a publish blocker, so it is not restored here.
+  # decoder-audio is the only package whose mobile run blocked publish on main.
+  # Static job because `uses:` cannot take an expression.
   mobile-gate-decoder-audio:
     name: Mobile gate (decoder-audio)
     needs: detect
@@ -303,14 +291,9 @@ jobs:
       - pre-publish-integration
       - verify-generated
       - mobile-gate-decoder-audio
-    # Test gates are per-package in the steps below, not here: needs.<job>.result is
-    # the matrix-wide aggregate, and `matrix` is unavailable in a job-level `if:`.
-    #
-    # verify-generated and mobile-gate-decoder-audio are the exceptions and are
-    # enforced here, aggregate and all. Each is skipped only when this run selected
-    # no package it applies to, so `skipped` cannot mask a real result. A failure
-    # blocks every package in the run rather than just the offender, which is
-    # fail-closed and near-free: dorny normally selects one changed package per run.
+    # Test gates are per-package in the steps below: needs.<job>.result is the
+    # matrix-wide aggregate. verify-generated and mobile-gate are enforced here
+    # instead, fail-closed; each is skipped only when no package needs it.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
       (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
@@ -514,13 +497,8 @@ jobs:
     outputs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
     steps:
-      # Keyed on publish-npm only. A GPR dev publish must NOT reopen this gate:
-      # post-publish integration already ran on the PR, and merge-guard consumed
-      # its result before the merge was allowed. publish-gpr does run off
-      # release-* here, so keying on it would start the full integration matrix
-      # on every main/feature-*/tmp-* push for asr-ggml, bci-whispercpp,
-      # ocr-ggml, translation-nmtcpp and tts-ggml. main removed exactly this in
-      # #4175 (QVAC-24365); publish-gpr-skip-policy.test.mjs guards it.
+      # publish-npm only: a GPR dev publish must not reopen the integration
+      # matrix, which already ran on the PR (#4175).
       - id: gate
         shell: bash
         run: |
