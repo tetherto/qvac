@@ -40,17 +40,17 @@ Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
 [Models](#models)); point the addon at the folder that holds them.
 MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
 
-The linux-x64 prebuild bundles the CUDA backend next to Vulkan: ggml runs in
-hybrid dynamically-loaded backend mode, the CPU-variant, Vulkan, and CUDA
-backends ship as `.so` modules beside the addon, and only the CUDA module
-depends on the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the
-CUDA 13 runtime libraries (cudart and cuBLAS) resolvable at load time; hosts that
-cannot resolve them skip the module and fall back to Vulkan or CPU. The engine
-prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
-opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`
-on the build host).
+The published linux-x64 prebuild ships Vulkan. CUDA is opt-in at build time
+via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host).
+When CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend
+mode: the CPU-variant, Vulkan, and CUDA backends ship as `.so` modules beside
+the addon, and only the CUDA module depends on the CUDA runtime. Engaging
+CUDA needs the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
+cuBLAS) resolvable at load time; hosts that cannot resolve them skip the
+module and fall back to Vulkan or CPU. The engine prefers CUDA when both GPU
+backends are usable.
 
-The prebuilt CUDA module targets **compute capability 7.5 and newer**, with
+A CUDA build's module targets **compute capability 7.5 and newer**, with
 native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
 Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
 from the bundled 8.0 PTX on first use, a one-off compile the driver caches.

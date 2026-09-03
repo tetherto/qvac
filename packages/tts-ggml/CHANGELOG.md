@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Drop CUDA from the published linux-x64 prebuild so the npm tarball stays
+  under the registry size limit. `useGPU: true` uses Vulkan on Linux. CUDA
+  remains opt-in at build time via `ENABLE_CUDA=ON`.
+
 - Raise the `speech-cpp` floor to 2026-09-01#2, which brings in ggml-speech
   2026-09-02. The CUDA backend now skips, at registration, GPUs whose
   compute capability has no compiled code in the fatbin, so a
