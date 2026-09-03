@@ -53,6 +53,12 @@ export function loadTeam(pod) {
   if (parsed.extraRepos !== undefined) {
     assertStringArray(parsed.extraRepos, "extraRepos", teamFile);
   }
+  if (parsed.docPaths !== undefined) {
+    assertStringArray(parsed.docPaths, "docPaths", teamFile);
+  }
+  if (parsed.approvalLeads !== undefined) {
+    assertStringArray(parsed.approvalLeads, "approvalLeads", teamFile);
+  }
   if (parsed.leads.length === 0 && parsed.members.length === 0) {
     console.error(`Warning: ${teamFile} has no leads or members`);
   }
@@ -61,7 +67,9 @@ export function loadTeam(pod) {
     name: typeof parsed.name === "string" ? parsed.name : pod,
     leads: parsed.leads,
     members: parsed.members,
+    approvalLeads: Array.isArray(parsed.approvalLeads) ? parsed.approvalLeads : [],
     ownedPaths: parsed.ownedPaths,
+    docPaths: Array.isArray(parsed.docPaths) ? parsed.docPaths : [],
     extraRepos: Array.isArray(parsed.extraRepos) ? parsed.extraRepos : [],
     teamFile,
   };
@@ -87,13 +95,14 @@ export function discoverPods() {
 }
 
 // Find the pod that owns a PR based on its touched files. Returns the
-// first pod whose ownedPaths overlap with the PR's files, or null. Order
-// is the readdir order of .github/teams/ — for a PR that touches paths
+// first pod whose ownedPaths or docPaths overlap with the PR's files, or null.
+// Order is the readdir order of .github/teams/ — for a PR that touches paths
 // in multiple pods, the first match wins.
 export function findPodForFiles(files, pods) {
   if (!files || !pods) return null;
   for (const pod of pods) {
-    if (files.some((f) => pod.ownedPaths.some((p) => f.path.startsWith(p)))) {
+    const prefixes = [...pod.ownedPaths, ...(pod.docPaths || [])];
+    if (files.some((f) => prefixes.some((p) => f.path.startsWith(p)))) {
       return pod;
     }
   }

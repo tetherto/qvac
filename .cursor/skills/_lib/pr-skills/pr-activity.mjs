@@ -13,6 +13,14 @@ export const STATE_ICONS = {
 const PR_PAGE_SIZE = 30;
 const APPROVAL_GATE_RE = /^(check-approvals|tier-based approval check)/i;
 const FAILING_STATES = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ERROR"]);
+const PENDING_STATES = new Set(["IN_PROGRESS", "QUEUED", "PENDING"]);
+const E2E_PLATFORM_RE = /^run-tests \/ (\w+)-tests/;
+const E2E_ICONS = {
+  success: "✅",
+  failure: "❌",
+  pending: "🕒",
+  skipped: "⏸",
+};
 
 function gh(args) {
   // stderr is piped (not inherited) so it does not leak to the user's terminal
@@ -51,10 +59,24 @@ function isBot(login) {
 export function rolesForPod(team, currentUser = null) {
   const leadSet = new Set(team.leads);
   const memberLogins = team.members.filter((login) => !leadSet.has(login));
+  const approvalLeads = [...new Set(team.approvalLeads || [])].filter(
+    (login) => !leadSet.has(login) && !memberLogins.includes(login),
+  );
   const allTeam = [...new Set([...team.leads, ...memberLogins])];
+  const leadApprovers = [...new Set([...team.leads, ...approvalLeads])];
+  const reviewers = [...new Set([...allTeam, ...approvalLeads])];
   const currentUserRole =
     currentUser && team.leads.includes(currentUser) ? "lead" : "member";
-  return { currentUser, currentUserRole, leads: team.leads, members: memberLogins, allTeam };
+  return {
+    currentUser,
+    currentUserRole,
+    leads: team.leads,
+    members: memberLogins,
+    allTeam,
+    approvalLeads,
+    leadApprovers,
+    reviewers,
+  };
 }
 
 // Formal-review-only state used for approval gates. Most recent non-COMMENTED
@@ -162,7 +184,8 @@ export function hasMemberApprovalInPod(pr, podRoles) {
 }
 
 export function hasLeadApprovalInPod(pr, podRoles) {
-  return podRoles.leads.some((member) => {
+  const leads = podRoles.leadApprovers || podRoles.leads;
+  return leads.some((member) => {
     if (member === pr.author.login) return false;
     return pr.reviewState.get(member) === "APPROVED";
   });
@@ -275,18 +298,17 @@ export function failingCheckNames(contexts) {
   return [...names];
 }
 
-export function formatCiRed(failingNames) {
+export function formatCiRed(failingNames, { suppressE2e = false } = {}) {
   if (!failingNames?.length) return null;
-  const e2eRe = /^(?:run-tests \/ )?(android|desktop|ios)-tests \//;
   const platforms = new Set();
   const other = [];
   for (const name of failingNames) {
-    const m = name.match(e2eRe);
-    if (m) platforms.add(m[1]);
+    const m = name.match(E2E_PLATFORM_RE);
+    if (m) platforms.add(m[1].toLowerCase());
     else other.push(name);
   }
   const labels = [];
-  if (platforms.size) {
+  if (platforms.size && !suppressE2e) {
     labels.push(`e2e tests (${[...platforms].sort().join(", ")})`);
   }
   const shown = other.slice(0, 3);
@@ -294,6 +316,37 @@ export function formatCiRed(failingNames) {
   if (other.length > 3) labels.push(`(+${other.length - 3} more)`);
   if (!labels.length) return null;
   return `⚠ CI red — ${labels.join(", ")}`;
+}
+
+export function computeE2e(contexts) {
+  const byPlatform = new Map();
+  for (const ctx of contexts || []) {
+    const m = ctx.name?.match(E2E_PLATFORM_RE);
+    if (!m) continue;
+    const platform = m[1].toLowerCase();
+    if (!byPlatform.has(platform)) byPlatform.set(platform, new Set());
+    byPlatform.get(platform).add(ctx.state);
+  }
+  const out = {};
+  for (const [platform, states] of byPlatform) {
+    if ([...states].some((s) => FAILING_STATES.has(s))) out[platform] = "failure";
+    else if ([...states].some((s) => PENDING_STATES.has(s))) out[platform] = "pending";
+    else if (states.has("SUCCESS")) out[platform] = "success";
+    else out[platform] = "skipped";
+  }
+  return out;
+}
+
+export function formatE2eLine(e2e) {
+  const platforms = Object.keys(e2e || {});
+  if (!platforms.length) return "e2e: ⏸ not run";
+  return (
+    "e2e: " +
+    platforms
+      .sort()
+      .map((p) => `${E2E_ICONS[e2e[p]]} ${p}`)
+      .join(" · ")
+  );
 }
 
 function fetchRollupForOid({ owner, name }, oid) {
@@ -524,6 +577,11 @@ function touchesOwnedPaths(files, ownedPaths) {
   return files.some((file) => ownedPaths.some((path) => file.path.startsWith(path)));
 }
 
+export function isDocsOnly(files, ownedPaths, docPaths) {
+  if (!docPaths?.length) return false;
+  return touchesOwnedPaths(files, docPaths) && !touchesOwnedPaths(files, ownedPaths);
+}
+
 export function collectPRActivity({
   mode = "team",
   pod = null,
@@ -542,6 +600,7 @@ export function collectPRActivity({
   const pods = loadPods(mode, pod);
   if (pods.length === 0) throw new Error("No pods discovered under .github/teams/.");
   const ownedPaths = [...new Set(pods.flatMap((p) => p.ownedPaths))];
+  const docPaths = [...new Set(pods.flatMap((p) => p.docPaths || []))];
   const globalPodRoles =
     pods.length === 1 ? rolesForPod(pods[0], currentUser) : null;
   const roles = globalPodRoles || {
@@ -550,6 +609,9 @@ export function collectPRActivity({
     leads: [],
     members: [],
     allTeam: [],
+    approvalLeads: [],
+    leadApprovers: [],
+    reviewers: [],
   };
   // authorScope === "pod" filters relevantPRs to pod-roster authors only.
   // PRs that touch pod paths but were authored outside the roster are surfaced
@@ -618,7 +680,9 @@ export function collectPRActivity({
     if (!pr.author?.login) continue;
     if (mode === "my" && pr.author.login !== currentUser) continue;
     const files = pr.files?.nodes || [];
-    const pathHit = pr.soleOwner || touchesOwnedPaths(files, ownedPaths);
+    const implHit = pr.soleOwner || touchesOwnedPaths(files, ownedPaths);
+    const docsHit = !pr.soleOwner && touchesOwnedPaths(files, docPaths);
+    const pathHit = implHit || docsHit;
     const authorOnRoster = rosterLogins ? rosterLogins.has(pr.author.login) : false;
 
     if (!isCrossPodMy) {
@@ -645,6 +709,7 @@ export function collectPRActivity({
       ? resolveCheckContexts(pr, pr._repoConfig || repoConfig)
       : [];
     const failingChecks = failingCheckNames(checkContexts);
+    const e2e = includeCiChecks ? computeE2e(checkContexts) : {};
     const ciRed = formatCiRed(failingChecks);
     const enriched = {
       ...pr,
@@ -658,7 +723,9 @@ export function collectPRActivity({
       repo: pr.repo,
       prRef,
       failingChecks,
+      e2e,
       ciRed,
+      docsOnly: isDocsOnly(files, ownedPaths, docPaths),
     };
     if (includeAuthorTiers) {
       enriched.authorTier = assignAuthorTier(enriched, allTeamSet);
@@ -727,17 +794,21 @@ export function classifyTeamPRs(state) {
 export const AUTHOR_TIER_ORDER = ["core", "platform", "external"];
 
 export function groupTeamPRsByTier(groups) {
-  function empty() {
+  function emptyBuckets() {
     return { reReviewPRs: [], stalePRs: [], activePRs: [], approvedPRs: [] };
   }
+  function emptyLanes() {
+    return { impl: emptyBuckets(), docs: emptyBuckets() };
+  }
   const tiers = {
-    core: empty(),
-    platform: empty(),
-    external: empty(),
+    core: emptyLanes(),
+    platform: emptyLanes(),
+    external: emptyLanes(),
   };
   function place(pr, key) {
     const tier = AUTHOR_TIER_ORDER.includes(pr.authorTier) ? pr.authorTier : "platform";
-    tiers[tier][key].push(pr);
+    const lane = pr.docsOnly ? "docs" : "impl";
+    tiers[tier][lane][key].push(pr);
   }
   for (const pr of groups.reReviewPRs) place(pr, "reReviewPRs");
   for (const pr of groups.stalePRs) place(pr, "stalePRs");
@@ -833,6 +904,8 @@ export function toJsonablePR(pr) {
       ([login, state]) => ({ login, state }),
     ),
     failingChecks: pr.failingChecks || [],
+    e2e: pr.e2e || {},
     ciRed: pr.ciRed || null,
+    docsOnly: Boolean(pr.docsOnly),
   };
 }
