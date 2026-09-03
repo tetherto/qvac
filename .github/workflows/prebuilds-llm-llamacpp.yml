@@ -53,5 +53,9 @@ jobs:
       # QVAC-23763: cuda-backend hard-errors without nvcc, so linux needs the
       # toolkit. Compile-only, no NVIDIA GPU required.
       include-cuda: true
+      # QVAC-24442: the vcpkg manifest gates cuda-backend on `linux`, not
+      # `linux & x64`, so the arm64 job needs the sbsa toolkit for the same
+      # reason. Without it arm64 hard-errors on the missing nvcc.
+      include-cuda-arm64: true
       extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
     secrets: inherit

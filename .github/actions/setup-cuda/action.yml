@@ -1,7 +1,7 @@
 name: "Setup CUDA toolkit for nvcc compile"
 description: >-
   Assembles a pinned CUDA toolkit from NVIDIA's redistributable component
-  archives on a linux-x64 runner and exports
+  archives on a linux runner, x64 or arm64, and exports
   CUDA_PATH/CUDACXX/PATH(bin)/VCPKG_KEEP_ENV_VARS/LD_LIBRARY_PATH so a
   consumer's speech-cpp cuda feature can compile the ggml CUDA backend.
   Component tarballs are used instead of the runfile installer because the
@@ -28,18 +28,22 @@ runs:
     # list changes or a stale toolkit is restored and the sha256-verified
     # assemble below is skipped.
     #
-    # QVAC-23763: restore and save are split, and only trusted events save.
+    # QVAC-24442: runner.arch is part of the key. GitHub scopes a cache by repo
+    # and ref, not by architecture, so without it an arm64 job would restore the
+    # x86_64 toolkit and fail with an exec format error deep in the build.
+    #
+    # Restore and save are split so only trusted events write.
     # `pull_request_target` runs with GITHUB_REF on the base branch, so a
-    # combined `actions/cache` let any authorized PR write the entry that main's
-    # privileged runs restore, and cpp-lint reaches here with no label at all.
-    # r1 -> r2 because the split only stops new writes; rotating makes whatever
-    # that lane already wrote unreachable.
+    # combined `actions/cache` let any authorized PR populate the entry that
+    # main's privileged runs then restore, and cpp-lint reaches here with no
+    # label at all. r1 -> r2 because splitting only stops new writes; rotating
+    # makes whatever the old lane already wrote unreachable.
     - name: Restore CUDA toolkit
       id: cache-cuda
-      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-r2
+        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r2
 
     - name: Download + verify + assemble CUDA toolkit
       if: steps.cache-cuda.outputs.cache-hit != 'true'
@@ -51,7 +55,17 @@ runs:
         # is the minimal set that compiles and links the ggml CUDA backend;
         # the runtime-loaded module resolves cudart and cuBLAS from the
         # host at run time.
-        COMPONENTS="\
+        #
+        # QVAC-24442: NVIDIA calls the arm64 build "sbsa". It is a native
+        # toolkit, not a cross-compiler, so it only runs on an arm64 runner.
+        case "$(uname -m)" in
+          x86_64)  REDIST_ARCH=linux-x86_64 ;;
+          aarch64) REDIST_ARCH=linux-sbsa ;;
+          *) echo "::error::setup-cuda: no CUDA redist for $(uname -m)"; exit 1 ;;
+        esac
+        echo "Assembling the $REDIST_ARCH toolkit"
+
+        COMPONENTS_linux_x86_64="\
         cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-13.2.51-archive.tar.xz 706b996fefc59dc8d64d317fdf48d0aa84c4ae004eff43009dd918f40c5cc66a
         libnvvm/linux-x86_64/libnvvm-linux-x86_64-13.2.51-archive.tar.xz e013fce38130d2337ea695aadc5ddd5dcfb78f9107903d72492b9819539749bb
         cuda_crt/linux-x86_64/cuda_crt-linux-x86_64-13.2.51-archive.tar.xz fbc31fed55b7255591f3a19f575ca078827f5e6757d317d009f7ec1e69fcde4b
@@ -59,6 +73,26 @@ runs:
         cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-13.2.27-archive.tar.xz 56e1bafb29faa87375b0484814870046530b88c0a421909096892f027ec1927b
         cuda_culibos/linux-x86_64/cuda_culibos-linux-x86_64-13.2.51-archive.tar.xz dece3cdb7954d276e07eb23bee882a24627f431654cdeeef2bcee2d22669d93c
         libcublas/linux-x86_64/libcublas-linux-x86_64-13.3.0.5-archive.tar.xz 9f3c23d55b098d9159c435db59f228df79493152a778d4d367e7d60470d8c64b"
+
+        COMPONENTS_linux_sbsa="\
+        cuda_nvcc/linux-sbsa/cuda_nvcc-linux-sbsa-13.2.51-archive.tar.xz 28d201ffc46627abd919d623d85e721f33c92cf02749e023cd66d6fa0f1206a7
+        libnvvm/linux-sbsa/libnvvm-linux-sbsa-13.2.51-archive.tar.xz 366da4383992b8d13df63ffecd3a8315815955f50da0c0288ca5123212f67e02
+        cuda_crt/linux-sbsa/cuda_crt-linux-sbsa-13.2.51-archive.tar.xz 04f8fd03bc5a99507f5d531cc65452881c8949311bc5cc87bc1fe05a7607fd9e
+        cuda_cudart/linux-sbsa/cuda_cudart-linux-sbsa-13.2.51-archive.tar.xz 379363621c59c8d6faeea2f7a527eae91fc7db8cb2121cb42fe7972a48462f67
+        cuda_cccl/linux-sbsa/cuda_cccl-linux-sbsa-13.2.27-archive.tar.xz 1587f83b92aef54414cd118723ec1e4c118e14c70ac7779e13caa941f8030faf
+        cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.2.51-archive.tar.xz 35244c4d90e5b1aa48fb98d655f6dfa3f9e4f7d0ac220266ebf85c0928a7524b
+        libcublas/linux-sbsa/libcublas-linux-sbsa-13.3.0.5-archive.tar.xz edadce2ec8d997ffb08f5a1c4ee6b1d14a2c883f2aa11e1d3208b4f077d9225f"
+
+        # Same seven components and release either way, only the path and hash
+        # differ. An explicit case rather than an indirect expansion: it fails
+        # closed if a new arch is added above without a matching list here,
+        # instead of silently expanding to an empty COMPONENTS and assembling
+        # nothing.
+        case "$REDIST_ARCH" in
+          linux-x86_64) COMPONENTS="$COMPONENTS_linux_x86_64" ;;
+          linux-sbsa)   COMPONENTS="$COMPONENTS_linux_sbsa" ;;
+          *) echo "::error::setup-cuda: no COMPONENTS list for $REDIST_ARCH"; exit 1 ;;
+        esac
 
         prefix="$RUNNER_TEMP/cuda/toolkit"
         mkdir -p "$prefix"
@@ -85,10 +119,10 @@ runs:
         (github.event_name == 'push' ||
          github.event_name == 'workflow_dispatch' ||
          github.event_name == 'merge_group')
-      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-r2
+        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r2
 
     - name: Export CUDA environment
       shell: bash

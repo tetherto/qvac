@@ -2,6 +2,8 @@ import test from 'brittle'
 import { estimateLlm, LLM_ESTIMATOR_VERSION } from '@/resources/model-fit/estimators/llm'
 import { estimateWhisper } from '@/resources/model-fit/estimators/whisper'
 import { assessModelFitFromResources } from '@/resources/model-fit/assess'
+import { fitResidentMemory } from '@/resources/model-fit/calibration/fit'
+import type { CalibrationPoint } from '@/resources/model-fit/calibration/fit'
 import type { PlatformCalibration } from '@/resources/model-fit/types'
 import type { GgufFacts, ModelResourceProfile } from '@/schemas/model-resource-profile'
 import type { SystemResources } from '@/schemas/system-resources'
@@ -53,10 +55,35 @@ function profile(overrides: Partial<ModelResourceProfile> = {}): ModelResourcePr
   }
 }
 
-function resources(options: { totalBytes?: number; usedBytes?: number; gpu?: boolean } = {}) {
+function resources(
+  options: {
+    totalBytes?: number
+    usedBytes?: number
+    gpu?: boolean
+    processUsedBytes?: number
+    processAvailableBytes?: number
+  } = {}
+) {
   const total = options.totalBytes ?? 64 * GIB
   const used = options.usedBytes ?? 16 * GIB
   const provenance = { source: 'test', scope: 'system' as const }
+  const processProvenance = { source: 'test', scope: 'process' as const }
+  const processUsed =
+    options.processUsedBytes === undefined
+      ? ({ status: 'unavailable' } as const)
+      : ({
+          status: 'supported',
+          value: options.processUsedBytes,
+          provenance: processProvenance
+        } as const)
+  const processAvailable =
+    options.processAvailableBytes === undefined
+      ? ({ status: 'unavailable' } as const)
+      : ({
+          status: 'supported',
+          value: options.processAvailableBytes,
+          provenance: processProvenance
+        } as const)
 
   const value: SystemResources = {
     capabilities: {
@@ -98,7 +125,9 @@ function resources(options: { totalBytes?: number; usedBytes?: number; gpu?: boo
       cpu: { status: 'unavailable' },
       memory: {
         usedBytes: { status: 'supported', value: used, provenance },
-        totalBytes: { status: 'supported', value: total, provenance }
+        totalBytes: { status: 'supported', value: total, provenance },
+        processUsedBytes: processUsed,
+        processAvailableBytes: processAvailable
       },
       gpus: { status: 'supported', provenance, value: [] }
     }
@@ -389,6 +418,42 @@ test('estimateWhisper: refuses a non-audio workload', (t) => {
   t.is(result.kind, 'unknown')
 })
 
+test('estimateWhisper: unmeasured audio coefficients refuse rather than under-estimate', (t) => {
+  // FLAT_CALIBRATION carries the harness's placeholder zeros: consuming them
+  // would return an estimate whose entire audio working memory is zero.
+  const unmeasured = estimateWhisper({
+    profile: profile({ engine: 'whispercpp-transcription' }),
+    workload: { kind: 'audio', windowMs: 30_000, streaming: false },
+    extraArtifactBytes: 0,
+    calibration: calibration(),
+    hasGpu: false
+  })
+  t.is(unmeasured.kind, 'unknown')
+  if (unmeasured.kind !== 'unknown') return
+  t.ok(unmeasured.reasons.some((r) => r.includes('has not been measured')))
+
+  // A measured window is not enough for a streaming session whose own
+  // coefficient is still a placeholder.
+  const windowOnly = calibration({ audioWindowBytes: { lower: 60 * MIB, upper: 90 * MIB } })
+  const streaming = estimateWhisper({
+    profile: profile({ engine: 'whispercpp-transcription' }),
+    workload: { kind: 'audio', windowMs: 30_000, streaming: true },
+    extraArtifactBytes: 0,
+    calibration: windowOnly,
+    hasGpu: false
+  })
+  t.is(streaming.kind, 'unknown')
+
+  const oneShot = estimateWhisper({
+    profile: profile({ engine: 'whispercpp-transcription' }),
+    workload: { kind: 'audio', windowMs: 30_000, streaming: false },
+    extraArtifactBytes: 0,
+    calibration: windowOnly,
+    hasGpu: false
+  })
+  t.is(oneShot.kind, 'estimate', 'a measured window supports a non-streaming estimate')
+})
+
 // ---------------------------------------------------------------------------
 // Budget and reserve
 // ---------------------------------------------------------------------------
@@ -416,8 +481,11 @@ test('assess: desktop reserve is the larger of 2 GiB and 15%', (t) => {
   t.is(large.budget?.reservedBytes, 64 * GIB * 0.15, '15% dominates on a large machine')
 })
 
-test('assess: mobile reserve is the larger of 1 GiB and 20%', (t) => {
-  const result = assessModelFitFromResources({
+test('assess: iOS budgets are per-process and refuse without the allowance metric', (t) => {
+  // System metrics being supported must NOT produce a budget on iOS: jetsam
+  // enforces a per-process limit, and a system budget would defend verdicts
+  // the OS does not honor.
+  const withoutMetric = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
@@ -425,7 +493,42 @@ test('assess: mobile reserve is the larger of 1 GiB and 20%', (t) => {
     calibration: calibration(),
     resolveProfile: () => profile()
   })
+  t.is(withoutMetric.basis, 'process-memory')
+  t.is(withoutMetric.verdict, 'unknown')
+  t.absent(withoutMetric.budget)
+  t.ok(
+    withoutMetric.reasons.some((r) => r.includes('per-process allowance metric is not available'))
+  )
+
+  const withMetric = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ processUsedBytes: 1 * GIB, processAvailableBytes: 3 * GIB }),
+    platform: 'ios-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(withMetric.basis, 'process-memory')
+  // Ceiling = allowance + footprint (the relation jetsam enforces); the mobile
+  // reserve applies against that ceiling: max(1 GiB, 20% of 4 GiB) = 1 GiB.
+  t.is(withMetric.budget?.totalBytes, 4 * GIB)
+  t.is(withMetric.budget?.usedBytes, 1 * GIB)
+  t.is(withMetric.budget?.reservedBytes, 1 * GIB)
+  t.is(withMetric.budget?.availableAfterReserveBytes, 2 * GIB)
+})
+
+test('assess: android keeps the system basis with the mobile reserve, by explicit decision', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
+    platform: 'android-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(result.basis, 'system-memory')
   t.is(result.budget?.reservedBytes, 8 * GIB * 0.2)
+  t.ok(result.assumptions.some((a) => a.includes('android budgets deliberately use system memory')))
 })
 
 test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
@@ -441,7 +544,7 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
   })
   t.is(noSample.verdict, 'unknown')
   t.absent(noSample.budget)
-  t.ok(noSample.reasons.some((r) => r.includes('no system-memory sample')))
+  t.ok(noSample.reasons.some((r) => r.includes('no memory sample')))
 
   const unsupported = assessModelFitFromResources({
     models: [candidate()],
@@ -453,7 +556,9 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
         cpu: { status: 'unavailable' },
         memory: {
           usedBytes: { status: 'unavailable' },
-          totalBytes: { status: 'unavailable' }
+          totalBytes: { status: 'unavailable' },
+          processUsedBytes: { status: 'unavailable' },
+          processAvailableBytes: { status: 'unavailable' }
         },
         gpus: { status: 'unavailable' }
       }
@@ -512,7 +617,52 @@ test('assess: verdict boundaries around the budget', (t) => {
 // Aggregation
 // ---------------------------------------------------------------------------
 
-test('assess: sequential takes the largest peak, concurrent sums them', (t) => {
+test('assess: sequential takes the largest working peak, concurrent sums them', (t) => {
+  // Audio working memory is the per-operation peak that distinguishes the two
+  // modes — an LLM load holds everything resident, so it cannot.
+  const cal = calibration({ audioWindowBytes: { lower: 60 * MIB, upper: 60 * MIB } })
+
+  const models: ModelFitCandidate[] = [
+    candidate({
+      model: { name: 'A', sha256Checksum: 'a'.repeat(64) },
+      workload: { kind: 'audio', windowMs: 30_000, streaming: false }
+    }),
+    candidate({
+      model: { name: 'B', sha256Checksum: 'b'.repeat(64) },
+      workload: { kind: 'audio', windowMs: 60_000, streaming: false }
+    })
+  ]
+
+  const resolveProfile = () =>
+    profile({ engine: 'whispercpp-transcription', artifactBytes: 1 * GIB, ggufFacts: undefined })
+
+  const sequential = assessModelFitFromResources({
+    models,
+    execution: 'sequential',
+    resources: resources(),
+    platform: 'darwin-arm64',
+    calibration: cal,
+    resolveProfile
+  })
+  const concurrent = assessModelFitFromResources({
+    models,
+    execution: 'concurrent',
+    resources: resources(),
+    platform: 'darwin-arm64',
+    calibration: cal,
+    resolveProfile
+  })
+
+  // Both keep 2 × 1 GiB of weights resident; the peaks are one window (60 MiB)
+  // for A and two windows (120 MiB) for B.
+  const persistent = 2 * GIB
+  t.is(sequential.estimate?.lowerBoundBytes, persistent + 120 * MIB)
+  t.is(concurrent.estimate?.lowerBoundBytes, persistent + 180 * MIB)
+  t.is(sequential.execution, 'sequential')
+  t.is(concurrent.execution, 'concurrent')
+})
+
+test('assess: co-resident LLM loads count every model’s overhead, so the modes agree', (t) => {
   const cal = calibration({ fixedOverheadBytes: { lower: 1 * GIB, upper: 1 * GIB } })
   const facts = denseFacts({ blockCount: 1, headCountKv: 1, contextLength: 8192 })
 
@@ -546,14 +696,12 @@ test('assess: sequential takes the largest peak, concurrent sums them', (t) => {
     resolveProfile
   })
 
-  // Both keep 2 × (2 GiB + 512 B of KV) resident; the working peaks are the
-  // 1 GiB fixed overhead each.
-  const persistent = 2 * (2 * GIB + 512)
-  const peak = 1 * GIB
-  t.is(sequential.estimate?.lowerBoundBytes, persistent + peak)
-  t.is(concurrent.estimate?.lowerBoundBytes, persistent + 2 * peak)
-  t.is(sequential.execution, 'sequential')
-  t.is(concurrent.execution, 'concurrent')
+  // llama.cpp allocates everything at load, so each resident model carries its
+  // weights, its 512 B KV cache and its 1 GiB engine overhead — under either
+  // declared mode. `sequential` must not drop the second model's overhead.
+  const total = 2 * (2 * GIB + 512 + 1 * GIB)
+  t.is(sequential.estimate?.lowerBoundBytes, total)
+  t.is(concurrent.estimate?.lowerBoundBytes, total)
 })
 
 // ---------------------------------------------------------------------------
@@ -680,4 +828,97 @@ test('assess: the result always states its basis and its assumptions', (t) => {
     'default KV-cache types are called out'
   )
   t.is(result.models[0]!.estimatorVersion, LLM_ESTIMATOR_VERSION)
+})
+
+// ---------------------------------------------------------------------------
+// Calibration fit
+// ---------------------------------------------------------------------------
+
+/** Points generated from known coefficients, one per (artifact, context) pair. */
+function syntheticPoints(
+  weightRatio: number,
+  fixedBytes: number,
+  perTokenBytes: number
+): CalibrationPoint[] {
+  const artifacts = [500 * MIB, 1 * GIB, 4 * GIB]
+  const contexts = [512, 8192]
+  const points: CalibrationPoint[] = []
+  for (const artifactBytes of artifacts) {
+    for (const contextTokens of contexts) {
+      const kvBytes = contextTokens * 1024
+      points.push({
+        artifactBytes,
+        contextTokens,
+        kvBytes,
+        persistentBytes:
+          weightRatio * artifactBytes + perTokenBytes * contextTokens + fixedBytes + kvBytes
+      })
+    }
+  }
+  return points
+}
+
+/** Every observed point must sit at or below the fitted plane plus its excess. */
+function coversEveryPoint(
+  t: { ok(value: unknown, message?: string): void },
+  points: readonly CalibrationPoint[],
+  fit: NonNullable<ReturnType<typeof fitResidentMemory>>
+) {
+  for (const point of points) {
+    const covered =
+      fit.weightRatio * point.artifactBytes +
+      fit.perTokenBytes * point.contextTokens +
+      fit.fixedBytes +
+      fit.worstExcessBytes +
+      point.kvBytes
+    t.ok(point.persistentBytes <= covered + 1e-6, 'the fit plus its excess covers every point')
+  }
+}
+
+test('fitResidentMemory: recovers exact coefficients from noiseless points', (t) => {
+  const points = syntheticPoints(1.05, 256 * MIB, 20_000)
+  const fit = fitResidentMemory(points)
+
+  t.ok(fit, 'six points over three artifacts and two contexts determine the plane')
+  if (!fit) return
+  t.ok(Math.abs(fit.weightRatio - 1.05) < 1e-6)
+  t.ok(Math.abs(fit.fixedBytes - 256 * MIB) < 1)
+  t.ok(Math.abs(fit.perTokenBytes - 20_000) < 1e-3)
+  t.ok(fit.worstExcessBytes < 1, 'a perfect fit leaves no excess')
+})
+
+test('fitResidentMemory: an outlier above the plane lands in the excess, never below the bound', (t) => {
+  const points = syntheticPoints(1.05, 256 * MIB, 20_000)
+  points[3] = { ...points[3]!, persistentBytes: points[3]!.persistentBytes + 200 * MIB }
+
+  const fit = fitResidentMemory(points)
+  t.ok(fit)
+  if (!fit) return
+  t.ok(fit.worstExcessBytes > 0, 'the outlier is not absorbed silently')
+  coversEveryPoint(t, points, fit)
+})
+
+test('fitResidentMemory: a negative solution clamps to zero and still covers the points', (t) => {
+  // No per-token cost at all, with noise nudging the slope slightly negative.
+  const points = syntheticPoints(1.0, 128 * MIB, 0)
+  points[1] = { ...points[1]!, persistentBytes: points[1]!.persistentBytes - 5 * MIB }
+
+  const fit = fitResidentMemory(points)
+  t.ok(fit)
+  if (!fit) return
+  t.ok(fit.perTokenBytes >= 0)
+  t.ok(fit.fixedBytes >= 0)
+  coversEveryPoint(t, points, fit)
+})
+
+test('fitResidentMemory: refuses designs that cannot separate the coefficients', (t) => {
+  t.is(fitResidentMemory([]), undefined, 'no points')
+  t.is(fitResidentMemory(syntheticPoints(1.05, 0, 0).slice(0, 2)), undefined, 'two points')
+
+  // A single context makes the per-token column indistinguishable from the
+  // intercept, so the normal matrix is singular.
+  const singleContext = syntheticPoints(1.05, 256 * MIB, 20_000).filter(
+    (p) => p.contextTokens === 512
+  )
+  t.is(fitResidentMemory(singleContext), undefined, 'one context throughout')
 })

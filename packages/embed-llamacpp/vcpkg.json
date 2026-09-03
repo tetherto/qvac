@@ -8,11 +8,11 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "10297.1.0#1",
+      "version>=": "10297.1.1#1",
       "features": [
         {
           "name": "cuda-backend",
-          "platform": "linux & x64"
+          "platform": "linux"
         },
         "vector-index"
       ]

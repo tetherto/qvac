@@ -98,6 +98,9 @@ struct NormalizationDependencies {
   /// production `splitModeDeviceNames()` overload passes a null log callback.
   std::function<backend_selection::SplitDeviceList(const std::string&)>
       splitModeDeviceNames;
+  /// Devices to pin LLAMA_SPLIT_MODE_TENSOR to. Consulted only for tensor
+  /// mode; see backend_selection::getTensorSplitDeviceNames.
+  std::function<std::vector<std::string>()> tensorSplitDeviceNames;
 };
 
 struct NormalizedLoad {
@@ -125,7 +128,7 @@ void tuneLoadConfigMap(
     const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides = {},
     bool isOpenCl = false, bool isMetal = false, bool isGpu = false,
-    bool isCuda = false);
+    bool isCuda = false, bool isTensorSplit = false);
 
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,

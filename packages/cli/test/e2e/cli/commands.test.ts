@@ -41,10 +41,18 @@ describe('cli: version & help', () => {
     }
   })
 
-  it('serve openai --help shows options', async () => {
+  it('serve --help shows options and one flag per mountable surface', async () => {
+    const r = await runCli(['serve', '--help'])
+    assert.equal(r.code, 0)
+    for (const s of ['--port', '--api-key', '--cors', '--openai', '--no-default']) {
+      assert.ok(r.output.includes(s), `missing ${s}`)
+    }
+  })
+
+  it('serve openai --help shows options and marks the alias deprecated', async () => {
     const r = await runCli(['serve', 'openai', '--help'])
     assert.equal(r.code, 0)
-    for (const s of ['--port', '--api-key', '--cors', 'OpenAI-compatible']) {
+    for (const s of ['--port', '--api-key', '--cors', 'OpenAI-compatible', 'Deprecated']) {
       assert.ok(r.output.includes(s), `missing ${s}`)
     }
   })
