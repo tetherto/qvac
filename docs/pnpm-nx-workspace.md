@@ -54,7 +54,11 @@ Nx (`23.1.0`, root devDependency) is **not** a build system here — it's an **a
 1. **Affected graph** — the set of packages a diff impacts, transitively via the dependency graph. Used by CI to run only what a change touches.
 2. **Config source** — `packages/<pkg>/project.json` `targets.<target>.options.ci` declares each package's CI shape as data.
 
-Only native-addon packages carry a `project.json` (they need the `-nx` build/cpp/integration leaves). Pure-JS packages (`inference`, `rag`, `cli`, `ai-sdk-provider`, ...) have none and publish via `trigger-reusable-lib`; nx still tracks them in the graph through their `package.json`.
+Most packages carry a `project.json`, pure-JS ones included: 29 of the 31 packages under `packages/`, the exceptions being `inference` and `test-suite`. Three more dirs carry one with no `package.json` at all (`inference-addon-cpp`, `lint-cpp`, `sdk-python`), for 32 files in total. It is required for the native addons, whose `-nx` leaves read `options.ci`, and it is also what lets a package expose a target under a stable name (`test:unit`, `on-pr`) regardless of what its `package.json` script is called.
+
+A `project.json` is **not** required for nx to see a package. Nx derives targets from `package.json` scripts on its own, so `inference`, `test-suite` and the two plugins (`plugins/openclaw`, `plugins/opencode`) are still in the graph with their scripts as targets. `@qvac/inference` resolves a `build` target and appears in `nx show projects --affected -t build` with no `project.json` at all.
+
+The distinction is targets-as-data, not graph membership: add a `project.json` when a package needs `options.ci` or a stable target name, and leave it out when its `package.json` scripts already say everything.
 
 `nx.json` is intentionally minimal:
 
