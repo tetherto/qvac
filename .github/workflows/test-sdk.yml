@@ -717,7 +717,9 @@ jobs:
           # available when it exits non-zero.
           PLATFORM=$(node -p "process.platform + '-' + process.arch")
           # Glob so a GPU pass, which keys its fixture by backend as well, is
-          # collected alongside the CPU one.
+          # collected alongside the CPU one. The glob also matches the fixtures
+          # already committed for this platform, so read the log's `wrote` lines
+          # to see which files this run actually produced before shipping one.
           echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM*.ts" >> "$GITHUB_OUTPUT"
           # Invoke the repo-pinned bare by path: npx/PATH can resolve a global
           # bare too old for TypeScript type-stripping.
