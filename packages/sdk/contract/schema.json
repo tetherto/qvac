@@ -736,8 +736,9 @@
             },
             "total": {
               "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value."
             }
           },
           "required": ["stage", "step", "total"],
