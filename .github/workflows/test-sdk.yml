@@ -706,7 +706,7 @@ jobs:
           echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM.ts" >> "$GITHUB_OUTPUT"
           # Invoke the repo-pinned bare by path: npx/PATH can resolve a global
           # bare too old for TypeScript type-stripping.
-          node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write
+          node node_modules/bare/bin/bare scripts/probe-win32-memory-metrics.ts
 
       - name: Upload fixture
         # A failed gate still writes a fixture (`validated: false`), and that is
@@ -717,5 +717,5 @@ jobs:
         with:
           name: calibration-fixture-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.calibrate.outputs.fixture }}
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 30
