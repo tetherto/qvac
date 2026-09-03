@@ -101,6 +101,16 @@ export interface GenerateOptions {
      */
     simpleMode?: boolean;
     /**
+     * Query Rewriting: the LM FORMAT pass rewrites the caption into a detailed
+     * musical description before synthesis, preserving the lyric content and
+     * filling any metadata left unset. Unlike Simple Mode — which expands a bare
+     * query and writes lyrics from scratch — this takes caption AND lyrics as
+     * input, so real `lyrics` are required (`'[Instrumental]'` belongs to Simple
+     * Mode) and the two options are mutually exclusive. Requires
+     * `taskType: 'text2music'`; faithful rewriting needs the 1.7B LM.
+     */
+    rewriteQuery?: boolean;
+    /**
      * Percentile loudness normalization on the generated audio (default true):
      * the 99.999th-percentile sample scales to full scale and the tiny tail
      * above it clips, matching the reference loudness. Set false for the raw

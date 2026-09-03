@@ -209,6 +209,7 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.lm_cfg_scale = in.lmCfgScale;
   params.lm_phase1 = in.lmPhase1;
   params.simple_mode = in.simpleMode;
+  params.rewrite_query = in.rewriteQuery;
   params.normalize_loudness = in.normalizeLoudness;
   params.compute_quality_score = in.computeQualityScore;
   params.dcw_enabled = in.dcwEnabled;

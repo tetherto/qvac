@@ -86,6 +86,7 @@ public:
     float lmCfgScale = 2.0F;
     bool lmPhase1 = true;
     bool simpleMode = false;
+    bool rewriteQuery = false;
     bool normalizeLoudness = true;
     bool computeQualityScore = false;
     bool dcwEnabled = true;
