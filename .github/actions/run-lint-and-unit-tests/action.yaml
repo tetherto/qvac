@@ -24,14 +24,14 @@ runs:
     - name: Setup Node.js
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
-        # Node 20.x: the sanity-checks "Check for errors" step runs
+        # Node 22.x: the sanity-checks "Check for errors" step runs
         # scripts/ci/check-bundler-requires.mjs on whatever node this step puts on
-        # PATH. That script npm-installs bare-pack@^1.4.7 (unpinned) into /tmp and
-        # dlopen()s the resolved bare-module-lexer prebuild; lexer >= 1.6.6 needs
-        # the node_api_is_sharedarraybuffer Node-API symbol, which Node 18 does not
-        # export (native "symbol lookup error" abort, not a catchable JS throw).
-        # 20.x (>= 20.19) and 22.x export it; 20.x matches the on-pr-* consumers.
-        node-version: "20.x"
+        # PATH. That script npm-installs the pinned bare-pack@1.5.1 and
+        # bare-module-lexer@1.6.6 into /tmp and dlopen()s the lexer prebuild, which
+        # needs the node_api_is_sharedarraybuffer Node-API symbol. Node added it in
+        # 22.21.0 and 24.9.0; 18.x and 20.x never had it and abort with a native
+        # "symbol lookup error" (not a catchable JS throw) on the first lex() call.
+        node-version: "22.x"
 
     - name: Restore npm cache
       id: cache-npm
