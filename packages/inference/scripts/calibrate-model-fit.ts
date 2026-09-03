@@ -82,11 +82,13 @@ function rssBytes() {
   return usage && usage.rss > 0 ? usage.rss : 0
 }
 
-// win32 prefetches mapped weights into the standby list, not the working set, so
-// RSS sees 16 MiB of a 2.4 GiB model. An anonymous load still bounds the mmap
-// default, which keeps at most the artifact size resident.
+// Load anonymously wherever the CPU backend is forced. It copies mapped weights
+// into its own buffers, so RSS counts them twice — linux read 1.7x the artifact
+// — while win32 prefetches to the standby list and counts almost none. The
+// anonymous copy is the memory the system must actually find; the mapped pages
+// the default keeps are file-backed and evictable.
 function calibrationLoadMode(platform: string) {
-  return platform.startsWith('win32') ? 'none' : undefined
+  return forcesCpu(platform) ? 'none' : undefined
 }
 
 function createSampler() {

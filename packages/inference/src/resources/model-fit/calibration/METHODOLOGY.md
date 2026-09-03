@@ -136,11 +136,11 @@ a `q8_0` cache. The engine had defaulted the cache to `q8_0` because the
 and compute buffers — was fully present in the working set; no trimming was
 observed. `device: 'cpu'` is the fix (see the procedure above).
 
-What is genuinely different on Windows is the mapped weights. `llama_mmap`
+The second difference is the mapped weights. `llama_mmap`
 prefetches the file with `PrefetchVirtualMemory`, which fills the standby list
 without faulting pages into the working set, so right after a load RSS shows
 almost none of them (16 MiB of a 2.4 GiB model) and the weight ratio cannot
-be fitted. The harness therefore loads with `load_mode: 'none'` on win32,
+be fitted. The harness therefore loads with `load_mode: 'none'`,
 which reads the weights into anonymous memory; the probe measured the working
 set at artifact + KV + ~30 MiB in that mode, with the 8192-token growth at
 110% of the KV growth (the rest being compute buffers). A fixture measured
@@ -150,10 +150,17 @@ so in `notes`. The commit charge was evaluated as an alternative counter and
 rejected: it sees the same KV growth as the working set but carries ~0.8 GiB
 of committed, never-touched backend memory that physical RAM never pays for.
 
-This treatment is win32-only. Linux hit the same `q8_0`/`f16` abort and needed
-the same `device: 'cpu'` fix, but its RSS does count mapped weights at load —
-a 2382 MiB artifact read as 2415 MiB persistent — so calibration there
-measures the mmap default users actually run.
+Every CPU-forced platform loads anonymously, for two different reasons. Linux
+counts mapped weights the opposite way round: with the CPU backend selected it
+copies them into its own buffers and RSS counts both copies, so a 2382 MiB
+artifact read as 4118 MiB persistent and the weight ratio fitted at 1.71. That
+is not memory the system must find — the mapped half is file-backed and
+evictable — so linux takes `load_mode: 'none'` too, and measures the anonymous
+copy alone.
+
+Measured under `device: 'gpu'` linux reads ~1.0 (2415 MiB for the same
+artifact), because no CPU-backend copy exists there. That number does not
+transfer to a CPU-forced run, and reading it across cost a calibration round.
 
 ## Scope of a fixture
 
