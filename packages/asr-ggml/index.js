@@ -5,6 +5,7 @@ const QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const error_1 = require("./lib/error");
+const backends_1 = require("./lib/backends");
 const types_1 = require("./lib/types");
 const driver_1 = require("./engines/whisper/driver");
 const driver_2 = require("./engines/parakeet/driver");
@@ -381,5 +382,6 @@ class ASRGgml {
 // eslint-disable-next-line @typescript-eslint/no-namespace
 (function (ASRGgml) {
     ASRGgml.BackendId = types_1.BackendId;
+    ASRGgml.resolveBackendsDir = backends_1.resolveBackendsDir;
 })(ASRGgml || (ASRGgml = {}));
 module.exports = ASRGgml;

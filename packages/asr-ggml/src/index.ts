@@ -9,6 +9,7 @@ import {
 } from "@qvac/infer-base";
 
 import { QvacErrorAddonASRGgml, ERR_CODES } from "./lib/error";
+import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
 import {
   BackendId as BackendIdEnum,
   type ASRRunOutput,
@@ -579,6 +580,8 @@ namespace ASRGgml {
   export type InferenceClientState = InferenceClientStateShape;
 
   export import BackendId = BackendIdEnum;
+
+  export const resolveBackendsDir = resolveBackendsDirImpl;
 }
 
 export = ASRGgml;

@@ -26,6 +26,18 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   runtime behavior is unchanged; the fix matters for anything that opts
   VAD into the GPU.
 
+- **Per-platform prebuild packages.** `@qvac/asr-ggml` is now a meta package
+  that ships the JavaScript wrapper only; native prebuilds install through
+  `os`/`cpu` filtered `optionalDependencies` (`@qvac/asr-ggml-<platform>-<arch>`,
+  iOS flavours grouped in `@qvac/asr-ggml-ios`), version-locked to the meta
+  package. Breaking for the published file layout:
+  `node_modules/@qvac/asr-ggml/prebuilds` no longer exists in npm installs —
+  use the new `resolveBackendsDir()` export instead of hardcoding that path.
+  Supported installers are npm 7+, pnpm, bun, and Yarn Berry; Yarn v1 and
+  `--omit=optional` installs fail at require time with an error naming the
+  missing platform package. A locally built `prebuilds/` directory keeps
+  taking precedence, so source builds are unaffected.
+
 ## [0.4.2] - 2026-09-01
 
 ### Changed

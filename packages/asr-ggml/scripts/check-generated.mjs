@@ -9,6 +9,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const sourceRoot = path.join(packageRoot, 'src')
 const handwrittenPaths = [
   'addon/',
+  'addon-unavailable.js',
   'benchmarks/',
   'binding.js',
   'build/',

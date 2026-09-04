@@ -25,6 +25,9 @@ const requiredFiles = [
   'package.json',
   'index.js',
   'index.d.ts',
+  'addon-unavailable.js',
+  'lib/backends.js',
+  'lib/backends.d.ts',
   'engines/types.d.ts',
   'engines/whisper/driver.d.ts',
   'engines/parakeet/driver.d.ts',
@@ -58,11 +61,32 @@ function externalSpecifiers(source) {
   const specifiers = []
   for (const match of source.matchAll(externalSpecifierPattern)) {
     const specifier = match[2]
-    if (!specifier.startsWith('.') && !specifier.startsWith('/') && !nodeBuiltins.has(specifier)) {
+    if (
+      !specifier.startsWith('.') &&
+      !specifier.startsWith('/') &&
+      !specifier.startsWith('#') &&
+      !nodeBuiltins.has(specifier)
+    ) {
       specifiers.push(specifier)
     }
   }
   return specifiers
+}
+
+function importsMapFileTargets(target) {
+  if (typeof target === 'string') {
+    return target.startsWith('./') ? [target] : []
+  }
+  if (Array.isArray(target)) {
+    return target.flatMap(importsMapFileTargets)
+  }
+  return Object.values(target).flatMap(importsMapFileTargets)
+}
+
+function assertImportsMapTargetsExist(packageJson, packedFiles) {
+  const targets = importsMapFileTargets(packageJson.imports || {})
+  assert.ok(targets.length > 0, 'imports map must keep a local fallback target')
+  targets.forEach((target) => assert.ok(packedFiles.has(target.replace(/^\.\//, '')), target))
 }
 
 function undeclaredImports(filePath, declaredPackages) {
@@ -199,6 +223,7 @@ test('packed tarball preserves the public package contract', () => {
     )
     assert.equal(packageJson.version, expectedVersion)
     assertExportTargetsExist(packageJson, packedFiles)
+    assertImportsMapTargetsExist(packageJson, packedFiles)
     assertExampleTargetsExist(packageJson, packedFiles)
     requiredFiles.forEach((filePath) =>
       assert.ok(fs.existsSync(path.join(installedRoot, filePath)), filePath)

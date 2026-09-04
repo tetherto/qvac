@@ -1,10 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ParakeetInterface = void 0;
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
-const path = require("bare-path");
-/* eslint-enable @typescript-eslint/no-require-imports */
 const error_1 = require("../../lib/error");
+const backends_1 = require("../../lib/backends");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
 const state = Object.freeze({
@@ -72,9 +70,7 @@ class ParakeetInterface {
     _applyDefaults(configurationParams) {
         const out = { ...configurationParams };
         if (!out.backendsDir) {
-            // Generated file lives at engines/parakeet/parakeet.js; prebuilds/
-            // sits at the package root, two levels up.
-            out.backendsDir = path.join(__dirname, "..", "..", "prebuilds");
+            out.backendsDir = (0, backends_1.resolveBackendsDir)();
         }
         return out;
     }

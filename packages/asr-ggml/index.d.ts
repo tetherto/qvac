@@ -1,6 +1,7 @@
 import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { QvacErrorAddonASRGgml } from "./lib/error";
+import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
 import { BackendId as BackendIdEnum, type ASRRunOutput, type ASRStreamOutput, type AudioChunk, type AudioInput, type BackendInfo, type EndOfTurnEvent, type InferenceClientState, type ParakeetRuntimeStats, type RuntimeStats, type RuntimeStatsCore, type TranscriptionSegment, type VadEvent, type WhisperRuntimeStats } from "./lib/types";
 import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, AsrNativeInterface, EngineType } from "./engines/types";
 import { type VadParams, type WhisperConfig, type WhisperEngineConfig, type WhisperStreamingOptions } from "./engines/whisper/driver";
@@ -166,5 +167,6 @@ declare namespace ASRGgml {
     type RuntimeStats = RuntimeStatsShape;
     type InferenceClientState = InferenceClientStateShape;
     export import BackendId = BackendIdEnum;
+    const resolveBackendsDir: typeof resolveBackendsDirImpl;
 }
 export = ASRGgml;
