@@ -2,6 +2,7 @@
   "npm_runtime": [
     "classification-ggml",
     "vla-ggml",
+    "model-fit",
     "ocr-ggml"
   ]
 }
