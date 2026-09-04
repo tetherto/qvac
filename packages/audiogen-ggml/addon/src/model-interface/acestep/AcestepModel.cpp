@@ -57,6 +57,23 @@ int64_t backendIdFromName(const std::string& name) {
 int64_t backendDeviceFromName(const std::string& name) {
   return name == "CPU" ? BACKEND_DEVICE_CPU : BACKEND_DEVICE_GPU;
 }
+
+// Wire codes for AudiogenStats.gpuFallbackReason. Mapped explicitly rather than
+// cast from the enum so reordering it upstream cannot silently remap them.
+int64_t gpuFallbackReasonCode(tts_cpp::GpuFallbackReason reason) {
+  switch (reason) {
+  case tts_cpp::GpuFallbackReason::none:
+    return 0;
+  case tts_cpp::GpuFallbackReason::not_requested:
+    return 1;
+  case tts_cpp::GpuFallbackReason::no_devices:
+    return 2;
+  case tts_cpp::GpuFallbackReason::init_failed:
+    return 3;
+  }
+  return 99;
+}
+
 } // namespace
 
 AcestepModel::AcestepModel(AcestepConfig config) : cfg_(std::move(config)) {
@@ -131,6 +148,7 @@ void AcestepModel::loadLocked() {
   }
   sampleRate_ = engine_->sample_rate();
   backendName_ = engine_->backend_name();
+  gpuFallbackReason_ = engine_->gpu_fallback_reason();
 }
 
 void AcestepModel::unload() {
@@ -190,6 +208,9 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.lm_top_k = in.lmTopK;
   params.lm_cfg_scale = in.lmCfgScale;
   params.lm_phase1 = in.lmPhase1;
+  params.simple_mode = in.simpleMode;
+  params.normalize_loudness = in.normalizeLoudness;
+  params.compute_quality_score = in.computeQualityScore;
   params.dcw_enabled = in.dcwEnabled;
   params.dcw_scaler = in.dcwScaler;
   params.dcw_high_scaler = in.dcwHighScaler;
@@ -197,6 +218,8 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.reference_audio = in.referenceAudio;
   params.source_audio = in.sourceAudio;
   params.task_type = in.taskType;
+  params.track = in.track;
+  params.guidance_scale = in.guidanceScale;
   params.audio_cover_strength = in.audioCoverStrength;
   params.cover_noise_strength = in.coverNoiseStrength;
   params.edit_plan.reserve(in.editOperations.size());
@@ -250,6 +273,8 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   if (cancelRequested_.load()) {
     throw std::runtime_error("ACE-Step generation cancelled");
   }
+  hasQualityScore_ = in.computeQualityScore;
+  qualityScore_ = result.metadata.quality_score;
 
   // Peak-normalise before the int16 quantisation, exactly like the music CLI's
   // wav_write (gain = 0.9 / peak). The Oobleck VAE routinely outputs float
@@ -306,6 +331,11 @@ qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
   // CPU is visible to callers (gpu-smoke.test.js asserts on these).
   stats.emplace_back("backendDevice", backendDeviceFromName(backendName_));
   stats.emplace_back("backendId", backendIdFromName(backendName_));
+  stats.emplace_back(
+      "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
+  if (hasQualityScore_) {
+    stats.emplace_back("qualityScore", qualityScore_);
+  }
   return stats;
 }
 

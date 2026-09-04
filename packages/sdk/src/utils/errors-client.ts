@@ -122,6 +122,36 @@ export class WorkerCrashedError extends QvacErrorBase {
   }
 }
 
+/**
+ * A worker that failed before the IPC handshake, attached as the `cause` of
+ * `RPCInitTimeoutError`. `workerExited` separates a dead worker from a merely
+ * slow one; `exitCode` / `exitSignal` mirror what `WorkerCrashedError` carries
+ * on the post-handshake path.
+ */
+export class WorkerStartupError extends QvacErrorBase {
+  /** False while the process is still running and simply has not connected. */
+  public readonly workerExited: boolean
+  public readonly exitCode: number | null
+  public readonly exitSignal: NodeJS.Signals | null
+  /** Bounded tail of the worker's stderr; empty when it wrote nothing. */
+  public readonly stderrTail: string
+
+  constructor(
+    details: string,
+    exit: { code: number | null; signal: NodeJS.Signals | null } | null,
+    stderrTail: string,
+    cause?: unknown
+  ) {
+    super(
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED, [details, stderrTail], cause)
+    )
+    this.workerExited = exit !== null
+    this.exitCode = exit?.code ?? null
+    this.exitSignal = exit?.signal ?? null
+    this.stderrTail = stderrTail
+  }
+}
+
 export class WorkerShutdownError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN, undefined, cause))

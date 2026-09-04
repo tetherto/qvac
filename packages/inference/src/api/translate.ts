@@ -18,7 +18,8 @@ import {
  * @param params.to - Target language code
  * @param params.stream - Whether to stream tokens (true) or return complete response (false). Defaults to true.
  * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
- * @returns Object with tokenStream generator and text/stats properties
+ * @returns Object with a tokenStream generator, `translations` (one entry per
+ * input, in order), `text` (those entries joined by newlines) and stats
  * @throws {QvacErrorBase} When translation fails with an error message or when language detection fails
  * @example
  * ```typescript
@@ -54,6 +55,7 @@ export function translate(
 ): {
   tokenStream: AsyncGenerator<string>
   stats: Promise<TranslationStats | undefined>
+  translations: Promise<string[]>
   text: Promise<string>
 } {
   // Source-language auto-detection lives in the engine op
@@ -86,11 +88,10 @@ export function translate(
       }
     })()
 
-    const textPromise = Promise.resolve('')
-
     return {
       tokenStream,
-      text: textPromise,
+      translations: Promise.resolve([]),
+      text: Promise.resolve(''),
       stats: statsPromise
     }
   } else {
@@ -98,26 +99,31 @@ export function translate(
       //Empty generator for non-streaming mode
     })()
 
-    const textPromise = (async () => {
-      let buffer = ''
+    const batched = Array.isArray(params.text)
+    const translationsPromise = (async () => {
+      const collected: string[] = batched ? [] : ['']
 
       for await (const response of streamRpc(request, options)) {
         if (response.type === 'translate') {
           const streamResponse = translateResponseSchema.parse(response)
-          buffer += streamResponse.token
           if (streamResponse.done) {
             stats = streamResponse.stats
             statsResolver(stats)
+          } else if (batched) {
+            collected.push(streamResponse.token)
+          } else {
+            collected[0] += streamResponse.token
           }
         }
       }
 
-      return buffer
+      return collected
     })()
 
     return {
       tokenStream,
-      text: textPromise,
+      translations: translationsPromise,
+      text: translationsPromise.then((entries) => entries.join('\n')),
       stats: statsPromise
     }
   }

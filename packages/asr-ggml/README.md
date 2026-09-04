@@ -120,7 +120,7 @@ SDK code — see [Engine Selection](#engine-selection).
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA (x64 prebuild) |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA via `build:cuda` / `ASR_CUDA=ON` |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
@@ -503,14 +503,13 @@ that ends mid-sample is rejected.
 GPU backends are selected per platform via `vcpkg.json` features; no
 `bare-make generate` flag is needed:
 
-- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host); the linux-x64 prebuild additionally bundles CUDA, see below
+- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host)
 - **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
 - **macOS / iOS** — Metal, statically linked
 
 **CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
 gated behind the `ASR_CUDA` CMake option. The published linux-x64 prebuild
-turns it on (the prebuild workflow installs the CUDA toolkit); elsewhere build
-it yourself with `npm run build:cuda` (or
+does not enable it; build it yourself with `npm run build:cuda` (or
 `bare-make generate -D ASR_CUDA=ON`), which adds the `cuda` feature to the
 `speech-cpp` dependency and turns on `GGML_CUDA`. On linux-x64 the cuda
 feature flips ggml into hybrid dynamically-loaded backend mode: the
@@ -525,6 +524,14 @@ registers CUDA ahead of Vulkan, so a `use_gpu` / `useGPU` request lands on
 CUDA when a supported device is present and falls back to Vulkan otherwise.
 Both engines report the winner through `getBackendInfo()` as `backendId: 2`
 (`BackendId.CUDA`).
+
+A CUDA build's module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
+Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
+Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
+path here: the backend skips such devices at registration and the addon falls
+back to Vulkan or CPU.
 
 The addon takes no direct CUDA linkage — the CUDA module carries its own CUDA
 `DT_NEEDED` entries, which is what makes the graceful fallback possible — and

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.3.1",
+  "version": "0.3.3",
   "description": "Audio generation (music) addon for qvac",
   "addon": true,
   "engines": {
@@ -14,6 +14,9 @@
     "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
     "example:minimax": "bare examples/generate-music-minimax.js",
     "example:cover": "bare examples/generate-cover.js",
+    "example:lego": "bare examples/generate-lego.js",
+    "example:simple": "bare examples/generate-simple-mode.js",
+    "example:best-of": "bare examples/generate-best-of.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "node scripts/check-generated.mjs",
     "test:dts": "tsc --noEmit -p tsconfig.dts.json",
@@ -90,6 +93,7 @@
   ],
   "devDependencies": {
     "@qvac/registry-client": "^0.6.1",
+    "bare-pack": "^1.4.7",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
@@ -111,6 +115,9 @@
     "bare-os": "^3.8.0",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
+  },
+  "overrides": {
+    "bare-module-lexer": "1.6.3"
   },
   "types": "index.d.ts"
 }

@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 import { audioInputSchema, type AudioInput } from '@/schemas/transcription'
+import {
+  inferenceBackendDiagnosticsSchema,
+  type InferenceBackendDiagnostics
+} from '@/schemas/system-resources'
 import { encodeBase64 } from '@/utils/encoding'
 
 const base64Schema = z.string().min(1)
@@ -349,11 +353,26 @@ export const audioGenStreamRequestSchema = z
   .strict()
   .superRefine(validateAudioGenRequest)
 
+export type AudioGenProgress = {
+  stage: string
+  step: number
+  /**
+   * Total number of steps when greater than zero. Values less than or equal to zero mean
+   * indeterminate progress and must not be rendered as a `step / total` determinate progress value.
+   */
+  total: number
+}
+
 export const audioGenProgressSchema = z.object({
   stage: z.string(),
   step: z.number().int().nonnegative(),
-  total: z.number().int().nonnegative()
-})
+  total: z
+    .number()
+    .int()
+    .describe(
+      'Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.'
+    )
+}) satisfies z.ZodType<AudioGenProgress>
 
 export const audioGenStatsSchema = z.object({
   audioDurationMs: z.number().optional(),
@@ -373,7 +392,12 @@ export const audioGenStreamResponseSchema = z
     bitsPerSample: z.number().int().positive().optional(),
     done: z.boolean().default(false),
     stopReason: z.enum(['completed', 'cancelled']).optional(),
-    stats: audioGenStatsSchema.optional()
+    stats: audioGenStatsSchema.optional(),
+    diagnostics: inferenceBackendDiagnosticsSchema
+      .optional()
+      .describe(
+        'Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
+      )
   })
   .strict()
 
@@ -388,7 +412,6 @@ export type MinimaxAudioGenConfig = z.infer<typeof minimaxAudioGenConfigSchema>
 export type AudioGenConfig = z.infer<typeof audioGenConfigSchema>
 export type AudioGenClientParams = z.input<typeof audioGenClientParamsSchema>
 export type AudioGenStreamRequest = z.infer<typeof audioGenStreamRequestSchema>
-export type AudioGenProgress = z.infer<typeof audioGenProgressSchema>
 export type AudioGenStats = z.infer<typeof audioGenStatsSchema>
 export type AudioGenStreamResponse = z.infer<typeof audioGenStreamResponseSchema>
 
@@ -404,4 +427,5 @@ export interface AudioGenResult {
   progressStream: AsyncGenerator<AudioGenProgress>
   audio: Promise<AudioGenAudio>
   stats: Promise<AudioGenStats | undefined>
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
 }

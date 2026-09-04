@@ -10,6 +10,7 @@
 #include <variant>
 #include <vector>
 
+#include "audiogen-cpp/gpu_fallback.h"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/AudioGenProgress.hpp"
@@ -84,6 +85,9 @@ public:
     int lmTopK = 0;
     float lmCfgScale = 2.0F;
     bool lmPhase1 = true;
+    bool simpleMode = false;
+    bool normalizeLoudness = true;
+    bool computeQualityScore = false;
     bool dcwEnabled = true;
     float dcwScaler = 0.05F;
     float dcwHighScaler = 0.02F;
@@ -92,6 +96,8 @@ public:
     std::vector<float> referenceAudio;
     std::vector<float> sourceAudio;
     std::string taskType = "text2music";
+    std::string track;
+    float guidanceScale = 0.0F;
     float audioCoverStrength = 1.0F;
     float coverNoiseStrength = 0.0F;
     std::vector<AudioEditOperationInput> editOperations;
@@ -152,10 +158,14 @@ private:
   double audioDurationMs_ = 0.0;
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
+  double qualityScore_ = 0.0;
+  bool hasQualityScore_ = false; // set per run; gates the qualityScore stat
   int sampleRate_ = 0; // populated from the engine result in generate()
   int channels_ = 0;   // populated from the engine result in generate()
 
   std::string backendName_ = "CPU";
+  tts_cpp::GpuFallbackReason gpuFallbackReason_ =
+      tts_cpp::GpuFallbackReason::not_requested;
 };
 
 } // namespace qvac::audiogenggml::acestep
