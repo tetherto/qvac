@@ -87,6 +87,7 @@ public:
     bool lmPhase1 = true;
     bool simpleMode = false;
     bool normalizeLoudness = true;
+    bool computeQualityScore = false;
     bool dcwEnabled = true;
     float dcwScaler = 0.05F;
     float dcwHighScaler = 0.02F;
@@ -100,6 +101,20 @@ public:
     float audioCoverStrength = 1.0F;
     float coverNoiseStrength = 0.0F;
     std::vector<AudioEditOperationInput> editOperations;
+    // Reverse pipeline: describe the sourceAudio instead of generating.
+    bool understand = false;
+  };
+
+  // Result of an understand job: the LM's description of the audio plus the
+  // recovered FSQ codes (reusable as a generation's audioCodes).
+  struct UnderstandOutput {
+    std::string caption;
+    int bpm = 0;
+    float duration = 0.0F;
+    std::string keyscale;
+    std::string timesignature;
+    std::string vocalLanguage;
+    std::vector<int> audioCodes;
   };
 
   explicit AcestepModel(AcestepConfig config);
@@ -140,6 +155,8 @@ public:
 
 private:
   Output generate(const AnyInput& in);
+  UnderstandOutput understandAudio(const AnyInput& in);
+  std::shared_ptr<tts_cpp::acestep::Engine> acquireEngine();
   static void validateConfig(const AcestepConfig& cfg);
   void loadLocked();
   void unloadLocked();
@@ -157,6 +174,8 @@ private:
   double audioDurationMs_ = 0.0;
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
+  double qualityScore_ = 0.0;
+  bool hasQualityScore_ = false; // set per run; gates the qualityScore stat
   int sampleRate_ = 0; // populated from the engine result in generate()
   int channels_ = 0;   // populated from the engine result in generate()
 

@@ -83,13 +83,10 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   assumptions.push(element.assumption)
   const kv = kvCacheBytes(facts, contextTokens, element.bytes, assumptions, reasons)
 
-  // Everything an LLM load costs is persistent, not a working peak: llama.cpp
-  // builds the context when the model loads — KV cache, engine overhead and
-  // the context-scaled compute buffers included — so every loaded model holds
-  // all of it for its whole lifetime. Calibration runs confirmed this: the
-  // RSS delta during a completion is ~0. Parking any of these terms in
-  // `working` would let `sequential` aggregation count only the largest one
-  // while all of them are resident.
+  // llama.cpp builds the context at load — KV cache, engine overhead, compute
+  // buffers — so all of it is resident for the model's lifetime. Parking any of
+  // it in `working` would let `sequential` count only the largest. What a
+  // completion adds on top is released afterwards, so that part is `working`.
   const persistent: ByteRange = {
     lower: Math.ceil(
       artifactBytes +
@@ -107,6 +104,11 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   assumptions.push(
     'the KV cache, engine overhead and compute buffers count as resident for the model’s whole lifetime; llama.cpp allocates them when the model loads, not per operation'
   )
+  if (calibration.workingPeakBytes && calibration.workingPeakBytes.upper > 0) {
+    assumptions.push(
+      'one operation is assumed in flight per model; the working peak is what a single completion was measured to add on top of the resident cost'
+    )
+  }
 
   assumptions.push(
     'default KV-cache types are assumed; an explicit `cache-type-k`/`cache-type-v` in `modelConfig` is not expressible in a workload and would change these numbers'
@@ -116,7 +118,10 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
     kind: 'estimate',
     estimatorVersion: LLM_ESTIMATOR_VERSION,
     persistent,
-    working: { lower: 0, upper: 0 },
+    working: {
+      lower: calibration.workingPeakBytes?.lower ?? 0,
+      upper: calibration.workingPeakBytes?.upper ?? 0
+    },
     reasons,
     assumptions
   }

@@ -136,10 +136,11 @@ for await (const item of response.iterate()) {
 }
 const stats = await response.await()
 // { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId,
-//   gpuFallbackReason }
+//   gpuFallbackReason, qualityScore? }
 // backendDevice:     0 = CPU, 1 = GPU
 // backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
+// qualityScore:      [0, 1], present only when the run set computeQualityScore
 
 await gen.destroy()
 ```
@@ -288,6 +289,55 @@ Or end to end from the repo:
 ```bash
 AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:simple
+```
+
+### Quality scoring: rank a batch of takes
+
+With `computeQualityScore: true` the engine teacher-forces the generated audio
+codes back through the LM and `stats.qualityScore` reports how well the take
+matches the request as a weighted `[0, 1]` score — caption and lyrics as
+normalized PMI, set metadata fields as top-k recall. Generation varies a lot
+by seed, so generate several takes and keep the best:
+
+```js
+const response = await gen.run(caption, { computeQualityScore: true, seed })
+// ...collect the PCM...
+const stats = await response.await()
+console.log(stats.qualityScore) // e.g. 0.6661
+```
+
+Scoring costs extra LM forwards after code generation and requires the LM
+code path (`taskType: 'text2music'`). End to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:best-of
+```
+
+### Audio understanding: the pipeline in reverse
+
+`understand()` describes an audio clip instead of generating one: the engine
+encodes the PCM, recovers the FSQ semantic codes, and the LM reports metadata
+and a caption. The input is interleaved stereo float PCM at 48 kHz — the same
+layout `sourceAudio` uses:
+
+```js
+const response = await gen.understand(pcm, { seed: 42 })
+const stats = await response.await()
+const heard = stats.understand
+// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes }
+```
+
+The description streams as an `understand` output item (progress ticks report
+the `source`, `tok`, and `understand` stages) and is repeated on the terminal
+stats. `audioCodes` are the recovered semantic codes — pass them back as a
+generation's `audioCodes` to re-synthesize or remix the clip. A
+`vocalLanguage` hint forces the language field instead of the LM's guess.
+End to end from the repo (generates a clip, then describes it):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:understand
 ```
 
 ### Ordered audio editing
@@ -455,6 +505,7 @@ wrapped by a level-gated `QvacLogger`.
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
 | `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
 | `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
+| `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |

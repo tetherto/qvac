@@ -211,6 +211,8 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
     modelInput.simpleMode = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "normalizeLoudness"))
     modelInput.normalizeLoudness = *value;
+  if (auto value = readOptionalBoolean(jobObject, env, "computeQualityScore"))
+    modelInput.computeQualityScore = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "dcwEnabled"))
     modelInput.dcwEnabled = *value;
   if (auto value = readOptionalAcestepNumber(jobObject, env, "dcwScaler"))
@@ -376,6 +378,48 @@ struct JsAudioOutputHandler
             }) {}
 };
 
+struct JsUnderstandOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          AcestepModel::UnderstandOutput> {
+  JsUnderstandOutputHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            AcestepModel::UnderstandOutput>(
+            [this](const AcestepModel::UnderstandOutput& u) -> js_value_t* {
+              auto result = js::Object::create(this->env_);
+              result.setProperty(
+                  this->env_,
+                  "caption",
+                  js::String::create(this->env_, u.caption));
+              result.setProperty(
+                  this->env_, "bpm", js::Number::create(this->env_, u.bpm));
+              result.setProperty(
+                  this->env_,
+                  "duration",
+                  js::Number::create(this->env_, u.duration));
+              result.setProperty(
+                  this->env_,
+                  "keyscale",
+                  js::String::create(this->env_, u.keyscale));
+              result.setProperty(
+                  this->env_,
+                  "timesignature",
+                  js::String::create(this->env_, u.timesignature));
+              result.setProperty(
+                  this->env_,
+                  "vocalLanguage",
+                  js::String::create(this->env_, u.vocalLanguage));
+              static_assert(sizeof(int) == sizeof(int32_t));
+              std::span<const int32_t> codesSpan(
+                  reinterpret_cast<const int32_t*>(u.audioCodes.data()),
+                  u.audioCodes.size());
+              result.setProperty(
+                  this->env_,
+                  "audioCodes",
+                  js::TypedArray<int32_t>::create(this->env_, codesSpan));
+              return result;
+            }) {}
+};
+
 struct JsProgressOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           AudioGenProgress> {
@@ -446,6 +490,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   outHandlers.add(
       make_shared<JsAudioOutputHandler>(
           std::move(sampleRate), std::move(channels)));
+  outHandlers.add(make_shared<JsUnderstandOutputHandler>());
   outHandlers.add(make_shared<JsProgressOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
@@ -470,7 +515,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto [type, jsInput] = JsInterface::getInput(args);
 
-  if (type != "text" && type != "edit") {
+  if (type != "text" && type != "edit" && type != "understand") {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "Unknown input type: " + type);
@@ -483,7 +528,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     if (type != "text") {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
-          "MiniMax-Music3 does not support audio editing");
+          type == "understand"
+              ? "MiniMax-Music3 does not support audio understanding"
+              : "MiniMax-Music3 does not support audio editing");
     }
     return instance.runJob(
         std::any(buildMinimaxInput(env, jobObject, jsInput)));
@@ -492,6 +539,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 
   AcestepModel::AnyInput modelInput =
       buildAcestepInput(env, jobObject, jsInput);
+  if (type == "understand") {
+    if (modelInput.sourceAudio.empty()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Audio understanding requires non-empty sourceAudio");
+    }
+    modelInput.understand = true;
+  }
   if (type == "edit") {
     if (modelInput.sourceAudio.empty()) {
       throw qvac_errors::StatusError(

@@ -158,6 +158,14 @@ export interface GenerateOptions {
    * engine output. Audio edits are never normalized.
    */
   normalizeLoudness?: boolean
+  /**
+   * Teacher-forced LM quality scoring of the generated audio codes against
+   * the request: `stats.qualityScore` reports a weighted [0, 1] score
+   * (caption/lyrics PMI plus metadata recall) at the cost of extra LM
+   * forwards after code generation — made for ranking a batch of takes.
+   * Requires the LM code path, so `taskType` must be `'text2music'`.
+   */
+  computeQualityScore?: boolean
   /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
   dcwEnabled?: boolean
   /** DCW low-frequency correction strength (official default: 0.05). */
@@ -302,8 +310,29 @@ export interface AudiogenProgressChunk {
   progress: AudiogenProgress
 }
 
+/**
+ * The LM's description of an audio clip, delivered by `understand()` — once
+ * through the response stream and again in the terminal stats. `audioCodes`
+ * are the recovered FSQ codes, reusable as a generation's `audioCodes` input.
+ */
+export interface AudiogenUnderstandResult {
+  caption: string
+  bpm: number
+  /** LM estimate in seconds; the codes fix the true length. */
+  duration: number
+  keyscale: string
+  timesignature: string
+  vocalLanguage: string
+  audioCodes: Int32Array
+}
+
+/** The understand result delivered through the response's output stream. */
+export interface AudiogenUnderstandChunk {
+  understand: AudiogenUnderstandResult
+}
+
 /** Items streamed by the `QvacResponse` returned from `run()`. */
-export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk
+export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk | AudiogenUnderstandChunk
 
 /**
  * Terminal run stats, resolved by `QvacResponse.await()`. These mirror exactly
@@ -326,6 +355,31 @@ export interface AudiogenStats {
   backendId?: number
   /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
   gpuFallbackReason?: number
+  /**
+   * Weighted quality of the generated codes against the request, in [0, 1]
+   * (caption/lyrics PMI plus metadata recall). Present only when the run set
+   * `computeQualityScore`; made for ranking a batch of takes.
+   */
+  qualityScore?: number
+  /**
+   * The LM's description of the analysed clip. Present only on stats resolved
+   * by an `understand()` response; also streamed as an output item.
+   */
+  understand?: AudiogenUnderstandResult
+}
+
+/** Options accepted by `understand()`. */
+export interface UnderstandOptions {
+  /** RNG seed for the LM decode; omit for a random seed. */
+  seed?: number
+  /** Language hint (e.g. `'es'`): forced into the result instead of the LM's guess. */
+  vocalLanguage?: string
+  /** LM sampling temperature (default 0.85). */
+  lmTemperature?: number
+  /** LM nucleus sampling p (default 0.9). */
+  lmTopP?: number
+  /** LM top-k (default 0 = disabled). */
+  lmTopK?: number
 }
 
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
@@ -383,9 +437,18 @@ interface NativeAudiogenData {
   backendDevice?: number
   backendId?: number
   gpuFallbackReason?: number
+  qualityScore?: number
   progressStage?: string
   progressStep?: number
   progressTotal?: number
+  // Understand payload: audioCodes marks the frame; the rest describe the clip.
+  audioCodes?: Int32Array
+  caption?: string
+  bpm?: number
+  duration?: number
+  keyscale?: string
+  timesignature?: string
+  vocalLanguage?: string
 }
 
 function asNativeData(data: unknown): NativeAudiogenData | null {
@@ -625,7 +688,8 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'track',
   'guidanceScale',
   'audioCoverStrength',
-  'coverNoiseStrength'
+  'coverNoiseStrength',
+  'computeQualityScore'
 ]
 
 function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boolean {
@@ -860,6 +924,7 @@ export class AudioGen {
   private _cancelPromise: Promise<void> | null
   private _cancellingResponse: QvacResponse<AudiogenOutputChunk> | null
   private _cancelTerminalResolve: (() => void) | null
+  private _lastUnderstand: AudiogenUnderstandResult | undefined
 
   constructor(options: AudioGenOptions = {}) {
     this._logger = new QvacLogger(options.logger)
@@ -990,6 +1055,49 @@ export class AudioGen {
    * be repeated and are executed in the exact order in which they are chained.
    * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
    */
+  /**
+   * Describe an audio clip through the reverse pipeline: the engine encodes
+   * the PCM, recovers the FSQ semantic codes, and the LM reports metadata and
+   * a caption. `audio` is interleaved stereo float PCM at 48 kHz — the same
+   * layout `sourceAudio` uses. The result streams as an `understand` output
+   * item and is repeated on the terminal stats (`stats.understand`).
+   */
+  async understand(
+    audio: Float32Array,
+    opts: UnderstandOptions = {}
+  ): Promise<QvacResponse<AudiogenOutputChunk>> {
+    if (this._engineType === ENGINE_MINIMAX) {
+      throw invalidInput('MiniMax-Music3 does not support audio understanding')
+    }
+    if (!(audio instanceof Float32Array)) {
+      throw invalidInput('understand audio must be a Float32Array')
+    }
+    if (audio.length === 0) {
+      throw invalidInput('understand audio must not be empty')
+    }
+    if (audio.length % 2 !== 0) {
+      throw invalidInput('understand audio must be interleaved stereo (even sample count)')
+    }
+    requireFinitePcm(audio, 'understand audio')
+    const jobData: AudioGenJobData = {
+      type: 'understand',
+      input: '',
+      sourceAudio: audio,
+      seed: optionalFiniteNumber(opts.seed, 'seed', true),
+      vocalLanguage: opts.vocalLanguage,
+      lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
+      lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
+      lmTopK: optionalFiniteNumber(opts.lmTopK, 'lmTopK', true)
+    }
+    const revision = this._lifecycleRevision
+    return new Promise((resolve, reject) => {
+      const queued = this._runExclusive(() =>
+        this._admitAndWait(jobData, revision, resolve, reject)
+      )
+      void queued.catch(reject)
+    })
+  }
+
   edit(source: AudioEditSource): AudioEditSession {
     if (this._engineType === ENGINE_MINIMAX) {
       throw invalidInput('MiniMax-Music3 does not support audio editing')
@@ -1033,6 +1141,7 @@ export class AudioGen {
       throw this._lifecycleError()
     }
     const addon = this._requireAddon()
+    this._lastUnderstand = undefined
     const response = this._job.start() as QvacResponse<AudiogenOutputChunk>
     let accepted: boolean
     try {
@@ -1121,6 +1230,12 @@ export class AudioGen {
     if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
       throw invalidInput('normalizeLoudness must be a boolean')
     }
+    if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
+      throw invalidInput('computeQualityScore must be a boolean')
+    }
+    if (opts.computeQualityScore === true && taskType !== undefined && taskType !== 'text2music') {
+      throw invalidInput("computeQualityScore requires taskType 'text2music' (the LM code path)")
+    }
     if (opts.simpleMode === true) {
       if (taskType !== undefined && taskType !== 'text2music') {
         throw invalidInput("simpleMode supports only taskType 'text2music'")
@@ -1151,6 +1266,7 @@ export class AudioGen {
       lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
       simpleMode: opts.simpleMode,
       normalizeLoudness: opts.normalizeLoudness,
+      computeQualityScore: opts.computeQualityScore,
       seed: optionalFiniteNumber(opts.seed, 'seed', true),
       vocalLanguage: opts.vocalLanguage,
       bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
@@ -1347,6 +1463,21 @@ export class AudioGen {
       return
     }
 
+    if (d.audioCodes) {
+      const understood: AudiogenUnderstandResult = {
+        caption: d.caption ?? '',
+        bpm: d.bpm ?? 0,
+        duration: d.duration ?? 0,
+        keyscale: d.keyscale ?? '',
+        timesignature: d.timesignature ?? '',
+        vocalLanguage: d.vocalLanguage ?? '',
+        audioCodes: d.audioCodes
+      }
+      this._lastUnderstand = understood
+      this._job.output({ understand: understood })
+      return
+    }
+
     if (typeof d.audioDurationMs === 'number' || typeof d.totalTimeMs === 'number') {
       const stats: AudiogenStats = {
         ...(typeof d.audioDurationMs === 'number' ? { audioDurationMs: d.audioDurationMs } : {}),
@@ -1356,7 +1487,9 @@ export class AudioGen {
         ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
         ...(typeof d.gpuFallbackReason === 'number'
           ? { gpuFallbackReason: d.gpuFallbackReason }
-          : {})
+          : {}),
+        ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
+        ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
       }
       this._job.end(stats, stats)
     }

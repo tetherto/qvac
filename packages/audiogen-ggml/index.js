@@ -279,7 +279,8 @@ const ACESTEP_GENERATE_KEYS = [
     'track',
     'guidanceScale',
     'audioCoverStrength',
-    'coverNoiseStrength'
+    'coverNoiseStrength',
+    'computeQualityScore'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
@@ -492,6 +493,7 @@ class AudioGen {
     _cancelPromise;
     _cancellingResponse;
     _cancelTerminalResolve;
+    _lastUnderstand;
     constructor(options = {}) {
         this._logger = new QvacLogger(options.logger);
         const files = options.files ?? {};
@@ -611,6 +613,43 @@ class AudioGen {
      * be repeated and are executed in the exact order in which they are chained.
      * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
      */
+    /**
+     * Describe an audio clip through the reverse pipeline: the engine encodes
+     * the PCM, recovers the FSQ semantic codes, and the LM reports metadata and
+     * a caption. `audio` is interleaved stereo float PCM at 48 kHz — the same
+     * layout `sourceAudio` uses. The result streams as an `understand` output
+     * item and is repeated on the terminal stats (`stats.understand`).
+     */
+    async understand(audio, opts = {}) {
+        if (this._engineType === exports.ENGINE_MINIMAX) {
+            throw invalidInput('MiniMax-Music3 does not support audio understanding');
+        }
+        if (!(audio instanceof Float32Array)) {
+            throw invalidInput('understand audio must be a Float32Array');
+        }
+        if (audio.length === 0) {
+            throw invalidInput('understand audio must not be empty');
+        }
+        if (audio.length % 2 !== 0) {
+            throw invalidInput('understand audio must be interleaved stereo (even sample count)');
+        }
+        requireFinitePcm(audio, 'understand audio');
+        const jobData = {
+            type: 'understand',
+            input: '',
+            sourceAudio: audio,
+            seed: optionalFiniteNumber(opts.seed, 'seed', true),
+            vocalLanguage: opts.vocalLanguage,
+            lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
+            lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
+            lmTopK: optionalFiniteNumber(opts.lmTopK, 'lmTopK', true)
+        };
+        const revision = this._lifecycleRevision;
+        return new Promise((resolve, reject) => {
+            const queued = this._runExclusive(() => this._admitAndWait(jobData, revision, resolve, reject));
+            void queued.catch(reject);
+        });
+    }
     edit(source) {
         if (this._engineType === exports.ENGINE_MINIMAX) {
             throw invalidInput('MiniMax-Music3 does not support audio editing');
@@ -637,6 +676,7 @@ class AudioGen {
             throw this._lifecycleError();
         }
         const addon = this._requireAddon();
+        this._lastUnderstand = undefined;
         const response = this._job.start();
         let accepted;
         try {
@@ -716,6 +756,12 @@ class AudioGen {
         if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
             throw invalidInput('normalizeLoudness must be a boolean');
         }
+        if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
+            throw invalidInput('computeQualityScore must be a boolean');
+        }
+        if (opts.computeQualityScore === true && taskType !== undefined && taskType !== 'text2music') {
+            throw invalidInput("computeQualityScore requires taskType 'text2music' (the LM code path)");
+        }
         if (opts.simpleMode === true) {
             if (taskType !== undefined && taskType !== 'text2music') {
                 throw invalidInput("simpleMode supports only taskType 'text2music'");
@@ -746,6 +792,7 @@ class AudioGen {
             lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
             simpleMode: opts.simpleMode,
             normalizeLoudness: opts.normalizeLoudness,
+            computeQualityScore: opts.computeQualityScore,
             seed: optionalFiniteNumber(opts.seed, 'seed', true),
             vocalLanguage: opts.vocalLanguage,
             bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
@@ -919,6 +966,20 @@ class AudioGen {
             });
             return;
         }
+        if (d.audioCodes) {
+            const understood = {
+                caption: d.caption ?? '',
+                bpm: d.bpm ?? 0,
+                duration: d.duration ?? 0,
+                keyscale: d.keyscale ?? '',
+                timesignature: d.timesignature ?? '',
+                vocalLanguage: d.vocalLanguage ?? '',
+                audioCodes: d.audioCodes
+            };
+            this._lastUnderstand = understood;
+            this._job.output({ understand: understood });
+            return;
+        }
         if (typeof d.audioDurationMs === 'number' || typeof d.totalTimeMs === 'number') {
             const stats = {
                 ...(typeof d.audioDurationMs === 'number' ? { audioDurationMs: d.audioDurationMs } : {}),
@@ -928,7 +989,9 @@ class AudioGen {
                 ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
                 ...(typeof d.gpuFallbackReason === 'number'
                     ? { gpuFallbackReason: d.gpuFallbackReason }
-                    : {})
+                    : {}),
+                ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
+                ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
             };
             this._job.end(stats, stats);
         }
