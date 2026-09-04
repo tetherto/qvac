@@ -171,7 +171,9 @@ const MIN_USABLE_GPU_BYTES = 1024 * 1024 * 1024
 // Windows iGPU case above. Such a device is what a `shared` pass measures, and
 // what `assess.ts` keeps on the system basis.
 function isSharedMemoryGpu(gpu: Record<string, unknown>) {
-  if (metricValue(gpu.unifiedMemory) !== false) return true
+  // `=== true`, not `!== false`: an unreported flag is not evidence of sharing,
+  // and `allocatesFromSystemMemory` in `assess.ts` reads it the same way.
+  if (metricValue(gpu.unifiedMemory) === true) return true
   const declared = metricValue(gpu.memoryTotalBytes)
   return typeof declared === 'number' && declared < MIN_USABLE_GPU_BYTES
 }
@@ -237,6 +239,40 @@ async function readGpuUsedBytes() {
 // against 690 for the same model. Wait for two readings to agree instead.
 const GPU_SETTLE_TOLERANCE_BYTES = 16 * 1024 * 1024
 const GPU_SETTLE_ATTEMPTS = 40
+
+// Device memory during a completion, polled rather than sampled at 25 ms: the
+// counter is only readable through an async collector call. Coarser than the
+// RSS sampler, and the reason a GPU pass used to record a flat zero — which
+// this PR's own sampler fix showed was an assumption, not a measurement.
+const GPU_SAMPLE_INTERVAL_MS = 250
+
+function createGpuSampler() {
+  let running = false
+  let peak = 0
+  let loop: Promise<void> | undefined
+
+  return {
+    start() {
+      running = true
+      loop = (async () => {
+        while (running) {
+          try {
+            const used = await readGpuUsedBytes()
+            if (used > peak) peak = used
+          } catch {
+            // One failed reading must not end the sample.
+          }
+          await new Promise((resolve) => setTimeout(resolve, GPU_SAMPLE_INTERVAL_MS))
+        }
+      })()
+    },
+    async stop() {
+      running = false
+      await loop
+      return peak
+    }
+  }
+}
 
 async function settledGpuUsedBytes() {
   let previous = await readGpuUsedBytes()
@@ -350,12 +386,9 @@ async function measure(
   await settle()
   const afterLoad = gpuPass ? await settledGpuUsedBytes() : rssBytes()
 
-  // The RSS sampler cannot follow device memory — that counter is only readable
-  // through an async collector call. It costs nothing to skip: llama.cpp
-  // allocates the whole context at load, and every CPU point measured a working
-  // delta of 0.
-  const sampler = gpuPass ? undefined : createSampler()
-  sampler?.start()
+  // Both passes sample across the completion, against their own counter.
+  const sampler = gpuPass ? createGpuSampler() : createSampler()
+  sampler.start()
   let peak = afterLoad
   let backendDevice: 'cpu' | 'gpu' | undefined
   try {
@@ -375,7 +408,7 @@ async function measure(
     )
     backendDevice = final.stats?.backendDevice
   } finally {
-    if (sampler) peak = sampler.stop()
+    peak = Math.max(afterLoad, await sampler.stop())
   }
 
   await withTimeout(

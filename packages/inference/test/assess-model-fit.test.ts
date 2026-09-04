@@ -1492,6 +1492,59 @@ test('assess: an integrated GPU keeps the system basis, with its own coefficient
   )
 })
 
+// The host `win32-x64:vulkan-shared` exists for: an ordinary Windows laptop
+// whose only GPU is the Intel iGPU. DXGI types it dedicated for a 128 MiB
+// carve-out and `unifiedMemory` reads false, so the size floor is the only
+// thing that identifies it — and with no discrete card beside it, nothing else
+// can carry the budget.
+test('assess: a Windows laptop with only an iGPU takes the shared fixture', (t) => {
+  const igpuOnly = discreteGpuResources({
+    vramTotalBytes: 128 * MIB,
+    vramUsedBytes: 8 * MIB,
+    gpuScope: 'budget',
+    systemTotalBytes: 32 * GIB,
+    systemUsedBytes: 8 * GIB
+  })
+  const gpus = igpuOnly.capabilities.gpus
+  if (gpus.status === 'supported') {
+    const provenance = { source: 'test', scope: 'device' as const }
+    gpus.value[0] = {
+      ...gpus.value[0]!,
+      name: { status: 'supported', value: 'Intel(R) UHD Graphics 770', provenance }
+    }
+  }
+
+  const measured = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: igpuOnly,
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveSharedGpuCalibration: () => calibration({ weightUpperCoeff: 2.044 }),
+    resolveProfile: () => profile()
+  })
+
+  t.is(measured.basis, 'system-memory', 'not the 128 MiB carve-out')
+  t.is(measured.budget?.totalBytes, 32 * GIB)
+  t.is(measured.verdict, 'likely-fits')
+  t.ok(measured.assumptions.some((a) => a.includes('Intel(R) UHD Graphics 770')))
+
+  // Without the shared fixture it must not fall back to the CPU coefficients.
+  const unmeasured = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: igpuOnly,
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveSharedGpuCalibration: () => undefined,
+    resolveProfile: () => profile()
+  })
+  t.is(unmeasured.verdict, 'unknown')
+  t.ok(unmeasured.reasons.some((r) => r.includes('integrated vulkan GPU')))
+})
+
 // A dedicated card next to the integrated one is where the engine would put
 // the model: `chooseBackend` fills its GPU list before its iGPU list and takes
 // the first non-empty one.
