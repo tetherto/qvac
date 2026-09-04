@@ -608,6 +608,12 @@ Third-Party Model Licenses
     https://huggingface.co/nvidia/GR00T-N1.7-LIBERO
   groot-q8_vf16
     https://huggingface.co/nvidia/GR00T-N1.7-3B
+  parakeet-unified-en-0.6b.f16
+    https://huggingface.co/nvidia/parakeet-unified-en-0.6b
+  parakeet-unified-en-0.6b.q4_0
+    https://huggingface.co/nvidia/parakeet-unified-en-0.6b
+  parakeet-unified-en-0.6b.q8_0
+    https://huggingface.co/nvidia/parakeet-unified-en-0.6b
 
 --- openrail ---
 
@@ -632,6 +638,11 @@ Third-Party Model Licenses
     https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF
   stable-diffusion-xl-base-1.0-GGUF
     https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF
+
+--- qwen-community-1.0 ---
+
+  Qwen3.8-Flash-Next-GGUF
+    https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF
 
 =========================================================================
 Modification Notice

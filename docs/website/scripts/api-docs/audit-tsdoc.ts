@@ -10,7 +10,7 @@
  * Programmatic: import { auditTsDoc, bootstrapProject } from "./audit-tsdoc.js"
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import * as path from "path";
 import ts from "typescript";
 import { Application, ReflectionKind } from "typedoc";
@@ -28,7 +28,12 @@ import type { AuditDiagnostic, AuditOptions, AuditResult } from "./types.js";
 export async function bootstrapProject(
   sdkPath: string,
 ): Promise<ProjectReflection> {
-  const entryPoint = path.join(sdkPath, "index.ts").replace(/\\/g, "/");
+  const srcEntry = path.join(sdkPath, "src", "index.ts");
+  const rootEntry = path.join(sdkPath, "index.ts");
+  const entryPoint = (existsSync(srcEntry) ? srcEntry : rootEntry).replace(
+    /\\/g,
+    "/",
+  );
   const tsconfigPath = path.join(sdkPath, "tsconfig.json").replace(/\\/g, "/");
 
   const app = await Application.bootstrapWithPlugins({

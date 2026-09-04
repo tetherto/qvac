@@ -17,6 +17,7 @@ export type ModelFitPlatform =
   | 'linux-arm64'
   | 'linux-x64'
   | 'win32-x64'
+  | 'win32-arm64'
   | 'android-arm64'
   | 'ios-arm64'
 
@@ -48,6 +49,12 @@ export interface PlatformCalibration {
   weightUpperCoeff: number
   fixedOverheadBytes: ByteRange
   computeBufferBytesPerToken: ByteRange
+  /**
+   * Transient peak one operation adds on top of the resident cost — a few MiB
+   * on most platforms, 73 MiB on darwin-x64. Optional: fixtures measured
+   * before the harness sampled generation contribute nothing, as they do now.
+   */
+  workingPeakBytes?: ByteRange
   audioWindowBytes: ByteRange
   audioStreamingBytes: ByteRange
   validated: boolean
@@ -83,6 +90,12 @@ export interface CalibrationFixture {
    * and because one platform can run several backends whose buffers differ.
    */
   gpuPlatforms?: Readonly<Record<string, PlatformCalibration>>
+  /**
+   * Integrated-GPU coefficients, keyed the same way. A third map because the
+   * buffers are the backend's, as in `gpuPlatforms`, but come out of system
+   * RAM, as in `platforms`. Measured by the harness's `--igpu` pass.
+   */
+  sharedGpuPlatforms?: Readonly<Record<string, PlatformCalibration>>
 }
 
 /** What an estimator is handed for one candidate. */
