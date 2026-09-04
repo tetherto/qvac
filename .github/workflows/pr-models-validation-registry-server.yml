@@ -390,6 +390,7 @@ jobs:
       - fork-approval
       - sync-staging
     runs-on: ubuntu-latest
+    environment: release
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
     steps:
