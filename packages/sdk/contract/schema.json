@@ -3320,6 +3320,21 @@
               "type": "string",
               "const": "deleteCache"
             },
+            "auto": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": ["type", "auto"],
+          "title": "DeleteCacheAutoRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "deleteCache"
+            },
             "kvCacheKey": {
               "type": "string"
             },

@@ -469,11 +469,22 @@ async def delete_cache(
     transport: Transport,
     *,
     all: bool | None = None,
+    auto: bool | None = None,
     kv_cache_key: str | None = None,
     model_id: str | None = None,
 ) -> dict[str, bool]:
+    """Delete KV cache files.
+
+    ``all`` wipes the cache root, caller-owned named caches included. ``auto``
+    reclaims only the engine-generated automatic caches that no request is
+    using, covering the whole cache directory — which is shared by every QVAC
+    process under the same home directory. ``kv_cache_key`` targets one key,
+    optionally narrowed to one ``model_id``.
+    """
     if all:
         payload: dict[str, Any] = {"type": "deleteCache", "all": True}
+    elif auto:
+        payload = {"type": "deleteCache", "auto": True}
     elif kv_cache_key is not None:
         payload = {"type": "deleteCache", "kvCacheKey": kv_cache_key}
         if model_id is not None:
