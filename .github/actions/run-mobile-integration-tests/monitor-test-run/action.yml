@@ -10,6 +10,12 @@ description: |
   dual-flagship runs (2 ARNs), embed single-pool (1 ARN), and LLM/OCR
   sharded mode (2-10 ARNs).
 
+  A run that Device Farm completes as ERRORED without executing a single test
+  is an infrastructure failure, not a result, and is rescheduled once on the
+  same device selection (see max-errored-retries). That needs the scheduling
+  inputs below plus run-specs from schedule-test-run; without them the retry
+  is skipped and monitoring behaves exactly as it did before.
+
 inputs:
   run-arns:
     description: "JSON array of Device Farm run ARNs"
@@ -26,6 +32,34 @@ inputs:
     description: "JSON array from upload-to-devicefarm: [{name, grep, arn}]. Used to print a run-to-tests legend. Optional; omit for non-sharded runs."
     required: false
     default: "[]"
+  run-specs:
+    description: "run-specs from schedule-test-run: the per-slot respawn recipe. Required for the errored-run retry; default [] disables it."
+    required: false
+    default: "[]"
+  test-package-upload-arn:
+    description: |
+      Device Farm upload ARN for the Appium test package, as passed to
+      schedule-test-run. Required for the errored-run retry: it is the one
+      scheduling parameter Device Farm does not report back on a run, so unlike
+      the project / app / timeout below it cannot be derived here.
+    required: false
+    default: ""
+  device-farm-project-arn:
+    description: "Optional override. Empty (default) derives the project ARN from the run ARN being retried, so callers do not have to re-pass the secret the scheduler already used."
+    required: false
+    default: ""
+  app-upload-arn:
+    description: "Optional override. Empty (default) reads the app upload ARN back off the errored run, which is by definition the one it was scheduled with."
+    required: false
+    default: ""
+  job-timeout-minutes:
+    description: "Optional override for a rescheduled run's jobTimeoutMinutes. Empty (default) reuses the errored run's own value, so a retry inherits whatever ceiling the scheduler set."
+    required: false
+    default: ""
+  max-errored-retries:
+    description: "How many times one run slot may be rescheduled after Device Farm errors it without executing any test. Default 1 (retry once); 0 disables. Never applies to FAILED runs — those are real results."
+    required: false
+    default: "1"
 
 outputs:
   test-result:
@@ -49,6 +83,14 @@ outputs:
   user-test-failed:
     description: "Devices failed (user-defined non-PASSED jobs)"
     value: ${{ steps.monitor.outputs.user_test_failed }}
+  run-arns:
+    description: |
+      JSON array of the run ARNs actually monitored: index-aligned with the
+      run-arns input, with any rescheduled slot replaced by its new ARN. Use it
+      for log collection so a retried slot's artifacts come from the run that
+      executed. Empty when monitoring never reached the end of the polling loop,
+      so callers should fall back to the scheduler's run-arns.
+    value: ${{ steps.monitor.outputs.effective_run_arns }}
 
 runs:
   using: composite
@@ -60,6 +102,12 @@ runs:
         RUN_ARNS_JSON: ${{ inputs.run-arns }}
         MAX_WAIT_TIME_SECONDS: ${{ inputs.max-wait-time-seconds }}
         TEST_SPECS_JSON: ${{ inputs.test-specs }}
+        RUN_SPECS_JSON: ${{ inputs.run-specs }}
+        PROJECT_ARN: ${{ inputs.device-farm-project-arn }}
+        APP_ARN: ${{ inputs.app-upload-arn }}
+        TEST_PACKAGE_ARN: ${{ inputs.test-package-upload-arn }}
+        JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
+        MAX_ERRORED_RETRIES: ${{ inputs.max-errored-retries }}
       run: |
         set -euo pipefail
 
@@ -93,6 +141,158 @@ runs:
           echo "  Run $((i+1)): ${RUN_ARNS[$i]}"
         done
         echo ""
+
+        # ── errored-run retry setup ─────────────────────────────────
+        # Device Farm sometimes completes a run as ERRORED without executing a
+        # single test: the slot sits in a pending state, then finishes with an
+        # empty message and a zero test tally (TTS iOS run 33418309222 — the same
+        # commit passed on a re-dispatch). That is an infrastructure failure, not
+        # a result. A real test failure reports FAILED with executed tests, and
+        # ERRORED with a non-zero tally means tests ran and blew up; neither is
+        # ever retried here.
+        #
+        # Rescheduling needs everything schedule-run needs. The project ARN, app
+        # upload and job timeout are read back off the errored run itself, so a
+        # caller cannot pass a project or ceiling that disagrees with the run it
+        # is retrying, and no secret has to be threaded through a second step.
+        # The other two cannot be derived: Device Farm never reports the test
+        # package ARN, and the device selection it reports back does not round
+        # trip reliably enough to retry on the same hardware — so the caller
+        # passes test-package-upload-arn and run-specs (the scheduler's own
+        # per-slot pool / filter). Missing either disables the retry rather than
+        # guessing, which keeps callers that pass neither on the old behaviour.
+        case "${MAX_ERRORED_RETRIES:-1}" in
+          ''|*[!0-9]*)
+            echo "::warning::max-errored-retries='${MAX_ERRORED_RETRIES:-}' is not a non-negative integer — treating it as 0 (no retry)."
+            MAX_ERRORED_RETRIES=0
+            ;;
+        esac
+        RETRY_CREATED_ARNS=""
+        SPEC_RECIPE_COUNT=0
+        if [ -n "$RUN_SPECS_JSON" ] && [ "$RUN_SPECS_JSON" != "[]" ]; then
+          SPEC_RECIPE_COUNT=$(echo "$RUN_SPECS_JSON" | jq 'length')
+        fi
+        RETRY_ENABLED=false
+        if [ "$MAX_ERRORED_RETRIES" -eq 0 ]; then
+          RETRY_REASON="max-errored-retries=0"
+        elif [ "$SPEC_RECIPE_COUNT" -ne "$RUN_COUNT" ]; then
+          RETRY_REASON="run-specs carries $SPEC_RECIPE_COUNT recipe(s) for $RUN_COUNT run(s)"
+        elif [ -z "$TEST_PACKAGE_ARN" ]; then
+          RETRY_REASON="test-package-upload-arn is not set"
+        else
+          RETRY_ENABLED=true
+        fi
+        if [ "$RETRY_ENABLED" = "true" ]; then
+          echo "🔁 Errored-run retry: up to $MAX_ERRORED_RETRIES reschedule(s) per slot, only when Device Farm errors a run before any test executes"
+        else
+          echo "🔁 Errored-run retry: disabled ($RETRY_REASON)"
+        fi
+        echo ""
+
+        # ERRORED with a zero test tally — the one shape we retry.
+        errored_before_any_test() {
+          local run_json="$1"
+          [ -n "$run_json" ] || return 1
+          local result total
+          result=$(echo "$run_json" | jq -r '.run.result // ""')
+          total=$(echo "$run_json" | jq -r '.run.counters.total // 0')
+          [ "$result" = "ERRORED" ] && [ "$total" = "0" ]
+        }
+
+        # Replay slot $1's recipe as a fresh run, echoing the new ARN. Same pool
+        # or device filter, same test spec, so the retry measures the same thing
+        # the slot was scheduled to measure.
+        reschedule_slot() {
+          local slot="$1"
+          local attempt="$2"
+          local old_arn="$3"
+          local run_json="$4"
+          local name spec_arn pool_arn filter retry_name
+          local project_arn app_arn timeout
+          name=$(echo "$RUN_SPECS_JSON" | jq -r ".[$slot].name // \"\"")
+          spec_arn=$(echo "$RUN_SPECS_JSON" | jq -r ".[$slot].specArn // \"\"")
+          pool_arn=$(echo "$RUN_SPECS_JSON" | jq -r ".[$slot].poolArn // \"\"")
+          filter=$(echo "$RUN_SPECS_JSON" | jq -r ".[$slot].filter // \"\"")
+          if [ -z "$spec_arn" ]; then
+            echo "  recipe for run $((slot+1)) has no test spec ARN" >&2
+            return 1
+          fi
+          # A run ARN is <partition-and-account>:run:<projectId>/<runId>, and the
+          # project ARN is the same prefix with :project:<projectId> — the same
+          # decomposition the console links below already rely on.
+          project_arn="$PROJECT_ARN"
+          if [ -z "$project_arn" ]; then
+            project_arn=$(echo "$old_arn" | sed -n 's|^\(arn:[^:]*:devicefarm:[^:]*:[^:]*\):run:\([^/]*\)/.*|\1:project:\2|p')
+          fi
+          app_arn="$APP_ARN"
+          [ -n "$app_arn" ] || app_arn=$(echo "$run_json" | jq -r '.run.appUpload // ""')
+          timeout="$JOB_TIMEOUT_MINUTES"
+          [ -n "$timeout" ] || timeout=$(echo "$run_json" | jq -r '.run.jobTimeoutMinutes // 120')
+          if [ -z "$project_arn" ] || [ -z "$app_arn" ]; then
+            echo "  could not resolve project ARN / app upload for run $((slot+1))" >&2
+            return 1
+          fi
+          retry_name="${name}-retry${attempt}"
+          if [ -n "$pool_arn" ]; then
+            aws devicefarm schedule-run \
+              --project-arn "$project_arn" \
+              --device-pool-arn "$pool_arn" \
+              --app-arn "$app_arn" \
+              --name "$retry_name" \
+              --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
+              --execution-configuration jobTimeoutMinutes="$timeout" \
+              --query 'run.arn' --output text
+          elif [ -n "$filter" ]; then
+            aws devicefarm schedule-run \
+              --project-arn "$project_arn" \
+              --device-selection-configuration "$filter" \
+              --app-arn "$app_arn" \
+              --name "$retry_name" \
+              --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
+              --execution-configuration jobTimeoutMinutes="$timeout" \
+              --query 'run.arn' --output text
+          else
+            echo "  recipe for run $((slot+1)) has neither a device pool nor a device filter" >&2
+            return 1
+          fi
+        }
+
+        # A run rescheduled here is invisible to the caller's cancel step, which
+        # only knows the ARNs the scheduler returned, so it would keep billing
+        # device minutes after a cancellation. Stop what this step created. Same
+        # SIGKILL limitation the scheduler's rollback documents: a hard kill can
+        # still orphan a run.
+        stop_created_retry_runs() {
+          [ -n "$RETRY_CREATED_ARNS" ] || return 0
+          for arn in $RETRY_CREATED_ARNS; do
+            if aws devicefarm stop-run --arn "$arn" >/dev/null 2>&1; then
+              echo "  stopped $arn"
+            else
+              echo "  ::warning::could not stop $arn (it may have already finished)"
+            fi
+          done
+        }
+
+        stop_retry_runs_on_exit() {
+          local status=$?
+          trap - ERR INT TERM
+          if [ -n "$RETRY_CREATED_ARNS" ]; then
+            echo "::warning::Monitor interrupted (status $status) — stopping the run(s) it rescheduled."
+            stop_created_retry_runs
+          fi
+          exit "$status"
+        }
+        trap stop_retry_runs_on_exit ERR INT TERM
+
+        # Effective ARNs for the caller: the input list with every rescheduled
+        # slot replaced, so log collection reads the run that actually executed.
+        publish_effective_run_arns() {
+          local json='[]' idx
+          for ((idx=0; idx<RUN_COUNT; idx++)); do
+            json=$(echo "$json" | jq -c --arg arn "${RUN_ARNS[$idx]}" '. + [$arn]')
+          done
+          echo "effective_run_arns=$json" >> "$GITHUB_OUTPUT"
+        }
 
         # ── run-to-tests legend ────────────────────────────────────
         # When test-specs is provided (sharded mode), print a table so
@@ -163,6 +363,10 @@ runs:
         echo "Transition notices (::notice::, shown at top of job UI):"
         echo "  '<state> -> RUNNING after <Q>s of queue time'   slot acquired a device"
         echo "  'queued <Q>s | executed <X>s | total <T>s'      slot finished; T == Q + X"
+        echo "  'RESCHEDULED -> ...'                            slot was retried; its times restart here"
+        echo "Rescheduling (::warning::):"
+        echo "  'Run N rescheduled'                             Device Farm errored the run with 0 tests executed"
+        echo "                                                  (infrastructure failure) and it was scheduled again"
         echo "::endgroup::"
         echo ""
 
@@ -180,12 +384,21 @@ runs:
         # used to compute queued vs executed time on COMPLETED.
         PREV_STATUS=()
         RUNNING_AT=()
+        # RETRIES_USED caps reschedules per slot. SLOT_EPOCH is the ELAPSED at
+        # which the slot's current run started being monitored — 0 for the runs
+        # the scheduler created, and the reschedule time for a retried slot, so
+        # the queue / execution figures below stay relative to the run they
+        # describe instead of counting the errored attempt's wait as queue time.
+        RETRIES_USED=()
+        SLOT_EPOCH=()
         for ((i=0; i<RUN_COUNT; i++)); do
           DONE[$i]="false"
           CUR_STATUS[$i]="PENDING"
           CUR_RESULT[$i]="PENDING"
           PREV_STATUS[$i]=""
           RUNNING_AT[$i]=""
+          RETRIES_USED[$i]=0
+          SLOT_EPOCH[$i]=0
         done
 
         # Run-level RUNNING is a coarse bucket. Every DEEP_DIVE_INTERVAL
@@ -204,8 +417,31 @@ runs:
               CUR_STATUS[$i]=$(echo "$RUN_JSON" | jq -r '.run.status // "UNKNOWN"')
               CUR_RESULT[$i]=$(echo "$RUN_JSON" | jq -r '.run.result // "UNKNOWN"')
               if [ "${CUR_STATUS[$i]}" = "COMPLETED" ]; then
-                DONE[$i]="true"
-                DONE_COUNT=$((DONE_COUNT + 1))
+                if [ "$RETRY_ENABLED" = "true" ] \
+                   && [ "${RETRIES_USED[$i]}" -lt "$MAX_ERRORED_RETRIES" ] \
+                   && errored_before_any_test "$RUN_JSON"; then
+                  _attempt=$(( ${RETRIES_USED[$i]} + 1 ))
+                  _old_arn="${RUN_ARNS[$i]}"
+                  _new_arn=$(reschedule_slot "$i" "$_attempt" "$_old_arn" "$RUN_JSON") || _new_arn=""
+                  if [ -n "$_new_arn" ] && [ "$_new_arn" != "None" ]; then
+                    RETRIES_USED[$i]=$_attempt
+                    RETRY_CREATED_ARNS="$RETRY_CREATED_ARNS $_new_arn"
+                    RUN_ARNS[$i]="$_new_arn"
+                    CUR_STATUS[$i]="PENDING"
+                    CUR_RESULT[$i]="PENDING"
+                    PREV_STATUS[$i]="RESCHEDULED"
+                    RUNNING_AT[$i]=""
+                    SLOT_EPOCH[$i]=$ELAPSED
+                    echo "::warning title=Device Farm Run $((i+1)) rescheduled::Device Farm errored this run before any test executed (attempt $_attempt of $MAX_ERRORED_RETRIES). Replaced $_old_arn with $_new_arn"
+                  else
+                    echo "::warning::Run $((i+1)) errored before any test executed and could not be rescheduled — keeping the ERRORED result."
+                    DONE[$i]="true"
+                    DONE_COUNT=$((DONE_COUNT + 1))
+                  fi
+                else
+                  DONE[$i]="true"
+                  DONE_COUNT=$((DONE_COUNT + 1))
+                fi
               fi
 
               # Transition signals. RUNNING / COMPLETED get promoted
@@ -215,6 +451,9 @@ runs:
               prev_status="${PREV_STATUS[$i]}"
               cur_status="${CUR_STATUS[$i]}"
               cur_result="${CUR_RESULT[$i]}"
+              # 0 unless this slot was rescheduled, so the figures below describe
+              # the run being reported rather than the whole monitoring window.
+              slot_epoch="${SLOT_EPOCH[$i]}"
               if [ -n "$cur_status" ] && [ "$cur_status" != "$prev_status" ]; then
                 TS=$(date -u +%H:%M:%S)
                 if [ -z "$prev_status" ]; then
@@ -227,19 +466,19 @@ runs:
                 elif [ "$cur_status" = "RUNNING" ]; then
                   if [ -z "${RUNNING_AT[$i]}" ]; then
                     RUNNING_AT[$i]=$ELAPSED
-                    echo "::notice title=Device Farm Run $((i+1)) acquired device::[$TS] $prev_status -> RUNNING after ${ELAPSED}s of queue time"
+                    echo "::notice title=Device Farm Run $((i+1)) acquired device::[$TS] $prev_status -> RUNNING after $((ELAPSED - slot_epoch))s of queue time"
                   fi
                 elif [ "$cur_status" = "COMPLETED" ]; then
                   running_at="${RUNNING_AT[$i]}"
                   if [ -n "$running_at" ]; then
                     exec_time=$((ELAPSED - running_at))
-                    echo "::notice title=Device Farm Run $((i+1)) finished::[$TS] result=$cur_result | queued ${running_at}s | executed ${exec_time}s | total ${ELAPSED}s"
+                    echo "::notice title=Device Farm Run $((i+1)) finished::[$TS] result=$cur_result | queued $((running_at - slot_epoch))s | executed ${exec_time}s | total $((ELAPSED - slot_epoch))s"
                   else
                     # Defensive: COMPLETED without ever observing
                     # RUNNING means we missed the RUNNING window between
                     # two 30s polls (rare, trivially short runs) or the
                     # run errored straight from a pending state.
-                    echo "::notice title=Device Farm Run $((i+1)) finished::[$TS] result=$cur_result | total ${ELAPSED}s (no RUNNING window observed)"
+                    echo "::notice title=Device Farm Run $((i+1)) finished::[$TS] result=$cur_result | total $((ELAPSED - slot_epoch))s (no RUNNING window observed)"
                   fi
                 else
                   echo "🔄 Run $((i+1)): $prev_status -> $cur_status (elapsed ${ELAPSED}s)"
@@ -288,11 +527,24 @@ runs:
           if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then
             echo ""
             echo "❌ Timeout: exceeded ${MAX_WAIT_TIME}s"
+            if [ -n "$RETRY_CREATED_ARNS" ]; then
+              echo "   A rescheduled run was still in flight. If that is routine here, raise max-wait-time-seconds: a retry restarts the slot's queue and execution inside this same budget."
+              # Timing out abandons monitoring, and the caller's cancel step does
+              # not know these ARNs, so stop them here rather than let them bill
+              # on to their own jobTimeoutMinutes.
+              stop_created_retry_runs
+            fi
+            publish_effective_run_arns
             exit 1
           fi
           sleep 30
           ELAPSED=$((ELAPSED + 30))
         done
+
+        publish_effective_run_arns
+        # Every slot is COMPLETED from here, so there is nothing left to stop and
+        # the aggregation below must not be able to trip the rollback.
+        trap - ERR INT TERM
 
         # ── aggregate results ────────────────────────────────────────
         DEVICE_COUNT=0

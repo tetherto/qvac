@@ -453,6 +453,11 @@ jobs:
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
+          # Errored-run retry (documented in monitor-test-run): run-specs carries
+          # each slot's device selection, and the test package upload is the one
+          # scheduling input Device Farm never reports back on a run.
+          run-specs: ${{ steps.schedule.outputs.run-specs }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
           # Functional multi-spec runs need headroom beyond Device Farm's
           # 120-minute execution ceiling for normal queue variance.
@@ -473,7 +478,9 @@ jobs:
           addon-npm-name: '@qvac/tts-ggml'
           enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          # The monitor's list, so a rescheduled slot's logs come from the run
+          # that executed; falls back to the scheduler's when it never published.
+          run-arns: ${{ steps.monitor.outputs.run-arns || steps.schedule.outputs.run-arns }}
 
       # Benchmark runs (run_rtf_benchmarks=true) print one [PERF_REPORT_START]
       # block per suite (RTF + streaming) into bare_console.log. Scrape every

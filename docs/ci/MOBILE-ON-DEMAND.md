@@ -360,6 +360,20 @@ gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
 This is the cheap, fast loop for reproducing/fixing a single failure without paying
 for the whole pool again.
 
+### Runs Device Farm errors before the tests start
+
+Device Farm occasionally completes a run as `ERRORED` with **0 tests executed** —
+the slot waits in a pending state, then finishes with an empty message. That is an
+infrastructure failure rather than a result, so the monitor reschedules that slot
+**once**, on the same device selection, and logs a `Run N rescheduled` warning with
+the old and new run ARNs. Nothing to re-dispatch by hand; the retried run's logs are
+what gets collected.
+
+Real test failures are never retried: they report `FAILED` with executed tests, as
+does an `ERRORED` run that got far enough to run something. If the reschedule itself
+errors again the job fails with the ERRORED result, which is the point at which a
+manual re-dispatch (or a Device Farm status check) is worth it.
+
 ### Run-count cap (fail-fast)
 
 To stop a single dispatch from spraying the whole fleet, two safety rails are

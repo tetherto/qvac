@@ -105,6 +105,15 @@ outputs:
   run-count:
     description: "Number of scheduled runs"
     value: ${{ steps.schedule.outputs.run_count }}
+  run-specs:
+    description: |
+      JSON array index-aligned with run-arns: the recipe each slot was
+      scheduled from, as [{ name, specArn, poolArn, filter }] (exactly one of
+      poolArn / filter is non-empty). Pass to monitor-test-run so it can
+      reschedule a slot Device Farm errored before running any test, on the
+      same device selection the slot originally used. Empty array if the
+      recipes could not be recorded 1:1, which disables that retry.
+    value: ${{ steps.schedule.outputs.run_specs }}
 
 runs:
   using: composite
@@ -218,10 +227,28 @@ runs:
           CREATED_RUN_ARNS="$CREATED_RUN_ARNS $1"
         }
 
+        # Respawn recipes, one JSONL line per scheduled run, appended by the two
+        # schedule_run_* helpers below. They run inside $(...) command
+        # substitution, so a shell variable would be lost with the subshell — a
+        # file survives. Appending inside the helpers keeps the recipe list
+        # aligned with RUN_ARNS_JSON by construction (both grow once per call, in
+        # call order) instead of relying on every branch to record it. A helper
+        # that fails after writing its line leaves the file one ahead, but that
+        # aborts the whole step through the trap, so no caller ever sees it.
+        RUN_SPECS_FILE="${RUNNER_TEMP:-/tmp}/devicefarm-run-specs.jsonl"
+        : > "$RUN_SPECS_FILE"
+
+        record_run_spec() {
+          jq -nc --arg name "$1" --arg specArn "$2" --arg poolArn "$3" --arg filter "$4" \
+            '{name: $name, specArn: $specArn, poolArn: $poolArn, filter: $filter}' \
+            >> "$RUN_SPECS_FILE"
+        }
+
         schedule_run_with_pool() {
           local pool_arn="$1"
           local name="$2"
           local spec_arn="$3"
+          record_run_spec "$name" "$spec_arn" "$pool_arn" ""
           aws devicefarm schedule-run \
             --project-arn "$PROJECT_ARN" \
             --device-pool-arn "$pool_arn" \
@@ -236,6 +263,7 @@ runs:
           local name="$1"
           local filter="$2"
           local spec_arn="$3"
+          record_run_spec "$name" "$spec_arn" "" "$filter"
           aws devicefarm schedule-run \
             --project-arn "$PROJECT_ARN" \
             --device-selection-configuration "$filter" \
@@ -446,8 +474,20 @@ runs:
         echo "Scheduled $RUN_COUNT run(s):"
         echo "$RUN_ARNS_JSON" | jq .
 
+        # Publish the respawn recipes only when they line up 1:1 with the ARNs.
+        # The monitor keys them by slot index, so a mismatch would retry a slot
+        # on another slot's device selection; emitting [] instead just turns that
+        # retry off and leaves every other behaviour untouched.
+        RUN_SPECS_JSON=$(jq -sc '.' "$RUN_SPECS_FILE")
+        SPECS_RECORDED=$(echo "$RUN_SPECS_JSON" | jq 'length')
+        if [ "$SPECS_RECORDED" != "$RUN_COUNT" ]; then
+          echo "::warning::Recorded $SPECS_RECORDED run spec(s) for $RUN_COUNT run(s) — publishing none, so monitor-test-run will not retry errored runs."
+          RUN_SPECS_JSON='[]'
+        fi
+
         echo "run_arns=$(echo "$RUN_ARNS_JSON" | jq -c .)" >> "$GITHUB_OUTPUT"
         echo "run_count=$RUN_COUNT" >> "$GITHUB_OUTPUT"
+        echo "run_specs=$RUN_SPECS_JSON" >> "$GITHUB_OUTPUT"
 
         # Outputs are published: the caller now has the ARNs and owns cleanup (its
         # cancel step covers cancellation and failure from here). Disarm so the EXIT
