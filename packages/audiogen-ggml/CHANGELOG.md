@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require `speech-cpp` port revision `2026-09-03#1`, which adds the engine's
   ACE-Step Query Rewriting (FORMAT pass) and audio understanding (reverse
   pipeline) on top of the teacher-forced LM quality scoring.
+- Raise the `speech-cpp` floor further to `2026-09-04`: the engine now rejects
+  `"[Instrumental]"` lyrics under `rewrite_query` instead of silently
+  generating a sung track, matching the validation this addon already applies
+  to `rewriteQuery` on the JS side.
 
 ## [0.3.3] - 2026-09-01
 
