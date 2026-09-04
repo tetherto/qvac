@@ -22,6 +22,11 @@
         "x64": ["@qvac/tts-ggml-win32-x64", "./addon-unavailable.js"],
         "default": "./addon-unavailable.js"
       },
+      "android": {
+        "arm64": ["@qvac/tts-ggml-android-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "ios": ["@qvac/tts-ggml-ios", "./addon-unavailable.js"],
       "default": "./addon-unavailable.js"
     }
   },
