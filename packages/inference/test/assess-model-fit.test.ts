@@ -1392,6 +1392,50 @@ test('assess: a GPU with no graphics API the engine talks to is passed over', (t
   t.is(result.verdict, 'likely-fits')
 })
 
+// An AMD APU under amdgpu exposes a VRAM carve-out, so libgpuinfo infers
+// `dedicated` from sysfs and `unifiedMemory` reads false — a Ryzen 5000U
+// laptop reported over a gigabyte of "VRAM". Applying the discrete card's
+// fixture and budgeting against the carve-out would be wrong twice over.
+test('assess: an AMD GPU on linux cannot be placed, so it stays unknown', (t) => {
+  const resources = discreteGpuResources({ vramTotalBytes: 2 * GIB, vramUsedBytes: 256 * MIB })
+  const gpus = resources.capabilities.gpus
+  if (gpus.status === 'supported') {
+    const provenance = { source: 'test', scope: 'device' as const }
+    gpus.value[0] = {
+      ...gpus.value[0]!,
+      name: { status: 'supported', value: 'Lucienne', provenance },
+      driverName: { status: 'supported', value: 'amdgpu', provenance }
+    }
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources,
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveSharedGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'unknown')
+  t.is(result.basis, 'system-memory', 'and no device budget is formed from the carve-out')
+  t.ok(result.reasons.some((r) => r.includes('cannot say where the model would execute')))
+
+  // The same card on windows is unambiguous: DXGI reports real dedicated VRAM.
+  const onWindows = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(onWindows.verdict, 'likely-fits')
+})
+
 // ---------------------------------------------------------------------------
 // Integrated GPUs — the ordinary consumer desktop
 // ---------------------------------------------------------------------------

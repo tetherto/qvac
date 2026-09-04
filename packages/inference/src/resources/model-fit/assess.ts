@@ -92,7 +92,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   // host gets".
   const mustPlaceGpu =
     platform !== undefined && CPU_CALIBRATED_PLATFORMS.includes(platform) && hasGpu(resources)
-  const placement = mustPlaceGpu ? resolveGpuPlacement(resources) : undefined
+  const placement = mustPlaceGpu && platform ? resolveGpuPlacement(resources, platform) : undefined
   const gpuCalibration =
     placement && platform
       ? placement.kind === 'device'
@@ -431,6 +431,19 @@ function allocatesFromSystemMemory(gpu: GPUResourceCapabilities) {
   return tooSmallToHostAModel(gpu)
 }
 
+/**
+ * Whether the collector's dedicated/integrated call is trustworthy for this
+ * device. On linux it is inferred from amdgpu's `mem_info_vram_total`, which an
+ * APU also exposes for its carve-out — a Ryzen 5000U reported `dedicated` with
+ * over a gigabyte of "VRAM". Vulkan calls the same device INTEGRATED_GPU, but
+ * that is not in the collector, so an AMD GPU on linux cannot be placed and
+ * assesses as `unknown` until the engine's own device type is exposed.
+ */
+function integratedIsIndistinguishable(gpu: GPUResourceCapabilities, platform: ModelFitPlatform) {
+  if (!platform.startsWith('linux')) return false
+  return gpu.driverName.status === 'supported' && gpu.driverName.value === 'amdgpu'
+}
+
 // Ordered by the backends the addon actually builds, not by what the device's
 // drivers advertise: the NVIDIA calibration host advertises both CUDA and
 // Vulkan, and every load on it reports `ggml_vulkan`, never `ggml_cuda`. The
@@ -453,9 +466,13 @@ function backendOf(gpu: GPUResourceCapabilities): string | undefined {
  * @returns `undefined` when the readings support neither, or when the cards
  *   disagree on backend or scope.
  */
-function resolveGpuPlacement(resources: SystemResources): GpuPlacement | undefined {
+function resolveGpuPlacement(
+  resources: SystemResources,
+  platform: ModelFitPlatform
+): GpuPlacement | undefined {
   const gpus = usableGpus(resources)
   if (gpus.length === 0) return undefined
+  if (gpus.some((gpu) => integratedIsIndistinguishable(gpu, platform))) return undefined
 
   // Classify on device properties only, never on a reading. A card whose
   // sample failed must still count as a card the engine could choose;

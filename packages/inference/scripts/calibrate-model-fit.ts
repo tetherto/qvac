@@ -500,10 +500,16 @@ async function main() {
       )
       Bare.exit(1)
     }
-    const integrated = gpuRecords.filter((gpu) => isSharedMemoryGpu(gpu))
-    if (integrated.length === 0) {
+    // Deliberately no check that the collector called one of these integrated:
+    // it is the weaker source. An AMD APU under amdgpu exposes a VRAM
+    // carve-out, so libgpuinfo infers `dedicated` from sysfs while Vulkan
+    // reports INTEGRATED_GPU and `chooseBackend` selects it happily — a check
+    // here refused a Ryzen 5000U laptop that the engine would have measured.
+    // Let the engine decide, and let `checkBackendDevice` catch a real CPU
+    // fallback on a host with no integrated device at all.
+    if (gpuRecords.length === 0) {
       console.log(
-        `\nno integrated GPU is reported on this host, so 'main-gpu: integrated' has nothing to select and the engine would fall back to the CPU. This pass needs a host with integrated graphics. No fixture written.`
+        `\nno usable GPU is reported on this host, so there is nothing for 'main-gpu: integrated' to select. No fixture written.`
       )
       Bare.exit(1)
     }

@@ -303,12 +303,26 @@ its own fixture rather than the platform's.
 
 | Gap                    | What it needs                                                                                                                                                                                       |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| linux-x64 iGPU         | a host with integrated graphics; both linux runners have discrete NVIDIA cards                                                                                                                      |
+| linux-x64 iGPU         | a host with integrated graphics; both linux runners have discrete NVIDIA cards. An AMD APU is additionally unplaceable — see below                                                                  |
 | linux-arm64 iGPU       | more than a host — see below                                                                                                                                                                        |
 | darwin-x64 GPU         | a real Intel Mac. `macos-15-large` is a VM whose Metal device reports as "Apple Paravirtual device" with `hasUnifiedMemory: false`, so calibrating it would describe a hypervisor rather than a GPU |
 | win32-arm64            | an engine addon built for it; `@qvac/llm-llamacpp` ships nine prebuild targets and that is not one                                                                                                  |
 | CUDA, ROCm, Level Zero | the addon does not build them — `prebuilds-llm-llamacpp.yml` enables the Vulkan SDK only                                                                                                            |
 | Audio, every platform  | a whisper pass in the harness. `estimateWhisper` refuses the zeroed audio coefficients rather than consuming them                                                                                   |
+
+### An AMD GPU on linux cannot be placed
+
+libgpuinfo infers dedicated-vs-integrated on linux from amdgpu's
+`mem_info_vram_total`, which an APU also exposes for its carve-out. A Ryzen
+5000U laptop ("Lucienne") therefore reports `unifiedMemory: false` with over a
+gigabyte of "VRAM", and is indistinguishable from a small discrete Radeon.
+Vulkan calls the same device `INTEGRATED_GPU`, but that is not in the collector.
+
+Placing it wrongly is worse than not placing it: the device basis would budget
+against the carve-out and apply the RTX 4000's coefficients. So an AMD GPU on
+linux assesses as `unknown` until the engine's own device type reaches JS —
+`chooseBackend` already distinguishes `GGML_BACKEND_DEVICE_TYPE_IGPU`, so the
+fix is to expose what it knows.
 
 ### linux-arm64 on an integrated GPU: measured, and it does not load
 
