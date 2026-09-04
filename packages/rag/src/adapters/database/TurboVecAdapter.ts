@@ -1097,7 +1097,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
         snapshot
       }
       fs.writeFileSync(temporaryManifest, `${JSON.stringify(manifest)}\n`)
-      const manifestFd = fs.openSync(temporaryManifest, 'r')
+      const manifestFd = fs.openSync(temporaryManifest, 'r+')
       try {
         fs.fsyncSync(manifestFd)
       } finally {
@@ -1279,7 +1279,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
     if (verifyOwnership) this._assertWriterOwnership()
     try {
       fs.writeFileSync(temporaryOwnerPath, `${JSON.stringify(record)}\n`)
-      const ownerFd = fs.openSync(temporaryOwnerPath, 'r')
+      const ownerFd = fs.openSync(temporaryOwnerPath, 'r+')
       try {
         fs.fsyncSync(ownerFd)
       } finally {
