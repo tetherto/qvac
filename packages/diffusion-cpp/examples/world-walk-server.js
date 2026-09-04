@@ -134,7 +134,12 @@ function makeWorld() {
       backend: process.env.ABOT_BACKEND || undefined,
       // 0/unset = lossless PNG frames; 1..100 = JPEG at that quality (much
       // smaller frames, so remote/tunneled browsers stream far less data).
-      frameJpegQuality: process.env.ABOT_JPEG_QUALITY || undefined,
+      // Number(): frameJpegQuality is validated with Number.isInteger, so the
+      // raw env string is rejected (threads/seed/backend reach the native
+      // string parser instead and need no coercion here).
+      frameJpegQuality: process.env.ABOT_JPEG_QUALITY
+        ? Number(process.env.ABOT_JPEG_QUALITY)
+        : undefined,
       // The engine takes these as session params now (the native library no
       // longer reads ABOT_* environment variables); the env names stay as
       // launcher conveniences and become explicit config here.

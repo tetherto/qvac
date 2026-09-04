@@ -155,6 +155,15 @@ test('constructor: frameJpegQuality range validation', async function (t) {
     () => new WorldStableDiffusion({ files: FILES, config: { frameJpegQuality: 85 } }),
     '85 accepted'
   )
+  // A numeric STRING is rejected, unlike threads/seed/backend which reach the
+  // native string parser. Callers that read this from an environment variable
+  // or a query parameter must coerce it - examples/world-walk-server.js did
+  // not, so the documented ABOT_JPEG_QUALITY=85 crashed the server at startup.
+  await t.exception.all(
+    () => new WorldStableDiffusion({ files: FILES, config: { frameJpegQuality: '85' } }),
+    /\[0, 100\]/,
+    "the string '85' throws (callers must pass a number)"
+  )
 })
 
 test('ActionFlag: named bits agree with KEY_ORDER and toActionMask', function (t) {

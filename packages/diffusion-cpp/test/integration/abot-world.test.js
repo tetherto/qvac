@@ -50,6 +50,7 @@ const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
 const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
 const { readImageDimensions } = require('@qvac/diffusion-cpp/addon.js')
 const { ensureModelPath, setupJsLogger } = require('./utils.js')
+const { pngLuminanceStddev, readScenePackPromptRows } = require('./abot-guards.js')
 
 // The registry client is a devDependency used only by the desktop provisioning
 // path (the lanes skip on mobile). The indirect specifier keeps the literal out
@@ -264,6 +265,15 @@ test(
       'walking forward produces different frames than idling'
     )
 
+    // Numerical quality gate (see pngLuminanceStddev): garbage frames pass
+    // every structural assert above; require real image content.
+    const walkSharpness = pngLuminanceStddev(b)
+    t.ok(
+      walkSharpness > 20,
+      `walk frames keep structural detail (luminance stddev ` +
+        `${walkSharpness.toFixed(1)} > 20; blur/garbage collapse lands at 8-12)`
+    )
+
     await world.unload().catch(() => {})
   }
 )
@@ -383,6 +393,47 @@ test(
     t.ok(fs.existsSync(scenePath), 'scene pack written by native scene creation')
     t.ok(/"scene"/.test(sceneMsg), 'scene-creation completion JSON received')
 
+    // Conditioning invariants, straight off the pack - no DiT, no GPU, no
+    // frames. `live < rows` is the reference's zeroed prompt padding: without
+    // it the walk cross-attends to pad-token embeddings in all 512 rows and
+    // collapses into blur from the first block (the 2026-08-11 port
+    // regression). `live > 0` means the prompt survived at all.
+    const census = readScenePackPromptRows(fs.readFileSync(scenePath))
+    t.ok(census.live > 0, `prompt encoded into the pack (${census.live} live rows)`)
+    t.ok(
+      census.live < census.rows,
+      `prompt padding is zeroed (${census.live}/${census.rows} rows live; ` +
+        'all rows live = pad embeddings condition the walk)'
+    )
+
+    // ...and the embeddings must actually depend on the prompt. One extra
+    // umT5 encode (seconds, no DiT) guards the "prompt is ignored" class.
+    const otherScenePath = path.join(dir, 'scene-native-e2e-prompt-b.safetensors')
+    if (fs.existsSync(otherScenePath)) fs.unlinkSync(otherScenePath)
+    const otherCreation = await world.createScene({
+      prompt: '| unknown | A snowy mountain village at night under heavy snowfall.',
+      image,
+      t5: t5Xxl,
+      vae: vaePath,
+      output: otherScenePath,
+      width: 832,
+      height: 480
+    })
+    await otherCreation.onUpdate(() => {}).await()
+    const otherCensus = readScenePackPromptRows(fs.readFileSync(otherScenePath))
+    // Compare only the overlapping (equal-length) region. The two prompts have
+    // different token counts, so their live prefixes differ in length, and
+    // Buffer.equals() returns false for different-sized buffers regardless of
+    // content - a raw prefix compare would pass on the length difference alone.
+    // umT5 is contextual, so two different prompts differ even on shared leading
+    // rows, so a difference over the shared region proves content-sensitivity.
+    const shared = Math.min(census.prefix.length, otherCensus.prefix.length)
+    t.ok(shared > 0, 'both prompts encoded live rows into their packs')
+    t.ok(
+      !census.prefix.subarray(0, shared).equals(otherCensus.prefix.subarray(0, shared)),
+      'a different prompt changes the embeddings over the shared rows (prompt is not ignored)'
+    )
+
     // 2. Walk the newly created world with the KV cache on, covering the
     //    demo's input space: idle, move, move+camera chord, and the array
     //    form (bit 0..7 = W,A,S,D,I,J,K,L; see the unit matrix for the full
@@ -418,6 +469,18 @@ test(
     t.ok(
       idleLast.length !== chordLast.length || !idleLast.every((v, i) => v === chordLast[i]),
       'chord block produces different frames than idling'
+    )
+
+    // Numerical quality gate over the NATIVELY created scene: a conditioning
+    // or scene-pack regression collapses generated frames into low-contrast
+    // mush (stddev 8-12) that still passes every structural assert above.
+    // Real walk frames from a photo scene hold 30+; 20 is a safe floor.
+    const chordSharpness = pngLuminanceStddev(chordLast)
+    t.ok(
+      chordSharpness > 20,
+      `walk frames from the native scene keep structural detail ` +
+        `(luminance stddev ${chordSharpness.toFixed(1)} > 20; ` +
+        `blur/garbage collapse lands at 8-12)`
     )
 
     // 3. unload() with a block still streaming: the in-flight response must
