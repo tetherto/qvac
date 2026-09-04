@@ -19,7 +19,7 @@ import {
   ServeStartTimeoutError
 } from './errors.js'
 
-// Low-level lifecycle of a single `qvac serve openai` child: resolve the
+// Low-level lifecycle of a single `qvac serve --openai` child: resolve the
 // command, pick a port, spawn, wait until healthy, and stop. Deliberately
 // free of any registry/process-handler coupling — the detached runner owns
 // those concerns and uses these primitives.
@@ -248,7 +248,7 @@ export interface SpawnedServe {
   readonly baseURL: string
 }
 
-// Spawn `qvac serve openai` on the given port and resolve once it answers a
+// Spawn `qvac serve --openai` on the given port and resolve once it answers a
 // health check. On any failure the child is killed and a structured error is
 // thrown, so the caller never leaks a half-started process.
 export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedServe> {
@@ -265,7 +265,11 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
   const args = [
     ...baseArgs,
     'serve',
-    'openai',
+    // `--no-default` keeps the QVAC surface off the port: this provider only
+    // speaks /v1/*, and the pair is what the retired `serve openai` subcommand
+    // expanded to.
+    '--openai',
+    '--no-default',
     '--config',
     options.configPath,
     '--port',
