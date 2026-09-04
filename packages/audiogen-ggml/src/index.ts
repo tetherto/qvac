@@ -142,6 +142,30 @@ export interface GenerateOptions {
   lmCfgScale?: number
   /** Allow the LM to infer missing metadata before semantic-code generation. */
   lmPhase1?: boolean
+  /**
+   * Simple Mode: treat the caption as a short natural-language query and let
+   * the LM compose the full request before synthesis — a detailed caption,
+   * lyrics, and any metadata left unset (bpm, keyscale, timesignature,
+   * vocalLanguage, and duration when 0). Options you set are kept. Requires
+   * `text2music` with no `audioCodes`; leave `lyrics` unset for LM-written
+   * vocals or pass `'[Instrumental]'` for an instrumental song.
+   */
+  simpleMode?: boolean
+  /**
+   * Percentile loudness normalization on the generated audio (default true):
+   * the 99.999th-percentile sample scales to full scale and the tiny tail
+   * above it clips, matching the reference loudness. Set false for the raw
+   * engine output. Audio edits are never normalized.
+   */
+  normalizeLoudness?: boolean
+  /**
+   * Teacher-forced LM quality scoring of the generated audio codes against
+   * the request: `stats.qualityScore` reports a weighted [0, 1] score
+   * (caption/lyrics PMI plus metadata recall) at the cost of extra LM
+   * forwards after code generation — made for ranking a batch of takes.
+   * Requires the LM code path, so `taskType` must be `'text2music'`.
+   */
+  computeQualityScore?: boolean
   /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
   dcwEnabled?: boolean
   /** DCW low-frequency correction strength (official default: 0.05). */
@@ -310,6 +334,12 @@ export interface AudiogenStats {
   backendId?: number
   /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
   gpuFallbackReason?: number
+  /**
+   * Weighted quality of the generated codes against the request, in [0, 1]
+   * (caption/lyrics PMI plus metadata recall). Present only when the run set
+   * `computeQualityScore`; made for ranking a batch of takes.
+   */
+  qualityScore?: number
 }
 
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
@@ -367,6 +397,7 @@ interface NativeAudiogenData {
   backendDevice?: number
   backendId?: number
   gpuFallbackReason?: number
+  qualityScore?: number
   progressStage?: string
   progressStep?: number
   progressTotal?: number
@@ -609,7 +640,8 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'track',
   'guidanceScale',
   'audioCoverStrength',
-  'coverNoiseStrength'
+  'coverNoiseStrength',
+  'computeQualityScore'
 ]
 
 function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boolean {
@@ -1099,6 +1131,32 @@ export class AudioGen {
     ) {
       throw invalidInput(`taskType '${taskType}' requires sourceAudio`)
     }
+    if (opts.simpleMode !== undefined && typeof opts.simpleMode !== 'boolean') {
+      throw invalidInput('simpleMode must be a boolean')
+    }
+    if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
+      throw invalidInput('normalizeLoudness must be a boolean')
+    }
+    if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
+      throw invalidInput('computeQualityScore must be a boolean')
+    }
+    if (opts.computeQualityScore === true && taskType !== undefined && taskType !== 'text2music') {
+      throw invalidInput("computeQualityScore requires taskType 'text2music' (the LM code path)")
+    }
+    if (opts.simpleMode === true) {
+      if (taskType !== undefined && taskType !== 'text2music') {
+        throw invalidInput("simpleMode supports only taskType 'text2music'")
+      }
+      if (opts.audioCodes !== undefined) {
+        throw invalidInput('simpleMode cannot take pre-supplied audioCodes')
+      }
+      if (opts.lyrics !== undefined && opts.lyrics !== '' && opts.lyrics !== '[Instrumental]') {
+        throw invalidInput("simpleMode lyrics must be omitted (the LM writes them) or '[Instrumental]'")
+      }
+      if (opts.lmPhase1 === false) {
+        throw invalidInput('simpleMode requires lmPhase1')
+      }
+    }
     if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
       throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`)
     }
@@ -1112,7 +1170,10 @@ export class AudioGen {
     return {
       type: 'text',
       input: caption,
-      lyrics: opts.lyrics ?? '[Instrumental]',
+      lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
+      simpleMode: opts.simpleMode,
+      normalizeLoudness: opts.normalizeLoudness,
+      computeQualityScore: opts.computeQualityScore,
       seed: optionalFiniteNumber(opts.seed, 'seed', true),
       vocalLanguage: opts.vocalLanguage,
       bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
@@ -1318,7 +1379,8 @@ export class AudioGen {
         ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
         ...(typeof d.gpuFallbackReason === 'number'
           ? { gpuFallbackReason: d.gpuFallbackReason }
-          : {})
+          : {}),
+        ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {})
       }
       this._job.end(stats, stats)
     }

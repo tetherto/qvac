@@ -353,11 +353,26 @@ export const audioGenStreamRequestSchema = z
   .strict()
   .superRefine(validateAudioGenRequest)
 
+export type AudioGenProgress = {
+  stage: string
+  step: number
+  /**
+   * Total number of steps when greater than zero. Values less than or equal to zero mean
+   * indeterminate progress and must not be rendered as a `step / total` determinate progress value.
+   */
+  total: number
+}
+
 export const audioGenProgressSchema = z.object({
   stage: z.string(),
   step: z.number().int().nonnegative(),
-  total: z.number().int().nonnegative()
-})
+  total: z
+    .number()
+    .int()
+    .describe(
+      'Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.'
+    )
+}) satisfies z.ZodType<AudioGenProgress>
 
 export const audioGenStatsSchema = z.object({
   audioDurationMs: z.number().optional(),
@@ -397,7 +412,6 @@ export type MinimaxAudioGenConfig = z.infer<typeof minimaxAudioGenConfigSchema>
 export type AudioGenConfig = z.infer<typeof audioGenConfigSchema>
 export type AudioGenClientParams = z.input<typeof audioGenClientParamsSchema>
 export type AudioGenStreamRequest = z.infer<typeof audioGenStreamRequestSchema>
-export type AudioGenProgress = z.infer<typeof audioGenProgressSchema>
 export type AudioGenStats = z.infer<typeof audioGenStatsSchema>
 export type AudioGenStreamResponse = z.infer<typeof audioGenStreamResponseSchema>
 

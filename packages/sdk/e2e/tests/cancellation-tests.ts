@@ -51,7 +51,10 @@ export const cancelBroadEmbeddings: TestDefinition = {
     passageFiller:
       'machine learning natural language processing transformer architecture attention mechanism gradient descent ',
     passageFillerRepeats: 16,
-    registryBeginGraceMs: 50
+    registryBeginGraceMs: 50,
+    cancelRetryMs: 250,
+    cancelDeadlineMs: 30000,
+    settleTimeoutMs: 45000
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: {
@@ -107,7 +110,7 @@ export const cancelIsolatesConcurrentBatches: TestDefinition = {
   metadata: {
     category: 'cancellation',
     dependency: 'llm-batch',
-    estimatedDurationMs: 30000
+    estimatedDurationMs: 80000
   }
 }
 
@@ -133,7 +136,10 @@ export const cancelByRequestIdEmbed: TestDefinition = {
     passageFiller:
       'machine learning natural language processing transformer architecture attention mechanism gradient descent ',
     passageFillerRepeats: 16,
-    registryBeginGraceMs: 50
+    registryBeginGraceMs: 50,
+    cancelRetryMs: 250,
+    cancelDeadlineMs: 30000,
+    settleTimeoutMs: 45000
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: {

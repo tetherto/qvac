@@ -13,7 +13,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
   - [`bundle sdk`](#bundle-sdk)
   - [`verify deps`](#verify-deps)
   - [`verify bundle`](#verify-bundle)
-  - [`serve openai`](#serve-openai)
+  - [`serve`](#serve)
 - [Configuration](#configuration)
 - [System Requirements](#system-requirements)
 - [Development](#development)
@@ -121,7 +121,7 @@ qvac doctor --quiet || exit 1
 ### `configure`
 
 Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
-straight to `qvac serve openai`. It searches the models the SDK provides — by name or by
+straight to `qvac serve --openai`. It searches the models the SDK provides — by name or by
 capability (role, addon, quantization) — and on a wide terminal previews, for the
 highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
 its alias, set config parameters (guided by the SDK's config schema — each field shows its
@@ -357,13 +357,15 @@ on-device runtime version from a mobile dependency tree. **Pass
 strict ABI verification; otherwise mobile bundles will emit
 `unknown-runtime-version` and skip the ABI check pass.
 
-### `serve openai`
+### `serve`
 
-Run an **OpenAI-compatible HTTP server** backed by locally configured QVAC models (`serve.models` in `qvac.config.*`).
+Run an HTTP server backed by locally configured QVAC models (`serve.models` in `qvac.config.*`), with an optional **OpenAI-compatible** extension.
 
 ```bash
-qvac serve openai [options]
+qvac serve --openai [options]
 ```
+
+`--no-default` leaves the QVAC surface out. `qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
 
 | Flag                             | Description                                                                                                                         |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -389,7 +391,7 @@ With lazy loading on (the default), the server starts even when some preload mod
 `serve.cors.origins` in `qvac.config.*` and repeatable `--cors-origin` flags are combined. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. `--cors` is only a compatibility validation switch and does not enable CORS itself. It fails without an explicit CLI/config origin, including with `--docs`. Existing `--cors` scripts must add every trusted origin explicitly:
 
 ```bash
-qvac serve openai --cors --cors-origin https://app.example.com
+qvac serve --openai --cors --cors-origin https://app.example.com
 ```
 
 Independently, `--docs` enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. `/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. Do not expose docs on a non-loopback bind unless public introspection is acceptable.
@@ -398,7 +400,7 @@ A non-loopback `--host` refuses to start without `--api-key` or `--api-key-file`
 
 `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file` reads it from an owner-only file instead; the CLI refuses a path that is not a regular file and warns when the file is readable beyond its owner.
 
-See **[docs/serve-openai.md](./docs/serve-openai.md)** for supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS — `wav` + `pcm` natively, plus `mp3` / `opus` / `aac` / `flac` when `ffmpeg` is on the server's `PATH` — with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias, and the `GET /v1/audio/voices` / `GET /v1/audio/models` discovery endpoints).
+See **[docs/serve/](./docs/serve/README.md)** for the server reference: shared configuration and model loading, the [QVAC surface](./docs/serve/default.md), and the [OpenAI-compatible surface](./docs/serve/openai.md) — supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS — `wav` + `pcm` natively, plus `mp3` / `opus` / `aac` / `flac` when `ffmpeg` is on the server's `PATH` — with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias, and the `GET /v1/audio/voices` / `GET /v1/audio/models` discovery endpoints).
 
 ## Configuration
 
@@ -468,7 +470,7 @@ qvac doctor
 
 ### Agent-stack test ownership
 
-For tests that touch `qvac serve openai`, `@qvac/ai-sdk-provider`, or agent-tool plugins, see
+For tests that touch `qvac serve --openai`, `@qvac/ai-sdk-provider`, or agent-tool plugins, see
 [`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
 CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
 
