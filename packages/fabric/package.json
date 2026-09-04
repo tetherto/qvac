@@ -20,6 +20,7 @@
   "files": [
     "binding.js",
     "platform.js",
+    "platform.d.ts",
     "prebuilds/include",
     "prebuilds/share/qvac-fabric",
     "LICENSE",
@@ -28,7 +29,10 @@
   "exports": {
     ".": "./binding.js",
     "./package": "./package.json",
-    "./platform": "./platform.js"
+    "./platform": {
+      "types": "./platform.d.ts",
+      "default": "./platform.js"
+    }
   },
   "imports": {
     "#binding": {

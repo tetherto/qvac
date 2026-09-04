@@ -10,7 +10,7 @@
 
 • *Fabric / addon pod lead* (`packages/fabric`, `qvac-fabric-llm.cpp`) — shared runtime contract, backend layout, symbol/SONAME stability
 • *DevOps / CI* — multi-package publish, `on-merge-fabric`, `overlay-local-fabric`, prebuild artifact slicing
-• *npm-runtime consumer owners* (`classification-ggml`, `vla-ggml`) — `require.resolve('@qvac/fabric/package')`, CMake `qvac-fabric_DIR`, `resolveBackendsDir()`
+• *npm-runtime consumer owners* (`classification-ggml`, `vla-ggml`, `ocr-ggml`, `model-fit`, `translation-nmtcpp`) — `require('@qvac/fabric/platform')`, CMake `qvac-fabric_DIR`, `resolveBackendsDir()`
 • *Mobile / test-framework owners* — worklet packing, `mobile:copy-prebuilds`, Expo/npm optional-dep behaviour
 • *Lead / Architect* — package boundary, install contract, CUDA/HIP as a second split axis
 • *cmake-bare / Holepunch* — `#binding` imports map; reference [bare-collabora](https://github.com/holepunchto/bare-collabora/blob/82567e08897e44b5ff691e02fa06ebad23a35e7b/package.json#L13-L41)
@@ -115,7 +115,7 @@ Unchanged at runtime: same `.bare`, same SONAME `qvac__fabric@0.bare`, same chec
 *Compatibility / release impact*
 
 • `require('@qvac/fabric')` and the C API/SONAME stay the same.
-• *Breaking for path-dependent consumers:* CMake `qvac-fabric_DIR` pointing at `node_modules/@qvac/fabric/prebuilds/share/...` can stay (headers remain in meta); `include_bare_module("@qvac/fabric" … PREBUILD)` and `resolveBackendsDir()` must follow the platform package. Coordinated bumps of `classification-ggml` and `vla-ggml` in the same release train.
+• *Breaking for path-dependent consumers:* CMake `qvac-fabric_DIR` pointing at `node_modules/@qvac/fabric/prebuilds/share/...` can stay (headers remain in meta); `include_bare_module("@qvac/fabric" … PREBUILD)` and `resolveBackendsDir()` must follow the platform package. Coordinated bumps of `classification-ggml`, `vla-ggml`, `ocr-ggml`, `model-fit`, and `translation-nmtcpp` in the same release train.
 • Installers that omit optional deps (`--omit=optional`) or Yarn v1 will not get a runtime. Document that.
 • Semver: treat as breaking for the published file layout (`0.x` bump with `[bc]` in consumer changelogs, or `1.0.0` if we are ready to leave 0.x). Direct vcpkg consumers are unaffected.
 

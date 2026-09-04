@@ -35,7 +35,9 @@ function getErrorMessage(error, fallback) {
 // appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
 function resolveBackendsDir() {
     try {
-        const fabricPrebuilds = require("@qvac/fabric/platform").resolvePlatformPrebuilds();
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/fabric/platform is CJS and absent from 0.10.0 fat installs.
+        const fabricPlatform = require("@qvac/fabric/platform");
+        const fabricPrebuilds = fabricPlatform.resolvePlatformPrebuilds();
         if (fabricPrebuilds && fs.existsSync(fabricPrebuilds))
             return fabricPrebuilds;
     }

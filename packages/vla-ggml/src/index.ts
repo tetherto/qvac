@@ -32,7 +32,11 @@ const { QvacErrorAddonVla, ERR_CODES } = errorModule;
 // root we return.
 function resolveBackendsDir(): string {
   try {
-    const fabricPrebuilds = require("@qvac/fabric/platform").resolvePlatformPrebuilds();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/fabric/platform is CJS and absent from 0.10.0 fat installs.
+    const fabricPlatform = require("@qvac/fabric/platform") as {
+      resolvePlatformPrebuilds: () => string | null;
+    };
+    const fabricPrebuilds = fabricPlatform.resolvePlatformPrebuilds();
     if (fabricPrebuilds && fs.existsSync(fabricPrebuilds)) return fabricPrebuilds;
   } catch {}
   try {

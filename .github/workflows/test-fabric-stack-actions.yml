@@ -12,6 +12,7 @@ on:
       - "packages/fabric/package.json"
       - "packages/fabric/binding.js"
       - "packages/fabric/platform.js"
+      - "packages/fabric/platform.d.ts"
   workflow_dispatch:
 
 permissions:

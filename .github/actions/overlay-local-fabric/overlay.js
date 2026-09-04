@@ -102,7 +102,7 @@ function overlayHost (src, metaPrebuilds, scopeDir, platKey) {
 
 function overlayMetaJs (metaPkg, workspace) {
   const source = path.join(workspace, 'packages', 'fabric')
-  for (const file of ['binding.js', 'platform.js']) {
+  for (const file of ['binding.js', 'platform.js', 'platform.d.ts']) {
     const from = path.join(source, file)
     if (fs.existsSync(from)) fs.copyFileSync(from, path.join(metaPkg, file))
   }

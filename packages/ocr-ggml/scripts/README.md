@@ -13,7 +13,8 @@ bash scripts/check_ggml_backends.sh
 ```
 
 By default it inspects
-`node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/` — override with the
+`node_modules/@qvac/fabric-<platform>/prebuilds/<host>/qvac__fabric/` (and
+falls back to the 0.10 fat `@qvac/fabric` tree). Override with the
 `BACKENDS_DIR` environment variable to point at another Fabric backend folder.
 
 Sections it prints:
