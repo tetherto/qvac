@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.19.x (latest)
+title: API Summary — v0.18.x
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -8,33 +8,15 @@ description: One-page reference of all public functions and objects exported by 
 > For per-parameter and per-field details, hover symbols in your IDE or open
 > `node_modules/@qvac/sdk/dist`. This page is intentionally a high-level index.
 >
-> **Fields shown**: description, signature, throws, examples, deprecation, prototype.
+> **Fields shown**: description, signature, throws, examples, deprecation.
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 53 functions in `packages/sdk/client/api/`.
+> **Scope**: 52 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
 ## Functions
-
-### `assessModelFit`
-
-Assesses, before anything is downloaded, whether the given models are likely
-to fit in this device's memory.
-
-Advisory only: it does not download weights, run a native fit probe, block
-`loadModel`, reserve memory, or make a performance claim. `unknown` is a real
-answer — it means the available evidence does not support a verdict either
-way, and callers should treat it as "cannot say", not "no".
-
-**Signature**:
-
-```ts
-function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResult>;
-```
-
----
 
 ### `audioGen`
 
@@ -65,23 +47,6 @@ for await (const progress of run.progressStream) {
 const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
 const stats = await run.stats;
 
-// MiniMax-Music3 uses a local LM and synthesis GGUF pair:
-const minimaxId = await loadModel({
-  modelType: "audiogen",
-  modelConfig: {
-    engine: "minimax",
-    lmModelSrc: "/models/mm3-lm-q8.gguf",
-    synthModelSrc: "/models/mm3-synth-q8.gguf",
-  },
-});
-const minimaxRun = audioGen({
-  modelId: minimaxId,
-  caption: "warm cinematic piano",
-  maxFrames: 250,
-  inferenceSteps: 12,
-  cfgScale: 1.8,
-});
-
 // Re-render an existing song with a new caption (cover) and a timbre reference:
 const cover = audioGen({
   modelId,
@@ -97,12 +62,7 @@ const cover = audioGen({
 
 ### `batchCompletion`
 
-Runs multiple prompts concurrently through one loaded model.
-
-The returned run exposes the request ID immediately, a merged event stream,
-ordered results, aggregate batch statistics, and per-prompt streams via
-`byId()`. Stream-level failures reject the aggregate promises; individual
-terminal failures are also exposed through the corresponding `byId().final`.
+No description available
 
 **Signature**:
 
@@ -123,7 +83,7 @@ complete text. Accepts either a `.bin` file path or a raw neural buffer.
 **Signature**:
 
 ```ts
-function bciTranscribe(params: any, options?: RPCOptions): Promise<TranscribeSegment[]> & { requestId: string };
+function bciTranscribe(params: BciTranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<{ append: boolean; endMs: number; id: number; startMs: number; text: string }[]> & { requestId: string };
 ```
 
 #### Overload 2
@@ -153,7 +113,7 @@ will throw a `TranscriptionFailedError`.
 **Signature**:
 
 ```ts
-function bciTranscribeStream(params: any, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;
+function bciTranscribeStream(params: BciTranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;
 ```
 
 #### Overload 2
@@ -307,7 +267,7 @@ Deletes KV cache files.
 **Signature**:
 
 ```ts
-function deleteCache(params: { all: true } | { kvCacheKey: string; modelId?: string }): Promise<{ success: any }>;
+function deleteCache(params: { all: true } | { kvCacheKey: string; modelId?: string }): Promise<{ success: boolean }>;
 ```
 
 **Throws**:
@@ -416,7 +376,7 @@ const buffers = await outputs;
 Downloads an asset (model file) without loading it into memory.
 
 This function is specifically designed for download-only operations and
-doesn't accept runtime configuration options like modelConfig.
+doesn't accept runtime configuration options like modelConfig or delegate.
 Use this for download-only operations instead of loadModel for better semantic clarity.
 
 **Signature**:
@@ -466,7 +426,7 @@ Generates embeddings for a single text using a specified model.
 **Signature**:
 
 ```ts
-function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: any }> & { requestId: string };
+function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: { backendDevice?: "gpu" | "cpu"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
 ```
 
 **Throws**:
@@ -479,7 +439,7 @@ Generates embeddings for multiple texts using a specified model.
 **Signature**:
 
 ```ts
-function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: any }> & { requestId: string };
+function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: "gpu" | "cpu"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
 ```
 
 **Throws**:
@@ -515,11 +475,15 @@ function finetune(params: FinetuneReplyParams, rpcOptions?: RPCOptions): Promise
 
 ### `getLoadedModelInfo`
 
-Returns introspection info for a loaded `modelId`.
+Returns introspection info for a loaded `modelId` (local or delegated).
 
-`info.modelType` and `info.handlers` are authoritative. Use them to preflight
-an SDK call before sending the actual RPC, e.g. confirm that a model supports
-`transcribeStream` before calling `transcribe()`.
+For local models, `info.modelType` and `info.handlers` are authoritative.
+Use them to preflight an SDK call before sending the actual RPC, e.g.
+confirm that a model supports `transcribeStream` before calling `transcribe()`.
+
+For delegated models, only `modelId`, `isDelegated: true`, `providerInfo`,
+and `handlers: []` are populated. Preflight against a delegated model is
+best-effort and falls through to the provider's error response.
 
 Throws `ModelNotFoundError` if no entry exists for `modelId`.
 
@@ -529,16 +493,11 @@ Throws `ModelNotFoundError` if no entry exists for `modelId`.
 function getLoadedModelInfo(params: GetLoadedModelInfoParams, rpcOptions?: RPCOptions): Promise<LoadedModelInfo>;
 ```
 
-**Throws**:
-
-- `InvalidResponseError` — When the worker returns an unexpected response.
-- `ModelNotFoundError` — When no loaded model has the requested ID.
-
 **Example**:
 ```ts
 const info = await getLoadedModelInfo({ modelId });
-if (info.handlers.includes("completionStream")) {
-  // safe to call completion()
+if (info.isDelegated || info.handlers.includes("completionStream")) {
+  // safe to call completion(); delegated path defers to provider
 }
 ```
 
@@ -551,7 +510,7 @@ Returns status information for a catalog model, including cache state and loaded
 **Signature**:
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<any>;
+function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "audiogen" | "llm" | "whisper" | "bci" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
 ```
 
 **Throws**:
@@ -574,21 +533,34 @@ function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemReso
 
 ### `heartbeat`
 
-Checks whether the local SDK worker is responsive by sending a heartbeat
-round-trip.
+Checks if a delegated provider is online by sending a heartbeat round-trip.
+Can also be used to check if the local SDK worker is responsive.
 
 **Signature**:
 
 ```ts
-function heartbeat(): Promise<HeartbeatResponse>;
+function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number } }): Promise<HeartbeatResponse>;
 ```
 
 **Throws**:
 
-- `QvacErrorBase` — When the response is invalid.
+- `QvacErrorBase` — When the provider is unreachable or the response is invalid.
 
-**Example**:
+**Examples**:
 ```ts
+// Check if a delegated provider is online
+try {
+  await heartbeat({
+    delegate: { providerPublicKey: "peerHex", timeout: 3000 },
+  });
+  console.log("Provider is online");
+} catch {
+  console.log("Provider is offline");
+}
+```
+
+```ts
+// Check if the local SDK worker is responsive
 await heartbeat();
 ```
 
@@ -874,7 +846,7 @@ Performs Optical Character Recognition (OCR) on an image to extract text.
 **Signature**:
 
 ```ts
-function ocr(params: OCRClientParams): { blocks: Promise<OCRTextBlock[]>; blockStream: AsyncGenerator<OCRTextBlock[]>; stats: Promise<any> };
+function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> };
 ```
 
 **Example**:
@@ -942,8 +914,6 @@ Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapte
 This function explicitly closes them, releasing memory and file locks. The workspace data
 remains on disk unless `deleteOnClose` is set to true.
 
-No description available
-
 **Signature**:
 
 ```ts
@@ -973,8 +943,6 @@ Deletes document embeddings from the RAG vector database.
 
 **Workspace lifecycle:** This operation requires an existing workspace.
 
-No description available
-
 **Signature**:
 
 ```ts
@@ -1001,8 +969,6 @@ await ragDeleteEmbeddings({
 
 Deletes a RAG workspace and all its data.
 The workspace must not be currently loaded/in-use.
-
-No description available
 
 **Signature**:
 
@@ -1031,12 +997,10 @@ Full pipeline: chunk → embed → save
 **Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
 The workspace remains open until closed.
 
-No description available
-
 **Signature**:
 
 ```ts
-function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ droppedIndices: number[]; processed: RagSaveEmbeddingsResult[] }> & { requestId: string };
+function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ droppedIndices: number[]; processed: SaveEmbeddingsResult[] }> & { requestId: string };
 ```
 
 **Throws**:
@@ -1075,8 +1039,6 @@ Returns all workspaces that exist on disk. The `open` field indicates whether
 the workspace is currently loaded in memory and holding active resources
 (Corestore, HyperDB adapter, and possibly a RAG instance).
 
-No description available
-
 **Signature**:
 
 ```ts
@@ -1108,12 +1070,10 @@ For HyperDB, this rebalances centroids using k-means clustering.
 For HyperDB, this is 16 documents by default. If there are insufficient documents,
 `reindexed` will be `false` with `details` explaining the reason.
 
-No description available
-
 **Signature**:
 
 ```ts
-function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<RagReindexResult> & { requestId: string };
+function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<ReindexResult> & { requestId: string };
 ```
 
 **Throws**:
@@ -1154,12 +1114,10 @@ Part of the segregated flow: chunk() → embed() → saveEmbeddings()
 **Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
 The workspace remains open until closed.
 
-No description available
-
 **Signature**:
 
 ```ts
-function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<RagSaveEmbeddingsResult[]> & { requestId: string };
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<SaveEmbeddingsResult[]> & { requestId: string };
 ```
 
 **Throws**:
@@ -1193,8 +1151,6 @@ Searches for similar documents in the RAG vector database.
 
 **Workspace lifecycle:** This operation requires an existing workspace. If the workspace
 doesn't exist, returns an empty array.
-
-No description available
 
 **Signature**:
 
@@ -1234,6 +1190,9 @@ non-lifecycle SDK operations are accepted normally.
 Behavior of in-flight operations from before the previous `suspend()`:
   - P2P / Hyperdrive downloads: continue automatically once their underlying
     swarm/corestore is restored
+  - Delegated reply RPCs: auto-recover once the swarm reconnects
+    (subject to delegate `timeout`)
+  - Delegated stream RPCs: not recovered — re-issue after `resume()` works normally.
 
 **Signature**:
 
@@ -1253,6 +1212,30 @@ function resume(): Promise<void>;
 await resume();
 console.log(await state()); // "active"
 ```
+
+---
+
+### `startQVACProvider`
+
+Starts a provider service that offers QVAC capabilities to remote peers.
+
+Consumers connect directly to the provider via its public key using
+`dht.connect(publicKey)`, so no topic or discovery configuration is needed.
+The provider's keypair (and therefore its public key) can be controlled via
+the `QVAC_HYPERSWARM_SEED` environment variable.
+
+Idempotent: calling more than once while a provider is already running
+returns the same public key without re-listening on the DHT.
+
+**Signature**:
+
+```ts
+function startQVACProvider(params: ProvideParams): Promise<{ error?: string; publicKey?: string; success: boolean; type: "provide" }>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is not "provide" or the request fails
 
 ---
 
@@ -1281,6 +1264,31 @@ if (current !== "active") {
   await resume();
 }
 ```
+
+---
+
+### `stopQVACProvider`
+
+Stops the running provider service.
+
+After this call returns, incoming peer connections are dropped at the RPC
+layer and remote `loadModel`/`completion`/etc. requests will no longer be
+served. The keyPair stays bound on the DHT (a `swarm.listen()` cannot be
+undone without tearing down the shared swarm), so peers may still open a
+raw socket — but those sockets are immediately destroyed and no RPC server
+is mounted on them.
+
+Idempotent: calling more than once with no provider running is a no-op.
+
+**Signature**:
+
+```ts
+function stopQVACProvider(): Promise<{ error?: string; success: boolean; type: "stopProvide" }>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is not "stopProvide" or the request fails
 
 ---
 
@@ -1331,6 +1339,10 @@ In-flight operations started before suspend:
   - P2P / Hyperdrive downloads: stall cleanly, continue after `resume()`
   - HTTP downloads: bypass suspend entirely (bytes keep flowing)
   - Local native inference: runs to completion regardless
+  - Delegated reply RPCs: stall, then auto-recover after `resume()`
+    (subject to delegate `timeout`)
+  - Delegated stream RPCs: severed, consumer iterator hangs silently;
+    re-issue after `resume()` works normally.
 
 **Signature**:
 
@@ -1388,7 +1400,7 @@ function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextT
 ### `textToSpeechStream`
 
 Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
-Uint8Array should be a complete UTF-8 fragment. The worker forwards them to the TTS streaming handler
+Uint8Array should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
 (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
 lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
 
@@ -1397,11 +1409,6 @@ lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
 ```ts
 function textToSpeechStream(params: TextToSpeechStreamClientParams, options?: RPCOptions): Promise<TextToSpeechStreamSession>;
 ```
-
-**Throws**:
-
-- `TextToSpeechStreamFailedError` — When the session is iterated more
-  than once, receives a server error, or is written after closing.
 
 ---
 
@@ -1416,7 +1423,7 @@ path or an audio buffer.
 **Signature**:
 
 ```ts
-function transcribe(params: any, options?: RPCOptions): Promise<TranscribeSegment[]> & { requestId: string };
+function transcribe(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<{ append: boolean; endMs: number; id: number; startMs: number; text: string }[]> & { requestId: string };
 ```
 
 #### Overload 2
@@ -1439,7 +1446,7 @@ removed in the next major version.
 Streaming transcription with upfront audio: sends full audio, yields text
 chunks as they arrive.
 
-Has 5 overloads.
+Has 6 overloads.
 
 #### Overload 1 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
@@ -1451,7 +1458,7 @@ chunks as they arrive.
 **Signature**:
 
 ```ts
-function transcribeStream(params: any, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;
+function transcribeStream(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;
 ```
 
 #### Overload 2 — Upfront audio (deprecated)
@@ -1478,7 +1485,7 @@ time will throw a `TranscriptionFailedError`.
 **Signature**:
 
 ```ts
-function transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
+function transcribeStream(params: TranscribeStreamClientParams & { emitVadEvents: true }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
 ```
 
 #### Overload 4 — Upfront audio (deprecated)
@@ -1491,10 +1498,23 @@ chunks as they arrive.
 **Signature**:
 
 ```ts
-function transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;
+function transcribeStream(params: TranscribeStreamClientParams & { parakeetStreamingConfig: { chunkLeftContextMs?: number; chunkMs?: number; chunkRightContextMs?: number; emitEnergyVad?: boolean; emitPartials?: boolean; fifoLen?: number; historyMs?: number; leftContextMs?: number; rightLookaheadMs?: number; spkCacheEnable?: boolean; spkCacheLen?: number; spkCacheUpdatePeriod?: number } }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
 ```
 
 #### Overload 5 — Upfront audio (deprecated)
+> ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
+removed in the next major version.
+
+Streaming transcription with upfront audio: sends full audio, yields text
+chunks as they arrive.
+
+**Signature**:
+
+```ts
+function transcribeStream(params: TranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;
+```
+
+#### Overload 6 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
 removed in the next major version.
 
@@ -1517,7 +1537,7 @@ Supports both NMT (Neural Machine Translation) and LLM models.
 **Signature**:
 
 ```ts
-function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };
+function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string> };
 ```
 
 **Throws**:
@@ -1678,25 +1698,6 @@ const { outputs } = video({
 ```
 
 ```ts
-const referenceSheet = fs.readFileSync("reference-sheet.png");
-const { outputs } = video({
-  modelId,
-  mode: "txt2vid",
-  prompt: "Reference sheet: a red-haired explorer. Generated video: the explorer crosses a snowy ridge.",
-  lora: "/absolute/path/to/ltx-2-ingredients.safetensors",
-  lora_strength: 1.37,
-  stg_scale: 1,
-  stg_block: 29,
-  reference_images: [referenceSheet],
-  reference_attention_strength: 1,
-  reference_downscale_factor: 1,
-  video_frames: 217,
-  scheduler: "ltx2",
-});
-const buffers = await outputs;
-```
-
-```ts
 const { requestId, outputs } = video({ modelId, mode: "txt2vid", prompt: "..." });
 // ...later
 await cancel(requestId);
@@ -1761,11 +1762,6 @@ state tensor (`max_state_dim` = 32 by default).
 function vlaPadState(state: ArrayLike<number>, targetDim: number): Float32Array;
 ```
 
-**Throws**:
-
-- `TypeError` — When `targetDim` is not a positive integer.
-- `RangeError` — When `state` is longer than `targetDim`.
-
 ---
 
 ### `vlaPreprocessImage`
@@ -1782,11 +1778,6 @@ the reference smolvla.cpp behavior.
 ```ts
 function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, opts: VlaPreprocessImageOptions): Float32Array;
 ```
-
-**Throws**:
-
-- `TypeError` — When width or height is not a positive integer.
-- `RangeError` — When the pixel count does not match the dimensions.
 
 ---
 
@@ -1828,306 +1819,50 @@ console.log(hparams.selectedEmbodimentTag, hparams.numCameras);
 
 ---
 
-### `worldCreateScene`
+## Objects
 
-Has 3 overloads.
+### `profiler`
 
-#### Overload 1
-Builds a world for an ABot-World session: the prompt and first frame are
-encoded into a scene pack the walk then runs on.
+QVAC SDK Profiler
 
-Run this once per world. The world is live on the session as soon as this
-completes — `stats` is the completion signal. Creating a world on a session
-that already has one replaces it and restarts the walk from the beginning.
-
-The pack itself is NOT returned by default: it is 10+ MB, a third larger again
-as base64, and the common create-then-walk-now flow never touches the bytes.
-Pass `returnPack: true` to get them, save them, and pass that file back as
-`modelConfig.sceneSrc` on a later `loadModel` to walk the same world again.
-`sceneSrc` takes a path or URL, so persist the bytes yourself.
-
-Scene creation cannot be interrupted — the engine exposes no abort hook for
-it — so cancelling by request id stops the SDK from yielding but the encode
-runs to completion. Await the result before unloading the model.
-
-**Signature**:
+**Shape**:
 
 ```ts
-function worldCreateScene(params: any): WorldSceneResultWithPack;
+const profiler: {
+  clear(): void;
+  disable(): void;
+  enable(options?: ProfilerRuntimeOptions): void;
+  exportJSON(options?: { includeRecentEvents?: boolean }): ProfilerExport;
+  exportSummary(): string;
+  exportTable(): string;
+  getAggregates(): Record<string, AggregatedStats>;
+  getConfig(): ResolvedProfilerConfig;
+  isEnabled(): boolean;
+  onRecord(callback: (event: ProfilingEvent) => void): () => void;
+};
 ```
 
-**Throws**:
+**Methods**:
 
-- `RequestValidationFailedError` — Client-side, before any RPC, if the
-  prompt is empty, the dimensions are not positive multiples of 32 within the
-  per-axis and total-pixel ceilings, or the first frame exceeds 3 MB.
-  Server-side, before the session is touched, if the first frame's header
-  declares more than 8192x8192 pixels or cannot be read. Raised as
-  `PluginRequestValidationFailedError` on the engine; that class is not
-  exported from the client package and is not in the RPC reconstructor map, so
-  match it on message rather than with `instanceof`.
-- `ModelOperationNotSupportedError` — If the model was not loaded with
-  `mode: "world"`.
-- `RequestRejectedByPolicyError` — If a world job is already running on
-  this model — world refuses rather than queues.
-- `InferenceCancelledError` — If cancel by request id is accepted.
-  Scene creation is uninterruptible, so this stops delivery while the encode
-  runs to completion.
-- `StreamEndedError` — If the RPC stream closes without a terminal
-  `done` chunk.
+- **`clear()`** — Clears all aggregated data and the recent-events ring buffer.
+- **`disable()`** — Disables profiling.
+- **`enable(options?)`** — Enables profiling and resets all previously aggregated data.
+- **`exportJSON(options?)`** — Exports profiling data as a structured JSON object suitable for machine consumption.
+- **`exportSummary()`** — Exports a short, human-readable summary string of the aggregated stats.
+- **`exportTable()`** — Exports aggregated stats as a formatted ASCII table suitable for terminal output.
+- **`getAggregates()`** — Returns all aggregated stats keyed by operation name.
+- **`getConfig()`** — Returns the current effective profiler configuration.
+- **`isEnabled()`** — Returns whether profiling is currently enabled.
+- **`onRecord(callback)`** — Registers a listener for profiling events; returns an unsubscribe function.
 
 **Example**:
 ```ts
-const modelId = await loadModel({
-  modelType: "diffusion",
-  modelSrc: ABOT_WORLD_0_5B_Q8_0,
-  modelConfig: {
-    mode: "world",
-    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
-    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
-    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
-    world: { seed: 42, kvCache: true },
-  },
-});
+import { profiler } from "@qvac/sdk";
 
-// Walk it now and never persist it: no pack crosses the wire.
-const { stats } = worldCreateScene({
-  modelId,
-  prompt: "| unknown | A realistic outdoor world scene with a navigable path.",
-  image: fs.readFileSync("first-frame.jpg"),
-});
-await stats;
-
-// Or keep it, to walk the same world after a reload.
-const { scene } = worldCreateScene({
-  modelId,
-  prompt: "| unknown | A realistic outdoor world scene with a navigable path.",
-  image: fs.readFileSync("first-frame.jpg"),
-  returnPack: true,
-});
-fs.writeFileSync("world.safetensors", await scene);
-```
-
-#### Overload 2
-Builds a world for an ABot-World session: the prompt and first frame are
-encoded into a scene pack the walk then runs on.
-
-Run this once per world. The world is live on the session as soon as this
-completes — `stats` is the completion signal. Creating a world on a session
-that already has one replaces it and restarts the walk from the beginning.
-
-The pack itself is NOT returned by default: it is 10+ MB, a third larger again
-as base64, and the common create-then-walk-now flow never touches the bytes.
-Pass `returnPack: true` to get them, save them, and pass that file back as
-`modelConfig.sceneSrc` on a later `loadModel` to walk the same world again.
-`sceneSrc` takes a path or URL, so persist the bytes yourself.
-
-Scene creation cannot be interrupted — the engine exposes no abort hook for
-it — so cancelling by request id stops the SDK from yielding but the encode
-runs to completion. Await the result before unloading the model.
-
-**Signature**:
-
-```ts
-function worldCreateScene(params: any): WorldSceneResult;
-```
-
-**Throws**:
-
-- `Client-side, before any RPC, if the
-  prompt is empty, the dimensions are not positive multiples of 32 within the
-  per-axis and total-pixel ceilings, or the first frame exceeds 3 MB.
-  Server-side, before the session is touched, if the first frame's header
-  declares more than 8192x8192 pixels or cannot be read. Raised as
-  `PluginRequestValidationFailedError` on the engine; that class is not
-  exported from the client package and is not in the RPC reconstructor map, so
-  match it on message rather than with `instanceof`.` — —
-- `If the model was not loaded with
-  `mode: "world"`.` — —
-- `If a world job is already running on
-  this model — world refuses rather than queues.` — —
-- `If cancel by request id is accepted.
-  Scene creation is uninterruptible, so this stops delivery while the encode
-  runs to completion.` — —
-- `If the RPC stream closes without a terminal
-  `done` chunk.` — —
-
-**Example**:
-```ts
-const modelId = await loadModel({
-  modelType: "diffusion",
-  modelSrc: ABOT_WORLD_0_5B_Q8_0,
-  modelConfig: {
-    mode: "world",
-    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
-    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
-    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
-    world: { seed: 42, kvCache: true },
-  },
-});
-
-// Walk it now and never persist it: no pack crosses the wire.
-const { stats } = worldCreateScene({
-  modelId,
-  prompt: "| unknown | A realistic outdoor world scene with a navigable path.",
-  image: fs.readFileSync("first-frame.jpg"),
-});
-await stats;
-
-// Or keep it, to walk the same world after a reload.
-const { scene } = worldCreateScene({
-  modelId,
-  prompt: "| unknown | A realistic outdoor world scene with a navigable path.",
-  image: fs.readFileSync("first-frame.jpg"),
-  returnPack: true,
-});
-fs.writeFileSync("world.safetensors", await scene);
-```
-
-#### Overload 3
-Builds a world for an ABot-World session: the prompt and first frame are
-encoded into a scene pack the walk then runs on.
-
-Run this once per world. The world is live on the session as soon as this
-completes — `stats` is the completion signal. Creating a world on a session
-that already has one replaces it and restarts the walk from the beginning.
-
-The pack itself is NOT returned by default: it is 10+ MB, a third larger again
-as base64, and the common create-then-walk-now flow never touches the bytes.
-Pass `returnPack: true` to get them, save them, and pass that file back as
-`modelConfig.sceneSrc` on a later `loadModel` to walk the same world again.
-`sceneSrc` takes a path or URL, so persist the bytes yourself.
-
-Scene creation cannot be interrupted — the engine exposes no abort hook for
-it — so cancelling by request id stops the SDK from yielding but the encode
-runs to completion. Await the result before unloading the model.
-
-**Signature**:
-
-```ts
-function worldCreateScene(params: WorldSceneClientParams): WorldSceneResultWithPack | WorldSceneResult;
-```
-
-**Throws**:
-
-- `Client-side, before any RPC, if the
-  prompt is empty, the dimensions are not positive multiples of 32 within the
-  per-axis and total-pixel ceilings, or the first frame exceeds 3 MB.
-  Server-side, before the session is touched, if the first frame's header
-  declares more than 8192x8192 pixels or cannot be read. Raised as
-  `PluginRequestValidationFailedError` on the engine; that class is not
-  exported from the client package and is not in the RPC reconstructor map, so
-  match it on message rather than with `instanceof`.` — —
-- `If the model was not loaded with
-  `mode: "world"`.` — —
-- `If a world job is already running on
-  this model — world refuses rather than queues.` — —
-- `If cancel by request id is accepted.
-  Scene creation is uninterruptible, so this stops delivery while the encode
-  runs to completion.` — —
-- `If the RPC stream closes without a terminal
-  `done` chunk.` — —
-
-**Example**:
-```ts
-const modelId = await loadModel({
-  modelType: "diffusion",
-  modelSrc: ABOT_WORLD_0_5B_Q8_0,
-  modelConfig: {
-    mode: "world",
-    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
-    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
-    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
-    world: { seed: 42, kvCache: true },
-  },
-});
-
-// Walk it now and never persist it: no pack crosses the wire.
-const { stats } = worldCreateScene({
-  modelId,
-  prompt: "| unknown | A realistic outdoor world scene with a navigable path.",
-  image: fs.readFileSync("first-frame.jpg"),
-});
-await stats;
-
-// Or keep it, to walk the same world after a reload.
-const { scene } = worldCreateScene({
-  modelId,
-  prompt: "| unknown | A realistic outdoor world scene with a navigable path.",
-  image: fs.readFileSync("first-frame.jpg"),
-  returnPack: true,
-});
-fs.writeFileSync("world.safetensors", await scene);
-```
-
----
-
-### `worldStep`
-
-Generates the next block of an ABot-World walk under the keys held for it.
-
-One call produces one block: at the default `world.numFramePerBlock`, 9 frames
-for the first block after the session loads (decoder warmup) and 12
-thereafter. Both counts move with `numFramePerBlock`, so read `stats.frames`
-rather than assuming them. Frames arrive on `frameStream` as they are decoded,
-so a viewer can display them without waiting for the block.
-
-Only one block runs at a time per model — a second call while one is in
-flight is rejected rather than queued, so drive the next call off the
-previous one. Cancelling has block granularity: the current block finishes
-internally, delivery stops, and the call rejects rather than returning a
-truncated block.
-
-`keys` accepts an array, a key-state object, or a raw 8-bit mask. WASD move,
-IJKL steer the camera; omit for an idle block.
-
-`progressStream` forwards the engine's step / totalSteps / elapsedMs tick,
-the same shape `video` and `diffusion` emit. The engine fires it once per
-block, AFTER the frames, so it is an end-of-block summary rather than
-mid-block liveness — one tick per `worldStep` call.
-
-**Signature**:
-
-```ts
-function worldStep(params: WorldStepClientParams): WorldStepResult;
-```
-
-**Throws**:
-
-- `RequestValidationFailedError` — Client-side, before any RPC, on an
-  unknown walk key.
-- `ModelOperationNotSupportedError` — If the model was not loaded with
-  `mode: "world"`.
-- `RequestRejectedByPolicyError` — If a block is already in flight on
-  this model.
-- `InferenceCancelledError` — If cancel by request id is accepted. The
-  step rejects rather than resolving with a truncated block, and the session
-  is rebuilt on the next call.
-- `StreamEndedError` — If the RPC stream closes without a terminal
-  `done` chunk.
-
-**Examples**:
-```ts
-const { frameStream } = worldStep({ modelId, keys: ["W"] });
-for await (const frame of frameStream) {
-  display(frame); // PNG, or JPEG when world.frameJpegQuality is set
-}
-```
-
-```ts
-const { progressStream, frames } = worldStep({ modelId, keys: ["W"] });
-for await (const { totalSteps, elapsedMs } of progressStream) {
-  // Once per block, after its frames: a summary, not a spinner tick.
-  report(`block delivered ${totalSteps} frames in ${elapsedMs}ms`);
-}
-for (const frame of await frames) display(frame);
-```
-
-```ts
-while (walking) {
-  const { frames } = worldStep({ modelId, keys: heldKeys }); // e.g. { W: true, L: true }
-  for (const frame of await frames) display(frame);
-}
+profiler.enable({ mode: "summary" });
+// ... run SDK operations ...
+console.log(profiler.exportTable());
+profiler.disable();
 ```
 
 ---
@@ -2137,3 +1872,147 @@ while (walking) {
 Public error codes thrown across the SDK. Catch via `instanceof QvacErrorBase`
 and read `error.code` / `error.cause`. Code ranges:
 50,001–52,000 (client) and 52,001–54,000 (server).
+
+### Client errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| `INVALID_RESPONSE_TYPE` | 50001 | Invalid response type received, expected: … |
+| `INVALID_OPERATION_IN_RESPONSE` | 50002 | Invalid operation type in response |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | 50003 | Stream ended without receiving final response |
+| `INVALID_AUDIO_CHUNK_TYPE` | 50004 | Invalid audio chunk type received |
+| `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided |
+| `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema: … |
+| `OCR_FAILED` | 50007 | OCR operation failed… |
+| `MODEL_TYPE_REQUIRED` | 50008 | modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "ggml-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata. |
+| `MODEL_SRC_TYPE_MISMATCH` | 50009 | modelSrc describes "…", but modelType resolves to "…". Omit modelType to infer it automatically, or pass a matching modelType. |
+| `REQUEST_VALIDATION_FAILED` | 50010 | Invalid request:\\n… |
+| `RPC_NO_HANDLER` | 50200 | No handler function registered for request type: … |
+| `RPC_REQUEST_NOT_SENT` | 50201 | Cannot perform operation - request has not been sent yet |
+| `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Cannot perform operation - response stream not created |
+| `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed: … |
+| `RPC_INIT_TIMEOUT` | 50204 | RPC initialization timed out after …ms — the worker process may have failed to start |
+| `WORKER_CRASHED` | 50205 | Bare worker exited mid-request (code=…, signal=…) — in-flight calls were aborted |
+| `WORKER_SHUTDOWN` | 50206 | SDK is shutting down — in-flight RPC call aborted |
+| `PROVIDER_START_FAILED` | 50400 | Failed to start provider… |
+| `PROVIDER_STOP_FAILED` | 50401 | Failed to stop provider… |
+| `DELEGATE_NO_FINAL_RESPONSE` | 50402 | No final response received from delegated provider |
+| `DELEGATE_PROVIDER_ERROR` | 50403 | Delegated provider error: … |
+| `DELEGATE_CONNECTION_FAILED` | 50404 | Failed to connect to delegated provider: … |
+| `SDK_NOT_FOUND_IN_NODE_MODULES` | 50600 | QVAC SDK not found in node_modules. Checked: @qvac/sdk, @tetherto/sdk-mono, @tetherto/sdk-dev |
+| `WORKER_FILE_NOT_FOUND` | 50601 | Worker file not found at … |
+| `CONFIG_FILE_NOT_FOUND` | 50602 | Config file not found. Searched: …. Create qvac.config.json, qvac.config.js, or qvac.config.ts in your project root. |
+| `CONFIG_FILE_INVALID` | 50603 | Config file at … is invalid: … |
+| `CONFIG_FILE_PARSE_FAILED` | 50604 | Failed to parse config file at …: … |
+| `CONFIG_VALIDATION_FAILED` | 50605 | Config validation failed: … |
+| `PEAR_WORKER_ENTRY_REQUIRED` | 50606 | No plugins registered. Pear apps must spawn … as the worker entry. Run \\ |
+| `MULTIPLE_SDK_INSTALLATIONS` | 50607 | Multiple QVAC SDK installations found: …. Remove all but one to avoid conflicts. |
+| `WORKER_PLUGINS_NOT_REGISTERED` | 50608 | plugins([...]) |
+| `BUNDLE_VERIFICATION_FAILED` | 50609 | qvac verify bundle reported error-level issues for …. See the CLI output above for the failing addons/hosts; resolve them before shipping. |
+| `BARE_PACK_NOT_INSTALLED` | 50610 | bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack |
+| `BARE_PACK_ERROR` | 50611 | bare-pack exited with code …\\n\\n Entry file: …\\n Output file: …\\n\\n Run bare-pack manually for more details. |
+| `INVALID_PLUGIN_SPECIFIER` | 50612 | Invalid plugin specifiers (must end with /plugin):\\n… |
+| `BARE_IMPORTS_MAP_NOT_FOUND` | 50613 | bare-imports.json not found.\\n\\n Expected at: …\\n\\n Make sure … is installed in your project. |
+| `BARE_RUNTIME_BINARY_NOT_FOUND` | 50614 | Could not load the Bare runtime binary for …-…. The platform package "bare-runtime-…-…" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \\ |
+| `PROFILER_INVALID_CAPACITY` | 50800 | Profiler invalid capacity |
+
+### Server errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| `MODEL_ALREADY_REGISTERED` | 52001 | Model with ID "…" is already registered |
+| `MODEL_NOT_FOUND` | 52002 | Model with ID "…" not found |
+| `MODEL_NOT_LOADED` | 52003 | Model with ID "…" is not loaded |
+| `MODEL_IS_DELEGATED` | 52004 | Model "…" is a delegated model and cannot be accessed directly |
+| `UNKNOWN_MODEL_TYPE` | 52005 | Unknown model type: …. If using a custom worker bundle, ensure the plugin for "…" is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk". |
+| `MODEL_LOAD_FAILED` | 52200 | Failed to load model… |
+| `MODEL_FILE_NOT_FOUND` | 52201 | Model file not found: … |
+| `MODEL_FILE_NOT_FOUND_IN_DIR` | 52202 | … model file … not found in directory … |
+| `MODEL_FILE_LOCATE_FAILED` | 52203 | Failed to locate … model file: … |
+| `PROJECTION_MODEL_REQUIRED` | 52204 | Projection model source is required for multimodal LLM models |
+| `VAD_MODEL_REQUIRED` | 52205 | VAD model source is required for this configuration |
+| `TTS_ARTIFACTS_REQUIRED` | 52208 | TTS (Chatterbox) requires s3genModelSrc in modelConfig (companion S3Gen GGUF) and the primary T3 GGUF via modelSrc |
+| `TTS_REFERENCE_AUDIO_REQUIRED` | 52209 | TTS (Chatterbox) requires referenceAudioSrc (path or URL to a WAV file for voice cloning) |
+| `LEGACY_PARAKEET_MODEL_DEPRECATED` | 52210 | Legacy parakeet ONNX modelConfig fields are no longer supported (…). As of @qvac/transcription-parakeet 0.6.0 the addon ships as a single GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF metadata. Supply the GGUF via the top-level modelSrc (e.g. loadModel(\{ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" \})). |
+| `LEGACY_TTS_MODEL_DEPRECATED` | 52211 | Legacy ONNX TTS modelConfig fields are no longer supported (…). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc, set language in modelConfig, and for Chatterbox add s3genModelSrc (e.g. loadModel(\{ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: \{ ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX \} \})). Supertonic multilingual mode is selected by the GGUF (e.g. TTS_MULTILINGUAL_SUPERTONIC2_Q8_0) plus language — not ttsSupertonicMultilingual. |
+| `MODEL_UNLOAD_FAILED` | 52400 | Failed to unload model… |
+| `EMBED_FAILED` | 52401 | Failed to generate embeddings… |
+| `EMBED_NO_EMBEDDINGS` | 52402 | No embeddings returned from model |
+| `TRANSCRIPTION_FAILED` | 52403 | Transcription failed… |
+| `AUDIO_FILE_NOT_FOUND` | 52404 | Audio file not found or not accessible: … |
+| `TRANSLATION_FAILED` | 52405 | Translation failed… |
+| `COMPLETION_FAILED` | 52406 | Completion failed… |
+| `ATTACHMENT_NOT_FOUND` | 52407 | Attachment not found at path: … |
+| `CANCEL_FAILED` | 52408 | Failed to cancel operation… |
+| `TEXT_TO_SPEECH_FAILED` | 52409 | Text-to-speech operation failed… |
+| `CONFIG_RELOAD_NOT_SUPPORTED` | 52410 | Model "…" does not support hot config reload |
+| `MODEL_TYPE_MISMATCH` | 52411 | Model type mismatch: expected "…", got "…" |
+| `OCR_FAILED` | 52412 | OCR operation failed… |
+| `IMAGE_FILE_NOT_FOUND` | 52413 | Image file not found or not accessible: … |
+| `INVALID_IMAGE_INPUT` | 52414 | Invalid image input type provided |
+| `TEXT_TO_SPEECH_STREAM_FAILED` | 52415 | Text-to-speech stream operation failed… |
+| `MODEL_OPERATION_NOT_SUPPORTED` | 52416 | Supported operations on this model: …. |
+| `REQUEST_ID_CONFLICT` | 52417 | Request id "…" is already in flight; refusing to overwrite the existing context |
+| `REQUEST_NOT_FOUND` | 52418 | No in-flight request with id "…" |
+| `INFERENCE_CANCELLED` | 52419 | Inference request "…" was cancelled before it could complete |
+| `REQUEST_REJECTED_BY_POLICY` | 52420 | Request "…" (kind: …, modelId: …) was rejected by registry concurrency policy: … |
+| `CONTEXT_OVERFLOW` | 52421 | … prompt tokens |
+| `INVALID_AUDIO_INPUT` | 52422 | Invalid audio input… |
+| `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
+| `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
+| `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |
+| `RAG_UNKNOWN_OPERATION` | 52803 | Unknown RAG operation: … |
+| `RAG_HYPERDB_FAILED` | 52804 | HyperDB RAG operation failed: … |
+| `RAG_WORKSPACE_MODEL_MISMATCH` | 52805 | Workspace "…" is configured for model "…", but you're trying to use model "…". Use a different workspace or the same model |
+| `RAG_WORKSPACE_NOT_FOUND` | 52806 | RAG workspace not found: … |
+| `RAG_WORKSPACE_IN_USE` | 52807 | RAG workspace '…' is currently in use. Close it first. |
+| `RAG_WORKSPACE_CLOSE_FAILED` | 52808 | Failed to close RAG workspace… |
+| `RAG_LIST_WORKSPACES_FAILED` | 52809 | Failed to list RAG workspaces… |
+| `RAG_CHUNK_FAILED` | 52810 | Failed to chunk documents… |
+| `RAG_WORKSPACE_NOT_OPEN` | 52811 | RAG workspace '…' is not open |
+| `FILE_NOT_FOUND` | 53000 | File not found: … |
+| `DOWNLOAD_CANCELLED` | 53001 | Download was cancelled |
+| `CHECKSUM_VALIDATION_FAILED` | 53002 | Checksum validation failed for … |
+| `HTTP_ERROR` | 53003 | HTTP error: … … |
+| `NO_RESPONSE_BODY` | 53004 | No response body received from HTTP request |
+| `RESPONSE_BODY_NOT_READABLE` | 53005 | Response body is not readable |
+| `NO_BLOB_FOUND` | 53006 | No blob found for … |
+| `DOWNLOAD_ASSET_FAILED` | 53007 | Failed to download asset… |
+| `SEEDING_NOT_SUPPORTED` | 53008 | Seeding is only supported for hyperdrive models |
+| `HYPERDRIVE_DOWNLOAD_FAILED` | 53009 | Hyperdrive download failed: … |
+| `INVALID_SHARD_URL_PATTERN` | 53010 | URL does not contain a valid sharded model pattern: … |
+| `ARCHIVE_EXTRACTION_FAILED` | 53011 | Failed to extract archive: … |
+| `ARCHIVE_UNSUPPORTED_TYPE` | 53012 | Unsupported archive type: … |
+| `ARCHIVE_MISSING_SHARDS` | 53013 | Archive is missing required shard file: … |
+| `PARTIAL_DOWNLOAD_OFFLINE` | 53014 | Cannot resume partial download (… bytes downloaded) - unable to connect. URL: … |
+| `REGISTRY_DOWNLOAD_FAILED` | 53015 | Registry download failed: … |
+| `DELETE_CACHE_FAILED` | 53200 | Failed to delete cache… |
+| `INVALID_DELETE_CACHE_PARAMS` | 53201 | Invalid deleteCache parameters - provide either modelId or cacheKey |
+| `CACHE_DIR_NOT_ABSOLUTE` | 53202 | Cache directory must be an absolute path |
+| `CACHE_DIR_NOT_WRITABLE` | 53203 | Cache directory is not writable: …… |
+| `SET_CONFIG_FAILED` | 53350 | Failed to set config… |
+| `CONFIG_ALREADY_SET` | 53351 | Config has already been set and is immutable. Config can only be set once during SDK initialization. |
+| `FFMPEG_NOT_AVAILABLE` | 53500 | FFmpeg is not available on this system |
+| `AUDIO_PLAYER_FAILED` | 53501 | Audio player failed: … |
+| `INVALID_AUDIO_CHUNK_TYPE` | 53502 | Invalid audio chunk type |
+| `ASYNC_DISPOSE_UNAVAILABLE` | 53503 | Host runtime does not expose Symbol.asyncDispose; the SDK request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare/Expo/Node ≥ 20.4) and any polyfill registration. |
+| `DELEGATE_NO_FINAL_RESPONSE` | 53700 | No final response received from delegated provider |
+| `DELEGATE_CONNECTION_FAILED` | 53701 | Failed to connect to delegated provider: … |
+| `DELEGATE_PROVIDER_ERROR` | 53702 | Delegated provider error: … |
+| `RPC_NO_DATA_RECEIVED` | 53703 | No data received from request |
+| `RPC_UNKNOWN_REQUEST_TYPE` | 53704 | Unknown request type received: … |
+| `PLUGIN_NOT_FOUND` | 53850 | Plugin not found for model type "…". If using a custom worker bundle, ensure the plugin is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk". |
+| `PLUGIN_HANDLER_NOT_FOUND` | 53851 | Handler "…" not found in plugin "…" |
+| `PLUGIN_REQUEST_VALIDATION_FAILED` | 53852 | Request validation failed for handler "…"… |
+| `PLUGIN_RESPONSE_VALIDATION_FAILED` | 53853 | Response validation failed for handler "…"… |
+| `PLUGIN_ALREADY_REGISTERED` | 53854 | Plugin already registered for modelType: … |
+| `PLUGIN_HANDLER_TYPE_MISMATCH` | 53855 | Handler "…" is …, but was called as …. Use invokePlugin() for reply handlers and invokePluginStream() for streaming handlers. |
+| `PLUGIN_LOGGING_INVALID` | 53856 | Plugin "…" has invalid logging configuration: … |
+| `PLUGIN_DEFINITION_INVALID` | 53857 | Plugin definition invalid for "…": … |
+| `PLUGIN_MODEL_TYPE_RESERVED` | 53858 | modelType "…" is reserved for built-in plugins |
+| `PLUGIN_LOAD_CONFIG_VALIDATION_FAILED` | 53859 | modelConfig validation failed for "…": … |
+| `LIFECYCLE_SUSPEND_FAILED` | 53600 | Runtime suspend failed… |
+| `LIFECYCLE_RESUME_FAILED` | 53601 | Runtime resume failed… |
+| `LIFECYCLE_OPERATION_BLOCKED` | 53602 | Operation "…" is blocked while runtime state is "…" |
+| `PATH_TRAVERSAL` | 53900 | Path traversal detected: "…" escapes base directory "…" |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | Qvac model registry query failed |

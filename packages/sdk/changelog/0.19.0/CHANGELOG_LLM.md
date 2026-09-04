@@ -1,19 +1,12 @@
----
-title: SDK Release Notes — v0.19.x (latest)
-description: Release notes for QVAC SDK v0.19.0.
----
-
-## v0.19.0
-
-### @qvac/sdk
+# QVAC SDK v0.19.0 Release Notes
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.19.0
 
 QVAC SDK 0.19.0 is the first release after `@qvac/inference` became the in-process engine. You can assess whether a model will fit before downloading it, walk an ABot-World session, generate MiniMax music, and transcribe with Parakeet Unified. Delegated DHT inference is gone, `no_mmap` is `load_mode`, and batch translations return an array instead of a newline-joined string. `@qvac/bare-sdk` is no longer part of the lockstep pipeline.
 
-#### Breaking Changes
+## Breaking Changes
 
-##### Inference Is the In-Process Engine
+### Inference Is the In-Process Engine
 
 The SDK worker and Bare in-process path now sit on `@qvac/inference`. `@qvac/bare-sdk` is a thin re-export and is no longer versioned with the SDK. Import lifecycle helpers from `@qvac/sdk/worker-lifecycle`. The worker entry is `dist/src/worker/index.js`. `./commands` and `./worker-core` are gone; importing them throws with migration guidance. `./onnx-tts/plugin` remains as an alias of the TTS plugin.
 
@@ -33,7 +26,7 @@ const worker = "<sdk_root>/dist/src/worker/index.js";
 
 `@qvac/sdk` now depends on `@qvac/inference@^0.19.0`. Install both at 0.19.0.
 
-##### Delegated Inference Removed
+### Delegated Inference Removed
 
 Provider mode and DHT delegation are gone. Models load and run locally only.
 
@@ -55,7 +48,7 @@ await heartbeat();
 
 Removed: `startQVACProvider`, `stopQVACProvider`, `loadModel`/`heartbeat` `delegate` options, `hasActiveProviders` on unload, `isDelegated`/`providerInfo` on loaded-model info, profiler `origin` / `resourceOrigin`, and the provider/delegate error classes. Python `load_model(delegate=...)` is also gone.
 
-##### no_mmap Became load_mode
+### no_mmap Became load_mode
 
 `modelConfig.no_mmap` is replaced by `load_mode`. Do not keep a boolean under the new key.
 
@@ -87,7 +80,7 @@ await loadModel({
 
 The same mapping applies to `deviceDefaults.llm` and `deviceDefaults["llamacpp-completion"]`. `load_mode` also accepts `"mlock"`, `"mmap+mlock"`, and `"dio"`.
 
-##### Batch Translations Return an Array
+### Batch Translations Return an Array
 
 A `translate` call with several strings used to join results with `\n`. It now returns `translations: string[]`. Streaming emits one whole translation per token, in input order.
 
@@ -113,25 +106,25 @@ const result = translate({
 const translations = await result.translations;
 ```
 
-##### n_discarded Dropped
+### n_discarded Dropped
 
 `modelConfig.n_discarded` is no longer accepted. Context overflow now reports `requiredTokens`, `cachedTokens`, `promptTokens`, and `ctxSize` on `ContextOverflowError`.
 
-##### MiniMax Python Config Types
+### MiniMax Python Config Types
 
 AudioGen load-config generated names are engine-specific. ACE-Step classes gained an `Acestep` infix; MiniMax has its own `Minimax` types. Update Python imports accordingly.
 
-##### Language Detection Package Rename
+### Language Detection Package Rename
 
 `@qvac/langdetect-text-cld2` is removed. Import from `@qvac/langdetect-text`. `detectOne` is synchronous.
 
-##### e2e Test Suite Package Rename
+### e2e Test Suite Package Rename
 
 SDK e2e depends on `@qvac/test-suite` instead of `@qvac/qvac-test-suite`. Update imports and Metro resolvers. The old package remains installable for 0.10.x pins.
 
-#### New APIs
+## New APIs
 
-##### assessModelFit
+### assessModelFit
 
 `assessModelFit` estimates whether a set of models will fit before you download them. The same function is exported from `@qvac/sdk` and `@qvac/inference`.
 
@@ -152,7 +145,7 @@ result.basis; // "system-memory" | "process-memory" | "device-memory" | "device-
 
 On a single discrete GPU, `basis` is `device-memory` (Linux VRAM) or `device-budget` (Windows DXGI). iOS uses per-process memory and may return `unknown` when that metric is missing. Catalog resource profiles (`getModelResourceProfile`) back the estimator; an unknown checksum is `undefined`, not a guess.
 
-##### ABot-World Sessions
+### ABot-World Sessions
 
 Load a world-mode diffusion model, create a scene once, then step it. Frames stream as they decode.
 
@@ -180,7 +173,7 @@ for await (const frame of frameStream) {
 
 Pass `returnPack: true` on create to keep the scene bytes for a later reload.
 
-##### MiniMax Music Generation
+### MiniMax Music Generation
 
 AudioGen can load MiniMax (`engine: "minimax"`) alongside ACE-Step.
 
@@ -205,7 +198,7 @@ const run = audioGen({
 
 `audioGen` results now include `diagnostics` (`selectedBackend`, `selectedDevice`, optional `fallback.reason` when a GPU request landed on CPU). Progress `total` may be `0` for indeterminate stages.
 
-##### Parakeet Unified Transcription
+### Parakeet Unified Transcription
 
 ```typescript
 import { loadModel, transcribe, PARAKEET_UNIFIED_0_6B_Q8_0 } from "@qvac/sdk";
@@ -217,7 +210,7 @@ const modelId = await loadModel({
 const text = await transcribe({ modelId, audioChunk: "audio.wav" });
 ```
 
-##### Hugging Face Download Checksums
+### Hugging Face Download Checksums
 
 Hugging Face HTTP downloads are verified against the Hub SHA-256. `requireHttpChecksum` and `requireSecureTransport` can also be set globally or per `loadModel` / `downloadAsset` call. Plain HTTP to a private origin is unchanged unless you opt in.
 
@@ -230,35 +223,35 @@ await loadModel({
 });
 ```
 
-##### Worker Startup Timeout
+### Worker Startup Timeout
 
 `rpcInitTimeoutMs` (config file) and `QVAC_RPC_INIT_TIMEOUT_MS` control the worker handshake. A timeout whose worker already exited attaches `WorkerStartupError` as `cause`, with `exitCode`, `exitSignal`, and `stderrTail`, so you can tell a dead worker from a slow one.
 
-##### Tensor Split and Flash Attention
+### Tensor Split and Flash Attention
 
 llama.cpp loads accept `split-mode: "tensor"` and `flash-attn: "on"` in `modelConfig`.
 
-##### Injected TurboVec RAG Index
+### Injected TurboVec RAG Index
 
 Set `ragTurbovec: true` in `qvac.config.json`. Embedding plugins can supply a `turbovecIndexProvider` with `create` / `load`.
 
-##### Config Schema Descriptions
+### Config Schema Descriptions
 
 Every `modelConfig` field now carries a description, exported from `@qvac/sdk/schemas`. `configSchemaForModelType("whisper")` (or `"llm"`, `"tts-ggml"`, `"diffusion"`, …) returns that type's schema so tools such as `qvac configure` can document options without a per-addon list.
 
-#### Features
+## Features
 
 Qwen3.8 tool calls go through the Qwen parser. Darwin-arm64 calibration uses a persistent-based fit with an audio guard. Desktop calibration fixtures land alongside GPU-memory assessment for `assessModelFit`. `@qvac/tts-ggml` 0.8.0 can select CUDA on linux-x64 NVIDIA without a new backend key. `@qvac/diffusion-cpp` is `^0.21.0`. `@qvac/bci-whispercpp` is `0.8.0`.
 
-#### Bug Fixes
+## Bug Fixes
 
 A worker RPC init timeout now preserves the exit signal instead of dropping it. Expo prebuild refreshes iOS addon links. `ContextOverflowError` reports how many tokens the request needed versus the effective `ctx_size` / parallel ceiling.
 
-#### Model Changes
+## Model Changes
 
 This release adds Parakeet Unified 0.6B transcription constants and Qwen3.8 Flash Next 177B multimodal shards.
 
-##### Added Models
+### Added Models
 
 ```text
 MMPROJ_QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_F16
