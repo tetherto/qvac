@@ -1225,18 +1225,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         fs.mkdirSync(lockPath)
-        try {
-          this._writeLockRecord(lockPath, false)
-          this.ownsLock = true
-          this._startLockHeartbeat(lockPath)
-        } catch (error) {
-          this._removeLockArtifact(lockPath)
-          throw error
-        }
-        return
       } catch (error) {
-        lastError = error
-        if (!fs.existsSync(lockPath)) continue
+        if ((error as { code?: string }).code !== 'EEXIST') {
+          throw lockFailedError(lockPath, error)
+        }
         const updatedAt = this._readLockTimestamp(lockPath)
         if (Date.now() - updatedAt < this.lockStaleMs) {
           throw new QvacErrorRAG({
@@ -1244,6 +1236,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
             adds: `TurboVec workspace is already locked: ${lockPath}`
           })
         }
+        lastError = error
         const stalePath = `${lockPath}.stale-${this.lockOwner}-${attempt}`
         try {
           fs.renameSync(lockPath, stalePath)
@@ -1251,6 +1244,17 @@ export class TurboVecAdapter extends BaseDBAdapter {
         } catch (recoveryError) {
           lastError = recoveryError
         }
+        continue
+      }
+
+      try {
+        this._writeLockRecord(lockPath, false)
+        this.ownsLock = true
+        this._startLockHeartbeat(lockPath)
+        return
+      } catch (error) {
+        this._removeLockArtifact(lockPath)
+        throw lockFailedError(lockPath, error)
       }
     }
 
