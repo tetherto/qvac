@@ -6,7 +6,7 @@ schemaType: HowTo
 
 ## Overview
 
-Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml), with your choice of either [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) as inference engine. Load a model using `modelType: "audiogen"`, and `modelConfig.engine: "minimax"` for MiniMax-Music3 (ACE-Step is the default). Then call `audioGen()` with a caption and any engine-specific inputs.
+Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml), with your choice of either [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) as the inference engine. Load a model with `modelType: "audiogen"` and select the engine with `modelConfig.engine` — `"minimax"` for MiniMax-Music3; ACE-Step is the default. Then call `audioGen()` with a caption and any engine-specific inputs.
 
 Pick ACE-Step when you need lyrics, per-song musical controls (BPM, key, time signature, vocal language), reference-audio timbre conditioning, or cover generation. Pick MiniMax-Music3 when you want a lighter API surface — just a caption and a handful of sampling knobs — on desktop hardware with a capable GPU.
 
@@ -60,7 +60,7 @@ Unlike single-file model families, AudioGen does not use a top-level `modelSrc`.
 
 ### ACE-Step
 
-ACE-Step uses four independent GGUF files:
+ACE-Step uses four GGUF files — text encoder, LM, one DiT variant of the three listed, and VAE:
 
 | Stage | SDK model constant | Purpose |
 | --- | --- | --- |
@@ -99,6 +99,8 @@ const modelId = await loadModel({
   },
 });
 ```
+
+Advanced load-time controls (`inferenceSteps`, `shift`, `nGpuLayers`, `threads`, `backendsDir`) are ACE-Step's to tune; omit `inferenceSteps` and `shift` unless you need to override the addon's per-variant defaults. `backendsDir` is needed on arm64, where the CPU backend ships as per-microarch modules.
 
 For more about model constants and sources, see [SDK — Models](/introduction#models).
 
@@ -310,16 +312,12 @@ The cover example takes an existing recording (any FFmpeg-decodable file), an op
 
 This example loads a local MiniMax-Music3 pair from the `AUDIOGEN_MINIMAX_LM_MODEL` and `AUDIOGEN_MINIMAX_SYNTH_MODEL` environment variables, generates an instrumental, and writes the PCM output as WAV. Set `AUDIOGEN_MAX_FRAMES`, `AUDIOGEN_STEPS`, and `AUDIOGEN_CFG_SCALE` to override the MiniMax-only per-run controls (`maxFrames`, `inferenceSteps`, `cfgScale`).
 
-<Tabs>
-<Tab value="ts" label="TypeScript" default>
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-music-minimax.ts title="generate-music-minimax.ts" lineNumbers
 ```
 
 </WrapCode>
-</Tab>
-</Tabs>
 
 <Callout type="success">
   **Tip:** see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python
