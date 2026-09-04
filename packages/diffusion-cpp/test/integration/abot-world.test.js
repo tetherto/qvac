@@ -421,9 +421,17 @@ test(
     })
     await otherCreation.onUpdate(() => {}).await()
     const otherCensus = readScenePackPromptRows(fs.readFileSync(otherScenePath))
+    // Compare only the overlapping (equal-length) region. The two prompts have
+    // different token counts, so their live prefixes differ in length, and
+    // Buffer.equals() returns false for different-sized buffers regardless of
+    // content - a raw prefix compare would pass on the length difference alone.
+    // umT5 is contextual, so two different prompts differ even on shared leading
+    // rows, so a difference over the shared region proves content-sensitivity.
+    const shared = Math.min(census.prefix.length, otherCensus.prefix.length)
+    t.ok(shared > 0, 'both prompts encoded live rows into their packs')
     t.ok(
-      !census.prefix.equals(otherCensus.prefix) || census.live !== otherCensus.live,
-      'a different prompt produces different embeddings (prompt is not ignored)'
+      !census.prefix.subarray(0, shared).equals(otherCensus.prefix.subarray(0, shared)),
+      'a different prompt changes the embeddings over the shared rows (prompt is not ignored)'
     )
 
     // 2. Walk the newly created world with the KV cache on, covering the

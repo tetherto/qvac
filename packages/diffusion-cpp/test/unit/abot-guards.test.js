@@ -57,6 +57,57 @@ function makePng(width, height, pixel) {
   ])
 }
 
+// Same image as makePng, but each row is encoded with the PNG filter type
+// rowFilter(y) returns (0=None, 1=Sub, 2=Up, 3=Average, 4=Paeth), applying the
+// forward filter so the guard's per-row reconstruction has to invert it. This
+// exercises the Sub/Up/Average/Paeth paths, not just None (bpp = 3).
+function makePngFiltered(width, height, pixel, rowFilter) {
+  const stride = width * 3
+  const raw = Buffer.alloc((stride + 1) * height)
+  let prev = Buffer.alloc(stride)
+  let p = 0
+  for (let y = 0; y < height; y++) {
+    const line = Buffer.alloc(stride)
+    for (let x = 0; x < width; x++) {
+      const [r, g, b] = pixel(x, y)
+      line[x * 3] = r
+      line[x * 3 + 1] = g
+      line[x * 3 + 2] = b
+    }
+    const ft = rowFilter(y)
+    raw[p++] = ft
+    for (let i = 0; i < stride; i++) {
+      const a = i >= 3 ? line[i - 3] : 0
+      const b = prev[i]
+      const c = i >= 3 ? prev[i - 3] : 0
+      let pred = 0
+      if (ft === 1) pred = a
+      else if (ft === 2) pred = b
+      else if (ft === 3) pred = (a + b) >> 1
+      else if (ft === 4) {
+        const pp = a + b - c
+        const pa = Math.abs(pp - a)
+        const pb = Math.abs(pp - b)
+        const pc = Math.abs(pp - c)
+        pred = pa <= pb && pa <= pc ? a : pb <= pc ? b : c
+      }
+      raw[p++] = (line[i] - pred) & 255
+    }
+    prev = line
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr[8] = 8
+  ihdr[9] = 2
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0))
+  ])
+}
+
 // safetensors scene pack carrying only prompt_embeds [1, rows, emb].
 function makeScenePack(rows, emb, fillRow) {
   const data = Buffer.alloc(rows * emb * 4)
@@ -91,10 +142,19 @@ test('pngLuminanceStddev: separates collapsed frames from real ones', function (
 
 test('pngLuminanceStddev: handles every PNG row filter', function (t) {
   // Encoders pick filters per row; the guard reverses all five. A wrong
-  // reconstruction would fabricate contrast and mask a real collapse.
-  const png = makePng(32, 32, (x, y) => [x * 8, y * 8, 128])
-  const stddev = pngLuminanceStddev(png)
-  t.ok(stddev > 20, `gradient reconstructs with real contrast (${stddev.toFixed(1)})`)
+  // reconstruction would fabricate contrast and mask a real collapse. Encode
+  // the SAME image once as filter 0 and once with every row cycling through
+  // filters 0-4, and require both to measure identically - which can only hold
+  // if Sub/Up/Average/Paeth all reconstruct correctly.
+  const pixel = (x, y) => [x * 8, y * 8, 128]
+  const baseline = pngLuminanceStddev(makePng(32, 32, pixel))
+  const allFilters = pngLuminanceStddev(makePngFiltered(32, 32, pixel, (y) => y % 5))
+  t.ok(baseline > 20, `gradient reconstructs with real contrast (${baseline.toFixed(1)})`)
+  t.ok(
+    Math.abs(allFilters - baseline) < 1e-6,
+    `all five row filters reconstruct to the same image ` +
+      `(${allFilters.toFixed(3)} == ${baseline.toFixed(3)})`
+  )
 })
 
 test('readScenePackPromptRows: counts live prompt rows', function (t) {
