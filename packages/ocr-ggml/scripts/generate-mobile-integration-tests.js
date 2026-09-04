@@ -13,7 +13,6 @@ const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
-const groupsFile = path.join(mobileDir, 'test-groups.json')
 
 function getIntegrationFiles() {
   if (!fs.existsSync(integrationDir)) {
@@ -71,56 +70,14 @@ function buildFileContents(files) {
   return `${lines.join('\n')}\n`
 }
 
-// Validates that every generated function name appears in at least one group
-// in test-groups.json and that all group entries resolve to real functions.
-// Supports nested format: { android: { group: [...] }, ios: { group: [...] }, perf_report_filter: "..." }
-// Also supports legacy flat format: { perf: [...], regularA: [...], perf_report_filter: "..." }
-function validateGroups(functionNames) {
-  if (!fs.existsSync(groupsFile)) {
-    console.warn('[warn] test-groups.json not found — skipping split validation')
-    return
-  }
-  const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf-8'))
-  const nameSet = new Set(functionNames)
-  const covered = new Set()
-
-  for (const [key, value] of Object.entries(groups)) {
-    if (key === 'perf_report_filter') continue
-    if (typeof value === 'object' && !Array.isArray(value)) {
-      // Nested format: { android: { groupName: [...] }, ios: { groupName: [...] } }
-      for (const groupTests of Object.values(value)) {
-        if (Array.isArray(groupTests)) {
-          for (const name of groupTests) covered.add(name)
-        }
-      }
-    } else if (Array.isArray(value)) {
-      // Flat format (legacy): { groupName: [...] }
-      for (const name of value) covered.add(name)
-    } else {
-      console.warn(`[warn] Unexpected value type for key '${key}' in test-groups.json — skipping`)
-    }
-  }
-
-  const missing = functionNames.filter((n) => !covered.has(n))
-  const extra = [...covered].filter((n) => !nameSet.has(n))
-
-  if (missing.length) {
-    throw new Error(
-      'Tests not assigned to any group in test-groups.json:\n  ' +
-        missing.join('\n  ') +
-        '\nAdd them to a group in test/mobile/test-groups.json.'
-    )
-  }
-  if (extra.length) {
-    throw new Error(
-      'test-groups.json references non-existent tests:\n  ' +
-        extra.join('\n  ') +
-        '\nRemove them or check for typos.'
-    )
-  }
-  console.log('Group coverage validated — all tests assigned.')
-}
-
+// NOTE: this generator deliberately performs no test-groups.json validation.
+// `npm run test:integration` chains it (so the committed integration.auto.cjs
+// can never go stale), which means anything that throws here takes desktop
+// integration tests down on every platform — and it used to, from a check that
+// had already let the file be written correctly. Group coverage is a Device Farm
+// scheduling concern, so it lives in `npm run test:mobile:validate`
+// (scripts/validate-mobile-tests.js) and `npm run test:mobile:groups`, over the
+// shared rules in scripts/lib/validate-test-groups.js.
 function main() {
   if (!fs.existsSync(mobileDir)) {
     fs.mkdirSync(mobileDir, { recursive: true })
@@ -131,11 +88,9 @@ function main() {
     throw new Error(`No integration test files found inside ${integrationDir}`)
   }
 
-  const functionNames = files.map(toFunctionName)
   const content = buildFileContents(files)
   fs.writeFileSync(outputFile, content, 'utf8')
   console.log(`Generated ${outputFile} with ${files.length} integration runners.`)
-  validateGroups(functionNames)
 }
 
 if (require.main === module) {
