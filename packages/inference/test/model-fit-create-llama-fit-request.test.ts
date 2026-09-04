@@ -70,6 +70,16 @@ test('createLlamaFitRequest: forwards only fit-relevant completion load settings
   })
 })
 
+test('createLlamaFitRequest: forwards completion flash-attn as fit evidence', (t) => {
+  // Flash attention alters KV/compute memory, so it must forward as evidence,
+  // not refuse the check.
+  const plan = completionRequest({ 'flash-attn': 'on' })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.is(plan.config.params['flash-attn'], 'on')
+})
+
 test('createLlamaFitRequest: pins the requested context as the reduction floor', (t) => {
   const plan = completionRequest()
 

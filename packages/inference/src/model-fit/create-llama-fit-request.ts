@@ -29,6 +29,8 @@ const FIT_LOAD_KEYS: Record<LlamaLoadKind, readonly string[]> = {
     'parallel',
     'cache-type-k',
     'cache-type-v',
+    // Alters KV/compute memory; `model-fit` reads it as evidence.
+    'flash-attn',
     'main-gpu',
     'split-mode',
     'tensor-split'
