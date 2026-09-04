@@ -29,6 +29,9 @@ export const LINUX_X64_VULKAN_CALIBRATION: PlatformCalibration = {
     upper: 0
   },
   validated: true,
+  notes: [
+    'workingPeakBytes is an unsampled zero, not a measurement: this run polled no device counter during completions. Re-measure before trusting a per-completion budget on this backend'
+  ],
   measuredAt: '2026-09-03',
   measuredOn: {
     backend: 'vulkan',
