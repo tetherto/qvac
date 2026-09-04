@@ -308,9 +308,26 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
     # is the PTX floor that lets an unlisted newer card run at all, and the
     # registration guard keys off the lowest entry being virtual. Making 121-real
     # the floor would silently disarm that guard.
+    # No 87-real here on purpose. The Orin is the only sm_87 device and it cannot
+    # load a CUDA 13 module at all, so those cubins would ship to the one machine
+    # that cannot open the file. It belongs in the separate CUDA 12 module, when
+    # that exists.
     set(QVAC_CUDA_ARCHS "80-virtual\;121-real")
   else()
-    set(QVAC_CUDA_ARCHS "86-real\;120a-real\;80-virtual")
+    # QVAC-24470, Gianfranco's target: Ampere and Blackwell native, everything
+    # from sm_75 upward served by PTX. 80-real is the A100, 86-real the 3090 CI
+    # runners, 120a-real the 5090.
+    #
+    # BOTH floors are here on purpose and 75-virtual is NOT a replacement for
+    # 80-virtual. A -virtual entry costs the same whichever arch it names, so
+    # swapping looks free, but ggml resolves features through
+    # ggml_cuda_highest_compiled_arch(cc) across the whole __CUDA_ARCH_LIST__.
+    # With 80 gone the list reads {750, 860, 1200}, so an sm_89 Ada resolves to
+    # 860 and the host enables Ampere paths while the driver has only 75 PTX to
+    # JIT from, which carries none of them. Our own RTX 4000 Ada CI runner is
+    # sm_89 and sits exactly in that gap, as does Hopper at sm_90. Keeping
+    # 80-virtual means both JIT from PTX that matches what the host thinks it has.
+    set(QVAC_CUDA_ARCHS "75-virtual\;80-virtual\;80-real\;86-real\;120a-real")
   endif()
   message(STATUS "qvac-fabric: cuda-backend ON, building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
   list(APPEND PLATFORM_OPTIONS
