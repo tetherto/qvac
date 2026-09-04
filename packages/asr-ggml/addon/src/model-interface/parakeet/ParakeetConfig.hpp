@@ -8,6 +8,7 @@ namespace qvac::asrggml::parakeet {
 
 struct ParakeetConfig {
   static constexpr int DEFAULT_STREAMING_CHUNK_MS = 2000;
+  static constexpr int DEFAULT_NEMOTRON_STREAMING_CHUNK_MS = 320;
   static constexpr int DEFAULT_STREAMING_HISTORY_MS = 30000;
   static constexpr int DEFAULT_STREAMING_SPK_CACHE_LEN = 188;
   static constexpr int DEFAULT_STREAMING_FIFO_LEN = 188;
@@ -30,6 +31,8 @@ struct ParakeetConfig {
   bool timestampsEnabled = true;
   int seed = -1;
 
+  // Indic CTC language id or Nemotron locale alias. Empty selects Nemotron's
+  // "auto" locale; it keeps existing behaviour for non-Nemotron models.
   std::string language;
 
   // ── Streaming mode ──────────────────────────────────────────────────────
@@ -40,7 +43,7 @@ struct ParakeetConfig {
   // for Sortformer) across appends, so within a single run() call:
   //   - Sortformer speaker IDs stay stable from chunk to chunk.
   //   - EOU `<EOU>` boundaries surface as segment markers (and StreamEvents).
-  //   - Optional energy-VAD events fire for CTC/TDT.
+  //   - Optional energy-VAD events fire for CTC/TDT/RNNT/Nemotron.
   // Cross-call scope: a single run() invocation batches all of its append()
   // chunks into one process() call (see runStreamingProcess_), so cross-chunk
   // state is preserved within that run. Each NEW run() on the same model
@@ -52,19 +55,21 @@ struct ParakeetConfig {
   // regardless of how many append-style chunks it ingests.
   // Off by default for batch-style transcription.
   bool streaming = false;
-  int streamingChunkMs = DEFAULT_STREAMING_CHUNK_MS;
+  // 0 means model-specific default. It is resolved after GGUF model-type
+  // detection and is never forwarded to speech-cpp.
+  int streamingChunkMs = 0;
   int streamingHistoryMs =
       DEFAULT_STREAMING_HISTORY_MS; // Sortformer rolling window only
   bool streamingEmitPartials = true;
-  bool streamingEnergyVad = false; // CTC/TDT only; ignored elsewhere
+  bool streamingEnergyVad = false; // ASR only; ignored by EOU/Sortformer
   // Forwarded to pkt::StreamingOptions.left_context_ms /
   // right_lookahead_ms. ASR sessions only (Sortformer ignores both --
   // it has its own SortformerStreamingOptions::history_ms knob).
   // right_lookahead_ms adds directly to the per-segment latency floor
   // (effective latency >= chunk_ms + right_lookahead_ms); left_context_ms
   // bounds the rolling encoder context retained upstream of each chunk.
-  // -1 keeps parakeet's own defaults (10000 / 2000) so callers that don't
-  // set the field behave like before.
+  // -1 keeps speech-cpp's defaults. Nemotron ignores both context overrides
+  // because its context is selected by the chunk operating point.
   int streamingLeftContextMs = -1;
   int streamingRightLookaheadMs = -1;
 

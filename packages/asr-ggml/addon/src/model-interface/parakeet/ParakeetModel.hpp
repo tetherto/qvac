@@ -138,7 +138,7 @@ public:
   const std::string& getEncoderBackend() const { return encoder_backend_; }
   int getEncoderOnCoreml() const { return encoder_on_coreml_; }
   int getStreamingChunkMs() const {
-    return cfg_.streamingChunkMs > 0 ? cfg_.streamingChunkMs : 1000;
+    return resolveStreamingChunkMs(cfg_.modelType, cfg_.streamingChunkMs);
   }
   int getStreamingHistoryMs() const {
     return cfg_.streamingHistoryMs > 0
@@ -171,6 +171,7 @@ public:
     return cfg_.streamingSpkCacheUpdatePeriod;
   }
   bool isSortformer() const { return cfg_.modelType == ModelType::SORTFORMER; }
+  bool isNemotron() const { return cfg_.modelType == ModelType::NEMOTRON; }
   float getDiarOnsetThreshold() const { return diarConfig_.onset; }
   float getDiarMinDurationOn() const { return diarConfig_.minDurationOn; }
 
@@ -233,6 +234,8 @@ public:
       const std::string& audioFormat = "s16le");
   [[nodiscard]] static ModelType modelTypeFromMetadata(
       const std::string& detected, ModelType fallback);
+  [[nodiscard]] static int
+  resolveStreamingChunkMs(ModelType modelType, int configuredChunkMs);
 
 private:
   void throwIfCancelled() const;
