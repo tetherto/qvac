@@ -14,6 +14,18 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-03. Silero VAD now honors
+  `use_gpu`: the compute backends match the weight placement, fixing the
+  ggml_backend_sched abort ("pre-allocated tensor in a buffer that cannot
+  run the operation") that killed every `use_gpu=true` VAD context init on
+  GPU builds (Metal, Vulkan, CUDA, HIP), and the VAD LSTM input is made
+  contiguous to satisfy the CUDA mul-mat-vec kernel's stride requirement.
+  The addon creates its VAD context with the default (CPU) parameters, so
+  runtime behavior is unchanged; the fix matters for anything that opts
+  VAD into the GPU.
+
 ## [0.4.2] - 2026-09-01
 
 ### Changed
