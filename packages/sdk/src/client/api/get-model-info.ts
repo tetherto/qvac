@@ -1,4 +1,8 @@
-import { type GetModelInfoRequest, type GetModelInfoParams } from '@qvac/inference/surface'
+import {
+  type GetModelInfoRequest,
+  type GetModelInfoParams,
+  type ModelInfo
+} from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
 
@@ -10,7 +14,7 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * @returns A promise resolving to the model's status information (cache presence, loaded instances, size on disk, etc.).
  * @throws {QvacErrorBase} When the response type is invalid (`InvalidResponseError`) or the RPC layer fails.
  */
-export async function getModelInfo(params: GetModelInfoParams) {
+export async function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo> {
   const request: GetModelInfoRequest = {
     type: 'getModelInfo',
     name: params.name
