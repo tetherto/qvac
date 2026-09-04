@@ -492,16 +492,16 @@ test('estimateWhisper: unmeasured audio coefficients refuse rather than under-es
 // Budget and reserve
 // ---------------------------------------------------------------------------
 
-test('assess: desktop reserve is the larger of 2 GiB and 15%', (t) => {
+test('assess: desktop reserve is 20% of available, capped at 2 GiB', (t) => {
   const small = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
-    resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
+    resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
     platform: 'darwin-arm64',
     calibration: calibration(),
     resolveProfile: () => profile()
   })
-  t.is(small.budget?.reservedBytes, 2 * GIB, '15% of 8 GiB is below the 2 GiB floor')
+  t.is(small.budget?.reservedBytes, 1 * GIB, '20% of the 5 GiB available')
   t.is(small.budget?.availableAfterReserveBytes, 4 * GIB)
 
   const large = assessModelFitFromResources({
@@ -512,7 +512,27 @@ test('assess: desktop reserve is the larger of 2 GiB and 15%', (t) => {
     calibration: calibration(),
     resolveProfile: () => profile()
   })
-  t.is(large.budget?.reservedBytes, 64 * GIB * 0.15, '15% dominates on a large machine')
+  t.is(large.budget?.reservedBytes, 2 * GIB, 'the cap holds once 20% of available passes it')
+  t.is(large.budget?.availableAfterReserveBytes, 46 * GIB)
+})
+
+// The reserve used to be a share of total subtracted from available, so on a
+// host already using most of its RAM it exceeded the headroom and zeroed the
+// budget — every model, however small, read likely-too-large.
+test('assess: a busy host keeps a budget proportional to what is free', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate({ workload: { kind: 'llm', contextTokens: 1 } })],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 24 * GIB, usedBytes: 20.7 * GIB }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile({ artifactBytes: 2 * GIB })
+  })
+  const available = 24 * GIB - 20.7 * GIB
+  const reserved = Math.floor(available * 0.2)
+  t.is(result.budget?.reservedBytes, reserved)
+  t.is(result.budget?.availableAfterReserveBytes, available - reserved)
+  t.is(result.verdict, 'likely-fits', 'a 2 GiB model fits in 3.3 GiB of free memory')
 })
 
 test('assess: iOS budgets are per-process and refuse without the allowance metric', (t) => {
@@ -537,17 +557,17 @@ test('assess: iOS budgets are per-process and refuse without the allowance metri
   const withMetric = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
-    resources: resources({ processUsedBytes: 1 * GIB, processAvailableBytes: 3 * GIB }),
+    resources: resources({ processUsedBytes: 1 * GIB, processAvailableBytes: 2.5 * GIB }),
     platform: 'ios-arm64',
     calibration: calibration(),
     resolveProfile: () => profile()
   })
   t.is(withMetric.basis, 'process-memory')
   // Ceiling = allowance + footprint (the relation jetsam enforces); the mobile
-  // reserve applies against that ceiling: max(1 GiB, 20% of 4 GiB) = 1 GiB.
-  t.is(withMetric.budget?.totalBytes, 4 * GIB)
+  // reserve is taken from the allowance: min(1 GiB, 20% of 2.5 GiB) = 0.5 GiB.
+  t.is(withMetric.budget?.totalBytes, 3.5 * GIB)
   t.is(withMetric.budget?.usedBytes, 1 * GIB)
-  t.is(withMetric.budget?.reservedBytes, 1 * GIB)
+  t.is(withMetric.budget?.reservedBytes, 0.5 * GIB)
   t.is(withMetric.budget?.availableAfterReserveBytes, 2 * GIB)
 })
 
@@ -561,7 +581,7 @@ test('assess: android keeps the system basis with the mobile reserve, by explici
     resolveProfile: () => profile()
   })
   t.is(result.basis, 'system-memory')
-  t.is(result.budget?.reservedBytes, 8 * GIB * 0.2)
+  t.is(result.budget?.reservedBytes, 1 * GIB, '20% of the 6 GiB available, capped at 1 GiB')
   t.ok(result.assumptions.some((a) => a.includes('android budgets deliberately use system memory')))
 })
 
@@ -621,12 +641,12 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
 // ---------------------------------------------------------------------------
 
 test('assess: verdict boundaries around the budget', (t) => {
-  // Budget: 8 GiB total, 2 GiB used, 2 GiB reserved => 4 GiB available.
+  // Budget: 8 GiB total, 3 GiB used => 5 GiB available, 1 GiB reserved => 4 GiB.
   function verdictFor(artifactBytes: number, weightUpperCoeff: number) {
     return assessModelFitFromResources({
       models: [candidate({ workload: { kind: 'llm', contextTokens: 1 } })],
       execution: 'sequential',
-      resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
+      resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
       platform: 'darwin-arm64',
       calibration: calibration({ weightUpperCoeff }),
       resolveProfile: () =>
@@ -1231,7 +1251,7 @@ test('assess: a GPU with too little VRAM is too large even on a roomy host', (t)
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
-    resources: discreteGpuResources({ vramTotalBytes: 4 * GIB, vramUsedBytes: 1 * GIB }),
+    resources: discreteGpuResources({ vramTotalBytes: 2 * GIB, vramUsedBytes: 1 * GIB }),
     platform: 'linux-x64',
     calibration: calibration(),
     resolveGpuCalibration: () => calibration(),
@@ -1266,20 +1286,20 @@ test('assess: several GPUs are assessed as alternatives, not as one budget', (t)
   t.is(twoRoomy.basis, 'device-memory')
   t.ok(twoRoomy.assumptions.some((a) => a.includes('2 usable GPUs')))
 
-  // 1 GB of weights plus the cache: room on the 20 GiB card, none on the 4 GiB
+  // 1 GB of weights plus the cache: room on the 20 GiB card, none on the 2 GiB
   // one. Neither answer holds for both, so there is no verdict.
   const mixed = assess({
     vramTotalBytes: 20 * GIB,
     vramUsedBytes: 1 * GIB,
-    extraGpus: [{ vramTotalBytes: 4 * GIB, vramUsedBytes: 1 * GIB }]
+    extraGpus: [{ vramTotalBytes: 2 * GIB, vramUsedBytes: 1 * GIB }]
   })
   t.is(mixed.verdict, 'unknown', 'a fit on the larger card is not a fit on the smaller')
-  t.is(mixed.budget?.totalBytes, 4 * GIB, 'the budget reported is the tightest of the candidates')
+  t.is(mixed.budget?.totalBytes, 2 * GIB, 'the budget reported is the tightest of the candidates')
 
   const bothTooSmall = assess({
-    vramTotalBytes: 4 * GIB,
+    vramTotalBytes: 2 * GIB,
     vramUsedBytes: 1 * GIB,
-    extraGpus: [{ vramTotalBytes: 4 * GIB, vramUsedBytes: 2 * GIB }]
+    extraGpus: [{ vramTotalBytes: 2 * GIB, vramUsedBytes: 1.5 * GIB }]
   })
   t.is(bothTooSmall.verdict, 'likely-too-large', 'too large on the largest is too large anywhere')
 })

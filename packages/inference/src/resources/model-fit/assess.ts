@@ -527,12 +527,13 @@ function resolveGpuPlacement(
 }
 
 function gpuBudget(target: GpuTarget, platform: ModelFitPlatform | undefined) {
-  const reserved = reserveBytes(target.totalBytes, platform)
+  const available = target.totalBytes - target.usedBytes
+  const reserved = reserveBytes(available, platform)
   return {
     totalBytes: target.totalBytes,
     usedBytes: target.usedBytes,
     reservedBytes: reserved,
-    availableAfterReserveBytes: Math.max(0, target.totalBytes - target.usedBytes - reserved)
+    availableAfterReserveBytes: available - reserved
   }
 }
 
@@ -631,12 +632,12 @@ function resolveBudget(
       return undefined
     }
 
-    const reserved = reserveBytes(total, platform)
+    const reserved = reserveBytes(available.value, platform)
     return {
       totalBytes: total,
       usedBytes: used.value,
       reservedBytes: reserved,
-      availableAfterReserveBytes: Math.max(0, available.value - reserved)
+      availableAfterReserveBytes: available.value - reserved
     }
   }
 
@@ -652,19 +653,28 @@ function resolveBudget(
     return undefined
   }
 
-  const reserved = reserveBytes(total.value, platform)
+  const available = total.value - used.value
+  const reserved = reserveBytes(available, platform)
   return {
     totalBytes: total.value,
     usedBytes: used.value,
     reservedBytes: reserved,
-    availableAfterReserveBytes: Math.max(0, total.value - used.value - reserved)
+    availableAfterReserveBytes: available - reserved
   }
 }
 
-/** `interactive-v1`: 2 GiB or 15% on desktop, 1 GiB or 20% on mobile. */
-function reserveBytes(totalBytes: number, platform: ModelFitPlatform | undefined): number {
+/**
+ * `interactive-v1`: 20% of what is available right now, capped at 2 GiB on
+ * desktop and 1 GiB on mobile.
+ *
+ * The reserve is taken from available memory, not total: a share of total is
+ * subtracted from a figure that already excludes what is in use, so on a busy
+ * host it double-counts and can exceed the whole headroom — a 24 GiB Mac with
+ * 3.3 GiB free ended up with a zero budget and called a 2 GiB model too large.
+ */
+function reserveBytes(availableBytes: number, platform: ModelFitPlatform | undefined): number {
   const mobile = platform !== undefined && MOBILE_PLATFORMS.includes(platform)
-  return mobile ? Math.max(1 * GIB, totalBytes * 0.2) : Math.max(2 * GIB, totalBytes * 0.15)
+  return Math.min(mobile ? 1 * GIB : 2 * GIB, Math.floor(availableBytes * 0.2))
 }
 
 /**

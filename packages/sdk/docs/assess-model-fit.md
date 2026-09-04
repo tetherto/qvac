@@ -55,14 +55,17 @@ reserve anything on the strength of it.
 
 ### `policy: 'interactive-v1'`
 
-Headroom withheld from the budget: the larger of 2 GiB or 15% of `total` on
-desktop, the larger of 1 GiB or 20% on mobile — the percentage applies to
-whatever `total` means under the result's `basis`. Under `system-memory` that
-headroom is left for the rest of the system; under `process-memory` it is left
-inside the app's own ceiling, since jetsam acts on this app's footprint.
+Headroom withheld from the budget: 20% of the memory available right now,
+capped at 2 GiB on desktop and 1 GiB on mobile. It is a share of what is free,
+not of `total`, so it can never exceed the headroom it is carved from — a busy
+host with 3 GiB free keeps a 2.4 GiB budget rather than none. Under
+`system-memory` that headroom is left for the rest of the system; under
+`process-memory` it is left inside the app's own ceiling, since jetsam acts on
+this app's footprint.
 
 ```text
-budget = total − in use now − policy reserve
+available = total − in use now
+budget    = available − min(cap, 20% × available)
 
 lower bound  > budget  → likely-too-large
 upper bound <= budget  → likely-fits

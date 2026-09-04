@@ -96,7 +96,7 @@ export const assessModelFitInputSchema = z.object({
     .literal('interactive-v1')
     .default('interactive-v1')
     .describe(
-      'Headroom policy. `interactive-v1` leaves the larger of 2 GiB or 15% of total RAM on desktop, 1 GiB or 20% on mobile.'
+      'Headroom policy. `interactive-v1` withholds 20% of the memory available right now, capped at 2 GiB on desktop and 1 GiB on mobile.'
     )
 })
 
