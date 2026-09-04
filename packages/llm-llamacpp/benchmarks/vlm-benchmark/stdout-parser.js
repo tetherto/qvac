@@ -12,6 +12,12 @@
 // the actual encoder workload. visionEncodeSliceCount surfaces the
 // tile count so it shows up in the report alongside the summed time.
 const VISION_ENCODE_REGEX = /image (?:slice )?encoded in\s+(\d+(?:\.\d+)?)\s*ms/gi
+// The line above comes from mtmd_helper_eval_chunks (mtmd-helper.cpp). llama-mtmd-cli
+// does NOT call that helper, it runs its own encode loop and logs the two lines below
+// instead, so CLI legs reported no encode time at all. Chunk count comes from the
+// n_chunks field because one batch can carry several slices.
+const VISION_ENCODE_BATCH_REGEX = /mtmd batch encoding done in\s+(\d+(?:\.\d+)?)\s*ms/gi
+const VISION_ENCODE_CHUNKS_REGEX = /encoding mtmd batch,\s*n_chunks\s*=\s*(\d+)/gi
 // Pulled verbatim from Ian's Metal plan §5.7 — same llama.cpp output
 // shape on every platform.
 // Prompt eval must be matched BEFORE decode eval since "prompt eval time"
@@ -30,6 +36,16 @@ function parseStdoutMetrics (text) {
   if (visMatches.length) {
     out.visionEncodeMs = visMatches.reduce((sum, m) => sum + Number(m[1]), 0)
     out.visionEncodeSliceCount = visMatches.length
+  } else {
+    // Fall back to the CLI's own encode loop. Same ViT work, different log line.
+    const batches = [...text.matchAll(VISION_ENCODE_BATCH_REGEX)]
+    if (batches.length) {
+      out.visionEncodeMs = batches.reduce((sum, m) => sum + Number(m[1]), 0)
+      const chunks = [...text.matchAll(VISION_ENCODE_CHUNKS_REGEX)]
+      out.visionEncodeSliceCount = chunks.length
+        ? chunks.reduce((sum, m) => sum + Number(m[1]), 0)
+        : batches.length
+    }
   }
 
   const prompt = text.match(PROMPT_EVAL_REGEX)

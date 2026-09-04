@@ -202,6 +202,13 @@ function parseArgs (argv) {
 // llama.cpp/mtmd print these on native stderr (captured by `2>&1 | tee`), NOT via the
 // JS logger — so we attribute the timing lines that precede each [VLMROW] to that row.
 const VISION_RE = /image (?:slice )?encoded in\s+(\d+(?:\.\d+)?)\s*ms/i
+// The line above is logged by mtmd_helper_eval_chunks. llama-mtmd-cli does NOT call that
+// helper, it runs its own encode loop and logs these two instead, so CLI legs reported an
+// empty `mmproj enc` / `tiles` column. Tiles come from n_chunks: one batch can carry
+// several slices. Mirrors the fallback in stdout-parser.js. Per segment the helper line
+// wins where both appear, so addon legs are unaffected.
+const VISION_BATCH_MS_RE = /mtmd batch encoding done in\s+(\d+(?:\.\d+)?)\s*ms/i
+const VISION_BATCH_CHUNKS_RE = /encoding mtmd batch,\s*n_chunks\s*=\s*(\d+)/i
 const ROW_RE = /\[VLMROW\](.*?)\[\/VLMROW\]/
 const SEG_RE = /\[VLMSEG\](.*?)\[\/VLMSEG\]/
 const META_RE = /\[VLMMETA\](.*?)\[\/VLMMETA\]/
@@ -211,7 +218,7 @@ const META_RE = /\[VLMMETA\](.*?)\[\/VLMMETA\]/
 // the [VLMROW] markers (stdout). They're joined on the cell|device key, not position.
 function parseLog (inputs) {
   const rows = []
-  const vision = {} // host|cell|device -> { segMs: [perSegmentSummedMs], segTiles: [perSegmentEncodeCount] }
+  const vision = {} // host|cell|device -> { segMs: [perSegmentSummedMs], segTiles: [perSegmentEncodeCount], segHelper: [sawHelperLine] }
   const meta = {} // cell -> { main_origin, mmproj_origin, ... }
   // Android logcat captures each printed line twice (live + flushed bare buffer),
   // so the same [VLMROW] appears more than once. Dedup exact rows per host.
@@ -229,16 +236,28 @@ function parseLog (inputs) {
         try {
           const s = JSON.parse(sm[1])
           cur = `${host}|${s.cell}|${s.device}`
-          if (!vision[cur]) vision[cur] = { segMs: [], segTiles: [] }
-          vision[cur].segMs.push(0); vision[cur].segTiles.push(0)
+          if (!vision[cur]) vision[cur] = { segMs: [], segTiles: [], segHelper: [] }
+          vision[cur].segMs.push(0); vision[cur].segTiles.push(0); vision[cur].segHelper.push(false)
         } catch (_) {}
         continue
       }
       const vm = line.match(VISION_RE)
       if (vm && cur && vision[cur] && vision[cur].segMs.length) {
         const v = vision[cur]
-        v.segMs[v.segMs.length - 1] += Number(vm[1]); v.segTiles[v.segTiles.length - 1]++
+        const last = v.segMs.length - 1
+        // Helper line wins: discard whatever the batch fallback below already summed for
+        // this segment, otherwise a segment carrying both line shapes double-counts.
+        if (!v.segHelper[last]) { v.segMs[last] = 0; v.segTiles[last] = 0; v.segHelper[last] = true }
+        v.segMs[last] += Number(vm[1]); v.segTiles[last]++
         continue
+      }
+      if (cur && vision[cur] && vision[cur].segMs.length && !vision[cur].segHelper[vision[cur].segMs.length - 1]) {
+        const v = vision[cur]
+        const last = v.segMs.length - 1
+        const bm = line.match(VISION_BATCH_MS_RE)
+        if (bm) { v.segMs[last] += Number(bm[1]); continue }
+        const bc = line.match(VISION_BATCH_CHUNKS_RE)
+        if (bc) { v.segTiles[last] += Number(bc[1]); continue }
       }
       const rm = line.match(ROW_RE)
       if (rm) {
@@ -594,15 +613,37 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   }
   if (Object.keys(meta).length) {
     L.push('### Models & origins (Source = Registry / HF / S3 / URL · pinned commits)\n')
-    L.push('| Cell | main model | mmproj |')
-    L.push('|---|---|---|')
+    L.push('| Cell | main model | mmproj | preprocessing |')
+    L.push('|---|---|---|---|')
     for (const cell of Object.keys(meta).sort()) {
       const m = meta[cell]
       const main = `**${m.main_source || '—'}** · ${m.main_origin || '—'}`
       const proj = `**${m.mmproj_source || '—'}** · ${m.mmproj_origin || '—'}`
-      L.push(`| \`${cell}\` | ${main} | ${proj} |`)
+      const pre = m.preproc ? `\`${m.preproc}\`` : (m.preproc === '' ? 'base' : '—')
+      L.push(`| \`${cell}\` | ${main} | ${proj} | ${pre} |`)
     }
     L.push('')
+    // Two legs of one model that applied different preprocessing are not comparable, and the
+    // numbers give no hint of it. The usual cause is an upstream-cli leg, which never receives
+    // cliArgs because they are fabric-fork flags, so say so instead of letting a reader treat
+    // the rows as like for like.
+    const byModel = {}
+    for (const [cell, m] of Object.entries(meta)) {
+      if (m.preproc == null) continue
+      const key = m.model || cell
+      byModel[key] = byModel[key] || {}
+      byModel[key][m.preproc] = byModel[key][m.preproc] || []
+      byModel[key][m.preproc].push(cell)
+    }
+    const split = Object.entries(byModel).filter(([, v]) => Object.keys(v).length > 1)
+    if (split.length) {
+      for (const [model, variants] of split) {
+        const parts = Object.entries(variants).map(([pre, cells]) =>
+          `${cells.map(c => `\`${c}\``).join(', ')} ran ${pre ? `\`${pre}\`` : 'base preprocessing'}`)
+        L.push(`> **Preprocessing differs across the legs of \`${model}\`**: ${parts.join('; ')}. Those rows are not like for like.`)
+      }
+      L.push('')
+    }
   }
   if (provText && provText.trim()) {
     L.push('### Provenance — hardware & software\n')
@@ -673,7 +714,8 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   }
   L.push('')
   L.push('> **mmproj enc** is the pure ViT vision-encode time (and **tiles** its slice count). ' +
-    'CLI legs parse llama.cpp\'s native stderr (`slice encoded in N ms`); addon legs read the ' +
+    'CLI legs parse llama.cpp\'s native stderr (`slice encoded in N ms`, or `mtmd batch encoding ' +
+    'done in N ms` when the CLI runs its own encode loop); addon legs read the ' +
     'in-process `visionEncodeMs`/`visionEncodeTiles` runtime stats (same ViT encode) — so both ' +
     'columns are populated on every platform, including mobile (Device Farm), where the native ' +
     'stderr line is not captured. ' +

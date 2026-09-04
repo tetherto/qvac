@@ -24,13 +24,19 @@
 //     source.type 'hf'  : { type:'hf', repo, sha, file } -> pinned HuggingFace commit
 //     source.type 'url' : { type:'url', url }             -> arbitrary direct link
 //     source.type 's3'  : { type:'s3', url }              -> S3 (presigned URL)
+//   Two optional per-model fields carry preprocessing a model needs but its mmproj does
+//   not declare: `cliArgs` for the native CLI legs and `addonConfig`, its addon-side twin.
+//   Both are allowlisted in models.cjs and must be set together or the legs diverge.
+//   See CONTRACT.md section 3.
 
 // Pinned commit SHAs (immutable provenance).
 const SHA = {
   qwenUnsloth: '6ab461498e2023f6e3c1baea90a8f0fe38ab64d0', // registry: Qwen3.5 main + f16 mmproj
   qwenMrader: '9d48fdbc0d8f133716da87ec1d904e5d2c7175a6', //  registry: Qwen3.5 q8 mmproj
   gemmaBart: 'b5e99bd964eaacc27ba484bb2eb3e9f6160b9143', //   registry: Gemma-4-E2B q4 main (+ f16/bf16 mmproj)
-  gemmaGgml: 'a1dac71d3ab220618f5a7573a52acdc4baf3ae3b' //    registry: Gemma-4-E2B q8 mmproj
+  gemmaGgml: 'a1dac71d3ab220618f5a7573a52acdc4baf3ae3b', //   registry: Gemma-4-E2B q8 mmproj
+  visionpsyBase: '4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1', // VisionPsy-Nano base q4_0 + q8 mmproj
+  visionpsyFlash: 'a24fb9cdd1119406b15ff60b06a51f8438a931c1' // VisionPsy-Nano Flash q4_0 + q8 mmproj
 }
 
 // Apache-2.0 Qwen mmproj blobs are published in the QVAC registry; the pinned HF URL
@@ -64,9 +70,9 @@ const MODEL_1 = {
   label: 'qwen3.5-f16', //    short id — report column + marker key (keep filesystem-safe)
   name: 'Qwen3.5-0.8B · mmproj-F16', // display name
   ctx_size: '4096',
-  llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+  llm: hf('Qwen3.5-0.8B-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
     'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
-  mmproj: hf('reg-qwen-unsloth-mmproj-F16.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} · mmproj-F16`,
+  mmproj: hf('mmproj-Qwen3.5-0.8B-F16.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} · mmproj-F16`,
     'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'mmproj-F16.gguf', QWEN_REG)
 }
 
@@ -74,9 +80,9 @@ const MODEL_2 = {
   label: 'qwen3.5-q8', //     short id
   name: 'Qwen3.5-0.8B · mmproj-Q8', // display name
   ctx_size: '4096',
-  llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+  llm: hf('Qwen3.5-0.8B-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
     'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
-  mmproj: hf('reg-qwen-mradermacher-mmproj-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
+  mmproj: hf('mmproj-Qwen3.5-0.8B-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
     'mradermacher/Qwen3.5-0.8B-GGUF', SHA.qwenMrader, 'Qwen3.5-0.8B.mmproj-Q8_0.gguf',
     { license: 'Apache-2.0', link: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF' })
 }
@@ -89,12 +95,88 @@ const GEMMA4_Q4 = {
   label: 'gemma4-q4',
   name: 'Gemma-4-E2B-it · Q4_K_M + mmproj-Q8',
   ctx_size: '4096',
-  llm: hf('reg-gemma4-e2b-Q4_K_M.gguf', `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)}`,
+  llm: hf('google_gemma-4-E2B-it-Q4_K_M.gguf', `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)}`,
     'bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'google_gemma-4-E2B-it-Q4_K_M.gguf',
     { license: 'Gemma', link: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF' }),
-  mmproj: hf('reg-gemma4-e2b-mmproj-Q8_0.gguf', `ggml-org/gemma-4-E2B-it-GGUF@${SHA.gemmaGgml.slice(0, 10)} · mmproj-Q8_0`,
+  mmproj: hf('mmproj-gemma-4-E2B-it-Q8_0.gguf', `ggml-org/gemma-4-E2B-it-GGUF@${SHA.gemmaGgml.slice(0, 10)} · mmproj-Q8_0`,
     'ggml-org/gemma-4-E2B-it-GGUF', SHA.gemmaGgml, 'mmproj-gemma-4-E2B-it-Q8_0.gguf',
     { license: 'Gemma', link: 'https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF' })
+}
+
+// VisionPsy-Nano-460M (QVAC-23075). Base and Flash differ ONLY in whether the preprocessor
+// upscales the long side to 2048, hence separate entries rather than one with a flag.
+// modelNames must be models.manifest.json keys or the addon leg aborts (see #3195).
+//
+// The addon leg can run these: the projector arrived in qvac-fabric 10069.1.0 and vcpkg.json
+// pins >= 10069.1.1, and the addon accepts image-no-upscale (LoadConfigHandlers.cpp, #3725).
+// So two-models works here, not only several-sources against a fabric branch.
+const VISIONPSY_BASE = {
+  id: 'visionpsy',
+  name: 'VisionPsy-Nano-460M',
+  repo: 'qvac/VisionPsy-Nano-460M-GGUFs',
+  sha: SHA.visionpsyBase,
+  prefix: 'visionpsy-nano-460m',
+  mmproj: 'mmproj-visionpsy-nano-460m-q8.gguf'
+}
+
+// Flash needs its own preprocessing rule and the published mmproj carries no key saying
+// so, so the flag is what selects it. Two spellings of the same thing because the legs
+// run different engines: `cliArgs` for the native CLI, `addonConfig` for the addon, which
+// is what the phones run. Without both, a Flash leg measures Flash weights under base
+// preprocessing.
+const VISIONPSY_FLASH = {
+  id: 'visionpsy-flash',
+  name: 'VisionPsy-Nano-460M-Flash',
+  repo: 'qvac/VisionPsy-Nano-460M-Flash-GGUFs',
+  sha: SHA.visionpsyFlash,
+  prefix: 'visionpsy-nano-460m-flash',
+  mmproj: 'mmproj-visionpsy-nano-460m-flash-q8.gguf',
+  cliArgs: ['--image-no-upscale', 'on'],
+  addonConfig: { 'image-no-upscale': 'on' }
+}
+
+// One catalog entry per (checkpoint, main-model quant); the mmproj stays Q8 throughout
+// because that is the only projector quant either repo publishes, so all three quants of
+// a checkpoint share one downloaded projector. `quantId` is the catalog-name suffix and
+// `fileQuant` the on-HF filename fragment, which differ where the upstream name carries
+// the imatrix suffix. bf16 and fp32 are deliberately absent: 820 MB and 1.6 GB, and the
+// mobile legs download their blobs mid-test.
+function visionpsy (ckpt, quantId, fileQuant) {
+  const main = `${ckpt.prefix}-${fileQuant}.gguf`
+  const at = `${ckpt.repo}@${ckpt.sha.slice(0, 10)}`
+  return {
+    label: `${ckpt.id}-${quantId}`,
+    // quantOf returns null for a quant its regex does not know (fp32, mxfp4), and this
+    // runs at require time, so falling back to quantId degrades the label instead of
+    // taking down every consumer of config.cjs on a one-token edit.
+    name: `${ckpt.name} · ${(quantOf(main) || quantId).toUpperCase()} + mmproj-Q8`,
+    ctx_size: '4096',
+    cliArgs: ckpt.cliArgs,
+    addonConfig: ckpt.addonConfig,
+    llm: hf(main, at, ckpt.repo, ckpt.sha, main),
+    mmproj: hf(ckpt.mmproj, `${at} · mmproj-Q8`, ckpt.repo, ckpt.sha, ckpt.mmproj)
+  }
+}
+
+const VISIONPSY_Q4 = visionpsy(VISIONPSY_BASE, 'q4', 'q4_0')
+const VISIONPSY_Q8 = visionpsy(VISIONPSY_BASE, 'q8', 'q8_0')
+const VISIONPSY_IQ3M = visionpsy(VISIONPSY_BASE, 'iq3m', 'iq3_m-imat')
+const VISIONPSY_FLASH_Q4 = visionpsy(VISIONPSY_FLASH, 'q4', 'q4_0')
+const VISIONPSY_FLASH_Q8 = visionpsy(VISIONPSY_FLASH, 'q8', 'q8_0')
+const VISIONPSY_FLASH_IQ3M = visionpsy(VISIONPSY_FLASH, 'iq3m', 'iq3_m-imat')
+
+// visionpsy-flash-q4 with the projector forced onto the GPU, which reaches a path no other
+// entry can: the addon auto-defaults the projector backend by GPU class (LlamaModel.cpp),
+// CPU on Mali, so a plain `device: gpu` leg on a Mali phone never runs the vision encoder on
+// Vulkan. Kept separate because that auto-default is deliberate, the Mali projector being
+// slower on GPU than CPU (QVAC-21257), so forcing it everywhere would have routine Pixel runs
+// measure a configuration nobody ships. Check the log line, not the timing: it must read
+// `GPU (mmproj-use-gpu override)`.
+const VISIONPSY_FLASH_Q4_MMPROJ_GPU = {
+  ...VISIONPSY_FLASH_Q4,
+  label: 'visionpsy-flash-q4-mmproj-gpu',
+  name: `${VISIONPSY_FLASH_Q4.name} · projector forced to GPU`,
+  addonConfig: { ...VISIONPSY_FLASH_Q4.addonConfig, 'mmproj-use-gpu': 'on' }
 }
 
 // ════════════════════ THE MODEL FOR SOURCE COMPARISON (several-sources mode) ════════════════════
@@ -104,9 +186,9 @@ const SOURCES_MODEL = {
   label: 'qwen3.5-0.8b-q8',
   name: 'Qwen3.5-0.8B (mmproj Q8)',
   ctx_size: '4096',
-  llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+  llm: hf('Qwen3.5-0.8B-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
     'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
-  mmproj: hf('reg-qwen-mradermacher-mmproj-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
+  mmproj: hf('mmproj-Qwen3.5-0.8B-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
     'mradermacher/Qwen3.5-0.8B-GGUF', SHA.qwenMrader, 'Qwen3.5-0.8B.mmproj-Q8_0.gguf',
     { license: 'Apache-2.0', link: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF' })
 }
@@ -141,7 +223,14 @@ module.exports = {
     'qwen3.5-f16': MODEL_1,
     'qwen3.5-q8': MODEL_2,
     'qwen3.5-0.8b-q8': SOURCES_MODEL,
-    'gemma4-q4': GEMMA4_Q4
+    'gemma4-q4': GEMMA4_Q4,
+    'visionpsy-q4': VISIONPSY_Q4,
+    'visionpsy-q8': VISIONPSY_Q8,
+    'visionpsy-iq3m': VISIONPSY_IQ3M,
+    'visionpsy-flash-q4': VISIONPSY_FLASH_Q4,
+    'visionpsy-flash-q8': VISIONPSY_FLASH_Q8,
+    'visionpsy-flash-iq3m': VISIONPSY_FLASH_IQ3M,
+    'visionpsy-flash-q4-mmproj-gpu': VISIONPSY_FLASH_Q4_MMPROJ_GPU
   },
   // What runs when matrix_models is empty (two-models mode).
   defaultModels: ['qwen3.5-f16', 'qwen3.5-q8'],

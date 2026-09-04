@@ -123,6 +123,13 @@
       "sha256": "56e4c6cfe73b0c82e3e82bc518d7591997e61d81f723fc41a586f4fa69ea2453",
       "bytes": 204987232
     },
+    "mmproj-Qwen3.5-0.8B-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF/resolve/9d48fdbc0d8f133716da87ec1d904e5d2c7175a6/Qwen3.5-0.8B.mmproj-Q8_0.gguf"
+      ],
+      "sha256": "5a6b15da0f483b9e320a5b86b787ad1831953dfaa706e2c5d91de830ea70d784",
+      "bytes": 115923680
+    },
     "mmproj-Qwen3.5-2B-F16.gguf": {
       "urls": [
         "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-F16.gguf"
@@ -216,6 +223,14 @@
       "sha256": "3397f2e15859d268dc91782e92e70c485c7780448d57d622d145374390168f71",
       "bytes": 985653760
     },
+    "mmproj-gemma-4-E2B-it-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/a1dac71d3ab220618f5a7573a52acdc4baf3ae3b/mmproj-gemma-4-E2B-it-Q8_0.gguf"
+      ],
+      "sha256": "8a82e0fd831bb7cb5c8898b86393eb14042986b950a60e1034bf21d061aac8a8",
+      "bytes": 557367776,
+      "warm": false
+    },
     "SmolVLM2-500M-Video-Instruct-Q8_0.gguf": {
       "urls": [
         "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
@@ -272,12 +287,28 @@
       "sha256": "ddc1be0331c403269b5eced1806c1a3f4a952f0d70b44e58da83bc846b5c8c5c",
       "bytes": 49564032
     },
+    "visionpsy-nano-460m-q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q4_0.gguf"
+      ],
+      "sha256": "803b0c846f63231fede7b98686e4ae837dd1b3a315c714482656e44ed8fa9598",
+      "bytes": 255764960,
+      "warm": false
+    },
     "visionpsy-nano-460m-q8_0.gguf": {
       "urls": [
         "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf"
       ],
       "sha256": "fc70a6c6eed7d2f82ed48cbd52cc7118b249eff8b91112ef9cbfca6813a1eefa",
       "bytes": 436676000,
+      "warm": false
+    },
+    "visionpsy-nano-460m-iq3_m-imat.gguf": {
+      "urls": [
+        "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-iq3_m-imat.gguf"
+      ],
+      "sha256": "9bafc829a0ca476da6e64c0ebd042b977d9f9049a5b5eab99fff10f0c47b028f",
+      "bytes": 251541312,
       "warm": false
     },
     "mmproj-visionpsy-nano-460m-q8.gguf": {
@@ -288,12 +319,28 @@
       "bytes": 108782144,
       "warm": false
     },
+    "visionpsy-nano-460m-flash-q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q4_0.gguf"
+      ],
+      "sha256": "21cf98677aead737689a30a6c3d61b989628d4fda36d192ff7c88fcff87eab20",
+      "bytes": 255764960,
+      "warm": false
+    },
     "visionpsy-nano-460m-flash-q8_0.gguf": {
       "urls": [
         "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q8_0.gguf"
       ],
       "sha256": "66d84c0f552c96ec6734d8cef7f0a3192f4f2df2cd781a193339df194f501a12",
       "bytes": 436676000,
+      "warm": false
+    },
+    "visionpsy-nano-460m-flash-iq3_m-imat.gguf": {
+      "urls": [
+        "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-iq3_m-imat.gguf"
+      ],
+      "sha256": "126d3db15c14d125beac9dffb6eb7fe61c58bc1aa7dd4670396e676d3db2b3f4",
+      "bytes": 251541312,
       "warm": false
     },
     "mmproj-visionpsy-nano-460m-flash-q8.gguf": {

@@ -52,6 +52,11 @@ on:
         required: false
         type: string
         default: ""
+      allow_unverified_models:
+        description: "  allow a CLI leg to run a blob with no sha256 pin (a json: spec whose modelName is not a manifest key and that carries no sha256). Off by default: an unverified GGUF's own chat template reaches --chat-template."
+        required: false
+        type: boolean
+        default: false
       matrix_mobile:
         description: "  mobile (AWS Device Farm) legs, comma-sep <device>[any][-<backend>]: s26,s25,pixel9,iphone16,iphone17,iphone17pro — plain token = that EXACT model; 'any' suffix (e.g. pixel9any) = any subfamily variant, availability-picked. e.g. 's26-cpu,pixel9any,iphone17pro' (bare device = cpu+gpu in one session; empty = no mobile)"
         required: false
@@ -115,8 +120,27 @@ jobs:
         run: |
           repo="$REPO"
           ref="${INPUT_REF:-$REF_NAME}"
-          echo "repository=$repo" >> "$GITHUB_OUTPUT"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          # `ref` is a workflow input, so it is untrusted. A git ref cannot contain
+          # whitespace anyway, so reject it outright rather than trying to encode it: that
+          # closes the newline-injection route into GITHUB_OUTPUT at the source, instead of
+          # relying on a delimiter the value might also contain.
+          case "$ref" in
+            *[[:space:]]*|"")
+              echo "::error::ref must be a single git ref with no whitespace"
+              exit 1
+              ;;
+          esac
+          # Belt and braces: a per-run random delimiter, so even a value that somehow
+          # carried a newline could not terminate the block and append its own output.
+          delim="EOF_$(openssl rand -hex 16)"
+          {
+            echo "repository<<$delim"
+            echo "$repo"
+            echo "$delim"
+            echo "ref<<$delim"
+            echo "$ref"
+            echo "$delim"
+          } >> "$GITHUB_OUTPUT"
       # Resolve the mobile timeout (minutes) so matrix-mobile can forward it to the
       # reusable workflow's mocha_timeout_ms / per_test_timeout_minutes inputs.
       # Precedence: workflow input > config.cjs `mobileTimeoutMin` > '' (pipeline default).
@@ -579,8 +603,14 @@ jobs:
           # = the pinned npm pack — symlinked into ./prebuilds before its run (a fresh `bare`
           # process per source picks up the swap). Run the plain published addon (no swap)
           # first so the original prebuilds is intact for it.
+          # No addon-type token in matrix_sources means the dispatch asked for CLI
+          # sources only, so run no addon leg. Defaulting to the published addon here
+          # forced it into every CLI-only comparison, and for a model the published
+          # prebuild cannot load (new projector type on a fabric branch) that failure
+          # exits this step and the CLI step below never runs.
           if [ "$QVAC_VLM_MODE" = "several-sources" ]; then
-            SRCS=$(node -e "const s=require('./benchmarks/vlm-benchmark/sources.cjs');const a=s.parseSources(process.env.QVAC_VLM_SOURCES||'addon').filter(x=>x.type==='addon').map(x=>x.id);process.stdout.write((a.length?a:['addon']).join(' '))")
+            SRCS=$(node -e "const s=require('./benchmarks/vlm-benchmark/sources.cjs');const a=s.parseSources(process.env.QVAC_VLM_SOURCES||'addon').filter(x=>x.type==='addon').map(x=>x.id);process.stdout.write(a.join(' '))")
+            [ -z "$SRCS" ] && echo "no addon-type source requested, skipping the addon leg (CLI sources only)"
           else
             SRCS=addon
           fi
@@ -652,24 +682,29 @@ jobs:
           SAMPLES: ${{ inputs.matrix_samples }}
           PRESET: ${{ inputs.matrix_preset }}
           MATRIX_SOURCES: ${{ inputs.matrix_sources }}
+          ALLOW_UNVERIFIED: ${{ inputs.allow_unverified_models }}
+          QVAC_VLM_MODELS: ${{ inputs.matrix_models }} # '' → config.sourcesModel (same resolution as harness.cjs)
         run: |
           # Match the addon leg's run size: samples + repeats come from the active
           # preset in config.cjs (matrix_samples still overrides samples). CLI build +
           # runner are vendored into this folder (no vlm-performance dependency).
-          PRESET_SAMPLES=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).samplesPerTask||3)")
-          REPEATS=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).repeats||1)")
+          # $PRESET is read through process.env inside each -e script, never spliced into the
+          # source: it comes from a workflow input, and a value carrying a quote would
+          # otherwise close the string literal and run as JavaScript on the runner.
+          PRESET_SAMPLES=$(node -e "console.log((require('./config.cjs').presets[process.env.PRESET]||{}).samplesPerTask||3)")
+          REPEATS=$(node -e "console.log((require('./config.cjs').presets[process.env.PRESET]||{}).repeats||1)")
           SAMPLES="${SAMPLES:-$PRESET_SAMPLES}"
           # Per-task sample caps from the preset (e.g. full caps ocr-page to 1) so the
           # CLI legs run the SAME items as the addon leg.
-          TASK_SAMPLES=$(node -e "console.log(JSON.stringify((require('./config.cjs').presets['$PRESET']||{}).taskSamples||{}))")
+          TASK_SAMPLES=$(node -e "console.log(JSON.stringify((require('./config.cjs').presets[process.env.PRESET]||{}).taskSamples||{}))")
           # Distinct-task cap from the preset (e.g. smoke=1) so the CLI legs cover the
           # SAME tasks as the addon leg — otherwise smoke mismatches (addon 1 task, CLI all).
-          MAX_TASKS=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).maxTasks||0)")
+          MAX_TASKS=$(node -e "console.log((require('./config.cjs').presets[process.env.PRESET]||{}).maxTasks||0)")
           # Task list + id allowlist from the preset so the CLI legs run the SAME items as the
           # addon: preset.tasks (e.g. cognitive's 5 VQA) restricts tasks; preset.ids
           # (ocr1page/ocr5pages) pins exact items and wins over --tasks. Empty → all tasks.
-          PRESET_TASKS=$(node -e "const t=(require('./config.cjs').presets['$PRESET']||{}).tasks; console.log(Array.isArray(t)?t.join(','):'')")
-          PRESET_IDS=$(node -e "const i=(require('./config.cjs').presets['$PRESET']||{}).ids; console.log(Array.isArray(i)?i.join(','):'')")
+          PRESET_TASKS=$(node -e "const t=(require('./config.cjs').presets[process.env.PRESET]||{}).tasks; console.log(Array.isArray(t)?t.join(','):'')")
+          PRESET_IDS=$(node -e "const i=(require('./config.cjs').presets[process.env.PRESET]||{}).ids; console.log(Array.isArray(i)?i.join(','):'')")
           # Build only the CLI engines actually requested in matrix_sources (don't build or
           # report a source the user didn't ask for).
           CLI_SRCS=""
@@ -678,19 +713,144 @@ jobs:
           node build-cli-sources.js --sources="$CLI_SRCS" \
             --fabric-ref=${{ needs.context.outputs.fabric_ref }} --upstream-ref=${{ needs.context.outputs.upstream_ref }} \
             --backend=${{ matrix.backend }}
-          # Model files were downloaded by the addon leg (names from config.cjs).
-          LLM="$MODEL_DIR/reg-qwen-unsloth-Q8_0.gguf"
-          MMPROJ="$MODEL_DIR/reg-qwen-mradermacher-mmproj-Q8_0.gguf"
+          # Blob names, URLs and provenance for the model under comparison, resolved the
+          # same way harness.cjs does (matrix_models first token, else config.sourcesModel).
+          # Hardcoding the qwen registry filenames here made every several-sources run
+          # measure qwen even when matrix_models asked for something else.
+          # Under RUNNER_TEMP, not the workspace: a json: spec's URL can be a presigned link,
+          # which is a bearer credential, and the workspace on a self-hosted runner outlives
+          # this job. Removed as soon as the values are in the environment.
+          ENV_FILE="$RUNNER_TEMP/cli-model.env"
+          node resolve-cli-model.cjs > "$ENV_FILE"
+          # Everything except the URLs, which a json: spec can point at a presigned S3 link
+          # whose signature is in the query string. Names, origins and sources still print,
+          # so the log still says what ran and where it came from.
+          grep -v '_URL=' "$ENV_FILE"
+          . "$ENV_FILE"
+          rm -f "$ENV_FILE"
+          LLM="$MODEL_DIR/$LLM_NAME"
+          MMPROJ="$MODEL_DIR/$MMPROJ_NAME"
+          # The addon leg normally downloads these. A CLI-only comparison runs no addon
+          # leg, so fetch what is missing here.
+          mkdir -p "$MODEL_DIR"
+          # A registry source has no URL, and the addon leg puts those blobs in
+          # benchmarks/model/ rather than MODEL_DIR (harness.cjs ensureBlob's custom-fetch
+          # path), so look there before calling a blob missing. Hard-linked so a multi-GB
+          # blob is not copied when both directories sit on the same filesystem.
+          ADDON_MODEL_DIR="$(cd .. && pwd)/model"
+          adopt_addon_blob () {
+            [ -s "$1" ] && return 0
+            [ -s "$ADDON_MODEL_DIR/$2" ] || return 0
+            echo ">> reusing $2 fetched by the addon leg ($ADDON_MODEL_DIR)"
+            ln "$ADDON_MODEL_DIR/$2" "$1" 2>/dev/null || cp "$ADDON_MODEL_DIR/$2" "$1"
+          }
+          adopt_addon_blob "$LLM" "$LLM_NAME"
+          adopt_addon_blob "$MMPROJ" "$MMPROJ_NAME"
+          fetch_blob () {
+            [ -s "$1" ] && return 0
+            if [ -z "$2" ]; then
+              echo "::error::$1 is missing and its source has no download URL. Registry sources are addon-only: they need an addon leg in this same job, which leaves the blob in $ADDON_MODEL_DIR. A CLI-only dispatch cannot fetch one."
+              return 1
+            fi
+            echo ">> fetching $1"
+            # Attach the HF token only to a huggingface.co URL: matrix_models' json: escape
+            # hatch lets a caller point downloadUrl anywhere, and the secret must not follow.
+            #
+            # The host check alone is not enough, because curl sends a -H header on every hop
+            # of a redirect chain, and --location-trusted scopes only -u, not -H. HF resolve
+            # URLs always 302 to a CDN host, so -L plus the token would hand it over. Hence
+            # the two calls below: resolve the hop with the token and no -L, then fetch the
+            # presigned target without it.
+            case "$2" in
+              https://huggingface.co/*)
+                if [ -n "$HF_TOKEN" ]; then
+                  hf_redirect=$(curl -fsS -I --retry 3 -H "Authorization: Bearer $HF_TOKEN" \
+                    -o /dev/null -w '%{redirect_url}' "$2")
+                  if [ -n "$hf_redirect" ]; then
+                    curl -fL --retry 3 -o "$1" "$hf_redirect"
+                  else
+                    # No redirect on the probe, so fetch inline with the token. --max-redirs 0
+                    # keeps the token off any hop the probe did not predict: if the GET
+                    # redirects anyway, curl fails here with a clear message instead of saving
+                    # the redirect body and failing later at the sha check.
+                    if ! curl -f --retry 3 --max-redirs 0 -H "Authorization: Bearer $HF_TOKEN" -o "$1" "$2"; then
+                      echo "::error::$1 redirected on the tokenized GET after the HEAD probe reported none, refusing to follow it with the token attached"
+                      return 1
+                    fi
+                  fi
+                else
+                  curl -fL --retry 3 -o "$1" "$2"
+                fi
+                ;;
+              *)
+                curl -fL --retry 3 -o "$1" "$2"
+                ;;
+            esac
+          }
+          # Check the bytes against the pin. The addon leg gets this from ensureModel(), but a
+          # CLI-only dispatch fetches the URL itself, so without this it benchmarks whatever
+          # the host served, and a GGUF's own chat template goes on to reach --chat-template.
+          sha256_check () {
+            if command -v sha256sum >/dev/null 2>&1; then
+              echo "$2  $1" | sha256sum -c - >/dev/null 2>&1
+            else
+              echo "$2  $1" | shasum -a 256 -c - >/dev/null 2>&1
+            fi
+          }
+          # Fetch, verify, and on a mismatch delete and refetch once before giving up. A
+          # truncated blob left in MODEL_DIR by an earlier cancelled run would otherwise fail
+          # this leg on every rerun, since fetch_blob skips a file that is merely non-empty,
+          # and on a self-hosted runner nothing clears it.
+          fetch_verified_blob () {
+            path=$1; name=$2; url=$3; want=$4
+            fetch_blob "$path" "$url" || return 1
+            if [ -z "$want" ]; then
+              if [ "$ALLOW_UNVERIFIED" = "true" ]; then
+                echo "::warning::$name has no sha256 pin and allow_unverified_models is set, using it unverified"
+                return 0
+              fi
+              echo "::error::$name has no sha256 pin, so its bytes cannot be verified. Give the blob a modelName that models.manifest.json pins, or an explicit sha256 in the json: spec. Set allow_unverified_models to override."
+              return 1
+            fi
+            if sha256_check "$path" "$want"; then
+              echo ">> verified $name against its sha256 pin"
+              return 0
+            fi
+            echo "::warning::$name does not match its pinned sha256, discarding it and fetching once more"
+            rm -f "$path"
+            fetch_blob "$path" "$url" || return 1
+            if sha256_check "$path" "$want"; then
+              echo ">> verified $name against its sha256 pin after refetch"
+              return 0
+            fi
+            echo "::error::$name does not match its pinned sha256 ($want) after a refetch"
+            return 1
+          }
+          # Both at once. These are multi-GB and bandwidth-bound, and a stalled download is
+          # the usual way this leg dies, so do not serialise the two exposure windows.
+          fetch_verified_blob "$LLM" "$LLM_NAME" "$LLM_URL" "$LLM_SHA256" &
+          llm_pid=$!
+          fetch_verified_blob "$MMPROJ" "$MMPROJ_NAME" "$MMPROJ_URL" "$MMPROJ_SHA256" &
+          mmproj_pid=$!
+          wait "$llm_pid" || { echo "::error::could not fetch or verify $LLM_NAME"; exit 1; }
+          wait "$mmproj_pid" || { echo "::error::could not fetch or verify $MMPROJ_NAME"; exit 1; }
           run_src () {
             echo ">> $1 over fixture ($2)"
+            # Model-specific flags (e.g. VisionPsy Flash's --image-no-upscale) are fabric-fork
+            # additions; upstream-cli aborts on an unknown argument, so only fabric gets them.
+            EXTRA=""
+            [ "$2" = "fabric" ] && EXTRA="$CLI_EXTRA_ARGS"
             node cli-fixture-runner.cjs \
               --binary "$3" --source "$1" --llm "$LLM" --mmproj "$MMPROJ" \
+              --extra-args "$EXTRA" \
+              --ctx-size "$CTX_SIZE" \
               --backend "${{ matrix.backend }}" --samples "$SAMPLES" --repeats "$REPEATS" \
               --tasks "${PRESET_TASKS:-textvqa,vizwiz,gqa,docvqa,ai2d,ocr-small,ocr-page}" \
               --ids "$PRESET_IDS" \
               --task-samples "$TASK_SAMPLES" --max-tasks "$MAX_TASKS" \
-              --main-origin "Qwen3.5-0.8B-Q8_0 (Registry)" \
-              --mmproj-origin "Qwen3.5-0.8B mmproj-Q8_0 (Registry)" >> "$LOG" 2>&1 || echo "::warning::$1 run had errors"
+              --main-origin "$MAIN_ORIGIN" --main-source "$MAIN_SOURCE" \
+              --mmproj-origin "$MMPROJ_ORIGIN" --mmproj-source "$MMPROJ_SOURCE" \
+              --model-label "$MODEL_LABEL" >> "$LOG" 2>&1 || echo "::warning::$1 run had errors"
           }
           case ",$CLI_SRCS," in *,fabric,*) run_src fabric-cli fabric "$(node -e "console.log(require('./cli-sources-resolved.json').fabric.binaryPath)")" ;; esac
           case ",$CLI_SRCS," in *,upstream,*) run_src upstream-cli upstream "$(node -e "console.log(require('./cli-sources-resolved.json').upstream.binaryPath)")" ;; esac
@@ -859,15 +1019,23 @@ jobs:
       # this workflow. See CONTRACT.md for the marker schema it consumes.
       - name: Aggregate matrix logs
         shell: bash
+        # Through env, not textual substitution: a quote in either input would otherwise
+        # close the shell string it lands in and run as a command on the runner.
+        env:
+          MATRIX_MODE: ${{ inputs.matrix_mode }}
+          MATRIX_PRESET: ${{ inputs.matrix_preset }}
+          ENGINE: ${{ needs.context.outputs.engine }}
+          VERSIONS_B64: ${{ needs.context.outputs.versions_b64 }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           node packages/llm-llamacpp/benchmarks/vlm-benchmark/combine.cjs \
             --dir matrix-logs \
             --out consolidated/vlm-matrix-consolidated.md \
-            --title "VLM Matrix — ${{ inputs.matrix_mode }} / ${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
-            --mode "${{ inputs.matrix_mode }}" --engine "${{ needs.context.outputs.engine }}" \
-            --preset "${{ inputs.matrix_preset }}" \
-            --versions-b64 "${{ needs.context.outputs.versions_b64 }}" \
-            --run-number "${{ github.run_number }}"
+            --title "VLM Matrix — $MATRIX_MODE / $MATRIX_PRESET (run #$RUN_NUMBER)" \
+            --mode "$MATRIX_MODE" --engine "$ENGINE" \
+            --preset "$MATRIX_PRESET" \
+            --versions-b64 "$VERSIONS_B64" \
+            --run-number "$RUN_NUMBER"
 
       - name: Post step summary
         if: always()

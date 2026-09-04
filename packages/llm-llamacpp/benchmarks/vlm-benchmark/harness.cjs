@@ -18,11 +18,11 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const { ensureModel } = require('../../test/integration/utils')
+const { ensureModel, resolveModelEntry, loadManifest } = require('../../test/integration/utils')
 const LlmLlamacpp = require('../../index.js')
 const fixture = require('./fixture.data.cjs')
 const config = require('./config.cjs')
-const { parseModels } = require('./models.cjs')
+const { parseModels, preprocLabel } = require('./models.cjs')
 const { stabilityGuard } = require('./methodology.cjs')
 
 // Resolve a fixture image. Images live in a fixture object store (not git): CI syncs
@@ -199,11 +199,32 @@ async function fetchFromRegistry (source, destPath) {
   }
 }
 
-// Download a blob to test/model/, honouring its source descriptor. Mirrors
-// ensureModel()'s cache-by-name behaviour for the custom-fetch (registry) path.
+// Honour a blob's source descriptor. Manifest-pinned blobs go to ensureModel()'s own
+// directory (test/model/); the custom-fetch (registry) path lands in benchmarks/model/
+// and mirrors ensureModel()'s cache-by-name behaviour there.
 async function ensureBlob (blob) {
   const plan = resolveBlob(blob)
-  if (plan.downloadUrl) return ensureModel({ modelName: plan.modelName, downloadUrl: plan.downloadUrl })
+  if (plan.downloadUrl) {
+    // ensureModel() resolves modelName against models.manifest.json and verifies the
+    // sha256 pinned there; it never reads downloadUrl. So the addon leg can only run
+    // blobs the manifest pins, and a generated adhoc-* name never is one. Say that when
+    // the name is genuinely absent, rather than reporting every manifest problem as a
+    // missing entry: resolveModelEntry also throws for an entry with no URL, no sha256
+    // or no byte-size pin, and those want the reader in models.manifest.json, not here.
+    try {
+      resolveModelEntry(plan.modelName)
+    } catch (err) {
+      const manifest = loadManifest()
+      if (manifest.models[plan.modelName] != null) throw err
+      throw new Error(
+        `${plan.modelName}: the addon leg runs only blobs pinned in models.manifest.json, so a bare ` +
+        '<llm-url>|<mmproj-url> pair cannot run on it. Use a catalog name, or a json: spec whose ' +
+        'modelName matches a manifest key. CLI-only dispatches fetch the URL directly and are unaffected.',
+        { cause: err }
+      )
+    }
+    return ensureModel({ modelName: plan.modelName })
+  }
   const modelDir = path.resolve(__dirname, '../model')
   const modelPath = path.join(modelDir, plan.modelName)
   if (fs.existsSync(modelPath) && fs.statSync(modelPath).size > 0) return [plan.modelName, modelDir]
@@ -213,10 +234,21 @@ async function ensureBlob (blob) {
   return [plan.modelName, modelDir]
 }
 
-// Human-readable origin URL for the [VLMMETA] provenance marker.
+// Human-readable origin URL for the [VLMMETA] provenance marker. On this leg ensureBlob()
+// hands the name to ensureModel(), which fetches and sha256-verifies the manifest entry and
+// never looks at downloadUrl, so report the manifest's URL. Reporting the caller's would name
+// bytes that were never fetched: a json: spec can pair modelName Qwen3.5-0.8B-Q8_0.gguf with
+// any URL it likes, and the manifest bytes are what actually run.
 function displayUrl (blob) {
   const plan = resolveBlob(blob)
-  if (plan.downloadUrl) return plan.downloadUrl
+  if (plan.downloadUrl) {
+    try {
+      const entry = resolveModelEntry(plan.modelName)
+      return entry.urls[0]
+    } catch (_) {
+      return plan.downloadUrl
+    }
+  }
   const s = blob.source || {}
   return `registry:${s.source || ''}/${s.path || ''}`
 }
@@ -334,7 +366,10 @@ function runModel (spec) {
         main_source: sourceType(spec.llm),
         mmproj_origin: spec.mmproj.origin,
         mmproj_url: displayUrl(spec.mmproj),
-        mmproj_source: sourceType(spec.mmproj)
+        mmproj_source: sourceType(spec.mmproj),
+        // Same canonical form the CLI legs emit, so the report can tell a leg that applied
+        // the model's preprocessing from one that ran the weights without it.
+        preproc: preprocLabel({ addonConfig: spec.addonConfig })
       })) + '[/VLMMETA]')
       // Size the output cap to the heaviest task in this run (ocr-page needs ~768).
       const items = selectedItems()
@@ -350,6 +385,11 @@ function runModel (spec) {
           n_predict: String(nPredict),
           verbosity: '2', // surfaces `image slice encoded in N ms` on native stderr
           'reasoning-budget': '0', // disable Qwen3.5 thinking -> clean direct answers
+          // Per-model load config, the addon-side twin of the catalog's `cliArgs`
+          // (e.g. VisionPsy Flash needs image-no-upscale, which nothing in its mmproj
+          // declares). Omitted entirely for models that define none, so the addon keeps
+          // its own defaults.
+          ...(spec.addonConfig || {}),
           ...(BACKENDS_DIR ? { backendsDir: BACKENDS_DIR } : {}) // candidate/baseline build swap (scheduler)
         },
         logger: console,
@@ -452,13 +492,13 @@ function runModel (spec) {
 }
 
 // One test file -> one mobile test function -> one Device Farm spec -> one phone.
-// two-models runs the QVAC_VLM_MODELS launch param (catalog names, ad-hoc
-// <llm-url>|<mmproj-url> pairs, or json: specs — see models.cjs / CONTRACT.md §3),
-// falling back to the committed config.models pair; several-sources loads the one
-// sourcesModel (the other engines run via cli-fixture-runner.cjs, same log).
+// two-models takes the pair from QVAC_VLM_MODELS, several-sources one model across the
+// engines from its first token; empty falls back to the committed config. See CONTRACT.md §3.
+// The gotcha: an ad-hoc <llm-url>|<mmproj-url> pair parses here but reaches the CLI legs
+// only, because the addon leg runs manifest-pinned blobs exclusively.
 function runAll () {
   const models = MODE === 'several-sources'
-    ? [config.sourcesModel]
+    ? parseModels(env('QVAC_VLM_MODELS'), config.catalog, [config.sourcesModel]).slice(0, 1)
     : parseModels(env('QVAC_VLM_MODELS'), config.catalog, config.models)
   // When the desktop scheduler drives one (source × model × block) per process it pins
   // the model by index (QVAC_VLM_MODEL_INDEX); otherwise run the whole list.

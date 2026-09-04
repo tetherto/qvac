@@ -16,6 +16,8 @@ const fs = require('fs')
 const path = require('path')
 const { runOnceCli } = require('./cli-case-runner')
 const { parseStdoutMetrics } = require('./stdout-parser')
+const { parseCliArgs } = require('./cli-args.cjs')
+const { preprocLabel } = require('./models.cjs')
 const fixture = require('./fixture.data.cjs')
 
 function arg (name, def) { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : def }
@@ -23,7 +25,17 @@ const BINARY = arg('binary')
 const SOURCE = arg('source', 'cli')
 const LLM = arg('llm')
 const MMPROJ = arg('mmproj')
+// Space-separated extra flags for the CLI, from the catalog entry's `cliArgs`. Empty for
+// every model that does not need one.
+const EXTRA_ARGS = parseCliArgs(arg('extra-args', ''))
 const BACKEND = arg('backend', 'cpu')
+// Context size for the run, from the spec the addon leg also uses (catalog ctx_size,
+// a json: spec's, or @ctx=N on a URL pair). Both engines must see the same one.
+// 0 means "let the engine pick the model default", so only a non-number falls back. Note
+// that models.cjs normalizeSpec already rewrites a falsy ctx_size to 4096, so 0 only ever
+// arrives here from @ctx=0 on a URL pair.
+const CTX_SIZE_ARG = parseInt(arg('ctx-size', '4096'), 10)
+const CTX_SIZE = Number.isNaN(CTX_SIZE_ARG) ? 4096 : CTX_SIZE_ARG
 const SAMPLES = parseInt(arg('samples', '3'), 10)
 const REPEATS = parseInt(arg('repeats', '3'), 10)
 const TASKS = (arg('tasks', '') || '').split(',').map(s => s.trim()).filter(Boolean)
@@ -46,6 +58,11 @@ const MAX_TASKS = parseInt(arg('max-tasks', '0'), 10) || 0
 const IDS = (arg('ids', '') || '').split(',').map(s => s.trim()).filter(Boolean)
 const MAIN_ORIGIN = arg('main-origin', 'Qwen3.5-0.8B-Q8_0')
 const MMPROJ_ORIGIN = arg('mmproj-origin', 'Qwen3.5-0.8B mmproj-Q8_0')
+// Model identity for the markers. Was hardcoded to qwen, which mislabelled every
+// several-sources run of any other model. Defaults keep old logs readable.
+const MODEL_LABEL = arg('model-label', 'qwen')
+const MAIN_SOURCE = arg('main-source', 'Registry')
+const MMPROJ_SOURCE = arg('mmproj-source', 'Registry')
 
 if (!BINARY || !fs.existsSync(BINARY)) { console.error(`[cli-fixture] binary not found: ${BINARY}`); process.exit(2) }
 if (!LLM || !MMPROJ) { console.error('[cli-fixture] --llm and --mmproj are required'); process.exit(2) }
@@ -70,12 +87,14 @@ function main () {
   console.error('[VLMMETA]' + JSON.stringify({
     cell: SOURCE,
     source: SOURCE,
-    model: 'qwen',
-    mmproj: 'q8',
+    model: MODEL_LABEL,
     main_origin: MAIN_ORIGIN,
-    main_source: 'Registry',
+    main_source: MAIN_SOURCE,
     mmproj_origin: MMPROJ_ORIGIN,
-    mmproj_source: 'Registry'
+    mmproj_source: MMPROJ_SOURCE,
+    // What this leg actually applied. Empty on upstream-cli by design, and the report marks
+    // that rather than leaving two legs looking like the same configuration.
+    preproc: preprocLabel({ cliArgs: EXTRA_ARGS })
   }) + '[/VLMMETA]')
 
   const items = selectedItems()
@@ -85,9 +104,10 @@ function main () {
       cliBinaryPath: BINARY,
       llmPath: LLM,
       mmprojPath: MMPROJ,
+      extraArgs: EXTRA_ARGS,
       imagePath: mediaPath(item.image),
       prompt: item.prompt,
-      ctxSize: 4096,
+      ctxSize: CTX_SIZE,
       nPredict: TASK_NPREDICT[item.task] || DEFAULT_NPREDICT,
       backend: BACKEND,
       temperature: 0,
@@ -96,7 +116,7 @@ function main () {
       perRunTimeoutMs: 5 * 60 * 1000
     }
     for (let rep = 0; rep < REPEATS; rep++) {
-      console.error('[VLMSEG]' + JSON.stringify({ cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND, id: item.id, rep }) + '[/VLMSEG]')
+      console.error('[VLMSEG]' + JSON.stringify({ cell: SOURCE, source: SOURCE, model: MODEL_LABEL, device: BACKEND, id: item.id, rep }) + '[/VLMSEG]')
       try {
         const r = runOnceCli(spec)
         if (r.stderr) process.stderr.write(r.stderr + '\n') // surfaces `image ... encoded in N ms` after the [VLMSEG]
@@ -107,8 +127,7 @@ function main () {
         console.log('[VLMROW]' + JSON.stringify({
           cell: SOURCE,
           source: SOURCE,
-          model: 'qwen',
-          mmproj: 'q8',
+          model: MODEL_LABEL,
           device: BACKEND,
           rep,
           task: item.task,
@@ -123,15 +142,22 @@ function main () {
           decode_tps: m.decodeTps != null ? m.decodeTps : null,
           ttft_ms: ttft,
           gen_tokens: m.decodeTokens != null ? m.decodeTokens : null,
-          prompt_tokens: m.promptTokens != null ? m.promptTokens : null
+          prompt_tokens: m.promptTokens != null ? m.promptTokens : null,
+          // runOnceCli reads this from the `/usr/bin/time -v` wrapper, so it is Linux-only
+          // and stays null on macOS and Windows. It was being dropped here even on Linux,
+          // so the report's peak-RSS row was empty for every CLI leg.
+          rss_mb: r.peakRssMb != null ? r.peakRssMb : null,
+          // Per-row encode time and slice count, the same fields the addon harness
+          // emits, so the report has them even when the log-scraping path misses.
+          vision_enc_ms: m.visionEncodeMs != null ? m.visionEncodeMs : null,
+          vision_enc_tiles: m.visionEncodeSliceCount != null ? m.visionEncodeSliceCount : null
         }) + '[/VLMROW]')
         ok++
       } catch (e) {
         console.log('[VLMROW]' + JSON.stringify({
           cell: SOURCE,
           source: SOURCE,
-          model: 'qwen',
-          mmproj: 'q8',
+          model: MODEL_LABEL,
           device: BACKEND,
           rep,
           task: item.task,
