@@ -11,20 +11,19 @@
 // streams the engine's output (progress ticks + one interleaved-Int16 PCM
 // chunk) and resolves with the run stats.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_GPU_FALLBACK_REASONS = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
+exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.resolveBackendsDir = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_GPU_FALLBACK_REASONS = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
 exports.audiogenBackendName = audiogenBackendName;
 exports.audiogenGpuFallbackReason = audiogenGpuFallbackReason;
 exports.detectEngineType = detectEngineType;
 const infer_base_1 = require("@qvac/infer-base");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
 const QvacLogger = require("@qvac/logging");
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path is a CommonJS module.
-const path = require("bare-path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-os is a CommonJS module.
 const os = require("bare-os");
 const audiogen_1 = require("./audiogen");
 const models_1 = require("./models");
 const audio_format_1 = require("./lib/audio-format");
+const backends_1 = require("./lib/backends");
 const error_1 = require("./error");
 exports.ENGINE_ACESTEP = 'acestep';
 exports.ENGINE_MINIMAX = 'minimax';
@@ -498,7 +497,7 @@ class AudioGen {
         const files = options.files ?? {};
         const config = options.config ?? {};
         this._engineType = detectEngineType(files, options.engine);
-        const backendsDir = config.backendsDir ?? path.join(__dirname, 'prebuilds');
+        const backendsDir = config.backendsDir ?? (0, backends_1.resolveBackendsDir)();
         const threads = requireNonNegativeInt32(config.threads ?? 0, 'threads');
         this._ditVariant = files.ditVariant;
         if (this._engineType === exports.ENGINE_MINIMAX) {
@@ -979,6 +978,8 @@ var audio_format_2 = require("./lib/audio-format");
 Object.defineProperty(exports, "encodePcm", { enumerable: true, get: function () { return audio_format_2.encodePcm; } });
 Object.defineProperty(exports, "pcmToWav", { enumerable: true, get: function () { return audio_format_2.pcmToWav; } });
 Object.defineProperty(exports, "OUTPUT_FORMATS", { enumerable: true, get: function () { return audio_format_2.SUPPORTED_FORMATS; } });
+var backends_2 = require("./lib/backends");
+Object.defineProperty(exports, "resolveBackendsDir", { enumerable: true, get: function () { return backends_2.resolveBackendsDir; } });
 var error_2 = require("./error");
 Object.defineProperty(exports, "ERR_CODE_RANGE", { enumerable: true, get: function () { return error_2.ERR_CODE_RANGE; } });
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_2.ERR_CODES; } });

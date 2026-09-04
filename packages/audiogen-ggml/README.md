@@ -40,6 +40,31 @@ Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
 [Models](#models)); point the addon at the folder that holds them.
 MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
 
+### Platform packages
+
+`@qvac/audiogen-ggml` is a meta package that ships the JavaScript wrapper
+only. The native prebuild for each host lives in a version-locked platform
+package selected at install time through `os`/`cpu` filtered
+`optionalDependencies`:
+
+| Host | Package |
+| --- | --- |
+| linux-x64 (glibc) | `@qvac/audiogen-ggml-linux-x64` |
+| linux-arm64 (glibc) | `@qvac/audiogen-ggml-linux-arm64` |
+| darwin-arm64 | `@qvac/audiogen-ggml-darwin-arm64` |
+| darwin-x64 | `@qvac/audiogen-ggml-darwin-x64` |
+| win32-x64 | `@qvac/audiogen-ggml-win32-x64` |
+| android-arm64 | `@qvac/audiogen-ggml-android-arm64` |
+| ios (device + simulators) | `@qvac/audiogen-ggml-ios` |
+
+Do not depend on platform packages directly. Supported installers are npm 7+,
+pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip the
+platform package and fail at require time with an error naming the missing
+package; a locally built `prebuilds/` directory in the package root always
+takes precedence. Use `require('@qvac/audiogen-ggml').resolveBackendsDir()`
+to locate the directory holding the host's prebuilt binaries and dynamically
+loaded ggml backends.
+
 The published linux-x64 prebuild ships Vulkan. CUDA is opt-in at build time
 via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host).
 When CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend
@@ -456,7 +481,7 @@ runnable end-to-end script (`npm run example`).
 | `cfgScale` | Default MiniMax flow guidance scale; `0` uses the model default. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |
-| `backendsDir` | Advanced; override the prebuilds root scanned for dlopen'd ggml backend modules. Defaults to `<addon>/prebuilds` (correct for the shipped package). Needed on arm64, where the CPU backend is a set of per-microarch module `.so`s. |
+| `backendsDir` | Advanced; override the prebuilds root scanned for dlopen'd ggml backend modules. Defaults to `resolveBackendsDir()`: the package's own `prebuilds/` when present, otherwise the installed platform package. Needed on arm64, where the CPU backend is a set of per-microarch module `.so`s. |
 
 `logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
 wrapped by a level-gated `QvacLogger`.

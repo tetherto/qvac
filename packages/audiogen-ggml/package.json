@@ -6,6 +6,30 @@
   "engines": {
     "bare": ">=1.19.0"
   },
+  "imports": {
+    "#host-addon": {
+      "linux": {
+        "x64": ["@qvac/audiogen-ggml-linux-x64", "./addon-unavailable.js"],
+        "arm64": ["@qvac/audiogen-ggml-linux-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "darwin": {
+        "arm64": ["@qvac/audiogen-ggml-darwin-arm64", "./addon-unavailable.js"],
+        "x64": ["@qvac/audiogen-ggml-darwin-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "win32": {
+        "x64": ["@qvac/audiogen-ggml-win32-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "android": {
+        "arm64": ["@qvac/audiogen-ggml-android-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "ios": ["@qvac/audiogen-ggml-ios", "./addon-unavailable.js"],
+      "default": "./addon-unavailable.js"
+    }
+  },
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
@@ -29,11 +53,11 @@
     "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" && lunte \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\"",
+    "lint:js": "prettier --check \"addon-unavailable.js\" \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" && lunte \"addon-unavailable.js\" \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
-    "format": "prettier --write \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\"",
+    "format": "prettier --write \"addon-unavailable.js\" \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\"",
     "download-models:registry": "node scripts/download-audiogen-ggml-models.js --output ./models",
     "download-models:registry:all": "node scripts/download-audiogen-ggml-models.js --variant all --output ./models"
   },
@@ -48,6 +72,7 @@
     "qvac-audiogen-download-models": "scripts/download-audiogen-ggml-models.js"
   },
   "files": [
+    "addon-unavailable.js",
     "binding.js",
     "index.js",
     "index.d.ts",
