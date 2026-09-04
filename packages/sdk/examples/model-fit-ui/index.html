@@ -77,6 +77,11 @@
         padding: 0.35rem 0.7rem;
         cursor: pointer;
       }
+      td button[title] {
+        padding: 0 0.3rem;
+        margin-left: 0.25rem;
+        opacity: 0.6;
+      }
       .bar {
         display: flex;
         gap: 0.75rem;
@@ -146,7 +151,9 @@
         tr.innerHTML = `
           <td>${model.name}</td>
           <td class="num">${gib(model.expectedSize)}</td>
-          <td class="verdict" data-cell="verdict">—</td>
+          <td class="verdict" data-cell="verdict">
+            <button data-estimate="${model.name}">Estimate</button>
+          </td>
           <td class="num" data-cell="predicted">—</td>
           <td data-cell="reality"><button data-run="${model.name}">Run</button></td>`
         rows.append(tr)
@@ -158,15 +165,12 @@
         )
       }
 
-      async function estimateAll() {
+      async function estimate(names, { combined }) {
         status.textContent = 'estimating…'
         const response = await fetch('/api/assess', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            names: models.map((m) => m.name),
-            contextTokens: Number(ctx.value)
-          })
+          body: JSON.stringify({ names, contextTokens: Number(ctx.value) })
         })
         const result = await response.json()
 
@@ -184,8 +188,8 @@
 
         for (const model of result.models ?? []) {
           const verdictCell = cell(model.name, 'verdict')
-          verdictCell.textContent = model.verdict
           verdictCell.className = `verdict ${VERDICT_CLASS[model.verdict] ?? ''}`
+          verdictCell.innerHTML = `${model.verdict} <button data-estimate="${model.name}" title="Estimate again">↻</button>`
           const predicted = cell(model.name, 'predicted')
           predicted.textContent = model.estimate ? gib(model.estimate.upperBoundBytes) : '—'
           // An `unknown` always says what is missing; that is the useful part.
@@ -196,7 +200,11 @@
             verdictCell.append(note)
           }
         }
-        status.textContent = `combined: ${result.verdict}`
+        // Only the all-models call has a combined verdict worth reporting: it
+        // aggregates every candidate against one budget.
+        status.textContent = combined
+          ? `combined: ${result.verdict}`
+          : `${names.length} of ${models.length} estimated`
       }
 
       async function runOne(name, button) {
@@ -223,10 +231,18 @@
           `<span class="reason">system memory +${delta} · ${(result.elapsedMs / 1000).toFixed(1)}s · “${result.sample ?? ''}”</span>`
       }
 
-      document.getElementById('estimate').addEventListener('click', estimateAll)
+      document.getElementById('estimate').addEventListener('click', () =>
+        estimate(
+          models.map((m) => m.name),
+          { combined: true }
+        )
+      )
+
       rows.addEventListener('click', (event) => {
-        const name = event.target?.dataset?.run
-        if (name) runOne(name, event.target)
+        const run = event.target?.dataset?.run
+        if (run) return runOne(run, event.target)
+        const one = event.target?.dataset?.estimate
+        if (one) return estimate([one], { combined: false })
       })
     </script>
   </body>
