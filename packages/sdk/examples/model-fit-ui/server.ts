@@ -49,7 +49,13 @@ const CATALOG = [
   QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL
 ]
 
-const PAGE = readFileSync(new URL('index.html', import.meta.url))
+const PAGE_PATH = new URL('index.html', import.meta.url)
+
+// Read per request, not once at startup: editing the page and reloading is the
+// normal way to poke at this, and a cached copy makes that silently not work.
+function page() {
+  return readFileSync(PAGE_PATH)
+}
 
 function byName(name: string) {
   const model = CATALOG.find((entry) => entry.name === name)
@@ -149,7 +155,7 @@ const server = createServer((request, response) => {
 
   if (request.method === 'GET' && (url === '/' || url.startsWith('/?'))) {
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-    response.end(PAGE)
+    response.end(page())
     return
   }
 

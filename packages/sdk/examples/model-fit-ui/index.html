@@ -145,6 +145,9 @@
       }
 
       const models = await (await fetch('/api/models')).json()
+      // What each row was judged against. A per-row estimate reads a fresh
+      // budget, so without this the rows and the header drift apart.
+      const judged = new Map()
 
       for (const model of models) {
         const tr = document.createElement('tr')
@@ -186,7 +189,9 @@
             : '') +
           (placement ? `\n${placement}` : '')
 
+        const available = result.budget?.availableAfterReserveBytes
         for (const model of result.models ?? []) {
+          judged.set(model.name, { verdict: model.verdict, available })
           const verdictCell = cell(model.name, 'verdict')
           verdictCell.className = `verdict ${VERDICT_CLASS[model.verdict] ?? ''}`
           verdictCell.innerHTML = `${model.verdict} <button data-estimate="${model.name}" title="Estimate again">↻</button>`
@@ -198,6 +203,14 @@
             note.className = 'reason'
             note.textContent = model.reasons[0]
             verdictCell.append(note)
+          }
+          // Stamp the budget this row was judged against: free memory moves, so
+          // a row estimated a minute ago answered a different question.
+          if (available !== undefined) {
+            const stamp = document.createElement('span')
+            stamp.className = 'reason'
+            stamp.textContent = `judged against ${gib(available)} free`
+            verdictCell.append(stamp)
           }
         }
         // Only the all-models call has a combined verdict worth reporting: it
@@ -218,17 +231,29 @@
         })
         const result = await response.json()
 
+        const said = judged.get(name)?.verdict
         if (!result.ok) {
-          target.innerHTML = `<span class="too-large">did not run</span><span class="reason">${result.error ?? 'unknown error'}</span>`
+          const matched = said === 'likely-too-large' ? ' — as the verdict said' : ''
+          target.innerHTML =
+            `<span class="too-large">did not run${matched}</span>` +
+            `<span class="reason">${result.error ?? 'unknown error'}</span>`
           return
         }
-        const delta =
-          result.systemUsedAfterLoadBytes && result.systemUsedBeforeBytes
-            ? gib(result.systemUsedAfterLoadBytes - result.systemUsedBeforeBytes)
-            : 'n/a'
+        const before = result.systemUsedBeforeBytes
+        const after = result.systemUsedAfterLoadBytes
+        const delta = before !== undefined && after !== undefined ? `${gib(after - before)}` : 'n/a'
+        // A `likely-too-large` that runs has not refuted the verdict: the OS
+        // reclaimed or compressed to make room, which is the cost the reserve
+        // exists to avoid. A bare green "ran" would read as the estimate being
+        // wrong.
+        const headline =
+          said === 'likely-too-large'
+            ? `<span class="too-large">ran anyway</span>` +
+              `<span class="reason">the OS made room for it — "too large" predicts paging, not a crash</span>`
+            : `<span class="fits">ran on ${result.backendDevice ?? 'device'}</span>`
         target.innerHTML =
-          `<span class="fits">ran on ${result.backendDevice ?? 'device'}</span>` +
-          `<span class="reason">system memory +${delta} · ${(result.elapsedMs / 1000).toFixed(1)}s · “${result.sample ?? ''}”</span>`
+          headline +
+          `<span class="reason">system memory ${delta} · ${(result.elapsedMs / 1000).toFixed(1)}s · “${result.sample ?? ''}”</span>`
       }
 
       document.getElementById('estimate').addEventListener('click', () =>
