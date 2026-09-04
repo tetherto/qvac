@@ -88,6 +88,7 @@ public:
     bool simpleMode = false;
     bool rewriteQuery = false;
     bool normalizeLoudness = true;
+    bool generateLrc = false;
     bool computeQualityScore = false;
     bool dcwEnabled = true;
     float dcwScaler = 0.05F;
@@ -153,6 +154,7 @@ public:
 
   int sampleRate() const { return sampleRate_; }
   int channels() const { return channels_; }
+  std::string lrcText() const { return lrc_; }
 
 private:
   Output generate(const AnyInput& in);
@@ -175,6 +177,9 @@ private:
   double audioDurationMs_ = 0.0;
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
+  std::string lrc_; // synchronized lyric timestamps of the last run
+  double lyricsScore_ = 0.0;
+  bool hasLyricsScore_ = false; // set per run; gates the lyricsScore stat
   double qualityScore_ = 0.0;
   bool hasQualityScore_ = false; // set per run; gates the qualityScore stat
   int sampleRate_ = 0; // populated from the engine result in generate()

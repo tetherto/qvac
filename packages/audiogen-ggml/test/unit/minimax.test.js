@@ -198,6 +198,10 @@ test('AudioGen rejects unsupported MiniMax generation options', async (t) => {
     /MiniMax does not accept guidanceScale/
   )
   await t.exception(
+    () => gen.run('test', { generateLrc: true, lyrics: '[verse]\nhello' }),
+    /MiniMax does not accept generateLrc/
+  )
+  await t.exception(
     () => gen.run('test', { computeQualityScore: true }),
     /MiniMax does not accept computeQualityScore/
   )
