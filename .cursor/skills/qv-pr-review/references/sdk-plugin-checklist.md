@@ -11,15 +11,17 @@ Domain-specific checklist for reviewing `tetherto/qvac` PRs that touch SDK plugi
 Apply this checklist **only** when the PR is in `tetherto/qvac` AND touches at least one of:
 
 - `packages/sdk/server/bare/plugins/**` — plugin code itself
+- `packages/sdk/client/api/**` — public client wrappers for plugin capabilities (first-class product check)
 - `packages/sdk/schemas/plugin.ts` — plugin contract types, `ADDON_*` constants, `SDK_DEFAULT_PLUGINS`
 - `packages/sdk/schemas/load-model.ts` — load-model contract; plugin schema changes flow through here
 - New `packages/sdk/schemas/*-config.ts` files — typically a new plugin config schema
+- `packages/sdk/schemas/completion-stream.ts` or `packages/sdk/schemas/batch-completion-stream.ts` — request/sampling params used by serve
 - `packages/sdk/server/worker.ts` — plugin registration
 - `packages/sdk/commands/bundle/**` — bundler `BUILTIN_PLUGINS` mapping (a new plugin must be registered here to be bundleable)
 
 **Don't trigger on:**
 
-- `packages/sdk/client/**` only — covered by general SDK cursor rules
+- `packages/sdk/client/**` other than `client/api/**` — internal client helpers, covered by general SDK cursor rules
 - `packages/sdk/utils/**`, `packages/sdk/profiling/**` — internal helpers
 - `packages/sdk/models/registry/**` only — auto-gen registry drift
 - `packages/sdk/e2e/**` only — test-only additions
@@ -144,3 +146,10 @@ Rules for this section:
 - API changes are documented in the PR description under **API Changes**.
 - Breaking changes are documented under **Breaking Changes**.
 - Lockfile / package updates are included when dependencies change.
+
+### First-class products (`qvac serve` / `qvac configure`)
+
+See `.cursor/rules/sdk/first-class-product-parity.mdc`. Native addon-only PRs skip this section.
+
+- User-facing inference change updates `@qvac/cli` in this PR, or the PR body says library-only.
+- Missing `packages/cli` diff with no library-only note is a gap (Medium).

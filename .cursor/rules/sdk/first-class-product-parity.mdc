@@ -1,0 +1,35 @@
+---
+description: User-facing SDK capabilities must land on qvac serve / qvac configure in the same PR unless marked library-only
+globs:
+  - packages/sdk/server/bare/plugins/**
+  - packages/sdk/client/api/**
+  - packages/sdk/schemas/**
+  - packages/cli/src/serve/**
+  - packages/cli/src/configure/**
+  - docs/website/content/docs/cli/http-server/**
+alwaysApply: false
+---
+
+# First-class product parity
+
+`@qvac/cli` (`qvac serve`, `qvac configure`) is a first-class SDK product. Exposing an addon feature on the SDK is not done at the plugin + client API.
+
+## Same PR
+
+A user-facing inference change (new modality, new request/sampling field, new load-time `modelConfig` field) includes CLI in **this** PR, or the PR body says it is library-only and why.
+
+Native addon PRs stay native. Do not mix C++/prebuilds into the CLI PR. The follow-up SDK exposure PR is where CLI belongs.
+
+## What to update
+
+| Change | CLI in the same PR |
+|---|---|
+| HTTP-visible request/sampling field | `packages/cli/src/serve/schemas` (e.g. `extractGenerationParams`), test, HTTP docs |
+| Load-time `modelConfig` field | `packages/cli/src/configure/param-schemas.ts` `SCHEMA_BY_ADDON` when that addon is in configure; serve config mapping if `serve.models` loads it |
+| New first-class modality | HTTP route (QVAC extension if no OpenAI URL), CLI test, HTTP docs, or an explicit library-only note |
+
+Do **not** put `invokePlugin`, P2P provide, KV-cache admin, or suspend/resume on HTTP unless they are already a serve product.
+
+## Agents
+
+CLI is in scope for SDK exposure tasks unless the task says library-only. A missing CLI diff with no opt-out is a gap, not a follow-up.
