@@ -1,3 +1,4 @@
+export declare const PREBUILT_HOSTS: string[];
 export interface BackendsDirSources {
     localPrebuildsDir: string;
     host: string | null;

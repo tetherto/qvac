@@ -19,6 +19,7 @@ const DEFAULT_MAX_SLICE_MB = 450
 const BYTES_PER_MB = 1024 * 1024
 const MANIFEST_INDENT = 2
 const META_FILES_TO_COPY = ['LICENSE', 'NOTICE']
+const BARE_ADDON_EXTENSION = '.bare'
 
 export function hostToSliceSuffix (host) {
   const definition = SLICE_DEFINITIONS.find((slice) => slice.hosts.includes(host))
@@ -40,6 +41,22 @@ export function validateHostDirs (hostDirs) {
       'Merged prebuilds artifact is missing host dirs: ' + missing.join(', ') +
       '. Refusing to publish an incomplete release.'
     )
+  }
+}
+
+function assertHostAddonPresent (prebuildsDir, host) {
+  const entries = fs.readdirSync(path.join(prebuildsDir, host))
+  if (!entries.some((entry) => entry.endsWith(BARE_ADDON_EXTENSION))) {
+    throw new Error(
+      'No ' + BARE_ADDON_EXTENSION + ' addon under prebuilds/' + host +
+      '. Refusing to publish a binary-less platform package.'
+    )
+  }
+}
+
+function assertAllHostAddonsPresent (prebuildsDir) {
+  for (const host of collectKnownHosts()) {
+    assertHostAddonPresent(prebuildsDir, host)
   }
 }
 
@@ -191,6 +208,7 @@ export function slicePlatformPackages (options) {
   const prebuildsDir = path.join(workdir, 'prebuilds')
 
   validateHostDirs(listHostDirs(prebuildsDir))
+  assertAllHostAddonsPresent(prebuildsDir)
   fs.mkdirSync(outDir, { recursive: true })
 
   const context = { metaManifest, workdir, outDir, prebuildsDir }

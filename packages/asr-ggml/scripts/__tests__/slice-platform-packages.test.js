@@ -180,6 +180,15 @@ test('fails on a host dir with no slice mapping', async (t) => {
   assert.throws(() => slicePlatformPackages({ workdir, outDir }), /linux-riscv64/)
 })
 
+test('fails when a host dir carries no .bare addon', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  fs.rmSync(path.join(workdir, 'prebuilds', 'win32-x64', 'qvac__fake-ggml.bare'))
+
+  assert.throws(() => slicePlatformPackages({ workdir, outDir }), /binary-less|No \.bare/)
+})
+
 test('fails when the merged artifact is missing a host', async (t) => {
   const { slicePlatformPackages } = await slicerPromise
   const { root, workdir, outDir } = makeFixture(ALL_HOSTS.filter((host) => host !== 'win32-x64'))

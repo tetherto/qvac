@@ -304,11 +304,13 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
           mkdir -p prebuilds "${{ runner.temp }}/tmp"
           rm -f "${{ runner.temp }}/tmp"/*.tgz
           rm -rf "${{ runner.temp }}/tmp/package"
-          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          npm pack "$PREBUILD_PACKAGE" --pack-destination "${{ runner.temp }}/tmp"
           tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
           # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
           # meta tarball; split releases ship them in the per-host platform
@@ -316,7 +318,7 @@ jobs:
           if [ -d "${{ runner.temp }}/tmp/package/prebuilds" ]; then
             cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
           else
-            SPEC="${{ inputs.prebuild_package }}"
+            SPEC="$PREBUILD_PACKAGE"
             REST="${SPEC#?}"
             if [ "${REST#*@}" != "$REST" ]; then
               VERSION="${SPEC##*@}"
@@ -340,10 +342,12 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
           New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
           New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
-          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
+          npm pack $env:PREBUILD_PACKAGE --pack-destination "${{ runner.temp }}\tmp"
           $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
           # Extract from inside the temp dir with a RELATIVE archive name. The
           # tar on PATH (Git's MSYS GNU tar) mangles absolute Windows paths — it
@@ -358,7 +362,7 @@ jobs:
           if (Test-Path "${{ runner.temp }}\tmp\package\prebuilds") {
             Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
           } else {
-            $spec = "${{ inputs.prebuild_package }}"
+            $spec = $env:PREBUILD_PACKAGE
             $atIndex = $spec.LastIndexOf('@')
             if ($atIndex -gt 0) {
               $name = $spec.Substring(0, $atIndex)

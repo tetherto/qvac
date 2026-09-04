@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const { hostPlatformPackage } = require('../../lib/backends.js')
+const { hostPlatformPackage, PREBUILT_HOSTS } = require('../../lib/backends.js')
 const packageJson = require('../../package.json')
 
 const ADDON_UNAVAILABLE_TARGET = './addon-unavailable.js'
@@ -42,6 +42,20 @@ test('loading #host-addon without the platform package names the missing package
     t.ok(err.message.includes('@qvac/asr-ggml'))
     t.ok(err.message.includes(hostPlatformPackage(require.addon.host)))
   }
+})
+
+test('binding.js loads the addon or rethrows the actionable error with its cause', (t) => {
+  try {
+    const binding = require('../../binding.js')
+    t.ok(binding)
+  } catch (err) {
+    t.ok(err.message.includes(hostPlatformPackage(require.addon.host)))
+    t.not(err.cause, undefined)
+  }
+})
+
+test('PREBUILT_HOSTS matches the published host matrix', (t) => {
+  t.alike([...PREBUILT_HOSTS], PUBLISHED_HOSTS)
 })
 
 test('the imports map routes every published host to its platform package', (t) => {

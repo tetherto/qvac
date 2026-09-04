@@ -239,9 +239,24 @@ jobs:
           for dir in "${{ runner.temp }}/platform-packages"/*/; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
-            if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+            # Idempotency guard: skip only on a confirmed hit, publish only on a
+            # confirmed miss (E404 or the empty-output form npm uses for a
+            # missing version). Any other npm view failure is a registry or
+            # network error; publishing blind would 403 on an immutable version
+            # and abort the release before the meta ships.
+            set +e
+            VIEW_OUT=$(npm view "${NAME}@${VERSION}" version 2>&1)
+            VIEW_RC=$?
+            set -e
+            VIEW_TRIMMED=$(printf '%s' "$VIEW_OUT" | tr -d '[:space:]')
+            if [ "$VIEW_RC" -eq 0 ] && [ -n "$VIEW_TRIMMED" ]; then
               echo "${NAME}@${VERSION} already on npm, skipping"
               continue
+            fi
+            if [ "$VIEW_RC" -ne 0 ] && ! printf '%s' "$VIEW_OUT" | grep -q 'E404'; then
+              echo "::error title=npm view failed::Could not query ${NAME}@${VERSION} (exit ${VIEW_RC}); refusing to publish blind. Re-run after the registry recovers." >&2
+              printf '%s\n' "$VIEW_OUT" >&2
+              exit 1
             fi
             echo "Publishing ${NAME}@${VERSION} with tag ${DIST_TAG}"
             (cd "$dir" && npm publish --tag "$DIST_TAG" --access public --provenance)
