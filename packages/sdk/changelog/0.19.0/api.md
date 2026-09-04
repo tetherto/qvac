@@ -304,23 +304,29 @@ from tetherto.qvac_sdk import (
 PR: [#4110](https://github.com/tetherto/qvac/pull/4110)
 
 ```typescript
-import { setConfig, loadModel, downloadAsset } from "@qvac/sdk";
+import { setConfig, loadModel, downloadAsset } from '@qvac/sdk'
 
 // Global default (engine config):
-setConfig({ requireHttpChecksum: true, requireSecureTransport: true });
+setConfig({ requireHttpChecksum: true, requireSecureTransport: true })
 
 // Or per call (overrides config for this call only):
 await loadModel({
-  modelSrc: "https://huggingface.co/org/repo/resolve/main/model.gguf",
-  modelType: "llamacpp-completion",
+  modelSrc: 'https://huggingface.co/org/repo/resolve/main/model.gguf',
+  modelType: 'llamacpp-completion',
   requireHttpChecksum: true,
-  requireSecureTransport: true,
-});
-await downloadAsset({ assetSrc: "https://huggingface.co/org/repo/resolve/main/model.gguf", requireSecureTransport: true });
+  requireSecureTransport: true
+})
+await downloadAsset({
+  assetSrc: 'https://huggingface.co/org/repo/resolve/main/model.gguf',
+  requireSecureTransport: true
+})
 
 // Hugging Face URLs are verified against the Hub SHA-256 regardless of the flags.
 // Bring-your-own HTTP is unchanged unless requireSecureTransport is set:
-await loadModel({ modelSrc: "http://my-model-server.internal/model.gguf", modelType: "llamacpp-completion" });
+await loadModel({
+  modelSrc: 'http://my-model-server.internal/model.gguf',
+  modelType: 'llamacpp-completion'
+})
 ```
 
 ---
@@ -342,10 +348,10 @@ PR: [#4138](https://github.com/tetherto/qvac/pull/4138)
 ```js
 // Unchanged surface — CUDA is selected inside the engine; there is no backend key to pass.
 const model = new TTSGgml({
-  files: { modelDir: "./models" },
-  config: { language: "en", useGPU: true }, // linux-x64 + NVIDIA -> CUDA, otherwise Vulkan / CPU
-  opts: { stats: true },
-});
+  files: { modelDir: './models' },
+  config: { language: 'en', useGPU: true }, // linux-x64 + NVIDIA -> CUDA, otherwise Vulkan / CPU
+  opts: { stats: true }
+})
 ```
 
 ---
@@ -501,13 +507,13 @@ PR: [#4211](https://github.com/tetherto/qvac/pull/4211)
 
 ```typescript
 await loadModel({
-  modelSrc: "model.gguf",
+  modelSrc: 'model.gguf',
   modelConfig: {
-    "split-mode": "tensor",
-    "flash-attn": "on",
-    ctx_size: 8192,
-  },
-});
+    'split-mode': 'tensor',
+    'flash-attn': 'on',
+    ctx_size: 8192
+  }
+})
 ```
 
 ---
@@ -520,6 +526,20 @@ PR: [#4238](https://github.com/tetherto/qvac/pull/4238)
 const { basis, budget } = await assessModelFit({ models, execution: 'sequential' })
 // Single discrete GPU on linux: 'device-memory', budget.totalBytes is the card's VRAM.
 // Windows: 'device-budget', budget.totalBytes is the DXGI budget for this process.
+```
+
+---
+
+## Widen desktop coverage to integrated GPUs and two more platforms
+
+PR: [#4265](https://github.com/tetherto/qvac/pull/4265)
+
+```typescript
+const { basis, budget } = await assessModelFit({ models, execution: 'sequential' })
+// Integrated GPU: basis stays 'system-memory'; budget.availableBytes is free RAM before reserve.
+// Multi-GPU: likely-fits must hold on the smallest usable card.
+budget.availableBytes
+budget.availableAfterReserveBytes
 ```
 
 ---
@@ -539,4 +559,3 @@ for await (const progress of run.progressStream) {
 ```
 
 ---
-
