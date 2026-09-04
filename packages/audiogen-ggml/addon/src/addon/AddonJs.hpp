@@ -213,6 +213,8 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
     modelInput.rewriteQuery = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "normalizeLoudness"))
     modelInput.normalizeLoudness = *value;
+  if (auto value = readOptionalBoolean(jobObject, env, "generateLrc"))
+    modelInput.generateLrc = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "computeQualityScore"))
     modelInput.computeQualityScore = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "dcwEnabled"))
@@ -357,11 +359,12 @@ struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
   JsAudioOutputHandler(
-      std::function<int()> sampleRate, std::function<int()> channels)
+      std::function<int()> sampleRate, std::function<int()> channels,
+      std::function<std::string()> lrc = nullptr)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<int16_t>>(
             [this, sampleRate = std::move(sampleRate),
-             channels = std::move(channels)](
+             channels = std::move(channels), lrc = std::move(lrc)](
                 const std::vector<int16_t>& data) -> js_value_t* {
               auto result = js::Object::create(this->env_);
               std::span<const int16_t> outputSpan(data.data(), data.size());
@@ -376,6 +379,13 @@ struct JsAudioOutputHandler
                   this->env_,
                   "channels",
                   js::Number::create(this->env_, channels()));
+              if (lrc) {
+                const std::string text = lrc();
+                if (!text.empty()) {
+                  result.setProperty(
+                      this->env_, "lrc", js::String::create(this->env_, text));
+                }
+              }
               return result;
             }) {}
 };
@@ -459,6 +469,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   function<int()> sampleRate;
   function<int()> channels;
   function<void(function<void(const AudioGenProgress&)>)> setProgressSink;
+  function<std::string()> lrcText;
 
   if (engineType == EngineType::Minimax) {
 #ifdef AUDIOGEN_HAS_MINIMAX
@@ -482,6 +493,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     AcestepModel* modelPtr = acestepModel.get();
     sampleRate = [modelPtr]() { return modelPtr->sampleRate(); };
     channels = [modelPtr]() { return modelPtr->channels(); };
+    lrcText = [modelPtr]() { return modelPtr->lrcText(); };
     setProgressSink = [modelPtr](function<void(const AudioGenProgress&)> sink) {
       modelPtr->setProgressSink(std::move(sink));
     };
@@ -491,7 +503,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(
       make_shared<JsAudioOutputHandler>(
-          std::move(sampleRate), std::move(channels)));
+          std::move(sampleRate), std::move(channels), std::move(lrcText)));
   outHandlers.add(make_shared<JsUnderstandOutputHandler>());
   outHandlers.add(make_shared<JsProgressOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(

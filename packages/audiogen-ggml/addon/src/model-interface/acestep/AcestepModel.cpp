@@ -272,6 +272,7 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.simple_mode = in.simpleMode;
   params.rewrite_query = in.rewriteQuery;
   params.normalize_loudness = in.normalizeLoudness;
+  params.generate_lrc = in.generateLrc;
   params.compute_quality_score = in.computeQualityScore;
   params.dcw_enabled = in.dcwEnabled;
   params.dcw_scaler = in.dcwScaler;
@@ -335,6 +336,9 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   if (cancelRequested_.load()) {
     throw std::runtime_error("ACE-Step generation cancelled");
   }
+  hasLyricsScore_ = in.generateLrc;
+  lyricsScore_ = result.metadata.lyrics_score;
+  lrc_ = result.metadata.lrc;
   hasQualityScore_ = in.computeQualityScore;
   qualityScore_ = result.metadata.quality_score;
 
@@ -395,6 +399,9 @@ qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
   stats.emplace_back("backendId", backendIdFromName(backendName_));
   stats.emplace_back(
       "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
+  if (hasLyricsScore_) {
+    stats.emplace_back("lyricsScore", lyricsScore_);
+  }
   if (hasQualityScore_) {
     stats.emplace_back("qualityScore", qualityScore_);
   }
