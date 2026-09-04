@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>assessModelFit — estimate vs. reality</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      body {
+        margin: 0 auto;
+        padding: 2rem 1.5rem 4rem;
+        max-width: 62rem;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 1.15rem;
+        margin: 0 0 0.25rem;
+      }
+      p.sub {
+        margin: 0 0 1.5rem;
+        opacity: 0.7;
+        font-size: 0.9rem;
+      }
+      #basis {
+        margin: 0 0 1.5rem;
+        padding: 0.75rem 1rem;
+        border-left: 3px solid currentColor;
+        font-size: 0.9rem;
+        white-space: pre-wrap;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.5rem 0.6rem;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+        vertical-align: top;
+      }
+      th {
+        font-weight: 600;
+        opacity: 0.7;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      td.num {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .verdict {
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .fits {
+        color: #1a7f37;
+      }
+      .too-large {
+        color: #b3261e;
+      }
+      .unknown {
+        opacity: 0.65;
+      }
+      .reason {
+        display: block;
+        opacity: 0.7;
+        font-size: 0.8rem;
+        margin-top: 0.2rem;
+      }
+      button {
+        font: inherit;
+        padding: 0.35rem 0.7rem;
+        cursor: pointer;
+      }
+      .bar {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin: 1.25rem 0;
+      }
+      .bar label {
+        font-size: 0.9rem;
+        opacity: 0.8;
+      }
+      code {
+        font-size: 0.85em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>assessModelFit — estimate vs. reality</h1>
+    <p class="sub">
+      <strong>Estimate</strong> reads catalog metadata and one memory sample: no download, no load.
+      <strong>Run</strong> loads the model for real and generates a few tokens, so the verdict can
+      be checked against what happens. Watch the elapsed time: a <code>likely-too-large</code> model
+      usually still runs on an OS with swap, just badly — the verdict is about the interactive
+      budget, not about whether the load throws.
+    </p>
+
+    <div class="bar">
+      <label
+        >Context <input id="ctx" type="number" value="8192" min="512" step="512" size="6"
+      /></label>
+      <button id="estimate">Estimate all</button>
+      <span id="status" class="sub"></span>
+    </div>
+
+    <p id="basis" hidden></p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>On disk</th>
+          <th>Verdict</th>
+          <th>Predicted need</th>
+          <th>Reality</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <script type="module">
+      const GIB = 1024 ** 3
+      const gib = (bytes) => `${(bytes / GIB).toFixed(2)} GiB`
+      const rows = document.getElementById('rows')
+      const status = document.getElementById('status')
+      const basis = document.getElementById('basis')
+      const ctx = document.getElementById('ctx')
+
+      const VERDICT_CLASS = {
+        'likely-fits': 'fits',
+        'likely-too-large': 'too-large',
+        unknown: 'unknown'
+      }
+
+      const models = await (await fetch('/api/models')).json()
+
+      for (const model of models) {
+        const tr = document.createElement('tr')
+        tr.innerHTML = `
+          <td>${model.name}</td>
+          <td class="num">${gib(model.expectedSize)}</td>
+          <td class="verdict" data-cell="verdict">—</td>
+          <td class="num" data-cell="predicted">—</td>
+          <td data-cell="reality"><button data-run="${model.name}">Run</button></td>`
+        rows.append(tr)
+      }
+
+      function cell(name, which) {
+        return rows.querySelector(
+          `tr:nth-child(${models.findIndex((m) => m.name === name) + 1}) [data-cell="${which}"]`
+        )
+      }
+
+      async function estimateAll() {
+        status.textContent = 'estimating…'
+        const response = await fetch('/api/assess', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            names: models.map((m) => m.name),
+            contextTokens: Number(ctx.value)
+          })
+        })
+        const result = await response.json()
+
+        const placement = (result.assumptions ?? []).find((line) =>
+          line.includes('assumed to execute on')
+        )
+        basis.hidden = false
+        basis.textContent =
+          `Basis: ${result.basis}` +
+          (result.budget
+            ? ` — ${gib(result.budget.availableAfterReserveBytes)} available of ` +
+              `${gib(result.budget.totalBytes)}, ${gib(result.budget.reservedBytes)} held back`
+            : '') +
+          (placement ? `\n${placement}` : '')
+
+        for (const model of result.models ?? []) {
+          const verdictCell = cell(model.name, 'verdict')
+          verdictCell.textContent = model.verdict
+          verdictCell.className = `verdict ${VERDICT_CLASS[model.verdict] ?? ''}`
+          const predicted = cell(model.name, 'predicted')
+          predicted.textContent = model.estimate ? gib(model.estimate.upperBoundBytes) : '—'
+          // An `unknown` always says what is missing; that is the useful part.
+          if (model.verdict === 'unknown' && model.reasons?.length) {
+            const note = document.createElement('span')
+            note.className = 'reason'
+            note.textContent = model.reasons[0]
+            verdictCell.append(note)
+          }
+        }
+        status.textContent = `combined: ${result.verdict}`
+      }
+
+      async function runOne(name, button) {
+        button.disabled = true
+        const target = button.parentElement
+        target.textContent = 'loading… (first run downloads weights)'
+        const response = await fetch('/api/run', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name, contextTokens: Number(ctx.value) })
+        })
+        const result = await response.json()
+
+        if (!result.ok) {
+          target.innerHTML = `<span class="too-large">did not run</span><span class="reason">${result.error ?? 'unknown error'}</span>`
+          return
+        }
+        const delta =
+          result.systemUsedAfterLoadBytes && result.systemUsedBeforeBytes
+            ? gib(result.systemUsedAfterLoadBytes - result.systemUsedBeforeBytes)
+            : 'n/a'
+        target.innerHTML =
+          `<span class="fits">ran on ${result.backendDevice ?? 'device'}</span>` +
+          `<span class="reason">system memory +${delta} · ${(result.elapsedMs / 1000).toFixed(1)}s · “${result.sample ?? ''}”</span>`
+      }
+
+      document.getElementById('estimate').addEventListener('click', estimateAll)
+      rows.addEventListener('click', (event) => {
+        const name = event.target?.dataset?.run
+        if (name) runOne(name, event.target)
+      })
+    </script>
+  </body>
+</html>
