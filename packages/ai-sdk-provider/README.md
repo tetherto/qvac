@@ -2,13 +2,13 @@
 
 [Vercel AI SDK](https://ai-sdk.dev) provider for the [QVAC](https://qvac.tether.io) local AI runtime.
 
-QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package implements the native provider contracts for language, embedding, image, file-reference, transcription, and speech operations against a local `qvac serve openai` runtime. It also re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
+QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package implements the native provider contracts for language, embedding, image, file-reference, transcription, and speech operations against a local `qvac serve --openai` runtime. It also re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
 
 The provider is OpenAI-compatible by construction: the OpenAI-compatible transport is its fallback provider, while the SDK's native custom-provider composition adds QVAC-specific files, transcription, and speech capabilities. Existing OpenAI-shaped chat, completion, embedding, and image requests keep the same wire protocol.
 
 > **Runtime modes:**
 >
-> - **External** (default): the package wraps a `qvac serve openai` HTTP endpoint that you run yourself.
+> - **External** (default): the package wraps a `qvac serve --openai` HTTP endpoint that you run yourself.
 > - **Managed** (`mode: 'managed'`): the provider synthesizes an ephemeral config from a model list, then spawns (or reuses) a shared `qvac serve` on a free port and keeps it alive for as long as anything is using it, reaping it automatically once everyone is done. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
 >
 > See the [QVAC-19194 epic](https://app.asana.com/1/45238840754660/task/1214968611313049).
@@ -35,7 +35,7 @@ Runtime requirements:
 
 ## Quickstart
 
-### 1. Run `qvac serve openai`
+### 1. Run `qvac serve --openai`
 
 You need [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) installed and a minimal config that preloads at least one chat model:
 
@@ -53,7 +53,7 @@ cat > qvac.config.json <<'EOF'
 EOF
 
 export QVAC_API_KEY='replace-with-a-random-secret'
-qvac serve openai --api-key "$QVAC_API_KEY"
+qvac serve --openai --no-default --api-key "$QVAC_API_KEY"
 ```
 
 By default, `qvac serve` listens on `http://127.0.0.1:11434/v1` (the port may change in a future CLI release — see the **Default base URL** note below).
@@ -150,7 +150,7 @@ Per-request transcription `prompt` is supported. Language is selected when the Q
 
 ## Managed mode
 
-External mode (above) assumes you've already authored a `qvac.config.json` and have `qvac serve openai` running in another terminal. **Managed mode removes both steps**: pass `mode: 'managed'` and a list of model constants, and the provider will synthesize an ephemeral config, spawn `qvac serve` on a free port, wait until it's healthy, and reap it automatically once nothing is using it.
+External mode (above) assumes you've already authored a `qvac.config.json` and have `qvac serve --openai` running in another terminal. **Managed mode removes both steps**: pass `mode: 'managed'` and a list of model constants, and the provider will synthesize an ephemeral config, spawn `qvac serve` on a free port, wait until it's healthy, and reap it automatically once nothing is using it.
 
 The serve is **shared and self-cleaning**: a second session (or a separate tool) asking for the same models attaches to the already-warm serve instead of paying another cold start, and the serve is torn down by a detached supervisor a few minutes after the last user goes away. You never have to babysit a process — see [Shared serves & lifecycle](#shared-serves--lifecycle).
 
@@ -160,7 +160,7 @@ Custom `fetch` wrappers receive requests after managed authorization has been ap
 
 ```bash
 # Managed mode needs the QVAC CLI available (optional peer dependency):
-npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli
+npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli@^0.13.0
 ```
 
 ```ts
@@ -233,7 +233,7 @@ const res = await fetch(`${qvac.baseURL}/models`, {
 
 Treat it as secret material. The property is non-enumerable, so `{ ...provider }`, `Object.keys(provider)`, and object dumps never carry it; never log it or hand it to an untrusted process.
 
-Neither the detached runner nor the `qvac serve` it starts receives the key through argv: both read it from a one-shot `0600` file, so it cannot be recovered from `ps` or `/proc/<pid>/cmdline`. Passing the key on the serve command line requires a CLI too old for `--api-key-file`, which the provider detects and falls back to; the same is true of a `serveBinPath` override, whose version cannot be determined. Install `@qvac/cli` 0.11.0 or newer to keep the key out of the process list.
+Neither the detached runner nor the `qvac serve` it starts receives the key through argv: both read it from a one-shot `0600` file, so it cannot be recovered from `ps` or `/proc/<pid>/cmdline`. Every CLI in the supported `^0.13.0` peer range takes `--api-key-file`, so the argv fallback is reached only behind a `serveBinPath` override, whose version cannot be determined.
 
 ### Per-model configuration
 
