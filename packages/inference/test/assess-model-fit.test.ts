@@ -501,6 +501,7 @@ test('assess: desktop reserve is 20% of available, capped at 2 GiB', (t) => {
     calibration: calibration(),
     resolveProfile: () => profile()
   })
+  t.is(small.budget?.availableBytes, 5 * GIB)
   t.is(small.budget?.reservedBytes, 1 * GIB, '20% of the 5 GiB available')
   t.is(small.budget?.availableAfterReserveBytes, 4 * GIB)
 
@@ -530,6 +531,7 @@ test('assess: a busy host keeps a budget proportional to what is free', (t) => {
   })
   const available = 24 * GIB - 20.7 * GIB
   const reserved = Math.floor(available * 0.2)
+  t.is(result.budget?.availableBytes, available)
   t.is(result.budget?.reservedBytes, reserved)
   t.is(result.budget?.availableAfterReserveBytes, available - reserved)
   t.is(result.verdict, 'likely-fits', 'a 2 GiB model fits in 3.3 GiB of free memory')
@@ -567,6 +569,7 @@ test('assess: iOS budgets are per-process and refuse without the allowance metri
   // reserve is taken from the allowance: min(1 GiB, 20% of 2.5 GiB) = 0.5 GiB.
   t.is(withMetric.budget?.totalBytes, 3.5 * GIB)
   t.is(withMetric.budget?.usedBytes, 1 * GIB)
+  t.is(withMetric.budget?.availableBytes, 2.5 * GIB)
   t.is(withMetric.budget?.reservedBytes, 0.5 * GIB)
   t.is(withMetric.budget?.availableAfterReserveBytes, 2 * GIB)
 })

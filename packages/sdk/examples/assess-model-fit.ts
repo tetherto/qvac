@@ -54,9 +54,10 @@ try {
   console.log(`▸ Budget basis: ${result.basis}`)
   if (result.budget) {
     console.log(
-      `    ${gib(result.budget.availableAfterReserveBytes)} available` +
+      `    ${gib(result.budget.availableAfterReserveBytes)} budget` +
         ` (${gib(result.budget.totalBytes)} total,` +
         ` ${gib(result.budget.usedBytes)} in use,` +
+        ` ${gib(result.budget.availableBytes)} free,` +
         ` ${gib(result.budget.reservedBytes)} held back)`
     )
   }

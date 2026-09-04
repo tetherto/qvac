@@ -422,16 +422,26 @@
               "type": "number",
               "description": "Memory in use at sample time under the same basis (system-wide, or this process)."
             },
+            "availableBytes": {
+              "type": "number",
+              "description": "Headroom before the policy applies: total − used, or the process allowance under process-memory. The reserve is a share of this."
+            },
             "reservedBytes": {
               "type": "number",
               "description": "Headroom withheld by the policy."
             },
             "availableAfterReserveBytes": {
               "type": "number",
-              "description": "Budget the estimate is compared against: total − used − reserved."
+              "description": "Budget the estimate is compared against: available − reserved."
             }
           },
-          "required": ["totalBytes", "usedBytes", "reservedBytes", "availableAfterReserveBytes"],
+          "required": [
+            "totalBytes",
+            "usedBytes",
+            "availableBytes",
+            "reservedBytes",
+            "availableAfterReserveBytes"
+          ],
           "additionalProperties": false,
           "title": "AssessModelFitResponseBudget"
         },

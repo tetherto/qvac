@@ -130,10 +130,15 @@ export const modelFitBudgetSchema = z.object({
   usedBytes: z
     .number()
     .describe('Memory in use at sample time under the same basis (system-wide, or this process).'),
+  availableBytes: z
+    .number()
+    .describe(
+      'Headroom before the policy applies: total − used, or the process allowance under process-memory. The reserve is a share of this.'
+    ),
   reservedBytes: z.number().describe('Headroom withheld by the policy.'),
   availableAfterReserveBytes: z
     .number()
-    .describe('Budget the estimate is compared against: total − used − reserved.')
+    .describe('Budget the estimate is compared against: available − reserved.')
 })
 
 export const modelFitModelResultSchema = z.object({

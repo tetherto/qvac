@@ -532,6 +532,7 @@ function gpuBudget(target: GpuTarget, platform: ModelFitPlatform | undefined) {
   return {
     totalBytes: target.totalBytes,
     usedBytes: target.usedBytes,
+    availableBytes: available,
     reservedBytes: reserved,
     availableAfterReserveBytes: available - reserved
   }
@@ -636,6 +637,7 @@ function resolveBudget(
     return {
       totalBytes: total,
       usedBytes: used.value,
+      availableBytes: available.value,
       reservedBytes: reserved,
       availableAfterReserveBytes: available.value - reserved
     }
@@ -658,6 +660,7 @@ function resolveBudget(
   return {
     totalBytes: total.value,
     usedBytes: used.value,
+    availableBytes: available,
     reservedBytes: reserved,
     availableAfterReserveBytes: available - reserved
   }

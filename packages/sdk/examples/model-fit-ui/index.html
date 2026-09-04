@@ -103,9 +103,9 @@
       <strong>Estimate</strong> reads catalog metadata and one memory sample: no download, no load.
       <strong>Run</strong> loads the model for real and generates a few tokens, so the verdict can
       be checked against what happens. Each row is judged on its own, not as one co-resident set.
-      Watch the elapsed time: a <code>likely-too-large</code> model usually still runs on an OS with
-      swap, just badly — the verdict is about the interactive budget, not about whether the load
-      throws.
+      <strong>Reality</strong> puts the memory the load actually took next to the predicted range. A
+      <code>likely-too-large</code> that runs means either the OS reclaimed or compressed other
+      memory to make room, or the estimate was off — the measured figure says which.
     </p>
 
     <div class="bar">
@@ -162,6 +162,20 @@
         rows.append(tr)
       }
 
+      function range(estimate) {
+        const { lowerBoundBytes: lower, upperBoundBytes: upper } = estimate
+        return lower === upper ? gib(upper) : `${gib(lower)} – ${gib(upper)}`
+      }
+
+      // Where the measured load landed against the predicted range. Measured
+      // after load, so it is the persistent part: weights, cache, engine.
+      function compared(taken, said) {
+        if (taken === undefined || said?.lower === undefined) return ''
+        if (taken < said.lower) return 'the estimate overshot'
+        if (taken > said.upper) return 'the estimate undershot'
+        return 'the estimate held'
+      }
+
       function cell(name, which) {
         return rows.querySelector(
           `tr:nth-child(${models.findIndex((m) => m.name === name) + 1}) [data-cell="${which}"]`
@@ -184,19 +198,25 @@
         basis.textContent =
           `Basis: ${result.basis}` +
           (result.budget
-            ? ` — ${gib(result.budget.availableAfterReserveBytes)} available of ` +
-              `${gib(result.budget.totalBytes)}, ${gib(result.budget.reservedBytes)} held back`
+            ? ` — ${gib(result.budget.availableAfterReserveBytes)} budget: ` +
+              `${gib(result.budget.availableBytes)} free of ${gib(result.budget.totalBytes)}, ` +
+              `${gib(result.budget.reservedBytes)} held back`
             : '') +
           (placement ? `\n${placement}` : '')
 
-        const available = result.budget?.availableAfterReserveBytes
+        const budget = result.budget
         for (const model of result.models ?? []) {
-          judged.set(model.name, { verdict: model.verdict, available })
+          judged.set(model.name, {
+            verdict: model.verdict,
+            budget,
+            lower: model.estimate?.lowerBoundBytes,
+            upper: model.estimate?.upperBoundBytes
+          })
           const verdictCell = cell(model.name, 'verdict')
           verdictCell.className = `verdict ${VERDICT_CLASS[model.verdict] ?? ''}`
           verdictCell.innerHTML = `${model.verdict} <button data-estimate="${model.name}" title="Estimate again">↻</button>`
           const predicted = cell(model.name, 'predicted')
-          predicted.textContent = model.estimate ? gib(model.estimate.upperBoundBytes) : '—'
+          predicted.textContent = model.estimate ? range(model.estimate) : '—'
           // An `unknown` always says what is missing; that is the useful part.
           if (model.verdict === 'unknown' && model.reasons?.length) {
             const note = document.createElement('span')
@@ -206,10 +226,12 @@
           }
           // Stamp the budget this row was judged against: free memory moves, so
           // a row estimated a minute ago answered a different question.
-          if (available !== undefined) {
+          if (budget) {
             const stamp = document.createElement('span')
             stamp.className = 'reason'
-            stamp.textContent = `judged against ${gib(available)} free`
+            stamp.textContent =
+              `judged against a ${gib(budget.availableAfterReserveBytes)} budget ` +
+              `(${gib(budget.availableBytes)} free, ${gib(budget.reservedBytes)} held back)`
             verdictCell.append(stamp)
           }
         }
@@ -229,9 +251,10 @@
         })
         const result = await response.json()
 
-        const said = judged.get(name)?.verdict
+        const said = judged.get(name)
+        const verdict = said?.verdict
         if (!result.ok) {
-          const matched = said === 'likely-too-large' ? ' — as the verdict said' : ''
+          const matched = verdict === 'likely-too-large' ? ' — as the verdict said' : ''
           target.innerHTML =
             `<span class="too-large">did not run${matched}</span>` +
             `<span class="reason">${result.error ?? 'unknown error'}</span>`
@@ -239,19 +262,32 @@
         }
         const before = result.systemUsedBeforeBytes
         const after = result.systemUsedAfterLoadBytes
-        const delta = before !== undefined && after !== undefined ? `${gib(after - before)}` : 'n/a'
-        // A `likely-too-large` that runs has not refuted the verdict: the OS
-        // reclaimed or compressed to make room, which is the cost the reserve
-        // exists to avoid. A bare green "ran" would read as the estimate being
-        // wrong.
+        const taken = before !== undefined && after !== undefined ? after - before : undefined
+        const outcome = compared(taken, said)
+        // A `likely-too-large` that runs is evidence either way: the OS may
+        // have reclaimed or compressed other memory to make room, or the
+        // estimate may have been off. Put the measurement next to the range
+        // and let the reader see which.
         const headline =
-          said === 'likely-too-large'
+          verdict === 'likely-too-large'
             ? `<span class="too-large">ran anyway</span>` +
-              `<span class="reason">the OS made room for it — "too large" predicts paging, not a crash</span>`
-            : `<span class="fits">ran on ${result.backendDevice ?? 'device'}</span>`
+              `<span class="reason">${outcome || 'the OS made room for it'}` +
+              (said?.budget
+                ? ` — judged against a ${gib(said.budget.availableAfterReserveBytes)} budget`
+                : '') +
+              `</span>`
+            : `<span class="fits">ran on ${result.backendDevice ?? 'device'}</span>` +
+              (outcome ? `<span class="reason">${outcome}</span>` : '')
+        const measured =
+          taken === undefined
+            ? 'system memory n/a'
+            : `took ${gib(taken)}` +
+              (said?.lower !== undefined
+                ? `, predicted ${range({ lowerBoundBytes: said.lower, upperBoundBytes: said.upper })}`
+                : '')
         target.innerHTML =
           headline +
-          `<span class="reason">system memory ${delta} · ${(result.elapsedMs / 1000).toFixed(1)}s · “${result.sample ?? ''}”</span>`
+          `<span class="reason">${measured} · ${(result.elapsedMs / 1000).toFixed(1)}s · “${result.sample ?? ''}”</span>`
       }
 
       rows.addEventListener('click', (event) => {

@@ -72,6 +72,10 @@ upper bound <= budget  → likely-fits
 otherwise              → unknown
 ```
 
+The result's `budget` carries every term — `totalBytes`, `usedBytes`,
+`availableBytes`, `reservedBytes`, `availableAfterReserveBytes` — so a verdict
+can be read back to the numbers it came from.
+
 What "total" and "in use" mean depends on the result's `basis`:
 
 - **`system-memory`** — device RAM and system-wide use. Desktop, and Android
