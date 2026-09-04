@@ -3,10 +3,16 @@
 
 const fs = require('fs')
 const path = require('path')
+const {
+  REQUIRED_PLATFORMS,
+  generatedRunnerNames,
+  validateTestGroups
+} = require('./lib/validate-test-groups')
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileAutoFile = path.join(repoRoot, 'test', 'mobile', 'integration.auto.cjs')
+const groupsFile = path.join(repoRoot, 'test', 'mobile', 'test-groups.json')
 
 function getIntegrationTestFiles() {
   if (!fs.existsSync(integrationDir)) {
@@ -73,7 +79,30 @@ try {
     process.exit(0)
   }
 
-  console.log('✅ Mobile integration tests are up to date')
+  if (!fs.existsSync(groupsFile)) {
+    console.error('❌ Mobile test groups not found!')
+    console.error('   Expected: test/mobile/test-groups.json')
+    process.exit(1)
+  }
+
+  const runners = generatedRunnerNames(mobileAutoContent)
+  if (runners.length === 0) {
+    console.error('❌ No mobile integration runners found!')
+    console.error('   Run: npm run test:mobile:generate')
+    process.exit(1)
+  }
+
+  const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf8'))
+  const problems = validateTestGroups(groups, runners, { platforms: REQUIRED_PLATFORMS })
+  if (problems.length > 0) {
+    console.error('❌ test-groups.json does not schedule every mobile runner:')
+    problems.forEach((problem) => console.error(`   ${problem}`))
+    process.exit(1)
+  }
+
+  console.log(
+    `✅ Mobile integration tests are up to date (${runners.length} runner(s), group coverage OK)`
+  )
   process.exit(0)
 } catch (error) {
   console.error('Error validating mobile tests:', error.message)
