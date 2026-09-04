@@ -13,7 +13,12 @@ import {
   stopServe,
   writeApiKeyFile
 } from '../src/managed/serve-process.js'
-import { fakeServeSkip as skip, makeFakeServe, setBehavior } from './helpers/fake-serve.js'
+import {
+  fakeServeSkip as skip,
+  makeFakeServe,
+  setArgvFile,
+  setBehavior
+} from './helpers/fake-serve.js'
 
 const API_KEY = 'managed-test-key'
 
@@ -52,6 +57,44 @@ test(
     } finally {
       setBehavior(undefined)
       await fake.cleanup()
+    }
+  }
+)
+
+test(
+  'spawnServe launches the serve with --openai --no-default, not the retired subcommand',
+  { skip },
+  async () => {
+    const fake = await makeFakeServe()
+    const dir = await mkdtemp(join(tmpdir(), 'qvac-argv-'))
+    const argvFile = join(dir, 'argv.json')
+    setBehavior('healthy')
+    setArgvFile(argvFile)
+    try {
+      const port = await allocateFreePort('127.0.0.1')
+      const serve = await spawnServe({
+        apiKey: API_KEY,
+        configPath: 'unused.json',
+        port,
+        serveBinPath: fake.binPath,
+        startTimeoutMs: 10_000
+      })
+
+      const argv = JSON.parse(await readFile(argvFile, 'utf8')) as string[]
+
+      // `serve openai` is deprecated as of @qvac/cli 0.13 and warns on start.
+      // The flag pair is what it expanded to: the OpenAI surface only.
+      assert.equal(argv[0], 'serve')
+      assert.equal(argv[1], '--openai')
+      assert.equal(argv[2], '--no-default')
+      assert.equal(argv.includes('openai'), false)
+
+      await stopServe(serve.child)
+    } finally {
+      setArgvFile(undefined)
+      setBehavior(undefined)
+      await fake.cleanup()
+      await rm(dir, { recursive: true, force: true })
     }
   }
 )
