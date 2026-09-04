@@ -102,16 +102,16 @@
     <p class="sub">
       <strong>Estimate</strong> reads catalog metadata and one memory sample: no download, no load.
       <strong>Run</strong> loads the model for real and generates a few tokens, so the verdict can
-      be checked against what happens. Watch the elapsed time: a <code>likely-too-large</code> model
-      usually still runs on an OS with swap, just badly — the verdict is about the interactive
-      budget, not about whether the load throws.
+      be checked against what happens. Each row is judged on its own, not as one co-resident set.
+      Watch the elapsed time: a <code>likely-too-large</code> model usually still runs on an OS with
+      swap, just badly — the verdict is about the interactive budget, not about whether the load
+      throws.
     </p>
 
     <div class="bar">
       <label
         >Context <input id="ctx" type="number" value="8192" min="512" step="512" size="6"
       /></label>
-      <button id="estimate">Estimate all</button>
       <span id="status" class="sub"></span>
     </div>
 
@@ -168,12 +168,12 @@
         )
       }
 
-      async function estimate(names, { combined }) {
+      async function estimate(name) {
         status.textContent = 'estimating…'
         const response = await fetch('/api/assess', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ names, contextTokens: Number(ctx.value) })
+          body: JSON.stringify({ names: [name], contextTokens: Number(ctx.value) })
         })
         const result = await response.json()
 
@@ -213,11 +213,9 @@
             verdictCell.append(stamp)
           }
         }
-        // Only the all-models call has a combined verdict worth reporting: it
-        // aggregates every candidate against one budget.
-        status.textContent = combined
-          ? `combined: ${result.verdict}`
-          : `${names.length} of ${models.length} estimated`
+        // No combined verdict is shown: it aggregates the models in one call
+        // against one budget, and each row here asks about a single model.
+        status.textContent = ''
       }
 
       async function runOne(name, button) {
@@ -256,18 +254,11 @@
           `<span class="reason">system memory ${delta} · ${(result.elapsedMs / 1000).toFixed(1)}s · “${result.sample ?? ''}”</span>`
       }
 
-      document.getElementById('estimate').addEventListener('click', () =>
-        estimate(
-          models.map((m) => m.name),
-          { combined: true }
-        )
-      )
-
       rows.addEventListener('click', (event) => {
         const run = event.target?.dataset?.run
         if (run) return runOne(run, event.target)
         const one = event.target?.dataset?.estimate
-        if (one) return estimate([one], { combined: false })
+        if (one) return estimate(one)
       })
     </script>
   </body>
