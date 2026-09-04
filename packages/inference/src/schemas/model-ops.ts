@@ -12,6 +12,12 @@ export const deleteCacheRequestSchema = z.union([
   z
     .object({
       type: z.literal('deleteCache'),
+      auto: z.literal(true)
+    })
+    .meta({ title: 'DeleteCacheAutoRequest' }),
+  z
+    .object({
+      type: z.literal('deleteCache'),
       kvCacheKey: z.string(),
       modelId: z.string().optional()
     })

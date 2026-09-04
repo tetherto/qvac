@@ -98,6 +98,7 @@ Anonymous caches created by `kvCache: true` are tracked with internal marker met
 - Auto caches idle for more than 24 hours are removed.
 - Least-recently-used auto caches are removed when their total size exceeds 512 MiB on React Native or 4 GiB on other runtimes.
 - Cache paths used by active turns are excluded from eviction.
+- `deleteCache({ auto: true })` reclaims the same set on demand, ignoring both bounds — see [Atomic Cache Deletion](#atomic-cache-deletion-deletekvcachestate).
 
 Named string-key caches are not inferred from their directory names and remain caller-managed through `deleteCache()`. Retention acts only on cache directories that carry an auto-cache marker, and a marker is written only on an auto (`kvCache: true`) turn — a purely named cache never gets one. The one exception: a named key chosen to exactly equal a generated auto key (16 lowercase hex characters) resolves to the *same* directory as that auto cache, so it shares the auto cache's lock and its retention. Avoid that shape for named keys you want to manage independently. Generated caches from older SDK versions become managed when they are next reused; operators can use `deleteCache({ all: true })` for a one-time removal of unreachable legacy caches.
 
@@ -195,9 +196,19 @@ When `kvCache: true`, `beginTurn` resolves the pre-response cache path (key deri
 import { deleteCache } from "@qvac/sdk";
 
 await deleteCache({ all: true });                              // wipe and recreate the kv-cache root
+await deleteCache({ auto: true });                             // reclaim inactive auto caches, keep named ones
 await deleteCache({ kvCacheKey: "session-a" });                // remove session-a across every model
 await deleteCache({ kvCacheKey: "session-a", modelId: "..." }); // remove only one model's session-a cache
 ```
+
+`{ auto: true }` is the on-demand counterpart to the periodic sweep. It reuses
+`planAutoCacheEvictions` with an unreachable quota, so it drops every auto cache
+no turn is holding regardless of age or size, while the marker check keeps
+caller-owned named caches out of scope. Unlike the keyed and `all` targets it
+skips active keys and holds the cache-state lock, so it is safe to call while
+requests are in flight. Its scope is the whole kv-cache root, shared by every
+QVAC process under the same home directory — the scope the periodic sweep
+already acts on.
 
 `handleDeleteCache` delegates to `deleteKvCacheState(...)` — a module-level export from `kv-cache-session.ts` that owns the same layers. It removes the matching on-disk directory tree and scope-clears the `initializedCaches`/`cachedPrefixes` entries by `(kvCacheKey[, modelId])`. The RPC handler itself has **zero direct references** to `fsPromises.unlink` or the session's in-memory maps.
 

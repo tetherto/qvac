@@ -1248,6 +1248,63 @@ test('kv-cache-session: deleteKvCacheState({ all: true }) wipes everything', asy
   }
 })
 
+test('kv-cache-session: deleteKvCacheState({ auto: true }) reclaims auto caches and spares named ones', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const autoKey = '7777777777777777'
+    const namedHexKey = '8888888888888888'
+    const autoPath = await utils.getCacheFilePath('model', 'config', autoKey)
+    const namedPath = await utils.getCacheFilePath('model', 'config', namedHexKey)
+    // A 0-byte `.bin` is what a crashed prime leaves: it has a real mtime, so
+    // the idle rule skips it, and it adds nothing to the size total.
+    const emptyKey = '9999999999999999'
+    const emptyPath = await utils.getCacheFilePath('model', 'config', emptyKey)
+
+    writeFakeCache(autoPath)
+    writeFakeCache(namedPath)
+    fs.writeFileSync(emptyPath, '')
+    await retention.markAutoCacheKey(autoKey)
+    await retention.markAutoCacheKey(emptyKey)
+
+    // Freshly written and far under the quota, so neither standing rule would
+    // evict them: reclaiming anyway is what makes this on-demand.
+    await mod.deleteKvCacheState({ auto: true })
+
+    t.is(fs.existsSync(autoPath), false, 'auto cache reclaimed')
+    t.is(fs.existsSync(emptyPath), false, 'zero-byte auto cache reclaimed')
+    t.ok(fs.existsSync(namedPath), 'hex-shaped named cache left alone')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: deleteKvCacheState({ auto: true }) skips a cache a turn is holding', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash: mod.generateConfigHash('sys', []),
+      history: [{ role: 'user', content: 'active' }],
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+    const inactiveKey = 'aaaaaaaaaaaaaaaa'
+    const inactivePath = await utils.getCacheFilePath('other-model', 'config', inactiveKey)
+    writeFakeCache(inactivePath)
+    await retention.markAutoCacheKey(inactiveKey)
+
+    await mod.deleteKvCacheState({ auto: true })
+
+    t.ok(fs.existsSync(turn.cachePath), 'in-flight auto cache retained')
+    t.is(fs.existsSync(inactivePath), false, 'inactive auto cache reclaimed')
+    await session.rollback(turn)
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: beginTurn throws if prime closure resolves but no cache file is on disk', async (t) => {
   // Mirrors the existing `verifySaveAndRecord` access-probe at
   // commit time, applied at prime time. The addon's
