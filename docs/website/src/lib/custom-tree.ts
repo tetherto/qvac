@@ -162,7 +162,7 @@ export const customTree: Node[] = [
     name: 'World simulation',
     url: '/ai-capabilities/world-simulation',
     type: 'page',
-    icon: resolveIcon('Waypoints'),
+    icon: resolveIcon('Rotate3d'),
   },
   {
     name: 'Music generation',

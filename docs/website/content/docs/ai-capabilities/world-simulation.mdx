@@ -6,7 +6,7 @@ schemaType: HowTo
 
 ## Overview
 
-World simulation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)) exposed as an interactive session — currently powered by **ABot-World**. Load a supported model using `modelType: "sdcpp-generation"` with `modelConfig.mode: "world"`. Then call `worldCreateScene()` once to build a world from a text prompt and a first-frame image, and `worldStep()` repeatedly to walk it — each call generates one block of video streamed frame-by-frame.
+World simulation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)) exposed as an interactive session powered by **ABot-World**. Load a supported model using `modelType: "sdcpp-generation"` with `modelConfig.mode: "world"`. Then call `worldCreateScene()` once to build a world from a text prompt and a first-frame image, and `worldStep()` repeatedly to walk it. Each call generates one block of video streamed frame-by-frame.
 
 The session runs on the machine hosting the worker; there is no remote route.
 
@@ -57,10 +57,6 @@ ABot-World uses a split layout with four models:
 - `ABOT_WORLD_0_5B_LF_VAE` — the taehv streaming decoder used on every step. Passed as `modelConfig.taehvModelSrc`.
 - `ABOT_WORLD_0_5B_LF_VAE_F16` — the full-precision VAE that encodes the first frame during `worldCreateScene`. Passed as `modelConfig.vaeModelSrc`.
 - `UMT5_XXL_ENC_Q8_0` — the UMT5 text encoder for the prompt. Passed as `modelConfig.t5XxlModelSrc`.
-
-<Callout type="warn">
-`taehvModelSrc` and `vaeModelSrc` are two different VAEs with similar names. Swapping them loads fine and then fails once the walk starts. Wire them exactly as above.
-</Callout>
 
 ```ts
 import {
