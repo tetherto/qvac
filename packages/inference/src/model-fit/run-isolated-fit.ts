@@ -148,9 +148,12 @@ type TailBytes = Buffer & Uint8Array
 
 function appendTail(current: TailBytes, chunk: string): TailBytes {
   const combined = Buffer.concat([current, Buffer.from(chunk)]) as TailBytes
-  return combined.length <= STDERR_TAIL_BYTES
-    ? combined
-    : (combined.subarray(combined.length - STDERR_TAIL_BYTES) as TailBytes)
+  if (combined.length <= STDERR_TAIL_BYTES) return combined
+  let start = combined.length - STDERR_TAIL_BYTES
+  // A byte-offset trim can open mid-codepoint; walk forward past UTF-8
+  // continuation bytes (0b10xxxxxx) so toString() never leads with U+FFFD.
+  while (start < combined.length && (combined[start]! & 0xc0) === 0x80) start++
+  return combined.subarray(start) as TailBytes
 }
 
 function unknown(

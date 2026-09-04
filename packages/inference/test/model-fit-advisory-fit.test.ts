@@ -156,7 +156,7 @@ test('advisory fit: treats every supervisor failure as absent evidence', async (
 })
 
 test('advisory fit: never launches a child for an unsupported load', async (t) => {
-  const { logger } = recordingLogger()
+  const { logger, records } = recordingLogger()
   const { calls, runFit } = fitReturning({ status: 'completed', result: FIT_PLAN })
 
   const outcome = await runAdvisoryFitCheck(
@@ -167,6 +167,25 @@ test('advisory fit: never launches a child for an unsupported load', async (t) =
   t.is(outcome.verdict, 'unknown')
   t.is(outcome.reason, 'unsupported-load')
   t.is(calls.length, 0)
+  // Every non-llama load takes this path, so it must not spam `info`.
+  t.is(records[0]?.level, 'debug')
+})
+
+test('advisory fit: the env opt-out disables the check without logging', async (t) => {
+  const { logger, records } = recordingLogger()
+  const { calls, runFit } = fitReturning({ status: 'completed', result: FIT_PLAN })
+
+  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
+    enabled: false,
+    mobile: false,
+    residentModelBytes: zeroResident,
+    runFit,
+    logger
+  })
+
+  t.alike(outcome, { verdict: 'unknown', reason: 'disabled' })
+  t.is(calls.length, 0)
+  t.is(records.length, 0)
 })
 
 test('advisory fit: never launches a child on mobile', async (t) => {
@@ -257,7 +276,7 @@ test('advisory fit: reserves resident model bytes through the fit margin', async
   t.is(config.marginMiB, 1024 + 10752)
 })
 
-test('advisory fit: leaves the package default margin when nothing is resident', async (t) => {
+test('advisory fit: always sends the explicit base margin, even with nothing resident', async (t) => {
   const { logger } = recordingLogger()
   const { calls, runFit } = fitReturning({ status: 'completed', result: FIT_PLAN })
 
@@ -268,8 +287,10 @@ test('advisory fit: leaves the package default margin when nothing is resident',
     logger
   })
 
+  // The base always travels explicitly: relying on the addon default would
+  // leave two sources of truth that diverge silently if the default moves.
   const config = calls[0]?.[1] as { marginMiB?: number }
-  t.absent('marginMiB' in config)
+  t.is(config.marginMiB, 1024)
 })
 
 test('advisory fit: absorbs a resident-bytes probe that rejects', async (t) => {

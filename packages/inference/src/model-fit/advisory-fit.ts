@@ -58,6 +58,7 @@ export interface AdvisoryFitInput {
  */
 export interface AdvisoryFitOptions {
   signal?: AbortSignal
+  enabled?: boolean
   mobile?: boolean
   timeoutMs?: number
   runFit?: typeof runIsolatedFit
@@ -65,11 +66,25 @@ export interface AdvisoryFitOptions {
   residentModelBytes?: () => Promise<number>
 }
 
+const DISABLED_VALUES = new Set(['0', 'false', 'off', 'no'])
+
 /**
- * The mobile runtime flag is imported lazily. The module reaches Bare-only
- * bindings, and resolving it eagerly would make this orchestration untestable
- * outside a Bare runtime.
+ * On by default; `QVAC_ADVISORY_MODEL_FIT=0` (or `false`/`off`/`no`) is the
+ * operator opt-out — the escape hatch for a load-heavy startup path or a
+ * runtime where the disposable child cannot spawn. Any other value, including
+ * unset, leaves the check on.
+ *
+ * The worker environment and the mobile runtime flag are imported lazily. Both
+ * modules reach Bare-only bindings, and resolving them eagerly would make this
+ * orchestration untestable outside a Bare runtime.
  */
+async function resolveEnabled(explicit: boolean | undefined): Promise<boolean> {
+  if (explicit !== undefined) return explicit
+  const { getValidatedEnv } = await import('@/runtime/env')
+  const value = getValidatedEnv().QVAC_ADVISORY_MODEL_FIT
+  return value === undefined || !DISABLED_VALUES.has(value.toLowerCase())
+}
+
 async function resolveMobile(explicit: boolean | undefined): Promise<boolean> {
   if (explicit !== undefined) return explicit
   const { isMobile } = await import('@/runtime/state')
@@ -171,13 +186,19 @@ function report(logger: Logger, input: AdvisoryFitInput, outcome: AdvisoryFitOut
     return
   }
 
-  // `info`, not `debug`: "why was there no verdict" is the most useful thing
-  // this check can report, and the default logger hides `debug`.
-  logger.info(
-    `${prefix} no fit evidence: ${outcome.reason}${
-      outcome.message === undefined ? '' : ` (${outcome.message})`
-    }`
-  )
+  // `unsupported-load` covers every load this check refuses up front — all
+  // non-llama.cpp model types and mobile — so at `info` it would tag every
+  // whisper/tts/ocr load on every start. `debug` for those; `info` where a
+  // child ran (or should have) and produced no verdict, because there "why was
+  // there no evidence" is the most useful thing this check can report.
+  const line = `${prefix} no fit evidence: ${outcome.reason}${
+    outcome.message === undefined ? '' : ` (${outcome.message})`
+  }`
+  if (outcome.reason === 'unsupported-load') {
+    logger.debug(line)
+    return
+  }
+  logger.info(line)
 }
 
 /**
@@ -195,6 +216,7 @@ export async function runAdvisoryFitCheck(
   let logger: Logger | undefined = options.logger
   try {
     logger ??= getEngineLogger()
+    if (!(await resolveEnabled(options.enabled))) return unknown('disabled')
 
     const plan = createLlamaFitRequest({
       modelType: input.modelType,
@@ -215,11 +237,12 @@ export async function runAdvisoryFitCheck(
     const residentReserveMiB = Math.ceil(residentBytes / BYTES_PER_MIB)
 
     const runFit = await resolveRunFit(options.runFit)
+    // Always sent, even with a zero reserve: relying on the addon default for
+    // the base margin would leave two sources of truth that match today and
+    // diverge silently if the addon default moves.
     const result = await runFit(
       plan.loadKind,
-      residentReserveMiB > 0
-        ? { ...plan.config, marginMiB: ADVISORY_FIT_BASE_MARGIN_MIB + residentReserveMiB }
-        : plan.config,
+      { ...plan.config, marginMiB: ADVISORY_FIT_BASE_MARGIN_MIB + residentReserveMiB },
       {
         timeoutMs: options.timeoutMs ?? ADVISORY_FIT_TIMEOUT_MS,
         ...(options.signal !== undefined && { signal: options.signal })
