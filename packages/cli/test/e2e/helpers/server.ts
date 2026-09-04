@@ -18,6 +18,8 @@ export interface CreateServerOptions {
   model?: string[]
   transcribeOverride?: OpenAIExtensionOptions['transcribeOverride']
   loadModelOverride?: StartServerOptions['loadModelOverride']
+  /** Extension names to mount. Defaults to every registered extension. */
+  extensions?: string[]
 }
 
 function serverOptions(projectRoot: string, opts: CreateServerOptions): StartServerOptions {
@@ -32,6 +34,7 @@ function serverOptions(projectRoot: string, opts: CreateServerOptions): StartSer
     ...(opts.publicBaseUrl !== undefined ? { publicBaseUrl: opts.publicBaseUrl } : {}),
     ...(opts.docs !== undefined ? { docs: opts.docs } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
+    ...(opts.extensions !== undefined ? { extensions: opts.extensions } : {}),
     ...(opts.transcribeOverride !== undefined
       ? { extensionOptions: { openai: { transcribeOverride: opts.transcribeOverride } } }
       : {}),

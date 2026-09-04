@@ -9,9 +9,61 @@ described in [README.md](README.md) and applies here. Its own configuration live
 
 ## Endpoints
 
-| Method | Path                 | Notes                        |
-| ------ | -------------------- | ---------------------------- |
-| `POST` | `/qvac/v1/translate` | Text translation (NMT model) |
+| Method   | Path                 | Notes                        |
+| -------- | -------------------- | ---------------------------- |
+| `DELETE` | `/qvac/v1/kv_cache`  | Reclaim automatic KV cache   |
+| `POST`   | `/qvac/v1/translate` | Text translation (NMT model) |
+
+## KV-cache retention
+
+`/v1/chat/completions` and `/v1/responses` cache each conversation's prefix under
+`~/.qvac/kv-cache`, so a follow-up turn only prefills the new tail. That directory grows on
+the order of hundreds of megabytes per conversation, **but it is bounded** — you do not need
+a sweeper of your own:
+
+| Bound           | Value                                             |
+| --------------- | ------------------------------------------------- |
+| Size quota      | 4 GiB least-recently-used (512 MiB on mobile)     |
+| Idle TTL        | 24 hours                                          |
+| Sweep frequency | After a cached turn finishes, at most every 5 min |
+
+Caches held by an in-flight request are never evicted.
+
+**Named caches are not covered.** The policy applies only to the _automatic_ caches these
+endpoints create. A caller-owned named cache — `completion({ kvCache: "my-session" })`
+through the SDK — is exempt from both the quota and the TTL, and the endpoint below never
+touches it. Clean those up with the SDK's `deleteCache({ kvCacheKey })`. Serve itself only
+ever creates automatic caches; it does not use named keys.
+
+## `DELETE /qvac/v1/kv_cache`
+
+Frees every automatic KV cache no in-flight request is using, immediately, rather than
+waiting for the quota or the TTL. Use it when reclaiming disk matters more than keeping
+conversations warm: deleting a cache costs the next turn a full prefill instead of a partial
+one, and loses no conversation content, since a KV cache is derived data.
+
+```bash
+curl -X DELETE http://localhost:11434/qvac/v1/kv_cache
+```
+
+```json
+{ "object": "kv_cache.reclaim", "deleted": true }
+```
+
+> **Scope is the host, not this server.** `~/.qvac/kv-cache` is shared by every QVAC process
+> running under the same home directory, so this reclaims another local process's automatic
+> caches too. That is the same scope the automatic sweep already acts on. Nothing in a cache
+> path identifies the process that wrote it, because cache identity is content-derived, so
+> per-server scoping is not available.
+
+This route needs the QVAC surface mounted. It is absent under `--no-default`, and therefore
+under the deprecated `qvac serve openai`, which implies it.
+
+### Errors
+
+| HTTP | `error.code`              | When                  |
+| ---- | ------------------------- | --------------------- |
+| 500  | `kv_cache_reclaim_failed` | The SDK delete failed |
 
 ## `POST /qvac/v1/translate`
 
