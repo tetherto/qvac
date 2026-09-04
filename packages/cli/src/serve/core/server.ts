@@ -12,7 +12,12 @@ import {
 
 import type { QvacContext } from '@/serve/core/context'
 import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '@/serve/core/cors'
-import { extensionSummary, extensionTags, type ServeExtension } from '@/serve/core/extensions'
+import {
+  extensionErrorCodes,
+  extensionSummary,
+  extensionTags,
+  type ServeExtension
+} from '@/serve/core/extensions'
 import { shutdownSDK } from '@/serve/core/lifecycle'
 import authPlugin from '@/serve/core/plugins/auth'
 import cancelBridgePlugin from '@/serve/core/plugins/cancel-bridge'
@@ -53,7 +58,7 @@ export async function createCoreServer(
   app.setValidatorCompiler(validatorCompiler)
   app.setSerializerCompiler(serializerCompiler)
 
-  await app.register(errorHandlerPlugin)
+  await app.register(errorHandlerPlugin, { fieldCodes: extensionErrorCodes(options.extensions) })
   await app.register(contextPlugin, { context: ctx })
 
   await app.register(swagger, {

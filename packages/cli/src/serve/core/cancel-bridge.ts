@@ -2,6 +2,14 @@ import type { ServerResponse } from 'node:http'
 import { cancel } from '@qvac/sdk'
 import type { Logger } from '@/logger'
 
+interface CancelBinding {
+  requestIds: Set<string>
+  cancelFn: (opts: { requestId: string }) => Promise<void>
+  clientGone: boolean
+}
+
+const bindings = new WeakMap<ServerResponse, CancelBinding>()
+
 /**
  * Bind the HTTP request lifecycle to an SDK `requestId` so a client
  * disconnect (browser tab closed, `fetch().abort()`, network drop)
@@ -32,8 +40,12 @@ import type { Logger } from '@/logger'
  * `embed` / `transcribe`) and surface `requestId` slightly differently.
  * Lifting to middleware buys nothing until a fourth long-running route
  * shows up.
- */
-/**
+ *
+ * A route may bind several ids for one request. One `close` listener serves a
+ * response however many ids it carries, and cancels all of them. `close` fires
+ * once and is not replayed, so an id bound after it is cancelled on the spot
+ * instead.
+ *
  * Optional `cancelFn` override is for unit tests only — production callers
  * omit it and the bridge uses the SDK's `cancel` directly. The override
  * exists because ESM named imports cannot be cleanly substituted at test
@@ -46,12 +58,32 @@ export function bindClientDisconnectCancel(
   logger: Logger,
   cancelFn: (opts: { requestId: string }) => Promise<void> = cancel
 ): void {
-  const onClose = () => {
-    if (res.writableEnded) return
-    cancelFn({ requestId }).catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err)
-      logger.debug(`  cancel-on-disconnect failed for requestId=${requestId}: ${message}`)
-    })
+  const bound = bindings.get(res)
+  if (bound) {
+    if (bound.clientGone) {
+      fireCancel(bound, requestId, logger)
+      return
+    }
+    bound.requestIds.add(requestId)
+    return
   }
-  res.once('close', onClose)
+
+  const binding: CancelBinding = { requestIds: new Set([requestId]), cancelFn, clientGone: false }
+  bindings.set(res, binding)
+
+  res.once('close', () => {
+    if (res.writableEnded) {
+      bindings.delete(res)
+      return
+    }
+    binding.clientGone = true
+    for (const id of binding.requestIds) fireCancel(binding, id, logger)
+  })
+}
+
+function fireCancel(binding: CancelBinding, requestId: string, logger: Logger): void {
+  binding.cancelFn({ requestId }).catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.debug(`  cancel-on-disconnect failed for requestId=${requestId}: ${message}`)
+  })
 }
