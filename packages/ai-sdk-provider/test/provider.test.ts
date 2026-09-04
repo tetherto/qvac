@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { APICallError } from '@ai-sdk/provider'
+import { APICallError, UnsupportedFunctionalityError } from '@ai-sdk/provider'
 
 import { DEFAULT_API_KEY, DEFAULT_BASE_URL } from '../src/defaults.js'
 import { createQvac, qvac } from '../src/provider.js'
@@ -170,6 +170,83 @@ test('uploadFile returns a qvac reference and language models resolve it through
     'http://127.0.0.1:55555/v1/chat/completions'
   ])
   assert.match(JSON.stringify(chatBody), /data:image\/png;base64,iVBORw0KGgo=/)
+})
+
+test('uploadFile accepts every file data variant and forwards the abort signal', async () => {
+  const uploaded: Array<{ bytes: Uint8Array; signal?: AbortSignal | null }> = []
+  const customFetch: typeof fetch = async (_input, init) => {
+    assert.ok(init?.body instanceof FormData)
+    const file = init.body.get('file')
+    assert.ok(file instanceof Blob)
+    uploaded.push({
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      ...(init.signal !== undefined && { signal: init.signal })
+    })
+    return Response.json({ id: `file-${uploaded.length}` })
+  }
+  const files = createQvac({
+    baseURL: 'http://127.0.0.1:55555/v1',
+    fetch: customFetch
+  }).files()
+
+  const raw = await files.uploadFile({
+    data: { type: 'data', data: Uint8Array.from([1, 2, 3]) },
+    mediaType: 'application/octet-stream'
+  })
+  assert.deepEqual(raw.providerReference, { qvac: 'file-1' })
+
+  await files.uploadFile({
+    data: { type: 'data', data: 'AQID' },
+    mediaType: 'application/octet-stream'
+  })
+
+  await files.uploadFile({ data: { type: 'text', text: 'hi' }, mediaType: 'text/plain' })
+
+  const abort = new AbortController()
+  await files.uploadFile({
+    data: {
+      type: 'stream',
+      stream: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(Uint8Array.from([1, 2]))
+          controller.enqueue(Uint8Array.from([3]))
+          controller.close()
+        }
+      })
+    },
+    mediaType: 'application/octet-stream',
+    abortSignal: abort.signal
+  })
+
+  assert.deepEqual(
+    uploaded.map(({ bytes }) => Array.from(bytes)),
+    [
+      [1, 2, 3],
+      [1, 2, 3],
+      [104, 105],
+      [1, 2, 3]
+    ]
+  )
+  assert.equal(uploaded[0]?.signal ?? null, null)
+  assert.equal(uploaded[3]?.signal, abort.signal)
+})
+
+test('uploadFile rejects an unknown file data variant without a build-time break', async () => {
+  const files = createQvac({
+    baseURL: 'http://127.0.0.1:55555/v1',
+    fetch: () => assert.fail('unknown data variants must not reach the network')
+  }).files()
+
+  await assert.rejects(
+    async () =>
+      await files.uploadFile({
+        data: { type: 'holo-tape' } as unknown as Parameters<typeof files.uploadFile>[0]['data'],
+        mediaType: 'application/octet-stream'
+      }),
+    (error: unknown) =>
+      UnsupportedFunctionalityError.isInstance(error) &&
+      error.functionality === "file upload data type 'holo-tape'"
+  )
 })
 
 test('native HTTP adapters expose structured APICallError details and retryability', async () => {
