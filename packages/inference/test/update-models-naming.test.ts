@@ -1518,6 +1518,148 @@ test('diffusion: FLUX.2 VAE — vae tag produces _VAE suffix', (t) => {
 })
 
 // ---------------------------------------------------------------------------
+// Diffusion: LTX audio + video VAEs sharing one model name (tagged "vae")
+// ---------------------------------------------------------------------------
+
+test('diffusion: LTX VAEs — type tag avoids collision', (t) => {
+  const coreKey = Buffer.from('ee'.repeat(32), 'hex')
+  const blobBinding = {
+    coreKey,
+    blockOffset: 500,
+    blockLength: 80,
+    byteOffset: 5000000,
+    byteLength: 364853140
+  }
+
+  const audio = processAndName({
+    path: 'unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors',
+    source: 'hf',
+    engine: '@qvac/diffusion-cpp',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 364853140,
+    sha256: 'ee'.repeat(32),
+    tags: ['vae', 'audio', 'ltx'],
+    blobBinding
+  })
+
+  const video = processAndName({
+    path: 'unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors',
+    source: 'hf',
+    engine: '@qvac/diffusion-cpp',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 1452256522,
+    sha256: 'ee'.repeat(32),
+    tags: ['vae', 'video', 'ltx'],
+    blobBinding
+  })
+
+  t.is(audio.exportName, 'LTX_2_3_AUDIO_VAE')
+  t.is(video.exportName, 'LTX_2_3_VIDEO_VAE')
+})
+
+test('diffusion: WAN VAE — type tag repeating the family name is skipped', (t) => {
+  const coreKey = Buffer.from('ee'.repeat(32), 'hex')
+
+  const { exportName } = processAndName({
+    path: 'Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/vae/wan_2.1_vae.safetensors',
+    source: 'hf',
+    engine: '@qvac/diffusion-cpp',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 254000000,
+    sha256: 'ee'.repeat(32),
+    tags: ['vae', 'wan'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 600,
+      blockLength: 90,
+      byteOffset: 6000000,
+      byteLength: 254000000
+    }
+  })
+
+  t.is(exportName, 'WAN_2_1_COMFYUI_REPACKAGED_VAE')
+})
+
+test('diffusion: ABot VAEs — type tag distinguishes taehv and wan files', (t) => {
+  const coreKey = Buffer.from('ee'.repeat(32), 'hex')
+  const blobBinding = {
+    coreKey,
+    blockOffset: 700,
+    blockLength: 100,
+    byteOffset: 7000000,
+    byteLength: 22844832
+  }
+
+  const taehv = processAndName({
+    path: 'qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf',
+    source: 's3',
+    engine: '@qvac/diffusion-cpp',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 22844832,
+    sha256: 'ee'.repeat(32),
+    quantization: 'F16',
+    tags: ['vae', 'taehv', 'abot-world'],
+    blobBinding
+  })
+
+  const wan = processAndName({
+    path: 'qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf',
+    source: 's3',
+    engine: '@qvac/diffusion-cpp',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 1409493568,
+    sha256: 'ee'.repeat(32),
+    quantization: 'F16',
+    tags: ['vae', 'wan', 'abot-world'],
+    blobBinding
+  })
+
+  t.is(taehv.exportName, 'ABOT_WORLD_0_5B_LF_TAEHV_VAE')
+  t.is(wan.exportName, 'ABOT_WORLD_0_5B_LF_WAN_VAE')
+})
+
+test('diffusion: VAE type selection does not depend on tag order or noise tags', (t) => {
+  const coreKey = Buffer.from('ee'.repeat(32), 'hex')
+  const blobBinding = {
+    coreKey,
+    blockOffset: 800,
+    blockLength: 80,
+    byteOffset: 8000000,
+    byteLength: 364853140
+  }
+
+  function ltxVae(filename: string, tags: string[]) {
+    return processAndName({
+      path: `unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/${filename}`,
+      source: 'hf',
+      engine: '@qvac/diffusion-cpp',
+      license: 'Apache-2.0',
+      name: '',
+      sizeBytes: 364853140,
+      sha256: 'ee'.repeat(32),
+      tags,
+      blobBinding
+    }).exportName
+  }
+
+  // Family tag listed before the type tag
+  t.is(ltxVae('audio_vae.safetensors', ['vae', 'ltx', 'audio']), 'LTX_2_3_AUDIO_VAE')
+  t.is(ltxVae('video_vae.safetensors', ['vae', 'ltx', 'video']), 'LTX_2_3_VIDEO_VAE')
+
+  // A format tag before the type is erased by cleanPart and skipped
+  t.is(ltxVae('audio_vae.safetensors', ['vae', 'gguf', 'audio']), 'LTX_2_3_AUDIO_VAE')
+
+  // 'vae' appearing again past index 0, in any case, must not become the role
+  t.is(ltxVae('some_vae.safetensors', ['image', 'vae']), 'LTX_2_3_IMAGE_VAE')
+  t.is(ltxVae('audio_vae.safetensors', ['vae', 'VAE', 'audio']), 'LTX_2_3_AUDIO_VAE')
+})
+
+// ---------------------------------------------------------------------------
 // Parakeet: English CTC vs Indic Conformer CTC
 // ---------------------------------------------------------------------------
 

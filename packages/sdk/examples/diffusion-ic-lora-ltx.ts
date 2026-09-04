@@ -3,8 +3,8 @@ import {
   loadModel,
   LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS,
   LTX_2_3_22B_Q5_K_M,
-  LTX_2_3_VAE,
-  LTX_2_3_VAE_1,
+  LTX_2_3_AUDIO_VAE,
+  LTX_2_3_VIDEO_VAE,
   unloadModel,
   video
 } from '@qvac/sdk'
@@ -40,8 +40,8 @@ try {
       device: 'gpu',
       threads: 4,
       llmModelSrc: GEMMA_3_12B_Q4_K_XL,
-      vaeModelSrc: LTX_2_3_VAE_1,
-      audioVaeModelSrc: LTX_2_3_VAE,
+      vaeModelSrc: LTX_2_3_VIDEO_VAE,
+      audioVaeModelSrc: LTX_2_3_AUDIO_VAE,
       embeddingsConnectorsModelSrc: LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS,
       diffusion_fa: true,
       offload_to_cpu: true,
