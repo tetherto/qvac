@@ -22,7 +22,9 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
   assessModelFit,
   getSystemResources,
@@ -34,19 +36,21 @@ import {
   QWEN3_1_7B_INST_Q4,
   QWEN3_4B_INST_Q4_K_M,
   QWEN3_8B_INST_Q4_K_M,
-  QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL
+  GEMMA4_31B_MULTIMODAL_Q4_K_M
 } from '@qvac/sdk'
 
 const PORT = 8712
 
-// A ladder ending well past what a laptop has, so one screen shows every
-// verdict. The 27B at Q8 is here to be refused.
+// A ladder ending past what a laptop has, so one screen shows every verdict.
+// The 31B is here to be refused: 18 GiB against a 24 GiB machine leaves the OS
+// no way to satisfy it without paging. Every entry is one that is already
+// cached locally, so a Run costs no download.
 const CATALOG = [
   QWEN3_600M_INST_Q4,
   QWEN3_1_7B_INST_Q4,
   QWEN3_4B_INST_Q4_K_M,
   QWEN3_8B_INST_Q4_K_M,
-  QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL
+  GEMMA4_31B_MULTIMODAL_Q4_K_M
 ]
 
 const PAGE_PATH = new URL('index.html', import.meta.url)
@@ -64,6 +68,18 @@ const progress = new Map<
   string,
   { percentage: number; downloaded: number; total: number; at: number }
 >()
+
+// Whether the weights are already on disk, so a Run costs no download. The
+// cache layout is not API, so this matches on file size — enough to label a
+// button, and it errs towards promising a download that may not happen.
+function cachedSizes() {
+  try {
+    const dir = join(homedir(), '.qvac', 'models')
+    return new Set(readdirSync(dir).map((file) => statSync(join(dir, file)).size))
+  } catch {
+    return new Set<number>()
+  }
+}
 
 function byName(name: string) {
   const model = CATALOG.find((entry) => entry.name === name)
@@ -160,7 +176,14 @@ async function run(body: Record<string, unknown>) {
       systemUsedBeforeBytes: before,
       systemUsedAfterLoadBytes: afterLoad,
       backendDevice: final.stats?.backendDevice,
-      sample: final.contentText.trim().slice(0, 120)
+      // The engine's own numbers for the run: tokens/s, time to first token,
+      // token counts. Worth showing next to the memory figures.
+      stats: final.stats,
+      // `cacheableAssistantContent` is the same text with <think> blocks
+      // stripped; a reasoning model otherwise leads with its scratchpad.
+      sample:
+        (final.cacheableAssistantContent ?? final.contentText).trim().slice(0, 160) ||
+        '(no plain text — the model returned reasoning only)'
     }
   } catch (error) {
     // The interesting negative case: the estimate said too large, and the load
@@ -197,7 +220,12 @@ const server = createServer((request, response) => {
     sendJson(
       response,
       200,
-      CATALOG.map((model) => ({ name: model.name, expectedSize: model.expectedSize }))
+      ((sizes) =>
+        CATALOG.map((model) => ({
+          name: model.name,
+          expectedSize: model.expectedSize,
+          cached: sizes.has(model.expectedSize)
+        })))(cachedSizes())
     )
     return
   }
