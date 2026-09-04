@@ -19,12 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   content and filling unset metadata. Requires real `lyrics` and
   `taskType: 'text2music'`; mutually exclusive with `simpleMode`. Faithful
   rewriting needs the 1.7B LM.
+- `understand()`: describe an audio clip through the reverse pipeline — the
+  engine encodes the PCM, recovers the FSQ semantic codes, and the LM reports
+  metadata and a caption. The description streams as an `understand` output
+  item and is repeated on the terminal stats; the recovered `audioCodes` are
+  reusable as a generation's `audioCodes` input.
 
 ### Changed
 
 - Require `speech-cpp` port revision `2026-09-03#1`, which adds the engine's
-  ACE-Step Query Rewriting (FORMAT pass) and audio understanding on top of
-  the teacher-forced LM quality scoring.
+  ACE-Step Query Rewriting (FORMAT pass) and audio understanding (reverse
+  pipeline) on top of the teacher-forced LM quality scoring.
 
 ## [0.3.3] - 2026-09-01
 
