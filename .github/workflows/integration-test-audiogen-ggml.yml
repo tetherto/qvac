@@ -87,6 +87,11 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
+      # The linux GPU self-hosted runners' shared npm cache holds root-owned
+      # files, so every npm invocation dies with EACCES before tests start.
+      # A per-job cache sidesteps the poisoned directory until the runner is
+      # repaired (sudo chown -R on /opt/shared-cache/npm).
+      npm_config_cache: ${{ runner.temp }}/npm-cache
     permissions:
       contents: read
       packages: read
