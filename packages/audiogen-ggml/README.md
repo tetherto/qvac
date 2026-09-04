@@ -140,6 +140,7 @@ const stats = await response.await()
 // backendDevice:     0 = CPU, 1 = GPU
 // backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
+// lyricsScore + lrc: alignment confidence and LRC text, only with generateLrc
 // qualityScore:      [0, 1], present only when the run set computeQualityScore
 
 await gen.destroy()
@@ -289,6 +290,32 @@ Or end to end from the repo:
 ```bash
 AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:simple
+```
+
+### LRC generation: karaoke-style synchronized lyrics
+
+With `generateLrc: true` the engine aligns the lyrics with the generated
+audio (a DiT cross-attention probe plus DTW over the validated lyric heads)
+and delivers standard LRC text — one `[mm:ss.xx]` timestamp per lyric line —
+in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`:
+
+```js
+const response = await gen.run(caption, {
+  generateLrc: true,
+  lyrics: '[verse]\nDancing with you under the moonlight'
+})
+// ...collect the PCM...
+const stats = await response.await()
+fs.writeFileSync('song.lrc', stats.lrc)
+```
+
+It requires lyrics to align — pass them explicitly or let Simple Mode write
+them; instrumental requests are rejected — and `taskType: 'text2music'`.
+End to end from the repo (writes `audiogen-lrc.wav` + `audiogen-lrc.lrc`):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:lrc
 ```
 
 ### Query Rewriting: keep your lyrics, upgrade your caption
@@ -533,6 +560,7 @@ wrapped by a level-gated `QvacLogger`.
 | `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
 | `rewriteQuery` | LM FORMAT pass: rewrite the caption into a detailed description, preserving the lyric content. Requires real `lyrics` and `taskType: 'text2music'`; mutually exclusive with `simpleMode`. |
 | `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
+| `generateLrc` | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`. |
 | `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |

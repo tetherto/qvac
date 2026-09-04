@@ -171,6 +171,77 @@ test('AudioGen.run rejects invalid simpleMode combinations', async (t) => {
   await rejectRunOptions(t, { simpleMode: true, lmPhase1: false }, /simpleMode requires lmPhase1/)
 })
 
+test('AudioGen.run validates and forwards generateLrc', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  await rejectRunOptions(t, { generateLrc: 'yes' }, /generateLrc must be a boolean/)
+  await rejectRunOptions(
+    t,
+    { generateLrc: true, taskType: 'cover-nofsq', sourceAudio, lyrics: '[verse]\nhello' },
+    /generateLrc requires taskType 'text2music'/
+  )
+  await rejectRunOptions(t, { generateLrc: true }, /generateLrc requires lyrics to align/)
+  await rejectRunOptions(
+    t,
+    { generateLrc: true, lyrics: '[Instrumental]' },
+    /generateLrc requires lyrics to align/
+  )
+  await rejectRunOptions(
+    t,
+    { generateLrc: true, simpleMode: true, lyrics: '[Instrumental]' },
+    /generateLrc requires lyrics to align/
+  )
+
+  const explicit = createHarness()
+  const explicitResponse = await explicit.gen.run('timed lyrics', {
+    generateLrc: true,
+    lyrics: '[verse]\nhello'
+  })
+  await explicitResponse.await()
+  t.is(explicit.received().generateLrc, true)
+
+  const simple = createHarness()
+  const simpleResponse = await simple.gen.run('a short query', {
+    generateLrc: true,
+    simpleMode: true
+  })
+  await simpleResponse.await()
+  t.is(simple.received().generateLrc, true, 'simple mode aligns the LM-written lyrics')
+})
+
+test('AudioGen.run surfaces the LRC text and score from the native run', async (t) => {
+  const gen = new AudioGen({})
+  gen.addon = {
+    runJob() {
+      gen._addonOutputCallback(
+        null,
+        null,
+        {
+          outputArray: new Int16Array([1, 2]),
+          sampleRate: 48000,
+          channels: 2,
+          lrc: '[00:01.24]Hello'
+        },
+        null
+      )
+      gen._addonOutputCallback(null, null, { totalTimeMs: 1, lyricsScore: 0.42 }, null)
+      return Promise.resolve(true)
+    },
+    cancel: () => Promise.resolve(),
+    destroyInstance: () => Promise.resolve()
+  }
+
+  const response = await gen.run('timed lyrics', { generateLrc: true, lyrics: '[verse]\nhello' })
+  const chunks = []
+  for await (const item of response.iterate()) {
+    if (item.outputArray) chunks.push(item)
+  }
+  const stats = await response.await()
+  t.is(chunks.length, 1)
+  t.is(chunks[0].lrc, '[00:01.24]Hello')
+  t.is(stats.lrc, '[00:01.24]Hello')
+  t.is(stats.lyricsScore, 0.42)
+})
+
 test('AudioGen.run validates and forwards rewriteQuery', async (t) => {
   const sourceAudio = new Float32Array([0.3, -0.3])
   const lyrics = '[verse]\nhello rewrite world'

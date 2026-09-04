@@ -169,6 +169,14 @@ export interface GenerateOptions {
    */
   normalizeLoudness?: boolean
   /**
+   * Synchronized lyric timestamps: after synthesis, the engine aligns the
+   * lyrics with the generated audio and delivers karaoke-style LRC text in
+   * `stats.lrc` with an alignment confidence in `stats.lyricsScore`. Requires
+   * lyrics to align: pass `lyrics` (or let Simple Mode write them) —
+   * instrumental requests are rejected. Requires `taskType: 'text2music'`.
+   */
+  generateLrc?: boolean
+  /**
    * Teacher-forced LM quality scoring of the generated audio codes against
    * the request: `stats.qualityScore` reports a weighted [0, 1] score
    * (caption/lyrics PMI plus metadata recall) at the cost of extra LM
@@ -313,6 +321,8 @@ export interface AudiogenPcmChunk {
   outputArray: Int16Array
   sampleRate: number
   channels: number
+  /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+  lrc?: string
 }
 
 /** A progress tick delivered through the run's output stream. */
@@ -365,6 +375,14 @@ export interface AudiogenStats {
   backendId?: number
   /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
   gpuFallbackReason?: number
+  /**
+   * Lyric-to-audio alignment confidence in [0, 1]. Present only when the run
+   * set `generateLrc`; the LRC text itself rides on the PCM chunk (`lrc`) and
+   * is repeated here for convenience.
+   */
+  lyricsScore?: number
+  /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+  lrc?: string
   /**
    * Weighted quality of the generated codes against the request, in [0, 1]
    * (caption/lyrics PMI plus metadata recall). Present only when the run set
@@ -447,6 +465,8 @@ interface NativeAudiogenData {
   backendDevice?: number
   backendId?: number
   gpuFallbackReason?: number
+  lyricsScore?: number
+  lrc?: string
   qualityScore?: number
   progressStage?: string
   progressStep?: number
@@ -699,6 +719,7 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'guidanceScale',
   'audioCoverStrength',
   'coverNoiseStrength',
+  'generateLrc',
   'computeQualityScore',
   'rewriteQuery'
 ]
@@ -934,6 +955,7 @@ export class AudioGen {
   private _destroyed: boolean
   private _cancelPromise: Promise<void> | null
   private _cancellingResponse: QvacResponse<AudiogenOutputChunk> | null
+  private _lastLrc: string | undefined
   private _cancelTerminalResolve: (() => void) | null
   private _lastUnderstand: AudiogenUnderstandResult | undefined
 
@@ -1002,6 +1024,7 @@ export class AudioGen {
     this._cancelPromise = null
     this._cancellingResponse = null
     this._cancelTerminalResolve = null
+    this._lastLrc = undefined
   }
 
   /** Create the native engine and load its GGUF files. Idempotent. */
@@ -1152,6 +1175,7 @@ export class AudioGen {
       throw this._lifecycleError()
     }
     const addon = this._requireAddon()
+    this._lastLrc = undefined
     this._lastUnderstand = undefined
     const response = this._job.start() as QvacResponse<AudiogenOutputChunk>
     let accepted: boolean
@@ -1241,6 +1265,20 @@ export class AudioGen {
     if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
       throw invalidInput('normalizeLoudness must be a boolean')
     }
+    if (opts.generateLrc !== undefined && typeof opts.generateLrc !== 'boolean') {
+      throw invalidInput('generateLrc must be a boolean')
+    }
+    if (opts.generateLrc === true) {
+      if (taskType !== undefined && taskType !== 'text2music') {
+        throw invalidInput("generateLrc requires taskType 'text2music'")
+      }
+      if (opts.lyrics === '[Instrumental]') {
+        throw invalidInput('generateLrc requires lyrics to align')
+      }
+      if (opts.simpleMode !== true && (opts.lyrics === undefined || opts.lyrics === '')) {
+        throw invalidInput('generateLrc requires lyrics to align')
+      }
+    }
     if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
       throw invalidInput('computeQualityScore must be a boolean')
     }
@@ -1300,6 +1338,7 @@ export class AudioGen {
       simpleMode: opts.simpleMode,
       rewriteQuery: opts.rewriteQuery,
       normalizeLoudness: opts.normalizeLoudness,
+      generateLrc: opts.generateLrc,
       computeQualityScore: opts.computeQualityScore,
       seed: optionalFiniteNumber(opts.seed, 'seed', true),
       vocalLanguage: opts.vocalLanguage,
@@ -1489,10 +1528,12 @@ export class AudioGen {
     }
 
     if (d.outputArray) {
+      this._lastLrc = typeof d.lrc === 'string' ? d.lrc : undefined
       this._job.output({
         outputArray: d.outputArray,
         sampleRate: d.sampleRate ?? 0,
-        channels: d.channels ?? 0
+        channels: d.channels ?? 0,
+        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
       })
       return
     }
@@ -1522,6 +1563,8 @@ export class AudioGen {
         ...(typeof d.gpuFallbackReason === 'number'
           ? { gpuFallbackReason: d.gpuFallbackReason }
           : {}),
+        ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
+        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
         ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
         ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
       }
