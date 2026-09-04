@@ -209,27 +209,49 @@ jobs:
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/classification-ggml
 
-  ts-checks:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs:
-      - fork-approval
-      - authorize
-      - ci-router
+  await-ts-checks:
+    name: Await PR-head TypeScript checks
+    if: github.event_name == 'pull_request_target'
+    needs: authorize
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.PKG_DIR }}
+    timeout-minutes: 17
+    permissions:
+      checks: read
+      contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Wait for ts-checks result
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         with:
-          node-version: 20
-      - name: Install dependencies
-        run: npm install --ignore-scripts
-      - name: Type declaration check
-        run: npm run test:dts
+          script: |
+            const timeoutAt = Date.now() + 15 * 60 * 1000
+
+            while (Date.now() < timeoutAt) {
+              const response = await github.rest.checks.listForRef({
+                ...context.repo,
+                ref: process.env.PR_HEAD_SHA,
+                check_name: 'classification-ggml-pr-head-ts-checks / ts-checks',
+                filter: 'latest',
+                per_page: 100
+              })
+              const check = response.data.check_runs.find(
+                ({ name }) => name === 'classification-ggml-pr-head-ts-checks / ts-checks'
+              )
+
+              if (check?.status === 'completed') {
+                if (check.conclusion !== 'success') {
+                  core.setFailed(
+                    `classification-ggml-pr-head-ts-checks / ts-checks completed with conclusion: ${check.conclusion}`
+                  )
+                }
+                return
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, 15_000))
+            }
+
+            core.setFailed('Timed out waiting for the PR-head Classification TypeScript checks')
 
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
@@ -422,7 +444,7 @@ jobs:
         authorize,
         ci-router,
         sanity-checks,
-        ts-checks,
+        await-ts-checks,
         cpp-lint,
         cpp-tests,
         detect-fabric-stack,
@@ -446,7 +468,7 @@ jobs:
       # it is trustworthy. If detection failed, or the prebuild hand-off failed
       # on a stack PR, the skips are consequences of that failure and must not
       # read as passes.
-      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
       build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') }}
       # run-mobile-integration-tests removed — mobile is on-demand only now.
       integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}

@@ -1,0 +1,29 @@
+name: Model Fit TypeScript Checks
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/model-fit/**"
+      - ".github/workflows/*model-fit*.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  model-fit-pr-head-ts-checks:
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/model-fit
