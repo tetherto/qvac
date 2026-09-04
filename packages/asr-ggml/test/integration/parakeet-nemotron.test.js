@@ -4,12 +4,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const test = require('brittle')
-const {
-  binding,
-  ASRGgml,
-  setupJsLogger,
-  getTestPaths
-} = require('./parakeet-helpers.js')
+const { binding, ASRGgml, setupJsLogger, getTestPaths } = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
 const modelPath = process.env.QVAC_TEST_GGUF_NEMOTRON || ''
