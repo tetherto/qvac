@@ -158,8 +158,14 @@
             <button data-estimate="${model.name}">Estimate</button>
           </td>
           <td class="num" data-cell="predicted">—</td>
-          <td data-cell="reality"><button data-run="${model.name}">Run</button></td>`
+          <td data-cell="reality"><button data-run="${model.name}">${runLabel(model)}</button></td>`
         rows.append(tr)
+      }
+
+      // A click on a row that is not cached costs its whole download, so say so
+      // rather than letting someone start 29 GiB by accident.
+      function runLabel(model) {
+        return model.expectedSize > 6 * GIB ? `Run · downloads ${gib(model.expectedSize)}` : 'Run'
       }
 
       function range(estimate) {
@@ -243,13 +249,48 @@
       async function runOne(name, button) {
         button.disabled = true
         const target = button.parentElement
-        target.textContent = 'loading… (first run downloads weights)'
-        const response = await fetch('/api/run', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ name, contextTokens: Number(ctx.value) })
-        })
-        const result = await response.json()
+        const startedAt = Date.now()
+        target.textContent = 'loading…'
+
+        // Without this the browser cannot tell a slow download from a stalled
+        // one or a dead worker — all three just sit on "loading…".
+        const ticker = setInterval(async () => {
+          const elapsed = Math.round((Date.now() - startedAt) / 1000)
+          let line = `loading… ${elapsed}s`
+          try {
+            const all = await (await fetch('/api/progress')).json()
+            const p = all[name]
+            if (p) {
+              const quiet = Math.round((Date.now() - p.at) / 1000)
+              line =
+                `downloading ${p.percentage.toFixed(0)}% · ` +
+                `${gib(p.downloaded)} of ${gib(p.total)} · ${elapsed}s` +
+                (quiet > 20 ? ` · no progress for ${quiet}s` : '')
+            }
+          } catch {
+            line = `loading… ${elapsed}s · the server stopped answering`
+          }
+          target.textContent = line
+        }, 1000)
+
+        let result
+        try {
+          const response = await fetch('/api/run', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name, contextTokens: Number(ctx.value) })
+          })
+          result = await response.json()
+        } catch (error) {
+          // A worker shutdown mid-load lands here; say so instead of hanging.
+          target.innerHTML =
+            `<span class="too-large">the run did not report back</span>` +
+            `<span class="reason">the load was interrupted — check the server console</span>`
+          button.disabled = false
+          return
+        } finally {
+          clearInterval(ticker)
+        }
 
         const said = judged.get(name)
         const verdict = said?.verdict

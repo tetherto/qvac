@@ -57,6 +57,14 @@ function page() {
   return readFileSync(PAGE_PATH)
 }
 
+// Download progress for a run in flight. `loadModel` only streams it when
+// `onProgress` is passed, and without it a 29 GiB download, a stall and a dead
+// worker all look identical from the browser: "loading…" forever.
+const progress = new Map<
+  string,
+  { percentage: number; downloaded: number; total: number; at: number }
+>()
+
 function byName(name: string) {
   const model = CATALOG.find((entry) => entry.name === name)
   if (!model) throw new Error(`unknown model: ${name}`)
@@ -126,7 +134,15 @@ async function run(body: Record<string, unknown>) {
     modelId = await loadModel({
       modelSrc: model,
       modelType: 'llm',
-      modelConfig: { ctx_size: contextTokens }
+      modelConfig: { ctx_size: contextTokens },
+      onProgress: (update) => {
+        progress.set(model.name, {
+          percentage: update.percentage,
+          downloaded: update.downloaded,
+          total: update.total,
+          at: Date.now()
+        })
+      }
     })
     const afterLoad = await systemUsedBytes()
 
@@ -156,6 +172,7 @@ async function run(body: Record<string, unknown>) {
       error: errorLabel(error)
     }
   } finally {
+    progress.delete(model.name)
     if (modelId) await unloadModel({ modelId }).catch(() => {})
   }
 }
@@ -166,6 +183,13 @@ const server = createServer((request, response) => {
   if (request.method === 'GET' && (url === '/' || url.startsWith('/?'))) {
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     response.end(page())
+    return
+  }
+
+  // Polled while a run is in flight; `at` lets the page say "no progress for
+  // 30s" instead of implying the download is still moving.
+  if (request.method === 'GET' && url === '/api/progress') {
+    sendJson(response, 200, Object.fromEntries(progress))
     return
   }
 
