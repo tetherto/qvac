@@ -703,10 +703,23 @@ jobs:
           # artifact name. Recorded before the harness runs so the path is still
           # available when it exits non-zero.
           PLATFORM=$(node -p "process.platform + '-' + process.arch")
-          echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM.ts" >> "$GITHUB_OUTPUT"
+          # Glob so a GPU pass, which keys its fixture by backend as well, is
+          # collected alongside the CPU one.
+          echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM*.ts" >> "$GITHUB_OUTPUT"
           # Invoke the repo-pinned bare by path: npx/PATH can resolve a global
           # bare too old for TypeScript type-stripping.
           node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write
+
+      # Best-effort second pass with the model resident on the GPU. Only the
+      # CPU-forced platforms need it: Apple silicon already calibrates on Metal,
+      # and its unified memory is bounded by the system basis. Non-fatal — a
+      # host whose GPU memory is not device-scoped simply yields no GPU fixture.
+      - name: Run GPU calibration harness
+        if: ${{ !contains(matrix.platform, 'macos') }}
+        continue-on-error: true
+        shell: bash
+        working-directory: packages/inference
+        run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --gpu
 
       - name: Upload fixture
         # A failed gate still writes a fixture (`validated: false`), and that is

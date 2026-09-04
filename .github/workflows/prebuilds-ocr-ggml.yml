@@ -25,6 +25,13 @@ on:
         required: false
         type: string
         default: "packages/ocr-ggml"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -42,4 +49,5 @@ jobs:
       repository: ${{ inputs.repository }}
       artifact-name-prefix: ggml-ocr-
       include-vulkan-sdk: true
+      fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
     secrets: inherit
