@@ -141,9 +141,10 @@ const result = await assessModelFit({
 
 result.verdict // "likely-fits" | "likely-too-large" | "unknown"
 result.basis // "system-memory" | "process-memory" | "device-memory" | "device-budget"
+result.budget?.availableBytes // headroom before the policy reserve
 ```
 
-On a single discrete GPU, `basis` is `device-memory` (Linux VRAM) or `device-budget` (Windows DXGI). iOS uses per-process memory and may return `unknown` when that metric is missing. Catalog resource profiles (`getModelResourceProfile`) back the estimator; an unknown checksum is `undefined`, not a guess.
+On a discrete GPU, `basis` is `device-memory` (Linux VRAM) or `device-budget` (Windows DXGI). Integrated GPUs stay on `system-memory` because they allocate from RAM. Multi-GPU machines require `likely-fits` on the smallest usable card and `likely-too-large` on the largest; in between the verdict is `unknown`. VM display adapters are not counted as GPUs. The reserve is 20% of `budget.availableBytes`, capped at 2 GiB on desktop and 1 GiB on mobile. iOS uses per-process memory and may return `unknown` when that metric is missing. Catalog resource profiles (`getModelResourceProfile`) back the estimator; an unknown checksum is `undefined`, not a guess.
 
 ### ABot-World Sessions
 
@@ -241,7 +242,7 @@ Every `modelConfig` field now carries a description, exported from `@qvac/sdk/sc
 
 ## Features
 
-Qwen3.8 tool calls go through the Qwen parser. Darwin-arm64 calibration uses a persistent-based fit with an audio guard. Desktop calibration fixtures land alongside GPU-memory assessment for `assessModelFit`. `@qvac/tts-ggml` 0.8.0 can select CUDA on linux-x64 NVIDIA without a new backend key. `@qvac/diffusion-cpp` is `^0.21.0`. `@qvac/bci-whispercpp` is `0.8.0`.
+Qwen3.8 tool calls go through the Qwen parser. Darwin-arm64 calibration uses a persistent-based fit with an audio guard. Desktop calibration for `assessModelFit` covers darwin-x64, linux-arm64, and win32-x64, including integrated GPUs; AMD linux stays `unknown`. `@qvac/tts-ggml` 0.8.0 can select CUDA on linux-x64 NVIDIA without a new backend key. `@qvac/diffusion-cpp` is `^0.21.0`. `@qvac/bci-whispercpp` is `0.8.0`.
 
 ## Bug Fixes
 
@@ -1872,9 +1873,7 @@ Bare consumers that previously called `getRPC()` against the full `@qvac/sdk` wo
 import { getRPC } from '@qvac/sdk'
 
 const rpc = await getRPC()
-await rpc.loadModel({
-  /* any built-in modelType works */
-})
+await rpc.loadModel({/* any built-in modelType works */})
 ```
 
 **After:**
@@ -2024,9 +2023,7 @@ LLM completion now surfaces real input token counts in stats and throws a typed 
 ```typescript
 import { ContextOverflowError } from '@qvac/sdk'
 
-const run = sdk.completion({
-  /* ... */
-})
+const run = sdk.completion({/* ... */})
 try {
   const final = await run.final
   console.log(final.stats?.promptTokens)

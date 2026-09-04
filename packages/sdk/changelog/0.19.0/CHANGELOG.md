@@ -39,6 +39,7 @@ Release Date: 2026-09-04
 - Add tensor split mode and flash attention config. (see PR [#4211](https://github.com/tetherto/qvac/pull/4211)) - See [API changes](./api.md)
 - Land desktop calibration fixtures and GPU-memory assessment. (see PR [#4238](https://github.com/tetherto/qvac/pull/4238)) - See [API changes](./api.md)
 - Allow indeterminate AudioGen progress totals. (see PR [#4243](https://github.com/tetherto/qvac/pull/4243)) - See [API changes](./api.md)
+- Widen desktop coverage to integrated GPUs and two more platforms. (see PR [#4265](https://github.com/tetherto/qvac/pull/4265)) - See [API changes](./api.md)
 
 ## 🐞 Fixes
 
@@ -76,4 +77,3 @@ Release Date: 2026-09-04
 ## ⚙️ Infrastructure
 
 - Calibration suite in the test-sdk dispatch. (see PR [#4158](https://github.com/tetherto/qvac/pull/4158))
-
