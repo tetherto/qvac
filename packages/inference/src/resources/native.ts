@@ -31,6 +31,7 @@ const gpuTypes =
 export const nativeResourceCollectorDependencies: ResourceCollectorDependencies = {
   cpuArchitectures,
   gpuTypes,
+  platform: os.platform(),
   createCPUInfo() {
     if (cpuModule.status !== 'fulfilled') return undefined
     return new cpuModule.value.default()

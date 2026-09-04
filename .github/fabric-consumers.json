@@ -1,6 +1,7 @@
 {
   "npm_runtime": [
     "classification-ggml",
-    "vla-ggml"
+    "vla-ggml",
+    "ocr-ggml"
   ]
 }

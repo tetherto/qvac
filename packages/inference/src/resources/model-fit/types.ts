@@ -77,6 +77,12 @@ export interface CalibrationProvenance {
 export interface CalibrationFixture {
   schemaVersion: 1
   platforms: Partial<Record<ModelFitPlatform, PlatformCalibration>>
+  /**
+   * GPU-resident coefficients, keyed `<platform>:<backend>`. Separate from
+   * `platforms` because those describe CPU-resident execution in system RAM,
+   * and because one platform can run several backends whose buffers differ.
+   */
+  gpuPlatforms?: Readonly<Record<string, PlatformCalibration>>
 }
 
 /** What an estimator is handed for one candidate. */
