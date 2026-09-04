@@ -110,16 +110,32 @@ endmacro()
 #                            to the runtime-provided backendsDir before calling
 #                            ggml_backend_load_all_from_path().
 #
-# The ggml compute backends live in @qvac/fabric's own prebuilds and are loaded
-# once per process; the addon neither collects nor installs them.
+# The ggml compute backends live in the host platform package's prebuilds and
+# are loaded once per process; the addon neither collects nor installs them.
 # ---------------------------------------------------------------------------
+function(qvac_addon_fabric_platform_package host_target out_var)
+  if(host_target MATCHES "^ios-")
+    set(_qvac_fabric_pkg "@qvac/fabric-ios")
+  elseif(host_target MATCHES "^android-")
+    set(_qvac_fabric_pkg "@qvac/fabric-android-arm64")
+  else()
+    set(_qvac_fabric_pkg "@qvac/fabric-${host_target}")
+  endif()
+  set(${out_var} "${_qvac_fabric_pkg}" PARENT_SCOPE)
+endfunction()
+
 macro(qvac_addon_use_fabric)
   set(qvac-fabric_DIR
       "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake")
   find_package(qvac-fabric CONFIG REQUIRED)
-  include_bare_module("@qvac/fabric" qvac_fabric_target PREBUILD)
-
   bare_target(bare_target_value)
+  # Runtime binaries live in the matching platform package; headers and CMake config remain in the meta package.
+  # Fall back to the 0.10 fat tarball when the platform package is not installed.
+  qvac_addon_fabric_platform_package("${bare_target_value}" _qvac_fabric_platform_package)
+  if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/${_qvac_fabric_platform_package}")
+    set(_qvac_fabric_platform_package "@qvac/fabric")
+  endif()
+  include_bare_module("${_qvac_fabric_platform_package}" qvac_fabric_target PREBUILD)
   set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/qvac__fabric")
   message(STATUS "qvac-addon: BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 endmacro()
@@ -320,8 +336,12 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
     COMMENT "Copying qvac__fabric@0.bare to test directory")
 
   bare_target(_qvac_host)
+  qvac_addon_fabric_platform_package("${_qvac_host}" _qvac_fabric_test_package)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/node_modules/${_qvac_fabric_test_package}")
+    set(_qvac_fabric_test_package "@qvac/fabric")
+  endif()
   file(GLOB _qvac_fabric_test_backends
-    "${CMAKE_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${_qvac_host}/qvac__fabric/*.so")
+    "${CMAKE_SOURCE_DIR}/node_modules/${_qvac_fabric_test_package}/prebuilds/${_qvac_host}/qvac__fabric/*.so")
   if(_qvac_fabric_test_backends)
     add_custom_command(TARGET ${test_target} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different

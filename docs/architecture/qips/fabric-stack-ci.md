@@ -32,7 +32,7 @@
 
 *1. Direct vcpkg* — packages declare `qvac-fabric` in `vcpkg.json` and compile locally (`llm-llamacpp`, `embed-llamacpp`, `ocr-ggml`, `translation-nmtcpp`, `vla-ggml`, and `packages/fabric` itself).
 
-*2. npm runtime* — migrated consumers depend on `@qvac/fabric`, which ships the shared `qvac__fabric.bare` prebuild plus headers/CMake config (`classification-ggml` today). All other fabric-consuming addons will follow this path; only `packages/fabric` keeps building `qvac-fabric` from vcpkg.
+*2. npm runtime* — migrated consumers depend on `@qvac/fabric`, which ships the shared `qvac__fabric.bare` prebuild plus headers/CMake config (`classification-ggml`, `vla-ggml`, `ocr-ggml`, `model-fit`, `translation-nmtcpp`). Only `packages/fabric` keeps building `qvac-fabric` from vcpkg.
 
 *What works today*
 
@@ -128,10 +128,9 @@ overlay-local-fabric
 
   1. npm install --ignore-scripts
   2. download fabric-prebuilds artifact
-  3. copy into every node_modules/@qvac/fabric match:
-       prebuilds/<platform>-<arch>/
-       prebuilds/include/
-       prebuilds/share/qvac-fabric/
+  3. copy headers into every node_modules/@qvac/fabric/prebuilds match
+       (include/, share/) and the host runtime into
+       node_modules/@qvac/fabric-<platform>/prebuilds/<platform>-<arch>/
   4. consumer bare-make generate && build
   5. consumer cpp-tests + integration-tests
 ```

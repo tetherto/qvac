@@ -8,6 +8,11 @@ on:
       - ".github/actions/wait-and-download-fabric-prebuilds/**"
       - ".github/scripts/test/fixtures/fabric-actions/**"
       - ".github/workflows/test-fabric-stack-actions.yml"
+      - "packages/fabric/scripts/**"
+      - "packages/fabric/package.json"
+      - "packages/fabric/binding.js"
+      - "packages/fabric/platform.js"
+      - "packages/fabric/platform.d.ts"
   workflow_dispatch:
 
 permissions:
@@ -246,6 +251,21 @@ jobs:
             exit 1
           fi
 
+  prepare-platform-packages:
+    name: Prepare fabric platform packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Run slicer unit tests
+        run: node --test packages/fabric/scripts/prepare-platform-packages.test.js
+
   overlay-local-fabric:
     name: Overlay local fabric prebuilds
     runs-on: ubuntu-24.04
@@ -273,6 +293,10 @@ jobs:
               root,
               "consumer/node_modules/@qvac/fabric/prebuilds",
             )
+            const platformDestination = path.join(
+              root,
+              "consumer/node_modules/@qvac/fabric-linux-x64/prebuilds",
+            )
 
             const planted = path.join(root, "planted")
 
@@ -285,6 +309,7 @@ jobs:
               path.join(planted, "share"),
               path.join(planted, "linux-x64"),
               path.join(destination, "linux-x64"),
+              path.join(platformDestination, "linux-x64"),
             ]) {
               fs.mkdirSync(directory, { recursive: true })
             }
@@ -321,32 +346,33 @@ jobs:
       - name: Verify overlaid tree
         shell: bash
         env:
-          PREBUILDS: ${{ runner.temp }}/fabric-overlay-test/consumer/node_modules/@qvac/fabric/prebuilds
+          META: ${{ runner.temp }}/fabric-overlay-test/consumer/node_modules/@qvac/fabric/prebuilds
+          PLATFORM: ${{ runner.temp }}/fabric-overlay-test/consumer/node_modules/@qvac/fabric-linux-x64/prebuilds
         run: |
           set -euo pipefail
           node -e '
             const fs = require("node:fs")
             const path = require("node:path")
-            const root = process.argv[1]
-            const expected = [
-              "include/fabric.h",
-              "share/qvac-fabric.cmake",
-              "linux-x64/qvac_fabric.so",
-            ]
-            for (const file of expected) {
-              if (!fs.existsSync(path.join(root, file))) {
+            const meta = process.argv[1]
+            const platform = process.argv[2]
+            for (const file of ["include/fabric.h", "share/qvac-fabric.cmake"]) {
+              if (!fs.existsSync(path.join(meta, file))) {
                 throw new Error(`Missing overlaid file: ${file}`)
               }
             }
+            if (!fs.existsSync(path.join(platform, "linux-x64/qvac_fabric.so"))) {
+              throw new Error("Missing overlaid runtime: linux-x64/qvac_fabric.so")
+            }
             for (const file of [
+              "linux-x64/qvac_fabric.so",
               "linux-x64/tetherto_fabric.so",
               "linux-x64/stale-library.so",
             ]) {
-              if (fs.existsSync(path.join(root, file))) {
-                throw new Error(`Unexpected stale file: ${file}`)
+              if (fs.existsSync(path.join(meta, file))) {
+                throw new Error(`Unexpected file in meta package: ${file}`)
               }
             }
-          ' "$PREBUILDS"
+          ' "$META" "$PLATFORM"
 
       - name: Reject incomplete fabric prebuilds
         id: incomplete

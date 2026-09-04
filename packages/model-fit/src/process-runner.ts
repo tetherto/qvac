@@ -40,6 +40,16 @@ const process = processModule as unknown as RunnerProcess
 // llamaConfigFit path also cannot go through fitParams().
 function resolveBackendsDir (): string | undefined {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/fabric/platform is CJS and absent from 0.10.0 fat installs.
+    const fabricPlatform = require('@qvac/fabric/platform') as {
+      resolvePlatformPrebuilds: () => string | null
+    }
+    const fabricPrebuilds = fabricPlatform.resolvePlatformPrebuilds()
+    if (fabricPrebuilds && fs.statSync(fabricPrebuilds).isDirectory()) return fabricPrebuilds
+  } catch {
+    // Fat 0.10.0 install has no platform helper.
+  }
+  try {
     const fabricPkg = require.resolve('@qvac/fabric/package')
     const fabricPrebuilds = path.join(path.dirname(fabricPkg), 'prebuilds')
     if (fs.statSync(fabricPrebuilds).isDirectory()) return fabricPrebuilds

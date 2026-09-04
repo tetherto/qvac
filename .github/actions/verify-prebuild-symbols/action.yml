@@ -43,8 +43,10 @@ runs:
         # When @qvac/fabric is installed, index its prebuilds as an external provider.
         # The script matches provider exports to each binary's DT_NEEDED by soname, so
         # mere presence of the package in node_modules cannot mask a genuine UND.
-        FABRIC_PREBUILDS="node_modules/@qvac/fabric/prebuilds"
-        if [ -d "$FABRIC_PREBUILDS" ]; then EXTRA="$EXTRA --provider-dir $FABRIC_PREBUILDS"; fi
+        shopt -s nullglob
+        for dir in node_modules/@qvac/fabric-*/prebuilds node_modules/@qvac/fabric/prebuilds; do
+          if [ -d "$dir" ]; then EXTRA="$EXTRA --provider-dir $dir"; fi
+        done
         node "$GITHUB_ACTION_PATH/verify-prebuild-symbols.mjs" --dir prebuilds --platform android $EXTRA
 
     - if: ${{ inputs.platform == 'linux' || inputs.platform == 'darwin' || inputs.platform == 'ios' }}
@@ -61,8 +63,10 @@ runs:
         # When @qvac/fabric is installed, index its prebuilds as an external provider.
         # The script matches provider exports to each binary's DT_NEEDED by soname, so
         # mere presence of the package in node_modules cannot mask a genuine UND.
-        FABRIC_PREBUILDS="node_modules/@qvac/fabric/prebuilds"
-        if [ -d "$FABRIC_PREBUILDS" ]; then EXTRA="$EXTRA --provider-dir $FABRIC_PREBUILDS"; fi
+        shopt -s nullglob
+        for dir in node_modules/@qvac/fabric-*/prebuilds node_modules/@qvac/fabric/prebuilds; do
+          if [ -d "$dir" ]; then EXTRA="$EXTRA --provider-dir $dir"; fi
+        done
         node "$GITHUB_ACTION_PATH/verify-prebuild-symbols.mjs" --dir prebuilds --platform "$PLATFORM" $EXTRA
 
     - if: ${{ inputs.platform == 'win32' }}

@@ -4,6 +4,8 @@
 # Unlike upstream EasyOcr-ggml (which builds ggml as a submodule and inspects
 # build/third_party/ggml/...), this package consumes ggml from the
 # `@qvac/fabric` npm runtime. The runtime artefacts live under
+# `node_modules/@qvac/fabric-<platform>/prebuilds/<host>/qvac__fabric/`
+# (0.11+ platform packages) or the fat 0.10 meta tree
 # `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`.
 #
 # Outputs four sections:
@@ -33,11 +35,19 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Fabric backend path: node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/
+# Fabric backend path: node_modules/@qvac/fabric-<platform>/prebuilds/<host>/qvac__fabric/
 # `host` is set by cmake-bare based on the runtime platform; on x64 Linux it
 # is `linux-x64`, on Apple Silicon `darwin-arm64`, etc.
 HOST_GUESS="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed -E 's/^x86_64$/x64/;s/^aarch64$/arm64/')"
-BACKENDS_DIR="${BACKENDS_DIR:-${REPO_ROOT}/node_modules/@qvac/fabric/prebuilds/${HOST_GUESS}/qvac__fabric}"
+if [ -z "${BACKENDS_DIR:-}" ]; then
+    FABRIC_PREBUILDS=""
+    FABRIC_PREBUILDS=$(node -e "try { process.stdout.write(require('@qvac/fabric/platform').resolvePlatformPrebuilds() || '') } catch (e) {}" 2>/dev/null || true)
+    if [ -n "${FABRIC_PREBUILDS}" ] && [ -d "${FABRIC_PREBUILDS}/${HOST_GUESS}/qvac__fabric" ]; then
+        BACKENDS_DIR="${FABRIC_PREBUILDS}/${HOST_GUESS}/qvac__fabric"
+    else
+        BACKENDS_DIR="${REPO_ROOT}/node_modules/@qvac/fabric/prebuilds/${HOST_GUESS}/qvac__fabric"
+    fi
+fi
 
 print_section() {
     echo
@@ -50,7 +60,7 @@ if [[ ! -d "${BACKENDS_DIR}" ]]; then
     echo "error: backends directory not found: ${BACKENDS_DIR}" >&2
     echo "" >&2
     echo "Run 'npm install' to install @qvac/fabric," >&2
-    echo "or override BACKENDS_DIR=/abs/path/to/@qvac/fabric/prebuilds/<host>/qvac__fabric" >&2
+    echo "or override BACKENDS_DIR=/abs/path/to/@qvac/fabric-<platform>/prebuilds/<host>/qvac__fabric" >&2
     exit 1
 fi
 

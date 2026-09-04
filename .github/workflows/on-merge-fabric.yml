@@ -143,6 +143,40 @@ jobs:
           name: prebuilds
           path: packages/fabric/prebuilds
 
+      - name: Prepare platform packages
+        shell: bash
+        run: node packages/fabric/scripts/prepare-platform-packages.js packages/fabric/prebuilds packages/fabric/dist/platforms
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+          registry-url: https://npm.pkg.github.com/
+          scope: "@tetherto"
+
+      - name: Publish platform slices to GitHub Packages
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_TAG: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
+        run: |
+          set -euo pipefail
+          PACKAGE_VERSION=$(node -p "require('./packages/fabric/package.json').version")
+          VERSION="${PACKAGE_VERSION}-tmp.runid-${GITHUB_RUN_ID}"
+          echo "gpr_slice_version=$VERSION" >> "$GITHUB_ENV"
+          for package in packages/fabric/dist/platforms/*; do
+            node packages/fabric/scripts/rewrite-gpr-names.js --slice "$package" "$VERSION"
+            NAME=$(node -e "console.log(require('./' + process.argv[1] + '/package.json').name)" "$package")
+            if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+              echo "Skipping ${NAME}@${VERSION} (already published)"
+              continue
+            fi
+            npm --prefix "$package" publish --tag "$GPR_TAG"
+          done
+
+      - name: Rewrite meta package optionalDependencies for GPR
+        shell: bash
+        run: node packages/fabric/scripts/rewrite-gpr-names.js --meta packages/fabric "$gpr_slice_version"
+
       - name: Publish to GitHub Package Registry
         id: publish
         uses: ./.github/actions/publish-library-to-gpr
@@ -191,6 +225,36 @@ jobs:
         with:
           name: prebuilds
           path: packages/fabric/prebuilds
+
+      - name: Prepare platform packages
+        shell: bash
+        run: node packages/fabric/scripts/prepare-platform-packages.js packages/fabric/prebuilds packages/fabric/dist/platforms
+
+      - name: Publish platform packages before meta package
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "24.14.1"
+          registry-url: https://registry.npmjs.org/
+          scope: "@qvac"
+
+      - name: Publish platform slices
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ inputs.npm_tag }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./packages/fabric/package.json').version")
+          for package in packages/fabric/dist/platforms/*; do
+            NAME=$(node -e "console.log(require('./' + process.argv[1] + '/package.json').name)" "$package")
+            if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+              echo "Skipping ${NAME}@${VERSION} (already published)"
+              continue
+            fi
+            args=(publish --provenance --access public)
+            if [ -n "$NPM_TAG" ]; then args+=(--tag "$NPM_TAG"); fi
+            npm --prefix "$package" "${args[@]}"
+          done
 
       - name: Publish to NPM Package Registry
         id: publish
