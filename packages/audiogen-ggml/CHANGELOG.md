@@ -9,16 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `generateLrc` generation control: karaoke-style synchronized lyric
+  timestamps in `stats.lrc` (standard LRC text) with an alignment confidence
+  in `stats.lyricsScore`. Requires lyrics — explicit or Simple-Mode written —
+  and `taskType: 'text2music'`.
 - `computeQualityScore` generation control: the generated audio codes are
   teacher-forced back through the LM and `stats.qualityScore` reports a
   weighted `[0, 1]` match against the request (caption/lyrics PMI plus
   metadata recall) — made for generating a batch of takes and keeping the
   best. Requires `taskType: 'text2music'`.
+- `rewriteQuery` generation control: the LM FORMAT pass rewrites the caption
+  into a detailed musical description before synthesis, preserving the lyric
+  content and filling unset metadata. Requires real `lyrics` and
+  `taskType: 'text2music'`; mutually exclusive with `simpleMode`. Faithful
+  rewriting needs the 1.7B LM.
+- `understand()`: describe an audio clip through the reverse pipeline — the
+  engine encodes the PCM, recovers the FSQ semantic codes, and the LM reports
+  metadata and a caption. The description streams as an `understand` output
+  item and is repeated on the terminal stats; the recovered `audioCodes` are
+  reusable as a generation's `audioCodes` input.
 
 ### Changed
 
-- Require `speech-cpp` port revision `2026-09-02`, which adds the engine's
-  teacher-forced LM quality scoring.
+- Require `speech-cpp` port revision `2026-09-03#1`, which adds the engine's
+  ACE-Step LRC generation, audio understanding (reverse pipeline) and Query
+  Rewriting (FORMAT pass) on top of the teacher-forced LM quality scoring.
 
 ## [0.3.3] - 2026-09-01
 

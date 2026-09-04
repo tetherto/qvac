@@ -152,12 +152,30 @@ export interface GenerateOptions {
    */
   simpleMode?: boolean
   /**
+   * Query Rewriting: the LM FORMAT pass rewrites the caption into a detailed
+   * musical description before synthesis, preserving the lyric content and
+   * filling any metadata left unset. Unlike Simple Mode — which expands a bare
+   * query and writes lyrics from scratch — this takes caption AND lyrics as
+   * input, so real `lyrics` are required (`'[Instrumental]'` belongs to Simple
+   * Mode) and the two options are mutually exclusive. Requires
+   * `taskType: 'text2music'`; faithful rewriting needs the 1.7B LM.
+   */
+  rewriteQuery?: boolean
+  /**
    * Percentile loudness normalization on the generated audio (default true):
    * the 99.999th-percentile sample scales to full scale and the tiny tail
    * above it clips, matching the reference loudness. Set false for the raw
    * engine output. Audio edits are never normalized.
    */
   normalizeLoudness?: boolean
+  /**
+   * Synchronized lyric timestamps: after synthesis, the engine aligns the
+   * lyrics with the generated audio and delivers karaoke-style LRC text in
+   * `stats.lrc` with an alignment confidence in `stats.lyricsScore`. Requires
+   * lyrics to align: pass `lyrics` (or let Simple Mode write them) —
+   * instrumental requests are rejected. Requires `taskType: 'text2music'`.
+   */
+  generateLrc?: boolean
   /**
    * Teacher-forced LM quality scoring of the generated audio codes against
    * the request: `stats.qualityScore` reports a weighted [0, 1] score
@@ -303,6 +321,8 @@ export interface AudiogenPcmChunk {
   outputArray: Int16Array
   sampleRate: number
   channels: number
+  /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+  lrc?: string
 }
 
 /** A progress tick delivered through the run's output stream. */
@@ -310,8 +330,29 @@ export interface AudiogenProgressChunk {
   progress: AudiogenProgress
 }
 
+/**
+ * The LM's description of an audio clip, delivered by `understand()` — once
+ * through the response stream and again in the terminal stats. `audioCodes`
+ * are the recovered FSQ codes, reusable as a generation's `audioCodes` input.
+ */
+export interface AudiogenUnderstandResult {
+  caption: string
+  bpm: number
+  /** LM estimate in seconds; the codes fix the true length. */
+  duration: number
+  keyscale: string
+  timesignature: string
+  vocalLanguage: string
+  audioCodes: Int32Array
+}
+
+/** The understand result delivered through the response's output stream. */
+export interface AudiogenUnderstandChunk {
+  understand: AudiogenUnderstandResult
+}
+
 /** Items streamed by the `QvacResponse` returned from `run()`. */
-export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk
+export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk | AudiogenUnderstandChunk
 
 /**
  * Terminal run stats, resolved by `QvacResponse.await()`. These mirror exactly
@@ -335,11 +376,38 @@ export interface AudiogenStats {
   /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
   gpuFallbackReason?: number
   /**
+   * Lyric-to-audio alignment confidence in [0, 1]. Present only when the run
+   * set `generateLrc`; the LRC text itself rides on the PCM chunk (`lrc`) and
+   * is repeated here for convenience.
+   */
+  lyricsScore?: number
+  /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+  lrc?: string
+  /**
    * Weighted quality of the generated codes against the request, in [0, 1]
    * (caption/lyrics PMI plus metadata recall). Present only when the run set
    * `computeQualityScore`; made for ranking a batch of takes.
    */
   qualityScore?: number
+  /**
+   * The LM's description of the analysed clip. Present only on stats resolved
+   * by an `understand()` response; also streamed as an output item.
+   */
+  understand?: AudiogenUnderstandResult
+}
+
+/** Options accepted by `understand()`. */
+export interface UnderstandOptions {
+  /** RNG seed for the LM decode; omit for a random seed. */
+  seed?: number
+  /** Language hint (e.g. `'es'`): forced into the result instead of the LM's guess. */
+  vocalLanguage?: string
+  /** LM sampling temperature (default 0.85). */
+  lmTemperature?: number
+  /** LM nucleus sampling p (default 0.9). */
+  lmTopP?: number
+  /** LM top-k (default 0 = disabled). */
+  lmTopK?: number
 }
 
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
@@ -397,10 +465,20 @@ interface NativeAudiogenData {
   backendDevice?: number
   backendId?: number
   gpuFallbackReason?: number
+  lyricsScore?: number
+  lrc?: string
   qualityScore?: number
   progressStage?: string
   progressStep?: number
   progressTotal?: number
+  // Understand payload: audioCodes marks the frame; the rest describe the clip.
+  audioCodes?: Int32Array
+  caption?: string
+  bpm?: number
+  duration?: number
+  keyscale?: string
+  timesignature?: string
+  vocalLanguage?: string
 }
 
 function asNativeData(data: unknown): NativeAudiogenData | null {
@@ -641,7 +719,9 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'guidanceScale',
   'audioCoverStrength',
   'coverNoiseStrength',
-  'computeQualityScore'
+  'generateLrc',
+  'computeQualityScore',
+  'rewriteQuery'
 ]
 
 function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boolean {
@@ -875,7 +955,9 @@ export class AudioGen {
   private _destroyed: boolean
   private _cancelPromise: Promise<void> | null
   private _cancellingResponse: QvacResponse<AudiogenOutputChunk> | null
+  private _lastLrc: string | undefined
   private _cancelTerminalResolve: (() => void) | null
+  private _lastUnderstand: AudiogenUnderstandResult | undefined
 
   constructor(options: AudioGenOptions = {}) {
     this._logger = new QvacLogger(options.logger)
@@ -942,6 +1024,7 @@ export class AudioGen {
     this._cancelPromise = null
     this._cancellingResponse = null
     this._cancelTerminalResolve = null
+    this._lastLrc = undefined
   }
 
   /** Create the native engine and load its GGUF files. Idempotent. */
@@ -1006,6 +1089,49 @@ export class AudioGen {
    * be repeated and are executed in the exact order in which they are chained.
    * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
    */
+  /**
+   * Describe an audio clip through the reverse pipeline: the engine encodes
+   * the PCM, recovers the FSQ semantic codes, and the LM reports metadata and
+   * a caption. `audio` is interleaved stereo float PCM at 48 kHz — the same
+   * layout `sourceAudio` uses. The result streams as an `understand` output
+   * item and is repeated on the terminal stats (`stats.understand`).
+   */
+  async understand(
+    audio: Float32Array,
+    opts: UnderstandOptions = {}
+  ): Promise<QvacResponse<AudiogenOutputChunk>> {
+    if (this._engineType === ENGINE_MINIMAX) {
+      throw invalidInput('MiniMax-Music3 does not support audio understanding')
+    }
+    if (!(audio instanceof Float32Array)) {
+      throw invalidInput('understand audio must be a Float32Array')
+    }
+    if (audio.length === 0) {
+      throw invalidInput('understand audio must not be empty')
+    }
+    if (audio.length % 2 !== 0) {
+      throw invalidInput('understand audio must be interleaved stereo (even sample count)')
+    }
+    requireFinitePcm(audio, 'understand audio')
+    const jobData: AudioGenJobData = {
+      type: 'understand',
+      input: '',
+      sourceAudio: audio,
+      seed: optionalFiniteNumber(opts.seed, 'seed', true),
+      vocalLanguage: opts.vocalLanguage,
+      lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
+      lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
+      lmTopK: optionalFiniteNumber(opts.lmTopK, 'lmTopK', true)
+    }
+    const revision = this._lifecycleRevision
+    return new Promise((resolve, reject) => {
+      const queued = this._runExclusive(() =>
+        this._admitAndWait(jobData, revision, resolve, reject)
+      )
+      void queued.catch(reject)
+    })
+  }
+
   edit(source: AudioEditSource): AudioEditSession {
     if (this._engineType === ENGINE_MINIMAX) {
       throw invalidInput('MiniMax-Music3 does not support audio editing')
@@ -1049,6 +1175,8 @@ export class AudioGen {
       throw this._lifecycleError()
     }
     const addon = this._requireAddon()
+    this._lastLrc = undefined
+    this._lastUnderstand = undefined
     const response = this._job.start() as QvacResponse<AudiogenOutputChunk>
     let accepted: boolean
     try {
@@ -1137,6 +1265,20 @@ export class AudioGen {
     if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
       throw invalidInput('normalizeLoudness must be a boolean')
     }
+    if (opts.generateLrc !== undefined && typeof opts.generateLrc !== 'boolean') {
+      throw invalidInput('generateLrc must be a boolean')
+    }
+    if (opts.generateLrc === true) {
+      if (taskType !== undefined && taskType !== 'text2music') {
+        throw invalidInput("generateLrc requires taskType 'text2music'")
+      }
+      if (opts.lyrics === '[Instrumental]') {
+        throw invalidInput('generateLrc requires lyrics to align')
+      }
+      if (opts.simpleMode !== true && (opts.lyrics === undefined || opts.lyrics === '')) {
+        throw invalidInput('generateLrc requires lyrics to align')
+      }
+    }
     if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
       throw invalidInput('computeQualityScore must be a boolean')
     }
@@ -1157,6 +1299,28 @@ export class AudioGen {
         throw invalidInput('simpleMode requires lmPhase1')
       }
     }
+    if (opts.rewriteQuery !== undefined && typeof opts.rewriteQuery !== 'boolean') {
+      throw invalidInput('rewriteQuery must be a boolean')
+    }
+    if (opts.rewriteQuery === true) {
+      if (opts.simpleMode === true) {
+        throw invalidInput('rewriteQuery cannot be combined with simpleMode')
+      }
+      if (taskType !== undefined && taskType !== 'text2music') {
+        throw invalidInput("rewriteQuery supports only taskType 'text2music'")
+      }
+      if (opts.audioCodes !== undefined) {
+        throw invalidInput('rewriteQuery cannot take pre-supplied audioCodes')
+      }
+      if (opts.lyrics === undefined || opts.lyrics === '' || opts.lyrics === '[Instrumental]') {
+        throw invalidInput(
+          "rewriteQuery requires lyric text to preserve (use simpleMode with '[Instrumental]' for an instrumental request)"
+        )
+      }
+      if (opts.lmPhase1 === false) {
+        throw invalidInput('rewriteQuery requires lmPhase1')
+      }
+    }
     if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
       throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`)
     }
@@ -1172,7 +1336,9 @@ export class AudioGen {
       input: caption,
       lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
       simpleMode: opts.simpleMode,
+      rewriteQuery: opts.rewriteQuery,
       normalizeLoudness: opts.normalizeLoudness,
+      generateLrc: opts.generateLrc,
       computeQualityScore: opts.computeQualityScore,
       seed: optionalFiniteNumber(opts.seed, 'seed', true),
       vocalLanguage: opts.vocalLanguage,
@@ -1362,11 +1528,28 @@ export class AudioGen {
     }
 
     if (d.outputArray) {
+      this._lastLrc = typeof d.lrc === 'string' ? d.lrc : undefined
       this._job.output({
         outputArray: d.outputArray,
         sampleRate: d.sampleRate ?? 0,
-        channels: d.channels ?? 0
+        channels: d.channels ?? 0,
+        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
       })
+      return
+    }
+
+    if (d.audioCodes) {
+      const understood: AudiogenUnderstandResult = {
+        caption: d.caption ?? '',
+        bpm: d.bpm ?? 0,
+        duration: d.duration ?? 0,
+        keyscale: d.keyscale ?? '',
+        timesignature: d.timesignature ?? '',
+        vocalLanguage: d.vocalLanguage ?? '',
+        audioCodes: d.audioCodes
+      }
+      this._lastUnderstand = understood
+      this._job.output({ understand: understood })
       return
     }
 
@@ -1380,7 +1563,10 @@ export class AudioGen {
         ...(typeof d.gpuFallbackReason === 'number'
           ? { gpuFallbackReason: d.gpuFallbackReason }
           : {}),
-        ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {})
+        ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
+        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
+        ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
+        ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
       }
       this._job.end(stats, stats)
     }
