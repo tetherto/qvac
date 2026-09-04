@@ -324,6 +324,28 @@ linux assesses as `unknown` until the engine's own device type reaches JS —
 `chooseBackend` already distinguishes `GGML_BACKEND_DEVICE_TYPE_IGPU`, so the
 fix is to expose what it knows.
 
+Classification is not the only blocker there. An `--igpu` pass on a Ryzen AI
+MAX+ 395 (Radeon 8060S, RADV, 121 GiB) aborted on the KV tripwire with **0%**
+observed growth: RSS read 122 / 206 / 305 MiB for the three fit models
+regardless of size or context, because RADV puts the weights and the cache in
+amdgpu's carve-out and GTT, which process RSS cannot see. The same load moved
+the _system-wide_ used figure by 2008 MiB against an RSS delta of 493.
+
+So the shared methodology is driver-dependent, and now measured on three:
+
+| Driver              | `--igpu` outcome                               |
+| ------------------- | ---------------------------------------------- |
+| Intel UHD, win32    | works; host-visible allocations land in RSS    |
+| RADV, linux         | invisible to RSS — needs a system-wide counter |
+| NVIDIA Tegra, linux | the load itself fails (see below)              |
+
+Calibrating an AMD APU therefore needs the shared pass to read system-wide used
+memory rather than RSS. That is the counter the system basis is derived from
+anyway, so it is the more principled choice — but it needs its own design pass:
+which pages count, what to do about the page cache holding mapped weights (the
+2008 MiB above is 67% of artifact plus cache, not all of it), and the noise
+floor on a machine that is not idle.
+
 ### linux-arm64 on an integrated GPU: measured, and it does not load
 
 Tried on a Jetson Orin Nano 8 GB. ggml sees the device correctly
