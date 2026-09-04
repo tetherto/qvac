@@ -185,7 +185,7 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # editing it changes the ABI and forces a rebuild. KEEP IT IN STEP WITH
   # setup-cuda's cuda-version, or a toolkit change ships stale binaries and the
   # only symptom is a crash on hardware CI does not have.
-  set(QVAC_FABRIC_CUDA_TOOLKIT "13.0.3-x64-and-12.6.3-aarch64-jetson-probe")
+  set(QVAC_FABRIC_CUDA_TOOLKIT "13.0.3-x64-and-12.6.3-aarch64-jetson-probe-r2-novmm")
   if(DEFINED ENV{CUDACXX} AND EXISTS "$ENV{CUDACXX}")
     set(NVCC_EXECUTABLE "$ENV{CUDACXX}")
   endif()
@@ -335,8 +335,33 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
     set(QVAC_CUDA_ARCHS "75-virtual\;80-virtual\;80-real\;86-real\;120a-real")
   endif()
   message(STATUS "qvac-fabric: cuda-backend ON, building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
+  # THROWAWAY BRANCH, QVAC-24470 Jetson probe, second round.
+  #
+  # Measured on the Orin with the first round: the module loads, the device
+  # enumerates at cc 8.7, every real buffer allocates (model 216.89 MiB, KV
+  # 10.64 MiB, compute 98.00 MiB against 5995 MiB reported free), and then it
+  # aborts:
+  #
+  #   CUDA error: out of memory
+  #     in function alloc at ggml-cuda.cu:596
+  #     cuMemAddressReserve(&pool_addr, CUDA_POOL_VMM_MAX_SIZE, 0, 0, 0)
+  #   [exit 134]
+  #
+  # That is a VIRTUAL address reservation, not a physical allocation.
+  # CUDA_POOL_VMM_MAX_SIZE is 1ull << 35, so ggml asks Tegra for 32 GB of
+  # address space because the device reports
+  # CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED. It cannot give it.
+  #
+  # There is no runtime escape in this fabric version: GGML_CUDA_NO_VMM is a
+  # compile-time option only, and nothing checks whether the reserve succeeded.
+  # So a user on a Jetson gets an abort with no way around it.
+  set(QVAC_CUDA_NO_VMM OFF)
+  if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
+    set(QVAC_CUDA_NO_VMM ON)
+  endif()
   list(APPEND PLATFORM_OPTIONS
     -DGGML_CUDA=ON
+    -DGGML_CUDA_NO_VMM=${QVAC_CUDA_NO_VMM}
     "-DCMAKE_CUDA_ARCHITECTURES=${QVAC_CUDA_ARCHS}"
     -DCMAKE_CUDA_COMPILER=${NVCC_EXECUTABLE}
     # The triplet compiles C++ with clang and -stdlib=libc++. nvcc defaults its
