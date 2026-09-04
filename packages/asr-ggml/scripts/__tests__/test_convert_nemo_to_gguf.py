@@ -39,24 +39,16 @@ def install_yaml_stub():
     sys.modules["yaml"] = types.ModuleType("yaml")
 
 
-try:
-    import gguf
-except ModuleNotFoundError:
+if importlib.util.find_spec("gguf") is None:
     install_gguf_stub()
 
-try:
-    import torch
-except ModuleNotFoundError:
+if importlib.util.find_spec("torch") is None:
     install_torch_stub()
 
-try:
-    import numpy
-except ModuleNotFoundError:
+if importlib.util.find_spec("numpy") is None:
     install_numpy_stub()
 
-try:
-    import yaml
-except ModuleNotFoundError:
+if importlib.util.find_spec("yaml") is None:
     install_yaml_stub()
 
 
