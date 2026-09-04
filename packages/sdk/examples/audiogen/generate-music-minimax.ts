@@ -44,7 +44,9 @@ try {
 
   console.log(`▸ requestId: ${run.requestId}`)
   for await (const progress of run.progressStream) {
-    console.log(`▸ ${progress.stage}: ${progress.step}/${progress.total}`)
+    const value =
+      progress.total > 0 ? `${progress.step}/${progress.total}` : `${progress.step} (indeterminate)`
+    console.log(`▸ ${progress.stage}: ${value}`)
   }
 
   const [audio, stats] = await Promise.all([run.audio, run.stats])

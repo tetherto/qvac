@@ -459,7 +459,7 @@ export function toWireJsonSchema(
   io: 'input' | 'output',
   defName: string
 ): JsonSchema {
-  const json = z.toJSONSchema(schema, {
+  const json = schema.toJSONSchema({
     target: 'draft-2020-12',
     io,
     unrepresentable: 'any'
@@ -596,7 +596,7 @@ export function buildContract() {
   }
 
   // Public constants (@/schemas/constants-registry), merged into the same
-  // $defs as every request/response type via the same z.toJSONSchema call —
+  // $defs as every request/response type via the same toJSONSchema call —
   // not a separate artifact. `x-enum-varnames` preserves each entry's
   // original key names (`ModelType.llamacppCompletion`, `PluginId.LLM`, ...)
   // through codegen; plain JSON Schema `enum:` only carries values.

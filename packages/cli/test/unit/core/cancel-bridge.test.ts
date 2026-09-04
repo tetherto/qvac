@@ -73,6 +73,48 @@ describe('bindClientDisconnectCancel', () => {
     assert.match(logger.debugs[0]!, /cancel race lost/)
   })
 
+  it('cancels every id bound to one response from a single listener', async () => {
+    const res = makeRes()
+    const cancelled: string[] = []
+    // lunte-disable-next-line require-await
+    const cancelFn = async (opts: { requestId: string }) => {
+      cancelled.push(opts.requestId)
+    }
+    const logger = makeLogger()
+    for (const id of ['rid-a', 'rid-b', 'rid-c']) {
+      bindClientDisconnectCancel(res, id, logger, cancelFn)
+    }
+
+    assert.equal(res.listenerCount('close'), 1, 'one listener regardless of bound id count')
+
+    res.emit('close')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    assert.deepEqual(cancelled, ['rid-a', 'rid-b', 'rid-c'])
+  })
+
+  it('cancels an id bound after close, which the close listener cannot reach', async () => {
+    const res = makeRes()
+    const cancelled: string[] = []
+    // lunte-disable-next-line require-await
+    const cancelFn = async (opts: { requestId: string }) => {
+      cancelled.push(opts.requestId)
+    }
+    const logger = makeLogger()
+
+    bindClientDisconnectCancel(res, 'rid-early', logger, cancelFn)
+    res.emit('close')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    bindClientDisconnectCancel(res, 'rid-late', logger, cancelFn)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    assert.deepEqual(cancelled, ['rid-early', 'rid-late'])
+  })
+
   it('binds via res.once so a second close event does not fire cancel twice', async () => {
     const res = makeRes()
     let called = 0
