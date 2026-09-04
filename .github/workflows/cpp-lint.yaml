@@ -42,10 +42,25 @@ on:
         type: boolean
         required: false
         default: false
+      include-cuda-sdk:
+        description: >-
+          Install the NVIDIA CUDA toolkit before generating the build system.
+          Required for packages whose qvac-fabric feature set pulls the
+          cuda-backend: that feature hard-errors without nvcc rather than
+          silently skipping, so configure fails on this linux runner even
+          though linting never builds or runs the CUDA backend.
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   cpp-lint:
     runs-on: qvac-ubuntu2204-x64
+    # A cold `setup-cuda` curls ~1GB from developer.download.nvidia.com on a
+    # persistent self-hosted runner, and this job sits on the no-label
+    # pull_request_target path, so a hung fetch would hold the runner until
+    # someone cancels by hand. Warm runs finish in 1.5 to 2.5 minutes.
+    timeout-minutes: 30
     environment: release
     permissions:
       contents: read
@@ -107,6 +122,11 @@ jobs:
       - if: ${{ inputs.include-rocm-sdk }}
         name: Setup ROCm SDK for HIP cross-compile
         uses: ./.github/actions/setup-rocm
+
+      # Like ROCm above, must run BEFORE vcpkg so nvcc is on PATH.
+      - if: ${{ inputs.include-cuda-sdk }}
+        name: Setup CUDA toolkit for the ggml CUDA backend
+        uses: ./.github/actions/setup-cuda
 
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855

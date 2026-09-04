@@ -30,7 +30,8 @@ jobs:
     needs: runner_names
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    # QVAC-23763: -vulkan only on the new leg, so existing check names are kept.
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.force_vulkan == 'true' && '-vulkan' || '' }}-integration-tests
     permissions:
       contents: read
       packages: read
@@ -51,6 +52,12 @@ jobs:
             platform: linux
             arch: x64
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
+          # QVAC-23763: same NVIDIA box, Vulkan half. The entry above runs CUDA.
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
+            force_vulkan: 'true'
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
@@ -219,7 +226,18 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
+      # QVAC-23763: its own step because the test step below has no shell, so on
+      # win32 it is PowerShell and a bash `if` will not parse. Skipped rather
+      # than set empty, because an empty value hides every CUDA device like -1.
+      - name: Force Vulkan on the NVIDIA runner
+        if: ${{ matrix.force_vulkan == 'true' }}
+        shell: bash
+        run: |
+          echo "hiding CUDA devices so the addon selects Vulkan"
+          echo "CUDA_VISIBLE_DEVICES=-1" >> "$GITHUB_ENV"
+
       - name: Run integration test
         working-directory: ${{ env.WORKDIR }}
-        run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
+        run: |
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
 

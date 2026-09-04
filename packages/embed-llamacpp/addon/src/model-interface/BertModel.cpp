@@ -416,8 +416,12 @@ BertModelSetup setupParams(
     const BackendType preferredBackend =
         preferredBackendTypeFromString(deviceIt->second);
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
-    const std::pair<BackendType, std::string> chosenBackend =
-        chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
+    // QVAC-23763: extracted and erased here like main-gpu, so the passthrough
+    // loop never forwards it to llama.cpp's argument parser.
+    const std::vector<std::string> backendOverride =
+        tryBackendOverrideFromMap(configFilemap);
+    const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
+        preferredBackend, llamaLogCallback, mainGpu, backendOverride);
 
     if (chosenBackend.first == BackendType::GPU) {
       result.resolvedBackendDevice = 1;
@@ -472,11 +476,61 @@ BertModelSetup setupParams(
     // In multi-GPU split mode we intentionally omit --device so llama.cpp
     // distributes layers/rows across all available GPUs rather than pinning
     // to the single backend that chooseBackend selected.
+    //
+    // QVAC-23763: that stops being safe once one physical card registers under
+    // two backends, so pass the chosen backend's own devices instead. Empty on
+    // a single-registry host, where --device stays omitted as before.
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(chosenBackend.second);
+    } else if (chosenBackend.first == BackendType::GPU) {
+      const std::vector<std::string> splitDevices =
+          splitModeDeviceNames(chosenBackend.second);
+      if (!splitDevices.empty()) {
+        std::string deviceList;
+        for (const std::string& deviceName : splitDevices) {
+          if (!deviceList.empty()) {
+            deviceList += ',';
+          }
+          deviceList += deviceName;
+        }
+        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+            GGML_LOG_LEVEL_INFO,
+            string_format(
+                "[BertModel] split-mode: restricting --device to the %s "
+                "backend's own devices (%s); this host registers GPUs under "
+                "more than one backend\n",
+                chosenBackend.second.c_str(),
+                deviceList.c_str())
+                .c_str(),
+            nullptr);
+        configVector.emplace_back("--device");
+        configVector.emplace_back(std::move(deviceList));
+        // QVAC-23763: --main-gpu indexes the list llama.cpp is handed, which is
+        // now this scoped one rather than every enumerated device, so the
+        // caller's index would point at a different card. Rewrite it to the
+        // selected device's position.
+        if (const auto mainGpuIt = configFilemap.find("main-gpu");
+            mainGpuIt != configFilemap.end()) {
+          const auto selectedPos =
+              std::ranges::find(splitDevices, chosenBackend.second);
+          if (selectedPos != splitDevices.end()) {
+            mainGpuIt->second =
+                std::to_string(selectedPos - splitDevices.begin());
+          } else {
+            configFilemap.erase(mainGpuIt);
+            qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+                GGML_LOG_LEVEL_WARN,
+                "[BertModel] main-gpu dropped: the selected device is not in "
+                "the scoped --device list\n",
+                nullptr);
+          }
+        }
+      }
     }
-    configFilemap.erase(deviceIt);
+    // Erase by key, not by deviceIt: the configFilemap["main-gpu"] insert above
+    // can rehash the map, which invalidates every iterator.
+    configFilemap.erase("device");
 
     // Disable flash attention by default when the chosen GPU backend is
     // OpenCL: it is not reliably supported there. Users who pass an

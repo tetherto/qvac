@@ -68,14 +68,23 @@ jobs:
     # smoke_timeout_minutes applies only in default mode; qvac_perf_only runs
     # the full perf list and keeps the leg's normal timeout_minutes.
     timeout-minutes: ${{ (!inputs.qvac_perf_only && matrix.smoke_timeout_minutes) || matrix.timeout_minutes || 360 }}
-    continue-on-error: true
+    # QVAC-23763: per-row now, because the -vulkan leg is a regression check
+    # that CUDA-as-default did not break the old path, and a check that cannot
+    # fail the workflow gates nothing. Rows without `allow_failure` keep the
+    # previous non-blocking behaviour, since an unset matrix field is not
+    # `false`. GitHub will not per-include a literal, so this has to be an
+    # expression.
+    continue-on-error: ${{ matrix.allow_failure != false }}
     runs-on: ${{ matrix.runner }}
     environment: release
-    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.force_vulkan == 'true' && '-vulkan' || '' }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WORKDIR: packages/llm-llamacpp
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
+      # QVAC-23763: not CUDA_VISIBLE_DEVICES directly, because an unset matrix
+      # field is the empty string, which hides every CUDA device like -1.
+      FORCE_VULKAN: ${{ matrix.force_vulkan || 'false' }}
     permissions:
       contents: read
       packages: read
@@ -102,6 +111,15 @@ jobs:
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
             timeout_minutes: 480
             label: linux-x64-u24-gpu
+          # QVAC-23763: same NVIDIA box, Vulkan half. The entry above runs CUDA.
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
+            timeout_minutes: 480
+            force_vulkan: 'true'
+            allow_failure: false
+            label: linux-x64-u24-gpu-vulkan
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -286,6 +304,11 @@ jobs:
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
+          # Only for the Vulkan leg, see FORCE_VULKAN above.
+          if [ "${FORCE_VULKAN}" = "true" ]; then
+            echo "FORCE_VULKAN=true: hiding CUDA devices so the addon selects Vulkan"
+            export CUDA_VISIBLE_DEVICES=-1
+          fi
           if [ "${{ inputs.qvac_perf_only }}" = "true" ]; then
             echo "qvac_perf_only=true: regenerating test/integration/all.js with perf-emitting tests only"
             npx brittle -r test/integration/all.js \

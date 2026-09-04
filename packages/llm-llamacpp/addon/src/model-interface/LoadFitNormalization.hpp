@@ -76,14 +76,23 @@ struct SelectedBackend {
   bool isMaliGpu = false;
 };
 
+/// Args: preferred type, main-gpu override, model metadata, isFinetuning,
+/// and the parsed `backend` priority list (empty when the caller did not set
+/// one). QVAC-23763.
 using BackendResolver = std::function<SelectedBackend(
     backend_selection::BackendType,
     const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
-    bool)>;
+    bool, const std::vector<std::string>&)>;
 
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
   std::function<bool()> gpuBackendSupportsRowSplit;
+  /// Args: the chosen backend's device name. Returns the devices to pass as
+  /// `--device` in multi-GPU split mode, or empty to keep omitting it.
+  /// QVAC-23763. Unset is treated as empty, so existing callers that build this
+  /// struct without it keep the pre-CUDA behaviour.
+  std::function<std::vector<std::string>(const std::string&)>
+      splitModeDeviceNames;
   /// Devices to pin LLAMA_SPLIT_MODE_TENSOR to. Consulted only for tensor
   /// mode; see backend_selection::getTensorSplitDeviceNames.
   std::function<std::vector<std::string>()> tensorSplitDeviceNames;
@@ -107,7 +116,7 @@ void tuneLoadConfigMap(
     const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides = {},
     bool isOpenCl = false, bool isMetal = false, bool isGpu = false,
-    bool isTensorSplit = false);
+    bool isCuda = false, bool isTensorSplit = false);
 
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,

@@ -147,6 +147,12 @@ jobs:
           ls -lh models/unit-test/
           du -sh models/unit-test/*
 
+      # QVAC-23763: cuda-backend hard-errors without nvcc, so linux needs the
+      # toolkit. Compile-only, no NVIDIA GPU required.
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Setup CUDA toolkit for the ggml CUDA backend
+        uses: ./.github/actions/setup-cuda
+
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
         run: |

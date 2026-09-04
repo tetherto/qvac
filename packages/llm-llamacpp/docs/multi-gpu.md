@@ -55,7 +55,7 @@ The `row` degrade applies to both inference and finetuning. Between `layer` and 
 | Backend | `'layer'` | `'row'` | `'tensor'` |
 |---------|-----------|---------|------------|
 | SYCL (not shipped) | Layer parallelism | True tensor parallelism (split buffers) | Meta device, generic all-reduce |
-| CUDA (not shipped) | Layer parallelism | Degraded to layer parallelism — split buffers dropped at v10069 | Meta device, backend-specific all-reduce (the tuned path upstream vouches for) |
+| CUDA (linux x64) | Layer parallelism | Degraded to layer parallelism — split buffers dropped at v10069 | Meta device, backend-specific all-reduce (the tuned path upstream vouches for) |
 | Vulkan  | Layer parallelism | Degraded to layer parallelism | Meta device, generic all-reduce |
 | Metal   | Layer parallelism | Degraded to layer parallelism | Meta device, generic all-reduce |
 | OpenCL  | Layer parallelism | Degraded to layer parallelism | Meta device, generic all-reduce |
@@ -122,7 +122,14 @@ device ─── 'cpu' ──> All GPU params ignored, CPU inference
                         │   tensor-split has no effect
                         │
                         └── split-mode = 'layer' | 'row' | 'tensor'
-                            --device is NOT passed (so qvac-fabric sees all GPUs)
+                            layer/row, one GPU backend:
+                                              --device is NOT passed
+                                              (so qvac-fabric sees all GPUs)
+                            layer/row, two or more:
+                                              --device lists every discrete GPU,
+                                              deduplicated by PCI bus id
+                            tensor:           --device lists the GPUs fabric's
+                                              tensor branch would not filter
                             tensor-split proportions forwarded as --tensor-split
                             main-gpu (integer only) forwarded as --main-gpu
                               row: selects GPU for intermediate results and KV
@@ -142,11 +149,21 @@ The `device` parameter is always required and is consumed first. When set to `'g
 After backend selection, the split-mode determines the forwarding strategy:
 
 - **`split-mode: 'none'`** (or omitted): the chosen backend name is passed as `--device <backend>`, pinning inference to that single GPU.
-- **`split-mode: 'layer'` or `'row'`**: `--device` is intentionally **not** passed. This lets qvac-fabric discover all available GPUs and distribute the model according to `tensor-split`.
+- **`split-mode: 'layer'` or `'row'`**: `--device` is either omitted, or set to the list of discrete GPUs deduplicated by PCI bus id. See below.
 
-### Why `--device` is omitted in split modes
+### What `--device` does in split modes
 
-When a split mode is active, passing `--device` would pin all computation to the single backend that `chooseBackend()` selected, defeating the purpose of multi-GPU. By omitting it, qvac-fabric's own device enumeration distributes layers or rows across all visible GPU backends.
+Passing a single `--device` would pin all computation to the one device `chooseBackend()` selected, defeating the purpose of multi-GPU. So a split mode never does that. What it passes instead depends on how many GPU backends the host registers.
+
+**One GPU backend**, which is every host without the CUDA module: `--device` is not passed at all. qvac-fabric's own device enumeration distributes layers or rows across all visible GPUs.
+
+**More than one GPU backend**, which on Linux means an NVIDIA machine where CUDA and Vulkan both register: `--device` is passed as the comma-separated list of every discrete GPU, deduplicated by PCI bus id, for example `cuda0,cuda1`. The same physical card registers once per backend, as both `CUDA0` and `Vulkan0`, and both publish the same bus id, so only one of the two is named. Where a card is registered under the chosen backend that entry wins, which is what keeps a `backend` override binding in split mode. A card that only another backend registers, a discrete AMD beside an NVIDIA say, still joins the split under that backend. Deduplicating needs every device in the chosen backend to publish a bus id. If any of them does not, as on a Vulkan driver without `VK_EXT_pci_bus_info`, there is no reliable key to match a card's two registrations by, so the whole list falls back to naming only the chosen backend's own devices.
+
+Use the `backend` config key to choose which backend the split runs on, for example `backend: 'vulkan'` on an NVIDIA host.
+
+### `main-gpu` indices
+
+`main-gpu` as an integer indexes ggml's full device list, CPU device included, so adding CUDA shifts the indices an existing config was written against. In a split mode the addon rewrites it to the selected device's position in the scoped `--device` list, so the two arguments stay in step.
 
 ## Usage examples
 
