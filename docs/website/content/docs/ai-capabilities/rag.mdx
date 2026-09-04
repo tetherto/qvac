@@ -75,6 +75,10 @@ The following script shows how to ingest documents into a built-in RAG workspace
 </Tab>
 </Tabs>
 
+<Callout type="info">
+**Swap the backend:** to store the vectors in a TurboVec index instead of the default HyperDB, set `"ragTurbovec": true` in `qvac.config.json`. The RAG API is the same. See [Configuration › `ragTurbovec`](/configuration#options) for details.
+</Callout>
+
 ### External vector DB
 
 #### MongoDB
