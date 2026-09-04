@@ -128,10 +128,9 @@ overlay-local-fabric
 
   1. npm install --ignore-scripts
   2. download fabric-prebuilds artifact
-  3. copy into every node_modules/@qvac/fabric match:
-       prebuilds/<platform>-<arch>/
-       prebuilds/include/
-       prebuilds/share/qvac-fabric/
+  3. copy headers into every node_modules/@qvac/fabric/prebuilds match
+       (include/, share/) and the host runtime into
+       node_modules/@qvac/fabric-<platform>/prebuilds/<platform>-<arch>/
   4. consumer bare-make generate && build
   5. consumer cpp-tests + integration-tests
 ```

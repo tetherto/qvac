@@ -47,7 +47,7 @@ Concretely, relative to the legacy `classification-ggml/CMakeLists.txt`:
 
 | Legacy | New |
 |---|---|
-| `find_package(ggml CONFIG REQUIRED)` | `set(qvac-fabric_DIR …/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake)` + `find_package(qvac-fabric CONFIG REQUIRED)` + `include_bare_module("@qvac/fabric" qvac_fabric_target PREBUILD)` |
+| `find_package(ggml CONFIG REQUIRED)` | `set(qvac-fabric_DIR …/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake)` + `find_package(qvac-fabric CONFIG REQUIRED)` + `include_bare_module` of the host `@qvac/fabric-<platform>` package (`qvac_addon_use_fabric()`) |
 | `foreach(_backend ${GGML_AVAILABLE_BACKENDS}) … INSTALL TARGET ggml::${_backend}` loop feeding `add_bare_module(… EXPORTS ${BACKEND_DL_LIBS})` | **deleted**; `add_bare_module(… EXPORTS)` (no exports) |
 | `BACKENDS_SUBDIR = ${bare_target_value}/${module_name}` (per-addon) | `BACKENDS_SUBDIR = ${bare_target_value}/qvac__fabric` (fixed, points at fabric's shared backend dir) |
 | `target_link_libraries(${tgt} PRIVATE ggml::ggml ggml::ggml-base)` + conditional `ggml::ggml-cpu` | `target_link_libraries(${tgt} PRIVATE qvac-fabric::headers)` (headers on lib target) **and** `target_link_libraries(${tgt}_module PRIVATE ${qvac_fabric_target}_module)` (dynamic link on module target) |

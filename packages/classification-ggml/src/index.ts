@@ -102,8 +102,12 @@ function getErrorMessage(error: unknown, fallback: string): string {
 // appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
 function resolveBackendsDir(): string {
   try {
-    const fabricPkg = require.resolve("@qvac/fabric/package");
-    const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");
+    const fabricPrebuilds = require("@qvac/fabric/platform").resolvePlatformPrebuilds();
+    if (fabricPrebuilds && fs.existsSync(fabricPrebuilds)) return fabricPrebuilds;
+  } catch {}
+  try {
+    const fabricRoot = path.dirname(require.resolve("@qvac/fabric/package"));
+    const fabricPrebuilds = path.join(fabricRoot, "prebuilds");
     if (fs.existsSync(fabricPrebuilds)) return fabricPrebuilds;
   } catch {}
   return path.join(__dirname, "prebuilds");

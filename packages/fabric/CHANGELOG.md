@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0] - 2026-09-03
+
+### Changed
+
+- `@qvac/fabric` is now a meta package. Headers and CMake config stay here; each
+  host runtime publishes as `@qvac/fabric-<platform>` and is selected by npm
+  `optionalDependencies` + `os`/`cpu` (`libc` on Linux). `binding.js` loads the
+  host via `require('#binding')` and a `package.json` `"imports"` map (same
+  pattern as bare-collabora). `include_bare_module` and `resolveBackendsDir()`
+  must follow the platform package (see `require('@qvac/fabric/platform')`).
+  CUDA/HIP vendor packages are not part of this release.
+
 ## [0.10.0] - 2026-08-29
 
 ### Changed

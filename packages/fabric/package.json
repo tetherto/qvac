@@ -1,6 +1,6 @@
 {
   "name": "@qvac/fabric",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Shared bare addon hosting the qvac-fabric (forked llama.cpp + ggml) runtime for QVAC inference addons",
   "addon": true,
   "engines": {
@@ -13,13 +13,13 @@
     "lint": "standard",
     "lint:fix": "standard --fix",
     "test:integration:install": "npm --prefix test/integration install",
-    "test:integration": "npm --prefix test/integration install && bare test/integration/shared-runtime.test.js"
+    "test:integration": "npm --prefix test/integration install && bare test/integration/shared-runtime.test.js",
+    "test:unit": "node --test scripts/*.test.js",
+    "prepare-platform-packages": "node scripts/prepare-platform-packages.js"
   },
   "files": [
     "binding.js",
-    "prebuilds/*/*.bare",
-    "prebuilds/*/*.bare.exports",
-    "prebuilds/*/qvac__fabric/**",
+    "platform.js",
     "prebuilds/include",
     "prebuilds/share/qvac-fabric",
     "LICENSE",
@@ -27,7 +27,25 @@
   ],
   "exports": {
     ".": "./binding.js",
-    "./package": "./package.json"
+    "./package": "./package.json",
+    "./platform": "./platform.js"
+  },
+  "imports": {
+    "#binding": {
+      "android": "@qvac/fabric-android-arm64",
+      "darwin": {
+        "arm64": "@qvac/fabric-darwin-arm64",
+        "x64": "@qvac/fabric-darwin-x64"
+      },
+      "ios": "@qvac/fabric-ios",
+      "linux": {
+        "arm64": "@qvac/fabric-linux-arm64",
+        "x64": "@qvac/fabric-linux-x64"
+      },
+      "win32": {
+        "x64": "@qvac/fabric-win32-x64"
+      }
+    }
   },
   "author": "Tether",
   "license": "Apache-2.0",
@@ -42,5 +60,14 @@
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "standard": "^17.0.0"
+  },
+  "optionalDependencies": {
+    "@qvac/fabric-linux-x64": "0.11.0",
+    "@qvac/fabric-linux-arm64": "0.11.0",
+    "@qvac/fabric-darwin-arm64": "0.11.0",
+    "@qvac/fabric-darwin-x64": "0.11.0",
+    "@qvac/fabric-win32-x64": "0.11.0",
+    "@qvac/fabric-android-arm64": "0.11.0",
+    "@qvac/fabric-ios": "0.11.0"
   }
 }
