@@ -6,10 +6,11 @@ quarter. Downstream enforcement tickets reference this doc instead of
 re-litigating scope per ticket.
 
 > **Status: partial (enforcement-surface stub).** This file currently captures
-> the enforcement surfaces needed by in-flight Q3 gates (§B). The full Tier-1
-> scope lock — the complete repo list, critical systems, public repo list, and
-> mobile signing scope — is owned by QVAC-19052; expand §A there. Sections are
-> lettered/numbered so tickets can cite a stable anchor (e.g. "§B1").
+> the enforcement surfaces needed by in-flight Q3 gates (§B) and the access
+> governance artifacts (§C). The full Tier-1 scope lock — the complete repo list,
+> critical systems, public repo list, and mobile signing scope — is owned by
+> QVAC-19052; expand §A there. Sections are lettered/numbered so tickets can cite
+> a stable anchor (e.g. "§B1").
 
 ## §A — Tier-1 repos
 
@@ -171,3 +172,51 @@ the workflow-hardening sibling of the §B2 security baseline (which scans repo
   Promotion to a required blocking check is a follow-up, gated on shadow-mode
   telemetry (false-positive rate, time-to-resolve) plus TL sign-off.
 - **Rolled out under QVAC-21551.**
+
+## §C — Access governance & break-glass
+
+The access-control decision artifacts for Tier-1 live in the **private
+[`tetherto/qvac-devops`](https://github.com/tetherto/qvac-devops)** repo, not here.
+They map critical secrets, owners, grant/revoke mechanisms, and emergency access —
+i.e. a recon map of the supply chain — so they are deliberately kept out of this
+public repo, matching the `deploy-registry-server` action's "setup steps live in a
+private runbook, not committed to this public repo" note. This section is the
+public pointer to them (existence disclosed, contents private).
+
+Where §B gates *code and supply-chain compliance* at PR time, §C answers *who can
+touch the critical systems themselves* — org/repo admin, CI secrets,
+`release`/`npm` environments, cloud OIDC, self-hosted runner hosts, and package
+registries — and how emergency access is obtained without improvising.
+
+### §C1 — Critical access coverage matrix
+
+- **Artifacts (private):** `qvac-devops`
+  [`docs/resources/resource-list.md`](https://github.com/tetherto/qvac-devops/blob/main/docs/resources/resource-list.md)
+  (what exists) + [`docs/resources/inventory-matrix.md`](https://github.com/tetherto/qvac-devops/blob/main/docs/resources/inventory-matrix.md)
+  (who has access). Maps each critical asset to owner, current grantees, grant/revoke
+  mechanism, privilege level, and review cadence — covering org/repo admin, branch
+  protection/rulesets, CI secrets, GitHub environments, AWS/GCP OIDC, package
+  registries, and self-hosted runner hosts.
+- **Gap analysis (private):** `qvac-devops`
+  [`docs/resources/access-gap-analysis.md`](https://github.com/tetherto/qvac-devops/blob/main/docs/resources/access-gap-analysis.md)
+  — single points of failure, over-provisioned/stale access, and least-privilege
+  violations, each with a remediation owner.
+- **Documentation + decision artifact first.** The matrix records current state and
+  scopes remediation; codifying the UI-only controls (branch protection / rulesets,
+  environment reviewers) as IaC is follow-up work tracked in the gap analysis.
+
+### §C2 — Break-glass procedure
+
+- **Runbook (private):** `qvac-devops`
+  [`docs/runbooks/break-glass.md`](https://github.com/tetherto/qvac-devops/blob/main/docs/runbooks/break-glass.md).
+  Codifies trigger conditions, who may invoke, the two-person approval/witness rule,
+  time-boxing, audit logging, mandatory post-use secret rotation, and the
+  post-incident review. Closes the previously-missing emergency-access path.
+
+### §C3 — Secrets rotation
+
+- **Runbook (private):** `qvac-devops`
+  [`docs/resources/secrets-rotation.md`](https://github.com/tetherto/qvac-devops/blob/main/docs/resources/secrets-rotation.md).
+  Tracks long-lived secrets by name (owner, source system, last-rotated date,
+  cadence, per-secret procedure), satisfying the runbook reference required by
+  [`secrets-and-credentials.mdc`](../../.cursor/rules/devops/secrets-and-credentials.mdc).
