@@ -81,7 +81,7 @@ function watchVerdicts(): void {
   void (async () => {
     for await (const log of loggingStream({ id: SDK_LOG_ID })) {
       if (log.message.includes('[advisory-fit:')) {
-        console.log(`   ⟶ [${log.level.toUpperCase()}] ${log.message}`)
+        console.log(`▸ [${log.level.toUpperCase()}] ${log.message}`)
       }
     }
   })().catch(() => {
@@ -110,10 +110,11 @@ try {
   const final = await result.final
   console.log(`▸ Completion still works normally: ${final.contentText.trim().slice(0, 120)}\n`)
 
-  // Unloaded before the next phase, so the second load is measured on an idle
-  // machine. The fit check projects a single model in isolation and has no
-  // notion of what is already resident, so leaving this one loaded would change
-  // the outcome without changing the verdict.
+  // Unloaded before the next phase, so the second verdict is measured on an
+  // idle machine and stays comparable to the fixture tables above. Leaving it
+  // loaded would shift the verdict: the check reserves resident weight bytes
+  // through the fit margin, and since model-fit 0.8.0 the fit child also sees
+  // system-wide wired memory.
   await unloadModel({ modelId: smallModelId, clearStorage: false })
   watchVerdicts()
 
@@ -168,7 +169,7 @@ try {
 } catch (error) {
   // A failing load here is the native loader's own error, not the fit check.
   // The check never throws and never converts a verdict into a load failure.
-  console.error('▸ Load failed:', error instanceof Error ? error.message : error)
+  console.error('✖', error instanceof Error ? error.message : error)
   process.exitCode = 1
 }
 
