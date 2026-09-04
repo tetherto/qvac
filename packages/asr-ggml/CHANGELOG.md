@@ -32,6 +32,16 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   runtime behavior is unchanged; the fix matters for anything that opts
   VAD into the GPU.
 
+- Raise the `speech-cpp` floor to 2026-09-03#2, which brings in ggml-speech
+  2026-09-04. Parakeet TDT decoding on CUDA and Metal runs the greedy loop
+  as fused LSTM-cell and TDT-step ops several steps per graph, the encoder
+  uses direct depthwise convolutions and view-based flash attention where
+  the backend supports them, and the mel front-end is multithreaded. At
+  steady state a 30 s clip at q8_0 transcribes about 2.5x faster on an
+  RTX 3080 and about 1.8x faster on an Apple M5, longer clips more. Metal
+  output is unchanged; CUDA output stays within WER noise of the CPU
+  reference. The `cuda` feature now builds ggml with CUDA graph capture on.
+
 ## [0.4.2] - 2026-09-01
 
 ### Changed

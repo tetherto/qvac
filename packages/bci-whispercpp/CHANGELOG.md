@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-03#2, which brings in ggml-speech
+  2026-09-04 (Metal depthwise-conv and strided-copy fast paths, CUDA norm
+  fusion and small-N MMQ tiles; the `cuda` feature now builds ggml with
+  CUDA graph capture on).
+
 ## [0.8.2] - 2026-09-01
 
 ### Changed
