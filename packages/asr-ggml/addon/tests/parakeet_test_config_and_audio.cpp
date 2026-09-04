@@ -76,8 +76,7 @@ TEST(ParakeetStreamingGetters, PreserveNemotronOperatingPointOverrides) {
 
   // Validation belongs to speech-cpp; do not silently coerce invalid values.
   EXPECT_EQ(
-      ParakeetModel::resolveStreamingChunkMs(ModelType::NEMOTRON, 2000),
-      2000);
+      ParakeetModel::resolveStreamingChunkMs(ModelType::NEMOTRON, 2000), 2000);
 }
 
 TEST(ParakeetPreprocessAudio, S16LeHandlesRangeExtremes) {

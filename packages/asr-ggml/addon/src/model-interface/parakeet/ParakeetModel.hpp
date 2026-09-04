@@ -234,8 +234,8 @@ public:
       const std::string& audioFormat = "s16le");
   [[nodiscard]] static ModelType modelTypeFromMetadata(
       const std::string& detected, ModelType fallback);
-  [[nodiscard]] static int resolveStreamingChunkMs(
-      ModelType modelType, int configuredChunkMs);
+  [[nodiscard]] static int
+  resolveStreamingChunkMs(ModelType modelType, int configuredChunkMs);
 
 private:
   void throwIfCancelled() const;
