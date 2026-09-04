@@ -1,0 +1,20 @@
+{
+  "name": "@qvac/ci",
+  "root": "packages/qvac-ci",
+  "targets": {
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/qvac-ci"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/qvac-ci"
+      }
+    }
+  }
+}

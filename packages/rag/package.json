@@ -90,6 +90,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
+    "@qvac/response": "^0.1.2",
     "@qvac/logging": "^0.1.1",
     "bare-crypto": "^1.13.4",
     "bare-fetch": "^3.0.1",

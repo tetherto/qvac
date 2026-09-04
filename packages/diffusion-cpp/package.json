@@ -108,7 +108,10 @@
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.2",
-    "typescript-eslint": "^8.64.0"
+    "typescript-eslint": "^8.64.0",
+    "cmake-npm": "^1.1.0",
+    "b4a": "^1.6.7",
+    "bare-https": "^3.0.0"
   },
   "dependencies": {
     "@qvac/infer-base": "^0.6.2",

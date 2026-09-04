@@ -1,0 +1,34 @@
+{
+  "name": "@qvac/dl-filesystem",
+  "root": "packages/dl-filesystem",
+  "targets": {
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/dl-filesystem"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/dl-filesystem"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/dl-filesystem"
+      }
+    },
+    "test:dts": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:dts",
+        "cwd": "packages/dl-filesystem"
+      }
+    }
+  }
+}

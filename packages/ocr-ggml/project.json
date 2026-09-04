@@ -1,0 +1,124 @@
+{
+  "name": "@qvac/ocr-ggml",
+  "root": "packages/ocr-ggml",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "hasCppLint": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts",
+          "hasFabricLockstep": true,
+          "hasPerfReport": true,
+          "perfReportVariant": "composite",
+          "perfReportPattern": "perf-report-ocr-*",
+          "perfReportTitle": "OCR-GGML Performance Report (All Platforms)",
+          "perfReportExclude": "full-suite|canvasSize lab_results"
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "artifactNamePrefix": "ggml-ocr-",
+          "includeVulkanSdk": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/ocr-ggml"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "timeoutMinutes": 30,
+          "envVarName": "QASE_API_TOKEN",
+          "envSecretName": "QASE_API_TOKEN",
+          "windowsGitCreds": true,
+          "linuxArmApt": ["mesa-vulkan-drivers"],
+          "modelS3": [
+            { "src": "qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/", "dest": "models/", "recursive": true },
+            { "src": "qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/", "dest": "models/", "recursive": true }
+          ],
+          "modelEnv": {
+            "OCR_GGML_DETECTOR": "models/craft_mlt_25k.gguf",
+            "OCR_GGML_RECOGNIZER": "models/latin_g2.gguf",
+            "OCR_GGML_DOCTR_DETECTOR": "models/db_mobilenet_v3_large.gguf",
+            "OCR_GGML_DOCTR_RECOGNIZER": "models/crnn_mobilenet_v3_small.gguf"
+          },
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
+            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-24.04-arm", "linuxArmApt": ["mesa-vulkan-drivers", "g++-13"] },
+            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm" },
+            { "os": "mac-mini-m4", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
+          ]
+        }
+      }
+    },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-ocr-ggml-rtf.js",
+          "manualDir": "packages/ocr-ggml/benchmarks/manual-results"
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/ocr-ggml"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/ocr-ggml"
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "none",
+          "repoName": "ocr-ggml",
+          "testGateMode": "post-publish-integration"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}

@@ -60,3 +60,5 @@ docs/website/scripts/api-docs/api-data.json
 
 # Local perf-report sim output (sim-*.js scripts)
 /tmp/
+
+.nx/

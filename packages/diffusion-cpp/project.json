@@ -1,0 +1,154 @@
+{
+  "name": "@qvac/diffusion-cpp",
+  "root": "packages/diffusion-cpp",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "hasCppLint": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts",
+          "prebuildLinkingScript": "packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs",
+          "hasPerfReport": true,
+          "perfReportVariant": "composite",
+          "perfReportPattern": "perf-report-diffusion-cpp-*",
+          "perfReportTitle": "Diffusion Performance Report (All Platforms)"
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "artifactNamePrefix": "sd-cpp-",
+          "includeVulkanSdk": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/diffusion-cpp"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "timeoutMinutes": 360,
+          "useTeeLogging": true,
+          "hasGenerateStep": true,
+          "hasPinModelManifest": true,
+          "qvacPerfRuns": "3",
+          "qvacPerfWarmupRuns": "0",
+          "dualRegistry": true,
+          "linuxArmApt": ["mesa-vulkan-drivers"],
+          "modelEnv": {
+            "LTX_DOWNLOAD": "false",
+            "LTX_LLM_FILE": "gemma-3-12b-it-UD-Q2_K_XL.gguf"
+          },
+          "modelCache": [
+            { "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" },
+            { "group": "ideogram", "cacheKeySuffix": "ideogram", "cacheVersion": "v2" }
+          ],
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
+            {
+              "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-24.04-arm", "noGpu": true,
+              "modelCache": [{ "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" }]
+            },
+            {
+              "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm", "noGpu": true,
+              "modelCache": [{ "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" }]
+            },
+            {
+              "os": "mac-mini-m4", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu",
+              "modelEnv": { "LTX_DOWNLOAD": "true", "LTX_LLM_FILE": "gemma-3-12b-it-UD-Q2_K_XL.gguf" },
+              "modelCache": [
+                { "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" },
+                { "group": "ideogram", "cacheKeySuffix": "ideogram", "cacheVersion": "v2" },
+                { "group": "ltx", "cacheKeySuffix": "ltx", "cacheVersion": "v2" }
+              ]
+            },
+            {
+              "os": "macos-15-large", "platform": "darwin", "arch": "x64", "runner": "macos-15-large", "noGpu": true,
+              "modelCache": [{ "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" }]
+            },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu", "timeoutMinutes": 1800 }
+          ]
+        }
+      }
+    },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-diffusion-cpp-rtf.js",
+          "manualDir": "packages/diffusion-cpp/benchmarks/manual-results"
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/diffusion-cpp"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "mode": "standard",
+          "windowsVsGenerator": true,
+          "needsSd2Model": true,
+          "testEnvVars": [{ "name": "SD_TEST_MODEL_PATH", "path": "test/model/stable-diffusion-v2-1-Q8_0.gguf" }],
+          "vulkan": { "os": "windows-2025", "shell": "powershell", "path": "C:\\VulkanSDK" },
+          "platforms": [
+            { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
+          ]
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "scope-rewrite",
+          "repoName": "diffusion-cpp",
+          "testGateMode": "none"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}

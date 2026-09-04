@@ -1,0 +1,4 @@
+{
+  "name": "@qvac/sdk-python",
+  "root": "packages/sdk-python"
+}

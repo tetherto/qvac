@@ -1,0 +1,115 @@
+{
+  "name": "@qvac/translation-nmtcpp",
+  "root": "packages/translation-nmtcpp",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/translation-nmtcpp",
+        "ci": {
+          "hasCppLint": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts",
+          "hasFabricLockstep": true
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/translation-nmtcpp",
+        "ci": {
+          "includeVulkanSdk": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/translation-nmtcpp"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/translation-nmtcpp",
+        "ci": {
+          "timeoutMinutes": 60,
+          "testCommandSuffix": true,
+          "useTeeLogging": true,
+          "envVarName": "QASE_API_TOKEN",
+          "envSecretName": "QASE_API_TOKEN",
+          "linuxArmApt": ["mesa-vulkan-drivers"],
+          "modelCache": [
+            {
+              "paths": "packages/translation-nmtcpp/model",
+              "hashFilesGlob": ".github/workflows/integration-test-nx.yml",
+              "warm": "false"
+            }
+          ],
+          "modelS3": [
+            { "src": "qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/", "dest": "model/bergamot/enit", "recursive": true, "skipOnCacheHit": true },
+            { "src": "qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/", "dest": "model/bergamot/esen", "recursive": true, "skipOnCacheHit": true },
+            { "src": "qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/", "dest": "model/bergamot/fren", "recursive": true, "skipOnCacheHit": true },
+            { "src": "qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/", "dest": "model/bergamot/enes", "recursive": true, "skipOnCacheHit": true },
+            { "src": "qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin", "dest": "model/indictrans/", "skipOnCacheHit": true }
+          ],
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
+            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64" },
+            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64" },
+            { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
+          ]
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/translation-nmtcpp"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/translation-nmtcpp",
+        "ci": {
+          "carveOut": true
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/translation-nmtcpp",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "none",
+          "useVTag": true,
+          "testGateMode": "post-publish-integration"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}

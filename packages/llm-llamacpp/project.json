@@ -1,0 +1,119 @@
+{
+  "name": "@qvac/llm-llamacpp",
+  "root": "packages/llm-llamacpp",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "hasCppLint": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts+lint",
+          "hasFabricLockstep": true,
+          "hasPerfReport": true,
+          "perfReportVariant": "composite",
+          "perfReportPattern": "perf-report-llamacpp-llm-*",
+          "perfReportTitle": "LLM Performance Report (All Platforms)",
+          "perfReportExtraArgs": "--addon-type vision --device-details",
+          "perfReportMediaDir": "packages/llm-llamacpp/media"
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "artifactNamePrefix": "llama-cpp-",
+          "includeVulkanSdk": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/llm-llamacpp"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "carveOut": true
+        }
+      }
+    },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-llamacpp-llm-rtf.js",
+          "manualDir": "packages/llm-llamacpp/benchmarks/manual-results"
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/llm-llamacpp"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "carveOut": true,
+          "mode": "llm",
+          "vulkan": { "os": "windows-2025", "shell": "powershell", "path": "C:\\VulkanSDK" },
+          "vcpkgMode": "composite-local-cache",
+          "hasWindowsCmakeGenerator": true,
+          "hasAppleClangWorkaround": true,
+          "needsUnitTestModelCache": true,
+          "hasResultsCountValidation": true,
+          "coverageOn": "ubuntu-24.04",
+          "platforms": [
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "macos-15-xlarge", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
+          ]
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "scope-rewrite",
+          "repoName": "llamacpp-llm",
+          "testGateMode": "none"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}
