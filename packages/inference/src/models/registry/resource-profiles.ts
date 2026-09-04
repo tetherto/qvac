@@ -573,6 +573,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 4371896
   },
+  '1f7b7f0b984cf065c604360c29c8098362ed61b290db0ff12c6f360bb1a8a980': {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 904004000
+  },
   '1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69': {
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
@@ -1249,6 +1254,27 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       ssmInnerSize: 4096,
       ssmGroupCount: 16
     }
+  },
+  '4448186216b3af4cc558bbce2c3213f01608f8f8b2e5267a9767971dd3ec8082': {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 111334654784,
+    ggufFacts: {
+      architecture: 'qwen4exp',
+      blockCount: 48,
+      headCount: 24,
+      headCountKv: 2,
+      keyLength: 256,
+      valueLength: 256,
+      embeddingLength: 2560,
+      contextLength: 262144,
+      fullAttentionInterval: 4,
+      ssmStateSize: 128,
+      ssmConvKernel: 4,
+      ssmInnerSize: 6144,
+      ssmGroupCount: 16
+    },
+    assumptions: ['artifactBytes sums 4 shards']
   },
   '44496b0fc6e9d1650d2977e2f352b849a0edf1c7f39034e3db60c0e9deea966e': {
     schemaVersion: 1,
@@ -3050,6 +3076,27 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
     artifactBytes: 81781811
+  },
+  a4f3b21e77353999829f2f767e9ac21ce9c71d29a74f2cc9eda48c9bf23c8b86: {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 78869128864,
+    ggufFacts: {
+      architecture: 'qwen4exp',
+      blockCount: 48,
+      headCount: 24,
+      headCountKv: 2,
+      keyLength: 256,
+      valueLength: 256,
+      embeddingLength: 2560,
+      contextLength: 262144,
+      fullAttentionInterval: 4,
+      ssmStateSize: 128,
+      ssmConvKernel: 4,
+      ssmInnerSize: 6144,
+      ssmGroupCount: 16
+    },
+    assumptions: ['artifactBytes sums 3 shards']
   },
   a642e9c9bbe2069628bb585071a138b794d04dae588823d183aa27af76698ef3: {
     schemaVersion: 1,
