@@ -65,7 +65,7 @@ node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --auth
 
 `pod` and `union` are only honored with `--mode team`; other modes ignore them (with a warning on stderr).
 
-`--tiers` (opt-in, `--mode team` only): split the dashboard into author tiers — pod Core (roster authors), Platform/Middleware (same GitHub org, not on roster), External Contribution (outside the org, or `community-contribution` label fallback). Off by default so other pods keep a flat list; `/qv-sdk-pr-status` passes it.
+`--tiers` (opt-in, `--mode team` only): split the dashboard into author tiers — pod Core (roster authors), Platform/Middleware (same GitHub org, not on roster), External Contribution (outside the org, or `community-contribution` label fallback). Docs-only PRs (`docPaths`) render in a `### 📚 Docs` lane inside each tier. `--pod sdk` also adds a per-platform `e2e:` line on Core impl PRs. Off by default so other pods keep a flat list; `/qv-sdk-pr-status` passes `--tiers`.
 
 `pr-status.mjs` reads `~/.config/qvac-pr-skills/config.json` when present for
 GitHub repo and stale-day settings. If config is missing, the repo is inferred
@@ -86,6 +86,10 @@ from the local `upstream` remote.
    ```
 
    `ownedPaths` are prefix-matched against changed-file paths to decide whether a PR is "owned" by this pod in the primary repo. Use trailing slashes.
+
+   `docPaths` (optional) are prefix-matched the same way. A PR that hits `docPaths` and misses `ownedPaths` is docs-only; with `--tiers` it renders under `### 📚 Docs` instead of mixing with impl.
+
+   `approvalLeads` (optional) GitHub logins whose formal `APPROVED` satisfies the team-lead gate and appear on `Reviews:`. They are not Core authors and are not ping targets.
 
    `extraRepos` (optional, `--mode team` only) is a list of additional `owner/name` repos the pod owns wholesale: **every** open PR there is in-scope regardless of touched paths. Plain `owner/name` entries are used as-is; an entry whose name segment contains `*` (e.g. `owner/prefix-*`) is treated as a glob and resolved per run against the org's non-archived repos via `gh repo list`. Repos the caller cannot read are skipped with a one-line stderr warning. The primary repo (`config.github.repo`) stays path-filtered — do not duplicate it under `extraRepos`. PRs from extra repos carry a `prRef` of `owner/repo#<num>` (primary-repo PRs keep `#<num>`).
 

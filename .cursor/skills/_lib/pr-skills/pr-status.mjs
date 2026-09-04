@@ -10,6 +10,8 @@ import {
   classifyTeamPRs,
   collectPRActivity,
   formatAge,
+  formatCiRed,
+  formatE2eLine,
   groupTeamPRsByTier,
   memberState,
   toJsonablePR,
@@ -94,26 +96,28 @@ function formatTarget(target) {
 
 function missingApprovals(pr, podRoles) {
   const missing = [];
-  // Approval gates use formal review state only (not conversation comments).
   if (!podRoles.members.some((member) => pr.reviewState.get(member) === "APPROVED")) {
     missing.push("team member approval");
   }
-  if (!podRoles.leads.some((lead) => pr.reviewState.get(lead) === "APPROVED")) {
+  const leads = podRoles.leadApprovers || podRoles.leads;
+  if (!leads.some((lead) => pr.reviewState.get(lead) === "APPROVED")) {
     missing.push("team lead approval");
   }
   return missing;
 }
 
 function reviewLines(pr, podRoles) {
+  const reviewers = podRoles.reviewers || podRoles.allTeam;
+  const reviewerSet = new Set(reviewers);
   const acted = [];
-  for (const member of podRoles.allTeam) {
+  for (const member of reviewers) {
     const status = memberState(pr, member);
     if (status === "PENDING" || status === "AUTHOR") continue;
     acted.push(`${STATE_ICONS[status] || "?"} ${member}`);
   }
   const outsideState = pr.displayReviewState || pr.reviewState;
   const outside = [...outsideState.entries()]
-    .filter(([login, status]) => !podRoles.allTeam.includes(login) && status !== "COMMENTED")
+    .filter(([login, status]) => !reviewerSet.has(login) && status !== "COMMENTED")
     .map(([login, status]) => `${STATE_ICONS[status] || "?"} ${login}`);
   return { acted, outside };
 }
@@ -143,7 +147,7 @@ function renderPRLine(pr, podRoles = state.roles, extras = [], { showNeeds = tru
 }
 
 // Chat/Slack-friendly markdown renderer used by --mode team.
-function renderMarkdownPR(pr, podRoles = state.roles, { showNeeds = true } = {}) {
+function renderMarkdownPR(pr, podRoles = state.roles, { showNeeds = true, showE2e = false } = {}) {
   const ref = pr.prRef ?? `#${pr.number}`;
   const lines = [
     `- [**${ref}**](${pr.url}) — ${pr.title}`,
@@ -157,7 +161,11 @@ function renderMarkdownPR(pr, podRoles = state.roles, { showNeeds = true } = {})
   const { acted, outside } = reviewLines(pr, podRoles);
   if (acted.length) lines.push(`  - Reviews: ${acted.join(" · ")}`);
   if (outside.length) lines.push(`  - Other: ${outside.join(" · ")}`);
-  if (pr.ciRed) lines.push(`  - ${pr.ciRed}`);
+  if (showE2e && !pr.docsOnly) lines.push(`  - ${formatE2eLine(pr.e2e)}`);
+  const ciRed = formatCiRed(pr.failingChecks, {
+    suppressE2e: showE2e && !pr.docsOnly,
+  });
+  if (ciRed) lines.push(`  - ${ciRed}`);
   return lines.join("\n");
 }
 
@@ -229,35 +237,68 @@ function tierHeading(tierKey) {
   return "## 🌍 External Contribution";
 }
 
-function tierAttentionCount(tierGroups) {
+function bucketHasPRs(buckets) {
   return (
-    tierGroups.reReviewPRs.length +
-    tierGroups.stalePRs.length +
-    tierGroups.activePRs.length
+    buckets.reReviewPRs.length +
+      buckets.stalePRs.length +
+      buckets.activePRs.length +
+      buckets.approvedPRs.length >
+    0
   );
 }
 
-function printTierBuckets(tierGroups) {
+function laneAttention(buckets) {
+  return buckets.reReviewPRs.length + buckets.stalePRs.length + buckets.activePRs.length;
+}
+
+function tierAttentionCount(lanes) {
+  return laneAttention(lanes.impl) + laneAttention(lanes.docs);
+}
+
+function docsAttention(byTier) {
+  let n = 0;
+  for (const key of AUTHOR_TIER_ORDER) n += laneAttention(byTier[key].docs);
+  return n;
+}
+
+function jsonBuckets(buckets) {
+  return {
+    reReview: jsonPRs(buckets.reReviewPRs),
+    stale: jsonPRs(buckets.stalePRs),
+    needsReview: jsonPRs(buckets.activePRs),
+    fullyApproved: jsonPRs(buckets.approvedPRs),
+  };
+}
+
+function printBucketSections(buckets, renderOpts = {}) {
   printMarkdownSection(
     "🔁 **Needs Your Re-Review** (commits since your last review or comment)",
-    tierGroups.reReviewPRs,
-    (pr) => renderMarkdownPR(pr),
+    buckets.reReviewPRs,
+    (pr) => renderMarkdownPR(pr, state.roles, renderOpts),
   );
   printMarkdownSection(
     `🔴 **Stale** (>${state.staleDays}d)`,
-    tierGroups.stalePRs,
-    (pr) => renderMarkdownPR(pr),
+    buckets.stalePRs,
+    (pr) => renderMarkdownPR(pr, state.roles, renderOpts),
   );
   printMarkdownSection(
     "🟡 **Needs Review**",
-    tierGroups.activePRs,
-    (pr) => renderMarkdownPR(pr),
+    buckets.activePRs,
+    (pr) => renderMarkdownPR(pr, state.roles, renderOpts),
   );
   printMarkdownSection(
     "🟢 **Fully Approved — Ready to Merge**",
-    tierGroups.approvedPRs,
-    (pr) => renderMarkdownPR(pr, state.roles, { showNeeds: false }),
+    buckets.approvedPRs,
+    (pr) => renderMarkdownPR(pr, state.roles, { ...renderOpts, showNeeds: false }),
   );
+}
+
+function printTierLanes(lanes, renderOpts = {}) {
+  printBucketSections(lanes.impl, renderOpts);
+  if (!bucketHasPRs(lanes.docs)) return;
+  console.log("### 📚 Docs");
+  console.log("");
+  printBucketSections(lanes.docs, { ...renderOpts, showE2e: false });
 }
 
 function modeTeam() {
@@ -295,14 +336,12 @@ function modeTeam() {
       payload.summary.core = tierAttentionCount(byTier.core);
       payload.summary.platform = tierAttentionCount(byTier.platform);
       payload.summary.external = tierAttentionCount(byTier.external);
+      payload.summary.docs = docsAttention(byTier);
       payload.tiers = {};
       for (const key of AUTHOR_TIER_ORDER) {
-        payload.tiers[key] = {
-          reReview: jsonPRs(byTier[key].reReviewPRs),
-          stale: jsonPRs(byTier[key].stalePRs),
-          needsReview: jsonPRs(byTier[key].activePRs),
-          fullyApproved: jsonPRs(byTier[key].approvedPRs),
-        };
+        const lanes = byTier[key];
+        payload.tiers[key] = jsonBuckets(lanes.impl);
+        if (bucketHasPRs(lanes.docs)) payload.tiers[key].docs = jsonBuckets(lanes.docs);
       }
     }
     console.log(JSON.stringify(payload, null, 2));
@@ -329,20 +368,21 @@ function modeTeam() {
     const nCore = tierAttentionCount(byTier.core);
     const nPlat = tierAttentionCount(byTier.platform);
     const nExt = tierAttentionCount(byTier.external);
+    const nDocs = docsAttention(byTier);
+    const docsNote = nDocs > 0 ? ` · ${nDocs} docs` : "";
     const teamName = state.pods?.[0]?.name || "Pod";
     const coreLabel = (teamName.replace(/\s*Pod\s*$/i, "").trim() || teamName).toLowerCase();
     console.log(
-      `**${nCore} ${coreLabel} core need attention** · ${nPlat} platform · ${nExt} external · ${groups.approvedPRs.length} fully approved · ${groups.reReviewPRs.length} need your re-review · ${groups.stalePRs.length} stale${conflictNote}`,
+      `**${nCore} ${coreLabel} core need attention** · ${nPlat} platform · ${nExt} external · ${groups.approvedPRs.length} fully approved · ${groups.reReviewPRs.length} need your re-review · ${groups.stalePRs.length} stale${docsNote}${conflictNote}`,
     );
     console.log("");
 
+    const showE2e = pod === "sdk";
     const tierBlocks = [];
     for (const key of AUTHOR_TIER_ORDER) {
-      const t = byTier[key];
-      const total =
-        t.reReviewPRs.length + t.stalePRs.length + t.activePRs.length + t.approvedPRs.length;
-      if (!total) continue;
-      tierBlocks.push({ key, groups: t });
+      const lanes = byTier[key];
+      if (!bucketHasPRs(lanes.impl) && !bucketHasPRs(lanes.docs)) continue;
+      tierBlocks.push({ key, lanes });
     }
 
     for (let i = 0; i < tierBlocks.length; i++) {
@@ -352,14 +392,16 @@ function modeTeam() {
       }
       console.log(tierHeading(tierBlocks[i].key));
       console.log("");
-      printTierBuckets(tierBlocks[i].groups);
+      printTierLanes(tierBlocks[i].lanes, {
+        showE2e: showE2e && tierBlocks[i].key === "core",
+      });
     }
   } else {
     console.log(
       `**${groups.needsAction.length} PRs need attention** · ${groups.approvedPRs.length} fully approved · ${groups.reReviewPRs.length} need your re-review · ${groups.stalePRs.length} stale${conflictNote}`,
     );
     console.log("");
-    printTierBuckets(groups);
+    printBucketSections(groups);
   }
 
   if (state.authorScope === "pod" && excludedPRs.length > 0) {
