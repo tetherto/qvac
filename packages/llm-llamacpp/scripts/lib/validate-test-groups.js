@@ -47,14 +47,17 @@ function validateTestGroups(groups, runners, options = {}) {
   }
 
   for (const platform of platforms) {
-    const sources = maps.filter((key) => platformFamily(key) === platform)
-    if (!sources.length) {
+    // The daily map must exist under the bare platform name: upload-to-devicefarm
+    // indexes only `.<platform>`, so groups that live only in `<platform>Weekly`
+    // collapse the run to one unfiltered spec. Pooling below is for coverage only.
+    if (!maps.includes(platform)) {
       problems.push(
-        `[${platform}] is required to be covered but test-groups.json has no ` +
-          '`{ "<group>": [runners] }` map for it.'
+        `[${platform}] has no \`{ "<group>": [runners] }\` daily map; upload-to-devicefarm ` +
+          `reads only \`.${platform}\`, so its groups cannot live only in ${platform}Weekly.`
       )
       continue
     }
+    const sources = maps.filter((key) => platformFamily(key) === platform)
 
     const covered = new Set(
       sources.flatMap((key) => Object.values(groups[key]).filter(Array.isArray).flat())

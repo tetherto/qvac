@@ -150,3 +150,19 @@ test('an empty options.platforms list uses the required platforms', () => {
   assert.equal(problems.length, 1)
   assert.ok(problems[0].startsWith('[android]'))
 })
+
+test('daily groups moved into the weekly map are reported, not pooled', () => {
+  // Device Farm indexes only `.android`; folding the daily groups into
+  // `androidWeekly` would silently collapse the run to one unfiltered spec.
+  const moved = {
+    ios: { light: ['runDailyTest'] },
+    iosWeekly: { heavy: ['runWeeklyTest'] },
+    androidWeekly: { light: ['runDailyTest'], heavy: ['runWeeklyTest'] }
+  }
+  const problems = validateTestGroups(moved, ['runDailyTest', 'runWeeklyTest'], {
+    platforms: ['ios', 'android']
+  })
+  assert.equal(problems.length, 1)
+  assert.ok(problems[0].startsWith('[android]'))
+  assert.ok(problems[0].includes('androidWeekly'))
+})

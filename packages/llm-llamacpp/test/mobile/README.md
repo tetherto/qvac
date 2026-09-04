@@ -43,7 +43,8 @@ workflow edits required. The weekend run posts a pass/fail report to a
 
 Every generated runner must appear in a group, and every group must name a
 generated runner. Coverage is pooled across each OS family's daily and weekly
-maps. Benchmark shards are scheduled through their dedicated workflow, while
+maps, but each platform must keep its own daily `android`/`ios` map because
+Device Farm reads only those keys. Benchmark shards are scheduled through their dedicated workflow, while
 the MoE finetuning test is desktop-only, so neither is required here. These
 rules live in `scripts/lib/validate-test-groups.js` and are enforced by
 `npm run test:mobile:validate` through `npm run test:unit`; they are deliberately
