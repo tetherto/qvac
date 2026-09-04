@@ -18,5 +18,8 @@
         "zlib"
       ]
     }
+  ],
+  "overlay-ports": [
+    "./vcpkg-overlay-ports"
   ]
 }

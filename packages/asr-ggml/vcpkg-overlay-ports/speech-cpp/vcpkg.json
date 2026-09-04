@@ -1,0 +1,123 @@
+{
+  "name": "speech-cpp",
+  "version-date": "2026-09-04",
+  "description": "Umbrella port over the QVAC speech stack with one shared ggml dependency and selectable whisper, parakeet, TTS, and audiogen engines.",
+  "homepage": "https://github.com/tetherto/qvac-fabric-speech.cpp",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "ggml-speech",
+      "default-features": false,
+      "version>=": "2026-09-04#1"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    },
+    "whisper"
+  ],
+  "features": {
+    "audiogen": {
+      "description": "Build the audiogen engine (ACE-Step music generation) from engines/audiogen. CMake package: find_package(audiogen-cpp CONFIG) + audiogen-cpp::audiogen-cpp."
+    },
+    "coreml": {
+      "description": "Parakeet only: enable the Apple Core ML (Neural Engine) encoder sidecar (presence-driven at runtime; falls back to the ggml encoder when the .mlmodelc sidecar is absent).",
+      "supports": "osx | ios",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "default-features": false,
+          "features": [
+            "parakeet"
+          ]
+        }
+      ]
+    },
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration for all enabled engines (Linux / Windows on NVIDIA, via ggml-speech[cuda]). Needs nvcc on the build host; at runtime CUDA engages only where the NVIDIA driver and the CUDA 13 runtime libraries (cudart, cuBLAS) both resolve, and devices without compiled kernels are skipped in favor of Vulkan or CPU.",
+      "supports": "!osx & !ios & !android",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "default-features": false,
+          "features": [
+            "cuda"
+          ],
+          "platform": "!osx & !ios & !android"
+        }
+      ]
+    },
+    "metal": {
+      "description": "Enable Metal GPU acceleration for all enabled engines (macOS / iOS, via ggml-speech[metal]).",
+      "supports": "osx | ios",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "default-features": false,
+          "features": [
+            "metal"
+          ],
+          "platform": "osx | ios"
+        }
+      ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU acceleration for all enabled engines (Android / Adreno, via ggml-speech[opencl]).",
+      "supports": "android",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "default-features": false,
+          "features": [
+            "opencl"
+          ],
+          "platform": "android"
+        }
+      ]
+    },
+    "parakeet": {
+      "description": "Build the Parakeet engine (NVIDIA FastConformer ASR: CTC / TDT / EOU, Nemotron 3.5, plus Sortformer diarization) from engines/parakeet. CMake package: find_package(qvac-parakeet CONFIG) + qvac::parakeet."
+    },
+    "tts": {
+      "description": "Build the TTS engine collection from engines/tts: Resemble Chatterbox (Turbo + Multilingual), Supertonic, Fun-CosyVoice3, Parler-TTS, Audio8 and LavaSR speech enhancement, as one library. CMake package: find_package(tts-cpp CONFIG) + tts-cpp::tts-cpp.",
+      "dependencies": [
+        "mecab"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration for all enabled engines (Linux / Windows / Android; Apple platforms use the metal feature instead, via ggml-speech[vulkan]).",
+      "supports": "!osx & !ios",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "default-features": false,
+          "features": [
+            "vulkan"
+          ],
+          "platform": "!osx & !ios"
+        }
+      ]
+    },
+    "whisper": {
+      "description": "Build the whisper engine from third_party/whisper.cpp (upstream whisper.cpp with the QVAC delta; upstream's bundled parakeet is gated off). CMake package: find_package(whisper CONFIG) + whisper::whisper."
+    }
+  }
+}
