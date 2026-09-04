@@ -318,6 +318,33 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:lrc
 ```
 
+### Query Rewriting: keep your lyrics, upgrade your caption
+
+With `rewriteQuery: true` the LM FORMAT pass reworks a full request before
+synthesis: your caption is rewritten into a detailed musical description and
+the lyric content is preserved, with any unset metadata filled the same way
+Simple Mode does. Unlike Simple Mode — which expands a bare query and writes
+lyrics from scratch — Query Rewriting takes caption AND lyrics as input, so
+real `lyrics` are required (`'[Instrumental]'` belongs to Simple Mode) and the
+two options are mutually exclusive:
+
+```js
+const response = await gen.run('a short salsa idea', {
+  rewriteQuery: true,
+  lyrics: '[verse]\nsuena el tambor y el barrio se enciende',
+  seed: 4242
+})
+```
+
+Faithful rewriting (lyrics back verbatim, caption on-genre) needs the 1.7B LM
+(`acestep-5Hz-lm-1.7B`); the 0.6B drifts genre, voice, and language. End to
+end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:rewrite
+```
+
 ### Quality scoring: rank a batch of takes
 
 With `computeQualityScore: true` the engine teacher-forces the generated audio
@@ -531,6 +558,7 @@ wrapped by a level-gated `QvacLogger`.
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
 | `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
+| `rewriteQuery` | LM FORMAT pass: rewrite the caption into a detailed description, preserving the lyric content. Requires real `lyrics` and `taskType: 'text2music'`; mutually exclusive with `simpleMode`. |
 | `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
 | `generateLrc` | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`. |
 | `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |

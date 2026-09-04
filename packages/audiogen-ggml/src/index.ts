@@ -152,6 +152,16 @@ export interface GenerateOptions {
    */
   simpleMode?: boolean
   /**
+   * Query Rewriting: the LM FORMAT pass rewrites the caption into a detailed
+   * musical description before synthesis, preserving the lyric content and
+   * filling any metadata left unset. Unlike Simple Mode — which expands a bare
+   * query and writes lyrics from scratch — this takes caption AND lyrics as
+   * input, so real `lyrics` are required (`'[Instrumental]'` belongs to Simple
+   * Mode) and the two options are mutually exclusive. Requires
+   * `taskType: 'text2music'`; faithful rewriting needs the 1.7B LM.
+   */
+  rewriteQuery?: boolean
+  /**
    * Percentile loudness normalization on the generated audio (default true):
    * the 99.999th-percentile sample scales to full scale and the tiny tail
    * above it clips, matching the reference loudness. Set false for the raw
@@ -710,7 +720,8 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'audioCoverStrength',
   'coverNoiseStrength',
   'generateLrc',
-  'computeQualityScore'
+  'computeQualityScore',
+  'rewriteQuery'
 ]
 
 function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boolean {
@@ -1288,6 +1299,28 @@ export class AudioGen {
         throw invalidInput('simpleMode requires lmPhase1')
       }
     }
+    if (opts.rewriteQuery !== undefined && typeof opts.rewriteQuery !== 'boolean') {
+      throw invalidInput('rewriteQuery must be a boolean')
+    }
+    if (opts.rewriteQuery === true) {
+      if (opts.simpleMode === true) {
+        throw invalidInput('rewriteQuery cannot be combined with simpleMode')
+      }
+      if (taskType !== undefined && taskType !== 'text2music') {
+        throw invalidInput("rewriteQuery supports only taskType 'text2music'")
+      }
+      if (opts.audioCodes !== undefined) {
+        throw invalidInput('rewriteQuery cannot take pre-supplied audioCodes')
+      }
+      if (opts.lyrics === undefined || opts.lyrics === '' || opts.lyrics === '[Instrumental]') {
+        throw invalidInput(
+          "rewriteQuery requires lyric text to preserve (use simpleMode with '[Instrumental]' for an instrumental request)"
+        )
+      }
+      if (opts.lmPhase1 === false) {
+        throw invalidInput('rewriteQuery requires lmPhase1')
+      }
+    }
     if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
       throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`)
     }
@@ -1303,6 +1336,7 @@ export class AudioGen {
       input: caption,
       lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
       simpleMode: opts.simpleMode,
+      rewriteQuery: opts.rewriteQuery,
       normalizeLoudness: opts.normalizeLoudness,
       generateLrc: opts.generateLrc,
       computeQualityScore: opts.computeQualityScore,

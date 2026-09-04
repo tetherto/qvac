@@ -206,6 +206,10 @@ test('AudioGen rejects unsupported MiniMax generation options', async (t) => {
     /MiniMax does not accept computeQualityScore/
   )
   await t.exception(
+    () => gen.run('test', { rewriteQuery: true, lyrics: '[verse]\nhello' }),
+    /MiniMax does not accept rewriteQuery/
+  )
+  await t.exception(
     () => gen.run('test', { duration: 2, maxFrames: 50 }),
     /either maxFrames or duration/
   )

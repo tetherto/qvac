@@ -209,6 +209,8 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
     modelInput.lmPhase1 = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "simpleMode"))
     modelInput.simpleMode = *value;
+  if (auto value = readOptionalBoolean(jobObject, env, "rewriteQuery"))
+    modelInput.rewriteQuery = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "normalizeLoudness"))
     modelInput.normalizeLoudness = *value;
   if (auto value = readOptionalBoolean(jobObject, env, "generateLrc"))

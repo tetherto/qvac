@@ -280,8 +280,8 @@ const ACESTEP_GENERATE_KEYS = [
     'guidanceScale',
     'audioCoverStrength',
     'coverNoiseStrength',
-    'generateLrc',
-    'computeQualityScore'
+    'computeQualityScore',
+    'rewriteQuery'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
@@ -493,7 +493,6 @@ class AudioGen {
     _destroyed;
     _cancelPromise;
     _cancellingResponse;
-    _lastLrc;
     _cancelTerminalResolve;
     _lastUnderstand;
     constructor(options = {}) {
@@ -556,7 +555,6 @@ class AudioGen {
         this._cancelPromise = null;
         this._cancellingResponse = null;
         this._cancelTerminalResolve = null;
-        this._lastLrc = undefined;
     }
     /** Create the native engine and load its GGUF files. Idempotent. */
     async load() {
@@ -679,7 +677,6 @@ class AudioGen {
             throw this._lifecycleError();
         }
         const addon = this._requireAddon();
-        this._lastLrc = undefined;
         this._lastUnderstand = undefined;
         const response = this._job.start();
         let accepted;
@@ -760,20 +757,6 @@ class AudioGen {
         if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
             throw invalidInput('normalizeLoudness must be a boolean');
         }
-        if (opts.generateLrc !== undefined && typeof opts.generateLrc !== 'boolean') {
-            throw invalidInput('generateLrc must be a boolean');
-        }
-        if (opts.generateLrc === true) {
-            if (taskType !== undefined && taskType !== 'text2music') {
-                throw invalidInput("generateLrc requires taskType 'text2music'");
-            }
-            if (opts.lyrics === '[Instrumental]') {
-                throw invalidInput('generateLrc requires lyrics to align');
-            }
-            if (opts.simpleMode !== true && (opts.lyrics === undefined || opts.lyrics === '')) {
-                throw invalidInput('generateLrc requires lyrics to align');
-            }
-        }
         if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
             throw invalidInput('computeQualityScore must be a boolean');
         }
@@ -794,6 +777,26 @@ class AudioGen {
                 throw invalidInput('simpleMode requires lmPhase1');
             }
         }
+        if (opts.rewriteQuery !== undefined && typeof opts.rewriteQuery !== 'boolean') {
+            throw invalidInput('rewriteQuery must be a boolean');
+        }
+        if (opts.rewriteQuery === true) {
+            if (opts.simpleMode === true) {
+                throw invalidInput('rewriteQuery cannot be combined with simpleMode');
+            }
+            if (taskType !== undefined && taskType !== 'text2music') {
+                throw invalidInput("rewriteQuery supports only taskType 'text2music'");
+            }
+            if (opts.audioCodes !== undefined) {
+                throw invalidInput('rewriteQuery cannot take pre-supplied audioCodes');
+            }
+            if (opts.lyrics === undefined || opts.lyrics === '' || opts.lyrics === '[Instrumental]') {
+                throw invalidInput("rewriteQuery requires lyric text to preserve (use simpleMode with '[Instrumental]' for an instrumental request)");
+            }
+            if (opts.lmPhase1 === false) {
+                throw invalidInput('rewriteQuery requires lmPhase1');
+            }
+        }
         if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
             throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`);
         }
@@ -809,8 +812,8 @@ class AudioGen {
             input: caption,
             lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
             simpleMode: opts.simpleMode,
+            rewriteQuery: opts.rewriteQuery,
             normalizeLoudness: opts.normalizeLoudness,
-            generateLrc: opts.generateLrc,
             computeQualityScore: opts.computeQualityScore,
             seed: optionalFiniteNumber(opts.seed, 'seed', true),
             vocalLanguage: opts.vocalLanguage,
@@ -978,12 +981,10 @@ class AudioGen {
             return;
         }
         if (d.outputArray) {
-            this._lastLrc = typeof d.lrc === 'string' ? d.lrc : undefined;
             this._job.output({
                 outputArray: d.outputArray,
                 sampleRate: d.sampleRate ?? 0,
-                channels: d.channels ?? 0,
-                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
+                channels: d.channels ?? 0
             });
             return;
         }
@@ -1011,8 +1012,6 @@ class AudioGen {
                 ...(typeof d.gpuFallbackReason === 'number'
                     ? { gpuFallbackReason: d.gpuFallbackReason }
                     : {}),
-                ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
-                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
                 ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
                 ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
             };

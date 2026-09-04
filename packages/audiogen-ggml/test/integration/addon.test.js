@@ -401,6 +401,37 @@ test(
 )
 
 test(
+  'AudioGen (ggml): rewriteQuery formats the request through the LM',
+  { timeout: INTEGRATION_TIMEOUT_MS },
+  async (t) => {
+    const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
+    if (!download.success) {
+      t.fail('ACE-Step models unavailable')
+      return
+    }
+
+    const gen = await loadAudioGen({
+      modelDir: download.modelDir,
+      ditVariant: VARIANT,
+      useGPU: !NO_GPU
+    })
+    t.teardown(() => gen.destroy())
+
+    const { data } = await runAudioGen(gen, {
+      caption: 'a short salsa idea',
+      opts: {
+        lyrics: '[verse]\nhello rewrite world',
+        duration: 4,
+        seed: 42,
+        rewriteQuery: true
+      }
+    })
+    t.ok(data.sampleCount > 0, 'rewrite run produced audio')
+    t.ok(data.stages.includes('lm'), 'streamed the LM stage (FORMAT pass + codes)')
+  }
+)
+
+test(
   'AudioGen (ggml): understand describes generated audio',
   { timeout: INTEGRATION_TIMEOUT_MS },
   async (t) => {

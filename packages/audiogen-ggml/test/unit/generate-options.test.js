@@ -242,6 +242,45 @@ test('AudioGen.run surfaces the LRC text and score from the native run', async (
   t.is(stats.lyricsScore, 0.42)
 })
 
+test('AudioGen.run validates and forwards rewriteQuery', async (t) => {
+  const sourceAudio = new Float32Array([0.3, -0.3])
+  const lyrics = '[verse]\nhello rewrite world'
+  await rejectRunOptions(t, { rewriteQuery: 'yes', lyrics }, /rewriteQuery must be a boolean/)
+  await rejectRunOptions(
+    t,
+    { rewriteQuery: true, simpleMode: true },
+    /rewriteQuery cannot be combined with simpleMode/
+  )
+  await rejectRunOptions(
+    t,
+    { rewriteQuery: true, lyrics, taskType: 'cover-nofsq', sourceAudio },
+    /rewriteQuery supports only taskType 'text2music'/
+  )
+  await rejectRunOptions(
+    t,
+    { rewriteQuery: true, lyrics, audioCodes: new Int32Array([1, 2]) },
+    /rewriteQuery cannot take pre-supplied audioCodes/
+  )
+  await rejectRunOptions(t, { rewriteQuery: true }, /rewriteQuery requires lyric text to preserve/)
+  await rejectRunOptions(
+    t,
+    { rewriteQuery: true, lyrics: '[Instrumental]' },
+    /rewriteQuery requires lyric text to preserve/
+  )
+  await rejectRunOptions(
+    t,
+    { rewriteQuery: true, lyrics, lmPhase1: false },
+    /rewriteQuery requires lmPhase1/
+  )
+
+  const { gen, received } = createHarness()
+  const response = await gen.run('a short salsa idea', { rewriteQuery: true, lyrics })
+  await response.await()
+  const job = received()
+  t.is(job.rewriteQuery, true)
+  t.is(job.lyrics, lyrics)
+})
+
 test('AudioGen.run validates and forwards computeQualityScore', async (t) => {
   const sourceAudio = new Float32Array([0.3, -0.3])
   await rejectRunOptions(t, { computeQualityScore: 'yes' }, /computeQualityScore must be a boolean/)
