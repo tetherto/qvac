@@ -317,6 +317,50 @@ test(
 )
 
 test(
+  'AudioGen (ggml): computeQualityScore reports stats.qualityScore',
+  { timeout: INTEGRATION_TIMEOUT_MS },
+  async (t) => {
+    const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
+    if (!download.success) {
+      t.fail('ACE-Step models unavailable')
+      return
+    }
+
+    const gen = await loadAudioGen({
+      modelDir: download.modelDir,
+      ditVariant: VARIANT,
+      useGPU: !NO_GPU
+    })
+    t.teardown(() => gen.destroy())
+
+    const scored = await runAudioGen(gen, {
+      caption: 'acoustic ballad quality scoring integration test',
+      opts: {
+        lyrics: '[verse]\nhello quality world',
+        duration: 4,
+        seed: 42,
+        bpm: 120,
+        keyscale: 'C major',
+        computeQualityScore: true
+      }
+    })
+    t.ok(scored.data.sampleCount > 0, 'scored run produced audio')
+    t.ok(scored.data.stages.includes('score'), 'streamed the score stage')
+    t.ok(typeof scored.data.stats.qualityScore === 'number', 'stats.qualityScore present')
+    t.ok(
+      scored.data.stats.qualityScore >= 0 && scored.data.stats.qualityScore <= 1,
+      `qualityScore in [0, 1] (${scored.data.stats.qualityScore})`
+    )
+
+    const unscored = await runAudioGen(gen, {
+      caption: 'acoustic ballad quality scoring integration test',
+      opts: { lyrics: '[Instrumental]', duration: 4, seed: 42 }
+    })
+    t.is(unscored.data.stats.qualityScore, undefined, 'no qualityScore without the flag')
+  }
+)
+
+test(
   'AudioGen (ggml): immediate ACE-Step cancellation is terminal',
   { timeout: INTEGRATION_TIMEOUT_MS },
   async (t) => {

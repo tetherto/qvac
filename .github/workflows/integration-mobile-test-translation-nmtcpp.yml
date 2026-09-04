@@ -222,6 +222,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/translation-nmtcpp' }}
           addon-npm-name: '@qvac/translation-nmtcpp'
+          prebuild-artifact-prefix: 'nmtcpp-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           # Manual dispatch (inputs.platform set). An empty `package` does NOT test
           # this branch's native code: a standalone dispatch produces no prebuild
