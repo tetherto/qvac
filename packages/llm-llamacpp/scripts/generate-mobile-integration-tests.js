@@ -8,7 +8,19 @@ const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
-const groupsFile = path.join(mobileDir, 'test-groups.json')
+
+// This generator deliberately does not read test/mobile/test-groups.json. Group
+// coverage is a Device Farm scheduling question, not a question about whether
+// integration.auto.cjs was written correctly, and it is enforced separately by
+// scripts/validate-mobile-tests.js (rules in scripts/lib/validate-test-groups.js)
+// under `npm run test:unit`.
+//
+// It used to be checked here, and the coupling cost a red main: this script runs
+// inside `npm run test:integration` (via test:integration:generate), so editing a
+// scheduling file that no desktop test reads aborted the desktop suite on every
+// platform — after the output file had already been written, so the abort bought
+// nothing. A scheduling-only PR has no native changes, so the mobile job that
+// would have caught it is skipped. See PR #4006 / #4031.
 
 // The benchmark-perf-*.test.js shards are generated, not committed (see
 // .gitignore), but the committed integration.auto.cjs references them. Enumerating
@@ -85,64 +97,6 @@ function buildFileContents(files) {
   return `${lines.join('\n')}\n`
 }
 
-// A platform's OS family is its name without the optional `Weekly` suffix, so
-// `iosWeekly` belongs to the `ios` family. Coverage is validated per family
-// (the union of its regular + weekly splits), letting the weekend-only suite
-// hold a disjoint subset of tests rather than duplicating the daily ones.
-function platformFamily(platform) {
-  return platform.replace(/Weekly$/, '')
-}
-
-function validateGroups(functionNames) {
-  if (!fs.existsSync(groupsFile)) {
-    console.warn('[warn] test-groups.json not found — skipping split validation')
-    return
-  }
-  const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf-8'))
-  const nameSet = new Set(functionNames)
-
-  // Benchmark shards (benchmark-perf-*.test.js -> runBenchmarkPerf*) are
-  // scheduled only by the Benchmark Performance workflow via an explicit
-  // test_groups override, and are deliberately absent from test-groups.json
-  // so normal mobile integration runs never trigger the heavy benchmark.
-  // Exclude them from the group-coverage requirement.
-  const isOverrideOnly = (n) => n.startsWith('runBenchmarkPerf') || n === 'runFinetuningMoeTest'
-
-  const coveredByFamily = new Map()
-  for (const [platform, splits] of Object.entries(groups)) {
-    const family = platformFamily(platform)
-    const covered = coveredByFamily.get(family) ?? new Set()
-    for (const name of Object.values(splits).flat()) {
-      covered.add(name)
-    }
-    coveredByFamily.set(family, covered)
-  }
-
-  for (const [family, covered] of coveredByFamily) {
-    const missing = functionNames.filter((n) => !covered.has(n) && !isOverrideOnly(n))
-    const extra = [...covered].filter((n) => !nameSet.has(n))
-    if (missing.length) {
-      throw new Error(
-        '[' +
-          family +
-          '] Tests not assigned to any group in test-groups.json:\n  ' +
-          missing.join('\n  ') +
-          `\nAdd them to a ${family} or ${family}Weekly group in test/mobile/test-groups.json.`
-      )
-    }
-    if (extra.length) {
-      throw new Error(
-        '[' +
-          family +
-          '] test-groups.json references non-existent tests:\n  ' +
-          extra.join('\n  ') +
-          '\nRemove them or check for typos.'
-      )
-    }
-  }
-  console.log('Group coverage validated — all tests assigned for every OS family.')
-}
-
 function main() {
   assertBenchmarkShardsPresent()
   const files = getIntegrationFiles()
@@ -150,11 +104,9 @@ function main() {
     throw new Error(`No integration test files found inside ${integrationDir}`)
   }
 
-  const functionNames = files.map(toFunctionName)
   const content = buildFileContents(files)
   fs.writeFileSync(outputFile, content, 'utf8')
   console.log(`Generated ${outputFile} with ${files.length} integration runners.`)
-  validateGroups(functionNames)
 }
 
 if (require.main === module) {
