@@ -14,6 +14,12 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- Add NVIDIA Nemotron 3.5 ASR Streaming 0.6B support to the Parakeet engine,
+  including locale prompting, cache-aware streaming operating points,
+  conversion tooling, and a model-specific 320 ms streaming default.
+
 ## [0.4.2] - 2026-09-01
 
 ### Changed
