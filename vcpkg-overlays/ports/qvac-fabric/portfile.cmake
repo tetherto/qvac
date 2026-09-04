@@ -225,8 +225,9 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   #
   #   86-real     RTX 3090, the qvac-ubuntu*-x64-gpu CI runners        (x64)
   #   120a-real   RTX 5090                                             (x64)
-  #   80-virtual  PTX floor, both tiers. JITs onto sm_89, sm_90, sm_12x
-  #               and anything newer that is not pinned above.
+  #   121-real    DGX Spark GB10                                       (arm64)
+  #   80-virtual  PTX floor, both tiers. JITs onto sm_89, sm_90 and
+  #               anything newer that is not pinned above.
   #
   # QVAC-24470: `87-real` was here for the Jetson Orin and has been REMOVED,
   # because it never reached one. The Orin's driver caps at CUDA 12.6 and it has
@@ -296,10 +297,18 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # from "linux & x64" to "linux", so the arm64 tier is now exercised by their
   # linux-arm64 prebuild.
   if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
-    # 80-virtual alone. The only arm64 CUDA hardware that can load this module is
-    # the DGX Spark at sm_121, which has no -real entry either way and reaches the
-    # kernels by JIT. The floor stays virtual so the registration guard is armed.
-    set(QVAC_CUDA_ARCHS "80-virtual")
+    # 121-real is the DGX Spark's GB10, native rather than JITted. Gianfranco,
+    # 2026-09-04: "spark should run native". Measured before it was added: 27.3 s
+    # to first token on a cold JIT cache against 143.9 ms warm, because sm_121 sat
+    # above every entry and had to compile the 80-virtual PTX at run time. A
+    # native cubin removes the JIT, so neither the cold cost nor its dependence on
+    # a writable $HOME applies to that card any more.
+    #
+    # 80-virtual stays, and stays the lowest entry, for two separate reasons: it
+    # is the PTX floor that lets an unlisted newer card run at all, and the
+    # registration guard keys off the lowest entry being virtual. Making 121-real
+    # the floor would silently disarm that guard.
+    set(QVAC_CUDA_ARCHS "80-virtual\;121-real")
   else()
     set(QVAC_CUDA_ARCHS "86-real\;120a-real\;80-virtual")
   endif()
