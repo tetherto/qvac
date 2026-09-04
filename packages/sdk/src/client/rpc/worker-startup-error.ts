@@ -1,30 +1,32 @@
+import { WorkerStartupError } from '@/utils/errors-client'
+
 export interface WorkerExit {
   code: number | null
   signal: string | null
 }
 
-export function createWorkerStartupError(details: string, stderrTail: string): Error {
-  const stderr = stderrTail.trimEnd()
-  if (!stderr) return new Error(details)
-
-  return new Error(`${details}\n\nWorker stderr:\n${stderr}`)
-}
-
+/**
+ * Always returns a cause. A worker that is still running and has written
+ * nothing carries no diagnostic text, but `workerExited: false` is what tells a
+ * caller that waiting longer could still help.
+ */
 export function createRPCInitTimeoutCause(
   stderrTail: string,
   workerExit: WorkerExit | null
-): Error | undefined {
+): WorkerStartupError {
+  const stderr = stderrTail.trimEnd()
+
   if (workerExit) {
-    return createWorkerStartupError(
+    return new WorkerStartupError(
       `Worker process exited with code ${workerExit.code}, signal ${workerExit.signal} before IPC connection was established`,
-      stderrTail
+      { code: workerExit.code, signal: workerExit.signal as NodeJS.Signals | null },
+      stderr
     )
   }
 
-  if (!stderrTail) return undefined
-
-  return createWorkerStartupError(
+  return new WorkerStartupError(
     'Worker did not establish IPC before the RPC initialization timeout',
-    stderrTail
+    null,
+    stderr
   )
 }
