@@ -280,7 +280,8 @@ const ACESTEP_GENERATE_KEYS = [
     'guidanceScale',
     'audioCoverStrength',
     'coverNoiseStrength',
-    'computeQualityScore'
+    'computeQualityScore',
+    'rewriteQuery'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
@@ -776,6 +777,26 @@ class AudioGen {
                 throw invalidInput('simpleMode requires lmPhase1');
             }
         }
+        if (opts.rewriteQuery !== undefined && typeof opts.rewriteQuery !== 'boolean') {
+            throw invalidInput('rewriteQuery must be a boolean');
+        }
+        if (opts.rewriteQuery === true) {
+            if (opts.simpleMode === true) {
+                throw invalidInput('rewriteQuery cannot be combined with simpleMode');
+            }
+            if (taskType !== undefined && taskType !== 'text2music') {
+                throw invalidInput("rewriteQuery supports only taskType 'text2music'");
+            }
+            if (opts.audioCodes !== undefined) {
+                throw invalidInput('rewriteQuery cannot take pre-supplied audioCodes');
+            }
+            if (opts.lyrics === undefined || opts.lyrics === '' || opts.lyrics === '[Instrumental]') {
+                throw invalidInput("rewriteQuery requires lyric text to preserve (use simpleMode with '[Instrumental]' for an instrumental request)");
+            }
+            if (opts.lmPhase1 === false) {
+                throw invalidInput('rewriteQuery requires lmPhase1');
+            }
+        }
         if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
             throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`);
         }
@@ -791,6 +812,7 @@ class AudioGen {
             input: caption,
             lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
             simpleMode: opts.simpleMode,
+            rewriteQuery: opts.rewriteQuery,
             normalizeLoudness: opts.normalizeLoudness,
             computeQualityScore: opts.computeQualityScore,
             seed: optionalFiniteNumber(opts.seed, 'seed', true),
