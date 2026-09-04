@@ -2137,3 +2137,141 @@ while (walking) {
 Public error codes thrown across the SDK. Catch via `instanceof QvacErrorBase`
 and read `error.code` / `error.cause`. Code ranges:
 50,001–52,000 (client) and 52,001–54,000 (server).
+
+### Client errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| `INVALID_RESPONSE_TYPE` | 50001 | Invalid response type received, expected: … |
+| `INVALID_OPERATION_IN_RESPONSE` | 50002 | Invalid operation type in response |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | 50003 | Stream ended without receiving final response |
+| `INVALID_AUDIO_CHUNK_TYPE` | 50004 | Invalid audio chunk type received |
+| `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided |
+| `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema: … |
+| `OCR_FAILED` | 50007 | OCR operation failed… |
+| `MODEL_TYPE_REQUIRED` | 50008 | modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "ggml-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata. |
+| `MODEL_SRC_TYPE_MISMATCH` | 50009 | modelSrc describes "…", but modelType resolves to "…". Omit modelType to infer it automatically, or pass a matching modelType. |
+| `REQUEST_VALIDATION_FAILED` | 50010 | Invalid request:\\n… |
+| `RPC_NO_HANDLER` | 50200 | No handler function registered for request type: … |
+| `RPC_REQUEST_NOT_SENT` | 50201 | Cannot perform operation - request has not been sent yet |
+| `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Cannot perform operation - response stream not created |
+| `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed: … |
+| `RPC_INIT_TIMEOUT` | 50204 | RPC initialization timed out after …ms — the worker process may have failed to start |
+| `WORKER_CRASHED` | 50205 | Bare worker exited mid-request (code=…, signal=…) — in-flight calls were aborted |
+| `WORKER_SHUTDOWN` | 50206 | SDK is shutting down — in-flight RPC call aborted |
+| `WORKER_STARTUP_FAILED` | 50207 | …\\n\\nWorker stderr:\\n… |
+| `SDK_NOT_FOUND_IN_NODE_MODULES` | 50600 | QVAC SDK not found in node_modules. Checked: @qvac/sdk, @tetherto/sdk-mono, @tetherto/sdk-dev |
+| `WORKER_FILE_NOT_FOUND` | 50601 | Worker file not found at … |
+| `CONFIG_FILE_NOT_FOUND` | 50602 | Config file not found. Searched: …. Create qvac.config.json, qvac.config.js, or qvac.config.ts in your project root. |
+| `CONFIG_FILE_INVALID` | 50603 | Config file at … is invalid: … |
+| `CONFIG_FILE_PARSE_FAILED` | 50604 | Failed to parse config file at …: … |
+| `CONFIG_VALIDATION_FAILED` | 50605 | Config validation failed: … |
+| `PEAR_WORKER_ENTRY_REQUIRED` | 50606 | No plugins registered. Pear apps must spawn … as the worker entry. Run \\ |
+| `MULTIPLE_SDK_INSTALLATIONS` | 50607 | Multiple QVAC SDK installations found: …. Remove all but one to avoid conflicts. |
+| `WORKER_PLUGINS_NOT_REGISTERED` | 50608 | @qvac/inference |
+| `BUNDLE_VERIFICATION_FAILED` | 50609 | qvac verify bundle reported error-level issues for …. See the CLI output above for the failing addons/hosts; resolve them before shipping. |
+| `BARE_PACK_NOT_INSTALLED` | 50610 | bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack |
+| `BARE_PACK_ERROR` | 50611 | bare-pack exited with code …\\n\\n Entry file: …\\n Output file: …\\n\\n Run bare-pack manually for more details. |
+| `INVALID_PLUGIN_SPECIFIER` | 50612 | Invalid plugin specifiers (must end with /plugin):\\n… |
+| `BARE_IMPORTS_MAP_NOT_FOUND` | 50613 | bare-imports.json not found.\\n\\n Expected at: …\\n\\n Make sure … is installed in your project. |
+| `BARE_RUNTIME_BINARY_NOT_FOUND` | 50614 | Could not load the Bare runtime binary for …-…. The platform package "bare-runtime-…-…" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \\ |
+| `PROFILER_INVALID_CAPACITY` | 50800 | Profiler invalid capacity |
+
+### Server errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| `MODEL_ALREADY_REGISTERED` | 52001 | Model with ID "…" is already registered |
+| `MODEL_NOT_FOUND` | 52002 | Model with ID "…" not found |
+| `MODEL_NOT_LOADED` | 52003 | Model with ID "…" is not loaded |
+| `UNKNOWN_MODEL_TYPE` | 52005 | Unknown model type: …. If using a custom worker bundle, ensure the plugin for "…" is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk". |
+| `MODEL_LOAD_FAILED` | 52200 | Failed to load model… |
+| `MODEL_FILE_NOT_FOUND` | 52201 | Model file not found: … |
+| `MODEL_FILE_NOT_FOUND_IN_DIR` | 52202 | … model file … not found in directory … |
+| `MODEL_FILE_LOCATE_FAILED` | 52203 | Failed to locate … model file: … |
+| `PROJECTION_MODEL_REQUIRED` | 52204 | Projection model source is required for multimodal LLM models |
+| `VAD_MODEL_REQUIRED` | 52205 | VAD model source is required for this configuration |
+| `TTS_ARTIFACTS_REQUIRED` | 52208 | TTS (Chatterbox) requires s3genModelSrc in modelConfig (companion S3Gen GGUF) and the primary T3 GGUF via modelSrc |
+| `TTS_REFERENCE_AUDIO_REQUIRED` | 52209 | TTS (Chatterbox) requires referenceAudioSrc (path or URL to a WAV file for voice cloning) |
+| `LEGACY_PARAKEET_MODEL_DEPRECATED` | 52210 | Legacy parakeet ONNX modelConfig fields are no longer supported (…). As of @qvac/transcription-parakeet 0.6.0 the addon ships as a single GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF metadata. Supply the GGUF via the top-level modelSrc (e.g. loadModel(\{ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" \})). |
+| `LEGACY_TTS_MODEL_DEPRECATED` | 52211 | Legacy ONNX TTS modelConfig fields are no longer supported (…). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc, set language in modelConfig, and for Chatterbox add s3genModelSrc (e.g. loadModel(\{ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: \{ ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX \} \})). Supertonic multilingual mode is selected by the GGUF (e.g. TTS_MULTILINGUAL_SUPERTONIC2_Q8_0) plus language — not ttsSupertonicMultilingual. |
+| `MODEL_UNLOAD_FAILED` | 52400 | Failed to unload model… |
+| `EMBED_FAILED` | 52401 | Failed to generate embeddings… |
+| `EMBED_NO_EMBEDDINGS` | 52402 | No embeddings returned from model |
+| `TRANSCRIPTION_FAILED` | 52403 | Transcription failed… |
+| `AUDIO_FILE_NOT_FOUND` | 52404 | Audio file not found or not accessible: … |
+| `TRANSLATION_FAILED` | 52405 | Translation failed… |
+| `COMPLETION_FAILED` | 52406 | Completion failed… |
+| `ATTACHMENT_NOT_FOUND` | 52407 | Attachment not found at path: … |
+| `CANCEL_FAILED` | 52408 | Failed to cancel operation… |
+| `TEXT_TO_SPEECH_FAILED` | 52409 | Text-to-speech operation failed… |
+| `CONFIG_RELOAD_NOT_SUPPORTED` | 52410 | Model "…" does not support hot config reload |
+| `MODEL_TYPE_MISMATCH` | 52411 | Model type mismatch: expected "…", got "…" |
+| `OCR_FAILED` | 52412 | OCR operation failed… |
+| `IMAGE_FILE_NOT_FOUND` | 52413 | Image file not found or not accessible: … |
+| `INVALID_IMAGE_INPUT` | 52414 | Invalid image input type provided |
+| `TEXT_TO_SPEECH_STREAM_FAILED` | 52415 | Text-to-speech stream operation failed… |
+| `MODEL_OPERATION_NOT_SUPPORTED` | 52416 | Supported operations on this model: …. |
+| `REQUEST_ID_CONFLICT` | 52417 | Request id "…" is already in flight; refusing to overwrite the existing context |
+| `REQUEST_NOT_FOUND` | 52418 | No in-flight request with id "…" |
+| `INFERENCE_CANCELLED` | 52419 | Inference request "…" was cancelled before it could complete |
+| `REQUEST_REJECTED_BY_POLICY` | 52420 | Request "…" (kind: …, modelId: …) was rejected by registry concurrency policy: … |
+| `CONTEXT_OVERFLOW` | 52421 | for model "…" |
+| `INVALID_AUDIO_INPUT` | 52422 | Invalid audio input… |
+| `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
+| `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
+| `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |
+| `RAG_UNKNOWN_OPERATION` | 52803 | Unknown RAG operation: … |
+| `RAG_HYPERDB_FAILED` | 52804 | HyperDB RAG operation failed: … |
+| `RAG_WORKSPACE_MODEL_MISMATCH` | 52805 | Workspace "…" is configured for model "…", but you're trying to use model "…". Use a different workspace or the same model |
+| `RAG_WORKSPACE_NOT_FOUND` | 52806 | RAG workspace not found: … |
+| `RAG_WORKSPACE_IN_USE` | 52807 | RAG workspace '…' is currently in use. Close it first. |
+| `RAG_WORKSPACE_CLOSE_FAILED` | 52808 | Failed to close RAG workspace… |
+| `RAG_LIST_WORKSPACES_FAILED` | 52809 | Failed to list RAG workspaces… |
+| `RAG_CHUNK_FAILED` | 52810 | Failed to chunk documents… |
+| `RAG_WORKSPACE_NOT_OPEN` | 52811 | RAG workspace '…' is not open |
+| `FILE_NOT_FOUND` | 53000 | File not found: … |
+| `DOWNLOAD_CANCELLED` | 53001 | Download was cancelled |
+| `CHECKSUM_VALIDATION_FAILED` | 53002 | Checksum validation failed for … |
+| `HTTP_ERROR` | 53003 | HTTP error: … … |
+| `NO_RESPONSE_BODY` | 53004 | No response body received from HTTP request |
+| `RESPONSE_BODY_NOT_READABLE` | 53005 | Response body is not readable |
+| `NO_BLOB_FOUND` | 53006 | No blob found for … |
+| `DOWNLOAD_ASSET_FAILED` | 53007 | Failed to download asset… |
+| `SEEDING_NOT_SUPPORTED` | 53008 | Seeding is only supported for hyperdrive models |
+| `HYPERDRIVE_DOWNLOAD_FAILED` | 53009 | Hyperdrive download failed: … |
+| `INVALID_SHARD_URL_PATTERN` | 53010 | URL does not contain a valid sharded model pattern: … |
+| `ARCHIVE_EXTRACTION_FAILED` | 53011 | Failed to extract archive: … |
+| `ARCHIVE_UNSUPPORTED_TYPE` | 53012 | Unsupported archive type: … |
+| `ARCHIVE_MISSING_SHARDS` | 53013 | Archive is missing required shard file: … |
+| `PARTIAL_DOWNLOAD_OFFLINE` | 53014 | Cannot resume partial download (… bytes downloaded) - unable to connect. URL: … |
+| `REGISTRY_DOWNLOAD_FAILED` | 53015 | Registry download failed: … |
+| `INSECURE_MODEL_SOURCE` | 53016 | Refusing insecure model download from …: … |
+| `CHECKSUM_UNAVAILABLE` | 53017 | Model download from … could not be verified against a trusted checksum |
+| `DELETE_CACHE_FAILED` | 53200 | Failed to delete cache… |
+| `INVALID_DELETE_CACHE_PARAMS` | 53201 | Invalid deleteCache parameters - provide either modelId or cacheKey |
+| `CACHE_DIR_NOT_ABSOLUTE` | 53202 | Cache directory must be an absolute path |
+| `CACHE_DIR_NOT_WRITABLE` | 53203 | Cache directory is not writable: …… |
+| `SET_CONFIG_FAILED` | 53350 | Failed to set config… |
+| `CONFIG_ALREADY_SET` | 53351 | Config has already been set and is immutable. Config can only be set once during SDK initialization. |
+| `FFMPEG_NOT_AVAILABLE` | 53500 | FFmpeg is not available on this system |
+| `AUDIO_PLAYER_FAILED` | 53501 | Audio player failed: … |
+| `INVALID_AUDIO_CHUNK_TYPE` | 53502 | Invalid audio chunk type |
+| `ASYNC_DISPOSE_UNAVAILABLE` | 53503 | Host runtime does not expose Symbol.asyncDispose; the SDK request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare/Expo/Node ≥ 20.4) and any polyfill registration. |
+| `RPC_NO_DATA_RECEIVED` | 53703 | No data received from request |
+| `RPC_UNKNOWN_REQUEST_TYPE` | 53704 | Unknown request type received: … |
+| `PLUGIN_NOT_FOUND` | 53850 | Plugin not found for model type "…". If using a custom worker bundle, ensure the plugin is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk". |
+| `PLUGIN_HANDLER_NOT_FOUND` | 53851 | Handler "…" not found in plugin "…" |
+| `PLUGIN_REQUEST_VALIDATION_FAILED` | 53852 | Request validation failed for handler "…"… |
+| `PLUGIN_RESPONSE_VALIDATION_FAILED` | 53853 | Response validation failed for handler "…"… |
+| `PLUGIN_ALREADY_REGISTERED` | 53854 | Plugin already registered for modelType: … |
+| `PLUGIN_HANDLER_TYPE_MISMATCH` | 53855 | Handler "…" is …, but was called as …. Use invokePlugin() for reply handlers and invokePluginStream() for streaming handlers. |
+| `PLUGIN_LOGGING_INVALID` | 53856 | Plugin "…" has invalid logging configuration: … |
+| `PLUGIN_DEFINITION_INVALID` | 53857 | Plugin definition invalid for "…": … |
+| `PLUGIN_MODEL_TYPE_RESERVED` | 53858 | modelType "…" is reserved for built-in plugins |
+| `PLUGIN_LOAD_CONFIG_VALIDATION_FAILED` | 53859 | modelConfig validation failed for "…": … |
+| `LIFECYCLE_SUSPEND_FAILED` | 53600 | Runtime suspend failed… |
+| `LIFECYCLE_RESUME_FAILED` | 53601 | Runtime resume failed… |
+| `LIFECYCLE_OPERATION_BLOCKED` | 53602 | Operation "…" is blocked while runtime state is "…" |
+| `PATH_TRAVERSAL` | 53900 | Path traversal detected: "…" escapes base directory "…" |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | Qvac model registry query failed |

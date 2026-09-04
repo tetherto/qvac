@@ -123,12 +123,25 @@ async function tryLoadCache(
 // Public API
 // ---------------------------------------------------------------------------
 
+function resolveSdkEntryPoint(sdkPath: string) {
+  const src = path.join(sdkPath, "src", "index.ts");
+  const root = path.join(sdkPath, "index.ts");
+  const chosen = fsSync.existsSync(src) ? src : root;
+  return chosen.replace(/\\/g, "/");
+}
+
+function resolveSdkSchemasDir(sdkPath: string) {
+  const src = path.join(sdkPath, "src", "schemas");
+  if (fsSync.existsSync(src)) return src;
+  return path.join(sdkPath, "schemas");
+}
+
 export async function extractApiData(
   sdkPath: string,
   version: string,
   options?: { forceExtract?: boolean; samplesDir?: string },
 ): Promise<ApiData> {
-  const entryPoint = path.join(sdkPath, "index.ts").replace(/\\/g, "/");
+  const entryPoint = resolveSdkEntryPoint(sdkPath);
   const tsconfigPath = path.join(sdkPath, "tsconfig.json").replace(/\\/g, "/");
 
   try {
@@ -169,7 +182,7 @@ export async function extractApiData(
 
   buildTypeMap(project);
   initTsProgram(tsconfigPath);
-  await loadZodDescriptions(path.join(sdkPath, "schemas"));
+  await loadZodDescriptions(resolveSdkSchemasDir(sdkPath));
   await loadSampleProse(options?.samplesDir);
 
   console.log(`🔍 Auditing TSDoc completeness...`);
@@ -244,7 +257,7 @@ export async function extractApiData(
 async function extractErrors(
   sdkPath: string,
 ): Promise<{ client: ErrorEntry[]; server: ErrorEntry[] }> {
-  const schemasDir = path.join(sdkPath, "schemas");
+  const schemasDir = resolveSdkSchemasDir(sdkPath);
   let clientSource = "";
   let serverSource = "";
 
