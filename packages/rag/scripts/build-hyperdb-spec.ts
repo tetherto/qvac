@@ -1,9 +1,10 @@
 import fs from 'bare-fs'
 import path from 'bare-path'
+import url from 'bare-url'
 import HyperDB from 'hyperdb/builder'
 import Hyperschema from 'hyperschema'
 
-const scriptDir = path.dirname(new URL(import.meta.url).pathname)
+const scriptDir = path.dirname(url.fileURLToPath(import.meta.url))
 const packageRoot = path.join(scriptDir, '..')
 
 const SCHEMA_DIR = path.join(packageRoot, 'src', 'adapters', 'database', 'hyperspec', 'hyperschema')
