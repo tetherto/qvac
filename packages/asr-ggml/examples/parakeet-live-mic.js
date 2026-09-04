@@ -87,7 +87,7 @@ function parseArgs() {
     else if (a === '--capture' || a === '-c') args.capture = argv[++i]
     else if (a === '--chunk-ms') {
       const v = parseInt(argv[++i], 10)
-      if (Number.isFinite(v) && v >= 200) args.chunkMs = v
+      if (Number.isFinite(v) && v > 0) args.chunkMs = v
     }
   }
   return args
@@ -113,15 +113,17 @@ async function main() {
 
   console.log(`Loading ${modelPath}...`)
 
+  const parakeetConfig = {
+    streaming: true,
+    useGPU: true
+  }
+  if (args.chunkMs !== null) parakeetConfig.streamingChunkMs = args.chunkMs
+
   const model = new ASRGgml({
     files: { model: modelPath },
     config: {
       engine: 'parakeet',
-      parakeetConfig: {
-        streaming: true,
-        streamingChunkMs: args.chunkMs ?? 2000,
-        useGPU: true
-      }
+      parakeetConfig
     }
   })
   await model.load()

@@ -269,9 +269,8 @@ pkt::SortformerStreamingOptions buildSortformerStreamingOptions(
     float minDurationOn) {
   pkt::SortformerStreamingOptions opts;
   opts.sample_rate = sampleRate;
-  opts.chunk_ms = cfg.streamingChunkMs > 0
-                      ? cfg.streamingChunkMs
-                      : ParakeetConfig::DEFAULT_STREAMING_CHUNK_MS;
+  opts.chunk_ms = ParakeetModel::resolveStreamingChunkMs(
+      cfg.modelType, cfg.streamingChunkMs);
   opts.history_ms = cfg.streamingHistoryMs > 0
                         ? cfg.streamingHistoryMs
                         : ParakeetConfig::DEFAULT_STREAMING_HISTORY_MS;
@@ -292,9 +291,8 @@ pkt::StreamingOptions
 buildAsrStreamingOptions(const ParakeetConfig& cfg, int sampleRate) {
   pkt::StreamingOptions opts;
   opts.sample_rate = sampleRate;
-  opts.chunk_ms = cfg.streamingChunkMs > 0
-                      ? cfg.streamingChunkMs
-                      : ParakeetConfig::DEFAULT_STREAMING_CHUNK_MS;
+  opts.chunk_ms = ParakeetModel::resolveStreamingChunkMs(
+      cfg.modelType, cfg.streamingChunkMs);
   if (cfg.streamingLeftContextMs > 0) {
     opts.left_context_ms = cfg.streamingLeftContextMs;
   }
@@ -412,7 +410,18 @@ ModelType ParakeetModel::modelTypeFromMetadata(
     return ModelType::SORTFORMER;
   if (detected == "rnnt")
     return ModelType::RNNT;
+  if (detected == "nemotron")
+    return ModelType::NEMOTRON;
   return fallback;
+}
+
+int ParakeetModel::resolveStreamingChunkMs(
+    ModelType modelType, int configuredChunkMs) {
+  if (configuredChunkMs > 0)
+    return configuredChunkMs;
+  if (modelType == ModelType::NEMOTRON)
+    return ParakeetConfig::DEFAULT_NEMOTRON_STREAMING_CHUNK_MS;
+  return ParakeetConfig::DEFAULT_STREAMING_CHUNK_MS;
 }
 
 void ParakeetModel::captureBackend() {

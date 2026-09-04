@@ -1,59 +1,21 @@
 cmake_minimum_required(VERSION 3.25)
 
-option(ANDROID_STL "Android STL linkage" c++_shared)
-option(BUILD_TESTING "Build tests" OFF)
+# Shared addon build helpers. See docs/architecture/ADDON-CMAKE-TEMPLATE.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+qvac_addon_preproject()
 
-find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
-find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
+project(model-fit LANGUAGES C CXX)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
-
-project(model-fit C CXX)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++)
-endif()
-
-# Generated lint configs, mirroring the other native addons so `lint-cpp`
-# has a .clang-format / .clang-tidy to work with.
-find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
+qvac_addon_project_setup()
 
 # Header-only JS<->C++ marshalling helpers (JsArgsParser / jsu / JSCATCH).
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
-# llama-targets.cmake transitively requires OpenSSL::SSL via cpp-httplib's
-# IMPORTED interface, so make OpenSSL discoverable before find_package(llama).
-find_package(OpenSSL)
-find_package(llama CONFIG REQUIRED)
+# llama.cpp + ggml are supplied by @qvac/fabric's shared bare runtime. This
+# also derives BACKENDS_SUBDIR_VALUE from Fabric's companion backend directory.
+qvac_addon_use_fabric()
 
-if(WIN32)
-  add_definitions(-DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI)
-endif()
-
-bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
-set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building model-fit with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
-
-# Install the ggml backend shared libs next to the prebuild. `common_fit_params`
-# needs the backends loaded to query per-device free memory.
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-  endforeach()
-endif()
-
-add_bare_module(model-fit EXPORTS ${BACKEND_DL_LIBS})
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${model-fit}_module PRIVATE -Wl,--exclude-libs,ALL)
-endif()
+add_bare_module(model-fit EXPORTS)
 
 set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
@@ -72,19 +34,10 @@ target_include_directories(
     ${PROJECT_SOURCE_DIR}/addon/src
 )
 
-target_link_libraries(
-  ${model-fit}
-  PRIVATE
-    llama::llama
-    # The fitter lives in libcommon, not the core llama ABI: upstream moved it
-    # there in ggml-org/llama.cpp#22171, renaming llama_params_fit to
-    # common_fit_params. llama.h no longer declares it, so linking llama alone
-    # resolves nothing.
-    llama::llama-common
-)
-
-target_compile_definitions(${model-fit} PUBLIC JS_LOGGER)
-target_compile_definitions(${model-fit} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+# The fitter lives in Fabric's exported libcommon surface as well as its llama
+# ABI, so compile against Fabric headers and dynamically link its one runtime.
+qvac_addon_link_fabric(${model-fit} ${qvac_fabric_target})
+qvac_addon_finalize(${model-fit} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
 
 if(BUILD_TESTING)
   enable_testing()
@@ -96,7 +49,13 @@ if(BUILD_TESTING)
   )
   target_include_directories(model-fit-context-test PRIVATE ${PROJECT_SOURCE_DIR}/addon/src)
   target_compile_features(model-fit-context-test PRIVATE cxx_std_17)
-  target_link_libraries(model-fit-context-test PRIVATE llama::llama)
+  target_link_libraries(
+    model-fit-context-test
+    PRIVATE
+      qvac-fabric::headers
+      ${qvac_fabric_target}_module
+  )
+  qvac_addon_stage_fabric_for_test(model-fit-context-test ${qvac_fabric_target})
   add_test(NAME ModelFitContextUnit COMMAND model-fit-context-test)
 
   add_executable(
@@ -110,7 +69,14 @@ if(BUILD_TESTING)
       ${PROJECT_SOURCE_DIR}/addon/src
   )
   target_compile_features(model-fit-params-application-test PRIVATE cxx_std_17)
-  target_link_libraries(model-fit-params-application-test PRIVATE llama::llama)
+  target_link_libraries(
+    model-fit-params-application-test
+    PRIVATE
+      qvac-fabric::headers
+      ${qvac_fabric_target}_module
+  )
+  qvac_addon_stage_fabric_for_test(
+    model-fit-params-application-test ${qvac_fabric_target})
   add_test(NAME ModelFitParamsApplicationUnit COMMAND model-fit-params-application-test)
 
   add_executable(
@@ -127,9 +93,11 @@ if(BUILD_TESTING)
   target_link_libraries(
     model-fit-llama-load-config-test
     PRIVATE
-      llama::llama
-      llama::llama-common
+      qvac-fabric::headers
+      ${qvac_fabric_target}_module
   )
+  qvac_addon_stage_fabric_for_test(
+    model-fit-llama-load-config-test ${qvac_fabric_target})
   if(APPLE)
     target_link_libraries(model-fit-llama-load-config-test PRIVATE objc)
     target_link_options(model-fit-llama-load-config-test PRIVATE -fuse-ld=/usr/bin/ld)

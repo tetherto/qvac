@@ -22,8 +22,9 @@
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:prestage && npm run test:package",
+    "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:prestage && npm run test:package && npm run test:mobile:groups && npm run test:mobile:validate",
     "test:prestage": "node --test scripts/__tests__/generate-prestage-block.test.js",
+    "test:mobile:groups": "node --test scripts/__tests__/mobile-test-groups.test.js",
     "test:package": "node --test test/package/package-contract.test.js",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:integration": "npm run test:integration:generate && bash test/integration/run-tests.sh",
@@ -91,6 +92,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
+    "@qvac/fabric": "^0.10.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fetch": "^3.0.1",

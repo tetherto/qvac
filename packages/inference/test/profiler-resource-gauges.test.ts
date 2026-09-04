@@ -23,6 +23,7 @@ test('operation profiling: resource gauges sample only when requested', async (t
 
   initializeResourceCollector({
     cpuArchitectures: [1],
+    platform: 'linux',
     gpuTypes: [1],
     createCPUInfo: () => ({
       query: () => ({
