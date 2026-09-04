@@ -22,6 +22,11 @@
         "x64": ["@qvac/audiogen-ggml-win32-x64", "./addon-unavailable.js"],
         "default": "./addon-unavailable.js"
       },
+      "android": {
+        "arm64": ["@qvac/audiogen-ggml-android-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "ios": ["@qvac/audiogen-ggml-ios", "./addon-unavailable.js"],
       "default": "./addon-unavailable.js"
     }
   },
