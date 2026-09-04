@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.PREBUILT_HOSTS = void 0;
 exports.hostPlatformPackage = hostPlatformPackage;
 exports.resolveBackendsDirFrom = resolveBackendsDirFrom;
 exports.resolveBackendsDir = resolveBackendsDir;
@@ -14,6 +15,17 @@ const PLATFORM_PACKAGE_PREFIX = "@qvac/tts-ggml-";
 const PLATFORM_MANIFEST_SUBPATH = "/package";
 const IOS_PLATFORM = "ios";
 const HOST_SEPARATOR = "-";
+exports.PREBUILT_HOSTS = [
+    "linux-x64",
+    "linux-arm64",
+    "darwin-arm64",
+    "darwin-x64",
+    "win32-x64",
+    "android-arm64",
+    "ios-arm64",
+    "ios-arm64-simulator",
+    "ios-x64-simulator",
+];
 function hostPlatformPackage(host) {
     const platform = host.split(HOST_SEPARATOR)[0];
     const suffix = platform === IOS_PLATFORM ? IOS_PLATFORM : host;

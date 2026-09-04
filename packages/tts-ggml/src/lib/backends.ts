@@ -11,6 +11,18 @@ const PLATFORM_MANIFEST_SUBPATH = "/package";
 const IOS_PLATFORM = "ios";
 const HOST_SEPARATOR = "-";
 
+export const PREBUILT_HOSTS = [
+  "linux-x64",
+  "linux-arm64",
+  "darwin-arm64",
+  "darwin-x64",
+  "win32-x64",
+  "android-arm64",
+  "ios-arm64",
+  "ios-arm64-simulator",
+  "ios-x64-simulator",
+];
+
 export interface BackendsDirSources {
   localPrebuildsDir: string;
   host: string | null;
