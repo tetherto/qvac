@@ -1,0 +1,47 @@
+{
+  "name": "@qvac/audiogen-diffusers",
+  "version": "0.1.0",
+  "description": "Official CUDA Diffusers runtime bridge for MiniMax-Music3",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.24.0"
+  },
+  "scripts": {
+    "build": "npm run build:ts",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build:ts && brittle test/unit/**/*.test.js",
+    "lint": "npm run lint:ts",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "protocol.js",
+    "protocol.d.ts",
+    "python",
+    "README.md",
+    "NOTICE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/audiogen-diffusers"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@qvac/error": "^0.1.1",
+    "bare-fs": "^4.5.6",
+    "bare-os": "^3.8.0",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "bare-subprocess": "^6.1.0"
+  },
+  "devDependencies": {
+    "brittle": "^3.17.0",
+    "eslint": "^9.39.4",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.63.0"
+  },
+  "types": "index.d.ts"
+}
