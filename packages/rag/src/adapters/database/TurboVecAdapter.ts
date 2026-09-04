@@ -34,6 +34,18 @@ const MANIFEST_VERSION = 1
 const DEFAULT_LOCK_STALE_MS = 30_000
 const DEFAULT_LOCK_HEARTBEAT_MS = 10_000
 
+function lockFailedError(lockPath: string, reason: unknown): QvacErrorRAG {
+  const detail =
+    reason instanceof Error
+      ? `${(reason as { code?: string }).code ?? reason.name}: ${reason.message}`
+      : String(reason)
+  return new QvacErrorRAG({
+    code: ERR_CODES.DB_OPERATION_FAILED,
+    adds: `Failed to acquire the TurboVec writer lock: ${lockPath}: ${detail}`,
+    cause: reason instanceof Error ? reason : undefined
+  })
+}
+
 export type TurboVecIndexStorage = 'f32' | 'q8' | 'q4' | 'turbovec-q4' | 'turbovec-q2'
 
 export interface TurboVecIndexSearchResult {
@@ -1242,11 +1254,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
       }
     }
 
-    throw new QvacErrorRAG({
-      code: ERR_CODES.DB_OPERATION_FAILED,
-      adds: `Failed to acquire the TurboVec writer lock: ${lockPath}`,
-      cause: lastError instanceof Error ? lastError : undefined
-    })
+    throw lockFailedError(lockPath, lastError)
   }
 
   private _releaseLock(): void {
