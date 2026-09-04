@@ -9,6 +9,8 @@ import {
   type ResponseHandler
 } from '@ai-sdk/provider-utils'
 
+import { mergeHeaders } from './headers.js'
+
 export interface QvacFilesOptions {
   readonly baseURL: string
   readonly headers: Record<string, string>
@@ -62,7 +64,7 @@ export function createQvacFiles(options: QvacFilesOptions): FilesV4 {
   return {
     specificationVersion: 'v4',
     provider: 'qvac',
-    async uploadFile({ data, mediaType, filename, providerOptions, abortSignal }) {
+    async uploadFile({ data, mediaType, filename, providerOptions, abortSignal, headers }) {
       const form = new FormData()
       const bytes = await bytesFor(data)
       const body = bytes.slice().buffer as ArrayBuffer
@@ -72,7 +74,7 @@ export function createQvacFiles(options: QvacFilesOptions): FilesV4 {
 
       const response = await postFormDataToApi({
         url: `${options.baseURL.replace(/\/+$/, '')}/files`,
-        headers: multipartHeaders(options.headers),
+        headers: multipartHeaders(mergeHeaders(options.headers, headers)),
         formData: form,
         failedResponseHandler,
         successfulResponseHandler,

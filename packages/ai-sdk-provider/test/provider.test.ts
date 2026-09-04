@@ -172,20 +172,26 @@ test('uploadFile returns a qvac reference and language models resolve it through
   assert.match(JSON.stringify(chatBody), /data:image\/png;base64,iVBORw0KGgo=/)
 })
 
-test('uploadFile accepts every file data variant and forwards the abort signal', async () => {
-  const uploaded: Array<{ bytes: Uint8Array; signal?: AbortSignal | null }> = []
+test('uploadFile accepts every file data variant and forwards per-call options', async () => {
+  const uploaded: Array<{
+    bytes: Uint8Array
+    headers: Headers
+    signal?: AbortSignal | null
+  }> = []
   const customFetch: typeof fetch = async (_input, init) => {
     assert.ok(init?.body instanceof FormData)
     const file = init.body.get('file')
     assert.ok(file instanceof Blob)
     uploaded.push({
       bytes: new Uint8Array(await file.arrayBuffer()),
+      headers: new Headers(init.headers),
       ...(init.signal !== undefined && { signal: init.signal })
     })
     return Response.json({ id: `file-${uploaded.length}` })
   }
   const files = createQvac({
     baseURL: 'http://127.0.0.1:55555/v1',
+    headers: { 'Content-Type': 'application/x-invalid-global-default', 'x-configured': 'provider' },
     fetch: customFetch
   }).files()
 
@@ -215,7 +221,8 @@ test('uploadFile accepts every file data variant and forwards the abort signal',
       })
     },
     mediaType: 'application/octet-stream',
-    abortSignal: abort.signal
+    abortSignal: abort.signal,
+    headers: { 'x-trace-id': 'upload-4' }
   })
 
   assert.deepEqual(
@@ -229,6 +236,14 @@ test('uploadFile accepts every file data variant and forwards the abort signal',
   )
   assert.equal(uploaded[0]?.signal ?? null, null)
   assert.equal(uploaded[3]?.signal, abort.signal)
+
+  // The configured Content-Type must never survive: fetch has to pick the
+  // multipart boundary itself.
+  assert.equal(uploaded[0]?.headers.get('content-type'), null)
+  assert.equal(uploaded[0]?.headers.get('x-configured'), 'provider')
+  assert.equal(uploaded[0]?.headers.get('x-trace-id'), null)
+  assert.equal(uploaded[3]?.headers.get('content-type'), null)
+  assert.equal(uploaded[3]?.headers.get('x-trace-id'), 'upload-4')
 })
 
 test('uploadFile rejects an unknown file data variant without a build-time break', async () => {
