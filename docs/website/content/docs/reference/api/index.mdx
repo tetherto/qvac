@@ -551,7 +551,7 @@ Returns status information for a catalog model, including cache state and loaded
 **Signature**:
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<any>;
+function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo>;
 ```
 
 **Throws**:
@@ -561,8 +561,6 @@ function getModelInfo(params: GetModelInfoParams): Promise<any>;
 ---
 
 ### `getSystemResources`
-
-No description available
 
 **Signature**:
 
@@ -942,8 +940,6 @@ Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapte
 This function explicitly closes them, releasing memory and file locks. The workspace data
 remains on disk unless `deleteOnClose` is set to true.
 
-No description available
-
 **Signature**:
 
 ```ts
@@ -973,8 +969,6 @@ Deletes document embeddings from the RAG vector database.
 
 **Workspace lifecycle:** This operation requires an existing workspace.
 
-No description available
-
 **Signature**:
 
 ```ts
@@ -1002,8 +996,6 @@ await ragDeleteEmbeddings({
 Deletes a RAG workspace and all its data.
 The workspace must not be currently loaded/in-use.
 
-No description available
-
 **Signature**:
 
 ```ts
@@ -1030,8 +1022,6 @@ Full pipeline: chunk → embed → save
 
 **Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
 The workspace remains open until closed.
-
-No description available
 
 **Signature**:
 
@@ -1075,8 +1065,6 @@ Returns all workspaces that exist on disk. The `open` field indicates whether
 the workspace is currently loaded in memory and holding active resources
 (Corestore, HyperDB adapter, and possibly a RAG instance).
 
-No description available
-
 **Signature**:
 
 ```ts
@@ -1107,8 +1095,6 @@ For HyperDB, this rebalances centroids using k-means clustering.
 **Note:** Reindex requires a minimum number of documents to perform clustering.
 For HyperDB, this is 16 documents by default. If there are insufficient documents,
 `reindexed` will be `false` with `details` explaining the reason.
-
-No description available
 
 **Signature**:
 
@@ -1154,8 +1140,6 @@ Part of the segregated flow: chunk() → embed() → saveEmbeddings()
 **Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
 The workspace remains open until closed.
 
-No description available
-
 **Signature**:
 
 ```ts
@@ -1193,8 +1177,6 @@ Searches for similar documents in the RAG vector database.
 
 **Workspace lifecycle:** This operation requires an existing workspace. If the workspace
 doesn't exist, returns an empty array.
-
-No description available
 
 **Signature**:
 
