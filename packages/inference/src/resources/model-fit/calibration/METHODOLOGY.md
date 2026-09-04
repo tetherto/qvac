@@ -301,13 +301,41 @@ its own fixture rather than the platform's.
 
 ### Not covered, and what each needs
 
-| Gap                         | What it needs                                                                                                                                                                                       |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| linux-x64, linux-arm64 iGPU | a CI host with integrated graphics; both linux runners have discrete NVIDIA cards                                                                                                                   |
-| darwin-x64 GPU              | a real Intel Mac. `macos-15-large` is a VM whose Metal device reports as "Apple Paravirtual device" with `hasUnifiedMemory: false`, so calibrating it would describe a hypervisor rather than a GPU |
-| win32-arm64                 | an engine addon built for it; `@qvac/llm-llamacpp` ships nine prebuild targets and that is not one                                                                                                  |
-| CUDA, ROCm, Level Zero      | the addon does not build them — `prebuilds-llm-llamacpp.yml` enables the Vulkan SDK only                                                                                                            |
-| Audio, every platform       | a whisper pass in the harness. `estimateWhisper` refuses the zeroed audio coefficients rather than consuming them                                                                                   |
+| Gap                    | What it needs                                                                                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| linux-x64 iGPU         | a host with integrated graphics; both linux runners have discrete NVIDIA cards                                                                                                                      |
+| linux-arm64 iGPU       | more than a host — see below                                                                                                                                                                        |
+| darwin-x64 GPU         | a real Intel Mac. `macos-15-large` is a VM whose Metal device reports as "Apple Paravirtual device" with `hasUnifiedMemory: false`, so calibrating it would describe a hypervisor rather than a GPU |
+| win32-arm64            | an engine addon built for it; `@qvac/llm-llamacpp` ships nine prebuild targets and that is not one                                                                                                  |
+| CUDA, ROCm, Level Zero | the addon does not build them — `prebuilds-llm-llamacpp.yml` enables the Vulkan SDK only                                                                                                            |
+| Audio, every platform  | a whisper pass in the harness. `estimateWhisper` refuses the zeroed audio coefficients rather than consuming them                                                                                   |
+
+### linux-arm64 on an integrated GPU: measured, and it does not load
+
+Tried on a Jetson Orin Nano 8 GB. ggml sees the device correctly
+(`NVIDIA Tegra Orin (nvgpu) | uma: 1`) and the collector classifies it as
+integrated, but the load fails on the 0.6B warm-up model:
+
+```
+common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+ggml_vulkan: Device memory allocation of size 313262080 failed.
+```
+
+Two separate things, both worth knowing before anyone measures this platform:
+
+- The SDK pins `n_gpu_layers: 99`, so llama.cpp's own fit cannot reduce the
+  layer count to what the device can hold, and the load hard-fails instead of
+  degrading. That is a product-level issue on small unified-memory devices,
+  independent of this feature.
+- `vulkaninfo` reports the heap as 7.44 GiB (all of system RAM, `uma: 1`) but
+  the **budget** as 1.09 GiB. So the system-memory basis would not bound a load
+  here even if it succeeded, which is the assumption the `shared` placement
+  rests on. It holds for Metal and for the Intel UHD measured above; it does
+  not hold on Tegra. A `linux-arm64` shared fixture should not ship until the
+  budget is readable from the collector.
+
+Today the host assesses as `unknown` for want of a fixture, which is the right
+answer for the wrong reason.
 
 Adding a platform means: run the harness with `--write`, add the module to
 `calibration/index.ts`, run prettier, and update the table above.
