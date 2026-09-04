@@ -1154,7 +1154,14 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private _syncCheckpointDirectory(): boolean {
     let directoryFd: number | null = null
     try {
-      directoryFd = fs.openSync(this.checkpointWorkspaceDir!, 'r')
+      // Windows flushes a directory handle only with write access; Unix refuses
+      // write access on a directory outright, so use whichever one this platform
+      // allows.
+      try {
+        directoryFd = fs.openSync(this.checkpointWorkspaceDir!, 'r+')
+      } catch {
+        directoryFd = fs.openSync(this.checkpointWorkspaceDir!, 'r')
+      }
       fs.fsyncSync(directoryFd)
       return true
     } catch (error) {
