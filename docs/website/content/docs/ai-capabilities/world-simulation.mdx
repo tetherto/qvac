@@ -1,0 +1,117 @@
+---
+title: World simulation
+description: Turn a single image and navigation controls into a streamed, navigable video using an interactive world model.
+schemaType: HowTo
+---
+
+## Overview
+
+World simulation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)) exposed as an interactive session — currently powered by **ABot-World**. Load a supported model using `modelType: "sdcpp-generation"` with `modelConfig.mode: "world"`. Then call `worldCreateScene()` once to build a world from a text prompt and a first-frame image, and `worldStep()` repeatedly to walk it — each call generates one block of video streamed frame-by-frame.
+
+The session runs on the machine hosting the worker; there is no remote route.
+
+<Callout type="warn">
+World simulation is hardware-intensive. The default **832×480** tier needs **≥20 GB** of video memory (a 24 GB card in practice). Pass **448×256** to use the low-VRAM tier, which runs on ~6 GB cards well below interactive frame rates.
+</Callout>
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/reference/api#loadmodel)
+2. [`worldCreateScene()`](/reference/api/) — once per world
+3. [`worldStep()`](/reference/api/) — repeatedly, one call per generated block
+4. [`unloadModel()`](/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+### `worldCreateScene()`
+
+Builds the world from a text `prompt` and a first-frame `image` (`Uint8Array` of PNG or JPEG bytes, ≤ 3 MB). Optional `width` and `height` are positive multiples of **32** and default to the model's tier.
+
+It returns `{ requestId, stats }`, plus `scene` (a `Promise<Uint8Array>` holding the scene pack) when you pass `returnPack: true`. Save that pack and load it back later with `modelConfig.sceneSrc` to walk the same world again without regenerating it. Calling `worldCreateScene()` twice on the same session replaces the world and restarts the walk.
+
+### `worldStep()`
+
+Generates the next block of the walk under the `keys` held for it. One call produces one block — a second call while one is in flight is rejected, so drive the next call off the previous one.
+
+`keys` accepts three equivalent forms:
+- an array of key names (`["W", "L"]`),
+- a key-state object (`{ W: true, L: true }`), or
+- a raw 8-bit mask.
+
+Use **WASD** to move (forward, left, back, right) and **IJKL** to steer the camera (up, left, down, right). Pass an empty value for an idle block.
+
+It returns `{ requestId, frameStream, progressStream, frames, stats }`:
+- `frameStream` — an async iterable of decoded frames, PNG by default or JPEG when `modelConfig.world.frameJpegQuality` is set. Display each frame as it arrives.
+- `progressStream` — emits one summary tick per block, **after** the frames.
+- `frames` — a `Promise` resolving to the whole block once decoding is done.
+- `stats` — timing and frame counts.
+
+Cancelling with `cancel({ requestId })` is block-granular: the current block finishes internally, delivery stops, and the call rejects with `InferenceCancelledError`. A cancel that lands after the block already completed resolves normally — handle both outcomes.
+
+## Models
+
+ABot-World uses a split layout with four models:
+
+- `ABOT_WORLD_0_5B_Q8_0` — the world-model transformer (DiT). Passed as `modelSrc`.
+- `ABOT_WORLD_0_5B_LF_VAE` — the taehv streaming decoder used on every step. Passed as `modelConfig.taehvModelSrc`.
+- `ABOT_WORLD_0_5B_LF_VAE_F16` — the full-precision VAE that encodes the first frame during `worldCreateScene`. Passed as `modelConfig.vaeModelSrc`.
+- `UMT5_XXL_ENC_Q8_0` — the UMT5 text encoder for the prompt. Passed as `modelConfig.t5XxlModelSrc`.
+
+<Callout type="warn">
+`taehvModelSrc` and `vaeModelSrc` are two different VAEs with similar names. Swapping them loads fine and then fails once the walk starts. Wire them exactly as above.
+</Callout>
+
+```ts
+import {
+  ABOT_WORLD_0_5B_Q8_0,
+  ABOT_WORLD_0_5B_LF_VAE,
+  ABOT_WORLD_0_5B_LF_VAE_F16,
+  UMT5_XXL_ENC_Q8_0,
+  loadModel,
+} from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: ABOT_WORLD_0_5B_Q8_0,
+  modelType: "sdcpp-generation",
+  modelConfig: {
+    mode: "world",
+    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
+    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
+    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
+    world: { kvCache: true, frameJpegQuality: 85 },
+  },
+});
+```
+
+For models available as constants, see [SDK — Models](/introduction#models).
+
+## Example
+
+The following script loads an ABot-World session, creates a world from a first-frame image, walks it for several blocks under a scripted key tape, and writes each decoded frame to disk:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/abot-world.js title="abot-world.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/abot-world.ts title="abot-world.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
+</Callout>
