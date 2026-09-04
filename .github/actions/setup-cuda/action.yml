@@ -61,9 +61,21 @@ runs:
         #
         # QVAC-24442: NVIDIA calls the arm64 build "sbsa". It is a native
         # toolkit, not a cross-compiler, so it only runs on an arm64 runner.
+        # THROWAWAY BRANCH, QVAC-24470 Jetson probe. arm64 is switched to the
+        # linux-aarch64 CUDA 12.6.3 toolkit instead of linux-sbsa CUDA 13.
+        #
+        # linux-aarch64 is NVIDIA's Jetson/L4T distribution and linux-sbsa is the
+        # server ARM one. They are different products, not two names for arm64.
+        # CUDA 13.0.3 publishes NO linux-aarch64 at all, only sbsa and x86_64,
+        # which is the upstream half of why an Orin cannot run our shipped module:
+        # it caps at CUDA 12.6 and we build against 13.
+        #
+        # This branch exists to answer one question before any of the two-module
+        # CI machinery gets built: does a CUDA 12 aarch64 build actually load and
+        # run on the Orin? Everything about that is inference so far.
         case "$(uname -m)" in
           x86_64)  REDIST_ARCH=linux-x86_64 ;;
-          aarch64) REDIST_ARCH=linux-sbsa ;;
+          aarch64) REDIST_ARCH=linux-aarch64 ;;
           *) echo "::error::setup-cuda: no CUDA redist for $(uname -m)"; exit 1 ;;
         esac
         echo "Assembling the $REDIST_ARCH toolkit"
@@ -104,14 +116,21 @@ runs:
         cuda_culibos/linux-x86_64/cuda_culibos-linux-x86_64-13.0.85-archive.tar.xz 98fca11f9ab89be61385a67eee686c1ebf76fad9c7269d0cf9090edfcdb8a8ac
         libcublas/linux-x86_64/libcublas-linux-x86_64-13.1.1.3-archive.tar.xz 980cbd746a63566602d1699e2ade005c49408bd95618a57d0888f475e5c721a4"
 
-        COMPONENTS_linux_sbsa="\
-        cuda_nvcc/linux-sbsa/cuda_nvcc-linux-sbsa-13.0.88-archive.tar.xz 01b01e10aa2662ad1b3aeab3317151d7d6d4a650eeade55ded504f6b7fced18e
-        libnvvm/linux-sbsa/libnvvm-linux-sbsa-13.0.88-archive.tar.xz f94feb1a0da0c55ceb5c7f039c1f0ffad5d162e0fedfb565efb87771187ddcfd
-        cuda_crt/linux-sbsa/cuda_crt-linux-sbsa-13.0.88-archive.tar.xz c03b92941ba7bf58a4992231ceb572477784ef450ce678f6545bed02392cae50
-        cuda_cudart/linux-sbsa/cuda_cudart-linux-sbsa-13.0.96-archive.tar.xz e2c78564330a09d890f98a066a2082a32c78256ffcc6bccca1696bd2abbaf445
-        cuda_cccl/linux-sbsa/cuda_cccl-linux-sbsa-13.0.85-archive.tar.xz eca22ded176804a78afcba3fe1909e7d473366ee1cb9f3784080df23bc8e74d5
-        cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.0.85-archive.tar.xz ab5ecee37c8adc7efbc2a88ab091de9d978924c4d7f66c3e0c42f23983a1beb3
-        libcublas/linux-sbsa/libcublas-linux-sbsa-13.1.1.3-archive.tar.xz 88b4d3d94d536d9a122eb149af01dc524699336ba3c0b33d019e175d177235fb"
+        # CUDA 12.6.3, linux-aarch64. FOUR components, not seven: in the 12.x
+        # split libnvvm, cuda_crt and cuda_culibos all live inside cuda_nvcc,
+        # so asking for them separately fails with a 404. Verified against
+        # redistrib_12.6.3.json, which lists 29 aarch64 components and none of
+        # those three.
+        #
+        # ptxas 12.6.85 supports sm_87, which is what the Orin needs. It has no
+        # sm_120 or sm_121, so this toolkit cannot serve Blackwell; that is the
+        # other half of why one arm64 module cannot cover both Jetson and the
+        # DGX Spark.
+        COMPONENTS_linux_aarch64="\
+        cuda_nvcc/linux-aarch64/cuda_nvcc-linux-aarch64-12.6.85-archive.tar.xz ef9dfb2c7327e196f8601ed216908de56911578f26e6ab9ac13c3e7dfff784f9
+        cuda_cudart/linux-aarch64/cuda_cudart-linux-aarch64-12.6.77-archive.tar.xz d5b8f6f5a2ab34066c267daf5f73f25d2f24ea25d8fa3dce427c196ff07504e7
+        cuda_cccl/linux-aarch64/cuda_cccl-linux-aarch64-12.6.77-archive.tar.xz ab8bd5c346ca69c96ac9afb9d317e8cbc0ec8fc32629ca17b38c14b3dede2fb7
+        libcublas/linux-aarch64/libcublas-linux-aarch64-12.6.4.1-archive.tar.xz 3324e0a995794704874c71397964c4739667c279d3e3cb183e482476df9b57ed"
 
         # Same seven components and release either way, only the path and hash
         # differ. An explicit case rather than an indirect expansion: it fails
@@ -119,8 +138,8 @@ runs:
         # instead of silently expanding to an empty COMPONENTS and assembling
         # nothing.
         case "$REDIST_ARCH" in
-          linux-x86_64) COMPONENTS="$COMPONENTS_linux_x86_64" ;;
-          linux-sbsa)   COMPONENTS="$COMPONENTS_linux_sbsa" ;;
+          linux-x86_64)  COMPONENTS="$COMPONENTS_linux_x86_64" ;;
+          linux-aarch64) COMPONENTS="$COMPONENTS_linux_aarch64" ;;
           *) echo "::error::setup-cuda: no COMPONENTS list for $REDIST_ARCH"; exit 1 ;;
         esac
 

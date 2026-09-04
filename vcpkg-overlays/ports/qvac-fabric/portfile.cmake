@@ -185,7 +185,7 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # editing it changes the ABI and forces a rebuild. KEEP IT IN STEP WITH
   # setup-cuda's cuda-version, or a toolkit change ships stale binaries and the
   # only symptom is a crash on hardware CI does not have.
-  set(QVAC_FABRIC_CUDA_TOOLKIT "13.0.3")
+  set(QVAC_FABRIC_CUDA_TOOLKIT "13.0.3-x64-and-12.6.3-aarch64-jetson-probe")
   if(DEFINED ENV{CUDACXX} AND EXISTS "$ENV{CUDACXX}")
     set(NVCC_EXECUTABLE "$ENV{CUDACXX}")
   endif()
@@ -312,7 +312,12 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
     # load a CUDA 13 module at all, so those cubins would ship to the one machine
     # that cannot open the file. It belongs in the separate CUDA 12 module, when
     # that exists.
-    set(QVAC_CUDA_ARCHS "80-virtual\;121-real")
+    # THROWAWAY BRANCH, QVAC-24470 Jetson probe. 87-real only, because this
+    # build uses the CUDA 12.6 linux-aarch64 toolkit and targets the Orin.
+    # No PTX floor is needed: sm_87 is the only device this build is for, and
+    # nvcc 12.6 cannot emit sm_121 anyway, so the DGX Spark is out of scope here
+    # by construction rather than by choice.
+    set(QVAC_CUDA_ARCHS "87-real")
   else()
     # QVAC-24470, Gianfranco's target: Ampere and Blackwell native, everything
     # from sm_75 upward served by PTX. 80-real is the A100, 86-real the 3090 CI
