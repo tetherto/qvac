@@ -29,10 +29,10 @@ export const WIN32_X64_VULKAN_CALIBRATION: PlatformCalibration = {
     upper: 0
   },
   validated: true,
-  measuredAt: "2026-09-04",
+  measuredAt: '2026-09-04',
   measuredOn: {
-    backend: "vulkan",
-    device: "NVIDIA RTX 4000 SFF Ada Generation",
+    backend: 'vulkan',
+    device: 'NVIDIA RTX 4000 SFF Ada Generation',
     kvElementBytes: 1.0625
   }
 }
