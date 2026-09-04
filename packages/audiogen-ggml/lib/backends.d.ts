@@ -5,6 +5,7 @@ export interface BackendsDirSources {
   resolveManifest: (specifier: string) => string | null
 }
 
+export const PREBUILT_HOSTS: string[]
 export function hostPlatformPackage(host: string): string
 export function resolveBackendsDirFrom(sources: BackendsDirSources): string
 export function resolveBackendsDir(): string

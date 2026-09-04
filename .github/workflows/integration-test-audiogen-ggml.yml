@@ -177,8 +177,10 @@ jobs:
         if: ${{ inputs.prebuild_package }}
         working-directory: ${{ runner.temp }}/audiogen-ggml
         shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
-          npm pack ${{ inputs.prebuild_package }}
+          npm pack "$PREBUILD_PACKAGE"
           tar -xzf *.tgz
           # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
           # meta tarball; split releases ship them in the per-host platform
@@ -186,7 +188,7 @@ jobs:
           if [ -d ./package/prebuilds ]; then
             cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
           else
-            SPEC="${{ inputs.prebuild_package }}"
+            SPEC="$PREBUILD_PACKAGE"
             REST="${SPEC#?}"
             if [ "${REST#*@}" != "$REST" ]; then
               VERSION="${SPEC##*@}"
