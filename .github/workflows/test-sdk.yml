@@ -130,6 +130,11 @@ on:
           - qvac-macos26-arm64-gpu-calibration
           - qvac-ubuntu2204-x64-gpu-calibration
           - qvac-win25-x64-gpu-calibration
+          # darwin-x64 and linux-arm64 have no self-hosted host and need none:
+          # a hosted runner is a fresh VM per job. Both labels already run
+          # llm-llamacpp's own integration tests.
+          - macos-15-large
+          - ubuntu-22.04-arm
         default: "off"
 
   workflow_call:
@@ -646,6 +651,9 @@ jobs:
   # GITHUB_JOB), and the run holds the whole host, so dispatch during off-peak
   # windows. The harness's busy-host warnings remain as a backstop — do not
   # ship a fixture from a warned run.
+  #
+  # The hosted labels in the matrix need none of that: a fresh VM per job
+  # already owns its machine.
   calibration:
     if: github.event_name == 'workflow_dispatch' && inputs.calibration != 'off'
     strategy:
@@ -653,7 +661,7 @@ jobs:
       matrix:
         platform: >-
           ${{ fromJSON(inputs.calibration == 'all'
-            && '["qvac-macos26-arm64-gpu-calibration", "qvac-ubuntu2204-x64-gpu-calibration", "qvac-win25-x64-gpu-calibration"]'
+            && '["qvac-macos26-arm64-gpu-calibration", "qvac-ubuntu2204-x64-gpu-calibration", "qvac-win25-x64-gpu-calibration", "macos-15-large", "ubuntu-22.04-arm"]'
             || format('["{0}"]', inputs.calibration)) }}
     runs-on: ${{ matrix.platform }}
     # Expected completion: ~30 min warm (validated darwin-arm64 runs measured
@@ -704,7 +712,8 @@ jobs:
           # available when it exits non-zero.
           PLATFORM=$(node -p "process.platform + '-' + process.arch")
           # Glob so a GPU pass, which keys its fixture by backend as well, is
-          # collected alongside the CPU one.
+          # collected alongside the CPU one. It also matches fixtures already
+          # committed, so read the log's `wrote` lines before shipping one.
           echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM*.ts" >> "$GITHUB_OUTPUT"
           # Invoke the repo-pinned bare by path: npx/PATH can resolve a global
           # bare too old for TypeScript type-stripping.
@@ -720,6 +729,16 @@ jobs:
         shell: bash
         working-directory: packages/inference
         run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --gpu
+
+      # Third pass, for the ordinary consumer desktop: the model pinned to the
+      # integrated GPU, which allocates out of system RAM, so RSS stays the
+      # counter. Run everywhere — the harness exits in seconds on a host that
+      # cannot honour it.
+      - name: Run integrated-GPU calibration harness
+        continue-on-error: true
+        shell: bash
+        working-directory: packages/inference
+        run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --igpu
 
       - name: Upload fixture
         # A failed gate still writes a fixture (`validated: false`), and that is

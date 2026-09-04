@@ -341,6 +341,32 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:best-of
 ```
 
+### Audio understanding: the pipeline in reverse
+
+`understand()` describes an audio clip instead of generating one: the engine
+encodes the PCM, recovers the FSQ semantic codes, and the LM reports metadata
+and a caption. The input is interleaved stereo float PCM at 48 kHz — the same
+layout `sourceAudio` uses:
+
+```js
+const response = await gen.understand(pcm, { seed: 42 })
+const stats = await response.await()
+const heard = stats.understand
+// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes }
+```
+
+The description streams as an `understand` output item (progress ticks report
+the `source`, `tok`, and `understand` stages) and is repeated on the terminal
+stats. `audioCodes` are the recovered semantic codes — pass them back as a
+generation's `audioCodes` to re-synthesize or remix the clip. A
+`vocalLanguage` hint forces the language field instead of the LM's guess.
+End to end from the repo (generates a clip, then describes it):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:understand
+```
+
 ### Ordered audio editing
 
 `edit()` starts a source-driven pipeline. `edit()`/`flowEdit()` and `repaint()`
