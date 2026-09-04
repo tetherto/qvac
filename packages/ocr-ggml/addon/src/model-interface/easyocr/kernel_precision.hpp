@@ -117,9 +117,8 @@ inline bool ocr_kernels_use_f16(
 // fragile (cos-sim ~0.73 vs reference; a regularB test regressed on a Galaxy
 // S25 Ultra / Adreno when mul_mat ran there), and OcrBackendSelection already
 // auto-skips Adreno Vulkan to CPU. The exclusion is keyed on the backend *API*,
-// not the chip, so a future Adreno-OpenCL backend (QVAC-19798) is NOT blocked
-// and can adopt mul_mat once validated. The env overrides below take
-// precedence.
+// not the chip, so the Adreno-OpenCL backend (QVAC-19798) is NOT blocked and
+// uses mul_mat like any other GPU. The env overrides below take precedence.
 inline bool ocr_conv1x1_mulmat_default(ggml_backend_t backend) {
   ggml_backend_dev_t dev =
       (backend != nullptr) ? ggml_backend_get_device(backend) : nullptr;
