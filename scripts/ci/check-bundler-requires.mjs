@@ -20,7 +20,11 @@ const LEXER_PACKAGE = 'bare-module-lexer'
 // one `bare-pack` itself resolves. Reading it out of an ambient `node_modules`
 // picks up whatever version happens to be hoisted nearby, and the desync this
 // check hunts for differs between lexer releases.
-const BUNDLER_SPEC = 'bare-pack@^1.4.7'
+// Exact pin: a floating range re-resolves against the latest publish on every run.
+const BUNDLER_SPEC = 'bare-pack@1.5.1'
+// Transitive via bare-module-traverse, so pinned with an override. 1.6.6 needs
+// node_api_is_sharedarraybuffer (Node >= 22.21); 1.6.3 predates it (pin from #4218).
+const LEXER_OVERRIDES = { [LEXER_PACKAGE]: '1.6.3' }
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
 // Directory names that never enter a mobile bundle. Generators under `scripts/`
 // and fixtures under `test/` embed require-looking strings in output text
@@ -68,6 +72,10 @@ function collectScripts(directory) {
 
 function installBundler() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bundler-requires-'))
+  fs.writeFileSync(
+    path.join(root, 'package.json'),
+    JSON.stringify({ name: 'bundler-requires', private: true, overrides: LEXER_OVERRIDES })
+  )
   const result = spawnSync(
     'npm',
     ['install', '--no-save', '--no-audit', '--no-fund', '--prefix', root, BUNDLER_SPEC],

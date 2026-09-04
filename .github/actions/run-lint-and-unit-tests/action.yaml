@@ -24,7 +24,9 @@ runs:
     - name: Setup Node.js
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
-        node-version: "18.x"
+        # check-bundler-requires.mjs runs on this node; the bare-module-lexer
+        # prebuild needs node_api_is_sharedarraybuffer (Node >= 22.21 / 24.9).
+        node-version: "22.x"
 
     - name: Restore npm cache
       id: cache-npm
