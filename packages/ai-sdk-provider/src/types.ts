@@ -10,7 +10,7 @@ interface QvacCommonOptions {
 }
 
 // External mode (default): the provider is a thin wrapper around a
-// `qvac serve openai` HTTP endpoint that the caller runs and supervises
+// `qvac serve --openai` HTTP endpoint that the caller runs and supervises
 // themselves. This is the v1 (0.1.0) surface, unchanged.
 export interface QvacExternalOptions extends QvacCommonOptions {
   readonly mode?: 'external'
@@ -41,7 +41,7 @@ export interface QvacManagedModel {
 }
 
 // Managed mode: the provider synthesizes an ephemeral `qvac.config.json` from
-// the requested model list, spawns `qvac serve openai` on a free port,
+// the requested model list, spawns `qvac serve --openai` on a free port,
 // health-checks it, and tears the process down on host exit. `createQvac`
 // returns a `Promise<ManagedQvacProvider>` in this mode. Managed mode generates
 // and owns the serve API key; caller headers and custom fetch wrappers receive
