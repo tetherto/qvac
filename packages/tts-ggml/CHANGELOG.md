@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-03#2, which brings in ggml-speech
+  2026-09-04 (Metal depthwise-conv and strided-copy fast paths, CUDA norm
+  fusion and small-N MMQ tiles; the `cuda` feature now builds ggml with
+  CUDA graph capture on). Two TTS CUDA crashes found by the win32/arm64
+  preflight are fixed: Chatterbox frees its time-MLP graph cache on unload
+  instead of at worker-thread exit, and Supertonic keys its capability
+  cache by device rather than backend instance.
+
 ## [0.8.1] - 2026-09-01
 
 ### Changed
