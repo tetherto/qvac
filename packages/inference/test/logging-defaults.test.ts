@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { getAppLogger, createBaseLogger } from '@/logging/logger'
+import { getAppLogger, createBaseLogger, setGlobalConsoleOutput } from '@/logging/logger'
 import { logLevelSchema } from '@/schemas/logging-stream'
 
 test('logLevelSchema: accepts off alongside the standard levels', (t) => {
@@ -33,14 +33,21 @@ test('getAppLogger: silent console by default, still feeds transports', (t) => {
   t.alike(received, ['hello'], 'transport still receives the log')
 })
 
+const CONSOLE_OUTPUT_KEY = Symbol.for('@qvac/inference:global-console-output')
+
 test('getAppLogger: enableConsole opts back into console output', (t) => {
   const original = console.info
+  const globalState = globalThis as unknown as Record<symbol, boolean | undefined>
+  const previousConsoleOutput = globalState[CONSOLE_OUTPUT_KEY]
   let printed = 0
   console.info = () => {
     printed++
   }
+  setGlobalConsoleOutput(true)
   t.teardown(() => {
     console.info = original
+    if (previousConsoleOutput === undefined) delete globalState[CONSOLE_OUTPUT_KEY]
+    else setGlobalConsoleOutput(previousConsoleOutput)
   })
 
   getAppLogger({ enableConsole: true }).info('hi')

@@ -279,7 +279,8 @@ const ACESTEP_GENERATE_KEYS = [
     'track',
     'guidanceScale',
     'audioCoverStrength',
-    'coverNoiseStrength'
+    'coverNoiseStrength',
+    'computeQualityScore'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
@@ -710,6 +711,32 @@ class AudioGen {
             (sourceAudio === undefined || sourceAudio.length === 0)) {
             throw invalidInput(`taskType '${taskType}' requires sourceAudio`);
         }
+        if (opts.simpleMode !== undefined && typeof opts.simpleMode !== 'boolean') {
+            throw invalidInput('simpleMode must be a boolean');
+        }
+        if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
+            throw invalidInput('normalizeLoudness must be a boolean');
+        }
+        if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
+            throw invalidInput('computeQualityScore must be a boolean');
+        }
+        if (opts.computeQualityScore === true && taskType !== undefined && taskType !== 'text2music') {
+            throw invalidInput("computeQualityScore requires taskType 'text2music' (the LM code path)");
+        }
+        if (opts.simpleMode === true) {
+            if (taskType !== undefined && taskType !== 'text2music') {
+                throw invalidInput("simpleMode supports only taskType 'text2music'");
+            }
+            if (opts.audioCodes !== undefined) {
+                throw invalidInput('simpleMode cannot take pre-supplied audioCodes');
+            }
+            if (opts.lyrics !== undefined && opts.lyrics !== '' && opts.lyrics !== '[Instrumental]') {
+                throw invalidInput("simpleMode lyrics must be omitted (the LM writes them) or '[Instrumental]'");
+            }
+            if (opts.lmPhase1 === false) {
+                throw invalidInput('simpleMode requires lmPhase1');
+            }
+        }
         if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
             throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`);
         }
@@ -723,7 +750,10 @@ class AudioGen {
         return {
             type: 'text',
             input: caption,
-            lyrics: opts.lyrics ?? '[Instrumental]',
+            lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
+            simpleMode: opts.simpleMode,
+            normalizeLoudness: opts.normalizeLoudness,
+            computeQualityScore: opts.computeQualityScore,
             seed: optionalFiniteNumber(opts.seed, 'seed', true),
             vocalLanguage: opts.vocalLanguage,
             bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
@@ -906,7 +936,8 @@ class AudioGen {
                 ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
                 ...(typeof d.gpuFallbackReason === 'number'
                     ? { gpuFallbackReason: d.gpuFallbackReason }
-                    : {})
+                    : {}),
+                ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {})
             };
             this._job.end(stats, stats);
         }
