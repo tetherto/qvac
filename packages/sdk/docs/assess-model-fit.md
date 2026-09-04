@@ -81,9 +81,11 @@ What "total" and "in use" mean depends on the result's `basis`:
   that per-process metric is available on a build, iOS assessments return
   `unknown` rather than a confidently wrong `likely-fits`.
 
-GPU and VRAM metrics are `unverified`-scoped by design and are deliberately
-excluded from the budget under either basis — see the
-[system resources support matrix](./system-resources-support-matrix.md).
+- **`device-memory`** — a discrete GPU's own memory, used when the model will
+  execute there. Only for a GPU whose readings the collector established are
+  device-scoped; everything else keeps the system basis or returns `unknown`.
+  See [discrete-GPU desktops](#supported-surface) below and the
+  [system resources support matrix](./system-resources-support-matrix.md).
 
 ## Why the estimate is a range
 
@@ -108,11 +110,11 @@ reported in `assumptions`.
 
 ## Supported surface
 
-|           | Phase 1                                                                 |
-| --------- | ----------------------------------------------------------------------- |
-| Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription` |
-| Workloads | `llm`, `audio`                                                          |
-| Platforms | `darwin-arm64` — see the calibration status below                       |
+|           | Phase 1                                                                     |
+| --------- | --------------------------------------------------------------------------- |
+| Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription`     |
+| Workloads | `llm`, `audio`                                                              |
+| Platforms | `darwin-arm64`, `linux-x64`, `win32-x64` — see the calibration status below |
 
 Everything outside this table assesses as `unknown`. Parakeet, translation, TTS,
 OCR, diffusion, and the vision projector (`mmproj-*`) half of a multimodal load
@@ -120,13 +122,42 @@ are phase 2.
 
 **Calibration status.** A platform only reports estimates once its coefficients
 have been measured on real hardware and a held-out model has validated inside
-the bounds. `darwin-arm64` has cleared that (measured on an Apple M4 Pro
-against the Metal backend), so LLM workloads return real verdicts there. Audio
+the bounds. `darwin-arm64` (Apple M4 Pro, Metal), `linux-x64` and `win32-x64`
+have all cleared that for CPU-resident execution, and `linux-x64` on Vulkan has
+cleared it for GPU-resident execution too, so LLM workloads return real
+verdicts on those. Audio
 workloads still return `unknown` on every platform: their coefficients await
 the harness's whisper pass, and the estimator refuses the unmeasured
 placeholders rather than consuming them. Every other platform returns `unknown`
 until its own run lands. See
 `@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
+
+**Discrete-GPU desktops.** The engine executes the model in the GPU's own
+memory there, which system RAM cannot bound, so those platforms' `platforms`
+fixtures describe CPU-only machines. When a GPU is present the assessment
+switches to a `device-memory` basis and the backend's own coefficients — today
+`linux-x64` on Vulkan — and reports the GPU's total, used and reserve in
+`budget` as usual.
+
+On Windows the readings are per-process rather than device-wide (DXGI
+`CurrentUsage` and `Budget`), so the basis is `device-budget` instead: the GPU
+memory the OS grants _this process_. It answers the same admission question.
+
+Both device bases additionally require the **system-memory** budget to hold, on
+every verdict — a GPU load is paid for in system RAM too (a 2382 MiB model
+raised RSS by 2918 MiB on Windows, 868 MiB on linux), so a machine with the
+card for it but not the RAM does not read as a fit.
+
+It returns `unknown` instead whenever the evidence is not defensible:
+
+- **More than one usable GPU.** The engine takes the first eligible ggml
+  device, an order the SDK cannot observe, so the card cannot be identified.
+  Adapters too small to hold any model are not counted as rivals — Windows
+  classifies an Intel iGPU as dedicated because it declares 128 MiB of its own.
+- **An uncalibrated backend**, or a GPU whose readings carry no usable scope.
+
+Apple silicon is unaffected: its memory is unified, so a GPU allocation is
+system RAM and the system basis already covers it.
 
 ## Relationship to `@qvac/model-fit`
 
