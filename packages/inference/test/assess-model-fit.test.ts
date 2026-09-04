@@ -730,11 +730,9 @@ test('assess: co-resident LLM loads count every model’s overhead, so the modes
     resolveProfile
   })
 
-  // llama.cpp allocates the context at load, so each resident model carries its
-  // weights, its 512 B KV cache and its 1 GiB engine overhead — under either
-  // declared mode. `sequential` must not drop the second model's overhead. The
-  // modes can still differ by the working peak a completion adds, which this
-  // fixture does not carry; the test below covers that.
+  // Each resident model carries its weights, 512 B KV cache and 1 GiB overhead
+  // under either mode: `sequential` must not drop the second model's. Only the
+  // working peak separates the modes, and this fixture carries none.
   const total = 2 * (2 * GIB + 512 + 1 * GIB)
   t.is(sequential.estimate?.lowerBoundBytes, total)
   t.is(concurrent.estimate?.lowerBoundBytes, total)

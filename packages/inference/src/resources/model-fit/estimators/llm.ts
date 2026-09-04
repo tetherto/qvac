@@ -83,17 +83,10 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   assumptions.push(element.assumption)
   const kv = kvCacheBytes(facts, contextTokens, element.bytes, assumptions, reasons)
 
-  // Almost everything an LLM load costs is persistent rather than a working
-  // peak: llama.cpp builds the context when the model loads — KV cache, engine
-  // overhead and the context-scaled compute buffers included — so every loaded
-  // model holds all of it for its whole lifetime. Parking any of those terms in
-  // `working` would let `sequential` aggregation count only the largest one
-  // while all of them are resident.
-  //
-  // What a completion does add on top is measured, not assumed: a few MiB on
-  // most platforms, 73 MiB on darwin-x64. It belongs in `working` because it is
-  // released afterwards, which is exactly what `sequential` counts once and
-  // `concurrent` counts per model.
+  // llama.cpp builds the context at load — KV cache, engine overhead, compute
+  // buffers — so all of it is resident for the model's lifetime. Parking any of
+  // it in `working` would let `sequential` count only the largest. What a
+  // completion adds on top is released afterwards, so that part is `working`.
   const persistent: ByteRange = {
     lower: Math.ceil(
       artifactBytes +

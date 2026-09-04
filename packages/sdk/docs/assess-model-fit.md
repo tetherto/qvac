@@ -110,10 +110,10 @@ reported in `assumptions`.
 
 ## Supported surface
 
-|           | Phase 1                                                                     |
-| --------- | --------------------------------------------------------------------------- |
-| Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription`     |
-| Workloads | `llm`, `audio`                                                              |
+|           | Phase 1                                                                 |
+| --------- | ----------------------------------------------------------------------- |
+| Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription` |
+| Workloads | `llm`, `audio`                                                          |
 | Platforms | every desktop except `win32-arm64` — see the calibration status below   |
 
 Everything outside this table assesses as `unknown`. Parakeet, translation, TTS,

@@ -72,19 +72,12 @@ export function getGpuCalibration(
 }
 
 /**
- * Looks up integrated-GPU coefficients for a platform on a specific backend.
+ * Looks up integrated-GPU coefficients, spent against the system budget. The
+ * gap from the device fixture is large: `win32-x64:vulkan` fits a weight ratio
+ * of 1.02 against the card's memory and 2.04 against system RAM.
  *
- * Distinct from `getGpuCalibration` because an integrated GPU allocates out of
- * system RAM: the buffers are the backend's, but the budget they are spent
- * against is the system one, and no other fixture describes that combination.
- * The measured gap is large — `win32-x64:vulkan` fits a weight ratio of 1.02
- * against the card's own memory and 2.04 against system RAM on the same host,
- * because an integrated load holds the weights mapped and copied at once.
- *
- * @returns `undefined` when that pair has not been measured. The host then
- *   assesses as `unknown` rather than borrowing the platform's CPU-forced
- *   coefficients, which were measured with the GPU offload disabled and do not
- *   cover the backend's own allocations.
+ * @returns `undefined` when unmeasured, which assesses as `unknown` rather
+ *   than borrowing the platform's CPU-forced coefficients.
  */
 export function getSharedGpuCalibration(
   platform: ModelFitPlatform,

@@ -130,11 +130,9 @@ on:
           - qvac-macos26-arm64-gpu-calibration
           - qvac-ubuntu2204-x64-gpu-calibration
           - qvac-win25-x64-gpu-calibration
-          # darwin-x64 and linux-arm64 have no self-hosted host, and do not need
-          # one: a hosted runner is a fresh VM, which is the isolation the
-          # `*-calibration` labels exist to buy on the shared hosts. These two
-          # labels are where `@qvac/llm-llamacpp` already runs its own
-          # integration tests, so the engine is known to work on them.
+          # darwin-x64 and linux-arm64 have no self-hosted host and need none:
+          # a hosted runner is a fresh VM per job. Both labels already run
+          # llm-llamacpp's own integration tests.
           - macos-15-large
           - ubuntu-22.04-arm
         default: "off"
@@ -654,11 +652,8 @@ jobs:
   # windows. The harness's busy-host warnings remain as a backstop — do not
   # ship a fixture from a warned run.
   #
-  # The hosted labels in the matrix (macos-15-large for darwin-x64,
-  # ubuntu-22.04-arm for linux-arm64) need none of that: a hosted runner is a
-  # fresh VM per job and already owns its machine. They exist because those two
-  # platforms have no self-hosted host, and waiting for one would leave two of
-  # the six desktop rows uncalibrated indefinitely.
+  # The hosted labels in the matrix need none of that: a fresh VM per job
+  # already owns its machine.
   calibration:
     if: github.event_name == 'workflow_dispatch' && inputs.calibration != 'off'
     strategy:
@@ -717,9 +712,8 @@ jobs:
           # available when it exits non-zero.
           PLATFORM=$(node -p "process.platform + '-' + process.arch")
           # Glob so a GPU pass, which keys its fixture by backend as well, is
-          # collected alongside the CPU one. The glob also matches the fixtures
-          # already committed for this platform, so read the log's `wrote` lines
-          # to see which files this run actually produced before shipping one.
+          # collected alongside the CPU one. It also matches fixtures already
+          # committed, so read the log's `wrote` lines before shipping one.
           echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM*.ts" >> "$GITHUB_OUTPUT"
           # Invoke the repo-pinned bare by path: npx/PATH can resolve a global
           # bare too old for TypeScript type-stripping.
@@ -737,11 +731,9 @@ jobs:
         run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --gpu
 
       # Third pass, for the ordinary consumer desktop: the model pinned to the
-      # host's integrated GPU, which allocates out of system RAM, so RSS is
-      # still the right counter and the basis stays system memory. Run on every
-      # host — the harness exits immediately, before any load, on one with no
-      # integrated device or whose platform fixture is already GPU-resident
-      # (Apple silicon), so the cost of asking is a few seconds.
+      # integrated GPU, which allocates out of system RAM, so RSS stays the
+      # counter. Run everywhere — the harness exits in seconds on a host that
+      # cannot honour it.
       - name: Run integrated-GPU calibration harness
         continue-on-error: true
         shell: bash

@@ -31,13 +31,9 @@ const ESTIMATORS = {
 const MOBILE_PLATFORMS: readonly ModelFitPlatform[] = ['android-arm64', 'ios-arm64']
 
 /**
- * Platforms whose own calibration fixture describes CPU-resident execution
- * (`device: 'cpu'`), so a reported GPU means the engine would not run the way
- * that fixture was measured. Such a host is assessed through
- * `resolveGpuPlacement` instead: against the card's own memory when it has
- * one, or against system memory when every GPU present allocates out of it.
- * Apple silicon and mobile calibrate on their GPU already — unified memory
- * makes the system basis the right one there — and are unaffected.
+ * Platforms whose fixture describes CPU-resident execution (`device: 'cpu'`),
+ * so a reported GPU sends the host through `resolveGpuPlacement` instead.
+ * Apple silicon and mobile calibrate on their GPU already.
  */
 const CPU_CALIBRATED_PLATFORMS: readonly ModelFitPlatform[] = [
   'darwin-x64',
@@ -68,10 +64,7 @@ export interface AssessModelFitOptions {
     platform: ModelFitPlatform,
     backend: string
   ) => PlatformCalibration | undefined
-  /**
-   * Resolves integrated-GPU coefficients, which are spent against the system
-   * budget rather than a device one. Defaults to the built-in fixtures.
-   */
+  /** Integrated-GPU coefficients, spent against the system budget. */
   resolveSharedGpuCalibration?: (
     platform: ModelFitPlatform,
     backend: string
@@ -94,10 +87,9 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   const resolveGpuCalibration = options.resolveGpuCalibration ?? getGpuCalibration
   const resolveSharedGpuCalibration = options.resolveSharedGpuCalibration ?? getSharedGpuCalibration
 
-  // Where the model would execute decides which evidence can bound it. A
-  // discrete GPU holds the model in its own memory, which system RAM cannot
-  // bound; an integrated one allocates out of system RAM, so the system basis
-  // still can. Both need coefficients measured under that condition.
+  // Where the model would execute decides which evidence can bound it, and
+  // which fixture describes the load. See METHODOLOGY.md, "Which fixture a
+  // host gets".
   const mustPlaceGpu =
     platform !== undefined && CPU_CALIBRATED_PLATFORMS.includes(platform) && hasGpu(resources)
   const placement = mustPlaceGpu ? resolveGpuPlacement(resources) : undefined
@@ -108,8 +100,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
         : resolveSharedGpuCalibration(platform, placement.backend)
       : undefined
 
-  // A mode only engages with coefficients measured for it: without them the
-  // host has no defensible estimate, and falls through to `unknown`.
+  // A mode only engages with coefficients measured for it.
   const onDevice = placement?.kind === 'device' && gpuCalibration ? placement : undefined
   const onIntegrated = placement?.kind === 'shared' && gpuCalibration ? placement : undefined
   const gpuMode = onDevice !== undefined || onIntegrated !== undefined
@@ -147,23 +138,22 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     )
   }
 
-  // In device mode every candidate card carries its own budget; the one
-  // reported is the tightest, and the verdict is taken across all of them.
+  // Every candidate card carries its own budget; the tightest is reported and
+  // the verdict is taken across all of them.
   const deviceBudgets = onDevice?.targets.map((target) => gpuBudget(target, platform))
   const budget = deviceBudgets
     ? tightest(deviceBudgets)
     : resolveBudget(resources, platform, basis, reasons)
 
-  // A discrete-GPU load also consumes system RAM, so the system budget bounds
-  // it too. In shared mode the system budget already *is* the budget.
+  // A discrete-GPU load is paid for in system RAM too. In shared mode the
+  // system budget already *is* the budget.
   const alsoBoundBy = onDevice ? resolveBudget(resources, platform, 'system-memory', []) : undefined
 
   if (!platform) {
     reasons.push('the runtime platform is not one this assessment covers')
   } else if (mustPlaceGpu && !gpuMode) {
-    // Say which fixture is missing, not just that one is. The platform's own
-    // coefficients exist here — they are simply the wrong ones, having been
-    // measured with the GPU offload disabled.
+    // Name the missing fixture: the platform's own coefficients exist here,
+    // they are just the wrong ones.
     reasons.push(
       !placement
         ? 'a GPU is reported but its readings cannot say where the model would execute, so no estimate can be defended'
@@ -266,11 +256,8 @@ function evaluate(
     }
   }
 
-  // A GPU is present and neither GPU mode applies, so the platform's own
-  // coefficients are the wrong ones: they were measured with the GPU offload
-  // disabled, and the engine would not run that way here. In either GPU mode
-  // both the budget and the coefficients have been replaced by ones measured
-  // under that condition.
+  // A GPU is present and neither GPU mode engaged, so the only coefficients
+  // left were measured with the offload disabled — not how this host runs.
   if (!gpuMode && platform && CPU_CALIBRATED_PLATFORMS.includes(platform) && hasGpu(resources)) {
     return {
       candidate,
@@ -376,14 +363,10 @@ function calibrationAssumption(
 }
 
 /**
- * The GPUs the engine could actually execute on.
- *
- * Two kinds of reported device are excluded, both because `chooseBackend`
- * would pass them over and fall back to the CPU: a paravirtual display
- * adapter, and a device with no graphics API this build talks to. The driver
- * flags are library-presence checks — `libvulkan.so.1`, `vulkan-1.dll` — which
- * is the same thing ggml's own backend needs in order to load at all, so their
- * absence is evidence about the engine and not just about the collector.
+ * The GPUs the engine could actually execute on: `chooseBackend` passes over a
+ * paravirtual adapter and a device with no graphics API this build talks to,
+ * and falls back to the CPU. The driver flags are library-presence checks, and
+ * ggml's own backend needs the same libraries to load.
  */
 function usableGpus(resources: SystemResources): readonly GPUResourceCapabilities[] {
   const gpus = resources.capabilities.gpus
@@ -391,10 +374,7 @@ function usableGpus(resources: SystemResources): readonly GPUResourceCapabilitie
   return gpus.value.filter((gpu) => !isVirtualDisplayAdapter(gpu) && backendOf(gpu) !== undefined)
 }
 
-/**
- * Whether the host has a GPU the engine would use. Decides which KV-cache type
- * it would default to, and whether a GPU budget is worth resolving.
- */
+/** Whether a GPU the engine would use is present. Sets the KV-cache default. */
 function hasGpu(resources: SystemResources): boolean {
   return usableGpus(resources).length > 0
 }
@@ -410,13 +390,9 @@ interface GpuTarget {
 }
 
 /**
- * Where the engine would put the model, once the reported GPUs are classified.
- *
- * `device` carries every card the engine could pin the model to — more than
- * one when the host has several and which one it picks is not observable from
- * here. `shared` is the ordinary laptop: every GPU present allocates out of
- * system RAM, so the model runs on the GPU while the system basis still bounds
- * it. `undefined` means the classification itself was ambiguous.
+ * Where the engine would put the model. `device` carries every card it could
+ * pin to, since which one it picks is not observable here; `shared` is the
+ * ordinary laptop, where the GPU allocates out of system RAM.
  */
 type GpuPlacement =
   | { kind: 'device'; backend: string; targets: readonly GpuTarget[] }
@@ -436,14 +412,9 @@ function tooSmallToHostAModel(gpu: GPUResourceCapabilities) {
   )
 }
 
-/**
- * `gpuType.VIRTUAL` from bare-gpu-info. A paravirtual display adapter — the
- * virtio / VMware / Hyper-V devices a VM or cloud host exposes — is enumerated
- * as a GPU by the collector but has no compute backend for the engine to use,
- * and `chooseBackend` falls back to the CPU on such a host. Counting it as a
- * GPU would deny the platform's own CPU-resident coefficients to every VM,
- * which is where they apply most.
- */
+// `gpuType.VIRTUAL`: the virtio / VMware / Hyper-V adapter a VM exposes. It
+// has no compute backend, so counting it as a GPU would deny every VM the
+// platform's own coefficients.
 const GPU_TYPE_VIRTUAL = 3
 
 function isVirtualDisplayAdapter(gpu: GPUResourceCapabilities) {
@@ -451,15 +422,9 @@ function isVirtualDisplayAdapter(gpu: GPUResourceCapabilities) {
 }
 
 /**
- * Whether this GPU's allocations come out of system RAM.
- *
- * Two shapes reach here. `unifiedMemory` says so directly — libgpuinfo sets it
- * from the device type on linux, from `hasUnifiedMemory` on darwin, and from a
- * zero `DedicatedVideoMemory` on win32. The second shape is the Windows iGPU
- * that declares a 128 MiB carve-out of its own and is therefore typed
- * dedicated: nothing but the size of that carve-out distinguishes it from a
- * real card, so the same floor that disqualifies it as a device budget is what
- * identifies it here.
+ * Whether this GPU's allocations come out of system RAM. `unifiedMemory` says
+ * so directly; the Windows iGPU does not, being typed dedicated for a 128 MiB
+ * carve-out, so the usable-memory floor is what identifies it.
  */
 function allocatesFromSystemMemory(gpu: GPUResourceCapabilities) {
   if (gpu.unifiedMemory.status === 'supported' && gpu.unifiedMemory.value) return true
@@ -482,25 +447,11 @@ function backendOf(gpu: GPUResourceCapabilities): string | undefined {
 }
 
 /**
- * Classifies the reported GPUs into where the model would actually live.
+ * Classifies the reported GPUs: any card with its own memory ⇒ `device`,
+ * otherwise ⇒ `shared`. That preference is the engine's own.
  *
- * The engine pins the model to one device (`--device`, split mode `none` by
- * default) and prefers a discrete one, taking an integrated device only when
- * that is all there is — `chooseBackend` fills `gpuBackends` before
- * `igpuBackends` and returns the first of the first non-empty list. So:
- *
- * - Any card with its own memory ⇒ `device`. Every such card is carried, not
- *   just the first: which one `chooseBackend` reaches first is a ggml
- *   enumeration order this side cannot see, and the verdict is taken across
- *   all of them rather than guessed at.
- * - Otherwise, if a GPU is reported at all ⇒ `shared`. It runs on the GPU, but
- *   an integrated device allocates out of system RAM, so the system basis
- *   bounds it — the same reasoning that makes Apple silicon work.
- *
- * Returns `undefined` when the readings cannot support either: a card whose
- * memory sample is missing or self-inconsistent, a backend that is not
- * identifiable, or device candidates spread across different backends, whose
- * buffers one fixture cannot describe.
+ * @returns `undefined` when the readings support neither, or when the cards
+ *   disagree on backend or scope.
  */
 function resolveGpuPlacement(resources: SystemResources): GpuPlacement | undefined {
   const gpus = usableGpus(resources)
@@ -576,19 +527,10 @@ function tightest(budgets: readonly NonNullable<AssessModelFitResult['budget']>[
 }
 
 /**
- * A verdict against the budgets the load must satisfy, and the one it might.
- *
- * `candidates` are alternatives: the engine pins the model to exactly one GPU,
- * and which one is a ggml enumeration order this side cannot see. So a fit has
- * to hold on the smallest of them, and a refusal on the largest — anything
- * between the two is genuinely unknown, and reporting the smallest card's
- * refusal would be wrong on a host whose other card has room.
- *
- * `alsoBoundBy` is a conjunction, not an alternative: a discrete-GPU load is
- * paid for in system RAM as well — a 2382 MiB model raised RSS by 2918 MiB on
- * win32 and 868 MiB on linux — so a host with the card for it but not the RAM
- * must not read as a fit. Applied to every verdict, per model and combined
- * alike, so the two can never disagree.
+ * `candidates` are alternatives — the engine pins the model to one of them, and
+ * which one is not observable here — so a fit has to hold on the smallest and a
+ * refusal on the largest. `alsoBoundBy` is a conjunction: a GPU load is paid
+ * for in system RAM too, so both bounds apply.
  */
 function verdictAgainst(
   estimate: ByteRange,

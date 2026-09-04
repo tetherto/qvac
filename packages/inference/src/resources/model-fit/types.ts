@@ -50,15 +50,9 @@ export interface PlatformCalibration {
   fixedOverheadBytes: ByteRange
   computeBufferBytesPerToken: ByteRange
   /**
-   * Transient peak one operation adds on top of the resident cost, measured as
-   * the worst RSS delta across a completion.
-   *
-   * Optional because the fixtures measured before the harness sampled
-   * generation at all do not carry it; those contribute nothing, which is the
-   * behaviour they shipped with. A completion was long assumed to add nothing —
-   * llama.cpp allocates the context at load — and on most platforms it adds
-   * only a few MiB, but darwin-x64 measured 73 MiB, above the harness's own
-   * drift threshold.
+   * Transient peak one operation adds on top of the resident cost — a few MiB
+   * on most platforms, 73 MiB on darwin-x64. Optional: fixtures measured
+   * before the harness sampled generation contribute nothing, as they do now.
    */
   workingPeakBytes?: ByteRange
   audioWindowBytes: ByteRange
@@ -97,12 +91,9 @@ export interface CalibrationFixture {
    */
   gpuPlatforms?: Readonly<Record<string, PlatformCalibration>>
   /**
-   * Coefficients for a model running on an *integrated* GPU, keyed the same
-   * `<platform>:<backend>` way. A third map rather than a flag because the
-   * numbers differ from both neighbours: the engine allocates the backend's
-   * buffers as it does in `gpuPlatforms`, but out of system RAM, so they are
-   * spent against the system budget as in `platforms`. Measured by the
-   * harness's `--igpu` pass.
+   * Integrated-GPU coefficients, keyed the same way. A third map because the
+   * buffers are the backend's, as in `gpuPlatforms`, but come out of system
+   * RAM, as in `platforms`. Measured by the harness's `--igpu` pass.
    */
   sharedGpuPlatforms?: Readonly<Record<string, PlatformCalibration>>
 }

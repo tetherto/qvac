@@ -61,16 +61,9 @@ const WORKING_DRIFT_WARN_BYTES = 64 * 1024 * 1024
 // must too. A shortfall means the wrong KV width, or a counter missing memory.
 const KV_OBSERVATION_FLOOR = 0.9
 
-// The weight ratio multiplies the largest term in the estimate and used to ship
-// with no margin at all: a fitted 0.995 became exactly 1.000, claiming resident
-// weights never exceed the artifact by a byte, while every other coefficient
-// carries ±20%. It cost a held-out failure — linux-x64 measured 5.83 GiB
-// against a predicted 5.82 (run 33795110381), with a fitted intercept of ~0
-// that left nothing to absorb the extrapolation from a 2.5 GB largest fit point
-// to a 4.7 GB held-out model. 1% is the scale the fitted slope actually moves
-// by between runs on one host (0.995 / 0.997 on linux, 1.078 / 1.079 on arm),
-// and 1% of a large model is still two orders of magnitude inside the 2 GiB
-// interactive reserve.
+// The ratio multiplies the largest term and used to ship with no margin, which
+// cost linux-x64 a held-out failure. 1% is how far the fitted slope moves
+// between runs on one host. See METHODOLOGY.md.
 const WEIGHT_UPPER_SLACK = 1.01
 
 // Small, medium, large — plus one held out of the fit entirely, used only to
@@ -79,14 +72,9 @@ const FIT_MODELS = ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_4B_IN
 const HELD_OUT_MODEL = 'QWEN3_8B_INST_Q4_K_M'
 
 /**
- * What the run measures, and against which counter.
- *
- * - `cpu`: CPU-resident execution (the platform fixture). RSS.
- * - `gpu`: weights resident in a discrete GPU's own memory. Device memory.
- * - `shared`: weights resident on an integrated GPU, whose memory *is* system
- *   RAM — so the engine runs on the GPU while RSS still sees the allocation.
- *   The basis stays system memory, which is why this is a separate fixture
- *   from `gpu` rather than a variant of it.
+ * What the run measures, and against which counter: `cpu` and `shared` read
+ * RSS, `gpu` reads device memory. `shared` is a separate fixture from `gpu`
+ * because an integrated GPU allocates out of system RAM.
  */
 type Pass = 'cpu' | 'gpu' | 'shared'
 
@@ -188,11 +176,8 @@ function isSharedMemoryGpu(gpu: Record<string, unknown>) {
   return typeof declared === 'number' && declared < MIN_USABLE_GPU_BYTES
 }
 
-// `gpuType.VIRTUAL`. A VM's paravirtual display adapter is enumerated as a GPU
-// but has no compute backend, and the engine falls back to the CPU on such a
-// host — the hosted arm64 runner is one, and llama.cpp reports "no usable GPU
-// found" there. Mirrors `assess.ts`, so the harness's KV assumption and the
-// estimator's agree about which devices count.
+// `gpuType.VIRTUAL`: a VM's paravirtual adapter, which has no compute backend.
+// Mirrors `assess.ts`, so both agree on which devices count.
 const GPU_TYPE_VIRTUAL = 3
 
 function isVirtualDisplayAdapter(gpu: Record<string, unknown>) {
@@ -413,13 +398,9 @@ async function measure(
 }
 
 /**
- * Aborts when the engine did not execute where the pass assumes it did.
- *
- * Each pass measures a different counter, and the counter is only the right
- * one for a particular kind of execution: a `shared` pass on a host with no
- * integrated device falls back to the CPU inside `chooseBackend`, and would
- * otherwise file CPU numbers under a GPU backend key. The addon reports only
- * `cpu`/`gpu`, which is exactly the distinction that matters here.
+ * Aborts when the engine did not execute where the pass assumes: a `shared`
+ * pass on a host with no integrated device falls back to the CPU, and would
+ * file CPU numbers under a GPU backend key.
  */
 function checkBackendDevice(measurement: Measurement, expected: 'cpu' | 'gpu' | undefined) {
   if (!expected) return
@@ -510,12 +491,8 @@ async function main() {
     `backend: ${backend}${device ? ` (${device})` : ''}${cpuForced ? ' — GPU offload disabled for calibration' : ''}`
   )
 
-  // A shared pass is only meaningful where two things hold, and both are
-  // properties of the host rather than of the run: there has to be an
-  // integrated device for `main-gpu: 'integrated'` to select, and the
-  // platform's own fixture has to describe CPU-resident execution. Where it
-  // does not — Apple silicon — the platform fixture is already a GPU-resident
-  // measurement against system memory, and this pass would only duplicate it.
+  // A shared pass needs an integrated device to select, and a platform whose
+  // own fixture is CPU-resident. On Apple silicon it would duplicate it.
   if (shared) {
     if (!forcesCpu(platform)) {
       console.log(
@@ -665,11 +642,8 @@ async function main() {
     }
   }
 
-  // The transient peak a completion adds on top of the resident cost. The fit
-  // reads persistent deltas only, so this is measured directly: the worst delta
-  // observed, plus the same 20% the fitted terms carry. Its lower bound is 0
-  // because points genuinely measured 0 — nothing says a completion must add
-  // anything.
+  // The peak a completion adds on top of the load: measured directly, since
+  // the fit reads persistent deltas only. Lower bound 0 — points measured 0.
   const worstWorking = Math.max(...measurements.map((m) => m.workingBytes))
   const notes: string[] = []
   if (loadMode) {
