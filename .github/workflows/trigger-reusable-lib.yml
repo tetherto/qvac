@@ -1,0 +1,242 @@
+name: General CI/CD (libs)
+# Consolidated publish workflow for plain-shape libraries: no build step, so
+# `npm publish` ships the committed sources as-is.
+#
+# Excluded: error/logging/rag build a dist before publish (gh#4055), as do
+# test-suite, cli, ai-sdk-provider, infer-base and the plugins. inference
+# publishes via publish-sdk.yml as the sdk lockstep anchor.
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/dl-base/**"
+      - "packages/dl-filesystem/**"
+      - "packages/dl-hyperdrive/**"
+      - "packages/diagnostics/**"
+      - "packages/langdetect-text/**"
+      - "packages/qvac-ci/**"
+      - ".github/workflows/trigger-reusable-lib.yml"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Library to publish"
+        required: true
+        type: choice
+        options:
+          - dl-base
+          - dl-filesystem
+          - dl-hyperdrive
+          - diagnostics
+          - langdetect-text
+          - qvac-ci
+      npm_tag:
+        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: Detect changed libraries
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.set.outputs.packages }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - name: Filter changed packages
+        id: filter
+        if: github.event_name == 'push'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        with:
+          # base == this branch so dorny diffs the push delta, not `main`; else a
+          # diverged feature/tmp branch matches every lib and over-publishes.
+          base: ${{ github.ref_name }}
+          filters: |
+            dl-base: packages/dl-base/**
+            dl-filesystem: packages/dl-filesystem/**
+            dl-hyperdrive: packages/dl-hyperdrive/**
+            diagnostics: packages/diagnostics/**
+            langdetect-text: packages/langdetect-text/**
+            qvac-ci: packages/qvac-ci/**
+      - name: Resolve package matrix
+        id: set
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          DISPATCH_PKG: ${{ inputs.package }}
+          CHANGED: ${{ steps.filter.outputs.changes }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            packages="[\"${DISPATCH_PKG}\"]"
+          else
+            packages="${CHANGED:-[]}"
+          fi
+
+          # Identity gate: release-<pkg>-x.y.z must publish exactly that pkg. Closes a
+          # release-merge-guard gap where a sibling lib could publish on someone's release line.
+          if [[ "$REF_NAME" == release-* ]]; then
+            if [[ "$REF_NAME" =~ ^release-(.+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              branch_pkg="${BASH_REMATCH[1]}"
+            else
+              echo "::error::Invalid release branch name — expected release-<package>-x.y.z, actual: ${REF_NAME}"
+              exit 1
+            fi
+
+            if [ ! -f "packages/${branch_pkg}/package.json" ]; then
+              echo "::error::release branch names package '${branch_pkg}' but packages/${branch_pkg}/package.json does not exist"
+              exit 1
+            fi
+
+            matches_branch_pkg=$(echo "$packages" | jq --arg p "$branch_pkg" '. == [$p]')
+            if [ "$matches_branch_pkg" != "true" ]; then
+              echo "::error::release-${branch_pkg}-* must publish exactly packages/${branch_pkg}/**; this run selected: ${packages}. No package reaches npm publish unless it is the sole package matching this release branch's name."
+              exit 1
+            fi
+          fi
+
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        uses: tetherto/qvac-actions/npm-publish-logic@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+
+  release-merge-guard:
+    name: Release Merge Guard
+    needs: detect
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.detect.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: ${{ matrix.package }}
+          package-json-path: packages/${{ matrix.package }}/package.json
+          changelog-path: packages/${{ matrix.package }}/CHANGELOG.md
+
+  # qvac-ci is the only package here that gates publish on lint+test; keep it.
+  lint-and-test:
+    needs: detect
+    if: contains(fromJSON(needs.detect.outputs.packages), 'qvac-ci')
+    runs-on: ubuntu-latest
+    env:
+      WORKDIR: packages/qvac-ci
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 18
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+      - name: Lint
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run lint
+      - name: Unit tests
+        working-directory: ${{ env.WORKDIR }}
+        run: npm test
+
+  # Single GPR publish for main/feature/tmp; gpr_tag resolves to dev/feature/temp
+  # per branch, so one job replaces the former three.
+  publish-gpr:
+    needs:
+      - detect
+      - publish-logic
+      - lint-and-test
+    # skipped when qvac-ci is not in the run, so test the result rather than success()
+    if: >-
+      always() &&
+      needs.lint-and-test.result != 'failure' &&
+      needs.lint-and-test.result != 'cancelled' &&
+      (needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true')
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.detect.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Publish to GitHub Packages
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: packages/${{ matrix.package }}
+          name-suffix: "-mono"
+
+  publish-release-npm:
+    needs:
+      - detect
+      - publish-logic
+      - release-merge-guard
+      - lint-and-test
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    if: |-
+      (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') && needs.lint-and-test.result != 'failure' && needs.lint-and-test.result != 'cancelled')
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.detect.outputs.packages) }}
+    uses: ./.github/workflows/public-reusable-npm.yml
+    secrets: inherit
+    with:
+      workdir: packages/${{ matrix.package }}
+      caller_event_name: ${{ github.event_name }}
+
+  # Tag the published version (no GitHub Release; SDK-only releases policy).
+  # Release branches carry one package, so the size-1 matrix resolves unambiguously.
+  create-tag:
+    needs: [detect, publish-release-npm]
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.detect.outputs.packages) }}
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: ${{ matrix.package }}
+      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
