@@ -101,6 +101,20 @@ public:
     float audioCoverStrength = 1.0F;
     float coverNoiseStrength = 0.0F;
     std::vector<AudioEditOperationInput> editOperations;
+    // Reverse pipeline: describe the sourceAudio instead of generating.
+    bool understand = false;
+  };
+
+  // Result of an understand job: the LM's description of the audio plus the
+  // recovered FSQ codes (reusable as a generation's audioCodes).
+  struct UnderstandOutput {
+    std::string caption;
+    int bpm = 0;
+    float duration = 0.0F;
+    std::string keyscale;
+    std::string timesignature;
+    std::string vocalLanguage;
+    std::vector<int> audioCodes;
   };
 
   explicit AcestepModel(AcestepConfig config);
@@ -141,6 +155,8 @@ public:
 
 private:
   Output generate(const AnyInput& in);
+  UnderstandOutput understandAudio(const AnyInput& in);
+  std::shared_ptr<tts_cpp::acestep::Engine> acquireEngine();
   static void validateConfig(const AcestepConfig& cfg);
   void loadLocked();
   void unloadLocked();
