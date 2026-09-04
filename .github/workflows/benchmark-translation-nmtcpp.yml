@@ -155,11 +155,11 @@ jobs:
                 NEED_BUILD=true
                 ;;
               macos-arm64)
-                ROW='{"id":"macos-arm64","runner":"qvac-macos26-arm64-gpu","source":"prebuild","artifact":"darwin-arm64"}'
+                ROW='{"id":"macos-arm64","runner":"qvac-macos26-arm64-gpu","source":"prebuild","artifact":"nmtcpp-darwin-arm64"}'
                 NEED_PREBUILD=true
                 ;;
               windows-x64)
-                ROW='{"id":"windows-x64","runner":"qvac-win25-x64-gpu","source":"prebuild","artifact":"win32-x64"}'
+                ROW='{"id":"windows-x64","runner":"qvac-win25-x64-gpu","source":"prebuild","artifact":"nmtcpp-win32-x64"}'
                 NEED_PREBUILD=true
                 ;;
               *)

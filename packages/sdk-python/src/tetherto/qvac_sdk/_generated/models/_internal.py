@@ -132,6 +132,8 @@ class AssessModelFitResponseVerdict(Enum):
 class AssessModelFitResponseBasis(Enum):
     system_memory = "system-memory"
     process_memory = "process-memory"
+    device_memory = "device-memory"
+    device_budget = "device-budget"
 
 
 class AssessModelFitResponseExecution(Enum):
@@ -232,7 +234,7 @@ class AssessModelFitResponse(GeneratedBaseModel):
     basis: Annotated[
         AssessModelFitResponseBasis,
         Field(
-            description="The evidence the budget was derived from — system RAM, or the per-process ceiling on iOS. GPU/VRAM metrics are deliberately excluded either way; they are `unverified`-scoped by design.",
+            description="The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.",
             title="AssessModelFitResponseBasis",
         ),
     ]
@@ -464,7 +466,14 @@ class AudioGenStreamResponseProgress(GeneratedBaseModel):
     )
     stage: str
     step: Annotated[int, Field(ge=0, le=9007199254740991)]
-    total: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[
+        int,
+        Field(
+            description="Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
 
 
 class AudioGenStreamResponseStopReason(Enum):
@@ -7079,6 +7088,13 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode(Enum):
     none = "none"
     layer = "layer"
     row = "row"
+    tensor = "tensor"
+
+
+class LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn(Enum):
+    on = "on"
+    off = "off"
+    auto = "auto"
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(Enum):
@@ -7338,8 +7354,16 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
+        ),
+    ] = None
+    flash_attn: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn | None,
+        Field(
+            alias="flash-attn",
+            description="Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`.",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn",
         ),
     ] = None
     tensor_split: Annotated[
