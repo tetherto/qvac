@@ -13,6 +13,12 @@
 # is opt-in per PR (new model / new GPU work) rather than automatic. We run only
 # the full bundle ("all"), the exact all-addon Android bootstrap that crashed in
 # 0.2.1, to keep the signal clean and the device count to one.
+#
+# The consumer build compiles packages/sdk from THIS checkout, so
+# @qvac/inference must come from the same tree: the SDK on main can depend on
+# surface exports the published npm package does not have yet. prepare-inference
+# packs the branch's packages/inference and hands it to test-android-sdk.yml,
+# the same branch-mode resolution the SDK e2e uses (test-sdk.yml).
 
 name: Co-load smoke (ggml, mobile)
 
@@ -64,8 +70,90 @@ jobs:
         shell: bash
         run: node scripts/coload-combinations.mjs --mobile --only all
 
+  prepare-inference:
+    name: Resolve inference source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      source: ${{ steps.inference.outputs.source }}
+      dependency-spec: ${{ steps.inference.outputs.dependency-spec }}
+      provenance: ${{ steps.inference.outputs.provenance }}
+      artifact-name: ${{ steps.artifact.outputs.name }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+    steps:
+      - id: checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk/package.json
+            packages/inference
+            .github/actions/sdk-e2e-prepare-inference
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Configure package registries
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+          ];
+          if (process.env.NPM_TOKEN) {
+            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
+          }
+          if (process.env.PAT_TOKEN) {
+            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
+          }
+          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
+
+      - name: Resolve and prepare inference
+        id: inference
+        shell: bash
+        env:
+          INFERENCE_SOURCE: branch
+          PROJECT_DIRECTORY: packages/sdk
+          INFERENCE_DIRECTORY: packages/inference
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/coload-mobile-inference-package
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
+        run: node .github/actions/sdk-e2e-prepare-inference/prepare.mjs resolve
+
+      - name: Derive branch artifact name
+        id: artifact
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const name = `coload-mobile-inference-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `name=${name}\n`);
+
+      - name: Upload branch inference package
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.inference.outputs.artifact-path }}
+          if-no-files-found: error
+          retention-days: 7
+
   mobile-coload:
-    needs: prepare
+    needs: [prepare, prepare-inference]
     if: ${{ needs.prepare.outputs.combos != '' && needs.prepare.outputs.combos != '[]' }}
     permissions:
       actions: read
@@ -86,6 +174,10 @@ jobs:
       overlay-prebuild-addon: ${{ inputs.addon }}
       test-version: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
       suite: smoke
       consumer-timeout: 1200
       device-farm-timeout: 90
