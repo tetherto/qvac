@@ -4,6 +4,7 @@
 // Run: bare examples/quickstart.ts (build @qvac/rag first: npm run build)
 
 import fs from 'bare-fs'
+import url from 'bare-url'
 import Corestore from 'corestore'
 import EmbedderPlugin from '@qvac/embed-llamacpp'
 import LlmPlugin from '@qvac/llm-llamacpp'
@@ -60,7 +61,7 @@ async function main() {
   const rag = new RAG({ embeddingFunction, dbAdapter, llm: llmAdapter, logger })
   await rag.ready()
 
-  const knowledgeBasePath = new URL('knowledge-base.json', import.meta.url).pathname
+  const knowledgeBasePath = url.fileURLToPath(new URL('knowledge-base.json', import.meta.url))
   const knowledgeBase: Array<{ text: string }> = JSON.parse(
     fs.readFileSync(knowledgeBasePath, 'utf8')
   )

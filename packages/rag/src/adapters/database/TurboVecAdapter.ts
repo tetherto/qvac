@@ -34,6 +34,18 @@ const MANIFEST_VERSION = 1
 const DEFAULT_LOCK_STALE_MS = 30_000
 const DEFAULT_LOCK_HEARTBEAT_MS = 10_000
 
+function lockFailedError(lockPath: string, reason: unknown): QvacErrorRAG {
+  const detail =
+    reason instanceof Error
+      ? `${(reason as { code?: string }).code ?? reason.name}: ${reason.message}`
+      : String(reason)
+  return new QvacErrorRAG({
+    code: ERR_CODES.DB_OPERATION_FAILED,
+    adds: `Failed to acquire the TurboVec writer lock: ${lockPath}: ${detail}`,
+    cause: reason instanceof Error ? reason : undefined
+  })
+}
+
 export type TurboVecIndexStorage = 'f32' | 'q8' | 'q4' | 'turbovec-q4' | 'turbovec-q2'
 
 export interface TurboVecIndexSearchResult {
@@ -1097,7 +1109,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
         snapshot
       }
       fs.writeFileSync(temporaryManifest, `${JSON.stringify(manifest)}\n`)
-      const manifestFd = fs.openSync(temporaryManifest, 'r')
+      const manifestFd = fs.openSync(temporaryManifest, 'r+')
       try {
         fs.fsyncSync(manifestFd)
       } finally {
@@ -1154,7 +1166,14 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private _syncCheckpointDirectory(): boolean {
     let directoryFd: number | null = null
     try {
-      directoryFd = fs.openSync(this.checkpointWorkspaceDir!, 'r')
+      // Windows flushes a directory handle only with write access; Unix refuses
+      // write access on a directory outright, so use whichever one this platform
+      // allows.
+      try {
+        directoryFd = fs.openSync(this.checkpointWorkspaceDir!, 'r+')
+      } catch {
+        directoryFd = fs.openSync(this.checkpointWorkspaceDir!, 'r')
+      }
       fs.fsyncSync(directoryFd)
       return true
     } catch (error) {
@@ -1206,18 +1225,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         fs.mkdirSync(lockPath)
-        try {
-          this._writeLockRecord(lockPath, false)
-          this.ownsLock = true
-          this._startLockHeartbeat(lockPath)
-        } catch (error) {
-          this._removeLockArtifact(lockPath)
-          throw error
-        }
-        return
       } catch (error) {
-        lastError = error
-        if (!fs.existsSync(lockPath)) continue
+        if ((error as { code?: string }).code !== 'EEXIST') {
+          throw lockFailedError(lockPath, error)
+        }
         const updatedAt = this._readLockTimestamp(lockPath)
         if (Date.now() - updatedAt < this.lockStaleMs) {
           throw new QvacErrorRAG({
@@ -1225,6 +1236,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
             adds: `TurboVec workspace is already locked: ${lockPath}`
           })
         }
+        lastError = error
         const stalePath = `${lockPath}.stale-${this.lockOwner}-${attempt}`
         try {
           fs.renameSync(lockPath, stalePath)
@@ -1232,14 +1244,21 @@ export class TurboVecAdapter extends BaseDBAdapter {
         } catch (recoveryError) {
           lastError = recoveryError
         }
+        continue
+      }
+
+      try {
+        this._writeLockRecord(lockPath, false)
+        this.ownsLock = true
+        this._startLockHeartbeat(lockPath)
+        return
+      } catch (error) {
+        this._removeLockArtifact(lockPath)
+        throw lockFailedError(lockPath, error)
       }
     }
 
-    throw new QvacErrorRAG({
-      code: ERR_CODES.DB_OPERATION_FAILED,
-      adds: `Failed to acquire the TurboVec writer lock: ${lockPath}`,
-      cause: lastError instanceof Error ? lastError : undefined
-    })
+    throw lockFailedError(lockPath, lastError)
   }
 
   private _releaseLock(): void {
@@ -1279,7 +1298,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
     if (verifyOwnership) this._assertWriterOwnership()
     try {
       fs.writeFileSync(temporaryOwnerPath, `${JSON.stringify(record)}\n`)
-      const ownerFd = fs.openSync(temporaryOwnerPath, 'r')
+      const ownerFd = fs.openSync(temporaryOwnerPath, 'r+')
       try {
         fs.fsyncSync(ownerFd)
       } finally {
