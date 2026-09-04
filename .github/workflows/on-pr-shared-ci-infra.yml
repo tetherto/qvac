@@ -9,6 +9,7 @@ on:
       - ".github/actions/cache-models/**"
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
       - "scripts/perf-report/**"
+      - "scripts/ci/**"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
   workflow_dispatch:
@@ -54,6 +55,24 @@ jobs:
           node-version: lts/*
       - name: Run perf-report unit tests
         run: node --test scripts/perf-report/__tests__/*.test.js
+
+  # The upstream-compat smoke verifiers are plain Node modules driven by the
+  # *-upstream-compat.yml workflows, which run on a schedule — so without this
+  # job a broken verifier would not surface until the next nightly tick, and
+  # the smoke it guards would go green or red for the wrong reason.
+  ci-script-unit-tests:
+    name: CI script unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Run CI script unit tests
+        run: node --test scripts/ci/__tests__/*.test.cjs
 
   model-availability:
     name: Model availability (${{ matrix.package }})

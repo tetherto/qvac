@@ -90,6 +90,8 @@ export interface ProcessMemorySample {
 export interface ResourceCollectorDependencies {
   cpuArchitectures: readonly number[]
   gpuTypes: readonly number[]
+  /** Runtime platform, used to grade what a GPU memory reading can mean. */
+  platform: string
   createCPUInfo(): CPUInfoContext | undefined
   createGPUInfo(): GPUInfoContext | undefined
   createGPUId(): string
