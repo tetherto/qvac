@@ -84,6 +84,16 @@ function readBody(request: IncomingMessage) {
   })
 }
 
+// The demo reports which error happened, never its message: a message can carry
+// a path or a host detail, and this server answers a browser. The full error
+// goes to the console, where the person running the demo can read it.
+function errorLabel(error: unknown) {
+  console.error(error)
+  if (!(error instanceof Error)) return 'unknown error'
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'number' ? `${error.name} (${code})` : error.name
+}
+
 function sendJson(response: ServerResponse, status: number, payload: unknown) {
   const body = JSON.stringify(payload)
   response.writeHead(status, { 'content-type': 'application/json' })
@@ -143,7 +153,7 @@ async function run(body: Record<string, unknown>) {
       ok: false,
       elapsedMs: Date.now() - startedAt,
       systemUsedBeforeBytes: before,
-      error: error instanceof Error ? error.message : String(error)
+      error: errorLabel(error)
     }
   } finally {
     if (modelId) await unloadModel({ modelId }).catch(() => {})
@@ -173,7 +183,7 @@ const server = createServer((request, response) => {
       .then(async (body) => (url === '/api/assess' ? await estimate(body) : await run(body)))
       .then((payload) => sendJson(response, 200, payload))
       .catch((error: unknown) => {
-        sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+        sendJson(response, 500, { error: errorLabel(error) })
       })
     return
   }
