@@ -16,6 +16,7 @@
     "example:cover": "bare examples/generate-cover.js",
     "example:lego": "bare examples/generate-lego.js",
     "example:simple": "bare examples/generate-simple-mode.js",
+    "example:best-of": "bare examples/generate-best-of.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "node scripts/check-generated.mjs",
     "test:dts": "tsc --noEmit -p tsconfig.dts.json",
@@ -114,6 +115,9 @@
     "bare-os": "^3.8.0",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
+  },
+  "overrides": {
+    "bare-module-lexer": "1.6.3"
   },
   "types": "index.d.ts"
 }

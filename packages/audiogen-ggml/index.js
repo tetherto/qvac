@@ -279,7 +279,8 @@ const ACESTEP_GENERATE_KEYS = [
     'track',
     'guidanceScale',
     'audioCoverStrength',
-    'coverNoiseStrength'
+    'coverNoiseStrength',
+    'computeQualityScore'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
@@ -716,6 +717,12 @@ class AudioGen {
         if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
             throw invalidInput('normalizeLoudness must be a boolean');
         }
+        if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
+            throw invalidInput('computeQualityScore must be a boolean');
+        }
+        if (opts.computeQualityScore === true && taskType !== undefined && taskType !== 'text2music') {
+            throw invalidInput("computeQualityScore requires taskType 'text2music' (the LM code path)");
+        }
         if (opts.simpleMode === true) {
             if (taskType !== undefined && taskType !== 'text2music') {
                 throw invalidInput("simpleMode supports only taskType 'text2music'");
@@ -746,6 +753,7 @@ class AudioGen {
             lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
             simpleMode: opts.simpleMode,
             normalizeLoudness: opts.normalizeLoudness,
+            computeQualityScore: opts.computeQualityScore,
             seed: optionalFiniteNumber(opts.seed, 'seed', true),
             vocalLanguage: opts.vocalLanguage,
             bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
@@ -928,7 +936,8 @@ class AudioGen {
                 ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
                 ...(typeof d.gpuFallbackReason === 'number'
                     ? { gpuFallbackReason: d.gpuFallbackReason }
-                    : {})
+                    : {}),
+                ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {})
             };
             this._job.end(stats, stats);
         }

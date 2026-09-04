@@ -132,6 +132,8 @@ class AssessModelFitResponseVerdict(Enum):
 class AssessModelFitResponseBasis(Enum):
     system_memory = "system-memory"
     process_memory = "process-memory"
+    device_memory = "device-memory"
+    device_budget = "device-budget"
 
 
 class AssessModelFitResponseExecution(Enum):
@@ -232,7 +234,7 @@ class AssessModelFitResponse(GeneratedBaseModel):
     basis: Annotated[
         AssessModelFitResponseBasis,
         Field(
-            description="The evidence the budget was derived from — system RAM, or the per-process ceiling on iOS. GPU/VRAM metrics are deliberately excluded either way; they are `unverified`-scoped by design.",
+            description="The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.",
             title="AssessModelFitResponseBasis",
         ),
     ]
@@ -464,7 +466,14 @@ class AudioGenStreamResponseProgress(GeneratedBaseModel):
     )
     stage: str
     step: Annotated[int, Field(ge=0, le=9007199254740991)]
-    total: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[
+        int,
+        Field(
+            description="Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
 
 
 class AudioGenStreamResponseStopReason(Enum):
