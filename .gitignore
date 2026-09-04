@@ -10,6 +10,10 @@ reset_history.sh
 confirmed.txt
 /node_modules
 packages/**/node_modules/
+# Without the trailing slash too: that form matches only directories, so a
+# `node_modules` symlink — the usual way to borrow another checkout's install
+# for local tooling — slipped through and reached CI as a dangling link.
+packages/**/node_modules
 packages/**/package-lock.json
 packages/**/.npmrc
 packages/sdk/bun.lock
