@@ -40,6 +40,14 @@ on:
         description: "Exclude suites (comma-separated)"
         required: false
         type: string
+      rerun-plan:
+        description: >-
+          JSON {family: {platform: [testId]}} of previously failed tests. When set,
+          each matrix leg replaces `filter` with the list recorded for its own
+          platform. Empty = normal run.
+        required: false
+        type: string
+        default: ""
       test-version:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
@@ -160,7 +168,7 @@ jobs:
           family: ${{ inputs.consumer }}
           platforms: ${{ steps.keys.outputs.platforms }}
           suite: ${{ inputs.suite }}
-          filter: ${{ inputs.filter }}
+          filter: ${{ inputs.rerun-plan != '' && 'rerun of previously failed tests' || inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
           inference-provenance: ${{ inputs.inference-provenance }}
           test-suite-provenance: ${{ inputs.test-suite-provenance }}
@@ -206,6 +214,49 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
           bun-version: latest
+
+      # A failed-test rerun carries a different test list per platform, so the
+      # effective filter is resolved inside the matrix leg rather than passed in.
+      - name: Resolve test filter for this platform
+        id: leg-filter
+        shell: node {0}
+        env:
+          RERUN_PLAN: ${{ inputs.rerun-plan }}
+          BASE_FILTER: ${{ inputs.filter }}
+          CONSUMER: ${{ inputs.consumer }}
+          RUNNER_LABEL: ${{ matrix.os }}
+        run: |
+          const fs = require('fs');
+
+          const label = String(process.env.RUNNER_LABEL || '').toLowerCase();
+          let platform = 'linux';
+          if (label.includes('win')) platform = 'windows';
+          else if (label.includes('mac') || label.includes('darwin')) platform = 'macos';
+
+          let filter = process.env.BASE_FILTER || '';
+          const raw = (process.env.RERUN_PLAN || '').trim();
+
+          if (raw) {
+            let plan;
+            try {
+              plan = JSON.parse(raw);
+            } catch (err) {
+              console.log(`::error::Invalid rerun-plan JSON: ${err.message}`);
+              process.exit(1);
+            }
+            const family = process.env.CONSUMER;
+            const ids = plan && plan[family] && plan[family][platform];
+            if (!Array.isArray(ids) || ids.length === 0) {
+              console.log(
+                `::error::rerun-plan has no tests for ${family}/${platform}; this leg should not have started.`
+              );
+              process.exit(1);
+            }
+            filter = ids.join(',');
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `filter=${filter}\n`);
+          console.log(`${platform}: filter=${filter || '(none)'}`);
 
       - name: Configure npm registries
         shell: node {0}
@@ -458,7 +509,7 @@ jobs:
         if: inputs.consumer == 'snap'
         shell: node {0}
         env:
-          TEST_FILTER: ${{ inputs.filter }}
+          TEST_FILTER: ${{ steps.leg-filter.outputs.filter }}
         run: |
           const fs = require('fs');
           const filters = (process.env.TEST_FILTER || '')
@@ -574,12 +625,15 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         timeout-minutes: 60
         shell: node {0}
+        env:
+          TEST_FILTER: ${{ steps.leg-filter.outputs.filter }}
         run: |
           (async () => {
             const { spawn, spawnSync } = require('child_process');
             const fs = require('fs');
 
-            const filter = '${{ inputs.filter }}';
+            // Read via env: a rerun filter is a long comma-separated test-id list.
+            const filter = process.env.TEST_FILTER || '';
             const filterArgs = filter ? ['--filter=' + filter] : [];
             const suite = '${{ inputs.suite }}';
             const suiteArgs = suite ? ['--suite=' + suite] : [];
@@ -875,7 +929,7 @@ jobs:
           platforms: ${{ needs.report-start.outputs.platform-keys }}
           comment-ids: ${{ needs.report-start.outputs.comment-ids }}
           suite: ${{ inputs.suite }}
-          filter: ${{ inputs.filter }}
+          filter: ${{ inputs.rerun-plan != '' && 'rerun of previously failed tests' || inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
           inference-provenance: ${{ inputs.inference-provenance }}
           test-suite-provenance: ${{ inputs.test-suite-provenance }}

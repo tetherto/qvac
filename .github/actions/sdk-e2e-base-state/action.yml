@@ -1,0 +1,277 @@
+name: SDK E2E Base State
+description: >
+  Maintains the single hidden comment tracking the last *base* SDK e2e run
+  (test-e2e-smoke, test-e2e-full, or the release-branch auto-run) on a PR, which
+  `sdk-e2e-resolve-rerun` reads to plan a `test-e2e-rerun-failed` run.
+
+  phase=start marks the base run as in flight so a rerun labelled before it
+  finishes is rejected. phase=finish records the per-platform failure set from the
+  run's results-* artifacts and clears that mark; with no usable results it keeps
+  the previously recorded base rather than wiping it.
+
+  Reusable workflows share the caller's run id, so every family's artifacts are
+  visible from the caller. No-op outside PR context.
+
+inputs:
+  phase:
+    description: "start (base run beginning) or finish (base run complete)"
+    required: true
+  suite:
+    description: "Suite the base run uses (empty = full)"
+    required: false
+    default: ""
+  head-sha:
+    description: "Head SHA the base run tests"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Download base results
+      if: inputs.phase == 'finish'
+      # A run whose every job died leaves no artifacts; the recorded base is then kept as-is.
+      continue-on-error: true
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        pattern: results-*
+        path: .sdk-e2e-base/results
+
+    - name: Update base state
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      env:
+        PHASE: ${{ inputs.phase }}
+        SUITE: ${{ inputs.suite }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+
+          const pr = context.payload.pull_request?.number;
+          if (!pr) {
+            core.info('No pull_request context; skipping base state update.');
+            return;
+          }
+
+          const phase = process.env.PHASE;
+          if (phase !== 'start' && phase !== 'finish') {
+            core.setFailed(`Unknown phase: ${phase}`);
+            return;
+          }
+
+          const MARKER = '<!-- sdk-e2e-base-state -->';
+          const DATA_RE = /<!-- sdk-e2e-base-state-data:v1:([A-Za-z0-9+/=]+) -->/;
+          const MAX_TESTS = 400;
+          const resultsRoot = '.sdk-e2e-base/results';
+          const suite = process.env.SUITE || '';
+          const sha = process.env.HEAD_SHA || context.payload.pull_request?.head?.sha || '';
+          const runUrl =
+            `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+
+          const comments = await github.paginate(github.rest.issues.listComments, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: pr,
+            per_page: 100,
+          });
+          const existing = comments.filter((c) => (c.body || '').includes(MARKER)).pop();
+
+          let previous = null;
+          if (existing && DATA_RE.test(existing.body)) {
+            try {
+              previous = JSON.parse(
+                Buffer.from(DATA_RE.exec(existing.body)[1], 'base64').toString('utf8')
+              );
+            } catch (err) {
+              core.warning(`Ignoring undecodable base state: ${err.message}`);
+            }
+          }
+
+          // results-android / results-ios carry a single implicit platform; node
+          // families qualify the artifact name with the platform key.
+          function parseArtifactName(name) {
+            let m = /^results-(android|ios)$/.exec(name);
+            if (m) return { family: m[1], platform: m[1] };
+            m = /^results-(desktop|electron|snap)-(.+)$/.exec(name);
+            if (m) return { family: m[1], platform: m[2] };
+            return null;
+          }
+
+          // actions/download-artifact@v8 extracts a single matched artifact directly
+          // into `path` instead of `path/<artifact-name>/`, so probe both layouts.
+          function findResultFiles(artifactName) {
+            for (const dir of [path.join(resultsRoot, artifactName), resultsRoot]) {
+              if (!fs.existsSync(dir)) continue;
+              const files = fs.readdirSync(dir)
+                .filter((f) => f.startsWith('results-') && f.endsWith('.json'))
+                .map((f) => path.join(dir, f));
+              if (files.length > 0) return files;
+            }
+            return [];
+          }
+
+          async function collectPlatforms() {
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              per_page: 100,
+            });
+
+            // "Re-run failed jobs" adds a second artifact under the same name; the
+            // download keeps the newest, so read each name once.
+            const byName = new Map();
+            for (const artifact of artifacts) {
+              const parsed = parseArtifactName(artifact.name);
+              if (!parsed) continue;
+              const seen = byName.get(artifact.name);
+              if (!seen || artifact.id > seen.artifact.id) byName.set(artifact.name, { artifact, parsed });
+            }
+
+            let budget = MAX_TESTS;
+            let truncated = false;
+            const platforms = [];
+
+            for (const { artifact, parsed } of byName.values()) {
+              const files = findResultFiles(artifact.name);
+              if (files.length === 0) {
+                core.warning(`Artifact ${artifact.name} contained no results-*.json.`);
+                continue;
+              }
+
+              const failed = [];
+              const seen = new Set();
+              let total = 0;
+              let passed = 0;
+              let parsedAny = false;
+
+              for (const file of files) {
+                let report;
+                try {
+                  report = JSON.parse(fs.readFileSync(file, 'utf8'));
+                } catch (err) {
+                  core.warning(`Failed to parse ${file}: ${err.message}`);
+                  continue;
+                }
+                parsedAny = true;
+                total += Number(report.summary?.total || 0);
+                passed += Number(report.summary?.passed || 0);
+                for (const test of Array.isArray(report.tests) ? report.tests : []) {
+                  if (test.outcome !== 'failure') continue;
+                  const testId = String(test.testId || '');
+                  if (!testId || seen.has(testId)) continue;
+                  seen.add(testId);
+                  if (budget <= 0) {
+                    truncated = true;
+                    continue;
+                  }
+                  budget -= 1;
+                  failed.push(testId);
+                }
+              }
+
+              if (!parsedAny) continue;
+              platforms.push({ family: parsed.family, platform: parsed.platform, total, passed, failed });
+            }
+
+            platforms.sort((a, b) =>
+              `${a.family}/${a.platform}`.localeCompare(`${b.family}/${b.platform}`));
+            return { platforms, truncated };
+          }
+
+          const recorded = previous?.recorded || null;
+          let state;
+
+          if (phase === 'start') {
+            state = { recorded, running: { runId: context.runId, runUrl, sha, suite } };
+          } else {
+            const { platforms, truncated } = await collectPlatforms();
+            if (platforms.length === 0) {
+              core.warning('No usable results on this run; keeping the previously recorded base.');
+              state = { recorded, running: null };
+            } else {
+              state = {
+                recorded: { runId: context.runId, runUrl, sha, suite, truncated, platforms },
+                running: null,
+              };
+            }
+          }
+
+          if (!state.recorded && !state.running && !existing) {
+            core.info('Nothing to record and no comment to update.');
+            return;
+          }
+
+          function describe(run) {
+            return `${run.runUrl ? `[run ${run.runId}](${run.runUrl})` : `run ${run.runId}`} · ` +
+              `suite \`${run.suite || 'full'}\`` +
+              (run.sha ? ` · sha \`${String(run.sha).substring(0, 7)}\`` : '');
+          }
+
+          const lines = [MARKER];
+
+          if (state.running) {
+            lines.push(
+              '### QVAC E2E — base run in progress',
+              `**Running:** ${describe(state.running)}`,
+              '',
+              'The `test-e2e-rerun-failed` label is rejected until this run finishes and its ' +
+              'failure set is recorded below.'
+            );
+            if (state.recorded) lines.push('', '---', '');
+          }
+
+          if (state.recorded) {
+            const totalFailed = state.recorded.platforms.reduce((sum, p) => sum + p.failed.length, 0);
+            lines.push(
+              '### QVAC E2E — base run recorded',
+              `**Base:** ${describe(state.recorded)}`,
+              '',
+              '| Platform | Passed | Total | Failed |',
+              '| --- | --- | --- | --- |',
+              ...state.recorded.platforms.map(
+                (p) => `| \`${p.family}/${p.platform}\` | ${p.passed} | ${p.total} | ${p.failed.length} |`
+              ),
+              ''
+            );
+            if (totalFailed === 0) {
+              lines.push('All recorded platforms are green — nothing for `test-e2e-rerun-failed` to re-run.');
+            } else {
+              lines.push(
+                `Apply **\`test-e2e-rerun-failed\`** to re-run just these ${totalFailed} failing ` +
+                'test(s) against the current head commit. The label clears itself, so add it again ' +
+                'for each attempt; every attempt re-runs this same set until a new ' +
+                '`test-e2e-smoke` / `test-e2e-full` run replaces this base.'
+              );
+            }
+            if (state.recorded.truncated) {
+              lines.push('', `> Only the first ${MAX_TESTS} failing test ids were recorded. Re-run the full suite instead.`);
+            }
+          } else if (!state.running) {
+            lines.push('### QVAC E2E — no base run recorded', '', 'Run `test-e2e-smoke` or `test-e2e-full` to record one.');
+          }
+
+          // Base64 keeps arbitrary test ids from closing the HTML comment early.
+          const encoded = Buffer.from(JSON.stringify(state), 'utf8').toString('base64');
+          lines.push('', `<!-- sdk-e2e-base-state-data:v1:${encoded} -->`);
+          const body = lines.join('\n');
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+            core.info(`Updated base state comment ${existing.id} (phase=${phase}).`);
+          } else {
+            const created = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              body,
+            });
+            core.info(`Created base state comment ${created.data.id} (phase=${phase}).`);
+          }
