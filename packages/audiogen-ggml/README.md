@@ -40,17 +40,17 @@ Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
 [Models](#models)); point the addon at the folder that holds them.
 MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
 
-The linux-x64 prebuild bundles the CUDA backend next to Vulkan: ggml runs in
-hybrid dynamically-loaded backend mode, the CPU-variant, Vulkan, and CUDA
-backends ship as `.so` modules beside the addon, and only the CUDA module
-depends on the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the
-CUDA 13 runtime libraries (cudart and cuBLAS) resolvable at load time; hosts that
-cannot resolve them skip the module and fall back to Vulkan or CPU. The engine
-prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
-opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`
-on the build host).
+The published linux-x64 prebuild ships Vulkan. CUDA is opt-in at build time
+via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host).
+When CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend
+mode: the CPU-variant, Vulkan, and CUDA backends ship as `.so` modules beside
+the addon, and only the CUDA module depends on the CUDA runtime. Engaging
+CUDA needs the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
+cuBLAS) resolvable at load time; hosts that cannot resolve them skip the
+module and fall back to Vulkan or CPU. The engine prefers CUDA when both GPU
+backends are usable.
 
-The prebuilt CUDA module targets **compute capability 7.5 and newer**, with
+A CUDA build's module targets **compute capability 7.5 and newer**, with
 native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
 Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
 from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
@@ -136,10 +136,11 @@ for await (const item of response.iterate()) {
 }
 const stats = await response.await()
 // { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId,
-//   gpuFallbackReason }
+//   gpuFallbackReason, qualityScore? }
 // backendDevice:     0 = CPU, 1 = GPU
 // backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
+// qualityScore:      [0, 1], present only when the run set computeQualityScore
 
 await gen.destroy()
 ```
@@ -265,6 +266,52 @@ ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
 AUDIOGEN_MODEL_DIR=/path/to/models \
   AUDIOGEN_SOURCE_PCM=source.f32le \
   npm run example:cover
+```
+
+### Simple Mode: one sentence in, a full song out
+
+With `simpleMode: true` the caption is a short natural-language query and the
+LM composes the complete request before synthesis — a detailed caption, full
+lyrics, and every metadata field you left unset (BPM, key/scale, time
+signature, vocal language, and duration when `duration` is `0`). Anything you
+set is kept. Leave `lyrics` unset for LM-written vocals, or pass
+`'[Instrumental]'` for an instrumental song.
+
+```js
+const response = await gen.run(
+  'a romantic modern salsa with male lead vocals for a wedding',
+  { simpleMode: true, duration: 0, seed: 4242 }
+)
+```
+
+Or end to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:simple
+```
+
+### Quality scoring: rank a batch of takes
+
+With `computeQualityScore: true` the engine teacher-forces the generated audio
+codes back through the LM and `stats.qualityScore` reports how well the take
+matches the request as a weighted `[0, 1]` score — caption and lyrics as
+normalized PMI, set metadata fields as top-k recall. Generation varies a lot
+by seed, so generate several takes and keep the best:
+
+```js
+const response = await gen.run(caption, { computeQualityScore: true, seed })
+// ...collect the PCM...
+const stats = await response.await()
+console.log(stats.qualityScore) // e.g. 0.6661
+```
+
+Scoring costs extra LM forwards after code generation and requires the LM
+code path (`taskType: 'text2music'`). End to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:best-of
 ```
 
 ### Ordered audio editing
@@ -430,6 +477,9 @@ wrapped by a level-gated `QvacLogger`.
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
+| `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
+| `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
+| `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |

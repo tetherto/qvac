@@ -33,6 +33,9 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
       if (test.testId.endsWith('-stats')) {
         return [test.testId, this.withStats.bind(this)]
       }
+      if (test.testId.endsWith('-batch-array')) {
+        return [test.testId, this.batchArray.bind(this)]
+      }
       if (test.testId.includes('-batch-')) {
         return [test.testId, this.batch.bind(this)]
       }
@@ -178,6 +181,43 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `Translation batch error: ${errorMsg}` }
+    }
+  }
+
+  async batchArray(params: unknown, expectation: Expectation): Promise<TestResult> {
+    const p = params as { texts: string[]; resource: string }
+    const modelId = await this.resources.ensureLoaded(p.resource)
+
+    try {
+      const result = translate({
+        modelId,
+        text: p.texts as never,
+        modelType: 'nmtcpp-translation',
+        stream: false
+      }) as unknown as { translations: Promise<string[]>; text: Promise<string> }
+      const translations = await result.translations
+
+      if (translations.length !== p.texts.length) {
+        return {
+          passed: false,
+          output: `Expected ${p.texts.length} translations, got ${translations.length}`
+        }
+      }
+
+      const emptyAt = translations.findIndex((entry) => entry.trim().length === 0)
+      if (emptyAt !== -1) {
+        return { passed: false, output: `Translation ${emptyAt + 1} of the batch is empty` }
+      }
+
+      const text = await result.text
+      if (text !== translations.join('\n')) {
+        return { passed: false, output: `text is not the newline join of translations: "${text}"` }
+      }
+
+      return ValidationHelpers.validate(translations.join(' '), expectation)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Translation batch array error: ${errorMsg}` }
     }
   }
 
