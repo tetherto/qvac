@@ -125,6 +125,21 @@ struct BuftOverride {
   std::string bufferType;
 };
 
+/// Projected memory for one device (or the host row) at the resolved
+/// parameters, in bytes. `total`/`free` are the budget the verdict was judged
+/// against; `model`/`context`/`compute` are the projected demand. Advisory
+/// evidence only — a verdict's distance from its budget — never an admission
+/// input on its own.
+struct FitProjectionRow {
+  /// Device name as the backend reports it, or "host" for the host row.
+  std::string name;
+  uint64_t totalBytes = 0;
+  uint64_t freeBytes = 0;
+  uint64_t modelBytes = 0;
+  uint64_t contextBytes = 0;
+  uint64_t computeBytes = 0;
+};
+
 /// Result of `runFit`. `status` mirrors `enum common_params_fit_status`
 /// (0 SUCCESS, 1 FAILURE, 2 ERROR). The remaining fields carry the fitted
 /// "load plan" the SDK can hand to the LLM addon.
@@ -181,6 +196,13 @@ struct FitResult {
   /// Subset of `nDevices` that are accelerators (GPU or integrated GPU). Zero
   /// means the projection is host-only and carries no GPU offload information.
   size_t nGpuDevices = 0;
+
+  /// Per-device projected memory at the resolved parameters, ending with the
+  /// host row. Populated on SUCCESS and FAILURE — a does-not-fit with numbers
+  /// is the point — and empty on ERROR or when the extra no-alloc probe that
+  /// produces it fails (the probe is advisory; its failure never changes
+  /// `status`).
+  std::vector<FitProjectionRow> projection;
 };
 
 /// Runs `common_fit_params` for `req`. Never loads weight data — the fitter

@@ -185,6 +185,38 @@ js_value_t* fitResultObject(js_env_t* env, const FitResult& result) {
     overrides.set(env, index, entry);
   }
   out.setProperty(env, "buftOverrides", overrides);
+
+  // Byte counts as doubles: every value here is a real memory size, far below
+  // Number.MAX_SAFE_INTEGER, and the projection is advisory evidence rather
+  // than arithmetic input.
+  auto projection = jsu::Array::create(env);
+  for (size_t index = 0; index < result.projection.size(); ++index) {
+    const FitProjectionRow& row = result.projection[index];
+    auto entry = jsu::Object::create(env);
+    entry.setProperty(env, "name", jsu::String::create(env, row.name.c_str()));
+    entry.setProperty(
+        env,
+        "totalBytes",
+        jsu::Number::create(env, static_cast<double>(row.totalBytes)));
+    entry.setProperty(
+        env,
+        "freeBytes",
+        jsu::Number::create(env, static_cast<double>(row.freeBytes)));
+    entry.setProperty(
+        env,
+        "modelBytes",
+        jsu::Number::create(env, static_cast<double>(row.modelBytes)));
+    entry.setProperty(
+        env,
+        "contextBytes",
+        jsu::Number::create(env, static_cast<double>(row.contextBytes)));
+    entry.setProperty(
+        env,
+        "computeBytes",
+        jsu::Number::create(env, static_cast<double>(row.computeBytes)));
+    projection.set(env, index, entry);
+  }
+  out.setProperty(env, "projection", projection);
   return out;
 }
 

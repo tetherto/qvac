@@ -3,7 +3,7 @@
 // way an SDK would rely on. Type-checked by `npm run test:dts`, never executed.
 
 import { fitParams, FIT_STATUS } from '../../index'
-import type { FitConfig, FitResult, FitReason, FitPlan } from '../../index'
+import type { FitConfig, FitResult, FitReason, FitPlan, FitProjectionRow } from '../../index'
 
 declare function assertNever (value: never): never
 
@@ -23,6 +23,18 @@ const devices: number = result.nDevices
 const accelerators: number = result.nGpuDevices
 void devices
 void accelerators
+
+// The projection rides the inventory: readable on every branch, but optional —
+// an older addon predates it and the probe may fail without changing the
+// verdict, so a consumer must handle absence.
+const projection: FitProjectionRow[] | undefined = result.projection
+const hostRow: FitProjectionRow | undefined = projection?.[projection.length - 1]
+const hostFree: number | undefined = hostRow?.freeBytes
+void hostFree
+
+// @ts-expect-error the projection is optional; unguarded access must not compile
+const unguarded: FitProjectionRow[] = result.projection
+void unguarded
 
 if (result.status === FIT_STATUS.SUCCESS) {
   // SUCCESS: the plan is fully present, no optional-chaining needed.
