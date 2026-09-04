@@ -10,7 +10,7 @@ export const WIN32_X64_VULKAN_CALIBRATION: PlatformCalibration = {
   weightUpperCoeff: 1.018,
   workingPeakBytes: {
     lower: 0,
-    upper: 0
+    upper: 6606029
   },
   fixedOverheadBytes: {
     lower: 231096560,
@@ -29,10 +29,10 @@ export const WIN32_X64_VULKAN_CALIBRATION: PlatformCalibration = {
     upper: 0
   },
   validated: true,
-  measuredAt: '2026-09-03',
+  measuredAt: "2026-09-04",
   measuredOn: {
-    backend: 'vulkan',
-    device: 'NVIDIA RTX 4000 SFF Ada Generation',
+    backend: "vulkan",
+    device: "NVIDIA RTX 4000 SFF Ada Generation",
     kvElementBytes: 1.0625
   }
 }

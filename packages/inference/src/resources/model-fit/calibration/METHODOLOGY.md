@@ -287,6 +287,15 @@ one.
 Every row is `validated: true`: its held-out model landed inside the bound, and
 no run shipped from a log carrying a busy-host warning.
 
+One caveat on the table: `linux-x64 | vulkan` carries `workingPeakBytes: 0`
+from a run that took no device sample, not from a measurement. `win32-x64 |
+vulkan` has since been re-measured with the device counter polled across each
+completion — 0 MiB on 17 of 18 points and 5 MiB on one, so 6.3 MiB after the
+margin — and the linux equivalent is pending: the first attempt came back with
+a 94%-of-mean repeat spread and a 0.897 weight ratio while the CPU pass in the
+same run was stable, so it was discarded, and the re-run is waiting on the
+runner.
+
 Two of the rows are worth reading twice.
 
 `win32-x64 | vulkan, shared` fits a weight ratio of **2.04** where the same
