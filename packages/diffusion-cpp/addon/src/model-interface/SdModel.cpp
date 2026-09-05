@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -1183,9 +1182,6 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
       vid.scheduler = DISCRETE_SCHEDULER;
     if (!vid.cfgScaleExplicit)
       vid.cfgScale = 1.0f;
-    if (!vid.guidanceExplicit)
-      vid.guidance = 7.0f;
-
     if (vid.cfgScale != 1.0f)
       throw StatusError(
           general_error::InvalidArgument,
@@ -1195,10 +1191,6 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
       throw StatusError(
           general_error::InvalidArgument,
           "MiniMax-H3 requires scheduler='discrete'");
-    if (!std::isfinite(vid.guidance))
-      throw StatusError(
-          general_error::InvalidArgument,
-          "MiniMax-H3 guidance must be a finite number");
   }
 
   const bool hasReferenceImages = !job.referenceImagesBytes.empty();
@@ -1446,7 +1438,6 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
       (isLtxModel_ && !vid.schedulerExplicit) ? LTX2_SCHEDULER : vid.scheduler;
   vidParams.sample_params.sample_steps = vid.sampleSteps;
   vidParams.sample_params.guidance.txt_cfg = vid.cfgScale;
-  vidParams.sample_params.guidance.distilled_guidance = vid.guidance;
   int stgBlock = vid.stgBlock;
   if (vid.stgScale > 0.0f) {
     vidParams.sample_params.guidance.slg.scale = vid.stgScale;

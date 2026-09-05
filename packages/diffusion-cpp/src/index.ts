@@ -109,7 +109,7 @@ export interface SdConfig {
   offload_to_cpu?: boolean
   backend?: string
   params_backend?: string
-  max_vram?: NumericLike
+  max_vram?: number | string
   stream_layers?: boolean
   prediction?: PredictionType
   flow_shift?: number

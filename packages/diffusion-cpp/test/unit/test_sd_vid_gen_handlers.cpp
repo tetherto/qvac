@@ -273,12 +273,6 @@ TEST(SdVidGenHandlers_CfgScale, SetsValue) {
   EXPECT_FLOAT_EQ(applyOne("cfg_scale", num(7.5)).cfgScale, 7.5f);
 }
 
-TEST(SdVidGenHandlers_Guidance, SetsDistilledGuidanceValue) {
-  const auto config = applyOne("guidance", num(7.0));
-  EXPECT_FLOAT_EQ(config.guidance, 7.0f);
-  EXPECT_TRUE(config.guidanceExplicit);
-}
-
 TEST(SdVidGenHandlers_FlowShift, AcceptsFloats) {
   EXPECT_FLOAT_EQ(applyOne("flow_shift", num(5.0)).flowShift, 5.0f);
   EXPECT_FLOAT_EQ(applyOne("flow_shift", num(8.0)).flowShift, 8.0f);

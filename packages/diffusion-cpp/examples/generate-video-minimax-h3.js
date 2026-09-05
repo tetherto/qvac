@@ -56,7 +56,6 @@ async function main() {
       fps: 24,
       steps: Number(process.env.STEPS || 8),
       cfg_scale: 1.0,
-      guidance: Number(process.env.GUIDANCE || 7),
       seed: Number(process.env.SEED || 11)
     })
 

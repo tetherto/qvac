@@ -55,8 +55,6 @@ export interface VideoGenerationParams {
     steps?: number;
     sampling_method?: SamplerMethod;
     scheduler?: ScheduleType;
-    /** MiniMax-H3 distilled guidance scale (default: 7.0). */
-    guidance?: number;
     cfg_scale?: number;
     flow_shift?: number;
     /** High-noise sample count; `-1` uses native moe_boundary-based routing. */
@@ -142,5 +140,4 @@ export default class VideoStableDiffusion {
         configLoaded: boolean;
     };
     private _isLtx;
-    private _isMiniMaxH3;
 }

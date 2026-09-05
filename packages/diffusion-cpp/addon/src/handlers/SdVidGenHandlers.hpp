@@ -74,10 +74,6 @@ struct SdVidGenConfig {
   bool schedulerExplicit = false;
   float cfgScale = 6.0f;                              // guidance.txt_cfg
   bool cfgScaleExplicit = false;
-  // Distilled guidance is used by MiniMax-H3. It is otherwise ignored by
-  // current Wan/LTX video models.
-  float guidance = 0.0f;
-  bool guidanceExplicit = false;
   // Image-conditioning guidance for img2vid. Mirrors the image
   // path's SdGenConfig::imgCfgScale exactly:
   //   -1.0f (default sentinel): fall through to cfgScale (txt_cfg), so a

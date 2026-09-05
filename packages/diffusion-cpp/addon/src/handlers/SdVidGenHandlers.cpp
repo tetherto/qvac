@@ -154,11 +154,6 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
        c.cfgScale = static_cast<float>(requireNum(v, "cfg_scale"));
        c.cfgScaleExplicit = true;
      }},
-    {"guidance",
-     [](SdVidGenConfig& c, const picojson::value& v) {
-       c.guidance = static_cast<float>(requireNum(v, "guidance"));
-       c.guidanceExplicit = true;
-     }},
 
     // img_cfg_scale -- image-conditioning guidance for img2vid.
     // Mirrors SdGenHandlers' "img_cfg_scale" handler. Sentinel -1 means

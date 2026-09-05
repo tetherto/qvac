@@ -441,8 +441,8 @@ FL2VA denoiser, Qwen3-VL text encoder, video VAE, and audio VAE:
 
 The initial integration intentionally rejects init images, control frames, and
 reference images. Use a 32-pixel spatial grid and a `17*k + 5` frame count.
-H3 is distilled: `cfg_scale` must be `1.0`, `guidance` defaults to `7.0`, and
-the output stream is always 24 FPS with its native stereo audio.
+H3 is distilled: `cfg_scale` must be `1.0`, and the output stream is always
+24 FPS with its native stereo audio.
 
 ```js
 const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
@@ -464,8 +464,7 @@ const response = await model.run({
   video_frames: 124,
   fps: 24,
   steps: 8,
-  cfg_scale: 1.0,
-  guidance: 7.0
+  cfg_scale: 1.0
 })
 ```
 
