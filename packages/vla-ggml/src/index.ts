@@ -156,22 +156,26 @@ const NATIVE_ERR_MARKERS = Object.freeze({
   archMismatch: "config.embodiment is GR00T-only",
   // setEmbodiment refused because an inference job is dispatched but unawaited.
   inFlight: "an inference job is in flight",
+  // parseBackendOverride rejected a `backend` family name. Raised by
+  // createInstance before any weight I/O, so it is a config error, not a
+  // weights failure. QVAC-23763.
+  badBackend: "backend: ",
 });
 
-// Map a native throw out of the embodiment paths onto a public error code.
-// Only the resolver's rejections are configuration errors; a switch can also
-// fail because the GGUF moved, a read came up short, or an allocation failed,
-// and reporting those as INVALID_CONFIG points the caller at the wrong problem
-// (and invites an SDK to retry a "bad config" forever). Those are the same
-// weight-read failures the load path reports, so they get the same code.
-function classifyEmbodimentError(err: Error) {
+// Map a native throw on the load and setEmbodiment paths onto a public error
+// code. Only rejections of the request itself are configuration errors; a load
+// can also fail because the GGUF moved, a read came up short, or an allocation
+// failed, and reporting those as INVALID_CONFIG points the caller at the wrong
+// problem and invites an SDK to retry a bad config forever.
+function classifyNativeLoadError(err: Error) {
   const message = typeof err.message === "string" ? err.message : "";
   if (message.includes(NATIVE_ERR_MARKERS.inFlight)) {
     return ERR_CODES.JOB_ALREADY_RUNNING;
   }
   if (
     message.includes(NATIVE_ERR_MARKERS.resolve) ||
-    message.includes(NATIVE_ERR_MARKERS.archMismatch)
+    message.includes(NATIVE_ERR_MARKERS.archMismatch) ||
+    message.includes(NATIVE_ERR_MARKERS.badBackend)
   ) {
     return ERR_CODES.INVALID_CONFIG;
   }
@@ -638,11 +642,17 @@ class VlaModel {
     this._nativeLoggerActive = false;
   }
 
-  async load({ backend = "auto" }: { backend?: "auto" | "cpu" } = {}): Promise<void> {
-    if (backend !== "auto" && backend !== "cpu") {
+  // QVAC-23763: `backend` now also takes a comma-separated GPU priority list,
+  // e.g. "cuda" or "cuda,vulkan". "auto" and "cpu" keep their meaning. The
+  // family names are validated natively so the list stays in one place; this
+  // check only rejects the shapes that never reach the addon.
+  async load({
+    backend = "auto",
+  }: { backend?: VlaModel.VlaBackendSelector } = {}): Promise<void> {
+    if (typeof backend !== "string" || backend.trim() === "") {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.INVALID_CONFIG,
-        adds: `backend must be 'auto' or 'cpu' (got: ${String(backend)})`,
+        adds: `backend must be 'auto', 'cpu', or a comma-separated GPU backend list such as 'cuda,vulkan' (got: ${String(backend)})`,
       });
     }
     return this._run(async () => {
@@ -714,14 +724,12 @@ class VlaModel {
       }
       // Same logger-leak guard as the missing-file path above.
       this._releaseNativeLogger();
-      // An unresolvable embodiment is a bad config, not a bad weights file — it
-      // is rejected before any weight I/O happens. Without this, the SAME root
-      // cause reported INVALID_CONFIG through setEmbodiment() and
-      // FAILED_TO_LOAD_WEIGHTS through the constructor. Everything else on this
-      // path is already FAILED_TO_LOAD_WEIGHTS, which is what the shared
-      // classifier falls back to.
+      // An unresolvable embodiment or a bad `backend` family is a config
+      // error, not a bad weights file: both are rejected before any weight I/O.
+      // Everything else here is FAILED_TO_LOAD_WEIGHTS, the classifier's
+      // fallback.
       throw new QvacErrorAddonVla({
-        code: classifyEmbodimentError(loadError as Error),
+        code: classifyNativeLoadError(loadError as Error),
         adds: (loadError as Error).message,
         cause: loadError as Error,
       });
@@ -805,7 +813,7 @@ class VlaModel {
       // which bumps the native count and no JS flag. Same cause as the check
       // above, so report the same code rather than blaming the config.
       throw new QvacErrorAddonVla({
-        code: classifyEmbodimentError(err as Error),
+        code: classifyNativeLoadError(err as Error),
         adds: (err as Error).message,
         cause: err as Error,
       });
@@ -1042,6 +1050,20 @@ namespace VlaModel {
     | string
     | number
     | { tag?: string; catId?: number; numCameras?: number };
+
+  /**
+   * Which backend `load()` should use. QVAC-23763.
+   *
+   * - `"auto"` (default): pick the best available device, preferring CUDA, then
+   *   HIP/ROCm, then Vulkan or Metal, then CPU.
+   * - `"cpu"`: skip GPU selection entirely.
+   * - a comma-separated GPU family list, e.g. `"cuda"` or `"cuda,vulkan"`:
+   *   try those families in order, then fall back to the normal order if none
+   *   of them has a device on this machine. Accepted family names are cuda,
+   *   vulkan, metal, opencl, hip, rocm and sycl; an unrecognised name is an
+   *   error. A family whose device the Adreno gate rejected stays rejected.
+   */
+  export type VlaBackendSelector = "auto" | "cpu" | (string & {});
 
   export interface VlaRunInput {
     images: Float32Array[];
