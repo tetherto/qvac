@@ -2,36 +2,31 @@
 /**
  * Orchestrator for **minor** docs releases (`X.Y.0`).
  *
- * Invariants enforced here:
- *   - Incoming version must end in `.0` (defensive: the workflow's branch
- *     glob already guarantees this, but local invocations could violate
- *     it).
- *   - The current latest (read from `versions.ts`) is frozen as a series
- *     sibling `v<outgoingMajor>.<outgoingMinor>.x.mdx` before any new
- *     content is generated, so the version selector never loses the
- *     outgoing snapshot.
+ * Under the shim-based layout (see the "versioned docs reorg" design
+ * doc), each section's `index.mdx` is a fixed template that `<include>`s
+ * the versioned MDX of the current latest series. Rotating latest
+ * therefore means:
+ *   - Generating the incoming series' versioned file
+ *     (`v<X.Y>.x.mdx`) with the same content generators that patch and
+ *     archived flows use — so every series page on disk is produced
+ *     the same way, regardless of whether it happens to be latest.
+ *   - Rewriting the two shim `index.mdx` files (API + release notes)
+ *     to point at the new series file and advertise the new
+ *     "(latest)" label + description range.
+ *   - Refreshing the managed `latest-series alias` block in
+ *     `public/_redirects` so the incoming series' versioned URL 301s
+ *     to the canonical bare path (search engines see one canonical URL
+ *     per series; the shim is the single entry point for "(latest)").
+ *   - Rebuilding `src/lib/versions.ts` from disk so the selector
+ *     dropdown reflects what's on-disk with the correct `(latest)`
+ *     marker.
  *
- * Steps (each delegated to the existing focused scripts):
- *   1. `create-version-bundle.ts <outgoing>` — copies `index.mdx` into a
- *      `v<outgoingMajor>.<outgoingMinor>.x.mdx` sibling for both API and
- *      release-notes sections.
- *  1a. `generate-api-docs.ts <outgoing> --target=v<X.Y>.x.mdx --title-only`
- *  1b. `generate-release-notes.ts <outgoing> --target=v<X.Y>.x.mdx --title-only`
- *      The freeze in step 1 is a raw file copy, so each snapshot inherits
- *      the outgoing `index.mdx` title verbatim — which still advertises
- *      `(latest)`. Steps 1a / 1b relabel the snapshots to the canonical
- *      archived series form (no `(latest)`) without re-rendering
- *      their bodies.
- *   2. `generate-api-docs.ts <new> --latest` — runs TypeDoc + render
- *      and writes the new `index.mdx`. The output is deterministic by
- *      construction: AI augmentation is no longer part of the pipeline
- *      (moved to local skills) so every input produces the same MDX.
- *   3. `generate-release-notes.ts <new> --latest` — reads the per-version
- *      changelog folder (Fonte B: `packages/<pkg>/changelog/<new>/CHANGELOG_LLM.md`)
- *      and writes the new `index.mdx` with a single `## v<new>` block
- *      per-package verbatim.
- *   4. `update-versions-list.ts --latest=<new>` — refreshes `versions.ts`
- *      from disk.
+ * Nothing is frozen or renamed anymore — the outgoing series' MDX file
+ * is untouched (it already exists as `v<outgoing>.x.mdx` on disk, since
+ * every series has always lived there under the new layout). No
+ * title-only relabel is needed either: versioned MDX titles never
+ * carry the "(latest)" marker; the marker lives exclusively on the
+ * shim.
  *
  * No git commit / push. The wrapping workflow stages and PRs the diff.
  *
@@ -41,13 +36,15 @@
 
 import {
   API_DIR,
-  fileExists,
+  RELEASE_NOTES_DIR,
   parseVersion,
   readLatestFromVersionsTs,
   runStep,
   seriesFileName,
+  seriesName,
+  writeLatestSeriesAliasRedirects,
+  writeShim,
 } from "./lib/release-shared.js";
-import * as path from "path";
 
 export interface MinorOptions {
   forceExtract: boolean;
@@ -63,6 +60,7 @@ export async function releaseMinor(newVersion: string, options: MinorOptions) {
   }
 
   const incoming = `v${newVersion}`;
+  const incomingSeries = seriesName(parsed);
   const outgoing = readLatestFromVersionsTs();
 
   console.log(`📦 Releasing docs ${incoming} (minor)`);
@@ -75,73 +73,52 @@ export async function releaseMinor(newVersion: string, options: MinorOptions) {
     );
   }
 
-  // Sanity-check the index file we're about to freeze. Missing index.mdx
-  // means either the path is wrong (regression) or a prior release was
-  // interrupted — either way, fail fast rather than corrupt the manifest.
-  const apiIndex = path.join(API_DIR, "index.mdx");
-  if (!(await fileExists(apiIndex))) {
-    throw new Error(
-      `API summary index missing: ${apiIndex}\n` +
-        `Run a prior release-version-minor end-to-end or restore the file before retrying.`,
-    );
-  }
-
-  if (outgoing) {
-    const outgoingNumeric = outgoing.replace(/^v/, "");
-    const outgoingParsed = parseVersion(outgoingNumeric);
-    const snapshotTarget = seriesFileName(
-      outgoingParsed.major,
-      outgoingParsed.minor,
-    );
-    runStep(
-      `1️⃣  Freezing outgoing ${outgoing} → ${snapshotTarget}...`,
-      `bun run scripts/create-version-bundle.ts ${outgoingNumeric}`,
-    );
-
-    // The freeze above is a raw `fs.copyFile` of `index.mdx` into the
-    // sibling snapshot, so the snapshot inherits the outgoing index's
-    // frontmatter title verbatim. That title still advertises the
-    // outgoing as `(latest)`. Relabel both snapshots to the canonical
-    // archived series form using the dedicated title-only mode so the
-    // body is preserved byte-for-byte.
-    runStep(
-      `1️⃣a Relabeling archived API snapshot title (${snapshotTarget})...`,
-      `bun run scripts/generate-api-docs.ts ${outgoingNumeric} --target=${snapshotTarget} --title-only`,
-    );
-    runStep(
-      `1️⃣b Relabeling archived release-notes snapshot title (${snapshotTarget})...`,
-      `bun run scripts/generate-release-notes.ts ${outgoingNumeric} --target=${snapshotTarget} --title-only`,
-    );
-  } else {
-    console.log(
-      `\n1️⃣  Skipping freeze step (no previous latest detected in versions.ts).`,
-    );
-  }
-
-  const apiFlags: string[] = ["--latest"];
+  const apiFlags: string[] = [];
   if (options.forceExtract) apiFlags.push("--force-extract");
 
   runStep(
-    `2️⃣  Generating ${incoming} API summary...`,
-    `bun run scripts/generate-api-docs.ts ${newVersion} ${apiFlags.join(" ")}`,
+    `1️⃣  Generating ${incoming} API summary → ${seriesFileName(parsed.major, parsed.minor)}...`,
+    `bun run scripts/generate-api-docs.ts ${newVersion}${apiFlags.length ? " " + apiFlags.join(" ") : ""}`,
   );
 
   runStep(
-    `3️⃣  Generating ${incoming} release notes (Fonte B: per-version folder)...`,
-    `bun run scripts/generate-release-notes.ts ${newVersion} --latest`,
+    `2️⃣  Generating ${incoming} release notes → ${seriesFileName(parsed.major, parsed.minor)} (Fonte B: per-version folder)...`,
+    `bun run scripts/generate-release-notes.ts ${newVersion}`,
   );
 
+  console.log(
+    `\n3️⃣  Rewriting API summary shim to <include> ${seriesFileName(parsed.major, parsed.minor)}...`,
+  );
+  await writeShim(
+    API_DIR,
+    seriesFileName(parsed.major, parsed.minor),
+    `API Summary — ${incomingSeries} (latest)`,
+    "One-page reference of all public functions and objects exported by @qvac/sdk",
+  );
+
+  console.log(
+    `\n4️⃣  Rewriting release-notes shim to <include> ${seriesFileName(parsed.major, parsed.minor)}...`,
+  );
+  await writeShim(
+    RELEASE_NOTES_DIR,
+    seriesFileName(parsed.major, parsed.minor),
+    `SDK Release Notes — ${incomingSeries} (latest)`,
+    `Release notes for QVAC SDK v${newVersion}.`,
+  );
+
+  console.log(
+    `\n5️⃣  Rewriting latest-series alias block in _redirects (${incomingSeries})...`,
+  );
+  await writeLatestSeriesAliasRedirects(incomingSeries);
+
   runStep(
-    `4️⃣  Updating versions list...`,
+    `6️⃣  Updating versions list...`,
     `bun run scripts/update-versions-list.ts --latest=${newVersion}`,
   );
 
   console.log(`\n✅ Release ${incoming} complete (minor)`);
 }
 
-// CLI — only runs when this module is invoked directly (not when imported
-// by `release-version.ts` for dispatch). `import.meta.main` is true under
-// both Bun and Node 24+.
 if (import.meta.main) {
   const args = process.argv.slice(2);
   const versionArg = args.find((a) => !a.startsWith("--"));
@@ -152,12 +129,15 @@ if (import.meta.main) {
       "Usage: bun run scripts/release-version-minor.ts <X.Y.0> [--force-extract]",
     );
     console.log("");
-    console.log("Promotes a minor release to latest:");
+    console.log("Rotates the docs latest to the incoming minor:");
     console.log(
-      "  - Freezes the outgoing latest as v<X.Y>.x.mdx for both API + release notes.",
+      "  - Generates the versioned MDX for API + release notes at v<X.Y>.x.mdx.",
     );
     console.log(
-      "  - Generates new API summary + release notes (Fonte B per-version folder).",
+      "  - Rewrites both index.mdx shims to <include> the new series file.",
+    );
+    console.log(
+      "  - Refreshes the latest-series alias block in public/_redirects.",
     );
     console.log("  - Refreshes src/lib/versions.ts.");
     console.log("");

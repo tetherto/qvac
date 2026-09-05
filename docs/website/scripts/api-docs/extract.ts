@@ -128,7 +128,9 @@ export async function extractApiData(
   version: string,
   options?: { forceExtract?: boolean; samplesDir?: string },
 ): Promise<ApiData> {
-  const entryPoint = path.join(sdkPath, "index.ts").replace(/\\/g, "/");
+  const entryPoint = path
+    .join(sdkPath, "src", "index.ts")
+    .replace(/\\/g, "/");
   const tsconfigPath = path.join(sdkPath, "tsconfig.json").replace(/\\/g, "/");
 
   try {
@@ -138,10 +140,10 @@ export async function extractApiData(
       `SDK entry point not found: ${entryPoint}\n\n` +
         `Either:\n` +
         `  1. Ensure the sdk package exists at: ${sdkPath}\n` +
-        `  2. Or set SDK_PATH to your SDK root, e.g.:\n` +
-        `     set SDK_PATH=C:\\path\\to\\sdk   (Windows)\n` +
-        `     export SDK_PATH=/path/to/sdk     (Linux/macOS)\n` +
-        `  Then run: bun run scripts/generate-api-docs.ts 0.7.0`,
+        `     (its sources must live at ${path.join(sdkPath, "src")})\n` +
+        `  2. Or set SDK_PATH to your SDK package root, e.g.:\n` +
+        `     set SDK_PATH=C:\\path\\to\\qvac\\packages\\sdk   (Windows)\n` +
+        `     export SDK_PATH=/path/to/qvac/packages/sdk        (Linux/macOS)\n`,
     );
   }
 
@@ -169,7 +171,7 @@ export async function extractApiData(
 
   buildTypeMap(project);
   initTsProgram(tsconfigPath);
-  await loadZodDescriptions(path.join(sdkPath, "schemas"));
+  await loadZodDescriptions(path.join(sdkPath, "src", "schemas"));
   await loadSampleProse(options?.samplesDir);
 
   console.log(`🔍 Auditing TSDoc completeness...`);
@@ -244,7 +246,7 @@ export async function extractApiData(
 async function extractErrors(
   sdkPath: string,
 ): Promise<{ client: ErrorEntry[]; server: ErrorEntry[] }> {
-  const schemasDir = path.join(sdkPath, "schemas");
+  const schemasDir = path.join(sdkPath, "src", "schemas");
   let clientSource = "";
   let serverSource = "";
 
@@ -573,11 +575,12 @@ function buildApiFunction(
             .filter((t: any) => t.tag === "@throws")
             .map((t: any) => {
               const text = extractComment(t.content);
-              const m = text.match(/^\{([^}]+)\}\s*(.*)/);
-              if (m) return { error: m[1], description: m[2] };
-              return { error: text, description: "" };
+              const m = text.match(/^\{([^}]+)\}\s*(.*)/s);
+              if (m) return { error: m[1], description: m[2].trim() };
+              // Classless throws: description-only, no forged error name.
+              return { error: "", description: text.trim() };
             })
-            .filter((t: any) => t.error);
+            .filter((t: any) => t.error || t.description);
     // Author-provided short label, written as `@overloadLabel "Single text"`.
     // When missing, the heading falls back to plain `Overload N`.
     const labelTag = sigBlockTags.find((t: any) => t.tag === "@overloadLabel");
@@ -756,11 +759,12 @@ function buildApiFunction(
         .filter((tag: any) => tag.tag === "@throws")
         .map((tag: any) => {
           const text = extractComment(tag.content);
-          const match = text.match(/^\{([^}]+)\}\s*(.*)/);
-          if (match) return { error: match[1], description: match[2] };
-          return { error: text, description: "" };
+          const match = text.match(/^\{([^}]+)\}\s*(.*)/s);
+          if (match) return { error: match[1], description: match[2].trim() };
+          // Classless throws: description-only, no forged error name.
+          return { error: "", description: text.trim() };
         })
-        .filter((t: any) => t.error);
+        .filter((t: any) => t.error || t.description);
     })(),
     examples: blockTags
       .filter((tag: any) => tag.tag === "@example")
@@ -1376,10 +1380,13 @@ function parseThrowsFromJsDoc(
     const error = (m[1] ?? "").trim();
     const description = (m[2] ?? "").trim();
     if (!error && !description) continue;
-    entries.push({
-      error: error || description,
-      description: error ? description : "",
-    });
+    // `@throws` without a `{ClassName}` header is valid TSDoc: the tag body is
+    // free-form. Leave `error` empty in that case so the renderer can pick a
+    // representation for classless entries (see `single-page.njk`) instead of
+    // shoehorning the description into a field that will later be wrapped in
+    // inline-code backticks — which produces MDX with mismatched fences when
+    // the description carries its own backticks or JSX-like tokens.
+    entries.push({ error, description });
   }
   return entries;
 }
