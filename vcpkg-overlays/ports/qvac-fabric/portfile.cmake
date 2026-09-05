@@ -160,6 +160,14 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
     message(FATAL_ERROR "qvac-fabric: cuda-backend supports linux x64 and arm64 only, got ${VCPKG_TARGET_ARCHITECTURE}.")
   endif()
 
+  set(QVAC_CUDA_JETSON OFF)
+  if(VCPKG_TARGET_TRIPLET STREQUAL "arm64-linux-cuda12")
+    if(NOT VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
+      message(FATAL_ERROR "qvac-fabric: the CUDA 12 Jetson variant is arm64-only.")
+    endif()
+    set(QVAC_CUDA_JETSON ON)
+  endif()
+
   # ggml's own CUDA CMake calls enable_language(CUDA), which fails with "No
   # CMAKE_CUDA_COMPILER could be found" whenever nvcc is off PATH — routine
   # under vcpkg, which does not inherit an interactive shell. Locate nvcc and
@@ -185,7 +193,11 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # editing it changes the ABI and forces a rebuild. KEEP IT IN STEP WITH
   # setup-cuda's cuda-version, or a toolkit change ships stale binaries and the
   # only symptom is a crash on hardware CI does not have.
-  set(QVAC_FABRIC_CUDA_TOOLKIT "13.0.3")
+  if(QVAC_CUDA_JETSON)
+    set(QVAC_FABRIC_CUDA_TOOLKIT "12.6.3-jetson")
+  else()
+    set(QVAC_FABRIC_CUDA_TOOLKIT "13.0.3-server")
+  endif()
   if(DEFINED ENV{CUDACXX} AND EXISTS "$ENV{CUDACXX}")
     set(NVCC_EXECUTABLE "$ENV{CUDACXX}")
   endif()
@@ -296,7 +308,14 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # cubins and vice versa. QVAC-24442 widened llm-llamacpp and embed-llamacpp
   # from "linux & x64" to "linux", so the arm64 tier is now exercised by their
   # linux-arm64 prebuild.
-  if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
+  set(QVAC_CUDA_NO_VMM OFF)
+  if(QVAC_CUDA_JETSON)
+    # Jetson Orin is the CUDA 12 arm64 target. Its Tegra driver cannot reserve
+    # ggml's fixed 32 GB VMM address-space pool, and this fabric version has no
+    # runtime fallback when cuMemAddressReserve fails.
+    set(QVAC_CUDA_ARCHS "87-real")
+    set(QVAC_CUDA_NO_VMM ON)
+  elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
     # 121-real is the DGX Spark's GB10, native rather than JITted. Gianfranco,
     # 2026-09-04: "spark should run native". Measured before it was added: 27.3 s
     # to first token on a cold JIT cache against 143.9 ms warm, because sm_121 sat
@@ -332,6 +351,7 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   message(STATUS "qvac-fabric: cuda-backend ON, building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
   list(APPEND PLATFORM_OPTIONS
     -DGGML_CUDA=ON
+    -DGGML_CUDA_NO_VMM=${QVAC_CUDA_NO_VMM}
     "-DCMAKE_CUDA_ARCHITECTURES=${QVAC_CUDA_ARCHS}"
     -DCMAKE_CUDA_COMPILER=${NVCC_EXECUTABLE}
     # The triplet compiles C++ with clang and -stdlib=libc++. nvcc defaults its
@@ -427,6 +447,27 @@ vcpkg_cmake_configure(
 vcpkg_cmake_install()
 vcpkg_cmake_config_fixup(
   PACKAGE_NAME ggml)
+
+if(BUILD_CUDA_BACKEND AND QVAC_CUDA_JETSON)
+  # Keep both CUDA majors in one prebuild directory. ggml's loader scans every
+  # libqvac-ggml-cuda*.so candidate and skips the one whose runtime major is not
+  # available on the host.
+  set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda.so")
+  set(QVAC_CUDA_JETSON_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda-jetson.so")
+  if(NOT EXISTS "${QVAC_CUDA_MODULE}")
+    message(FATAL_ERROR "qvac-fabric: expected CUDA module was not installed at ${QVAC_CUDA_MODULE}")
+  endif()
+  file(RENAME "${QVAC_CUDA_MODULE}" "${QVAC_CUDA_JETSON_MODULE}")
+
+  set(QVAC_GGML_TARGETS "${CURRENT_PACKAGES_DIR}/share/ggml/ggml-targets-release.cmake")
+  if(NOT EXISTS "${QVAC_GGML_TARGETS}")
+    message(FATAL_ERROR "qvac-fabric: expected ggml target exports were not installed at ${QVAC_GGML_TARGETS}")
+  endif()
+  vcpkg_replace_string(
+    "${QVAC_GGML_TARGETS}"
+    "libqvac-ggml-cuda.so"
+    "libqvac-ggml-cuda-jetson.so")
+endif()
 
 if(BUILD_LLAMA)
   vcpkg_cmake_config_fixup(PACKAGE_NAME llama)
