@@ -401,31 +401,55 @@ void SdModel::load() {
   params.vae_auto_cpu_fallback_memory_ratio =
       config_.vaeAutoCpuFallbackMemoryRatio;
 
-  // Parameter residency goes through the engine's params_backend assignment
-  // spec (comma-separated `module=backend` pairs, bare value = default for
-  // every module): offload_to_cpu pins all params to CPU RAM; clip_on_cpu /
-  // vae_on_cpu pin just those modules. vae_decode_only and
-  // free_params_immediately have no engine equivalent any more (the encoder
-  // stays loaded and params stay resident for the ctx lifetime); they remain
-  // addon-level config for validation/compatibility.
-  std::string paramsBackendSpec;
-  if (config_.offloadToCpu) {
-    paramsBackendSpec = "cpu";
-  } else {
-    if (config_.keepClipOnCpu)
-      paramsBackendSpec = "clip=cpu";
-    if (config_.keepVaeOnCpu)
-      paramsBackendSpec += paramsBackendSpec.empty() ? "vae=cpu" : ",vae=cpu";
+  params.max_vram =
+      config_.maxVramSpec.empty() ? nullptr : config_.maxVramSpec.c_str();
+  params.stream_layers = config_.streamLayers;
+
+  // An explicit assignment takes priority; otherwise retain the supported
+  // compatibility mappings for the legacy CPU-placement flags.
+  std::string paramsBackend = config_.paramsBackendSpec;
+  if (paramsBackend.empty()) {
+    if (config_.offloadToCpu) {
+      paramsBackend = "cpu";
+    } else {
+      if (config_.keepClipOnCpu)
+        paramsBackend = "clip=cpu";
+      if (config_.keepVaeOnCpu)
+        paramsBackend += paramsBackend.empty() ? "vae=cpu" : ",vae=cpu";
+    }
+  } else if (
+      config_.offloadToCpu || config_.keepClipOnCpu || config_.keepVaeOnCpu) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "params_backend overrides legacy CPU placement flags");
   }
-  if (!paramsBackendSpec.empty()) {
-    params.params_backend = paramsBackendSpec.c_str();
-  }
+  params.params_backend =
+      paramsBackend.empty() ? nullptr : paramsBackend.c_str();
+
+  // August always loads the VAE capabilities needed by the selected model and
+  // keeps model-manager residency across jobs. These legacy controls therefore
+  // have no direct C API equivalent.
+  if (config_.vaeDecodeOnly)
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "vae_decode_only is ignored by the 2026-08-11 engine");
+  if (config_.freeParamsImmediately)
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "free_params_immediately is ignored by the 2026-08-11 engine");
 
   params.preferred_gpu_backend =
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
 
   std::string mainGpuBackend;
-  if (!config_.mainGpu.empty() &&
+  if (!config_.backendSpec.empty()) {
+    params.backend = config_.backendSpec.c_str();
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "Explicit stable-diffusion backend assignment '" + config_.backendSpec +
+            "'");
+  } else if (
+      !config_.mainGpu.empty() &&
       sd_backend_selection::parseConfigDeviceString(config_.device) ==
           sd_backend_selection::ConfigDevice::Gpu) {
     auto mainGpuSpec = sd_backend_selection::parseMainGpu(config_.mainGpu);
@@ -952,7 +976,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
     }
     throw StatusError(general_error::InternalError, "generate_image() failed");
   }
-
+  if (genImages == nullptr || genImageCount <= 0) {
+    throw StatusError(
+        general_error::InternalError, "generate_image() returned no images");
+  }
   int outputCount = 0;
   // RuntimeStats describe emitted PNGs. Keep generation dimensions as the
   // fallback so a failed encode/callback does not report an upscaled size.
@@ -1081,6 +1108,10 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   qvac_lib_inference_addon_sd::applySdVidGenHandlers(
       vid, parsed.get<picojson::object>());
   const auto& paramsObject = parsed.get<picojson::object>();
+  const bool isMiniMaxH3 = videoModelCapabilities_.isMiniMaxH3;
+  const bool hasReferenceOptions =
+      paramsObject.find("reference_attention_strength") != paramsObject.end() ||
+      paramsObject.find("reference_downscale_factor") != paramsObject.end();
 
   if (vid.mode != "txt2vid" && vid.mode != "img2vid")
     throw StatusError(
@@ -1088,9 +1119,80 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
         "processVideo: unsupported mode '" + vid.mode +
             "' (expected txt2vid or img2vid)");
 
-  const bool hasReferenceOptions =
-      paramsObject.find("reference_attention_strength") != paramsObject.end() ||
-      paramsObject.find("reference_downscale_factor") != paramsObject.end();
+  if (isMiniMaxH3) {
+    // H3 currently supports text-to-audio-video only. Keep this native check
+    // authoritative so renamed GGUFs and bindings that bypass video.ts cannot
+    // enter unsupported image/reference/control paths.
+    if (vid.mode != "txt2vid" || !job.initImageBytes.empty() ||
+        !job.initImagesBytes.empty())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 supports text-to-audio-video only; image conditioning "
+          "(img2vid/init_image) is not supported");
+    if (!config_.highNoiseDiffusionModelPath.empty())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 does not support a Wan 2.2 high-noise diffusion model");
+    if (!job.controlFramesBytes.empty() ||
+        paramsObject.find("vace_strength") != paramsObject.end())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 does not support control_frames or vace_strength");
+    if (paramsObject.find("strength") != paramsObject.end() ||
+        paramsObject.find("img_cfg_scale") != paramsObject.end())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 does not support image-conditioning strength or "
+          "img_cfg_scale");
+    if (!job.referenceImagesBytes.empty() || hasReferenceOptions ||
+        !vid.loraPath.empty() ||
+        paramsObject.find("lora_strength") != paramsObject.end() ||
+        paramsObject.find("stg_scale") != paramsObject.end() ||
+        paramsObject.find("stg_block") != paramsObject.end())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 does not support reference_images, reference options, "
+          "or video LoRAs");
+    static constexpr std::array<const char*, 6> kWan22MoeParams = {
+        "high_noise_steps",
+        "high_noise_sampler",
+        "high_noise_scheduler",
+        "high_noise_cfg_scale",
+        "high_noise_flow_shift",
+        "moe_boundary"};
+    for (const char* key : kWan22MoeParams) {
+      if (paramsObject.find(key) != paramsObject.end())
+        throw StatusError(
+            general_error::InvalidArgument,
+            std::string("MiniMax-H3 does not support ") + key +
+                " (Wan 2.2 high-noise expert control)");
+    }
+
+    if (!vid.widthExplicit)
+      vid.width = 960;
+    if (!vid.heightExplicit)
+      vid.height = 544;
+    if (!vid.videoFramesExplicit)
+      vid.videoFrames = 124;
+    if (!vid.fpsExplicit)
+      vid.fps = 24;
+    if (!vid.sampleStepsExplicit)
+      vid.sampleSteps = 8;
+    if (!vid.schedulerExplicit)
+      vid.scheduler = DISCRETE_SCHEDULER;
+    if (!vid.cfgScaleExplicit)
+      vid.cfgScale = 1.0f;
+    if (vid.cfgScale != 1.0f)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 requires cfg_scale to be exactly 1.0; got: " +
+              std::to_string(vid.cfgScale));
+    if (vid.scheduler != DISCRETE_SCHEDULER)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 requires scheduler='discrete'");
+  }
+
   const bool hasReferenceImages = !job.referenceImagesBytes.empty();
   if (hasReferenceImages && vid.loraPath.empty())
     throw StatusError(
@@ -1171,7 +1273,17 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   // descriptors at load time, rather than the caller-controlled model path.
   // This keeps renamed TI2V checkpoints and direct native callers on the
   // correct 32-pixel grid.
-  if (isLtxModel_) {
+  if (isMiniMaxH3) {
+    if (vid.videoFrames < videoModelCapabilities_.minimumVideoFrames ||
+        (vid.videoFrames - videoModelCapabilities_.frameCountOffset) %
+                videoModelCapabilities_.frameCountStride !=
+            0)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 video_frames must be of the form (17*k + 5) with k >= "
+          "0. Got: " +
+              std::to_string(vid.videoFrames));
+  } else if (isLtxModel_) {
     if (vid.videoFrames < 9 || (vid.videoFrames - 1) % 8 != 0 ||
         vid.videoFrames > 257)
       throw StatusError(
@@ -1179,6 +1291,15 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
           "LTX-2 video_frames must be of the form (8*k + 1) in [9, 257] "
           "(9, 17, 25, 33, ..., 257). Got: " +
               std::to_string(vid.videoFrames));
+  } else if (
+      vid.videoFrames < videoModelCapabilities_.minimumVideoFrames ||
+      (vid.videoFrames - videoModelCapabilities_.frameCountOffset) %
+              videoModelCapabilities_.frameCountStride !=
+          0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "video_frames must be an integer >= 5 of the form (4*k + 1). Got: " +
+            std::to_string(vid.videoFrames));
   }
   const int spatialAlignment = videoModelCapabilities_.spatialAlignment;
   if (vid.width % spatialAlignment != 0 || vid.height % spatialAlignment != 0)
@@ -1369,6 +1490,13 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   if (vid.cacheThreshold > 0.0f)
     vidParams.cache.reuse_threshold = vid.cacheThreshold;
 
+  const int effectiveVideoFps =
+      sd_get_effective_video_fps(sdCtx_.get(), &vidParams);
+  if (effectiveVideoFps <= 0)
+    throw StatusError(
+        general_error::InternalError,
+        "processVideo: sd_get_effective_video_fps() returned an invalid rate");
+
   // -- Generate -------------------------------------------------------------
   // Wan 2.1 / TI2V-5B invoke one sampler (total == vid.sampleSteps). Wan 2.2
   // A14B invokes the high-noise expert first and the low-noise expert
@@ -1397,9 +1525,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   }
   const auto t0 = std::chrono::steady_clock::now();
 
-  // Upstream's master API returns success as a bool and hands back frames /
-  // audio via out-params. This addon delivers video-only (MJPG AVI), so we
-  // release any audio track the model produced to avoid leaking it.
+  // Upstream's API returns success as a bool and hands back frames / audio via
+  // out-params. Preserve a generated audio track in the emitted AVI.
   int numFramesOut = 0;
   sd_image_t* rawFrames = nullptr;
   sd_audio_t* rawAudio = nullptr;
@@ -1448,9 +1575,13 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   }
 
   // -- Encode AVI and deliver ----------------------------------------------
-  // audio.get() is null for Wan / silent LTX runs, yielding a video-only AVI.
+  // audio.get() is null for Wan / silent runs, yielding a video-only AVI.
   auto avi = qvac_lib_inference_addon_sd::encodeFramesToAvi(
-      frames.data(), frames.count(), vid.fps, /*jpegQuality=*/90, audio.get());
+      frames.data(),
+      frames.count(),
+      effectiveVideoFps,
+      /*jpegQuality=*/90,
+      audio.get());
 
   if (!avi.empty() && job.outputCallback) {
     job.outputCallback(avi);
@@ -1492,7 +1623,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   lastStats_.emplace_back("height", static_cast<int64_t>(vid.height));
   lastStats_.emplace_back("seed", vid.seed);
   lastStats_.emplace_back("videoFrames", static_cast<int64_t>(frames.count()));
-  lastStats_.emplace_back("fps", static_cast<int64_t>(vid.fps));
+  lastStats_.emplace_back("fps", static_cast<int64_t>(effectiveVideoFps));
   // LTX-2 audio: 0/1 flag + sample rate (0 when no audio track was produced).
   lastStats_.emplace_back("hasAudio", audio ? 1 : 0);
   lastStats_.emplace_back(

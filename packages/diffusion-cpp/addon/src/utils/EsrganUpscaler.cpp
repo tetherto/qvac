@@ -42,6 +42,19 @@ void freeSdImageData(sd_image_t& image) noexcept {
   image.data = nullptr;
 }
 
+void freeSdImageBatch(sd_image_t* images, int count) noexcept {
+  if (images == nullptr) {
+    return;
+  }
+
+  // The engine owns the count on successful output. A negative count is
+  // invalid, so only release the outer allocation in that malformed case.
+  for (int i = 0; i < count; ++i) {
+    freeSdImageData(images[i]);
+  }
+  free(images);
+}
+
 } // namespace
 
 EsrganUpscalerConfig makeUpscalerConfig(const SdCtxConfig& config) {

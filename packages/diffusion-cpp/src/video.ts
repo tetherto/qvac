@@ -14,7 +14,8 @@ import type { CacheMode, SamplerMethod, ScheduleType, SdConfig } from './index'
 export type VideoMode = 'txt2vid' | 'img2vid'
 
 /**
- * File paths for a video model context (Wan 2.1 / 2.2 or LTX-2 / LTXAV).
+ * File paths for a video model context (Wan 2.1 / 2.2, LTX-2 / LTXAV, or
+ * MiniMax-H3).
  *
  * Wan 2.2 TI2V-5B uses only `model`, like Wan 2.1, but requires the matching
  * Wan 2.2 VAE. Wan 2.2 T2V-A14B uses both `model` (low noise) and
@@ -53,9 +54,9 @@ export interface VideoGenerationParams {
   /** Transformer block whose video self-attention is skipped for STG. */
   stg_block?: number
   /**
-   * Wan 2.1 dimensions must be multiples of 16. Wan 2.2 TI2V and LTX-2 use a
-   * 32-pixel spatial grid; native validation derives the TI2V requirement from
-   * the loaded GGUF instead of the filename.
+   * Wan 2.1 dimensions must be multiples of 16. Wan 2.2 TI2V, LTX-2, and
+   * MiniMax-H3 use a 32-pixel spatial grid; native validation derives the
+   * actual requirement from the loaded GGUF instead of the filename.
    */
   width?: number
   height?: number
@@ -158,30 +159,9 @@ function assertAbsolute(key: string, value: unknown): asserts value is string {
   }
 }
 
-function validateVideoFrames(frameCount: number, isLtx = false): void {
-  const factor = isLtx ? 8 : 4
-  const minimum = factor + 1
-  if (!Number.isInteger(frameCount)) {
-    throw new Error(
-      `video_frames must be an integer of the form (${factor}*k + 1) with k >= 1. Got: ${frameCount}`
-    )
-  }
-  if (isLtx) {
-    if (frameCount < minimum || (frameCount - 1) % 8 !== 0 || frameCount > 257) {
-      throw new Error(
-        'LTX-2 video_frames must be an integer of the form (8*k + 1) in ' +
-          `[9, 257] (9, 17, 25, 33, ..., 257). Got: ${frameCount}`
-      )
-    }
-    return
-  }
-  if (frameCount < 5 || (frameCount - 1) % 4 !== 0) {
-    throw new Error(
-      'video_frames must be an integer >= 5 of the form (4*k + 1). ' +
-        'Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, ' +
-        '57, 61, 65, 69, 73, 77, 81 (Wan 1.3B native training length). ' +
-        `Got: ${frameCount}`
-    )
+function validateVideoFrames(frameCount: number): void {
+  if (!Number.isInteger(frameCount) || frameCount <= 0) {
+    throw new Error(`video_frames must be a positive integer. Got: ${frameCount}`)
   }
 }
 
@@ -438,7 +418,7 @@ export default class VideoStableDiffusion {
     }
 
     if (params.video_frames != null) {
-      validateVideoFrames(params.video_frames, isLtx)
+      validateVideoFrames(params.video_frames)
     }
 
     if (
@@ -735,6 +715,7 @@ export default class VideoStableDiffusion {
   private _isLtx(): boolean {
     return !!this._files.embeddingsConnectors
   }
+
 }
 
 module.exports = VideoStableDiffusion

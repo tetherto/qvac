@@ -65,6 +65,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
              "width must be a positive multiple of 16, got: " +
                  std::to_string(w));
        c.width = w;
+       c.widthExplicit = true;
      }},
 
     {"height",
@@ -76,6 +77,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
              "height must be a positive multiple of 16, got: " +
                  std::to_string(h));
        c.height = h;
+       c.heightExplicit = true;
      }},
 
     // -- Frame count ----------------------------------------------------------
@@ -89,23 +91,16 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     {"video_frames",
      [](SdVidGenConfig& c, const picojson::value& v) {
        const int n = requireInt(v, "video_frames");
-       // Mirror the JS-side message in video.js -- both layers list the
-       // same valid set up to 81 (Wan 1.3B native cap) so callers see a
-       // consistent error regardless of which validator fires first.
-       constexpr const char* kFrameRuleHint =
-           "video_frames must be an integer >= 5 of the form (4*k + 1). "
-           "Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, "
-           "53, 57, 61, 65, 69, 73, 77, 81 (Wan 1.3B native training "
-           "length). Got: ";
-       if (n < 5)
+       // The actual frame packing depends on the loaded GGUF (Wan: 4*k+1,
+       // LTX: 8*k+1, MiniMax-H3: 17*k+5), so model-aware validation belongs
+       // in SdModel::processVideo after capabilities are inspected.
+       if (n <= 0)
          throw StatusError(
              general_error::InvalidArgument,
-             std::string(kFrameRuleHint) + std::to_string(n));
-       if ((n - 1) % 4 != 0)
-         throw StatusError(
-             general_error::InvalidArgument,
-             std::string(kFrameRuleHint) + std::to_string(n));
+             "video_frames must be a positive integer, got: " +
+                 std::to_string(n));
        c.videoFrames = n;
+       c.videoFramesExplicit = true;
      }},
 
     // -- FPS ------------------------------------------------------------------
@@ -120,6 +115,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
              general_error::InvalidArgument,
              "fps must be in (0, 120], got: " + std::to_string(f));
        c.fps = f;
+       c.fpsExplicit = true;
      }},
 
     // -- Reproducibility ------------------------------------------------------
@@ -134,6 +130,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     {"steps",
      [](SdVidGenConfig& c, const picojson::value& v) {
        c.sampleSteps = requirePositiveInt(v, "steps");
+       c.sampleStepsExplicit = true;
      }},
 
     // Both "sampling_method" and "sampler" are accepted.
@@ -155,6 +152,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     {"cfg_scale",
      [](SdVidGenConfig& c, const picojson::value& v) {
        c.cfgScale = static_cast<float>(requireNum(v, "cfg_scale"));
+       c.cfgScaleExplicit = true;
      }},
 
     // img_cfg_scale -- image-conditioning guidance for img2vid.
