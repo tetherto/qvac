@@ -108,6 +108,16 @@ on:
         type: boolean
         required: false
         default: false
+      include-cuda-arm64-jetson:
+        description: >-
+          Build a second linux-arm64 CUDA module for Jetson after the normal
+          CUDA 13 SBSA prebuild. This uses CUDA 12.6.3, the
+          arm64-linux-cuda12 triplet, and installs a distinct
+          libqvac-ggml-cuda-jetson.so beside the CUDA 13 module. It has no
+          effect unless include-cuda and include-cuda-arm64 are also enabled.
+        type: boolean
+        required: false
+        default: false
       extra-cmake-defines:
         description: >-
           Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
@@ -443,6 +453,56 @@ jobs:
         shell: bash
         run: bare-make install
 
+      - if: ${{ inputs.include-cuda && inputs.include-cuda-arm64 && inputs.include-cuda-arm64-jetson && matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Setup CUDA 12 toolkit for Jetson module
+        uses: ./.github/actions/setup-cuda
+        with:
+          cuda-version: "12.6.3"
+          cuda-target: jetson
+
+      - if: ${{ inputs.include-cuda && inputs.include-cuda-arm64 && inputs.include-cuda-arm64-jetson && matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Generate Jetson CUDA module build
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: >-
+          bare-make generate
+          --build build-cuda12
+          --platform ${{ matrix.platform }}
+          --arch ${{ matrix.arch }}
+          ${{ matrix.flags }}
+          $DEFINES
+          -D VCPKG_TARGET_TRIPLET=arm64-linux-cuda12
+
+      - if: ${{ inputs.include-cuda && inputs.include-cuda-arm64 && inputs.include-cuda-arm64-jetson && matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Build Jetson CUDA module
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: bare-make build --build build-cuda12
+
+      - if: ${{ inputs.include-cuda && inputs.include-cuda-arm64 && inputs.include-cuda-arm64-jetson && matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Install Jetson CUDA module
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: bare-make install --build build-cuda12
+
+      - if: ${{ inputs.include-cuda && inputs.include-cuda-arm64 && inputs.include-cuda-arm64-jetson && matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Verify both arm64 CUDA modules
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          server_modules=(prebuilds/linux-arm64/*/libqvac-ggml-cuda.so)
+          jetson_modules=(prebuilds/linux-arm64/*/libqvac-ggml-cuda-jetson.so)
+          if [ "${#server_modules[@]}" -ne 1 ]; then
+            echo "::error::expected one CUDA 13 arm64 module, found ${#server_modules[@]}"
+            exit 1
+          fi
+          if [ "${#jetson_modules[@]}" -ne 1 ]; then
+            echo "::error::expected one CUDA 12 Jetson module, found ${#jetson_modules[@]}"
+            exit 1
+          fi
+          ls -l "${server_modules[0]}" "${jetson_modules[0]}"
+
       - name: Strip static libraries (.a) from prebuilds (Linux / MacOS)
         if: matrix.os != 'windows-2025'
         working-directory: ${{ env.WORKDIR }}
@@ -625,4 +685,3 @@ jobs:
         with:
           name: prebuilds
           path: prebuilds
-
