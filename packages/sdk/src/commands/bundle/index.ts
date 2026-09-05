@@ -16,6 +16,7 @@ import { generateAddonsManifest } from '@/commands/bundle/manifest'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 
 const require = createRequire(import.meta.url)
+const AUDIO_DECODER_MODULE = '@qvac/decoder-audio'
 
 export interface BundleSdkOptions {
   projectRoot?: string | undefined
@@ -33,6 +34,22 @@ export interface BundleSdkResult {
   addons: string[]
   entryPaths: { worker: string }
   manifestPath: string
+}
+
+/**
+ * Add config-driven deferred modules to the caller's list without changing
+ * the safe default: encoded file-path inputs require the decoder and its
+ * native addon to remain in the bundle and addons manifest.
+ */
+export function resolveDeferredModules(
+  config: { includeAudioDecoder?: boolean },
+  requestedModules: string[]
+): string[] {
+  const modules = [...requestedModules]
+  if (config.includeAudioDecoder === false && !modules.includes(AUDIO_DECODER_MODULE)) {
+    modules.push(AUDIO_DECODER_MODULE)
+  }
+  return modules
 }
 
 function resolveSdkPath(projectRoot: string, explicitSdkPath?: string): string {
@@ -131,7 +148,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : DEFAULT_HOSTS
 
-  const deferModules = options.defer ?? []
+  const deferModules = resolveDeferredModules(config, options.defer ?? [])
 
   await fsp.mkdir(outputDir, { recursive: true })
 

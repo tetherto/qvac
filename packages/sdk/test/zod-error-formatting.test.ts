@@ -78,6 +78,11 @@ test('validateConfig throws a readable ConfigValidationFailedError', function (t
   }
 })
 
+test('validateConfig preserves the mobile audio decoder bundler option', function (t) {
+  const config = validateConfig({ includeAudioDecoder: false })
+  t.is(config.includeAudioDecoder, false)
+})
+
 test('a malformed request rejects with a typed error, never a raw ZodError', async function (t) {
   try {
     await send({ type: 'embed' } as unknown as Request, {}, DUMMY_RPC)

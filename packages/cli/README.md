@@ -414,9 +414,10 @@ If no config file is found, the CLI bundles all built-in plugins.
 
 This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads this **bundler-only** key (ignored by the SDK at runtime):
 
-| Key       | Type       | Required | Description                                                                      |
-| --------- | ---------- | -------- | -------------------------------------------------------------------------------- |
-| `plugins` | `string[]` | No       | Module specifiers, each ending with `/plugin` (defaults to all built-in plugins) |
+| Key                   | Type       | Required | Description                                                                                                                               |
+| --------------------- | ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugins`             | `string[]` | No       | Module specifiers, each ending with `/plugin` (defaults to all built-in plugins)                                                          |
+| `includeAudioDecoder` | `boolean`  | No       | Include the optional FFmpeg audio decoder in generated worker bundles (defaults to `true`; set `false` only for raw PCM/base64-only apps) |
 
 > **Custom plugin contract:** custom `*/plugin` modules must **default-export** the plugin object.
 
