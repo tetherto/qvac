@@ -209,6 +209,7 @@
     "contract:export": "tsx ./scripts/export-contract.ts",
     "contract:check": "tsx ./scripts/export-contract.ts --check",
     "check:resource-collectors": "tsx ./scripts/check-resource-collectors-packaging.ts",
+    "check:addon-fabric-compatibility": "tsx ./scripts/check-addon-fabric-compatibility.ts",
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {

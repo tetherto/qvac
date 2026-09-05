@@ -434,6 +434,10 @@ jobs:
         working-directory: ${{ inputs.project-directory }}
         run: bun install
 
+      - name: Verify addon Fabric compatibility
+        working-directory: ${{ inputs.project-directory }}
+        run: bun run check:addon-fabric-compatibility
+
       - name: Build project
         working-directory: ${{ inputs.project-directory }}
         shell: node {0}
