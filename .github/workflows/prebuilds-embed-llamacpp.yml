@@ -57,5 +57,8 @@ jobs:
       # `linux & x64`, so the arm64 job needs the sbsa toolkit for the same
       # reason. Without it arm64 hard-errors on the missing nvcc.
       include-cuda-arm64: true
+      # QVAC-24470: Orin needs a separate CUDA 12 linux-aarch64 module. The
+      # reusable workflow installs it beside the CUDA 13 SBSA module.
+      include-cuda-arm64-jetson: true
       extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
     secrets: inherit
