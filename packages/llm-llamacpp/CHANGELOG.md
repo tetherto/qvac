@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Backend selection filters candidate devices by what the load actually needs
+  before the cascade picks one, instead of rejecting the load after a backend
+  was already chosen. A TurboQuant/PolarQuant KV-cache type on an NVIDIA host
+  that also has Vulkan now runs on Vulkan; previously it failed the load.
+- The capability question is asked of ggml (`ggml_backend_dev_supports_op` on
+  the `SET_ROWS` a KV cache builds) rather than inferred from the device name,
+  so the answer corrects itself when a backend gains those kernels.
+- A GPU load still fails when no available GPU can run the requested cache type
+  — on a Metal-only or CUDA-only host, say — rather than silently dropping to
+  CPU, which would be far slower than the `device: 'gpu'` that was asked for.
+  The error names each device that was passed over and why.
+
 ## [0.49.1] - 2026-09-02
 
 ### Fixed

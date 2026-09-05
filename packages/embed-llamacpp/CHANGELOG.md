@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Backend selection is restructured around one candidate list with a per-device
+  exclusion reason, matching `@qvac/llm-llamacpp`. No behaviour change here —
+  this package has no rules that exclude a device today — but it gives the two
+  implementations the same shape, and gives a future KV-cache-type feature the
+  seam it needs.
+
 ## [0.37.0] - 2026-08-29
 
 ### Changed

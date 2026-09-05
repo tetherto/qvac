@@ -45,9 +45,24 @@ backend loading.
   falls through to Vulkan, then CPU. Nothing needs configuring for that.
 - `backend: "vulkan"` forces Vulkan on an NVIDIA machine. Setting `CUDA_VISIBLE_DEVICES=-1` in the
   environment has the same effect without touching the load config.
-- TurboQuant / PolarQuant KV-cache types (`tbq3_0`, `tbq4_0`, `pq3_0`, `pq4_0`) are **not**
-  supported on CUDA and are rejected during model configuration. Use a Vulkan GPU or CPU for those.
-  Standard quantized types (`q4_0`, `q8_0`, …) work normally.
+- TurboQuant / PolarQuant KV-cache types (`tbq3_0`, `tbq4_0`, `pq3_0`, `pq4_0`) have no CUDA
+  kernels. Rather than refusing the load, backend selection asks ggml whether each device can run
+  the requested type and passes over the ones that cannot, so on a machine that also has Vulkan
+  these types simply run on Vulkan. Standard quantized types (`q4_0`, `q8_0`, …) work normally on
+  CUDA and are unaffected. The load still fails, naming the devices it passed over, when *no*
+  available GPU can run the type — a CUDA-only machine, say — because quietly falling back to CPU
+  would be far slower than the `device: "gpu"` you asked for. Use `device: "cpu"` if that is what
+  you want.
+- The shipped CUDA module covers **compute capability 8.0 and above**: native code for 8.6 and
+  12.0a, and PTX for 8.0 that the driver JIT-compiles forward onto anything newer. **A card below
+  8.0 — Turing, Volta, Pascal and older — currently still enumerates, is selected over Vulkan, and
+  then fails at the first kernel launch instead of falling back.** Set `backend: "vulkan"` or
+  `CUDA_VISIBLE_DEVICES=-1` on those machines. From `qvac-fabric` v10297.2.0 such a card is refused
+  at registration and the load falls through to Vulkan, then CPU, with no configuration needed; see
+  [qvac#4171](https://github.com/tetherto/qvac/issues/4171).
+- The driver caches the PTX JIT result under `$HOME/.nv/ComputeCache`. If `$HOME` is absent or
+  read-only, as in many containers, that cache is disabled and the JIT cost is paid on every
+  process start rather than once. Set `CUDA_CACHE_PATH` to a writable directory to avoid that.
 - BitNet (TQ1_0 / TQ2_0) and some LoRA finetuning kernels are not yet available on CUDA. Use
   `backend: "vulkan"` for those workloads until the kernels land.
 

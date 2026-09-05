@@ -66,8 +66,108 @@ struct BackendInterface {
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
+  // QVAC-23763: whether @p device can run the op a KV cache of @p kvType needs,
+  // which is SET_ROWS writing kvType from F32 - exactly what llama_kv_cache
+  // builds, and exactly what a backend's supports_op table answers. Asking ggml
+  // the capability question beats matching the device name against "cuda",
+  // because the answer then corrects itself when a backend gains those kernels.
+  //
+  // Deliberately last so existing positional initialisers keep compiling. Null
+  // means "unknown" and fails OPEN - no exclusion, pre-QVAC-23763 behaviour - so
+  // an initialiser that omits it stays correct, just unfiltered.
+  bool (*deviceSupportsKvCacheType)(
+      ggml_backend_dev_t device, enum ggml_type kvType);
 };
 
+/// @brief Map a `cache-type-k`/`cache-type-v` value to its ggml_type.
+///
+/// Returns GGML_TYPE_COUNT when the string names no type. The caller drops that
+/// rather than erroring, because tuneLoadConfigMap still validates the value and
+/// is the right place for the message.
+enum ggml_type kvCacheTypeFromString(const std::string& name);
+
+/// @brief Why a candidate device was passed over.
+///
+/// QVAC-23763: selection used to express these by clearing whole buckets, which
+/// destroyed the reason along with the candidate. Keeping the reason is what
+/// lets the caller say *why* a higher-priority backend was not chosen.
+enum class ExclusionReason : std::uint8_t {
+  None = 0,
+  FinetuneAdrenoBelow800,
+  FinetuneAdreno800Plus,
+  BitnetAdrenoBelow800,
+  BitnetAdreno800Plus,
+  /// The device's backend cannot run the requested KV-cache type.
+  KvCacheTypeUnsupported,
+};
+
+/// @brief Whether landing on CPU because every GPU carries this reason is an
+/// acceptable outcome or an error.
+///
+/// PreferOther means the guard actively wants another backend, and CPU is a
+/// legitimate destination - this is every Adreno/BitNet/finetune rule, and
+/// falling to CPU is what they already do. Incapable means the device cannot run
+/// the load at all; if nothing else can either, that is worth failing over
+/// rather than silently running somewhere far slower than the caller asked for.
+enum class ExclusionKind : std::uint8_t { PreferOther, Incapable };
+
+/// Total by construction: a new ExclusionReason must be classified before this
+/// compiles.
+ExclusionKind kindOf(ExclusionReason reason);
+
+/// @brief What the load requires of a device beyond its being a GPU.
+///
+/// Default-constructed means no extra constraint, which is every pre-QVAC-23763
+/// caller.
+struct LoadConstraints {
+  /// KV-cache types the device must be able to write with SET_ROWS from F32.
+  /// Empty when the caller set no cache-type, or set one that is not quantized.
+  std::vector<enum ggml_type> kvCacheTypes;
+};
+
+enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
+
+/// @brief How the choice was reached, and what it beat.
+struct SelectionTrace {
+  std::string selectedName;
+  std::string selectedRegistry;
+  SelectionPath path = SelectionPath::Cpu;
+  /// The highest-priority candidate that was passed over, and why. Empty when
+  /// nothing was passed over.
+  std::string skippedName;
+  std::string skippedRegistry;
+  ExclusionReason skippedReason = ExclusionReason::None;
+};
+
+/// @brief Everything selection needs to know about the caller's intent.
+struct BackendRequest {
+  BackendType preferred = BackendType::CPU;
+  const ModelMetaData* metadata = nullptr;
+  std::optional<MainGpu> mainGpu;
+  bool isFinetuning = false;
+  std::vector<std::string> backendOverride;
+  LoadConstraints constraints;
+};
+
+/// @brief The chosen backend, plus how it was chosen.
+struct BackendChoice {
+  BackendType type = BackendType::CPU;
+  std::string name = "none";
+  std::optional<int> adrenoVersion;
+  bool isMaliGpu = false;
+  SelectionTrace trace;
+};
+
+BackendChoice chooseBackend(
+    const BackendRequest& request, const BackendInterface& bckI);
+
+/// @brief `chooseBackend()` against the real ggml backend registry.
+BackendChoice
+chooseBackend(const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
+
+/// @brief Adapter for the positional form. Retained so existing callers and
+/// tests are unaffected by the request/choice split; prefer the overload above
+/// for new code.
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata = nullptr,

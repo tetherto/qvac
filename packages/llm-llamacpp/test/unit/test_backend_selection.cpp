@@ -33,6 +33,9 @@ struct MockDevice {
   /// unique: Vulkan reports the raw device name, identical across identical
   /// cards.
   std::string deviceId;
+  /// KV-cache type names this device's backend cannot run, as
+  /// `deviceSupportsKvCacheType` would answer. Empty means it runs everything.
+  std::vector<std::string> unsupportedKvTypes;
 
   MockDevice(
       std::string&& desc, std::string&& backend,
@@ -48,6 +51,13 @@ static MockDevice withDeviceId(MockDevice device, std::string&& id) {
 
 static MockDevice withSplitBuffers(MockDevice device) {
   device.hasSplitBuffers = true;
+  return device;
+}
+
+/// The TurboQuant/PolarQuant types CUDA has no kernels for, as of the pinned
+/// qvac-fabric. Used to stand a device up as incapable of running them.
+static MockDevice withoutTurboQuant(MockDevice device) {
+  device.unsupportedKvTypes = {"tbq3_0", "tbq4_0", "pq3_0", "pq4_0"};
   return device;
 }
 
@@ -99,7 +109,16 @@ public:
         &MockBackendInterface::static_dev_type,
         &MockBackendInterface::static_reg_get_proc_address,
         &MockBackendInterface::static_dev_get_props,
-        &MockBackendInterface::static_llamaLogCallback};
+        &MockBackendInterface::static_llamaLogCallback,
+        &MockBackendInterface::static_supports_kv_cache_type};
+  }
+
+  /// A BackendInterface with the capability probe left null, which is how a
+  /// caller that predates it looks. The filter must then fail open.
+  BackendInterface toBackendInterfaceWithoutKvProbe() const {
+    BackendInterface bckI = toBackendInterface();
+    bckI.deviceSupportsKvCacheType = nullptr;
+    return bckI;
   }
 
 private:
@@ -213,6 +232,22 @@ private:
       currentInstance->string_storage.push_back(mock_dev->deviceId);
       props->device_id = currentInstance->string_storage.back().c_str();
     }
+  }
+
+  // Stands in for the SET_ROWS supports_op probe. A device lists the KV-cache
+  // type names its backend cannot run; everything else it can.
+  static bool
+  static_supports_kv_cache_type(ggml_backend_dev_t dev, enum ggml_type kvType) {
+    if (currentInstance == nullptr || dev == nullptr) {
+      return true;
+    }
+    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
+    const char* name = ggml_type_name(kvType);
+    if (name == nullptr) {
+      return true;
+    }
+    return std::ranges::find(mock_dev->unsupportedKvTypes, std::string(name)) ==
+           mock_dev->unsupportedKvTypes.end();
   }
 
   static void static_llamaLogCallback(
@@ -1378,6 +1413,221 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
       nullptr,
       {"vulkan", "opencl"});
   EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// The two guards above have a second arm each, and neither was pinned. Both
+// matter for QVAC-23763: the override block sits after the guards today, so the
+// invariant holds by block ordering alone. Anything that reorders them, or that
+// replaces bucket mutation with per-candidate filtering, has to keep all four
+// arms working.
+
+// BitNet TQ on Adreno <800 is CPU only (TQ kernels run faster there), so no
+// override may reach a GPU. The 800+ arm of this guard is pinned above.
+TEST_F(
+    BackendSelectionTest, OverrideCannotResurrectGpuClearedByBitNetGuardSub800) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  MockModelMetaData bitnetMeta(true, "bitnet");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &bitnetMeta,
+      std::nullopt,
+      nullptr,
+      false,
+      nullptr,
+      {"vulkan", "opencl"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// Finetuning on Adreno 800+ prefers Vulkan by clearing OpenCL, so an explicit
+// opencl override must land on Vulkan rather than resurrecting it. The <800 arm
+// of this guard is pinned above.
+TEST_F(
+    BackendSelectionTest,
+    OverrideCannotResurrectOpenClClearedByFinetuneGuard800Plus) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(false, "qwen3");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &meta,
+      std::nullopt,
+      nullptr,
+      true,
+      nullptr,
+      {"opencl"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+}
+
+// clearAllGpuBackends() grew a cudaBackends.clear() for QVAC-23763. Nothing
+// pinned it, so a CUDA device could be resurrected out of a cleared bucket by an
+// override. Contrived host - CUDA beside an Adreno - but the mechanism is the
+// point, and it is the arm a per-candidate filter is most likely to miss.
+TEST_F(BackendSelectionTest, OverrideCannotResurrectCudaClearedByFinetuneGuard) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  MockModelMetaData meta(false, "qwen3");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &meta,
+      std::nullopt,
+      nullptr,
+      true,
+      nullptr,
+      {"cuda"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// ---- the capability filter (QVAC-23763 R9/R10) ----
+
+static BackendChoice chooseWithKvTypes(
+    MockBackendInterface& mockBackend,
+    const std::vector<const char*>& kvTypeNames,
+    BackendType preferred = BackendType::GPU,
+    const std::vector<std::string>& backendOverride = {}) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = preferred;
+  request.backendOverride = backendOverride;
+  for (const char* n : kvTypeNames) {
+    request.constraints.kvCacheTypes.push_back(kvCacheTypeFromString(n));
+  }
+  return chooseBackend(request, bckI);
+}
+
+// The headline: a TurboQuant load on an NVIDIA host that also has Vulkan used
+// to be refused after CUDA was already chosen. It now steps down instead.
+TEST_F(BackendSelectionTest, CudaDemotedToVulkanForTurboQuant) {
+  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.type, BackendType::GPU);
+  EXPECT_EQ(choice.name, "vulkan0");
+  EXPECT_EQ(choice.trace.skippedName, "cuda0");
+  EXPECT_EQ(choice.trace.skippedReason, ExclusionReason::KvCacheTypeUnsupported);
+}
+
+TEST_F(BackendSelectionTest, CudaDemotedForPolarQuantToo) {
+  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"pq3_0"}).name, "vulkan0");
+}
+
+// A quantized type CUDA *can* run must not trigger the filter, or every
+// quantized-KV load on an NVIDIA host silently moves to Vulkan.
+TEST_F(BackendSelectionTest, CudaKeptForStandardQuantizedKvType) {
+  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"q8_0"}).name, "cuda0");
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"f16"}).name, "cuda0");
+}
+
+// Either side of the cache being unsupported is enough to pass the device over.
+TEST_F(BackendSelectionTest, KvConstraintChecksEveryRequestedType) {
+  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"q8_0", "tbq4_0"}).name, "vulkan0");
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0", "q8_0"}).name, "vulkan0");
+}
+
+// No GPU can run it and the caller asked for a GPU: failing is better than
+// quietly running an order of magnitude slower on CPU.
+TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantThrows) {
+  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  try {
+    chooseWithKvTypes(mockBackend, {"tbq4_0"});
+    FAIL() << "expected a StatusError";
+  } catch (const qvac_errors::StatusError& e) {
+    const std::string what = e.what();
+    EXPECT_NE(what.find("cuda0"), std::string::npos) << what;
+    EXPECT_NE(what.find("tbq4_0"), std::string::npos) << what;
+  }
+}
+
+// ...but a deliberate CPU load must not throw. No devices are enumerated, so
+// there is nothing to be incapable.
+TEST_F(BackendSelectionTest, CpuLoadWithTurboQuantDoesNotThrow) {
+  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  const BackendChoice choice =
+      chooseWithKvTypes(mockBackend, {"tbq4_0"}, BackendType::CPU);
+  EXPECT_EQ(choice.type, BackendType::CPU);
+}
+
+// The guards that merely prefer another backend must still reach CPU silently.
+// Conflating them with "incapable" would turn BitNet-on-Adreno<800 from a
+// working CPU run into a failed load on every shipped Adreno 740.
+TEST_F(BackendSelectionTest, PreferOtherGuardsStillFallToCpuWithoutThrowing) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  MockModelMetaData bitnetMeta(true, "bitnet");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.metadata = &bitnetMeta;
+  EXPECT_EQ(chooseBackend(request, bckI).type, BackendType::CPU);
+}
+
+// A null probe is how any BackendInterface built before this existed looks. It
+// must fail OPEN, or a forgotten initialiser silently disables the filter in
+// the other direction and refuses a device that works.
+TEST_F(BackendSelectionTest, NullKvCapabilityProbeFailsOpen) {
+  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  bckI.deviceSupportsKvCacheType = nullptr;
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.constraints.kvCacheTypes.push_back(kvCacheTypeFromString("tbq4_0"));
+  EXPECT_EQ(chooseBackend(request, bckI).name, "cuda0");
+}
+
+// The resurrect invariant, for the new reason: an override naming a device the
+// capability filter ruled out must not bring it back.
+TEST_F(BackendSelectionTest, OverrideCannotResurrectKvExcludedCuda) {
+  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  const BackendChoice choice =
+      chooseWithKvTypes(mockBackend, {"tbq4_0"}, BackendType::GPU, {"cuda"});
+  EXPECT_EQ(choice.name, "vulkan0");
+}
+
+// ---- kvCacheTypeFromString ----
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringResolvesTurboQuant) {
+  EXPECT_EQ(kvCacheTypeFromString("tbq3_0"), GGML_TYPE_TBQ3_0);
+  EXPECT_EQ(kvCacheTypeFromString("pq3_0"), GGML_TYPE_PQ3_0);
+  // The types the addon rejects on CUDA must all be recognised, or the filter
+  // silently sees no constraint and the guard never fires.
+  for (const char* name : {"tbq3_0", "tbq4_0", "pq3_0", "pq4_0"}) {
+    const enum ggml_type t = kvCacheTypeFromString(name);
+    EXPECT_NE(t, GGML_TYPE_COUNT) << name;
+    EXPECT_TRUE(ggml_is_tbq_or_pq(t)) << name;
+  }
+}
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringResolvesOrdinaryTypes) {
+  EXPECT_EQ(kvCacheTypeFromString("f16"), GGML_TYPE_F16);
+  EXPECT_EQ(kvCacheTypeFromString("q8_0"), GGML_TYPE_Q8_0);
+  // and these must not look like TBQ/PQ, or every quantized load gets filtered
+  EXPECT_FALSE(ggml_is_tbq_or_pq(kvCacheTypeFromString("q8_0")));
+  EXPECT_FALSE(ggml_is_tbq_or_pq(kvCacheTypeFromString("f16")));
+}
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringIsCaseInsensitive) {
+  EXPECT_EQ(kvCacheTypeFromString("TBQ4_0"), kvCacheTypeFromString("tbq4_0"));
+  EXPECT_NE(kvCacheTypeFromString("TBQ4_0"), GGML_TYPE_COUNT);
+}
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringRejectsNonsense) {
+  EXPECT_EQ(kvCacheTypeFromString(""), GGML_TYPE_COUNT);
+  EXPECT_EQ(kvCacheTypeFromString("not_a_type"), GGML_TYPE_COUNT);
+  // a prefix of a real name must not resolve
+  EXPECT_EQ(kvCacheTypeFromString("tbq"), GGML_TYPE_COUNT);
 }
 
 // ---- parseBackendOverride ----

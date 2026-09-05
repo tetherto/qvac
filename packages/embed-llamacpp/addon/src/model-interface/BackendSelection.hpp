@@ -59,8 +59,76 @@ struct BackendInterface {
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
+  // QVAC-23763: whether @p device can run the op a KV cache of @p kvType needs.
+  // Kept so this struct stays a copy of llm-llamacpp's, which is what makes the
+  // two BackendSelection.cpp files diffable.
+  //
+  // The production initialisers in this package deliberately leave it null.
+  // embed exposes no cache-type config, so nothing populates
+  // LoadConstraints::kvCacheTypes and the probe would never be consulted;
+  // wiring it would be dead code. Null means "unknown" and fails OPEN, so that
+  // is safe - but it also means **whoever adds cache-type support to embed must
+  // set this**, or the filter will silently do nothing.
+  //
+  // Deliberately last so existing initialisers keep compiling.
+  bool (*deviceSupportsKvCacheType)(
+      ggml_backend_dev_t device, enum ggml_type kvType);
 };
 
+/// @brief Why a candidate device was passed over.
+///
+/// QVAC-23763: llm-llamacpp expresses the Adreno/BitNet/finetune guards and the
+/// KV-cache capability filter through this. embed has none of those rules today,
+/// so only None is ever set - the enum exists to keep the two implementations
+/// the same shape.
+enum class ExclusionReason : std::uint8_t {
+  None = 0,
+  KvCacheTypeUnsupported,
+};
+
+enum class ExclusionKind : std::uint8_t { PreferOther, Incapable };
+
+/// Total by construction: a new ExclusionReason must be classified here.
+ExclusionKind kindOf(ExclusionReason reason);
+
+/// @brief What the load requires of a device beyond its being a GPU.
+struct LoadConstraints {
+  std::vector<enum ggml_type> kvCacheTypes;
+};
+
+enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
+
+/// @brief How the choice was reached, and what it beat.
+struct SelectionTrace {
+  std::string selectedName;
+  std::string selectedRegistry;
+  SelectionPath path = SelectionPath::Cpu;
+  std::string skippedName;
+  std::string skippedRegistry;
+  ExclusionReason skippedReason = ExclusionReason::None;
+};
+
+/// @brief Everything selection needs to know about the caller's intent.
+struct BackendRequest {
+  BackendType preferred = BackendType::CPU;
+  std::optional<MainGpu> mainGpu;
+  std::vector<std::string> backendOverride;
+  LoadConstraints constraints;
+};
+
+/// @brief The chosen backend, plus how it was chosen.
+struct BackendChoice {
+  BackendType type = BackendType::CPU;
+  std::string name = "none";
+  SelectionTrace trace;
+};
+
+BackendChoice chooseBackend(
+    const BackendRequest& request, const BackendInterface& bckI);
+
+/// @brief Adapter for the positional form. Retained so existing callers and
+/// tests are unaffected by the request/choice split; prefer the overload above
+/// for new code.
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const std::optional<MainGpu>& mainGpu = std::nullopt,

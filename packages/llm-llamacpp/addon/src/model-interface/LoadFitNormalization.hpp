@@ -76,13 +76,11 @@ struct SelectedBackend {
   bool isMaliGpu = false;
 };
 
-/// Args: preferred type, main-gpu override, model metadata, isFinetuning,
-/// and the parsed `backend` priority list (empty when the caller did not set
-/// one). QVAC-23763.
-using BackendResolver = std::function<SelectedBackend(
-    backend_selection::BackendType,
-    const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
-    bool, const std::vector<std::string>&)>;
+/// QVAC-23763: takes the whole request rather than a growing argument list. The
+/// KV-cache-type constraint was the sixth thing selection needed to know, and
+/// the positional form had already reached five.
+using BackendResolver =
+    std::function<SelectedBackend(const backend_selection::BackendRequest&)>;
 
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
