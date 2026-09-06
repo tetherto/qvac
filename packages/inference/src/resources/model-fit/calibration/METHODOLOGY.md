@@ -25,8 +25,12 @@ for the per-layer accounting.
 
 ## Procedure
 
-`scripts/calibrate-model-fit.ts` on the platform being calibrated (bare ≥ 1.30
-runs it directly via type-stripping):
+The procedure is `calibration/harness.ts`, exported as
+`@qvac/inference/model-fit-calibration`. On desktop,
+`scripts/calibrate-model-fit.ts` runs it on the platform being calibrated (bare
+≥ 1.30 runs the script directly via type-stripping) and writes the fixture. On
+a phone the same module runs inside the SDK e2e consumer's calibration plugin
+and the fixture comes back as the test output — see "Mobile" below.
 
 llama.cpp allocates **almost everything at load** — weights, KV cache, engine
 overhead and the context-scaled compute buffers — so a load's RSS delta is the
@@ -74,10 +78,15 @@ the completion stats) before it accepts a point. A `--igpu` pass on a host with
 no integrated ggml device would otherwise fall back to the CPU inside
 `chooseBackend` and file CPU numbers under a GPU backend key.
 
-1. For each of three models (small, medium, large) at two contexts (512 and
-   8192 tokens), **three times each**: settle, read RSS, load, settle, read RSS
-   again — the difference is **persistent**. Single-shot loads were observed to
-   vary by up to ~100 MiB run to run, so every repeat enters the fit.
+1. For each of three models (small, medium, large) at two contexts, **three
+   times each**: settle, read RSS, load, settle, read RSS again — the difference
+   is **persistent**. Single-shot loads were observed to vary by up to ~100 MiB
+   run to run, so every repeat enters the fit. The model set and contexts come
+   from a per-platform-family profile in the harness: desktop uses 600M/1B/4B at
+   512/8192 with 8B held out; mobile uses 600M/1B/1.7B at 512/4096 with 4B held
+   out, because every load must stay well under a phone's per-process ceiling —
+   iOS jetsam kills near it, and a killed harness measures nothing (needs a
+   device with at least 6 GB of RAM).
 2. Subtract the KV cache from each persistent delta — the cache the engine
    _actually allocated_, taken from the estimator's own `kvElementBytes` rather
    than assumed. On a Metal or Vulkan backend the default is `q8_0`, so a fixed
@@ -250,6 +259,59 @@ A discrete-GPU verdict is additionally bound by system memory, because that
 load is paid for in RAM as well — a 2382 MiB model raised RSS by 2918 MiB on
 win32 and 868 MiB on linux.
 
+## Mobile
+
+A phone has no shell to run the script from, and `@qvac/sdk` reaches the
+engine only through its worker, so the harness runs where the engine lives:
+the SDK e2e consumer bundles a `custom-calibration-plugin` whose single
+streaming handler calls `runModelFitCalibration` inside the worker and relays
+its log lines and result. The e2e test `calibration-model-fit` (suite
+`calibration`) drives it and returns the run — coefficients, held-out check,
+warnings and the `<platform>.ts` source — as its output, so the producer's
+`results-<runId>.json` carries the fixture off the device without parsing
+logcat. Every run except a calibration dispatch drops the test producer-side
+with `--exclude-suite calibration`; the definition itself always ships, because
+a consumer resolves incoming testIds against that list.
+
+Two hosts run that test: `npx qvac-test run:local:android|ios` against an idle
+physical device plugged in with a registry-reachable network, or the test-sdk
+dispatch with `calibration: android|ios`, which builds the consumer, uploads it
+to a Device Farm pool, runs only that test, and publishes the fixture as a
+`calibration-fixture-<platform>-<runId>` artifact. Device Farm gives each run
+a device to itself, so there is no equivalent of the desktop drain-stop hook to
+arrange; the busy-host warnings still apply and a warned fixture still does not
+ship.
+
+What RSS means there differs by OS. Android's counter is the same Linux RSS as
+desktop. On iOS `uv_resident_set_memory` reads `task_info` resident size, which
+counts touched file-backed pages; jetsam's budget is `phys_footprint`, which
+does not. RSS therefore reads at or above what jetsam charges for the same
+load, so a fixture measured on it stays an upper bound for the per-process
+budget `assessModelFit` compares against on iOS — conservative, not
+optimistic. Per-process measurement also means the app hosting the worker is
+part of the baseline; every delta subtracts a settled reading taken in the same
+process, so the host's own footprint cancels.
+
+A calibrated iOS fixture is necessary but not sufficient. iOS assesses on the
+`process-memory` basis, whose budget is `os_proc_available_memory()` plus the
+current footprint, and no native source supplies the first term today —
+`resolveBudget` returns `unknown` before calibration is ever consulted. So an
+iOS run here is worth doing (the coefficients are what they will be), but iOS
+keeps returning `unknown` until that native metric lands. Android has no such
+gap: it assesses on `system-memory`, and only the fixture is missing.
+
+Both mobile platforms are in `forcesCpu`, which is not what unified memory
+would suggest. The first two Android runs left the engine to choose its own
+device and it chose the GPU on every point — while `bare-gpu-info` reported no
+GPU at all, because it has no Android backend at the pinned `libgpuinfo`. Two
+things broke at once: RSS never saw the allocation (persistent deltas flat at
+~200–290 MiB for every model at every context, KV growth −3% of computed), and
+`hasGpu` read false, so the harness subtracted an `f16` cache while a GPU
+backend builds `q8_0`. Forcing the CPU makes the counter and the subtracted
+cache agree again, at the price of describing CPU-resident execution only —
+the same trade the discrete-GPU desktops make. A phone's GPU cannot be
+calibrated until the collector can name the device.
+
 ## Scope of a fixture
 
 Coefficients are keyed by **platform**, while several of the buffers they cover
@@ -283,9 +345,20 @@ one.
 | linux-x64 \| vulkan         | GPU-resident, RTX 4000 SFF Ada               | 5.25 / 5.71 GiB                         | 33796564146 |
 | win32-x64 \| vulkan         | GPU-resident, RTX 4000 SFF Ada (DXGI budget) | 5.25 / 5.70 GiB                         | 33796554816 |
 | win32-x64 \| vulkan, shared | Integrated, Intel UHD Graphics 770           | 9.72 / 10.53 GiB                        | 33796554816 |
+| android-arm64               | CPU-forced, Pixel 10 Pro XL (Device Farm)    | 3.33 / 3.57 GiB (Qwen3-4B)              | 34044819621 |
+| ios-arm64                   | not run                                      | —                                       | —           |
 
-Every row is `validated: true`: its held-out model landed inside the bound, and
-no run shipped from a log carrying a busy-host warning.
+Every measured row is `validated: true`: its held-out model landed inside the
+bound, and no run shipped from a log carrying a busy-host warning.
+
+`android-arm64` took three runs to measure. The first two aborted on the KV
+tripwire; the second recorded `backendDevice` and named the cause — the engine
+executed on the GPU on every point, including the warm-up, while the collector
+reported no GPU at all. See "Mobile" for what that broke. Once CPU-forced, the
+same device read KV growth at 99/129/102% of computed and the held-out model
+landed inside the bound. Its `weightUpperCoeff` of 1.219 is the highest of any
+platform, which is what `load_mode: 'none'` costs on a phone: the anonymous
+copy is counted alongside pages the mapping already made resident.
 
 One caveat on the table: `linux-x64 | vulkan` carries `workingPeakBytes: 0`
 from a run that took no device sample, not from a measurement. `win32-x64 |

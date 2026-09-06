@@ -42,6 +42,7 @@ import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
 import { snapStorageTests } from './snap-storage-tests.js'
 import { systemResourcesTests } from './system-resources-tests.js'
+import { calibrationTests } from './calibration-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -372,6 +373,11 @@ export const tests = [
 
   // Local hardware capabilities and on-demand usage sampling
   ...systemResourcesTests,
+  // Model-fit calibration harness. Always defined — this list is what the
+  // consumer resolves incoming testIds against, so a definition missing there
+  // fails the test on the device. Ordinary runs drop it producer-side with
+  // `--exclude-suite calibration` (see the `calibration` suite it declares).
+  ...calibrationTests,
 
   // Additional model tests
   modelSwitchLlm,

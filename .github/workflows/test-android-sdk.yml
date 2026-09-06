@@ -31,6 +31,11 @@ on:
         description: "Exclude suites (comma-separated)"
         required: false
         type: string
+      calibration:
+        description: "Model-fit calibration run: the producer loads the opt-in calibration test and the run's fixture is published as an artifact. Pair with filter=calibration."
+        required: false
+        type: boolean
+        default: false
       device-farm-timeout:
         description: "Maximum time in minutes to keep Device Farm session alive."
         required: false
@@ -729,7 +734,9 @@ jobs:
     needs: [build, wait-device-farm-running]
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 120
+    # A calibration run is one ~45 min test plus device boot and downloads;
+    # matches the Device Farm ceiling the dispatcher raises the job to.
+    timeout-minutes: ${{ inputs.calibration && 150 || 120 }}
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -751,6 +758,7 @@ jobs:
             .github/actions/sdk-e2e-fail-on-failures
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
+            .github/scripts
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -893,6 +901,24 @@ jobs:
         with:
           name: results-android
           path: ${{ inputs.working-directory }}/reports/
+          retention-days: 30
+
+      # The calibration test returns the run as its output, so the fixture is
+      # lifted from the results report rather than parsed out of logcat. Fails
+      # the job on a missing run or a failed held-out check; the artifact still
+      # uploads so a failed gate can be audited.
+      - name: Extract calibration fixture
+        if: ${{ inputs.calibration && always() }}
+        working-directory: ${{ inputs.working-directory }}
+        run: node "$GITHUB_WORKSPACE/.github/scripts/extract-calibration-fixture.mjs" ./reports ./calibration-fixture
+
+      - name: Upload calibration fixture
+        if: ${{ inputs.calibration && always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: calibration-fixture-android-${{ needs.build.outputs.runId }}
+          path: ${{ inputs.working-directory }}/calibration-fixture/
+          if-no-files-found: error
           retention-days: 30
 
       - name: Download baseline (best-effort)

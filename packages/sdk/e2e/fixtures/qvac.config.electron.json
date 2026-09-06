@@ -9,7 +9,8 @@
     "@qvac/sdk/tts-ggml/plugin",
     "@qvac/sdk/ggml-ocr/plugin",
     "@qvac/sdk/ggml-classification/plugin",
-    "custom-echo-plugin/plugin"
+    "custom-echo-plugin/plugin",
+    "custom-calibration-plugin/plugin"
   ],
   "loggerLevel": "debug",
   "loggerConsoleOutput": true
