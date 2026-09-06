@@ -718,6 +718,73 @@ npm run test:benchmark:rtf:matrix
 workflow. Aggregated historical results:
 [`benchmarks/results/results_summary.md`](benchmarks/results/results_summary.md).
 
+### Core ML (Apple Neural Engine) RTF lanes
+
+On darwin the parakeet TDT matrix also has `coreml` lanes, which run the
+FastConformer **encoder** on the Neural Engine via an exported
+`<stem>-encoder.mlmodelc` sidecar while the TDT decoder stays on Metal. Add
+`"coreml": true` to a parakeet matrix entry:
+
+```json
+{ "engine": "parakeet", "modelType": "tdt", "quant": "f16", "useGPU": true, "coreml": true }
+```
+
+Three things are worth knowing before touching these lanes:
+
+- **The sidecar is presence-driven.** parakeet.cpp derives the sidecar path
+  from the GGUF path and strips a trailing quant tag, so one
+  `parakeet-tdt-0.6b-v3-encoder.mlmodelc` serves the f16/q8_0/q4_0 GGUFs. It
+  therefore cannot live in `models/` — every CPU and Metal lane would silently
+  start measuring the ANE. Core ML entries run against an isolated
+  `models/coreml/` copy instead, staged by the matrix runner.
+- **The export is traced at one mel length.** The sidecar accelerates only
+  utterances whose mel length matches the traced length; anything else falls
+  back to ggml. It is therefore bound to the benchmark's own sample —
+  `examples/samples/sample.raw` (20.13 s ⇒ `1 + 322137/160` = **2014** mel
+  frames). Changing that sample invalidates the sidecar. A variable-length
+  (`--flexible`) export exists but places **zero** ops on the ANE, so it is for
+  numerical checks only, never for benchmarking.
+- **A lane can never publish a mislabelled number.** `activeBackend` is derived
+  from the observed per-run `encoderOnCoreml` stat, and the benchmark refuses to
+  *write* an artifact when a Core ML lane did not actually reach the ANE (or
+  when a non-Core ML lane did). The check runs before the artifact is written,
+  because the artifact is written before the test's own assertions run.
+
+Sidecars are pinned in
+[`test/integration/parakeet-coreml.manifest.json`](test/integration/parakeet-coreml.manifest.json)
+and staged by `scripts/stage-integration-models.mjs`. **Until a bundle is
+published there the Core ML lanes skip themselves loudly** and the rest of the
+matrix is unaffected.
+
+To produce a sidecar, use `export-encoder-coreml.py` from the `speech-cpp`
+source tree at the ref pinned in `vcpkg.json`, seeded with an **f16 or f32**
+GGUF (the reference encoder cannot read quantised tensors):
+
+```bash
+python scripts/export-encoder-coreml.py \
+  --gguf models/parakeet-tdt-0.6b-v3.f16.gguf \
+  --n-mel-frames 2014 \
+  --out parakeet-tdt-0.6b-v3-encoder.mlpackage \
+  --compile-dir models/coreml
+```
+
+It prints the op placement; a good export is overwhelmingly `NeuralEngine`
+(the reference export is `NeuralEngine=1334, GPU=14, CPU=1`).
+
+Measured on an Apple M1 Pro (macOS 15.1.1, addon 0.4.2, `sample.raw`, 5 runs
+per lane) — full artifacts in
+[`benchmarks/manual-results/parakeet/`](benchmarks/manual-results/parakeet):
+
+| Quant | CPU | Metal | Core ML | ANE vs Metal |
+|-------|-----|-------|---------|--------------|
+| f16   | 0.09614 | 0.00751 | **0.00625** | 1.20x |
+| q8_0  | 0.04246 | 0.00847 | **0.00706** | 1.20x |
+| q4_0  | 0.04269 | 0.00718 | **0.00566** | 1.27x |
+
+Mean RTF, lower is better. The ANE encoder costs peak RSS (~+120-180 MB over
+the Metal lane) and additional load time to initialise the sidecar, so it pays
+off across many utterances in one process rather than for a single short one.
+
 ## Examples
 
 Whisper:
