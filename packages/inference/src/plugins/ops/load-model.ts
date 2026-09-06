@@ -21,6 +21,7 @@ import {
   ModelFileLocateFailedError
 } from '@/errors/index'
 import { getPlugin } from '@/plugins/index'
+import { runAdvisoryFitCheck } from '@/model-fit/advisory-fit'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { getEngineLogger } from '@/logging/index'
@@ -92,6 +93,20 @@ export async function loadModel(
       throw new ModelFileLocateFailedError(modelType, modelPath, error)
     }
   }
+
+  // Advisory: every outcome — including a projected insufficiency — continues
+  // to the ordinary load below. Runs after config resolution and path
+  // validation so it sees the same state the real load uses, and before
+  // `createModel()` so it never competes with the native load for device
+  // memory.
+  await runAdvisoryFitCheck({
+    modelId,
+    modelType: modelType as CanonicalModelType,
+    modelPath,
+    modelConfig,
+    artifacts,
+    isShardedModel
+  })
 
   logger.info(`${modelType}: Loading model ${modelId}...`)
   startLogBuffering(modelId)
