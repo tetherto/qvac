@@ -585,7 +585,51 @@ test('coverage reports GPU backends per engine as well as overall', () => {
   // The parakeet row is CPU-only, so parakeet still has zero GPU coverage even
   // though the overall table shows vulkan.
   assert.deepEqual(coverage.byEngine.parakeet.gpuBackendsCovered, [])
-  assert.deepEqual(coverage.byEngine.parakeet.missingBackends, ['vulkan', 'metal', 'opencl'])
+  // Core ML is expected coverage for parakeet (encoder sidecar) but not for
+  // whisper, whose port builds without WHISPER_COREML -- so it must not show up
+  // as a whisper gap, nor in the overall cascade.
+  assert.deepEqual(coverage.byEngine.parakeet.missingBackends, ['vulkan', 'metal', 'opencl', 'coreml'])
+  assert.deepEqual(coverage.byEngine.whisper.missingBackends, ['metal', 'opencl'])
+  assert.deepEqual(coverage.missingBackends, ['metal', 'opencl'])
+})
+
+test('a parakeet coreml row keeps its label and counts toward parakeet GPU coverage', () => {
+  const report = parakeetDesktopReport(true)
+  report.platform = 'darwin-arm64'
+  report.platformName = 'darwin'
+  report.labels.backend = 'coreml'
+  report.summary.activeBackend = 'coreml'
+  report.summary.encoderOnCoreml = 1
+
+  const record = normalizeDesktopRecord(
+    report,
+    'rtf-benchmark-darwin-arm64-tdt-q8_0-gpu-coreml.json'
+  )
+
+  assert.equal(record.backend, 'coreml')
+  assert.equal(record.gpu, 'gpu')
+
+  const coverage = buildCoverage([record])
+  assert.deepEqual(coverage.byEngine.parakeet.gpuBackendsCovered, ['coreml'])
+  assert.ok(!coverage.byEngine.parakeet.missingBackends.includes('coreml'))
+})
+
+test('coreml and metal rows for the same model never dedupe together', () => {
+  const metal = parakeetDesktopReport(true)
+  metal.platform = 'darwin-arm64'
+  metal.platformName = 'darwin'
+  metal.labels.backend = 'metal'
+
+  const coreml = JSON.parse(JSON.stringify(metal))
+  coreml.labels.backend = 'coreml'
+
+  const deduped = dedupeRecords([
+    normalizeDesktopRecord(metal, 'rtf-benchmark-darwin-arm64-tdt-q8_0-gpu.json'),
+    normalizeDesktopRecord(coreml, 'rtf-benchmark-darwin-arm64-tdt-q8_0-gpu-coreml.json')
+  ])
+
+  assert.equal(deduped.length, 2)
+  assert.deepEqual(deduped.map(record => record.backend).sort(), ['coreml', 'metal'])
 })
 
 test('markdown table carries the Engine column, memory columns and per-engine coverage', () => {
