@@ -129,15 +129,38 @@ are phase 2.
 
 **Calibration status.** A platform only reports estimates once its coefficients
 have been measured on real hardware and a held-out model has validated inside
-the bounds. `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64` and
-`win32-x64` have all cleared that, and `linux-x64` and `win32-x64` have cleared
-it for their GPUs as well, so LLM workloads return real verdicts there.
-`win32-arm64` cannot: no engine addon is built for it. Audio workloads still
-return `unknown` on every platform — their coefficients await the harness's
-whisper pass, and the estimator refuses the unmeasured placeholders rather than
-consuming them. See `@qvac/inference`'s
-`src/resources/model-fit/calibration/METHODOLOGY.md` for the per-platform
-numbers and for the GPU shapes that are still uncovered.
+the bounds. Where a GPU would run the model, the fixture has to be one measured
+on that placement too — the CPU numbers do not describe a GPU load. The table
+below is what that gives today for LLM workloads (`llamacpp-completion`,
+`llamacpp-embedding`). "Verdicts" means `likely-fits` / `likely-too-large` are
+possible; everything else is `unknown`, and the result's `reasons` say which
+row you landed in.
+
+| Platform        | No usable GPU reported                                                         | Integrated GPU                                      | Discrete GPU                                                          |
+| --------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- | --------------------------------------------------------------------- |
+| `darwin-arm64`  | verdicts                                                                       | verdicts (unified memory, one fixture)              | —                                                                     |
+| `darwin-x64`    | verdicts                                                                       | `unknown` — no GPU fixture                          | `unknown` — no GPU fixture                                            |
+| `linux-x64`     | verdicts                                                                       | `unknown` — no fixture; an AMD APU cannot be placed | verdicts on Vulkan (`device-memory`); AMD cards `unknown` — see below |
+| `linux-arm64`   | verdicts                                                                       | `unknown` — no fixture                              | `unknown` — no fixture                                                |
+| `win32-x64`     | verdicts                                                                       | verdicts on Vulkan (Intel UHD measured)             | verdicts on Vulkan (`device-budget`)                                  |
+| `win32-arm64`   | `unknown` — no engine addon is built for it                                    |                                                     |                                                                       |
+| `android-arm64` | `unknown` — no fixture yet; budget and reserve are in place                    |                                                     |                                                                       |
+| `ios-arm64`     | `unknown` — the per-process memory metric is not available yet, and no fixture |                                                     |                                                                       |
+
+Two rows deserve a plain-language reading. Every real Intel Mac reports a GPU,
+so `darwin-x64` returns verdicts only on hosts where the collector sees none
+(virtual machines, whose paravirtual adapter is discounted). And a discrete GPU
+only gets verdicts through the Vulkan backend, because that is the only GPU
+backend `@qvac/llm-llamacpp` ships; a card reachable through another API alone
+is `unknown`.
+
+Audio workloads (`whispercpp-transcription`) return `unknown` on every platform:
+their coefficients await the harness's whisper pass, and the estimator refuses
+the unmeasured placeholders rather than consuming them. Every other engine
+returns `unknown` because it has no estimator yet.
+
+The per-platform numbers, the held-out results and the gaps still open are in
+`@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
 
 **Desktops with a GPU.** On linux, Windows and Intel macOS the platform's own
 coefficients describe CPU-resident execution, so when a GPU is present the
@@ -175,6 +198,57 @@ scope, or cards that disagree on the backend or on the scope of their readings.
 
 Apple silicon is unaffected: its memory is unified, so a GPU allocation is
 system RAM and the system basis already covers it.
+
+**AMD GPUs on linux** are `unknown` whether integrated or discrete. The
+collector infers dedicated-versus-integrated from the driver's reported VRAM,
+and an APU exposes its carve-out the same way a small discrete card exposes its
+memory, so the two cannot be told apart from JS. Placing the model wrongly would
+budget against the wrong memory with the wrong coefficients, so the assessment
+declines instead.
+
+### Mobile
+
+Both mobile platforms are unified memory, so no GPU placement is involved; the
+budget is the whole story.
+
+- **`android-arm64`** uses the `system-memory` basis by explicit decision (its
+  low-memory killer acts system-wide), and applies the mobile reserve. What is
+  missing is the calibration fixture: the harness has not yet run on a device.
+  Until it has, every Android assessment is `unknown` with the reason
+  `no validated calibration for android-arm64`.
+- **`ios-arm64`** uses the `process-memory` basis, because jetsam terminates an
+  app on its own footprint against a limit well below device RAM. That budget
+  needs `sample.memory.processAvailableBytes`, which no build supplies yet, so
+  iOS returns `unknown` before any calibration is consulted. A fixture alone
+  will not change that; the per-process metric has to exist first.
+
+## Why a result is `unknown`
+
+Every `unknown` names its cause in `reasons` — on the model when it is about
+that model, on the result when it is about the machine. The strings below are
+the ones the current release emits, grouped by what you can do about them.
+
+| Reason (abridged)                                                                             | Cause                                                                            | What helps                                                                        |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `no validated calibration for <platform>`                                                     | The platform has no measured fixture (Android, `win32-arm64`).                   | Nothing on the caller's side; a fixture has to land.                              |
+| `no validated calibration for <platform> on <backend>`                                        | A discrete GPU would run the model and no fixture describes that placement.      | Same. Today only `linux-x64` and `win32-x64` on Vulkan are covered.               |
+| `no validated calibration for <platform> on an integrated <backend> GPU`                      | An integrated GPU would run the model and no fixture describes it.               | Same. Today only `win32-x64` on Vulkan is covered.                                |
+| `a GPU is reported but its readings cannot say where the model would execute`                 | The GPU cannot be placed (an AMD GPU on linux; readings with no usable scope).   | None yet; needs the engine's own device type exposed to JS.                       |
+| `the runtime platform is not one this assessment covers`                                      | Running somewhere outside the eight platforms the SDK knows.                     | None.                                                                             |
+| `iOS budgets are per-process … the per-process allowance metric is not available`             | `processAvailableBytes` is `unavailable` on this build.                          | Needs a native source for `os_proc_available_memory()`.                           |
+| `system-memory metrics are not supported on this platform` / `no memory sample was available` | The collector could not produce `sample.memory.{total,used}Bytes`.               | Check `getSystemResources({ sample: true })` on the host; see the support matrix. |
+| `no resource profile in the catalog for this checksum`                                        | The model is not a generated catalog constant (a local file, a custom source).   | Only catalog constants can be assessed before download.                           |
+| `no GGUF metadata for this model in the catalog, so the KV cache cannot be sized`             | The registry could not extract the header for this entry (some GGUF v3 files).   | None on the caller's side; the catalog entry has no transformer facts.            |
+| `engine '<engine>' has no estimator in this phase`                                            | Parakeet, translation, TTS, OCR, diffusion, the `mmproj-*` projector, and so on. | Phase 2.                                                                          |
+| `the audio window coefficient for this platform has not been measured`                        | Any `audio` workload, on any platform.                                           | Awaits the whisper calibration pass.                                              |
+| `workload kind '<kind>' is not supported by <estimator>`                                      | An `llm` workload on a whisper model, or an `audio` workload on an LLM.          | Match the workload kind to the model's engine.                                    |
+| `an entry in artifacts has no resource profile in the catalog`                                | A companion constant in `artifacts` is not in the generated catalog.             | Pass catalog constants only.                                                      |
+
+Two more `unknown`s carry no dedicated reason because they are the verdict rule
+working as designed: the estimate's bounds straddle the budget (lower bound
+under it, upper bound over it), and, with several discrete GPUs, a fit that
+holds on the largest card but not the smallest. In both cases the `estimate`
+and `budget` fields are present, so the caller can see how close it was.
 
 ## Relationship to `@qvac/model-fit`
 
