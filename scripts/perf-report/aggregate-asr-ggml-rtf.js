@@ -24,6 +24,18 @@ const path = require('path')
 // S25). CUDA is not supported on any platform.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
+// Core ML (Apple Neural Engine) is not a ggml backend and not a peer of the
+// cascade above: it accelerates only the parakeet FastConformer *encoder*, via
+// an exported `<stem>-encoder.mlmodelc` sidecar, while the decoder stays on the
+// ggml backend. So it is expected coverage for parakeet alone -- listing it
+// globally would mark it permanently missing for whisper, whose port is built
+// without WHISPER_COREML.
+const ENGINE_EXTRA_GPU_BACKENDS = { parakeet: ['coreml'] }
+
+function expectedGpuBackends (engine) {
+  return SUPPORTED_GPU_BACKENDS.concat(ENGINE_EXTRA_GPU_BACKENDS[engine] || [])
+}
+
 // ggml active-backend ids reported by the addon (post-merge this is the unified
 // BackendId enum — one map serves both engines), mapped to the backend label.
 // Used to recover the REAL backend a mobile device selected at runtime rather
@@ -603,17 +615,20 @@ function sortRecords (records) {
   return records.sort((left, right) => sortKey(left).localeCompare(sortKey(right)))
 }
 
-function coverageFor (records) {
+function coverageFor (records, engine = null) {
   const gpuCoverage = new Set(
     records
       .filter(record => record.gpu === 'gpu')
       .map(record => record.backend)
       .filter(Boolean)
   )
+  // Overall coverage stays the shared ggml cascade; a per-engine call also
+  // expects that engine's accelerator backends (Core ML for parakeet).
+  const expected = engine ? expectedGpuBackends(engine) : SUPPORTED_GPU_BACKENDS
   return {
     rowCount: records.length,
     gpuBackendsCovered: Array.from(gpuCoverage).sort(),
-    missingBackends: SUPPORTED_GPU_BACKENDS.filter(backend => !gpuCoverage.has(backend))
+    missingBackends: expected.filter(backend => !gpuCoverage.has(backend))
   }
 }
 
@@ -627,7 +642,10 @@ function buildCoverage (records) {
   // engine as well as overall.
   const byEngine = {}
   for (const engine of ENGINES) {
-    byEngine[engine] = coverageFor(records.filter(record => record.engine === engine))
+    byEngine[engine] = coverageFor(
+      records.filter(record => record.engine === engine),
+      engine
+    )
   }
 
   return Object.assign(coverageFor(records), {

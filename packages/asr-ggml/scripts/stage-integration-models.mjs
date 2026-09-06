@@ -28,7 +28,15 @@
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -42,10 +50,32 @@ const MANIFEST_PATH = resolve(
 )
 const DEFAULT_OUT_DIR = resolve(__dirname, '..', 'models')
 
+// Core ML encoder sidecars are pinned in their own manifest rather than as a
+// new key in parakeet-models.manifest.json: that manifest's guard test asserts
+// an exact top-level key set, and both files are hashed into the model cache
+// key by the same `*.manifest.json` glob, so a separate file costs nothing.
+//
+// Sidecars are optional. An absent manifest, or an empty `sidecars` object,
+// leaves models/coreml/ unpopulated and the Core ML benchmark lanes skip
+// themselves -- no other lane is affected.
+const COREML_MANIFEST_PATH = resolve(
+  __dirname,
+  '..',
+  'test',
+  'integration',
+  'parakeet-coreml.manifest.json'
+)
+const COREML_SUBDIR = 'coreml'
+
 function parseArgs(argv) {
-  const args = { output: DEFAULT_OUT_DIR }
+  const args = { output: DEFAULT_OUT_DIR, coremlOnly: false }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--output' || argv[i] === '-o') args.output = resolve(argv[++i])
+    // Sidecars are darwin-only content inside a model cache whose key carries
+    // no OS, so the GGUF staging step's cache-hit gate cannot be trusted to
+    // have populated them. This flag lets CI stage them in their own
+    // always-run step without re-verifying multi-GB GGUFs.
+    else if (argv[i] === '--coreml-only') args.coremlOnly = true
     else throw new Error(`Unknown argument: ${argv[i]}`)
   }
   return args
@@ -83,11 +113,87 @@ function s3Cp(bucket, s3Path, dest) {
   if (res.status !== 0) throw new Error(`aws s3 cp exited ${res.status} for ${uri}`)
 }
 
+// Stage the zipped .mlmodelc bundles into <output>/coreml/ and unzip them.
+// Deliberately non-fatal on absence and darwin-only: a Core ML sidecar is
+// useless anywhere else, and no non-Apple lane should pay to download it.
+async function stageCoremlSidecars(bucket, outputDir) {
+  if (!existsSync(COREML_MANIFEST_PATH)) return
+  if (process.platform !== 'darwin') {
+    console.log('Core ML sidecars: not darwin — skip')
+    return
+  }
+
+  const manifest = JSON.parse(readFileSync(COREML_MANIFEST_PATH, 'utf8'))
+  const entries = Object.entries(manifest.sidecars || {})
+  if (!entries.length) {
+    console.log('Core ML sidecars: none pinned yet — Core ML benchmark lanes will skip')
+    return
+  }
+
+  const coremlDir = join(outputDir, COREML_SUBDIR)
+  mkdirSync(coremlDir, { recursive: true })
+  console.log(`Staging ${entries.length} Core ML sidecar(s) into ${coremlDir}`)
+
+  for (const [name, entry] of entries) {
+    if (!entry.s3Path) throw new Error(`${name}: missing s3Path in Core ML manifest`)
+    // `<stem>-encoder.mlmodelc.zip` unpacks to `<stem>-encoder.mlmodelc`, the
+    // exact name parakeet.cpp derives from the GGUF path beside it.
+    const bundleName = name.replace(/\.zip$/, '')
+    const bundleDir = join(coremlDir, bundleName)
+    const zipPath = join(coremlDir, name)
+
+    // The extracted bundle is a directory, so it carries no hash of its own.
+    // Stamp the pinned sha256 beside it: re-pinning a sidecar then restages it
+    // instead of being masked by the stale bundle still sitting in the cache.
+    const stampPath = join(coremlDir, `.${bundleName}.sha256`)
+    if (existsSync(bundleDir)) {
+      const stamped = existsSync(stampPath) ? readFileSync(stampPath, 'utf8').trim() : ''
+      if (stamped === entry.sha256) {
+        console.log(`  OK ${bundleName}: present + pinned sha matches — skip`)
+        continue
+      }
+      console.log(`  ! ${bundleName}: staged for a different pin — re-staging`)
+      rmSync(bundleDir, { recursive: true, force: true })
+      rmSync(stampPath, { force: true })
+    }
+
+    s3Cp(bucket, entry.s3Path, zipPath)
+
+    const res = await verify(zipPath, entry)
+    if (!res.ok) {
+      rmSync(zipPath, { force: true })
+      throw new Error(`${name}: staged sidecar failed integrity: ${res.reason}`)
+    }
+
+    const unzip = spawnSync('unzip', ['-q', '-o', zipPath, '-d', coremlDir], { stdio: 'inherit' })
+    rmSync(zipPath, { force: true })
+    if (unzip.error || unzip.status !== 0) {
+      // Never leave a half-extracted bundle behind: without the stamp it would
+      // be re-staged anyway, but a partial .mlmodelc that the engine tries to
+      // load is worse than none at all.
+      rmSync(bundleDir, { recursive: true, force: true })
+      throw unzip.error || new Error(`unzip exited ${unzip.status} for ${name}`)
+    }
+
+    if (!existsSync(bundleDir)) {
+      throw new Error(`${name}: expected ${bundleName} after unzip`)
+    }
+    // Stamp last, so it can only ever describe a fully extracted bundle.
+    writeFileSync(stampPath, `${entry.sha256}\n`)
+    console.log(`  OK ${bundleName}: ready`)
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
 
   const bucket = process.env.MODEL_S3_BUCKET
   if (!bucket) throw new Error('MODEL_S3_BUCKET is not set')
+
+  if (args.coremlOnly) {
+    await stageCoremlSidecars(bucket, args.output)
+    return
+  }
 
   if (!existsSync(MANIFEST_PATH)) throw new Error(`missing manifest at ${MANIFEST_PATH}`)
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
@@ -142,6 +248,8 @@ async function main() {
     console.log(`  OK ${name}: ready (${(size / 1024 / 1024).toFixed(1)}MB)`)
     staged++
   }
+
+  await stageCoremlSidecars(bucket, args.output)
 
   console.log(`Done: ${staged} staged, ${skipped} already present`)
 }

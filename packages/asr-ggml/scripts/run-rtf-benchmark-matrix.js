@@ -9,7 +9,15 @@
 //   whisper:  { engine, modelFile, useGPU, backendHint?, threads?, numRuns?,
 //               numWarmup?, gpuDevice?, rtfUpperBound?, label? }
 //   parakeet: { engine, modelType, quant?, useGPU, backendHint?, maxThreads?,
-//               numRuns?, numWarmup?, rtfUpperBound?, label? }
+//               numRuns?, numWarmup?, rtfUpperBound?, label?, coreml? }
+//
+// `coreml: true` (parakeet, darwin only) benchmarks the Apple Neural Engine
+// encoder sidecar. The sidecar is presence-driven -- parakeet.cpp derives
+// `<gguf-stem-without-quant>-encoder.mlmodelc` from the GGUF path and picks it
+// up automatically -- so it cannot live in `models/` next to the GGUFs the
+// cpu/metal lanes resolve, or those lanes would silently start measuring the
+// ANE. Coreml entries instead run against an isolated `models/coreml/` copy
+// (see prepareCoremlEntry) and pin resolution there via QVAC_TEST_GGUF_<TYPE>.
 //
 // Legacy single-engine invocations still work: when the unified env var is
 // absent, QVAC_WHISPER_BENCHMARK_MATRIX_JSON / QVAC_PARAKEET_BENCHMARK_MATRIX_JSON
@@ -27,6 +35,13 @@ const { spawnSync } = require('child_process')
 const { isDeepStrictEqual } = require('util')
 
 const RESULTS_DIR = path.resolve(__dirname, '..', 'benchmarks', 'results')
+const MODELS_DIR = path.resolve(__dirname, '..', 'models')
+
+// Core ML sidecars are exported per encoder checkpoint, not per quantisation:
+// parakeet.cpp strips a trailing quant tag when deriving the sidecar path, so
+// one `<stem>-encoder.mlmodelc` serves the f16/q8_0/q4_0 GGUFs of that stem.
+// Only model types listed here have a published, validated sidecar.
+const COREML_GGUF_STEMS = { tdt: 'parakeet-tdt-0.6b-v3' }
 
 const ENGINES = {
   whisper: {
@@ -84,9 +99,13 @@ function hasMatchingUnifiedEntry(entries, tdtEntry) {
 function addUnifiedCoverage(entries) {
   const expanded = [...entries]
   for (const entry of entries) {
+    // Never clone a coreml lane into a `unified` one: `unified` is a different
+    // checkpoint family (parakeet-unified-en-0.6b) with no encoder sidecar, so
+    // the clone would resolve no sidecar and hard-fail the entry.
     if (
       entry.engine === 'parakeet' &&
       entry.modelType === 'tdt' &&
+      !normalizeBoolean(entry.coreml) &&
       !hasMatchingUnifiedEntry(expanded, entry)
     ) {
       expanded.push(buildUnifiedEntry(entry))
@@ -148,7 +167,10 @@ function buildLabel(engine, entry, index) {
   const gpuTag = normalizeBoolean(entry.useGPU) ? 'gpu' : 'cpu'
   if (engine === 'parakeet') {
     const quantPart = entry.quant ? `-${entry.quant}` : ''
-    return `${index + 1}-${entry.modelType || 'tdt'}${quantPart}-${gpuTag}`
+    // The label lands in the artifact filename, so a coreml lane must not
+    // collide with the metal lane of the same model/quant on the same runner.
+    const coremlPart = normalizeBoolean(entry.coreml) ? '-coreml' : ''
+    return `${index + 1}-${entry.modelType || 'tdt'}${quantPart}-${gpuTag}${coremlPart}`
   }
   const model = String(entry.modelFile || 'ggml-tiny.bin').replace(/\.bin$/, '')
   return `${index + 1}-${model}-${gpuTag}`
@@ -188,6 +210,79 @@ function buildWhisperEnv(entry, label) {
   return env
 }
 
+// A matrix entry that cannot run here but must not redden the lane (no Core ML
+// on this platform, or the sidecar was never staged). Distinct from a plain
+// Error, which still fails the entry.
+class SkipEntryError extends Error {}
+
+// Link the staged GGUF next to its Core ML sidecar under `models/coreml/` and
+// return the env that pins model resolution there.
+//
+// The isolation is the point: the sidecar is picked up by presence alone, so
+// keeping it out of `models/` is what stops the cpu/metal lanes from silently
+// measuring the ANE. Symlink first (cheap, and the GGUFs are ~0.4-1.4 GB),
+// falling back to a hardlink and then a copy for filesystems that refuse.
+function prepareCoremlEntry(entry, modelsDir = MODELS_DIR) {
+  // Validate the entry before the platform gate: an unsupported model type is
+  // a mistake in the matrix JSON, not a property of the runner, so every
+  // platform should reject it rather than only the one that can run the lane.
+  const modelType = String(entry.modelType || 'tdt')
+  const stem = COREML_GGUF_STEMS[modelType]
+  if (!stem) {
+    throw new Error(
+      `Core ML is not supported for parakeet model type "${modelType}" ` +
+        `(supported: ${Object.keys(COREML_GGUF_STEMS).join(', ')})`
+    )
+  }
+
+  if (process.platform !== 'darwin') {
+    throw new SkipEntryError('Core ML lanes run on darwin only')
+  }
+
+  const coremlDir = path.join(modelsDir, 'coreml')
+  const sidecar = path.join(coremlDir, `${stem}-encoder.mlmodelc`)
+  if (!fs.existsSync(sidecar)) {
+    throw new SkipEntryError(`no Core ML encoder sidecar staged at ${sidecar}`)
+  }
+
+  const quant = entry.quant ? String(entry.quant) : 'f16'
+  const ggufName = `${stem}.${quant}.gguf`
+  const source = path.join(modelsDir, ggufName)
+  if (!fs.existsSync(source)) {
+    throw new Error(`Core ML lane needs ${ggufName}, which is not staged under models/`)
+  }
+
+  const linked = path.join(coremlDir, ggufName)
+  // existsSync follows symlinks, so a link left dangling by an earlier run (or
+  // by a cache restored without its target) reads as absent while still
+  // occupying the path. Clear whatever is there before relinking; otherwise
+  // symlink/link would throw EEXIST and the copy fallback would write THROUGH
+  // the dangling link into the source GGUF.
+  if (!fs.existsSync(linked)) {
+    try {
+      fs.unlinkSync(linked)
+    } catch (_) {
+      /* nothing to clear */
+    }
+    try {
+      // Relative target: models/ is a restored CI cache, so an absolute path
+      // would dangle if the workspace is restored under a different root.
+      fs.symlinkSync(path.join('..', ggufName), linked)
+    } catch (_) {
+      try {
+        fs.linkSync(source, linked)
+      } catch (__) {
+        fs.copyFileSync(source, linked)
+      }
+    }
+  }
+
+  return {
+    [`QVAC_TEST_GGUF_${modelType.toUpperCase()}`]: linked,
+    QVAC_PARAKEET_BENCHMARK_COREML: 'true'
+  }
+}
+
 function buildParakeetEnv(entry, label) {
   const env = {
     ...process.env,
@@ -199,7 +294,9 @@ function buildParakeetEnv(entry, label) {
     QVAC_PARAKEET_BENCHMARK_LABEL: label,
     QVAC_PARAKEET_BENCHMARK_BACKEND: entry.backendHint
       ? String(entry.backendHint)
-      : process.env.QVAC_PARAKEET_BENCHMARK_BACKEND || '',
+      : normalizeBoolean(entry.coreml)
+        ? 'coreml'
+        : process.env.QVAC_PARAKEET_BENCHMARK_BACKEND || '',
     QVAC_PARAKEET_BENCHMARK_DEVICE: entry.deviceLabel
       ? String(entry.deviceLabel)
       : process.env.QVAC_ASR_GGML_BENCHMARK_DEVICE ||
@@ -255,6 +352,11 @@ function runBenchmarkEntry(pkgDir, entry, index) {
   const env = engine === 'parakeet' ? buildParakeetEnv(entry, label) : buildWhisperEnv(entry, label)
   const { npmScript } = ENGINES[engine]
 
+  // May throw SkipEntryError (no sidecar / not darwin), which main() reports as
+  // a skip rather than a failure.
+  const coreml = engine === 'parakeet' && normalizeBoolean(entry.coreml)
+  if (coreml) Object.assign(env, prepareCoremlEntry(entry))
+
   console.log('')
   console.log('='.repeat(70))
   console.log(`Running benchmark entry ${index + 1}`)
@@ -264,6 +366,12 @@ function runBenchmarkEntry(pkgDir, entry, index) {
     console.log(`  quant:     ${env.QVAC_PARAKEET_BENCHMARK_QUANT || 'default'}`)
     console.log(`  useGPU:    ${env.QVAC_PARAKEET_BENCHMARK_USE_GPU}`)
     console.log(`  backend:   ${env.QVAC_PARAKEET_BENCHMARK_BACKEND || 'default'}`)
+    if (coreml) {
+      // modelType is optional on an entry (prepareCoremlEntry defaults it), so
+      // read the pinned path back off the env rather than re-deriving the key.
+      const pinned = Object.keys(env).find((key) => key.startsWith('QVAC_TEST_GGUF_'))
+      console.log(`  coreml:    ${pinned ? env[pinned] : 'staged'}`)
+    }
   } else {
     console.log(`  modelFile: ${env.QVAC_WHISPER_BENCHMARK_MODEL_FILE}`)
     console.log(`  useGPU:    ${env.QVAC_WHISPER_BENCHMARK_USE_GPU}`)
@@ -291,20 +399,30 @@ function main() {
   const pkgDir = path.resolve(__dirname, '..')
   const matrix = parseMatrixConfig()
   const failures = []
+  const skips = []
 
   for (let i = 0; i < matrix.length; i++) {
     try {
       runBenchmarkEntry(pkgDir, matrix[i], i)
     } catch (err) {
+      if (err instanceof SkipEntryError) {
+        console.log(`\n[matrix-runner] entry ${i + 1} SKIPPED: ${err.message}\n`)
+        skips.push({ index: i + 1, message: err.message })
+        continue
+      }
       console.error(`\n[matrix-runner] entry ${i + 1} failed: ${err.message}\n`)
       failures.push({ index: i + 1, message: err.message })
     }
   }
 
+  const attempted = matrix.length - skips.length
   console.log('')
-  console.log(
-    `Completed ${matrix.length - failures.length}/${matrix.length} benchmark configuration(s).`
-  )
+  console.log(`Completed ${attempted - failures.length}/${attempted} benchmark configuration(s).`)
+
+  if (skips.length > 0) {
+    console.log(`${skips.length} skipped:`)
+    for (const s of skips) console.log(`  - entry ${s.index}: ${s.message}`)
+  }
 
   if (failures.length > 0) {
     console.log(`${failures.length} failure(s):`)
@@ -319,4 +437,11 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { addUnifiedCoverage, parseMatrixConfig }
+module.exports = {
+  addUnifiedCoverage,
+  parseMatrixConfig,
+  buildLabel,
+  buildParakeetEnv,
+  prepareCoremlEntry,
+  SkipEntryError
+}
