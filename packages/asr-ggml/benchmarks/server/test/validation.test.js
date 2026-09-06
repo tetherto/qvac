@@ -4,6 +4,13 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { ParakeetConfigSchema } = require('../src/validation')
 
+test('accepts Parakeet Unified without a language', () => {
+  const config = ParakeetConfigSchema.parse({ modelType: 'unified' })
+
+  assert.equal(config.modelType, 'unified')
+  assert.equal(config.language, undefined)
+})
+
 test('accepts Indic Conformer with a language', () => {
   const config = ParakeetConfigSchema.parse({
     modelType: 'indic-conformer',
