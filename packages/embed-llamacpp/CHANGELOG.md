@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.1` -> `10297.1.2` (mtmd temporal merge is now opt-in per bitmap; no API change for this package).
+
 ## [0.37.0] - 2026-08-29
 
 ### Changed
