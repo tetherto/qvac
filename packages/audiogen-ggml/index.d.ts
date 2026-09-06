@@ -91,6 +91,48 @@ export interface GenerateOptions {
     lmCfgScale?: number;
     /** Allow the LM to infer missing metadata before semantic-code generation. */
     lmPhase1?: boolean;
+    /**
+     * Simple Mode: treat the caption as a short natural-language query and let
+     * the LM compose the full request before synthesis — a detailed caption,
+     * lyrics, and any metadata left unset (bpm, keyscale, timesignature,
+     * vocalLanguage, and duration when 0). Options you set are kept. Requires
+     * `text2music` with no `audioCodes`; leave `lyrics` unset for LM-written
+     * vocals or pass `'[Instrumental]'` for an instrumental song.
+     */
+    simpleMode?: boolean;
+    /**
+     * Query Rewriting: the LM FORMAT pass rewrites the caption into a detailed
+     * musical description before synthesis, preserving the lyric content and
+     * filling any metadata left unset. Unlike Simple Mode — which expands a bare
+     * query and writes lyrics from scratch — this takes caption AND lyrics as
+     * input, so real `lyrics` are required (`'[Instrumental]'` belongs to Simple
+     * Mode) and the two options are mutually exclusive. Requires
+     * `taskType: 'text2music'`; faithful rewriting needs the 1.7B LM.
+     */
+    rewriteQuery?: boolean;
+    /**
+     * Percentile loudness normalization on the generated audio (default true):
+     * the 99.999th-percentile sample scales to full scale and the tiny tail
+     * above it clips, matching the reference loudness. Set false for the raw
+     * engine output. Audio edits are never normalized.
+     */
+    normalizeLoudness?: boolean;
+    /**
+     * Synchronized lyric timestamps: after synthesis, the engine aligns the
+     * lyrics with the generated audio and delivers karaoke-style LRC text in
+     * `stats.lrc` with an alignment confidence in `stats.lyricsScore`. Requires
+     * lyrics to align: pass `lyrics` (or let Simple Mode write them) —
+     * instrumental requests are rejected. Requires `taskType: 'text2music'`.
+     */
+    generateLrc?: boolean;
+    /**
+     * Teacher-forced LM quality scoring of the generated audio codes against
+     * the request: `stats.qualityScore` reports a weighted [0, 1] score
+     * (caption/lyrics PMI plus metadata recall) at the cost of extra LM
+     * forwards after code generation — made for ranking a batch of takes.
+     * Requires the LM code path, so `taskType` must be `'text2music'`.
+     */
+    computeQualityScore?: boolean;
     /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
     dcwEnabled?: boolean;
     /** DCW low-frequency correction strength (official default: 0.05). */
@@ -106,18 +148,33 @@ export interface GenerateOptions {
     referenceAudio?: Float32Array;
     /**
      * Source / cover audio (same layout as `referenceAudio`). Required when
-     * `taskType` is `"cover"` or `"cover-nofsq"`.
+     * `taskType` is `"cover"`, `"cover-nofsq"`, or `"lego"`.
      */
     sourceAudio?: Float32Array;
     /**
      * Task discriminator. Supported today: `"text2music"` (default) |
-     * `"cover-nofsq"`. `"cover"` (FSQ roundtrip) is accepted but not implemented
-     * in the engine yet.
+     * `"cover-nofsq"` | `"lego"`. `"cover"` (FSQ roundtrip) is accepted but not
+     * implemented in the engine yet. `"lego"` generates a new instrument layer
+     * that follows `sourceAudio` and returns only that layer; it requires the
+     * base DiT variant (turbo and sft are rejected by the engine).
      */
-    taskType?: 'text2music' | 'cover' | 'cover-nofsq';
+    taskType?: 'text2music' | 'cover' | 'cover-nofsq' | 'lego';
+    /**
+     * Lego target layer. Required when `taskType` is `"lego"`; one of
+     * vocals|backing_vocals|drums|bass|guitar|keyboard|percussion|strings|
+     * synth|fx|brass|woodwinds.
+     */
+    track?: string;
+    /**
+     * DiT classifier-free guidance scale. 0 (default) resolves automatically:
+     * 1.0 on turbo variants (CFG disabled), 7.0 on base/sft. Values > 1 run
+     * CFG via APG and double the DiT cost per step.
+     */
+    guidanceScale?: number;
     /**
      * Fraction of DiT steps that keep the source context (0..1). Default 1.0.
-     * Values < 1 are rejected by the engine until context switching lands.
+     * Below 1 the engine follows the source for that fraction of the run, then
+     * finishes freely on a silence context.
      */
     audioCoverStrength?: number;
     /**
@@ -203,13 +260,34 @@ export interface AudiogenPcmChunk {
     outputArray: Int16Array;
     sampleRate: number;
     channels: number;
+    /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+    lrc?: string;
 }
 /** A progress tick delivered through the run's output stream. */
 export interface AudiogenProgressChunk {
     progress: AudiogenProgress;
 }
+/**
+ * The LM's description of an audio clip, delivered by `understand()` — once
+ * through the response stream and again in the terminal stats. `audioCodes`
+ * are the recovered FSQ codes, reusable as a generation's `audioCodes` input.
+ */
+export interface AudiogenUnderstandResult {
+    caption: string;
+    bpm: number;
+    /** LM estimate in seconds; the codes fix the true length. */
+    duration: number;
+    keyscale: string;
+    timesignature: string;
+    vocalLanguage: string;
+    audioCodes: Int32Array;
+}
+/** The understand result delivered through the response's output stream. */
+export interface AudiogenUnderstandChunk {
+    understand: AudiogenUnderstandResult;
+}
 /** Items streamed by the `QvacResponse` returned from `run()`. */
-export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk;
+export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk | AudiogenUnderstandChunk;
 /**
  * Terminal run stats, resolved by `QvacResponse.await()`. These mirror exactly
  * what the native model emits — `totalTimeMs`,
@@ -231,6 +309,38 @@ export interface AudiogenStats {
     backendId?: number;
     /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
     gpuFallbackReason?: number;
+    /**
+     * Lyric-to-audio alignment confidence in [0, 1]. Present only when the run
+     * set `generateLrc`; the LRC text itself rides on the PCM chunk (`lrc`) and
+     * is repeated here for convenience.
+     */
+    lyricsScore?: number;
+    /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+    lrc?: string;
+    /**
+     * Weighted quality of the generated codes against the request, in [0, 1]
+     * (caption/lyrics PMI plus metadata recall). Present only when the run set
+     * `computeQualityScore`; made for ranking a batch of takes.
+     */
+    qualityScore?: number;
+    /**
+     * The LM's description of the analysed clip. Present only on stats resolved
+     * by an `understand()` response; also streamed as an output item.
+     */
+    understand?: AudiogenUnderstandResult;
+}
+/** Options accepted by `understand()`. */
+export interface UnderstandOptions {
+    /** RNG seed for the LM decode; omit for a random seed. */
+    seed?: number;
+    /** Language hint (e.g. `'es'`): forced into the result instead of the LM's guess. */
+    vocalLanguage?: string;
+    /** LM sampling temperature (default 0.85). */
+    lmTemperature?: number;
+    /** LM nucleus sampling p (default 0.9). */
+    lmTopP?: number;
+    /** LM top-k (default 0 = disabled). */
+    lmTopK?: number;
 }
 /** Name of a backend `AudiogenStats.backendId` can resolve to. */
 export type AudiogenBackendName = 'cpu' | 'metal' | 'cuda' | 'vulkan' | 'opencl' | 'other';
@@ -292,7 +402,9 @@ export declare class AudioGen {
     private _destroyed;
     private _cancelPromise;
     private _cancellingResponse;
+    private _lastLrc;
     private _cancelTerminalResolve;
+    private _lastUnderstand;
     constructor(options?: AudioGenOptions);
     /** Create the native engine and load its GGUF files. Idempotent. */
     load(): Promise<void>;
@@ -307,6 +419,14 @@ export declare class AudioGen {
      * be repeated and are executed in the exact order in which they are chained.
      * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
      */
+    /**
+     * Describe an audio clip through the reverse pipeline: the engine encodes
+     * the PCM, recovers the FSQ semantic codes, and the LM reports metadata and
+     * a caption. `audio` is interleaved stereo float PCM at 48 kHz — the same
+     * layout `sourceAudio` uses. The result streams as an `understand` output
+     * item and is repeated on the terminal stats (`stats.understand`).
+     */
+    understand(audio: Float32Array, opts?: UnderstandOptions): Promise<QvacResponse<AudiogenOutputChunk>>;
     edit(source: AudioEditSource): AudioEditSession;
     private _runEdit;
     private _admitAndWait;

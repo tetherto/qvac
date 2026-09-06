@@ -9,9 +9,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `generateLrc` generation control: karaoke-style synchronized lyric
+  timestamps in `stats.lrc` (standard LRC text) with an alignment confidence
+  in `stats.lyricsScore`. Requires lyrics — explicit or Simple-Mode written —
+  and `taskType: 'text2music'`.
+- `computeQualityScore` generation control: the generated audio codes are
+  teacher-forced back through the LM and `stats.qualityScore` reports a
+  weighted `[0, 1]` match against the request (caption/lyrics PMI plus
+  metadata recall) — made for generating a batch of takes and keeping the
+  best. Requires `taskType: 'text2music'`.
+- `rewriteQuery` generation control: the LM FORMAT pass rewrites the caption
+  into a detailed musical description before synthesis, preserving the lyric
+  content and filling unset metadata. Requires real `lyrics` and
+  `taskType: 'text2music'`; mutually exclusive with `simpleMode`. Faithful
+  rewriting needs the 1.7B LM.
+- `understand()`: describe an audio clip through the reverse pipeline — the
+  engine encodes the PCM, recovers the FSQ semantic codes, and the LM reports
+  metadata and a caption. The description streams as an `understand` output
+  item and is repeated on the terminal stats; the recovered `audioCodes` are
+  reusable as a generation's `audioCodes` input.
+
+### Changed
+
+- Require `speech-cpp` port revision `2026-09-03#1`, which adds the engine's
+  ACE-Step LRC generation, audio understanding (reverse pipeline) and Query
+  Rewriting (FORMAT pass) on top of the teacher-forced LM quality scoring.
+
+## [0.3.3] - 2026-09-01
+
+### Added
+
+- Support the full `audioCoverStrength` range for `cover-nofsq`. Values below
+  `1` follow the source for that fraction of the diffusion run and finish
+  freely afterwards; `0.5` starts as a cover and diverges halfway.
+- Multi-Track (lego) generation: `taskType: 'lego'` with a `track` option
+  (one of the 12 ACE-Step layer names) generates a new isolated instrument
+  layer that follows `sourceAudio` and returns only that stem. Requires the
+  base DiT model.
+- Optional `guidanceScale` generation control for DiT classifier-free
+  guidance; `0` (the default) picks the loaded model's preset automatically.
+
+### Changed
+
+- Drop CUDA from the published linux-x64 prebuild so the npm tarball stays
+  under the registry size limit. `useGPU: true` uses Vulkan on Linux. CUDA
+  remains opt-in at build time via `ENABLE_CUDA=ON`.
+
+- Raise the `speech-cpp` floor to 2026-08-31, which brings in the ACE-Step
+  Multi-Track (lego) task and base-model guided sampling.
+- Raise the `speech-cpp` floor further to 2026-09-01#2, which brings in
+  ggml-speech 2026-09-02. The CUDA backend now skips, at registration, GPUs
+  whose compute capability has no compiled code in the fatbin, so a
+  `useGPU: true` run on such a card (Turing and older) falls back to Vulkan
+  or CPU instead of failing at the first kernel launch. The CUDA fatbin
+  now carries native code for every architecture the prebuilds target —
+  Turing (7.5), Ampere (8.0, 8.6), Ada (8.9), Hopper (9.0) and Blackwell
+  (12.0, 12.1) — with 8.0 PTX for anything newer, so Turing is supported
+  again and Blackwell no longer pays a first-use JIT. The roll also brings
+  the compute-buffer OOM handling and k-quant GET_ROWS fixes, and fixes two
+  multi-GPU faults on a host that mixes supported and unsupported NVIDIA
+  cards: backend initialisation no longer aborts when the unsupported card
+  enumerates first, and a row-split buffer no longer allocates on the
+  skipped card.
+
+## [0.3.2] - 2026-09-01
+
+### Added
+
 - Report why a `useGPU: true` run resolved to the CPU. `stats.gpuFallbackReason`
   carries the engine's reason code for both ACE-Step and MiniMax, with
   `AUDIOGEN_GPU_FALLBACK_REASONS` and `audiogenGpuFallbackReason()` to name it.
+- Simple Mode: `simpleMode: true` treats the caption as a short
+  natural-language query and the LM composes the complete request before
+  synthesis — a detailed caption, full lyrics, and every metadata field left
+  unset. Leave `lyrics` unset for LM-written vocals or pass `'[Instrumental]'`
+  for an instrumental song.
+- `normalizeLoudness` generation control (default `true`): percentile loudness
+  normalization of the generated audio matching the reference implementation;
+  audio edits are never normalized.
+
+### Changed
+
+- Require `speech-cpp` port revision `2026-09-01`, which adds the engine's
+  Simple Mode pipeline, LM progress and cancellation for both phases, and the
+  output loudness normalization.
+
+### Fixed
+
+- Restore mobile (Android / iOS) support. The generated `index.js` carried
+  `${exports.…}` interpolations that desynchronise `bare-module-lexer`, so
+  `bare-pack` stopped discovering imports partway through the file and left
+  `binding.js` out of the app bundle. Every on-device model load then failed
+  with `MODULE_NOT_FOUND: Cannot find module './binding'`, even though the
+  file ships in the tarball. The engine validation message and the registry
+  path in `models.js` are now assembled without that construct, and package
+  tests assert every relative `require` in the generated scripts stays
+  visible to the bundler and that the construct never reappears.
 
 ## [0.3.1] - 2026-08-28
 
@@ -251,6 +344,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-08-03
 
 ### Changed
+
 - Update `ggml-speech` dependency version to align with other packages that also depend on it.
 
 ## [0.1.0] - 2026-07-30

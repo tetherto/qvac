@@ -77,7 +77,7 @@ function chunkBuffer(chunk) {
 /**
  * Parakeet engine driver: owns the `ParakeetInterface`, the parakeet event
  * mapping, and the parakeet streaming lifecycle. Backed by
- * qvac-parakeet.cpp; accepts CTC, TDT, EOU, and Sortformer GGUF
+ * speech-cpp; accepts CTC, TDT, RNN-T, EOU, Nemotron, and Sortformer GGUF
  * checkpoints.
  */
 class ParakeetDriver {
@@ -234,7 +234,7 @@ class ParakeetDriver {
             seed: this.params.seed ?? -1,
             language: this.params.language || "",
             streaming: this.params.streaming === true,
-            streamingChunkMs: this.params.streamingChunkMs ?? 2000,
+            streamingChunkMs: this.params.streamingChunkMs,
             streamingHistoryMs: this.params.streamingHistoryMs ?? 30000,
             streamingEmitPartials: this.params.streamingEmitPartials !== false,
             streamingEnergyVad: this.params.streamingEnergyVad === true,

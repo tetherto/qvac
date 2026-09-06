@@ -117,7 +117,7 @@ class AssessModelFitRequest(GeneratedBaseModel):
     policy: Annotated[
         Literal["interactive-v1"],
         Field(
-            description="Headroom policy. `interactive-v1` leaves the larger of 2 GiB or 15% of total RAM on desktop, 1 GiB or 20% on mobile."
+            description="Headroom policy. `interactive-v1` withholds 20% of the memory available right now, capped at 2 GiB on desktop and 1 GiB on mobile."
         ),
     ] = "interactive-v1"
     type: Literal["assessModelFit"] = "assessModelFit"
@@ -127,6 +127,13 @@ class AssessModelFitResponseVerdict(Enum):
     likely_fits = "likely-fits"
     likely_too_large = "likely-too-large"
     unknown = "unknown"
+
+
+class AssessModelFitResponseBasis(Enum):
+    system_memory = "system-memory"
+    process_memory = "process-memory"
+    device_memory = "device-memory"
+    device_budget = "device-budget"
 
 
 class AssessModelFitResponseExecution(Enum):
@@ -141,11 +148,23 @@ class AssessModelFitResponseBudget(GeneratedBaseModel):
     total_bytes: Annotated[
         float,
         Field(
-            alias="totalBytes", description="Total system RAM reported by the sample."
+            alias="totalBytes",
+            description="Total budgetable memory under the result’s basis: system RAM, or the process ceiling (allowance plus current footprint) under process-memory.",
         ),
     ]
     used_bytes: Annotated[
-        float, Field(alias="usedBytes", description="System RAM in use at sample time.")
+        float,
+        Field(
+            alias="usedBytes",
+            description="Memory in use at sample time under the same basis (system-wide, or this process).",
+        ),
+    ]
+    available_bytes: Annotated[
+        float,
+        Field(
+            alias="availableBytes",
+            description="Headroom before the policy applies: total − used, or the process allowance under process-memory. The reserve is a share of this.",
+        ),
     ]
     reserved_bytes: Annotated[
         float,
@@ -155,7 +174,7 @@ class AssessModelFitResponseBudget(GeneratedBaseModel):
         float,
         Field(
             alias="availableAfterReserveBytes",
-            description="Budget the estimate is compared against: total − used − reserved.",
+            description="Budget the estimate is compared against: available − reserved.",
         ),
     ]
 
@@ -220,11 +239,12 @@ class AssessModelFitResponse(GeneratedBaseModel):
         ),
     ]
     basis: Annotated[
-        Literal["system-memory"],
+        AssessModelFitResponseBasis,
         Field(
-            description="The only evidence used. GPU/VRAM metrics are deliberately excluded — they are `unverified`-scoped by design."
+            description="The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.",
+            title="AssessModelFitResponseBasis",
         ),
-    ] = "system-memory"
+    ]
     execution: Annotated[
         AssessModelFitResponseExecution,
         Field(
@@ -453,7 +473,14 @@ class AudioGenStreamResponseProgress(GeneratedBaseModel):
     )
     stage: str
     step: Annotated[int, Field(ge=0, le=9007199254740991)]
-    total: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[
+        int,
+        Field(
+            description="Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
 
 
 class AudioGenStreamResponseStopReason(Enum):
@@ -470,6 +497,112 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+
+
+class AudioGenStreamResponseDiagnosticsSelectedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class AudioGenStreamResponseDiagnosticsGraphicsApi(Enum):
+    vulkan = "vulkan"
+    opencl = "opencl"
+    opengl = "opengl"
+    webgpu = "webgpu"
+    metal = "metal"
+    direct3d11 = "direct3d11"
+    direct3d12 = "direct3d12"
+    cuda = "cuda"
+    level_zero = "levelZero"
+    rocm = "rocm"
+
+
+class AudioGenStreamResponseDiagnosticsDriver(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(min_length=1)]
+    version: Annotated[str | None, Field(min_length=1)] = None
+
+
+class AudioGenStreamResponseDiagnosticsFallbackRequestedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class AudioGenStreamResponseDiagnosticsFallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    requested_backend: Annotated[
+        str | None, Field(alias="requestedBackend", min_length=1)
+    ] = None
+    requested_device: Annotated[
+        AudioGenStreamResponseDiagnosticsFallbackRequestedDevice | None,
+        Field(
+            alias="requestedDevice",
+            title="AudioGenStreamResponseDiagnosticsFallbackRequestedDevice",
+        ),
+    ] = None
+    reason: Annotated[str, Field(min_length=1)]
+
+
+class AudioGenStreamResponseDiagnosticsProbeStatus(Enum):
+    compatible = "compatible"
+    incompatible = "incompatible"
+    unknown = "unknown"
+
+
+class AudioGenStreamResponseDiagnosticsProbe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        AudioGenStreamResponseDiagnosticsProbeStatus,
+        Field(title="AudioGenStreamResponseDiagnosticsProbeStatus"),
+    ]
+    backend: Annotated[str, Field(min_length=1)]
+    reason: str | None = None
+
+
+class AudioGenStreamResponseDiagnostics(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
+    selected_device: Annotated[
+        AudioGenStreamResponseDiagnosticsSelectedDevice,
+        Field(
+            alias="selectedDevice",
+            title="AudioGenStreamResponseDiagnosticsSelectedDevice",
+        ),
+    ]
+    graphics_api: Annotated[
+        AudioGenStreamResponseDiagnosticsGraphicsApi | None,
+        Field(
+            alias="graphicsApi", title="AudioGenStreamResponseDiagnosticsGraphicsApi"
+        ),
+    ] = None
+    driver: Annotated[
+        AudioGenStreamResponseDiagnosticsDriver | None,
+        Field(title="AudioGenStreamResponseDiagnosticsDriver"),
+    ] = None
+    gpu_id: Annotated[
+        str | None,
+        Field(
+            alias="gpuId",
+            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+            min_length=1,
+        ),
+    ] = None
+    fallback: Annotated[
+        AudioGenStreamResponseDiagnosticsFallback | None,
+        Field(title="AudioGenStreamResponseDiagnosticsFallback"),
+    ] = None
+    probe: Annotated[
+        AudioGenStreamResponseDiagnosticsProbe | None,
+        Field(title="AudioGenStreamResponseDiagnosticsProbe"),
+    ] = None
 
 
 class AudioGenStreamResponse(GeneratedBaseModel):
@@ -496,6 +629,13 @@ class AudioGenStreamResponse(GeneratedBaseModel):
     ] = None
     stats: Annotated[
         AudioGenStreamResponseStats | None, Field(title="AudioGenStreamResponseStats")
+    ] = None
+    diagnostics: Annotated[
+        AudioGenStreamResponseDiagnostics | None,
+        Field(
+            description="Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+            title="AudioGenStreamResponseDiagnostics",
+        ),
     ] = None
 
 
@@ -6065,6 +6205,148 @@ class GetSystemResourcesResponseSampleMemoryTotalBytesFailed(GeneratedBaseModel)
     reason: str | None = None
 
 
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessUsedBytesFailed(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryProcessAvailableBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
 class GetSystemResourcesResponseSampleMemory(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -6082,6 +6364,26 @@ class GetSystemResourcesResponseSampleMemory(GeneratedBaseModel):
         | GetSystemResourcesResponseSampleMemoryTotalBytesUnverified
         | GetSystemResourcesResponseSampleMemoryTotalBytesFailed,
         Field(alias="totalBytes"),
+    ]
+    process_used_bytes: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessUsedBytesSupported
+        | GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnavailable
+        | GetSystemResourcesResponseSampleMemoryProcessUsedBytesUnverified
+        | GetSystemResourcesResponseSampleMemoryProcessUsedBytesFailed,
+        Field(
+            alias="processUsedBytes",
+            description="This process’s resident footprint (RSS). Process-scoped, unlike usedBytes.",
+        ),
+    ]
+    process_available_bytes: Annotated[
+        GetSystemResourcesResponseSampleMemoryProcessAvailableBytesSupported
+        | GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnavailable
+        | GetSystemResourcesResponseSampleMemoryProcessAvailableBytesUnverified
+        | GetSystemResourcesResponseSampleMemoryProcessAvailableBytesFailed,
+        Field(
+            alias="processAvailableBytes",
+            description="How much more this process may allocate before the OS intervenes. On iOS this is os_proc_available_memory() — the limit jetsam enforces. Unavailable where no per-process limit is exposed.",
+        ),
     ]
 
 
@@ -6793,6 +7095,13 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode(Enum):
     none = "none"
     layer = "layer"
     row = "row"
+    tensor = "tensor"
+
+
+class LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn(Enum):
+    on = "on"
+    off = "off"
+    auto = "auto"
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(Enum):
@@ -7013,12 +7322,6 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             description="Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`)."
         ),
     ] = None
-    n_discarded: Annotated[
-        float | None,
-        Field(
-            description="Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`)."
-        ),
-    ] = None
     parallel: Annotated[
         int | None,
         Field(
@@ -7058,8 +7361,16 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
+        ),
+    ] = None
+    flash_attn: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn | None,
+        Field(
+            alias="flash-attn",
+            description="Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`.",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn",
         ),
     ] = None
     tensor_split: Annotated[
@@ -10150,7 +10461,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     stream_chunk_tokens: Annotated[
@@ -10574,7 +10885,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
@@ -10747,7 +11058,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
@@ -11180,7 +11491,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[
@@ -11633,7 +11944,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
     output_sample_rate: Annotated[

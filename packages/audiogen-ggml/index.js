@@ -28,6 +28,7 @@ const audio_format_1 = require("./lib/audio-format");
 const error_1 = require("./error");
 exports.ENGINE_ACESTEP = 'acestep';
 exports.ENGINE_MINIMAX = 'minimax';
+const SUPPORTED_ENGINES = [exports.ENGINE_ACESTEP, exports.ENGINE_MINIMAX];
 exports.MINIMAX_FRAMES_PER_SECOND = 25;
 exports.MINIMAX_DEFAULT_MAX_FRAMES = 300;
 const MINIMAX_MIN_FRAMES = 1;
@@ -117,7 +118,21 @@ function requireMinimaxCfgScale(value) {
     }
     return scale;
 }
-const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq']);
+const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq', 'lego']);
+const LEGO_TRACKS = new Set([
+    'vocals',
+    'backing_vocals',
+    'drums',
+    'bass',
+    'guitar',
+    'keyboard',
+    'percussion',
+    'strings',
+    'synth',
+    'fx',
+    'brass',
+    'woodwinds'
+]);
 const AUDIO_LATENT_RATE = 25;
 const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE;
 const REPAINT_RANGE_EPSILON_SECONDS = 1e-5;
@@ -126,7 +141,7 @@ function optionalTaskType(value) {
     if (value === undefined)
         return undefined;
     if (typeof value !== 'string' || !GENERATE_TASK_TYPES.has(value)) {
-        throw invalidInput('taskType must be one of text2music|cover|cover-nofsq');
+        throw invalidInput('taskType must be one of text2music|cover|cover-nofsq|lego');
     }
     return value;
 }
@@ -228,6 +243,9 @@ function requirePrompt(prompt, name) {
 function isCoverTask(taskType) {
     return taskType === 'cover' || taskType === 'cover-nofsq';
 }
+function taskRequiresSourceAudio(taskType) {
+    return isCoverTask(taskType) || taskType === 'lego';
+}
 function invalidInput(message) {
     return new error_1.QvacErrorAudioGen({ code: error_1.ERR_CODES.INVALID_INPUT, adds: message });
 }
@@ -258,15 +276,25 @@ const ACESTEP_GENERATE_KEYS = [
     'referenceAudio',
     'sourceAudio',
     'taskType',
+    'track',
+    'guidanceScale',
     'audioCoverStrength',
-    'coverNoiseStrength'
+    'coverNoiseStrength',
+    'computeQualityScore',
+    'rewriteQuery'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
 }
+function quoteEngine(engine) {
+    return `'${engine}'`;
+}
+function supportedEnginesMessage() {
+    return SUPPORTED_ENGINES.map(quoteEngine).join(' or ');
+}
 function validateEngineType(engine) {
-    if (engine !== undefined && engine !== exports.ENGINE_ACESTEP && engine !== exports.ENGINE_MINIMAX) {
-        throw invalidInput(`engine must be '${exports.ENGINE_ACESTEP}' or '${exports.ENGINE_MINIMAX}'`);
+    if (engine !== undefined && !SUPPORTED_ENGINES.includes(engine)) {
+        throw invalidInput(`engine must be ${supportedEnginesMessage()}`);
     }
 }
 function detectEngineType(files = {}, explicitEngine) {
@@ -466,6 +494,7 @@ class AudioGen {
     _cancelPromise;
     _cancellingResponse;
     _cancelTerminalResolve;
+    _lastUnderstand;
     constructor(options = {}) {
         this._logger = new QvacLogger(options.logger);
         const files = options.files ?? {};
@@ -585,6 +614,43 @@ class AudioGen {
      * be repeated and are executed in the exact order in which they are chained.
      * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
      */
+    /**
+     * Describe an audio clip through the reverse pipeline: the engine encodes
+     * the PCM, recovers the FSQ semantic codes, and the LM reports metadata and
+     * a caption. `audio` is interleaved stereo float PCM at 48 kHz — the same
+     * layout `sourceAudio` uses. The result streams as an `understand` output
+     * item and is repeated on the terminal stats (`stats.understand`).
+     */
+    async understand(audio, opts = {}) {
+        if (this._engineType === exports.ENGINE_MINIMAX) {
+            throw invalidInput('MiniMax-Music3 does not support audio understanding');
+        }
+        if (!(audio instanceof Float32Array)) {
+            throw invalidInput('understand audio must be a Float32Array');
+        }
+        if (audio.length === 0) {
+            throw invalidInput('understand audio must not be empty');
+        }
+        if (audio.length % 2 !== 0) {
+            throw invalidInput('understand audio must be interleaved stereo (even sample count)');
+        }
+        requireFinitePcm(audio, 'understand audio');
+        const jobData = {
+            type: 'understand',
+            input: '',
+            sourceAudio: audio,
+            seed: optionalFiniteNumber(opts.seed, 'seed', true),
+            vocalLanguage: opts.vocalLanguage,
+            lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
+            lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
+            lmTopK: optionalFiniteNumber(opts.lmTopK, 'lmTopK', true)
+        };
+        const revision = this._lifecycleRevision;
+        return new Promise((resolve, reject) => {
+            const queued = this._runExclusive(() => this._admitAndWait(jobData, revision, resolve, reject));
+            void queued.catch(reject);
+        });
+    }
     edit(source) {
         if (this._engineType === exports.ENGINE_MINIMAX) {
             throw invalidInput('MiniMax-Music3 does not support audio editing');
@@ -611,6 +677,7 @@ class AudioGen {
             throw this._lifecycleError();
         }
         const addon = this._requireAddon();
+        this._lastUnderstand = undefined;
         const response = this._job.start();
         let accepted;
         try {
@@ -680,13 +747,74 @@ class AudioGen {
         const taskType = optionalTaskType(opts.taskType);
         const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio');
         const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio');
-        if (isCoverTask(taskType) && (sourceAudio === undefined || sourceAudio.length === 0)) {
+        if (taskRequiresSourceAudio(taskType) &&
+            (sourceAudio === undefined || sourceAudio.length === 0)) {
             throw invalidInput(`taskType '${taskType}' requires sourceAudio`);
+        }
+        if (opts.simpleMode !== undefined && typeof opts.simpleMode !== 'boolean') {
+            throw invalidInput('simpleMode must be a boolean');
+        }
+        if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
+            throw invalidInput('normalizeLoudness must be a boolean');
+        }
+        if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
+            throw invalidInput('computeQualityScore must be a boolean');
+        }
+        if (opts.computeQualityScore === true && taskType !== undefined && taskType !== 'text2music') {
+            throw invalidInput("computeQualityScore requires taskType 'text2music' (the LM code path)");
+        }
+        if (opts.simpleMode === true) {
+            if (taskType !== undefined && taskType !== 'text2music') {
+                throw invalidInput("simpleMode supports only taskType 'text2music'");
+            }
+            if (opts.audioCodes !== undefined) {
+                throw invalidInput('simpleMode cannot take pre-supplied audioCodes');
+            }
+            if (opts.lyrics !== undefined && opts.lyrics !== '' && opts.lyrics !== '[Instrumental]') {
+                throw invalidInput("simpleMode lyrics must be omitted (the LM writes them) or '[Instrumental]'");
+            }
+            if (opts.lmPhase1 === false) {
+                throw invalidInput('simpleMode requires lmPhase1');
+            }
+        }
+        if (opts.rewriteQuery !== undefined && typeof opts.rewriteQuery !== 'boolean') {
+            throw invalidInput('rewriteQuery must be a boolean');
+        }
+        if (opts.rewriteQuery === true) {
+            if (opts.simpleMode === true) {
+                throw invalidInput('rewriteQuery cannot be combined with simpleMode');
+            }
+            if (taskType !== undefined && taskType !== 'text2music') {
+                throw invalidInput("rewriteQuery supports only taskType 'text2music'");
+            }
+            if (opts.audioCodes !== undefined) {
+                throw invalidInput('rewriteQuery cannot take pre-supplied audioCodes');
+            }
+            if (opts.lyrics === undefined || opts.lyrics === '' || opts.lyrics === '[Instrumental]') {
+                throw invalidInput("rewriteQuery requires lyric text to preserve (use simpleMode with '[Instrumental]' for an instrumental request)");
+            }
+            if (opts.lmPhase1 === false) {
+                throw invalidInput('rewriteQuery requires lmPhase1');
+            }
+        }
+        if (taskType === 'lego' && (opts.track === undefined || !LEGO_TRACKS.has(opts.track))) {
+            throw invalidInput(`taskType 'lego' requires track: one of ${[...LEGO_TRACKS].join('|')}`);
+        }
+        if (opts.track !== undefined && taskType !== 'lego') {
+            throw invalidInput("track is only valid with taskType 'lego'");
+        }
+        const guidanceScale = optionalFiniteNumber(opts.guidanceScale, 'guidanceScale');
+        if (guidanceScale !== undefined && guidanceScale < 0) {
+            throw invalidInput('guidanceScale must be >= 0 (0 = engine default)');
         }
         return {
             type: 'text',
             input: caption,
-            lyrics: opts.lyrics ?? '[Instrumental]',
+            lyrics: opts.lyrics ?? (opts.simpleMode === true ? '' : '[Instrumental]'),
+            simpleMode: opts.simpleMode,
+            rewriteQuery: opts.rewriteQuery,
+            normalizeLoudness: opts.normalizeLoudness,
+            computeQualityScore: opts.computeQualityScore,
             seed: optionalFiniteNumber(opts.seed, 'seed', true),
             vocalLanguage: opts.vocalLanguage,
             bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
@@ -706,6 +834,8 @@ class AudioGen {
             referenceAudio,
             sourceAudio,
             taskType,
+            track: opts.track,
+            guidanceScale,
             audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
             coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
         };
@@ -858,6 +988,20 @@ class AudioGen {
             });
             return;
         }
+        if (d.audioCodes) {
+            const understood = {
+                caption: d.caption ?? '',
+                bpm: d.bpm ?? 0,
+                duration: d.duration ?? 0,
+                keyscale: d.keyscale ?? '',
+                timesignature: d.timesignature ?? '',
+                vocalLanguage: d.vocalLanguage ?? '',
+                audioCodes: d.audioCodes
+            };
+            this._lastUnderstand = understood;
+            this._job.output({ understand: understood });
+            return;
+        }
         if (typeof d.audioDurationMs === 'number' || typeof d.totalTimeMs === 'number') {
             const stats = {
                 ...(typeof d.audioDurationMs === 'number' ? { audioDurationMs: d.audioDurationMs } : {}),
@@ -867,7 +1011,9 @@ class AudioGen {
                 ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {}),
                 ...(typeof d.gpuFallbackReason === 'number'
                     ? { gpuFallbackReason: d.gpuFallbackReason }
-                    : {})
+                    : {}),
+                ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
+                ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
             };
             this._job.end(stats, stats);
         }

@@ -40,22 +40,23 @@ Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
 [Models](#models)); point the addon at the folder that holds them.
 MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
 
-The linux-x64 prebuild bundles the CUDA backend next to Vulkan: ggml runs in
-hybrid dynamically-loaded backend mode, the CPU-variant, Vulkan, and CUDA
-backends ship as `.so` modules beside the addon, and only the CUDA module
-depends on the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the
-CUDA 13 runtime libraries (cudart and cuBLAS) resolvable at load time; hosts that
-cannot resolve them skip the module and fall back to Vulkan or CPU. The engine
-prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
-opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`
-on the build host).
+The published linux-x64 prebuild ships Vulkan. CUDA is opt-in at build time
+via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host).
+When CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend
+mode: the CPU-variant, Vulkan, and CUDA backends ship as `.so` modules beside
+the addon, and only the CUDA module depends on the CUDA runtime. Engaging
+CUDA needs the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
+cuBLAS) resolvable at load time; hosts that cannot resolve them skip the
+module and fall back to Vulkan or CPU. The engine prefers CUDA when both GPU
+backends are usable.
 
-The prebuilt CUDA module targets **compute capability 8.0 and newer**. It
-carries native code for 8.6 (RTX 30xx, A40) and 8.9 (RTX 40xx, L40) and
-JIT-compiles from 8.0 PTX for anything newer (Hopper, Blackwell / RTX 50xx),
-which costs a one-off compile on first use that the driver then caches. Cards
-below 8.0 — Turing (RTX 20xx, GTX 16xx, T4), Volta and Pascal — have no CUDA
-code path in the prebuild and should run on Vulkan.
+A CUDA build's module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
+Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
+Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
+path here: the backend skips such devices at registration and the addon falls
+back to Vulkan or CPU.
 
 To build the native addon from source in a repository checkout:
 
@@ -135,10 +136,12 @@ for await (const item of response.iterate()) {
 }
 const stats = await response.await()
 // { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId,
-//   gpuFallbackReason }
+//   gpuFallbackReason, qualityScore? }
 // backendDevice:     0 = CPU, 1 = GPU
 // backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
+// lyricsScore + lrc: alignment confidence and LRC text, only with generateLrc
+// qualityScore:      [0, 1], present only when the run set computeQualityScore
 
 await gen.destroy()
 ```
@@ -217,9 +220,44 @@ Both PCM inputs must be `Float32Array` values containing finite, normalized
 samples in interleaved stereo order (`L, R, L, R, ...`) at 48 kHz. The addon
 does not resample, convert channels, or normalize input PCM. Keep samples in
 the conventional `[-1, 1]` range. `sourceAudio` is required for cover tasks.
-`cover-nofsq` currently requires `audioCoverStrength: 1`;
-`coverNoiseStrength` controls the source/noise blend from `0` to `1`. The
-full FSQ-based `cover` task is reserved but not implemented.
+`audioCoverStrength` sets the fraction of the run that follows the source:
+`1` (the default) keeps the source structure throughout, while lower values
+let the generation finish freely after that point — `0.5` starts as a cover
+and diverges halfway. `coverNoiseStrength` controls the source/noise blend
+from `0` to `1`. The full FSQ-based `cover` task is reserved but not
+implemented.
+
+Use `lego` to generate a new isolated instrument layer that follows the
+source (tempo, key, groove). The result is only the new stem, ready to mix
+over the source. Lego requires the base DiT variant (turbo and sft are
+rejected) and a `track` name:
+
+```js
+const response = await gen.run('clean electric guitar with syncopated fills', {
+  lyrics: '[Instrumental]',
+  taskType: 'lego',
+  track: 'guitar',
+  sourceAudio
+})
+```
+
+Valid `track` names: `vocals`, `backing_vocals`, `drums`, `bass`, `guitar`,
+`keyboard`, `percussion`, `strings`, `synth`, `fx`, `brass`, `woodwinds`.
+Output length locks to the source length. Takes vary per seed; generate a few
+and keep the best. The base DiT is not in the registry `ditVariant` set yet,
+so pass it as an explicit `files.ditModel` path next to `modelDir` (which
+still resolves the three fixed stages).
+
+See [`examples/generate-lego.js`](examples/generate-lego.js) for a runnable
+stem example using raw stereo 48 kHz float PCM input:
+
+```bash
+ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  AUDIOGEN_BASE_DIT_MODEL=/path/to/acestep-v15-base-Q8_0.gguf \
+  AUDIOGEN_SOURCE_PCM=source.f32le \
+  npm run example:lego
+```
 
 See [`examples/generate-cover.js`](examples/generate-cover.js) for a runnable
 cover example using raw stereo 48 kHz float PCM input.
@@ -229,6 +267,131 @@ ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
 AUDIOGEN_MODEL_DIR=/path/to/models \
   AUDIOGEN_SOURCE_PCM=source.f32le \
   npm run example:cover
+```
+
+### Simple Mode: one sentence in, a full song out
+
+With `simpleMode: true` the caption is a short natural-language query and the
+LM composes the complete request before synthesis — a detailed caption, full
+lyrics, and every metadata field you left unset (BPM, key/scale, time
+signature, vocal language, and duration when `duration` is `0`). Anything you
+set is kept. Leave `lyrics` unset for LM-written vocals, or pass
+`'[Instrumental]'` for an instrumental song.
+
+```js
+const response = await gen.run(
+  'a romantic modern salsa with male lead vocals for a wedding',
+  { simpleMode: true, duration: 0, seed: 4242 }
+)
+```
+
+Or end to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:simple
+```
+
+### LRC generation: karaoke-style synchronized lyrics
+
+With `generateLrc: true` the engine aligns the lyrics with the generated
+audio (a DiT cross-attention probe plus DTW over the validated lyric heads)
+and delivers standard LRC text — one `[mm:ss.xx]` timestamp per lyric line —
+in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`:
+
+```js
+const response = await gen.run(caption, {
+  generateLrc: true,
+  lyrics: '[verse]\nDancing with you under the moonlight'
+})
+// ...collect the PCM...
+const stats = await response.await()
+fs.writeFileSync('song.lrc', stats.lrc)
+```
+
+It requires lyrics to align — pass them explicitly or let Simple Mode write
+them; instrumental requests are rejected — and `taskType: 'text2music'`.
+End to end from the repo (writes `audiogen-lrc.wav` + `audiogen-lrc.lrc`):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:lrc
+```
+
+### Query Rewriting: keep your lyrics, upgrade your caption
+
+With `rewriteQuery: true` the LM FORMAT pass reworks a full request before
+synthesis: your caption is rewritten into a detailed musical description and
+the lyric content is preserved, with any unset metadata filled the same way
+Simple Mode does. Unlike Simple Mode — which expands a bare query and writes
+lyrics from scratch — Query Rewriting takes caption AND lyrics as input, so
+real `lyrics` are required (`'[Instrumental]'` belongs to Simple Mode) and the
+two options are mutually exclusive:
+
+```js
+const response = await gen.run('a short salsa idea', {
+  rewriteQuery: true,
+  lyrics: '[verse]\nsuena el tambor y el barrio se enciende',
+  seed: 4242
+})
+```
+
+Faithful rewriting (lyrics back verbatim, caption on-genre) needs the 1.7B LM
+(`acestep-5Hz-lm-1.7B`); the 0.6B drifts genre, voice, and language. End to
+end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:rewrite
+```
+
+### Quality scoring: rank a batch of takes
+
+With `computeQualityScore: true` the engine teacher-forces the generated audio
+codes back through the LM and `stats.qualityScore` reports how well the take
+matches the request as a weighted `[0, 1]` score — caption and lyrics as
+normalized PMI, set metadata fields as top-k recall. Generation varies a lot
+by seed, so generate several takes and keep the best:
+
+```js
+const response = await gen.run(caption, { computeQualityScore: true, seed })
+// ...collect the PCM...
+const stats = await response.await()
+console.log(stats.qualityScore) // e.g. 0.6661
+```
+
+Scoring costs extra LM forwards after code generation and requires the LM
+code path (`taskType: 'text2music'`). End to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:best-of
+```
+
+### Audio understanding: the pipeline in reverse
+
+`understand()` describes an audio clip instead of generating one: the engine
+encodes the PCM, recovers the FSQ semantic codes, and the LM reports metadata
+and a caption. The input is interleaved stereo float PCM at 48 kHz — the same
+layout `sourceAudio` uses:
+
+```js
+const response = await gen.understand(pcm, { seed: 42 })
+const stats = await response.await()
+const heard = stats.understand
+// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes }
+```
+
+The description streams as an `understand` output item (progress ticks report
+the `source`, `tok`, and `understand` stages) and is repeated on the terminal
+stats. `audioCodes` are the recovered semantic codes — pass them back as a
+generation's `audioCodes` to re-synthesize or remix the clip. A
+`vocalLanguage` hint forces the language field instead of the LM's guess.
+End to end from the repo (generates a clip, then describes it):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:understand
 ```
 
 ### Ordered audio editing
@@ -394,12 +557,19 @@ wrapped by a level-gated `QvacLogger`.
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
+| `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
+| `rewriteQuery` | LM FORMAT pass: rewrite the caption into a detailed description, preserving the lyric content. Requires real `lyrics` and `taskType: 'text2music'`; mutually exclusive with `simpleMode`. |
+| `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
+| `generateLrc` | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`. |
+| `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |
-| `sourceAudio` | Source PCM in the same format; required by cover tasks. |
-| `taskType` | `text2music` (default), `cover-nofsq`, or reserved `cover`. |
-| `audioCoverStrength` | Source-context strength from `0` to `1`; currently must be `1` for `cover-nofsq`. |
+| `sourceAudio` | Source PCM in the same format; required by cover and lego tasks. |
+| `taskType` | `text2music` (default), `cover-nofsq`, `lego`, or reserved `cover`. |
+| `track` | Lego target layer; required when `taskType` is `lego`. |
+| `guidanceScale` | DiT classifier-free guidance; `0` (default) auto-resolves to `1.0` on turbo and `7.0` on base/sft. |
+| `audioCoverStrength` | Fraction of the run that follows the source, from `0` to `1` (default `1`). |
 | `coverNoiseStrength` | Initial source/noise blend from `0` to `1`. |
 
 ## Models

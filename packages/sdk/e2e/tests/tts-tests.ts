@@ -268,7 +268,7 @@ export const ttsCosyvoice3Default: TestDefinition = {
     validation: 'contains-all',
     contains: ['cosyvoice3-generated', 'samples']
   },
-  metadata: { category: 'tts', dependency: 'tts-cosyvoice3', estimatedDurationMs: 150000 }
+  metadata: { category: 'tts', dependency: 'tts-cosyvoice3', estimatedDurationMs: 210000 }
 }
 
 export const ttsCosyvoice3Streaming: TestDefinition = {

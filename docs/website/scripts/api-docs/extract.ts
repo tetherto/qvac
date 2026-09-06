@@ -528,6 +528,7 @@ function buildApiFunction(
     examples: string[];
     throws: Array<{ error: string; description: string }>;
     deprecated?: string;
+    prototype?: string;
     label?: string;
   };
   const rawOverloads: RawOverload[] = overloadSigs.map((s, idx) => {
@@ -588,8 +589,15 @@ function buildApiFunction(
     const deprecated = depTag
       ? extractComment(depTag.content) || "This overload is deprecated."
       : undefined;
+    // @prototype on a specific overload — surfaces a "Prototype only"
+    // callout scoped to this overload. Mirrors @deprecated.
+    const protoTag = sigBlockTags.find((t: any) => t.tag === "@prototype");
+    const prototype = protoTag
+      ? extractComment(protoTag.content) ||
+        "This overload is a prototype and is not production grade."
+      : undefined;
 
-    return { signature: sigText, description, examples, throws, deprecated, label };
+    return { signature: sigText, description, examples, throws, deprecated, prototype, label };
   });
 
   // De-dupe identical overload signatures (TypeDoc sometimes emits the
@@ -619,6 +627,7 @@ function buildApiFunction(
           if (ov.throws.length > 0) entry.throws = ov.throws;
           if (ov.examples.length > 0) entry.examples = ov.examples;
           if (ov.deprecated) entry.deprecated = ov.deprecated;
+          if (ov.prototype) entry.prototype = ov.prototype;
           if (ov.label) entry.label = ov.label;
           return entry;
         })
@@ -760,6 +769,16 @@ function buildApiFunction(
       const depTag = blockTags.find((tag: any) => tag.tag === "@deprecated");
       if (depTag) return extractComment(depTag.content) || "This function is deprecated.";
       if (comment?.isDeprecated) return "This function is deprecated.";
+      return undefined;
+    })(),
+    prototype: (() => {
+      const protoTag = blockTags.find((tag: any) => tag.tag === "@prototype");
+      if (protoTag) {
+        return (
+          extractComment(protoTag.content) ||
+          "This function is a prototype and is not production grade."
+        );
+      }
       return undefined;
     })(),
   };

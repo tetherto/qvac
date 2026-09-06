@@ -1,10 +1,17 @@
-import { AudioGen } from '@qvac/audiogen-ggml'
+import { AudioGen, audiogenBackendName, audiogenGpuFallbackReason } from '@qvac/audiogen-ggml'
+import { z } from 'zod'
 import {
   audioGenStatsSchema,
   type AudioGenStreamRequest,
   type AudioGenStreamResponse
 } from '@/schemas/audio-gen'
+import {
+  graphicsDriverSchema,
+  type BackendFallback,
+  type InferenceBackendDiagnostics
+} from '@/schemas/index'
 import { getEngineLogger } from '@/logging/index'
+import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { resolveAudioGenPcm } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
 import { getModel } from '@/runtime/model-registry'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
@@ -143,13 +150,53 @@ export async function* audioGenStream(
     return
   }
 
-  const stats = audioGenStatsSchema.parse(await response.await())
-  yield {
+  const raw = await response.await()
+  const stats = audioGenStatsSchema.parse(raw)
+  const diagnostics = buildBackendDiagnostics(audiogenStats.parse(raw))
+  const terminal: AudioGenStreamResponse = {
     type: 'audioGenStream',
     done: true,
     stopReason: 'completed',
-    stats
+    stats,
+    ...(diagnostics && { diagnostics })
   }
+  yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
+}
+
+// The addon reports gpuFallbackReason, which the wire shape deliberately does
+// not carry: it reaches callers named, on diagnostics.fallback.reason.
+const audiogenStats = audioGenStatsSchema.extend({
+  gpuFallbackReason: z.number().optional()
+})
+
+type AudiogenStats = z.infer<typeof audiogenStats>
+
+/** An unrecognized GPU id yields no diagnostics rather than a guessed backend name. */
+function buildBackendDiagnostics(stats: AudiogenStats): InferenceBackendDiagnostics | undefined {
+  if (stats.backendDevice === undefined) return undefined
+  if (stats.backendDevice !== 1) {
+    const fallback = gpuFallbackDetail(stats)
+    return { selectedBackend: 'cpu', selectedDevice: 'cpu', ...(fallback && { fallback }) }
+  }
+
+  // A 'cpu' name against backendDevice 1 is the addon contradicting itself.
+  const selectedBackend = audiogenBackendName(stats.backendId)
+  if (selectedBackend === undefined || selectedBackend === 'cpu') return undefined
+
+  const graphicsApi = graphicsDriverSchema.safeParse(selectedBackend)
+  return {
+    selectedBackend,
+    selectedDevice: 'gpu',
+    ...(graphicsApi.success && { graphicsApi: graphicsApi.data })
+  }
+}
+
+// `none` and `not-requested` describe a run that never lost a GPU, and an
+// unmapped code must not become a guessed reason.
+function gpuFallbackDetail(stats: AudiogenStats): BackendFallback | undefined {
+  const reason = audiogenGpuFallbackReason(stats.gpuFallbackReason)
+  if (reason === undefined || reason === 'none' || reason === 'not-requested') return undefined
+  return { requestedDevice: 'gpu', reason }
 }
 
 /**

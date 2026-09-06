@@ -85,6 +85,11 @@ public:
     int lmTopK = 0;
     float lmCfgScale = 2.0F;
     bool lmPhase1 = true;
+    bool simpleMode = false;
+    bool rewriteQuery = false;
+    bool normalizeLoudness = true;
+    bool generateLrc = false;
+    bool computeQualityScore = false;
     bool dcwEnabled = true;
     float dcwScaler = 0.05F;
     float dcwHighScaler = 0.02F;
@@ -93,9 +98,25 @@ public:
     std::vector<float> referenceAudio;
     std::vector<float> sourceAudio;
     std::string taskType = "text2music";
+    std::string track;
+    float guidanceScale = 0.0F;
     float audioCoverStrength = 1.0F;
     float coverNoiseStrength = 0.0F;
     std::vector<AudioEditOperationInput> editOperations;
+    // Reverse pipeline: describe the sourceAudio instead of generating.
+    bool understand = false;
+  };
+
+  // Result of an understand job: the LM's description of the audio plus the
+  // recovered FSQ codes (reusable as a generation's audioCodes).
+  struct UnderstandOutput {
+    std::string caption;
+    int bpm = 0;
+    float duration = 0.0F;
+    std::string keyscale;
+    std::string timesignature;
+    std::string vocalLanguage;
+    std::vector<int> audioCodes;
   };
 
   explicit AcestepModel(AcestepConfig config);
@@ -133,9 +154,12 @@ public:
 
   int sampleRate() const { return sampleRate_; }
   int channels() const { return channels_; }
+  std::string lrcText() const { return lrc_; }
 
 private:
   Output generate(const AnyInput& in);
+  UnderstandOutput understandAudio(const AnyInput& in);
+  std::shared_ptr<tts_cpp::acestep::Engine> acquireEngine();
   static void validateConfig(const AcestepConfig& cfg);
   void loadLocked();
   void unloadLocked();
@@ -153,6 +177,11 @@ private:
   double audioDurationMs_ = 0.0;
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
+  std::string lrc_; // synchronized lyric timestamps of the last run
+  double lyricsScore_ = 0.0;
+  bool hasLyricsScore_ = false; // set per run; gates the lyricsScore stat
+  double qualityScore_ = 0.0;
+  bool hasQualityScore_ = false; // set per run; gates the qualityScore stat
   int sampleRate_ = 0; // populated from the engine result in generate()
   int channels_ = 0;   // populated from the engine result in generate()
 

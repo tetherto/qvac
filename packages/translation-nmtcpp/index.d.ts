@@ -140,8 +140,9 @@ declare namespace TranslationNmtcpp {
         gpuDevice?: number;
         /**
          * Path to the directory containing backend shared libraries
-         * (libqvac-ggml-vulkan.so, etc.). Defaults to `<package>/prebuilds` — where
-         * npm install places the shipped prebuilds.
+         * (libqvac-ggml-vulkan.so, etc.). Defaults to `@qvac/fabric`'s `prebuilds/`
+         * on desktop, falling back to this package's `prebuilds/` on mobile where
+         * the package tree isn't resolvable from the packed worklet.
          */
         backendsDir?: string;
         /**
