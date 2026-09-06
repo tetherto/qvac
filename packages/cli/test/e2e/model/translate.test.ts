@@ -69,6 +69,32 @@ describe('qvac translate: real NMT model', () => {
     assert.match(body.translations[1]!, /thank/i)
   })
 
+  it('keeps a newline inside one input from splitting it into two entries', async () => {
+    // The batch path used to return the translations joined by '\n', which made an
+    // input whose own translation contains a newline unrecoverable — the caller could
+    // not tell it apart from two separate inputs. These two requests produce the same
+    // text and must not produce the same shape.
+    const withNewline = await translate({
+      model: ALIAS,
+      text: ['Guten Morgen\nVielen Dank', 'Bis bald']
+    })
+    assert.equal(withNewline.statusCode, 200)
+
+    const joined = (withNewline.json() as TranslationResult).translations
+    assert.equal(joined.length, 2)
+    assert.ok(joined[0]!.includes('\n'), 'expected the newline to survive inside its own entry')
+    assert.match(joined[0]!, /morning/i)
+    assert.match(joined[0]!, /thank/i)
+    assert.match(joined[1]!, /soon/i)
+
+    const separate = await translate({
+      model: ALIAS,
+      text: ['Guten Morgen', 'Vielen Dank', 'Bis bald']
+    })
+    assert.equal(separate.statusCode, 200)
+    assert.equal((separate.json() as TranslationResult).translations.length, 3)
+  })
+
   it('streams a batch as one item per input', async () => {
     const res = await translate({
       model: ALIAS,
