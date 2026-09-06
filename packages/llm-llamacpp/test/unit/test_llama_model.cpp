@@ -893,7 +893,7 @@ TEST_F(LlamaModelTest, CommonParamsParseLoadModeNone) {
   EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseLoadModeDefaultsToMmap) {
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeDefaultsToAuto) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -904,7 +904,7 @@ TEST_F(LlamaModelTest, CommonParamsParseLoadModeDefaultsToMmap) {
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
-  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_MMAP);
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_AUTO);
 }
 
 TEST_F(LlamaModelTest, CommonParamsParseLoadModeHyphenVariant) {
