@@ -14,6 +14,24 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- Add NVIDIA Nemotron 3.5 ASR Streaming 0.6B support to the Parakeet engine,
+  including locale prompting, cache-aware streaming operating points,
+  conversion tooling, and a model-specific 320 ms streaming default.
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-03. Silero VAD now honors
+  `use_gpu`: the compute backends match the weight placement, fixing the
+  ggml_backend_sched abort ("pre-allocated tensor in a buffer that cannot
+  run the operation") that killed every `use_gpu=true` VAD context init on
+  GPU builds (Metal, Vulkan, CUDA, HIP), and the VAD LSTM input is made
+  contiguous to satisfy the CUDA mul-mat-vec kernel's stride requirement.
+  The addon creates its VAD context with the default (CPU) parameters, so
+  runtime behavior is unchanged; the fix matters for anything that opts
+  VAD into the GPU.
+
 ## [0.4.2] - 2026-09-01
 
 ### Changed
