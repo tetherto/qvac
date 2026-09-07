@@ -26,6 +26,9 @@ export class FitStubExecutor extends AbstractModelExecutor<typeof fitStubTests> 
     try {
       const modelId = await this.resources.ensureLoaded('fit-stub')
       const report = await fitStubCheck(modelId, params)
+      // The harness only publishes `output` for a failing test, and the numbers
+      // are the point of this check, so log the report on every run.
+      console.log(`fit-stub-check report: ${JSON.stringify(report)}`)
       return ValidationHelpers.validate(JSON.stringify(report), expectation)
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)

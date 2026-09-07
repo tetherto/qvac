@@ -185,8 +185,15 @@ resources.define('echo', {
 
 // Small catalogue GGUF loaded through the fit-stub fixture: the SDK downloads
 // it and hands the cache path to the plugin, which never loads it into an engine.
+// The catalogue entry declares `engine: 'llamacpp-completion'` and loadModel now
+// rejects an explicit modelType that disagrees, so the engine hints are dropped;
+// pre-download only reads `src`.
+const fitStubSrc: Record<string, unknown> = { ...QWEN3_600M_INST_Q4 }
+delete fitStubSrc['engine']
+delete fitStubSrc['addon']
+
 resources.define('fit-stub', {
-  constant: QWEN3_600M_INST_Q4,
+  constant: fitStubSrc as unknown as typeof QWEN3_600M_INST_Q4,
   type: 'fit-stub-check'
 })
 
