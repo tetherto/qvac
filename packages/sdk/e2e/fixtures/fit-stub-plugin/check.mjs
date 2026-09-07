@@ -8,16 +8,29 @@
 //   4. runs @qvac/model-fit on the full file and on the stub, compares the plans
 //   5. deletes the stub
 //
+// Metro also parses this file for the React Native side of the e2e app, so it
+// must stay Hermes-safe: no top-level await, no import.meta, and the Bare-only
+// modules are loaded lazily so importing this file has no side effects.
+//
 // CLI: bare check.mjs /abs/path/model.gguf [nCtx] [backendsDir]
-
-import fs from 'bare-fs'
-import path from 'bare-path'
-import modelFit from '@qvac/model-fit'
 
 const GGUF_MAGIC = 0x46554747 // "GGUF" little-endian
 const SIZES = { 0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8 }
 
-export function readHeaderOffsets(fd) {
+function unwrap(mod) {
+  return mod && mod.default && typeof mod.default === 'object' ? mod.default : mod
+}
+
+async function loadDeps() {
+  const [fsMod, pathMod, fitMod] = await Promise.all([
+    import('bare-fs'),
+    import('bare-path'),
+    import('@qvac/model-fit')
+  ])
+  return { fs: unwrap(fsMod), path: unwrap(pathMod), modelFit: unwrap(fitMod) }
+}
+
+export function readHeaderOffsets(fs, fd) {
   let buf = Buffer.alloc(0)
   let filePos = 0
   let pos = 0
@@ -102,7 +115,7 @@ export function readHeaderOffsets(fd) {
   }
 }
 
-function copyPrefix(srcFd, dstPath, length) {
+function copyPrefix(fs, srcFd, dstPath, length) {
   const out = fs.openSync(dstPath, 'w')
   try {
     const chunk = Buffer.alloc(1 << 20)
@@ -148,28 +161,14 @@ function planFields(r) {
   }
 }
 
-function resolveBackendsDir(explicit) {
-  if (explicit) return explicit
-  // Statically linked prebuilds (iOS, macOS, Windows) need no directory. Where
-  // backends ship as shared libraries (Android, Linux) the addon must be told
-  // where they are; on a packed phone build neither package tree is resolvable,
-  // so the test lets the caller pass `backendsDir` and reports what was used.
-  for (const spec of ['@qvac/fabric/package', '@qvac/model-fit/package']) {
-    try {
-      const url = import.meta.resolve(spec)
-      const file = url.startsWith('file://') ? decodeURIComponent(url.slice('file://'.length)) : url
-      const dir = path.join(path.dirname(file), 'prebuilds')
-      if (fs.statSync(dir).isDirectory()) return dir
-    } catch {}
-  }
-  return undefined
-}
-
 function platformTag() {
   if (typeof Bare !== 'undefined') return `${Bare.platform}-${Bare.arch}`
   return `${process.platform}-${process.arch}`
 }
 
+// Statically linked prebuilds (iOS, macOS, Windows) need no backends directory.
+// Where backends ship as shared libraries (Android, Linux) the caller passes it
+// explicitly; the report echoes what was used.
 export async function runFitStubCheck({
   modelPath,
   nCtx = 4096,
@@ -188,11 +187,6 @@ export async function runFitStubCheck({
     errors: {}
   }
   const t0 = Date.now()
-  const srcFd = fs.openSync(modelPath, 'r')
-  const fullSize = fs.fstatSync(srcFd).size
-  const dir = stubDir || path.dirname(modelPath)
-  const stubPath = path.join(dir, `${path.basename(modelPath)}.fitstub-${Date.now()}.gguf`)
-  let stubFd = null
   const finish = () => {
     report.totalMs = Date.now() - t0
     report.verdict = {
@@ -208,10 +202,28 @@ export async function runFitStubCheck({
     }
     return report
   }
-  try {
-    report.header = Object.assign(readHeaderOffsets(srcFd), { fullSize })
 
-    stubFd = copyPrefix(srcFd, stubPath, report.header.dataOffset)
+  let deps
+  try {
+    deps = await loadDeps()
+  } catch (e) {
+    report.errors.loadDeps = String((e && e.stack) || e)
+    return finish()
+  }
+  const { fs, path, modelFit } = deps
+
+  let srcFd = null
+  let stubFd = null
+  let stubPath = null
+  try {
+    srcFd = fs.openSync(modelPath, 'r')
+    const fullSize = fs.fstatSync(srcFd).size
+    const dir = stubDir || path.dirname(modelPath)
+    stubPath = path.join(dir, `${path.basename(modelPath)}.fitstub-${Date.now()}.gguf`)
+
+    report.header = Object.assign(readHeaderOffsets(fs, srcFd), { fullSize })
+
+    stubFd = copyPrefix(fs, srcFd, stubPath, report.header.dataOffset)
     fs.ftruncateSync(stubFd, fullSize)
     fs.closeSync(stubFd)
     stubFd = null
@@ -234,13 +246,12 @@ export async function runFitStubCheck({
       report.errors.requireModelFit = 'fitParams not exported by @qvac/model-fit'
       return finish()
     }
-    const resolvedBackends = resolveBackendsDir(backendsDir)
     const opts = Object.assign(
       { nCtx, nCtxMin: nCtx, marginMiB },
-      resolvedBackends ? { backendsDir: resolvedBackends } : {}
+      backendsDir ? { backendsDir } : {}
     )
     report.fit = {
-      backendsDir: resolvedBackends || null,
+      backendsDir: backendsDir || null,
       full: null,
       stub: null,
       identical: null,
@@ -273,12 +284,16 @@ export async function runFitStubCheck({
         fs.closeSync(stubFd)
       } catch {}
     }
-    try {
-      fs.unlinkSync(stubPath)
-    } catch {}
-    try {
-      fs.closeSync(srcFd)
-    } catch {}
+    if (stubPath) {
+      try {
+        fs.unlinkSync(stubPath)
+      } catch {}
+    }
+    if (srcFd !== null) {
+      try {
+        fs.closeSync(srcFd)
+      } catch {}
+    }
   }
 }
 
@@ -293,12 +308,11 @@ if (
     console.error('usage: bare check.mjs <model.gguf> [nCtx] [backendsDir]')
     Bare.exitCode = 2
   } else {
-    const report = await runFitStubCheck({
-      modelPath,
-      nCtx: nCtxArg ? Number(nCtxArg) : 4096,
-      backendsDir
-    })
-    console.log(JSON.stringify(report, null, 2))
-    Bare.exitCode = report.verdict.pass ? 0 : 1
+    runFitStubCheck({ modelPath, nCtx: nCtxArg ? Number(nCtxArg) : 4096, backendsDir }).then(
+      (report) => {
+        console.log(JSON.stringify(report, null, 2))
+        Bare.exitCode = report.verdict.pass ? 0 : 1
+      }
+    )
   }
 }
