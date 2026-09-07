@@ -1,0 +1,84 @@
+name: Download vla-ggml integration models
+description: |
+  Pulls the SmolVLA, pi05 and GR00T artefacts the vla integration tests need
+  into `<workdir>/model/vla` and `<workdir>/test/*-oracle`. Shared by the
+  integration lane and the on-merge cache seed so the two cannot drift.
+
+  This file is also the cache key's hash input, so editing the S3 paths below
+  invalidates the cache -- which is the intended behaviour.
+
+  `download-smolvla` exists because only the SmolVLA pull is gated on a cache
+  hit in the integration lane; pi05 and GR00T are fetched unconditionally there
+  (the cache covers model/vla but not the oracle directories under test/).
+
+inputs:
+  model-s3-bucket:
+    description: S3 bucket holding the compiled models.
+    required: true
+  workdir:
+    description: Package directory to download into.
+    required: false
+    default: packages/vla-ggml
+  download-smolvla:
+    description: "'true' to pull the SmolVLA model; skipped on a cache hit."
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Download SmolVLA model from S3
+      if: inputs.download-smolvla == 'true'
+      working-directory: ${{ inputs.workdir }}
+      shell: bash
+      env:
+        MODEL_S3_BUCKET: ${{ inputs.model-s3-bucket }}
+      run: |
+        set -euo pipefail
+        echo "Downloading SmolVLA LIBERO model from S3..."
+        mkdir -p model/vla
+        aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf" model/vla/smolvla-libero-vision-q8.gguf
+        echo "SmolVLA model files:"
+        ls -la model/vla/
+
+    # Default shipping quant is `q_aggressive` (Q5_0 vision + Q8_0 VLM + Q8_0
+    # expert + F32 norms/ada; ~3.9 GB). See README-pi05-converter.md for the
+    # full quant table and sweep.
+    #
+    # No `|| true`. If any artefact is missing the step fails loudly -- a
+    # skipped pi05 e2e under a green CI is a false-positive pass.
+    - name: Download pi05 test artefacts from S3
+      working-directory: ${{ inputs.workdir }}
+      shell: bash
+      env:
+        MODEL_S3_BUCKET: ${{ inputs.model-s3-bucket }}
+      run: |
+        set -euo pipefail
+        echo "Downloading pi05 test artefacts from S3..."
+        mkdir -p model/vla/pi05 test/pi05-oracle
+        S3_BASE="s3://${MODEL_S3_BUCKET}/qvac_models_compiled/vla/pi05-base/2026-05-21"
+        aws s3 cp "$S3_BASE/pi05-base-q-aggressive.gguf"  model/vla/pi05/pi05-base-q-aggressive.gguf
+        aws s3 cp "$S3_BASE/fixture.safetensors"          test/pi05-oracle/fixture.safetensors
+        aws s3 cp "$S3_BASE/activations.safetensors"      test/pi05-oracle/activations.safetensors
+        echo "pi05 asset state after download:"
+        ls -la model/vla/pi05/ test/pi05-oracle/
+
+    # The JS integration test is a plumbing gate (finite/shape/timing), not a
+    # PyTorch-parity test, so it reads only the patchified images, state, noise
+    # and visual-pos-masks from activations_v4.
+    #
+    # No `|| true`: a missing artefact fails the step loudly.
+    - name: Download GR00T test artefacts from S3
+      working-directory: ${{ inputs.workdir }}
+      shell: bash
+      env:
+        MODEL_S3_BUCKET: ${{ inputs.model-s3-bucket }}
+      run: |
+        set -euo pipefail
+        echo "Downloading GR00T test artefacts from S3..."
+        mkdir -p model/vla/groot test/groot-oracle
+        S3_ROOT="s3://${MODEL_S3_BUCKET}/qvac_models_compiled/vla"
+        aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf"           model/vla/groot/groot-q8_vf16.gguf
+        aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors"  test/groot-oracle/activations_v4.safetensors
+        echo "GR00T asset state after download:"
+        ls -la model/vla/groot/ test/groot-oracle/

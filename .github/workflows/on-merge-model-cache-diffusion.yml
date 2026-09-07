@@ -1,0 +1,77 @@
+name: On Merge Model Cache (Diffusion)
+
+# Seeds the three `models-diffusion-cpp-v2-{base,ideogram,ltx}-*` entries that
+# integration-test-diffusion-cpp.yml restores. That workflow is only reachable
+# from a pull_request_target caller, where cache-models takes its restore-only
+# branch, so nothing writes them.
+#
+# One job per group rather than one job with three steps: the groups are
+# independent cache entries of very different sizes (base ~46 GB, ltx ~21 GB,
+# ideogram ~16 GB), so serialising them would put a ~40h ceiling on a single
+# leg and let one failure strand the other two.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/diffusion-cpp/test/integration/models.manifest.json"
+  # Longest gap must stay under the cache server's five-day prune window.
+  schedule:
+    - cron: "17 8 * * 1,4"
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    # base is ~46 GB and these runners have been seen pulling at low single-digit
+    # MB/s. Deliberately generous; a warm run exits in minutes.
+    timeout-minutes: 480
+    name: seed-model-cache-${{ matrix.group }}
+    strategy:
+      # Independent cache entries -- one group failing must not skip the others.
+      fail-fast: false
+      matrix:
+        group: [base, ideogram, ltx]
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      # Must match integration-test-diffusion-cpp.yml:197-228 exactly. All three
+      # call sites there pass cache-key-suffix equal to the group name and
+      # cache-version v2, so one matrix entry covers each.
+      - name: Seed integration test models (${{ matrix.group }})
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          group: ${{ matrix.group }}
+          cache-key-suffix: ${{ matrix.group }}
+          cache-version: v2

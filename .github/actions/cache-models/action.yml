@@ -114,7 +114,11 @@ runs:
           --paths-output "$GITHUB_OUTPUT"
 
     # Restore + automatic post-job save on trusted contexts (same-repo head,
-    # push, workflow_dispatch, merge_group). The combined cache action
+    # push, workflow_dispatch, merge_group, schedule). `schedule` runs only from
+    # the default branch, so it is as trusted as `push`; without it a cron
+    # refresh silently falls through to restore-only, downloading tens of GB and
+    # saving none of it. cpp-tests-llm.yml already lists it on its own cache
+    # step. The combined cache action
     # registers a post-step that saves models downloaded LATER in the job.
     #
     # Cache writes from fork-PR code are the poisoning risk the devops rule
@@ -129,6 +133,7 @@ runs:
         github.event_name == 'push' ||
         github.event_name == 'workflow_dispatch' ||
         github.event_name == 'merge_group' ||
+        github.event_name == 'schedule' ||
         github.event.pull_request.head.repo.full_name == github.repository
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
@@ -145,6 +150,7 @@ runs:
         github.event_name != 'push' &&
         github.event_name != 'workflow_dispatch' &&
         github.event_name != 'merge_group' &&
+        github.event_name != 'schedule' &&
         github.event.pull_request.head.repo.full_name != github.repository
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:

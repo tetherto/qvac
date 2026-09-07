@@ -1,0 +1,111 @@
+name: On Merge Model Cache (ASR)
+
+# Seeds the asr-ggml entry that integration-test-asr-ggml.yml restores. That
+# workflow is only reachable from a pull_request_target caller, where
+# cache-models takes its restore-only branch, so nothing writes it.
+#
+# Two legs, linux and win32. `enable-cross-os: 'false'` at the call site does
+# NOT mean one entry per platform: @actions/cache only appends a version
+# component when the flag is off AND the runner is Windows, so linux and macOS
+# share an entry. Seeding both would race two identical keys at post-job save
+# and throw away whichever lost. darwin restores the linux archive; its Core ML
+# sidecars are staged unconditionally by the integration lane's own darwin step.
+#
+# Only the call site at integration-test-asr-ggml.yml:370 is seeded. The one at
+# :121 lives in `pin-model-manifest`, which is dispatch-gated and therefore
+# already takes cache-models' save branch and seeds itself.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/asr-ggml/test/integration/*.manifest.json"
+  # Longest gap must stay under the cache server's five-day prune window.
+  schedule:
+    - cron: "17 14 * * 1,4"
+  # No workflow_call. This job assumes the AWS OIDC role and runs repo-local
+  # composites from `github.sha`, which under a `pull_request` caller resolves
+  # to the merge commit -- PR-head code next to live credentials. Dispatch
+  # already covers on-demand runs.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs[matrix.runner_key] }}
+    # AWS_OIDC_ROLE_ARN's trust policy is scoped to this environment.
+    environment: release
+    timeout-minutes: 180
+    name: seed-model-cache-${{ matrix.platform }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner_key: linux_ubuntu2404_x64
+          - platform: win32
+            runner_key: win_2025_x64
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # Must match integration-test-asr-ggml.yml:370-383.
+      - name: Cache integration test models
+        id: model-cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: asr-ggml
+          paths: packages/asr-ggml/models
+          hash-files-glob: packages/asr-ggml/test/integration/*.manifest.json
+          warm: 'false'
+          enable-cross-os: 'false'
+
+      # stage-integration-models.mjs imports only node builtins and shells out
+      # to the AWS CLI, so no npm install is needed here.
+      - name: Stage Parakeet GGUFs from QVAC registry (manifest-driven)
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: packages/asr-ggml
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          node scripts/stage-integration-models.mjs
+          ls -lh models/
