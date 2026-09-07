@@ -5,9 +5,10 @@
 #include <string>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
-#include <llama.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama.h>
 
 namespace backend_selection {
 
@@ -38,6 +39,8 @@ struct BackendInterface {
       ggml_backend_dev_t device);
   void* (*ggml_backend_reg_get_proc_address)(
       ggml_backend_reg_t reg, const char* name);
+  void (*ggml_backend_dev_get_props)(
+      ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
 };
 
@@ -58,9 +61,17 @@ std::pair<BackendType, std::string> chooseBackend(
 /// exclude iGPUs by default when discrete GPUs exist.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
+/// @brief Ordered eligible device names for multi-GPU split modes.
+/// Discrete GPUs are preferred over integrated GPUs and duplicate physical
+/// devices are removed using ggml's device id.
+std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
+
+/// @brief `getSplitDeviceNames()` against the real ggml backend registry.
+std::vector<std::string> getSplitDeviceNames();
+
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
-/// True only when at least one GPU device is present AND every available
-/// GPU/iGPU device's backend provides split buffers, because qvac-fabric
+/// True only when at least one eligible GPU device is present AND every
+/// eligible GPU/iGPU device's backend provides split buffers, because fabric
 /// requires split buffers from each device it distributes over and throws on
 /// the first one that lacks them. Callers should degrade row -> layer when this
 /// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so

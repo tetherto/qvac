@@ -469,12 +469,29 @@ BertModelSetup setupParams(
           "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
           "'cpu'.\n");
     }
-    // In multi-GPU split mode we intentionally omit --device so llama.cpp
-    // distributes layers/rows across all available GPUs rather than pinning
-    // to the single backend that chooseBackend selected.
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(chosenBackend.second);
+    } else {
+      const std::vector<std::string> splitDevices =
+          backend_selection::getSplitDeviceNames();
+      if (splitDevices.empty()) {
+        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+            GGML_LOG_LEVEL_WARN,
+            "[BertModel] split mode: no eligible GPU device could be "
+            "enumerated; falling back to qvac-fabric device selection\n",
+            nullptr);
+      } else {
+        std::string deviceList;
+        for (const std::string& device : splitDevices) {
+          if (!deviceList.empty()) {
+            deviceList += ",";
+          }
+          deviceList += device;
+        }
+        configVector.emplace_back("--device");
+        configVector.emplace_back(deviceList);
+      }
     }
     configFilemap.erase(deviceIt);
 

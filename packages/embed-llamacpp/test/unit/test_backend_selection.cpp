@@ -22,6 +22,7 @@ struct MockDevice {
   /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
   /// SYCL does as of qvac-fabric v10069, so this defaults to false.
   bool hasSplitBuffers = false;
+  std::string deviceId;
 
   MockDevice(
       std::string&& desc, std::string&& backend,
@@ -32,6 +33,11 @@ struct MockDevice {
 
 static MockDevice withSplitBuffers(MockDevice device) {
   device.hasSplitBuffers = true;
+  return device;
+}
+
+static MockDevice withDeviceId(MockDevice device, std::string&& id) {
+  device.deviceId = std::move(id);
   return device;
 }
 
@@ -77,6 +83,7 @@ public:
         &MockBackendInterface::static_dev_name,
         &MockBackendInterface::static_dev_type,
         &MockBackendInterface::static_reg_get_proc_address,
+        &MockBackendInterface::static_dev_get_props,
         &MockBackendInterface::static_llamaLogCallback};
   }
 
@@ -143,6 +150,18 @@ private:
       return mock_dev->type;
     }
     return GGML_BACKEND_DEVICE_TYPE_CPU;
+  }
+
+  static void static_dev_get_props(
+      ggml_backend_dev_t dev, struct ggml_backend_dev_props* props) {
+    *props = {};
+    if (!currentInstance)
+      return;
+    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
+    if (mock_dev && !mock_dev->deviceId.empty()) {
+      currentInstance->string_storage.push_back(mock_dev->deviceId);
+      props->device_id = currentInstance->string_storage.back().c_str();
+    }
   }
 
   // `static_dev_backend_reg` hands back the device pointer as the registry
@@ -308,6 +327,40 @@ TEST_F(BackendSelectionTest, MetalGPUShouldBeChosenOverCPU) {
   mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
   mockBackend.addDevice(createCPUDevice("apple m1", "cpu"));
   expectChosen(mockBackend, BackendType::GPU, "metal");
+}
+
+TEST_F(BackendSelectionTest, RocmBeforeVulkanChoosesVulkan) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, RocmAfterVulkanChoosesVulkan) {
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "hip0"));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, RocmOnlyFallsBackToCpu) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  expectChosen(mockBackend, BackendType::CPU, "none");
+}
+
+TEST_F(BackendSelectionTest, UnknownGpuFallsBackToCpu) {
+  mockBackend.addDevice(createIGPUDevice("Future GPU", "FutureBackend0"));
+  expectChosen(mockBackend, BackendType::CPU, "none");
+}
+
+TEST_F(BackendSelectionTest, MtlDeviceIsEligibleCaseInsensitively) {
+  mockBackend.addDevice(createIGPUDevice("Apple M3", "MtL0"));
+  expectChosen(mockBackend, BackendType::GPU, "mtl0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuIndexTargetingRocmFallsBackToCpu) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  MainGpu mainGpu = 0;
+  expectChosen(mockBackend, BackendType::CPU, "none", mainGpu);
 }
 
 TEST_F(BackendSelectionTest, TryMainGpuFromMapWithInteger) {
@@ -563,14 +616,38 @@ TEST_F(BackendSelectionTest, GpuCount_AccelAndCpuIgnored) {
   EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
 }
 
+TEST_F(BackendSelectionTest, GpuCount_UnsupportedBackendsIgnored) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  mockBackend.addDevice(createIGPUDevice("Future GPU", "FutureBackend0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
+}
+
+TEST_F(BackendSelectionTest, SplitDevicesExcludeUnsupportedBackends) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));
+}
+
+TEST_F(BackendSelectionTest, SplitDevicesPreferDiscreteAndDedupeByDeviceId) {
+  mockBackend.addDevice(createIGPUDevice("Apple M3", "MTL0"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK), "pci:1"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice("NVIDIA RTX 4090", VULKAN1_BACK), "pci:1"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));
+}
+
 // ---- gpuBackendSupportsRowSplit ----
 //
 // qvac-fabric builds a split buffer list for EVERY device it distributes over
 // and throws on the first one whose backend lacks split buffers, so the
 // predicate must require all of them rather than any one. `withSplitBuffers()`
-// marks a mock device as SYCL-like (registry exposes
-// `ggml_backend_split_buffer_type`); plain devices are Vulkan/Metal/OpenCL-like
-// and expose nothing, which is every backend shipped at qvac-fabric v10069.
+// marks a mock device whose registry exposes
+// `ggml_backend_split_buffer_type`; plain eligible devices expose nothing.
 
 TEST_F(BackendSelectionTest, RowSplit_NoDevices_ReturnsFalse) {
   BackendInterface bckI = mockBackend.toBackendInterface();
@@ -591,16 +668,16 @@ TEST_F(BackendSelectionTest, RowSplit_SingleGpuWithoutSplitBuffers_False) {
 
 TEST_F(BackendSelectionTest, RowSplit_SingleGpuWithSplitBuffers_True) {
   mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+      withSplitBuffers(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK)));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
 }
 
 TEST_F(BackendSelectionTest, RowSplit_AllGpusWithSplitBuffers_True) {
   mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+      withSplitBuffers(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK)));
   mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL1")));
+      withSplitBuffers(createGPUDevice("nvidia rtx 4090", VULKAN1_BACK)));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
 }
@@ -609,7 +686,7 @@ TEST_F(BackendSelectionTest, RowSplit_AllGpusWithSplitBuffers_True) {
 // one is enough for qvac-fabric to reject the load, so the answer is false.
 TEST_F(BackendSelectionTest, RowSplit_OneGpuMissingSplitBuffers_False) {
   mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+      withSplitBuffers(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK)));
   mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
@@ -619,7 +696,7 @@ TEST_F(BackendSelectionTest, RowSplit_OneGpuMissingSplitBuffers_False) {
 // device qvac-fabric will try to build a split buffer for.
 TEST_F(BackendSelectionTest, RowSplit_IgpuMissingSplitBuffers_False) {
   mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+      withSplitBuffers(createGPUDevice("nvidia rtx 4090", VULKAN1_BACK)));
   mockBackend.addDevice(createIGPUDevice("intel uhd 770", VULKAN0_BACK));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
@@ -627,9 +704,17 @@ TEST_F(BackendSelectionTest, RowSplit_IgpuMissingSplitBuffers_False) {
 
 TEST_F(BackendSelectionTest, RowSplit_AccelAndCpuIgnored_True) {
   mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+      withSplitBuffers(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK)));
   mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
   mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
+}
+
+TEST_F(BackendSelectionTest, RowSplit_UnsupportedGpuIsIgnored) {
+  mockBackend.addDevice(
+      withSplitBuffers(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK)));
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
 }
