@@ -13,9 +13,20 @@ function dirname (file) {
   return index === -1 ? '.' : file.slice(0, index)
 }
 
+// Node has `process`; Bare has the `Bare` global. Do not require('bare-os') —
+// this file is loaded from Node (consumer CMake helpers) and Bare (binding.js).
+function runtimeHost () {
+  const proc = typeof process === 'undefined' ? null : process
+  if (proc && proc.platform) return { platform: proc.platform, arch: proc.arch }
+  const bare = typeof globalThis.Bare === 'undefined' ? null : globalThis.Bare
+  if (bare && bare.platform) return { platform: bare.platform, arch: bare.arch }
+  return { platform: undefined, arch: undefined }
+}
+
 function platformPackageName (platform, arch) {
-  platform = platform || process.platform
-  arch = arch || process.arch
+  const host = runtimeHost()
+  platform = platform || host.platform
+  arch = arch || host.arch
   if (platform === 'ios') return '@qvac/fabric-ios'
   if (platform === 'android') return '@qvac/fabric-android-arm64'
   return PLATFORM_PACKAGES[`${platform}-${arch}`] || null
@@ -31,4 +42,4 @@ function resolvePlatformPrebuilds () {
   }
 }
 
-module.exports = { platformPackageName, resolvePlatformPrebuilds }
+module.exports = { platformPackageName, resolvePlatformPrebuilds, runtimeHost }

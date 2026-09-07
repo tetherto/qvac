@@ -48,21 +48,19 @@ function addBareAliases (prebuildDir, packageName) {
   if (alias === source) return
   const sourcePath = path.join(prebuildDir, source)
   if (!fs.existsSync(sourcePath)) return
-  linkOrCopy(sourcePath, path.join(prebuildDir, alias), source)
+  linkOrCopy(sourcePath, path.join(prebuildDir, alias))
   const exportsSource = `${source}.exports`
   const exportsSourcePath = path.join(prebuildDir, exportsSource)
   if (fs.existsSync(exportsSourcePath)) {
-    linkOrCopy(exportsSourcePath, path.join(prebuildDir, `${alias}.exports`), exportsSource)
+    linkOrCopy(exportsSourcePath, path.join(prebuildDir, `${alias}.exports`))
   }
 }
 
-function linkOrCopy (from, to, relative) {
+function linkOrCopy (from, to) {
+  // Copy, do not symlink: matches prepare-platform-packages (npm pack omits
+  // symlinks, and require.addon() looks up qvac__fabric-<platform>.bare).
   fs.rmSync(to, { force: true })
-  try {
-    fs.symlinkSync(relative, to)
-  } catch {
-    fs.copyFileSync(from, to)
-  }
+  fs.copyFileSync(from, to)
 }
 
 function writePlatformStub (packageDir, packageName) {

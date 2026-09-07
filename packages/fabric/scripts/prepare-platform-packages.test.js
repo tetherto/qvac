@@ -65,11 +65,16 @@ test('prepare-platform-packages slices hosts, groups mobile flavours, and aliase
     assert.ok(fs.existsSync(path.join(ios, 'ios-arm64', 'qvac__fabric.bare')))
     assert.ok(fs.existsSync(path.join(ios, 'ios-arm64-simulator', 'qvac__fabric.bare')))
 
-    const linuxAlias = path.join(output, 'linux-x64', 'prebuilds', 'linux-x64', 'qvac__fabric-linux-x64.bare')
-    assert.equal(fs.readlinkSync(linuxAlias), 'qvac__fabric.bare')
+    const linuxDir = path.join(output, 'linux-x64', 'prebuilds', 'linux-x64')
+    const linuxAlias = path.join(linuxDir, 'qvac__fabric-linux-x64.bare')
     assert.equal(
-      fs.readlinkSync(path.join(output, 'linux-x64', 'prebuilds', 'linux-x64', 'qvac__fabric-linux-x64.bare.exports')),
-      'qvac__fabric.bare.exports'
+      fs.readFileSync(linuxAlias, 'utf8'),
+      fs.readFileSync(path.join(linuxDir, 'qvac__fabric.bare'), 'utf8')
+    )
+    assert.equal(fs.lstatSync(linuxAlias).isSymbolicLink(), false)
+    assert.equal(
+      fs.readFileSync(path.join(linuxDir, 'qvac__fabric-linux-x64.bare.exports'), 'utf8'),
+      fs.readFileSync(path.join(linuxDir, 'qvac__fabric.bare.exports'), 'utf8')
     )
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
