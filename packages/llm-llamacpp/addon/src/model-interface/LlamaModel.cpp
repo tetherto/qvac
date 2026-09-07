@@ -983,6 +983,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // Reset per-inference counters so they don't leak across runs.
   state_->llmContext_->resetThinkingBlockDiscards();
   state_->llmContext_->resetVisionEncodeMs();
+  state_->llmContext_->resetSpeculativeRuntimeStats();
 
   // Prompt media (both hoisted byte buffers and inline paths) is loaded by
   // resolveChatAndTools in prompt-marker order; see computeMediaLoadOrder.

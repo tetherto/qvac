@@ -106,6 +106,17 @@ safeTest('mtmd context: text turn drafts through the MTP head', { timeout: 600_0
   )
 })
 
+safeTest('mtmd context: one-token MTP text turn commits to KV', { timeout: 600_000 }, async (t) => {
+  const addon = await loadMtmdMtp(t, { n_predict: '1' })
+  const response = await addon.run(TEXT_PROMPT)
+  const output = await collectResponse(response)
+  const stats = response.stats
+  t.ok(output.length > 0, `one-token text turn produced output (${output.length} chars)`)
+  t.is(stats.generatedTokens, 1, 'one-token mtmd MTP turn reports exactly one generated token')
+  t.ok(stats.CacheTokens > stats.promptTokens, 'one-token mtmd MTP turn committed the token to KV')
+  t.is(stats.stopReason, 'predictionLimit', 'one-token mtmd MTP turn stops at the prediction limit')
+})
+
 safeTest(
   'mtmd context: image turn falls back to non-speculative decoding',
   { timeout: 600_000 },
@@ -127,6 +138,39 @@ safeTest(
     // fall back to normal decoding: no drafting at all.
     t.is(stats.draftTotal, 0, 'image turn does not draft (fell back to normal decode)')
     t.is(stats.draftAccepted, 0, 'image turn accepted no drafts')
+  }
+)
+
+safeTest(
+  'mtmd context: text turn drafts again after an image fallback',
+  { timeout: 600_000 },
+  async (t) => {
+    const addon = await loadMtmdMtp(t)
+    const imageBytes = new Uint8Array(fs.readFileSync(getMediaPath('elephant.jpg')))
+    const imageMessages = [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', type: 'media', content: imageBytes },
+      { role: 'user', content: 'Describe this image in one sentence.' }
+    ]
+
+    const imageResponse = await addon.run(imageMessages)
+    const imageOutput = await collectResponse(imageResponse)
+    t.ok(imageOutput.length > 0, `image turn produced output (${imageOutput.length} chars)`)
+    t.is(imageResponse.stats.draftTotal, 0, 'image turn falls back without drafting')
+
+    const textResponse = await addon.run(TEXT_PROMPT)
+    const textOutput = await collectResponse(textResponse)
+    const textStats = textResponse.stats
+    t.ok(textOutput.length > 0, `text turn produced output (${textOutput.length} chars)`)
+    t.ok(/paris/i.test(textOutput), 'text turn still answers coherently after image fallback')
+    t.ok(
+      textStats.draftTotal > 0,
+      `MTP drafts again after image fallback (draftTotal=${textStats.draftTotal})`
+    )
+    t.ok(
+      textStats.draftAccepted > 0,
+      `target accepts drafts after image fallback (draftAccepted=${textStats.draftAccepted})`
+    )
   }
 )
 

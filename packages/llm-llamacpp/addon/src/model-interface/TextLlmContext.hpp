@@ -310,6 +310,7 @@ private:
       llama_token tokenId, bool sampled, unsigned generated,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch) override {
+    generationStarted_ = true;
     return processToken(
         tokenId, sampled, generated, outputCallback, inlineDecodeBatch);
   }

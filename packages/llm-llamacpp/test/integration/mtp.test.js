@@ -242,6 +242,17 @@ safeTest(
   }
 )
 
+safeTest('Qwen3.5-0.8B MTP commits a one-token generation', { timeout: 600_000 }, async (t) => {
+  const addon = await loadAddon(t, { withSpec: true, overrides: { n_predict: '1' } })
+  const response = await addon.run(PROMPT)
+  const output = await collectResponse(response)
+  const stats = response.stats
+  t.ok(output.length > 0, `one-token run produced output (${output.length} chars)`)
+  t.is(stats.generatedTokens, 1, 'one-token MTP run reports exactly one generated token')
+  t.ok(stats.CacheTokens > stats.promptTokens, 'one-token MTP run committed the token to KV')
+  t.is(stats.stopReason, 'predictionLimit', 'one-token MTP run stops at the prediction limit')
+})
+
 safeTest(
   'Qwen3.5-0.8B MTP slides past the context ceiling without FailedToDecode',
   { timeout: 600_000 },
@@ -415,6 +426,8 @@ safeTest(
     const prefillResp = await addon.run(PROMPT, { prefill: true })
     await collectResponse(prefillResp)
     t.ok(true, 'prefill-only request completed')
+    t.is(prefillResp.stats.draftAccepted, 0, 'prefill-only request reports no accepted drafts')
+    t.is(prefillResp.stats.draftTotal, 0, 'prefill-only request reports no draft attempts')
 
     const response = await addon.run(PROMPT)
     const output = await collectResponse(response)

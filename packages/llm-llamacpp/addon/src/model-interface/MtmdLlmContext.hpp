@@ -301,6 +301,7 @@ private:
   /// text spans, so every position advance keeps the KV-cell count honest.
   void advanceTextSpan(llama_pos newPos);
   void initializeCommonState();
+  void initializeMtpDraftContext();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
   // Hooks for the shared MTP loop in `LlmContext`.
@@ -494,6 +495,8 @@ private:
   // so there is no reasoning boundary to anchor. See
   // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
   bool isPrefillOnlyRequest_ = false;
+  bool mtpDraftRequested_ = false;
+  bool specDisabledByMedia_ = false;
 
   // Per-request toggle for post-generation thinking-block KV compaction.
   // Default-off, except Qwen3-family models opt in during initialization;

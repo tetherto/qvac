@@ -96,10 +96,7 @@ void MtmdLlmContext::initializeCommonState() {
         ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
   }
 
-  // MTP draft context: only text-only turns actually draft on the mtmd path
-  // (image turns fall back). On failure `spec_` stays null and generation
-  // runs non-speculatively.
-  const bool specTypeIsMtp =
+  mtpDraftRequested_ =
       std::find(
           params_.speculative.types.begin(),
           params_.speculative.types.end(),
@@ -108,54 +105,14 @@ void MtmdLlmContext::initializeCommonState() {
   // under continuous batching (n_parallel > 1) the scheduler never calls
   // runSpeculativeGeneration, so a per-slot draft context is pure waste. Gate on
   // single-context and warn on the unsupported combo (mirrors TextLlmContext).
-  if (specTypeIsMtp && params_.n_parallel > 1) {
+  if (mtpDraftRequested_ && params_.n_parallel > 1) {
     QLOG_IF(
         Priority::WARNING,
         "[MtmdLlm] spec-type=draft-mtp is ignored under continuous batching "
         "(n_parallel > 1); running non-speculatively\n");
   }
-  const bool wantMtpDraft = specTypeIsMtp && params_.n_parallel <= 1;
-  if (wantMtpDraft) {
-    try {
-      auto cparamsMtp = common_context_params_to_llama(params_);
-      cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
-      cparamsMtp.type_k = params_.speculative.draft.cache_type_k;
-      cparamsMtp.type_v = params_.speculative.draft.cache_type_v;
-      cparamsMtp.n_rs_seq = 0;
-      cparamsMtp.n_outputs_max =
-          static_cast<uint32_t>(std::max(1, params_.n_parallel));
-      ctxDraft_.reset(llama_init_from_model(modelCtx_.model, cparamsMtp));
-      if (!ctxDraft_) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[MtmdLlm] MTP draft context could not be created for this "
-            "model; spec-type=draft-mtp will be inert\n");
-      } else {
-        params_.speculative.draft.ctx_tgt = modelCtx_.lctx;
-        params_.speculative.draft.ctx_dft = ctxDraft_.get();
-        // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
-        // draft loop is bounded: it uses its own construction-time params.n_max
-        // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
-        // per-round dp.n_max hint. kMaxSpecDraft matches runSpeculativeGeneration.
-        params_.speculative.draft.n_max =
-            std::min(params_.speculative.draft.n_max, kMaxSpecDraft);
-        spec_.reset(common_speculative_init(
-            params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
-        ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
-        QLOG_IF(
-            Priority::INFO,
-            "[MtmdLlm] MTP draft context + common_speculative initialized\n");
-      }
-    } catch (const std::exception& e) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "[MtmdLlm] MTP draft setup failed (%s); continuing without "
-              "speculative decoding\n",
-              e.what()));
-      ctxDraft_.reset();
-      spec_.reset();
-    }
+  if (mtpDraftRequested_ && params_.n_parallel <= 1) {
+    initializeMtpDraftContext();
   }
 
   if ((llama_model_chat_template(modelCtx_.model, nullptr) == nullptr) &&
@@ -266,6 +223,51 @@ void MtmdLlmContext::initializeCommonState() {
         eogTokens_.push_back(t);
       }
     }
+  }
+}
+
+void MtmdLlmContext::initializeMtpDraftContext() {
+  try {
+    auto cparamsMtp = common_context_params_to_llama(params_);
+    cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+    cparamsMtp.type_k = params_.speculative.draft.cache_type_k;
+    cparamsMtp.type_v = params_.speculative.draft.cache_type_v;
+    cparamsMtp.n_rs_seq = 0;
+    cparamsMtp.n_outputs_max =
+        static_cast<uint32_t>(std::max(1, params_.n_parallel));
+    ctxDraft_.reset(llama_init_from_model(modelCtx_.model, cparamsMtp));
+    if (!ctxDraft_) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[MtmdLlm] MTP draft context could not be created for this "
+          "model; spec-type=draft-mtp will be inert\n");
+      spec_.reset();
+      return;
+    }
+    params_.speculative.draft.ctx_tgt = modelCtx_.lctx;
+    params_.speculative.draft.ctx_dft = ctxDraft_.get();
+    // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
+    // draft loop is bounded: it uses its own construction-time params.n_max
+    // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
+    // per-round dp.n_max hint. kMaxSpecDraft matches runSpeculativeGeneration.
+    params_.speculative.draft.n_max =
+        std::min(params_.speculative.draft.n_max, kMaxSpecDraft);
+    spec_.reset(common_speculative_init(
+        params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
+    ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
+    specDisabledByMedia_ = false;
+    QLOG_IF(
+        Priority::INFO,
+        "[MtmdLlm] MTP draft context + common_speculative initialized\n");
+  } catch (const std::exception& e) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[MtmdLlm] MTP draft setup failed (%s); continuing without "
+            "speculative decoding\n",
+            e.what()));
+    ctxDraft_.reset();
+    spec_.reset();
   }
 }
 
@@ -669,9 +671,12 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     int32_t res;
     if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
       // The vision decode bypasses the MTP draft context, leaving it
-      // misaligned: disable speculation for the rest of the session.
+      // misaligned: suspend speculation for this request. resetState()
+      // recreates the draft context once the target KV has been cleared, so a
+      // later text-only turn on the same loaded mtmd model can draft again.
       spec_.reset();
       ctxDraft_.reset();
+      specDisabledByMedia_ = true;
       // Inlined copy of the IMAGE branch of qvac-fabric's
       // mtmd_helper_eval_chunk_single (tools/mtmd/mtmd-helper.cpp): encode ->
       // get_output_embd -> decode_image_chunk, called with the SAME args the
@@ -855,6 +860,8 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
   // Per-request speculative stats.
   draftAccepted_ = 0;
   draftTotal_ = 0;
+  specGeneratedTokens_ = 0;
+  lastGenerationUsedSpec_ = false;
 
   if (spec_) {
     return runSpeculativeGeneration(outputCallback);
@@ -1118,9 +1125,9 @@ void MtmdLlmContext::specBeginGeneration(
 
 // Per-token processing for the speculative loop.
 SequenceStepResult MtmdLlmContext::specProcessToken(
-    llama_token tokenId, bool /*sampled*/, unsigned /*generated*/,
+    llama_token tokenId, bool /*sampled*/, unsigned generated,
     const std::function<void(const std::string&)>& outputCallback,
-    LlamaBatch* /*inlineDecodeBatch*/) {
+    LlamaBatch* inlineDecodeBatch) {
   const std::string tokenStr =
       common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
   if (outputCallback) {
@@ -1170,8 +1177,13 @@ SequenceStepResult MtmdLlmContext::specProcessToken(
   }
 
   GenerationStopReason stopReason = GenerationStopReason::None;
+  const bool reachedBudget =
+      inlineDecodeBatch == nullptr && params_.n_predict > 0 &&
+      generated >= static_cast<unsigned>(params_.n_predict);
   if (isEos) {
     stopReason = GenerationStopReason::Eos;
+  } else if (reachedBudget) {
+    stopReason = GenerationStopReason::PredictionLimit;
   } else if (checkAntiprompt()) {
     stopReason = GenerationStopReason::Antiprompt;
   }
@@ -1632,6 +1644,10 @@ void MtmdLlmContext::resetState(bool resetStats) {
 
   // Reset sampler if available
   common_sampler_reset(smpl_.get());
+
+  if (specDisabledByMedia_ && mtpDraftRequested_ && params_.n_parallel <= 1) {
+    initializeMtpDraftContext();
+  }
 }
 
 void MtmdLlmContext::resetMedia() { bitmaps_.entries.clear(); }

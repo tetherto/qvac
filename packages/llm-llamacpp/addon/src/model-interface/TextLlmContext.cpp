@@ -794,6 +794,8 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
   // Per-request speculative stats.
   draftAccepted_ = 0;
   draftTotal_ = 0;
+  specGeneratedTokens_ = 0;
+  lastGenerationUsedSpec_ = false;
 
   // MTP speculative decoding takes a dedicated draft/verify/accept loop.
   if (spec_) {

@@ -458,6 +458,18 @@ public:
    */
   [[nodiscard]] int64_t getDraftAccepted() const { return draftAccepted_; }
   [[nodiscard]] int64_t getDraftTotal() const { return draftTotal_; }
+  [[nodiscard]] bool wasLastGenerationSpeculative() const {
+    return lastGenerationUsedSpec_;
+  }
+  [[nodiscard]] int64_t getSpecGeneratedTokens() const {
+    return specGeneratedTokens_;
+  }
+  void resetSpeculativeRuntimeStats() {
+    draftAccepted_ = 0;
+    draftTotal_ = 0;
+    specGeneratedTokens_ = 0;
+    lastGenerationUsedSpec_ = false;
+  }
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -566,6 +578,8 @@ protected:
   common_context_seq_rm_type ctxTgtSeqRmType_ = COMMON_CONTEXT_SEQ_RM_TYPE_PART;
   int64_t draftAccepted_ = 0;
   int64_t draftTotal_ = 0;
+  int64_t specGeneratedTokens_ = 0;
+  bool lastGenerationUsedSpec_ = false;
   std::atomic<bool> stopGeneration_ = false;
 
   // Mirror a target-context KV rollback onto the MTP draft context so the two
@@ -668,11 +682,37 @@ protected:
     return specPos() + needed <= specCtxCeiling();
   }
 
+  void specCommitPendingToken(
+      llama_token token, LlamaBatch& batch, const char* errorMessage) {
+    if (!specEnsurePendingTokenHeadroom()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextOverflow), errorMessage);
+    }
+    const llama_pos pos = specPos();
+    common_batch_clear(*batch);
+    common_batch_add(*batch, token, pos, {seqId_}, true);
+    if (decodeAndSpecProcess(*batch) != 0) {
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(FailedToDecode), errorMessage);
+    }
+    specSetPos(pos + 1);
+  }
+
+  [[nodiscard]] bool specEnsurePendingTokenHeadroom() {
+    if (specPos() + 1 <= specCtxCeiling()) {
+      return true;
+    }
+    specApplyContextDiscard();
+    return specPos() + 1 <= specCtxCeiling();
+  }
+
   // MTP speculative-decoding generation loop: draft from the MTP head, verify
   // the draft against the target in one batch, accept the longest matching
   // prefix, and feed each accepted token through specProcessToken.
   GenerateResponseResult runSpeculativeGeneration(
       const std::function<void(const std::string&)>& outputCallback) {
+    lastGenerationUsedSpec_ = true;
+    specGeneratedTokens_ = 0;
     specBeginGeneration(outputCallback);
 
     if (stopGeneration_.load()) {
@@ -739,23 +779,46 @@ protected:
         return specFinish(outputCallback, /*ok=*/false);
       }
       specRecoverReasoning(idLast, specBatch, outputCallback);
+      if (!specEnsurePendingTokenHeadroom()) {
+        return specFinish(outputCallback, /*ok=*/false);
+      }
       const llama_token next = specSampleAndAccept(-1);
       const SequenceStepResult step = specProcessToken(
           next, /*sampled=*/true, ++generated, outputCallback, &specBatch);
+      specGeneratedTokens_ = generated;
       idLast = step.token;
+      if (!step.finished && !step.decodedInline && params.n_predict > 0 &&
+          generated >= static_cast<unsigned>(params.n_predict)) {
+        specCommitPendingToken(
+            idLast,
+            specBatch,
+            "[LlmContext] failed to decode speculative final token after "
+            "reasoning recovery\n");
+        return specFinish(outputCallback, /*ok=*/true);
+      }
       if (step.finished) {
         return specFinish(outputCallback, /*ok=*/true);
       }
     } else {
-      // NOTE: the first token is not decoded here — it is decoded as id_last in
-      // the first verify batch below. With n_predict == 1 the loop never runs, so
-      // that single token is emitted but not committed to the KV cache (a
-      // degenerate config for speculative decoding, which targets long
-      // generations — the non-spec path decodes it). A caller needing a persisted
-      // 1-token cache should not enable spec-type.
+      // The first token is normally decoded as id_last in the first verify batch
+      // below. If a one-token prediction budget ends the generation here, commit
+      // it directly before returning so the visible output and KV cache agree.
+      if (!specEnsurePendingTokenHeadroom()) {
+        return specFinish(outputCallback, /*ok=*/false);
+      }
       const SequenceStepResult step = specProcessToken(
           idLast, sampled, ++generated, outputCallback, nullptr);
+      specGeneratedTokens_ = generated;
       idLast = step.token;
+      if (params.n_predict > 0 &&
+          generated >= static_cast<unsigned>(params.n_predict) &&
+          step.stopReason == GenerationStopReason::PredictionLimit) {
+        specCommitPendingToken(
+            idLast,
+            specBatch,
+            "[LlmContext] failed to decode speculative final token\n");
+        return specFinish(outputCallback, /*ok=*/true);
+      }
       if (step.finished) {
         return specFinish(outputCallback, /*ok=*/true);
       }
@@ -882,17 +945,32 @@ protected:
             return specFinish(outputCallback, /*ok=*/false);
           }
           specRecoverReasoning(tok, specBatch, outputCallback);
+          if (!specEnsurePendingTokenHeadroom()) {
+            return specFinish(outputCallback, /*ok=*/false);
+          }
           const llama_token next = specSampleAndAccept(-1);
           const SequenceStepResult nstep = specProcessToken(
               next, /*sampled=*/true, ++generated, outputCallback, &specBatch);
+          specGeneratedTokens_ = generated;
           idLast = nstep.token;
-          finished = nstep.finished;
+          if (!nstep.finished && !nstep.decodedInline && params.n_predict > 0 &&
+              generated >= static_cast<unsigned>(params.n_predict)) {
+            specCommitPendingToken(
+                idLast,
+                specBatch,
+                "[LlmContext] failed to decode speculative final token after "
+                "reasoning recovery\n");
+            finished = true;
+          } else {
+            finished = nstep.finished;
+          }
           reasoningRecovered = true;
           break;
         }
 
         const SequenceStepResult step = specProcessToken(
             tok, /*sampled=*/true, ++generated, outputCallback, &specBatch);
+        specGeneratedTokens_ = generated;
         idLast = step.token;
         if (step.finished) {
           finished = true;
