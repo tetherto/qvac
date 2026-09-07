@@ -27,8 +27,12 @@ export class FitStubExecutor extends AbstractModelExecutor<typeof fitStubTests> 
       const modelId = await this.resources.ensureLoaded('fit-stub')
       const report = await fitStubCheck(modelId, params)
       // The harness only publishes `output` for a failing test, and the numbers
-      // are the point of this check, so log the report on every run.
-      console.log(`fit-stub-check report: ${JSON.stringify(report)}`)
+      // are the point of this check, so log the report on every run. The iOS
+      // syslog truncates long lines, hence the chunks.
+      const json = JSON.stringify(report)
+      for (let i = 0; i < json.length; i += 600) {
+        console.log(`fit-stub-check report[${i / 600}]: ${json.slice(i, i + 600)}`)
+      }
       return ValidationHelpers.validate(JSON.stringify(report), expectation)
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
