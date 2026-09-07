@@ -1057,6 +1057,13 @@ class RegistryService extends ReadyResource {
       throw new Error('Invalid HuggingFace URL')
     }
 
+    // Download into an ephemeral per-model cache dir under outputDir
+    // (the parent of localPath) instead of the shared HF hub cache
+    // (~/.cache/huggingface). addModel()'s `finally` removes outputDir after
+    // each ingest, so this reclaims the download instead of letting the HF
+    // cache grow unbounded and fill the disk.
+    const cacheDir = path.join(path.dirname(localPath), '.hf-cache')
+
     // Isolated undici pool for this single download. Destroyed in `finally`
     // so no parked socket can leak into the next download and trigger
     // ECONNRESET from a half-closed remote.
@@ -1077,6 +1084,7 @@ class RegistryService extends ReadyResource {
             repo: parsed.repo,
             path: parsed.hfPath,
             revision: parsed.revision,
+            cacheDir,
             accessToken: hfToken,
             fetch: dispatcherFetch,
             // Force LFS over xet — the xet CAS bridge has been unreliable

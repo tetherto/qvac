@@ -106,7 +106,12 @@ async def main() -> int:
             async for response in audio_gen_stream(transport, request):
                 if response.progress is not None:
                     progress = response.progress
-                    print(f"▸ {progress.stage}: {progress.step}/{progress.total}")
+                    value = (
+                        f"{progress.step}/{progress.total}"
+                        if progress.total > 0
+                        else f"{progress.step} (indeterminate)"
+                    )
+                    print(f"▸ {progress.stage}: {value}")
                 if response.data is not None:
                     pcm_chunks.append(base64.b64decode(response.data))
                     sample_rate = response.sample_rate

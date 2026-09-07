@@ -18,8 +18,17 @@ import {
   resolveModelConstant as resolveSharedModelConstant,
   type QvacCatalogEntry
 } from '@qvac/ai-sdk-provider/models'
-import type { SecretProviderConfig } from 'openclaw/plugin-sdk/config-types'
-import type { ModelProviderConfig } from 'openclaw/plugin-sdk/provider-model-shared'
+import type { OpenClawConfig } from 'openclaw/plugin-sdk/plugin-entry'
+
+// openclaw 2026.8.1 dropped `plugin-sdk/config-types` from its exports map and
+// stopped shipping declarations for `plugin-sdk/provider-model-shared`, so the
+// two provider-config types are no longer importable by name. Derive them from
+// `OpenClawConfig` instead -- it is exported, typed, and already the entry this
+// plugin imports `definePluginEntry` from. Deriving rather than re-declaring
+// keeps these in step with upstream's real shape, and survives the next
+// internal reshuffle of where the types happen to live.
+type ModelProviderConfig = NonNullable<NonNullable<OpenClawConfig['models']>['providers']>[string]
+type SecretProviderConfig = NonNullable<NonNullable<OpenClawConfig['secrets']>['providers']>[string]
 
 export interface ResolvedOptions {
   readonly model: string

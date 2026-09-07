@@ -400,6 +400,8 @@ A non-loopback `--host` refuses to start without `--api-key` or `--api-key-file`
 
 `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file` reads it from an owner-only file instead; the CLI refuses a path that is not a regular file and warns when the file is readable beyond its owner.
 
+The QVAC surface serves **`POST /qvac/v1/translate`**: text translation through an NMT alias whose `config` carries the `engine` and the `from` / `to` languages. `text` takes one string or an array, and `stream: true` emits Server-Sent Events.
+
 See **[docs/serve/](./docs/serve/README.md)** for the server reference: shared configuration and model loading, the [QVAC surface](./docs/serve/default.md), and the [OpenAI-compatible surface](./docs/serve/openai.md) — supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS — `wav` + `pcm` natively, plus `mp3` / `opus` / `aac` / `flac` when `ffmpeg` is on the server's `PATH` — with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias, and the `GET /v1/audio/voices` / `GET /v1/audio/models` discovery endpoints).
 
 ## Configuration
