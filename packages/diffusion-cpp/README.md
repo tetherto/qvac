@@ -58,10 +58,15 @@ The package exposes four JS entry points:
 | Platform | Architecture | Status | GPU backend    |
 | -------- | ------------ | ------ | -------------- |
 | macOS    | arm64, x64   | Tier 1 | Metal          |
-| Linux    | arm64, x64   | Tier 1 | Vulkan         |
+| Linux    | arm64, x64   | Tier 1 | CUDA, Vulkan   |
 | Android  | arm64        | Tier 1 | Vulkan, OpenCL |
 | iOS      | arm64        | Tier 1 | Metal          |
-| Windows  | x64          | Tier 1 | Vulkan         |
+| Windows  | x64          | Tier 1 | CUDA, Vulkan   |
+
+CUDA ships as a runtime-loaded module and is preferred over Vulkan on NVIDIA
+GPUs. Windows needs the CUDA 13 runtime DLLs on `PATH`: `cudart64_13.dll`,
+`cublas64_13.dll`, and `cublasLt64_13.dll`. If CUDA cannot load, selection
+falls through to Vulkan and then CPU.
 
 Dependencies:
 
@@ -220,6 +225,7 @@ argument.
 | ----------------------- | ----------------------------------------- | ----------------- | ------------------------------------------------------------------------- |
 | `threads`               | number                                    | auto              | CPU threads for loading / CPU ops                                         |
 | `device`                | `'gpu'                                    | 'cpu'`            | `'gpu'`                                                                   | Prefer GPU backends or force CPU |
+| `backend`               | string                                    | automatic         | Comma-separated GPU backend priority, such as `'cuda,vulkan'`             |
 | `main-gpu`              | number \| `'integrated'` \| `'dedicated'` | unset             | Pin the GPU selected by stable-diffusion.cpp                              |
 | `type`                  | weight type                               | auto              | Override weight quantization                                              |
 | `rng`                   | `'cpu'                                    | 'cuda'            | 'std_default'`                                                            | `'cuda'`                         | Context RNG; `cuda` means Philox and is not GPU-specific |

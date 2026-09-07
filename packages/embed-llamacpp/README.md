@@ -32,14 +32,14 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
 | Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA (NVIDIA), Vulkan |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
-| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
+| Windows | x64 | 10+ | ✅ Tier 1 | CUDA (NVIDIA), Vulkan |
 
-**Note on CUDA (Linux, NVIDIA):**
-On Linux the CUDA backend ships as a dynamically loaded module alongside Vulkan, and is preferred
-over Vulkan when an NVIDIA device is present. Windows is Vulkan-only because it has no dynamic
-backend loading.
+**Note on CUDA (Linux and Windows, NVIDIA):**
+The CUDA backend ships as a dynamically loaded module alongside Vulkan, and is preferred over
+Vulkan when an NVIDIA device is present. On Windows, CUDA 13 runtime DLLs must be available on
+`PATH`: `cudart64_13.dll`, `cublas64_13.dll`, and `cublasLt64_13.dll`.
 
-- If the CUDA module or the NVIDIA driver is missing, the device never registers and selection
+- If the CUDA module, driver, or required runtime DLL is missing, the device never registers and selection
   falls through to Vulkan, then CPU. Nothing needs configuring for that.
 - `backend: "vulkan"` forces Vulkan on an NVIDIA machine. Setting `CUDA_VISIBLE_DEVICES=-1` in the
   environment has the same effect without touching the load config.
