@@ -417,6 +417,11 @@ jobs:
         shell: bash
         run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $DEFINES
 
+      - name: Pin bare-headers to the js_set_array_elements signature qvac-lib-inference-addon-cpp 1.3.3 compiles against
+        working-directory: ${{ env.WORKDIR }}/build/_bare
+        shell: bash
+        run: npm install --no-save --no-package-lock --ignore-scripts bare-headers@1.30.0
+
       - name: Dump vcpkg build logs on failure
         if: failure()
         shell: bash
