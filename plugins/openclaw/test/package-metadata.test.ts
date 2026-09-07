@@ -50,7 +50,7 @@ test('README install instructions materialize QVAC credentials through onboardin
     readme.indexOf('## Manual Local Testing')
   )
 
-  assert.match(installSection, /openclaw onboard[\s\S]*--auth-choice qvac/)
+  assert.match(installSection, /openclaw onboard[\s\S]*--auth-choice provider-plugin:qvac/)
   assert.match(installSection, /--non-interactive/)
   assert.match(installSection, /enabling[\s\S]*does\s+not[\s\S]*credentials?/i)
   assert.doesNotMatch(readme, /no additional auth setup is needed/i)
@@ -69,11 +69,11 @@ test('README explains QVAC key updates and recovery through onboarding', () => {
 
   assert.match(
     configureSection,
-    /`apiKey`\s+changes[\s\S]*re-running[\s\S]*`openclaw onboard --auth-choice qvac`/i
+    /`apiKey`\s+changes[\s\S]*re-running[\s\S]*`openclaw onboard --auth-choice provider-plugin:qvac`/i
   )
   assert.match(
     troubleshootingSection,
-    /missing[\s\S]*permission[\s\S]*openclaw onboard --auth-choice qvac/i
+    /missing[\s\S]*permission[\s\S]*openclaw onboard --auth-choice provider-plugin:qvac/i
   )
   assert.match(troubleshootingSection, /recreate[\s\S]*self-heal/i)
 })
