@@ -9,6 +9,11 @@
       "version>=": "1.4.4#3"
     },
     {
+      "name": "ggml-speech",
+      "version>=": "2026-09-04#2",
+      "default-features": false
+    },
+    {
       "name": "speech-cpp",
       "version>=": "2026-09-04#1",
       "default-features": false,

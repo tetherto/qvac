@@ -19,9 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Raise the `speech-cpp` floor to 2026-09-04#1 and the registry baseline to
-  ggml-speech 2026-09-04#2: fixes a Windows CUDA crash on engine unload and a
-  stale backend-capability cache that could abort GPU synthesis after backend
+- Raise the `speech-cpp` floor to 2026-09-04#1 and floor `ggml-speech` at
+  2026-09-04#2: fixes a Windows CUDA crash on engine unload and a stale
+  backend-capability cache that could abort GPU synthesis after backend
   reloads, and brings in the fused speech ops and CUDA-graphs decode path.
 
 ## [0.8.1] - 2026-09-01
