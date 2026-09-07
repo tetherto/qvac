@@ -1152,8 +1152,8 @@ NormalizedLoad normalizeLoadForFit(
               string_format(
                   "[LlamaModel] split-mode: heterogeneous split across "
                   "backends - %s. An even tensor-split will pace the model to "
-                  "the slowest card; pin `backend` to split on one backend, or "
-                  "set `tensor-split` to weight it.\n",
+                  "the slowest card; set `backend` with `backend-required` to "
+                  "split on one backend, or set `tensor-split` to weight it.\n",
                   perDevice.c_str()));
         }
         QLOG_IF(

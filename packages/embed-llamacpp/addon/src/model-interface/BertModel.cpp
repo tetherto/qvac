@@ -538,8 +538,8 @@ BertModelSetup setupParams(
               string_format(
                   "[BertModel] split-mode: heterogeneous split across backends "
                   "- %s. An even tensor-split will pace the model to the "
-                  "slowest card; pin `backend` to split on one backend, or set "
-                  "`tensor-split` to weight it.\n",
+                  "slowest card; set `backend` with `backend-required` to split "
+                  "on one backend, or set `tensor-split` to weight it.\n",
                   perDevice.c_str())
                   .c_str(),
               nullptr);
