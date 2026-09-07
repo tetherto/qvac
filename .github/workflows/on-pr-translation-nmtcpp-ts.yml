@@ -13,7 +13,10 @@ on:
       - tmp-*
     paths:
       - "packages/translation-nmtcpp/**"
-      - ".github/workflows/*translation-nmtcpp*.yml"
+      - ".github/workflows/*nmtcpp*.yml"
+      - "packages/fabric/vcpkg.json"
+      - "packages/fabric/vcpkg-configuration.json"
+      - ".github/workflows/reusable-ts-checks.yml"
 
 permissions:
   contents: read

@@ -13,7 +13,8 @@ on:
       - tmp-*
     paths:
       - "packages/embed-llamacpp/**"
-      - ".github/workflows/*embed-llamacpp*.yml"
+      - ".github/workflows/*embed*.yml"
+      - ".github/workflows/reusable-ts-checks.yml"
 
 permissions:
   contents: read

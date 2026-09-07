@@ -14,6 +14,7 @@ on:
     paths:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llm-llamacpp*.yml"
+      - ".github/workflows/reusable-ts-checks.yml"
 
 permissions:
   contents: read

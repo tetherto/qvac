@@ -14,6 +14,9 @@ on:
     paths:
       - "packages/model-fit/**"
       - ".github/workflows/*model-fit*.yml"
+      - "packages/fabric/vcpkg.json"
+      - "packages/fabric/vcpkg-configuration.json"
+      - ".github/workflows/reusable-ts-checks.yml"
 
 permissions:
   contents: read
