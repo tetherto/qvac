@@ -243,8 +243,11 @@ safeTest(
 )
 
 safeTest('Qwen3.5-0.8B MTP commits a one-token generation', { timeout: 600_000 }, async (t) => {
+  const cachePath = path.join(os.tmpdir(), `qvac-mtp-one-token-${Date.now()}.bin`)
+  t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
+
   const addon = await loadAddon(t, { withSpec: true, overrides: { n_predict: '1' } })
-  const response = await addon.run(PROMPT)
+  const response = await addon.run(PROMPT, { cacheKey: cachePath, saveCacheToDisk: true })
   const output = await collectResponse(response)
   const stats = response.stats
   t.ok(output.length > 0, `one-token run produced output (${output.length} chars)`)

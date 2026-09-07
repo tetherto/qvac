@@ -15,7 +15,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, safeTest, getMediaPath } = require('./utils')
+const { ensureModel, safeTest, getMediaPath, cleanupIntegrationCacheFiles } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
@@ -107,8 +107,11 @@ safeTest('mtmd context: text turn drafts through the MTP head', { timeout: 600_0
 })
 
 safeTest('mtmd context: one-token MTP text turn commits to KV', { timeout: 600_000 }, async (t) => {
+  const cachePath = path.join(os.tmpdir(), `qvac-mtp-mtmd-one-token-${Date.now()}.bin`)
+  t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
+
   const addon = await loadMtmdMtp(t, { n_predict: '1' })
-  const response = await addon.run(TEXT_PROMPT)
+  const response = await addon.run(TEXT_PROMPT, { cacheKey: cachePath, saveCacheToDisk: true })
   const output = await collectResponse(response)
   const stats = response.stats
   t.ok(output.length > 0, `one-token text turn produced output (${output.length} chars)`)
