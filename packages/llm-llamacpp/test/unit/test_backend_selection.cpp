@@ -27,6 +27,11 @@ struct MockDevice {
   /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
   /// SYCL does as of qvac-fabric v10069, so this defaults to false.
   bool hasSplitBuffers = false;
+  /// `ggml_backend_dev_props::device_id` — the PCI bus id for Vulkan, unique
+  /// per physical card. Empty means ggml reported null, which is the "cannot
+  /// dedupe, keep it" case. Descriptions are NOT unique: Vulkan reports the
+  /// raw device name, identical across identical cards.
+  std::string deviceId;
 
   MockDevice(
       std::string&& desc, std::string&& backend,
@@ -34,6 +39,11 @@ struct MockDevice {
       : description(std::move(desc)), backend_name(std::move(backend)),
         regName(std::move(reg)), type(devType) {}
 };
+
+static MockDevice withDeviceId(MockDevice device, std::string&& id) {
+  device.deviceId = std::move(id);
+  return device;
+}
 
 static MockDevice withSplitBuffers(MockDevice device) {
   device.hasSplitBuffers = true;
@@ -87,6 +97,7 @@ public:
         &MockBackendInterface::static_dev_name,
         &MockBackendInterface::static_dev_type,
         &MockBackendInterface::static_reg_get_proc_address,
+        &MockBackendInterface::static_dev_get_props,
         &MockBackendInterface::static_llamaLogCallback};
   }
 
@@ -144,6 +155,18 @@ private:
       return currentInstance->string_storage.back().c_str();
     }
     return "";
+  }
+
+  static void static_dev_get_props(
+      ggml_backend_dev_t dev, struct ggml_backend_dev_props* props) {
+    *props = {};
+    if (!currentInstance)
+      return;
+    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
+    if (mock_dev && !mock_dev->deviceId.empty()) {
+      currentInstance->string_storage.push_back(mock_dev->deviceId);
+      props->device_id = currentInstance->string_storage.back().c_str();
+    }
   }
 
   static enum ggml_backend_dev_type static_dev_type(ggml_backend_dev_t dev) {
@@ -1148,4 +1171,112 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenPreferredCpu) {
       &isMaliGpu);
   EXPECT_EQ(result.first, BackendType::CPU);
   EXPECT_FALSE(isMaliGpu);
+}
+
+// ---- getTensorSplitDeviceNames ----
+//
+// QVAC-24253: the explicit device list for LLAMA_SPLIT_MODE_TENSOR.
+//
+// qvac-fabric's tensor branch selects devices with no type filter and no
+// dedupe, so without this list it recruits integrated GPUs alongside discrete
+// ones and shards a physical GPU registered by two backends twice. These pin
+// the filtering the addon does on fabric's behalf.
+
+TEST_F(BackendSelectionTest, TensorDevices_NoDevices_ReturnsEmpty) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_TRUE(getTensorSplitDeviceNames(bckI).empty());
+}
+
+TEST_F(BackendSelectionTest, TensorDevices_OnlyCpuAndAccel_ReturnsEmpty) {
+  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
+  mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_TRUE(getTensorSplitDeviceNames(bckI).empty());
+}
+
+// The headline case: a discrete + integrated host must not put weights or KV
+// on the iGPU, because tensor parallelism paces the model by its slowest
+// participant.
+TEST_F(BackendSelectionTest, TensorDevices_ExcludesIgpuWhenDiscretePresent) {
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", "vulkan0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090 #2", "vulkan1"));
+  mockBackend.addDevice(createIGPUDevice("Intel UHD 770", "vulkan2"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+// An iGPU-only host still gets tensor mode rather than nothing.
+TEST_F(BackendSelectionTest, TensorDevices_FallsBackToIgpuWhenNoDiscrete) {
+  mockBackend.addDevice(createIGPUDevice("Intel UHD 770", "vulkan0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+}
+
+// One physical GPU registered by both Vulkan and HIP under GGML_BACKEND_DL
+// must be listed once, or it receives two shards. Same device_id, same
+// description — this is what a dual-registered card actually looks like.
+TEST_F(BackendSelectionTest, TensorDevices_DedupesDualRegisteredGpu) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("AMD Radeon 8060S", "vulkan0"), "0000:03:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("AMD Radeon 8060S", "rocm0"), "0000:03:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+}
+
+// Two identical cards: Vulkan reports the SAME description for both and
+// distinguishes them only by device_id (PCI bus id). Deduping on description
+// would silently collapse this to one device — which is the canonical
+// tensor-parallel setup, so it must not happen.
+TEST_F(BackendSelectionTest, TensorDevices_KeepsTwoIdenticalCards) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA GeForce RTX 4090", "vulkan0"), "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA GeForce RTX 4090", "vulkan1"), "0000:02:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+// A null device_id cannot be deduped against, so the device is kept —
+// dropping a real GPU is worse than tolerating a duplicate. Mirrors fabric,
+// whose find_if only matches when both ids are non-null.
+TEST_F(BackendSelectionTest, TensorDevices_KeepsDevicesWithoutDeviceId) {
+  mockBackend.addDevice(createGPUDevice("Some GPU", "vulkan0"));
+  mockBackend.addDevice(createGPUDevice("Some GPU", "vulkan1"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+// ggml types RPC devices as GPU (ggml-rpc.cpp, with a TODO). qvac-fabric
+// segregates them so they do not count as discrete GPUs — otherwise the local
+// iGPU is dropped on an iGPU + RPC host. chooseBackend already skips RPC; this
+// enumeration must too.
+TEST_F(BackendSelectionTest, TensorDevices_ExcludesRpcDevices) {
+  mockBackend.addDevice(
+      MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA RTX 4090", "vulkan0"), "0000:01:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+}
+
+// The case fabric's comment calls out by name: an RPC device must not make the
+// discrete bucket non-empty and displace the host's own integrated GPU.
+TEST_F(BackendSelectionTest, TensorDevices_RpcDoesNotDisplaceLocalIgpu) {
+  mockBackend.addDevice(
+      MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  mockBackend.addDevice(withDeviceId(
+      createIGPUDevice("Intel UHD 770", "vulkan0"), "0000:00:02.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
 }

@@ -6,7 +6,8 @@ import {
   type AudioGenProgress,
   type AudioGenResult,
   type AudioGenStats,
-  type AudioGenStreamRequest
+  type AudioGenStreamRequest,
+  type InferenceBackendDiagnostics
 } from '@qvac/inference/surface'
 import { parseClientInput } from '@/client/parse-input'
 import { generateClientRequestId } from '@/client/api/client-request-id'
@@ -64,6 +65,14 @@ export function createAudioGenResult(
   })
   stats.catch(() => {})
 
+  let resolveDiagnostics: (diagnostics: InferenceBackendDiagnostics | undefined) => void = () => {}
+  let rejectDiagnostics: (error: unknown) => void = () => {}
+  const diagnostics = new Promise<InferenceBackendDiagnostics | undefined>((resolve, reject) => {
+    resolveDiagnostics = resolve
+    rejectDiagnostics = reject
+  })
+  diagnostics.catch(() => {})
+
   function notifyProgress() {
     progressResolve?.()
     progressResolve = undefined
@@ -101,6 +110,7 @@ export function createAudioGenResult(
             const error = new InferenceCancelledError(requestId)
             rejectAudio(error)
             rejectStats(error)
+            rejectDiagnostics(error)
             break
           }
           if (sampleRate === undefined || channels === undefined || bitsPerSample === undefined) {
@@ -113,6 +123,7 @@ export function createAudioGenResult(
             bitsPerSample
           })
           resolveStats(chunk.stats)
+          resolveDiagnostics(chunk.diagnostics)
           break
         }
       }
@@ -125,6 +136,7 @@ export function createAudioGenResult(
         error instanceof Error ? error : new InvalidResponseError('audioGenStream', error)
       rejectAudio(progressError)
       rejectStats(progressError)
+      rejectDiagnostics(progressError)
     } finally {
       progressDone = true
       notifyProgress()
@@ -154,6 +166,7 @@ export function createAudioGenResult(
     requestId,
     progressStream: progressStream(),
     audio,
-    stats
+    stats,
+    diagnostics
   }
 }

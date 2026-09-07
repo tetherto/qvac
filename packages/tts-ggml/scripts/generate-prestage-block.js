@@ -38,6 +38,7 @@ const FUNCTIONAL_MODEL_TARGETS = {
   ],
   lavasrEnhancer: ['lavasr/lavasr-enhancer.gguf'],
   lavasrDenoiser: ['lavasr/lavasr-denoiser.gguf'],
+  parler: ['parler-mini-v1-q8_0.gguf'],
   cosyvoice3: [
     'cosyvoice3/cosyvoice3-llm-q8_0.gguf',
     'cosyvoice3/cosyvoice3-flow-f32.gguf',
@@ -181,6 +182,8 @@ function functionalModelsByTest(manifest) {
     FUNCTIONAL_MODEL_TARGETS.cosyvoice3,
     'CosyVoice3'
   )
+  const parlerModels = Array.isArray(manifest.parler) ? manifest.parler : []
+  const parler = requiredEntriesByTarget(parlerModels, FUNCTIONAL_MODEL_TARGETS.parler, 'Parler')
 
   return {
     runAddonTest: chatterbox,
@@ -193,7 +196,7 @@ function functionalModelsByTest(manifest) {
     runLavasrEnhancerTest: combineTargets(chatterbox, supertonic, lavasrEnhancer),
     runMultipleRunsTest: combineTargets(chatterbox, supertonic),
     runOutputSampleRateTest: supertonic,
-    runParlerTest: [],
+    runParlerTest: parler,
     runSupertonicMtlTest: supertonicMtl,
     runSupertonicTest: supertonic,
     runSupertonic3QuantTest: supertonic3
@@ -204,9 +207,10 @@ function functionalModelsByTest(manifest) {
 // values, or the manual `tests` dispatch input). Match it against the known
 // runner keys and stage the union of their models — so a partial pattern like
 // `runChatterbox` correctly stages every runner it will run on device, not just
-// an exact key. `modelsByTest` enumerates EVERY functional runner as a key
-// (including no-model ones such as runParlerTest -> []), so a runner that needs
-// no models still matches and stages nothing without erroring. An empty grep is
+// an exact key. `modelsByTest` enumerates EVERY functional runner as a key,
+// and a runner mapped to an empty model list would still match and stage
+// nothing without erroring (every current runner stages at least one file —
+// Parler was the last on-device downloader and is now staged). An empty grep is
 // benign (no shard resolved). A NON-empty grep that fails to compile or matches
 // zero runner keys is FATAL: the workflow_call lanes (weekend / on-merge /
 // benchmarks) never run validate-devices, so a test-groups <-> model-map drift

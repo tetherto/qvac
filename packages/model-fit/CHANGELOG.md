@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.0] - 2026-08-29
+
+### Fixed
+
+- Mobile integration test bundling. The two raw-fitter cases in
+  `test/integration/fit.test.js` reached the private `binding-internal.js`
+  surface, which the mobile test framework does not shim into its generated
+  `backend/` tree, so `bare-pack` failed with `MODULE_NOT_FOUND` and no mobile
+  suite could build on either platform. Those cases now live in
+  `test/integration/fit-internal.test.js`, which is excluded from the generated
+  mobile suite via `scripts/mobile-integration-exclusions.js`. Both still run on
+  desktop; no assertion changed. Broken since 0.6.0.
+
+- `bare-url` is now declared. `test/mobile/integration-runtime.cjs` requires it
+  and nothing in this package listed it.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader; no API change for this package).
+
 ## [0.7.0] - 2026-08-24
 
 ### Changed

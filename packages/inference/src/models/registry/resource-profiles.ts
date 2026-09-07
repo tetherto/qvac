@@ -573,6 +573,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 4371896
   },
+  '1f7b7f0b984cf065c604360c29c8098362ed61b290db0ff12c6f360bb1a8a980': {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 904004000
+  },
   '1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69': {
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
@@ -1250,6 +1255,27 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       ssmGroupCount: 16
     }
   },
+  '4448186216b3af4cc558bbce2c3213f01608f8f8b2e5267a9767971dd3ec8082': {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 111334654784,
+    ggufFacts: {
+      architecture: 'qwen4exp',
+      blockCount: 48,
+      headCount: 24,
+      headCountKv: 2,
+      keyLength: 256,
+      valueLength: 256,
+      embeddingLength: 2560,
+      contextLength: 262144,
+      fullAttentionInterval: 4,
+      ssmStateSize: 128,
+      ssmConvKernel: 4,
+      ssmInnerSize: 6144,
+      ssmGroupCount: 16
+    },
+    assumptions: ['artifactBytes sums 4 shards']
+  },
   '44496b0fc6e9d1650d2977e2f352b849a0edf1c7f39034e3db60c0e9deea966e': {
     schemaVersion: 1,
     engine: 'tts-ggml',
@@ -1333,6 +1359,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 20770630,
     assumptions: ['artifactBytes sums 4 companion-set files']
+  },
+  '48102e55d61aaa827b89af03d772106e37de6ee12e8746f278f6315e71d980ad': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 741330176
   },
   '48162b9ae086ad8e72275ece2245215975186de3601d5a74719de19ad88741b6': {
     schemaVersion: 1,
@@ -2875,6 +2906,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       contextLength: 40960
     }
   },
+  '98651c49ef4e3dbc2606f91bbc870431b84fdad739e9ff491e958d0f61c89a97': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 395029120
+  },
   '98d20700a345a131ffeaabf526faef324e5a1d83b75bf500c02f76401eb92d6c': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -3041,6 +3077,27 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'whispercpp-transcription',
     artifactBytes: 81781811
   },
+  a4f3b21e77353999829f2f767e9ac21ce9c71d29a74f2cc9eda48c9bf23c8b86: {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 78869128864,
+    ggufFacts: {
+      architecture: 'qwen4exp',
+      blockCount: 48,
+      headCount: 24,
+      headCountKv: 2,
+      keyLength: 256,
+      valueLength: 256,
+      embeddingLength: 2560,
+      contextLength: 262144,
+      fullAttentionInterval: 4,
+      ssmStateSize: 128,
+      ssmConvKernel: 4,
+      ssmInnerSize: 6144,
+      ssmGroupCount: 16
+    },
+    assumptions: ['artifactBytes sums 3 shards']
+  },
   a642e9c9bbe2069628bb585071a138b794d04dae588823d183aa27af76698ef3: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -3065,6 +3122,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 2228
+  },
+  a9b228101e8c3eeabeb5a38f1948f2a0a1ced9262e3261fcb301a935e38c4f28: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 1390644608
   },
   aa326306c177e11129de5bfeba518abc499c0b6005492766748a9c9ea6f4c712: {
     schemaVersion: 1,

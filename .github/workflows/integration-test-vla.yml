@@ -8,6 +8,13 @@ on:
         type: string
       repository:
         type: string
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -159,6 +166,21 @@ jobs:
         run: |
           npm install
 
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Install bare tooling
         run: npm install -g --force bare bare-make bare-runtime bare-https brittle

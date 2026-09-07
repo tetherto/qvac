@@ -70,6 +70,13 @@ export interface ApiFunction {
   examples?: string[];
   deprecated?: string;
   /**
+   * Prototype marker (`@prototype <message>` in TSDoc). Mirrors `deprecated`
+   * in shape and rendering: when set, the single-page renderer emits a
+   * "Prototype only" blockquote above the description, warning consumers
+   * that the function is not production grade.
+   */
+  prototype?: string;
+  /**
    * When the function declares multiple overloads, this is a per-overload
    * breakdown produced by the extractor (one entry per unique signature).
    * The single-page renderer emits one `#### Overload N` block per entry.
@@ -84,6 +91,8 @@ export interface ApiOverload {
   throws?: Array<{ error: string; description: string }>;
   examples?: string[];
   deprecated?: string;
+  /** See `ApiFunction.prototype`. Scoped to a single overload. */
+  prototype?: string;
   /** Optional human-friendly label, e.g. "Single text" or "Run / start". */
   label?: string;
 }

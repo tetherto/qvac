@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "audiogen-cpp/gpu_fallback.h"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/AudioGenProgress.hpp"
@@ -80,6 +81,8 @@ private:
   int sampleRate_ = 0;
   int channels_ = 0;
   std::string backendName_ = "CPU";
+  tts_cpp::GpuFallbackReason gpuFallbackReason_ =
+      tts_cpp::GpuFallbackReason::not_requested;
 };
 
 } // namespace qvac::audiogenggml::minimax

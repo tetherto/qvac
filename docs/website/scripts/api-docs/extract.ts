@@ -123,12 +123,25 @@ async function tryLoadCache(
 // Public API
 // ---------------------------------------------------------------------------
 
+function resolveSdkEntryPoint(sdkPath: string) {
+  const src = path.join(sdkPath, "src", "index.ts");
+  const root = path.join(sdkPath, "index.ts");
+  const chosen = fsSync.existsSync(src) ? src : root;
+  return chosen.replace(/\\/g, "/");
+}
+
+function resolveSdkSchemasDir(sdkPath: string) {
+  const src = path.join(sdkPath, "src", "schemas");
+  if (fsSync.existsSync(src)) return src;
+  return path.join(sdkPath, "schemas");
+}
+
 export async function extractApiData(
   sdkPath: string,
   version: string,
   options?: { forceExtract?: boolean; samplesDir?: string },
 ): Promise<ApiData> {
-  const entryPoint = path.join(sdkPath, "index.ts").replace(/\\/g, "/");
+  const entryPoint = resolveSdkEntryPoint(sdkPath);
   const tsconfigPath = path.join(sdkPath, "tsconfig.json").replace(/\\/g, "/");
 
   try {
@@ -169,7 +182,7 @@ export async function extractApiData(
 
   buildTypeMap(project);
   initTsProgram(tsconfigPath);
-  await loadZodDescriptions(path.join(sdkPath, "schemas"));
+  await loadZodDescriptions(resolveSdkSchemasDir(sdkPath));
   await loadSampleProse(options?.samplesDir);
 
   console.log(`🔍 Auditing TSDoc completeness...`);
@@ -244,7 +257,7 @@ export async function extractApiData(
 async function extractErrors(
   sdkPath: string,
 ): Promise<{ client: ErrorEntry[]; server: ErrorEntry[] }> {
-  const schemasDir = path.join(sdkPath, "schemas");
+  const schemasDir = resolveSdkSchemasDir(sdkPath);
   let clientSource = "";
   let serverSource = "";
 
@@ -528,6 +541,7 @@ function buildApiFunction(
     examples: string[];
     throws: Array<{ error: string; description: string }>;
     deprecated?: string;
+    prototype?: string;
     label?: string;
   };
   const rawOverloads: RawOverload[] = overloadSigs.map((s, idx) => {
@@ -555,7 +569,15 @@ function buildApiFunction(
     // packages/sdk/client/api/embed.ts and load-model.ts).
     const sigComment = (s as any).comment;
     const sigBlockTags = sigComment?.blockTags ?? [];
-    const description = extractComment(sigComment?.summary) || "";
+    const protoTag = sigBlockTags.find((t: any) => t.tag === "@prototype");
+    const protoSplit = protoTag
+      ? splitPrototypeTag(
+          extractComment(protoTag.content),
+          "This overload is a prototype and is not production grade.",
+        )
+      : null;
+    const description =
+      extractComment(sigComment?.summary) || protoSplit?.spilledDescription || "";
     const examples = sigBlockTags
       .filter((t: any) => t.tag === "@example")
       .map((t: any) => extractComment(t.content));
@@ -588,8 +610,11 @@ function buildApiFunction(
     const deprecated = depTag
       ? extractComment(depTag.content) || "This overload is deprecated."
       : undefined;
+    // @prototype on a specific overload — surfaces a "Prototype only"
+    // callout scoped to this overload. Mirrors @deprecated.
+    const prototype = protoSplit?.prototype;
 
-    return { signature: sigText, description, examples, throws, deprecated, label };
+    return { signature: sigText, description, examples, throws, deprecated, prototype, label };
   });
 
   // De-dupe identical overload signatures (TypeDoc sometimes emits the
@@ -619,16 +644,30 @@ function buildApiFunction(
           if (ov.throws.length > 0) entry.throws = ov.throws;
           if (ov.examples.length > 0) entry.examples = ov.examples;
           if (ov.deprecated) entry.deprecated = ov.deprecated;
+          if (ov.prototype) entry.prototype = ov.prototype;
           if (ov.label) entry.label = ov.label;
           return entry;
         })
       : undefined;
 
+  // TypeDoc treats `@prototype` as an unknown tag and swallows every
+  // following paragraph until the next `@` tag. When authors put the
+  // marker first, the real description lives in the tag body — first
+  // paragraph stays the callout, the rest becomes `description`.
+  const protoTag = blockTags.find((tag: any) => tag.tag === "@prototype");
+  const protoSplit = protoTag
+    ? splitPrototypeTag(
+        extractComment(protoTag.content),
+        "This function is a prototype and is not production grade.",
+      )
+    : null;
+
   return {
     name,
     signature,
     overloads,
-    description: extractComment(summary) || "No description available",
+    description:
+      extractComment(summary) || protoSplit?.spilledDescription || "",
     parameters,
     expandedParams,
     returns: {
@@ -762,6 +801,7 @@ function buildApiFunction(
       if (comment?.isDeprecated) return "This function is deprecated.";
       return undefined;
     })(),
+    prototype: protoSplit?.prototype,
   };
 }
 
@@ -862,7 +902,7 @@ function extractApiObjects(project: any): ApiObject[] {
       name: decl.name,
       description: (() => {
         const moduleDoc = extractComment(summary) ? null : readModuleJsDoc(sourcePath);
-        return extractComment(summary) || moduleDoc?.description || "No description available";
+        return extractComment(summary) || moduleDoc?.description || "";
       })(),
       objectSignature,
       fields,
@@ -925,13 +965,9 @@ function buildObjectSignature(
 function validateApiFunction(fn: ApiFunction): void {
   const errors: string[] = [];
   if (!fn.name?.trim()) errors.push("Missing name");
-  if (
-    !fn.description?.trim() ||
-    fn.description === "undefined" ||
-    fn.description === "null"
-  ) {
+  if (fn.description === "undefined" || fn.description === "null") {
     errors.push(
-      `Missing or invalid description (add JSDoc comment in source)`,
+      `Invalid description placeholder (add JSDoc comment in source)`,
     );
   }
   if (!fn.signature?.trim()) errors.push("Missing signature");
@@ -2262,6 +2298,30 @@ function buildSyntacticSignature(
     return `${p.name}${optional}: ${p.type}`;
   });
   return `function ${name}(${parts.join(", ")}): ${returnType};`;
+}
+
+/**
+ * TypeDoc treats unknown tags such as `@prototype` as consuming every
+ * following paragraph until the next `@` tag. When the marker is first in
+ * the JSDoc, the real description lands in the tag body. Keep the first
+ * paragraph as the prototype callout and treat the rest as description.
+ */
+function splitPrototypeTag(
+  content: string,
+  emptyFallback: string,
+): { prototype: string; spilledDescription: string } {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return { prototype: emptyFallback, spilledDescription: "" };
+  }
+  const blank = /\n[ \t]*\n/.exec(trimmed);
+  if (!blank) {
+    return { prototype: trimmed, spilledDescription: "" };
+  }
+  return {
+    prototype: trimmed.slice(0, blank.index).trim(),
+    spilledDescription: trimmed.slice(blank.index).trim(),
+  };
 }
 
 function extractComment(nodes: any): string {

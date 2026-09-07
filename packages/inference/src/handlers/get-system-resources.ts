@@ -43,6 +43,14 @@ export function handleGetSystemResources(
             totalBytes: {
               status: 'failed',
               reason: 'CPU resource collector is not initialized'
+            },
+            processUsedBytes: {
+              status: 'failed',
+              reason: 'resource collector is not initialized'
+            },
+            processAvailableBytes: {
+              status: 'failed',
+              reason: 'resource collector is not initialized'
             }
           },
           gpus: {

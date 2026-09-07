@@ -470,6 +470,8 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
     variant = 'EOU'
   } else if (lower.includes('tdt') || lowerPath.includes('parakeet-tdt')) {
     variant = 'TDT'
+  } else if (lower.includes('unified') || lowerPath.includes('parakeet-unified')) {
+    variant = 'UNIFIED'
   }
 
   if (lower.endsWith('.gguf')) {

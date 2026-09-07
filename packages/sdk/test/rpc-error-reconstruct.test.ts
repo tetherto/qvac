@@ -1,3 +1,5 @@
+// Type-only import from the package entry pins the exported record type.
+import type { ContextOverflowErrorSizes } from '@/index'
 import test from 'brittle'
 import { reconstructError, RPCError } from '@/client/rpc/rpc-error'
 // The worker serializes @qvac/inference's error classes with @qvac/inference's
@@ -85,12 +87,30 @@ test('reconstructError: ContextOverflowError round-trips with all fields', (t) =
   t.ok(r instanceof Error, 'reconstructed must still satisfy instanceof Error')
 })
 
+test('reconstructError: ContextOverflowError round-trips warm-cache fields', (t) => {
+  const contextSizes: ContextOverflowErrorSizes = {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192
+  }
+  const original = new InferenceContextOverflowError(contextSizes, 'qwen3-4b')
+  const envelope = createErrorResponse(original)
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof ContextOverflowError)
+  const r = reconstructed as ContextOverflowError
+  t.is(r.promptTokens, 31)
+  t.is(r.cachedTokens, 8170)
+  t.is(r.requiredTokens, 8201)
+  t.is(r.ctxSize, 8192)
+})
+
 test('reconstructError: ContextOverflowError tolerates missing fields', (t) => {
-  // The bare `LlamaModel::processPromptImpl` overflow path doesn't
-  // include prompt-token or ctx-size numbers in the addon message, so
-  // the server may throw `ContextOverflowError` with both fields
-  // `undefined`. The reconstructor must accept that and not throw, and
-  // `instanceof` must still hold.
+  // A bare overflow (the `processPromptImpl` wording) parses to no numbers,
+  // so every size field can be absent on the wire. The reconstructor must
+  // accept that and not throw, and `instanceof` must still hold.
   const original = new InferenceContextOverflowError()
   const envelope = createErrorResponse(original)
 
@@ -128,6 +148,17 @@ test('reconstructError: unknown error name falls through to RPCError', (t) => {
   // map keys off this exact value).
   t.is(rpc.name, 'MODEL_NOT_LOADED')
   t.is(rpc.isQvacError, true)
+})
+
+test('reconstructError: inherited object keys are not reconstructors', (t) => {
+  // "constructor" resolves through Object.prototype on an object literal;
+  // it must fall through to RPCError instead of returning a non-Error.
+  const envelope = { type: 'error' as const, name: 'constructor', message: 'probe' }
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof RPCError, 'inherited keys fall through to RPCError')
+  t.ok(reconstructed instanceof Error, 'the result is a real Error')
 })
 
 test('reconstructError: non-typed error envelope falls through to RPCError', (t) => {

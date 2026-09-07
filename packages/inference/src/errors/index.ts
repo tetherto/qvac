@@ -270,49 +270,117 @@ export class CompletionFailedError extends QvacErrorBase {
   }
 }
 
+/** The overflow sizes as one record; fields admit explicit `undefined` so a parser result assigns directly. */
+export type ContextOverflowErrorSizes = {
+  promptTokens?: number | undefined
+  cachedTokens?: number | undefined
+  requiredTokens?: number | undefined
+  ctxSize?: number | undefined
+}
+
+function normalizeContextOverflowArgs(
+  sizesOrPromptTokens?: ContextOverflowErrorSizes | number,
+  modelIdOrCtxSize?: string | number,
+  causeOrModelId?: unknown,
+  cause?: unknown,
+  extraSizes?: { cachedTokens?: number | undefined; requiredTokens?: number | undefined }
+): ContextOverflowErrorSizes & { modelId?: string | undefined; cause?: unknown } {
+  if (typeof sizesOrPromptTokens === 'object' && sizesOrPromptTokens !== null) {
+    return {
+      ...sizesOrPromptTokens,
+      modelId: modelIdOrCtxSize as string | undefined,
+      cause: causeOrModelId
+    }
+  }
+  // Only the two supported extra fields — a spread would let a wider,
+  // structurally assignable extras object override the positional args.
+  return {
+    promptTokens: sizesOrPromptTokens,
+    ctxSize: modelIdOrCtxSize as number | undefined,
+    modelId: causeOrModelId as string | undefined,
+    cause,
+    cachedTokens: extraSizes?.cachedTokens,
+    requiredTokens: extraSizes?.requiredTokens
+  }
+}
+
 /**
- * Thrown when the prompt exceeds the loaded model's configured context
- * window — distinct from a generic `CompletionFailedError` so consumers
+ * Thrown when a request no longer fits the model's effective context
+ * capacity — distinct from a generic `CompletionFailedError` so consumers
  * can drive UX (truncate, summarize, or surface a "increase ctx_size /
  * start a new thread" CTA) instead of treating it as an opaque failure.
  *
- * Carries the addon-reported prompt size and the model's context window
- * when the addon's error message includes them (the C++ overflow paths
- * in `TextLlmContext.cpp` and `MtmdLlmContext.cpp` format both numbers
- * into the message; the bare `processPromptImpl: context overflow`
- * fallback in `LlamaModel.cpp` carries neither — both fields are
- * therefore optional). `modelId` is supplied by the handler that wraps
- * the addon error.
+ * All size fields are optional: they carry whatever the addon guard
+ * reported (a cold prompt, a warm cached-plus-prompt split, or a bare
+ * overflow with no numbers). `modelId` is supplied by the handler that
+ * wraps the addon error.
  *
  * Serializes its typed fields (`toErrorResponseFields`) so a receiver can
  * rebuild it after the error crosses a serialization boundary (an RPC
  * response).
  */
 export class ContextOverflowError extends QvacErrorBase {
+  /** The prompt alone, in tokens; unset when the source reported KV cells. */
   readonly promptTokens?: number
+  /** Cached conversation on a warm-cache overflow, in `ctxSize` units. */
+  readonly cachedTokens?: number
+  /** Total the failing guard reported, in `ctxSize` units; can equal the window (`>=` triggers). */
+  readonly requiredTokens?: number
+  /** Effective per-request ceiling: `ctx_size` split across slots at `parallel > 1`. */
   readonly ctxSize?: number
   readonly modelId?: string
 
-  constructor(promptTokens?: number, ctxSize?: number, modelId?: string, cause?: unknown) {
+  /** Canonical form: the parsed sizes as one record. */
+  // lunte-disable-next-line constructor-super -- overload declaration, no body; the implementation calls super
+  constructor(contextSizes: ContextOverflowErrorSizes, modelId?: string, cause?: unknown)
+  /** @deprecated Kept for external consumers of the published package; in-repo callers use the record form. */
+  // lunte-disable-next-line constructor-super -- overload declaration, no body; the implementation calls super
+  constructor(
+    promptTokens?: number,
+    ctxSize?: number,
+    modelId?: string,
+    cause?: unknown,
+    extraSizes?: { cachedTokens?: number | undefined; requiredTokens?: number | undefined }
+  )
+  constructor(
+    sizesOrPromptTokens?: ContextOverflowErrorSizes | number,
+    modelIdOrCtxSize?: string | number,
+    causeOrModelId?: unknown,
+    cause?: unknown,
+    extraSizes?: { cachedTokens?: number | undefined; requiredTokens?: number | undefined }
+  ) {
+    const n = normalizeContextOverflowArgs(
+      sizesOrPromptTokens,
+      modelIdOrCtxSize,
+      causeOrModelId,
+      cause,
+      extraSizes
+    )
     super(
       createErrorOptions(
         ERROR_CODES.CONTEXT_OVERFLOW,
         [
-          promptTokens !== undefined ? String(promptTokens) : '',
-          ctxSize !== undefined ? String(ctxSize) : '',
-          modelId ?? ''
+          n.promptTokens !== undefined ? String(n.promptTokens) : '',
+          n.ctxSize !== undefined ? String(n.ctxSize) : '',
+          n.modelId ?? '',
+          n.cachedTokens !== undefined ? String(n.cachedTokens) : '',
+          n.requiredTokens !== undefined ? String(n.requiredTokens) : ''
         ],
-        cause
+        n.cause
       )
     )
-    if (promptTokens !== undefined) this.promptTokens = promptTokens
-    if (ctxSize !== undefined) this.ctxSize = ctxSize
-    if (modelId !== undefined) this.modelId = modelId
+    if (n.promptTokens !== undefined) this.promptTokens = n.promptTokens
+    if (n.ctxSize !== undefined) this.ctxSize = n.ctxSize
+    if (n.modelId !== undefined) this.modelId = n.modelId
+    if (n.cachedTokens !== undefined) this.cachedTokens = n.cachedTokens
+    if (n.requiredTokens !== undefined) this.requiredTokens = n.requiredTokens
   }
 
   toErrorResponseFields(): Record<string, unknown> {
     return {
       ...(this.promptTokens !== undefined && { promptTokens: this.promptTokens }),
+      ...(this.cachedTokens !== undefined && { cachedTokens: this.cachedTokens }),
+      ...(this.requiredTokens !== undefined && { requiredTokens: this.requiredTokens }),
       ...(this.ctxSize !== undefined && { ctxSize: this.ctxSize }),
       ...(this.modelId !== undefined && { modelId: this.modelId })
     }

@@ -2,7 +2,7 @@ import test from 'brittle'
 import { estimateLlm, LLM_ESTIMATOR_VERSION } from '@/resources/model-fit/estimators/llm'
 import { estimateWhisper } from '@/resources/model-fit/estimators/whisper'
 import { assessModelFitFromResources } from '@/resources/model-fit/assess'
-import { fitResidentMemory } from '@/resources/model-fit/calibration/fit'
+import { fitResidentMemory, kvObservation } from '@/resources/model-fit/calibration/fit'
 import type { CalibrationPoint } from '@/resources/model-fit/calibration/fit'
 import type { PlatformCalibration } from '@/resources/model-fit/types'
 import type { GgufFacts, ModelResourceProfile } from '@/schemas/model-resource-profile'
@@ -55,10 +55,35 @@ function profile(overrides: Partial<ModelResourceProfile> = {}): ModelResourcePr
   }
 }
 
-function resources(options: { totalBytes?: number; usedBytes?: number; gpu?: boolean } = {}) {
+function resources(
+  options: {
+    totalBytes?: number
+    usedBytes?: number
+    gpu?: boolean
+    processUsedBytes?: number
+    processAvailableBytes?: number
+  } = {}
+) {
   const total = options.totalBytes ?? 64 * GIB
   const used = options.usedBytes ?? 16 * GIB
   const provenance = { source: 'test', scope: 'system' as const }
+  const processProvenance = { source: 'test', scope: 'process' as const }
+  const processUsed =
+    options.processUsedBytes === undefined
+      ? ({ status: 'unavailable' } as const)
+      : ({
+          status: 'supported',
+          value: options.processUsedBytes,
+          provenance: processProvenance
+        } as const)
+  const processAvailable =
+    options.processAvailableBytes === undefined
+      ? ({ status: 'unavailable' } as const)
+      : ({
+          status: 'supported',
+          value: options.processAvailableBytes,
+          provenance: processProvenance
+        } as const)
 
   const value: SystemResources = {
     capabilities: {
@@ -100,7 +125,9 @@ function resources(options: { totalBytes?: number; usedBytes?: number; gpu?: boo
       cpu: { status: 'unavailable' },
       memory: {
         usedBytes: { status: 'supported', value: used, provenance },
-        totalBytes: { status: 'supported', value: total, provenance }
+        totalBytes: { status: 'supported', value: total, provenance },
+        processUsedBytes: processUsed,
+        processAvailableBytes: processAvailable
       },
       gpus: { status: 'supported', provenance, value: [] }
     }
@@ -323,6 +350,40 @@ test('estimateLlm: weights use the artifact size as the floor', (t) => {
   t.ok(result.assumptions.some((a) => a.includes('file-backed and evictable')))
 })
 
+// A completion was long assumed to add nothing on top of the load, and the
+// harness's own sampler was broken in a way that agreed. It is measured now, so
+// it lands in `working`: released after the operation, which is what
+// `sequential` counts once and `concurrent` counts per model.
+test('estimateLlm: the measured working peak is a peak, not resident memory', (t) => {
+  const withPeak = estimateLlm({
+    profile: profile({ artifactBytes: 0 }),
+    workload: { kind: 'llm', contextTokens: 512 },
+    extraArtifactBytes: 0,
+    calibration: calibration({ workingPeakBytes: { lower: 0, upper: 80 * MIB } }),
+    hasGpu: false
+  })
+  const without = estimateLlm({
+    profile: profile({ artifactBytes: 0 }),
+    workload: { kind: 'llm', contextTokens: 512 },
+    extraArtifactBytes: 0,
+    calibration: calibration(),
+    hasGpu: false
+  })
+
+  t.is(withPeak.kind, 'estimate')
+  t.is(without.kind, 'estimate')
+  if (withPeak.kind !== 'estimate' || without.kind !== 'estimate') return
+
+  t.is(withPeak.working.upper, 80 * MIB)
+  t.is(withPeak.working.lower, 0)
+  t.is(
+    withPeak.persistent.upper,
+    without.persistent.upper,
+    'the peak is not also counted as resident'
+  )
+  t.is(without.working.upper, 0, 'a fixture measured before the peak was sampled contributes none')
+})
+
 test('estimateLlm: refuses without GGUF facts or on the wrong workload', (t) => {
   const noFacts = estimateLlm({
     profile: { schemaVersion: 1, engine: 'llamacpp-completion', artifactBytes: 1 },
@@ -431,16 +492,17 @@ test('estimateWhisper: unmeasured audio coefficients refuse rather than under-es
 // Budget and reserve
 // ---------------------------------------------------------------------------
 
-test('assess: desktop reserve is the larger of 2 GiB and 15%', (t) => {
+test('assess: desktop reserve is 20% of available, capped at 2 GiB', (t) => {
   const small = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
-    resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
+    resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
     platform: 'darwin-arm64',
     calibration: calibration(),
     resolveProfile: () => profile()
   })
-  t.is(small.budget?.reservedBytes, 2 * GIB, '15% of 8 GiB is below the 2 GiB floor')
+  t.is(small.budget?.availableBytes, 5 * GIB)
+  t.is(small.budget?.reservedBytes, 1 * GIB, '20% of the 5 GiB available')
   t.is(small.budget?.availableAfterReserveBytes, 4 * GIB)
 
   const large = assessModelFitFromResources({
@@ -451,11 +513,35 @@ test('assess: desktop reserve is the larger of 2 GiB and 15%', (t) => {
     calibration: calibration(),
     resolveProfile: () => profile()
   })
-  t.is(large.budget?.reservedBytes, 64 * GIB * 0.15, '15% dominates on a large machine')
+  t.is(large.budget?.reservedBytes, 2 * GIB, 'the cap holds once 20% of available passes it')
+  t.is(large.budget?.availableAfterReserveBytes, 46 * GIB)
 })
 
-test('assess: mobile reserve is the larger of 1 GiB and 20%', (t) => {
+// The reserve used to be a share of total subtracted from available, so on a
+// host already using most of its RAM it exceeded the headroom and zeroed the
+// budget — every model, however small, read likely-too-large.
+test('assess: a busy host keeps a budget proportional to what is free', (t) => {
   const result = assessModelFitFromResources({
+    models: [candidate({ workload: { kind: 'llm', contextTokens: 1 } })],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 24 * GIB, usedBytes: 20.7 * GIB }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile({ artifactBytes: 2 * GIB })
+  })
+  const available = 24 * GIB - 20.7 * GIB
+  const reserved = Math.floor(available * 0.2)
+  t.is(result.budget?.availableBytes, available)
+  t.is(result.budget?.reservedBytes, reserved)
+  t.is(result.budget?.availableAfterReserveBytes, available - reserved)
+  t.is(result.verdict, 'likely-fits', 'a 2 GiB model fits in 3.3 GiB of free memory')
+})
+
+test('assess: iOS budgets are per-process and refuse without the allowance metric', (t) => {
+  // System metrics being supported must NOT produce a budget on iOS: jetsam
+  // enforces a per-process limit, and a system budget would defend verdicts
+  // the OS does not honor.
+  const withoutMetric = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
@@ -463,7 +549,43 @@ test('assess: mobile reserve is the larger of 1 GiB and 20%', (t) => {
     calibration: calibration(),
     resolveProfile: () => profile()
   })
-  t.is(result.budget?.reservedBytes, 8 * GIB * 0.2)
+  t.is(withoutMetric.basis, 'process-memory')
+  t.is(withoutMetric.verdict, 'unknown')
+  t.absent(withoutMetric.budget)
+  t.ok(
+    withoutMetric.reasons.some((r) => r.includes('per-process allowance metric is not available'))
+  )
+
+  const withMetric = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ processUsedBytes: 1 * GIB, processAvailableBytes: 2.5 * GIB }),
+    platform: 'ios-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(withMetric.basis, 'process-memory')
+  // Ceiling = allowance + footprint (the relation jetsam enforces); the mobile
+  // reserve is taken from the allowance: min(1 GiB, 20% of 2.5 GiB) = 0.5 GiB.
+  t.is(withMetric.budget?.totalBytes, 3.5 * GIB)
+  t.is(withMetric.budget?.usedBytes, 1 * GIB)
+  t.is(withMetric.budget?.availableBytes, 2.5 * GIB)
+  t.is(withMetric.budget?.reservedBytes, 0.5 * GIB)
+  t.is(withMetric.budget?.availableAfterReserveBytes, 2 * GIB)
+})
+
+test('assess: android keeps the system basis with the mobile reserve, by explicit decision', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
+    platform: 'android-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(result.basis, 'system-memory')
+  t.is(result.budget?.reservedBytes, 1 * GIB, '20% of the 6 GiB available, capped at 1 GiB')
+  t.ok(result.assumptions.some((a) => a.includes('android budgets deliberately use system memory')))
 })
 
 test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
@@ -479,7 +601,7 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
   })
   t.is(noSample.verdict, 'unknown')
   t.absent(noSample.budget)
-  t.ok(noSample.reasons.some((r) => r.includes('no system-memory sample')))
+  t.ok(noSample.reasons.some((r) => r.includes('no memory sample')))
 
   const unsupported = assessModelFitFromResources({
     models: [candidate()],
@@ -491,7 +613,9 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
         cpu: { status: 'unavailable' },
         memory: {
           usedBytes: { status: 'unavailable' },
-          totalBytes: { status: 'unavailable' }
+          totalBytes: { status: 'unavailable' },
+          processUsedBytes: { status: 'unavailable' },
+          processAvailableBytes: { status: 'unavailable' }
         },
         gpus: { status: 'unavailable' }
       }
@@ -520,12 +644,12 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
 // ---------------------------------------------------------------------------
 
 test('assess: verdict boundaries around the budget', (t) => {
-  // Budget: 8 GiB total, 2 GiB used, 2 GiB reserved => 4 GiB available.
+  // Budget: 8 GiB total, 3 GiB used => 5 GiB available, 1 GiB reserved => 4 GiB.
   function verdictFor(artifactBytes: number, weightUpperCoeff: number) {
     return assessModelFitFromResources({
       models: [candidate({ workload: { kind: 'llm', contextTokens: 1 } })],
       execution: 'sequential',
-      resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
+      resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
       platform: 'darwin-arm64',
       calibration: calibration({ weightUpperCoeff }),
       resolveProfile: () =>
@@ -629,12 +753,29 @@ test('assess: co-resident LLM loads count every model’s overhead, so the modes
     resolveProfile
   })
 
-  // llama.cpp allocates everything at load, so each resident model carries its
-  // weights, its 512 B KV cache and its 1 GiB engine overhead — under either
-  // declared mode. `sequential` must not drop the second model's overhead.
+  // Each resident model carries its weights, 512 B KV cache and 1 GiB overhead
+  // under either mode: `sequential` must not drop the second model's. Only the
+  // working peak separates the modes, and this fixture carries none.
   const total = 2 * (2 * GIB + 512 + 1 * GIB)
   t.is(sequential.estimate?.lowerBoundBytes, total)
   t.is(concurrent.estimate?.lowerBoundBytes, total)
+
+  // With a measured peak, only the operation in flight pays for it under
+  // `sequential`, while `concurrent` assumes one per model.
+  const withPeak = (execution: 'sequential' | 'concurrent') =>
+    assessModelFitFromResources({
+      models,
+      execution,
+      resources: resources(),
+      platform: 'darwin-arm64',
+      calibration: calibration({
+        fixedOverheadBytes: { lower: 1 * GIB, upper: 1 * GIB },
+        workingPeakBytes: { lower: 80 * MIB, upper: 80 * MIB }
+      }),
+      resolveProfile
+    })
+  t.is(withPeak('sequential').estimate?.lowerBoundBytes, total + 80 * MIB)
+  t.is(withPeak('concurrent').estimate?.lowerBoundBytes, total + 160 * MIB)
 })
 
 // ---------------------------------------------------------------------------
@@ -854,4 +995,737 @@ test('fitResidentMemory: refuses designs that cannot separate the coefficients',
     (p) => p.contextTokens === 512
   )
   t.is(fitResidentMemory(singleContext), undefined, 'one context throughout')
+})
+
+test('kvObservation: a counter that sees every allocation scores 1; compute buffers push it above', (t) => {
+  const exact = kvObservation(syntheticPoints(1.0, 128 * MIB, 0))
+  t.is(exact.models.length, 3, 'one growth per model')
+  t.ok(Math.abs(exact.ratio - 1) < 1e-9, 'persistent grows by exactly the KV growth')
+
+  const withCompute = kvObservation(syntheticPoints(1.0, 128 * MIB, 20_000))
+  t.ok(withCompute.ratio > 1, 'per-token compute buffers only add to the growth')
+})
+
+test('kvObservation: a counter that misses allocation scores its shortfall', (t) => {
+  // Persistent carries 56% of the KV growth — what the win32 working set measured.
+  const points = syntheticPoints(1.0, 128 * MIB, 0).map((p) => ({
+    ...p,
+    persistentBytes: p.persistentBytes - 0.44 * p.kvBytes
+  }))
+  const observation = kvObservation(points)
+  t.ok(Math.abs(observation.ratio - 0.56) < 1e-6)
+  for (const model of observation.models) {
+    t.ok(model.observedDeltaBytes < model.kvDeltaBytes, 'every model shows the shortfall')
+  }
+})
+
+test('kvObservation: one cold-start repeat does not read as a shortfall, and a single context has nothing to judge', (t) => {
+  const base = syntheticPoints(1.0, 128 * MIB, 0)
+  // Three repeats per point; the very first load of the run carries a cold
+  // page-cache transient (~250 MiB observed) on the small context only. The
+  // median of the repeats ignores it, where a mean would read a 15% shortfall.
+  const repeated = [...base, ...base, ...base]
+  const first = repeated.findIndex((p) => p.contextTokens === 512)
+  repeated[first] = {
+    ...repeated[first]!,
+    persistentBytes: repeated[first]!.persistentBytes + 250 * MIB
+  }
+  t.ok(Math.abs(kvObservation(repeated).ratio - 1) < 1e-9)
+
+  const single = kvObservation(base.filter((p) => p.contextTokens === 512))
+  t.is(single.models.length, 0)
+  t.is(single.ratio, 1)
+})
+
+// ---------------------------------------------------------------------------
+// Discrete-GPU platforms
+// ---------------------------------------------------------------------------
+
+test('assess: a GPU on linux or windows needs coefficients measured on it', (t) => {
+  // These platforms' fixtures describe CPU-resident execution, measured with
+  // the GPU offload disabled. With a GPU present the engine would not run that
+  // way, so those coefficients do not describe the load — whether the card
+  // holds the model in its own memory or, as here, shares system RAM.
+  const withGpu = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ gpu: true }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(withGpu.verdict, 'unknown')
+  t.is(withGpu.models[0]!.verdict, 'unknown')
+  t.ok(withGpu.models[0]!.reasons.some((r) => r.includes('a GPU is present')))
+
+  const cpuOnly = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources(),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.ok(cpuOnly.models[0]!.estimate, 'without a GPU the CPU-resident fixture applies')
+
+  const appleSilicon = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ gpu: true }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+  t.ok(appleSilicon.models[0]!.estimate, 'unified-memory platforms keep verdicts with a GPU')
+})
+
+/** A second (or third) card on the same host, as `extraGpus` describes it. */
+interface ExtraGpu {
+  vramTotalBytes: number
+  vramUsedBytes: number
+  /** `vulkan` unless stated; a different backend makes the pair unassessable. */
+  backend?: 'vulkan' | 'rocm'
+  /** Declared memory, when it differs from the sampled total (Windows iGPU). */
+  declaredBytes?: number
+  unifiedMemory?: boolean
+  name?: string
+}
+
+// A discrete card whose sampled memory the collector graded device-scoped.
+function discreteGpuResources(options: {
+  vramTotalBytes: number
+  vramUsedBytes: number
+  systemTotalBytes?: number
+  systemUsedBytes?: number
+  gpuScope?: 'device' | 'budget'
+  extraGpus?: readonly ExtraGpu[]
+}) {
+  const provenance = { source: 'test', scope: options.gpuScope ?? ('device' as const) }
+  const system = { source: 'test', scope: 'system' as const }
+  const total = options.systemTotalBytes ?? 64 * GIB
+  const used = options.systemUsedBytes ?? 16 * GIB
+  const supported = (value: number, p: typeof provenance | typeof system) =>
+    ({ status: 'supported', value, provenance: p }) as const
+
+  const value: SystemResources = {
+    capabilities: {
+      cpu: { status: 'unavailable' },
+      memory: { totalBytes: supported(total, system) },
+      gpus: {
+        status: 'supported',
+        provenance: system,
+        value: [
+          {
+            id: 'gpu0',
+            name: { status: 'supported', value: 'Test Discrete GPU', provenance },
+            vendor: { status: 'unavailable' },
+            type: { status: 'unavailable' },
+            driverName: { status: 'unavailable' },
+            driverVersion: { status: 'unavailable' },
+            drivers: {
+              vulkan: { status: 'supported', value: true, provenance },
+              opencl: { status: 'unavailable' },
+              opengl: { status: 'unavailable' },
+              webgpu: { status: 'unavailable' },
+              metal: { status: 'unavailable' },
+              direct3d11: { status: 'unavailable' },
+              direct3d12: { status: 'unavailable' },
+              cuda: { status: 'unavailable' },
+              levelZero: { status: 'unavailable' },
+              rocm: { status: 'unavailable' }
+            },
+            unifiedMemory: { status: 'supported', value: false, provenance },
+            memoryTotalBytes: supported(options.vramTotalBytes, provenance)
+          },
+          ...(options.extraGpus ?? []).map((extra, index) => ({
+            id: `gpu${index + 1}`,
+            name: {
+              status: 'supported' as const,
+              value: extra.name ?? 'Second GPU',
+              provenance
+            },
+            vendor: { status: 'unavailable' as const },
+            type: { status: 'unavailable' as const },
+            driverName: { status: 'unavailable' as const },
+            driverVersion: { status: 'unavailable' as const },
+            drivers: {
+              vulkan:
+                (extra.backend ?? 'vulkan') === 'vulkan'
+                  ? ({ status: 'supported' as const, value: true, provenance } as const)
+                  : ({ status: 'unavailable' as const } as const),
+              opencl: { status: 'unavailable' as const },
+              opengl: { status: 'unavailable' as const },
+              webgpu: { status: 'unavailable' as const },
+              metal: { status: 'unavailable' as const },
+              direct3d11: { status: 'unavailable' as const },
+              direct3d12: { status: 'unavailable' as const },
+              cuda: { status: 'unavailable' as const },
+              levelZero: { status: 'unavailable' as const },
+              rocm:
+                extra.backend === 'rocm'
+                  ? ({ status: 'supported' as const, value: true, provenance } as const)
+                  : ({ status: 'unavailable' as const } as const)
+            },
+            unifiedMemory: {
+              status: 'supported' as const,
+              value: extra.unifiedMemory ?? false,
+              provenance
+            },
+            memoryTotalBytes: supported(extra.declaredBytes ?? extra.vramTotalBytes, provenance)
+          }))
+        ]
+      }
+    },
+    sample: {
+      sampledAt: 0,
+      cpu: { status: 'unavailable' },
+      memory: {
+        usedBytes: supported(used, system),
+        totalBytes: supported(total, system),
+        processUsedBytes: { status: 'unavailable' },
+        processAvailableBytes: { status: 'unavailable' }
+      },
+      gpus: {
+        status: 'supported',
+        provenance: system,
+        value: [
+          {
+            id: 'gpu0',
+            compute: { status: 'unavailable' },
+            encode: { status: 'unavailable' },
+            decode: { status: 'unavailable' },
+            memoryUsedBytes: supported(options.vramUsedBytes, provenance),
+            memoryTotalBytes: supported(options.vramTotalBytes, provenance),
+            powerWatts: { status: 'unavailable' },
+            temperatureCelsius: { status: 'unavailable' }
+          },
+          ...(options.extraGpus ?? []).map((extra, index) => ({
+            id: `gpu${index + 1}`,
+            compute: { status: 'unavailable' as const },
+            encode: { status: 'unavailable' as const },
+            decode: { status: 'unavailable' as const },
+            memoryUsedBytes: supported(extra.vramUsedBytes, provenance),
+            memoryTotalBytes: supported(extra.vramTotalBytes, provenance),
+            powerWatts: { status: 'unavailable' as const },
+            temperatureCelsius: { status: 'unavailable' as const }
+          }))
+        ]
+      }
+    }
+  }
+  return value
+}
+
+test('assess: a calibrated discrete GPU is budgeted against its own memory', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'device-memory')
+  t.is(result.budget?.totalBytes, 20 * GIB)
+  t.is(result.budget?.usedBytes, 1 * GIB)
+  t.ok(result.models[0]!.estimate, 'a calibrated backend produces an estimate, not unknown')
+  t.ok(result.assumptions.some((a) => a.includes('vulkan')))
+})
+
+test('assess: an uncalibrated backend stays unknown on a discrete GPU', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => undefined,
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'unknown')
+  t.is(result.basis, 'system-memory')
+  t.ok(result.models[0]!.reasons.some((r) => r.includes('a GPU is present')))
+})
+
+test('assess: a GPU with too little VRAM is too large even on a roomy host', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 2 * GIB, vramUsedBytes: 1 * GIB }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'likely-too-large')
+})
+
+// The engine pins the model to one card, and which one is a ggml enumeration
+// order this side cannot see. That makes the cards alternatives rather than
+// bounds to intersect: a fit has to hold on the smallest, a refusal on the
+// largest, and anything between the two is genuinely unknown.
+test('assess: several GPUs are assessed as alternatives, not as one budget', (t) => {
+  const assess = (options: Parameters<typeof discreteGpuResources>[0]) =>
+    assessModelFitFromResources({
+      models: [candidate()],
+      execution: 'sequential',
+      resources: discreteGpuResources(options),
+      platform: 'linux-x64',
+      calibration: calibration(),
+      resolveGpuCalibration: () => calibration(),
+      resolveProfile: () => profile()
+    })
+
+  const twoRoomy = assess({
+    vramTotalBytes: 20 * GIB,
+    vramUsedBytes: 1 * GIB,
+    extraGpus: [{ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }]
+  })
+  t.is(twoRoomy.verdict, 'likely-fits', 'it fits on either card, so which one is picked is moot')
+  t.is(twoRoomy.basis, 'device-memory')
+  t.ok(twoRoomy.assumptions.some((a) => a.includes('2 usable GPUs')))
+
+  // 1 GB of weights plus the cache: room on the 20 GiB card, none on the 2 GiB
+  // one. Neither answer holds for both, so there is no verdict.
+  const mixed = assess({
+    vramTotalBytes: 20 * GIB,
+    vramUsedBytes: 1 * GIB,
+    extraGpus: [{ vramTotalBytes: 2 * GIB, vramUsedBytes: 1 * GIB }]
+  })
+  t.is(mixed.verdict, 'unknown', 'a fit on the larger card is not a fit on the smaller')
+  t.is(mixed.budget?.totalBytes, 2 * GIB, 'the budget reported is the tightest of the candidates')
+
+  const bothTooSmall = assess({
+    vramTotalBytes: 2 * GIB,
+    vramUsedBytes: 1 * GIB,
+    extraGpus: [{ vramTotalBytes: 2 * GIB, vramUsedBytes: 1.5 * GIB }]
+  })
+  t.is(bothTooSmall.verdict, 'likely-too-large', 'too large on the largest is too large anywhere')
+})
+
+// One fixture describes one backend's buffers, so cards that disagree on the
+// backend cannot be assessed under a single set of coefficients.
+test('assess: GPUs on different backends have no single set of coefficients', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      extraGpus: [{ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB, backend: 'rocm' }]
+    }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'unknown')
+  t.is(result.basis, 'system-memory')
+})
+
+// The Windows shape: the Intel iGPU declares a 128 MiB carve-out of its own,
+// so DXGI types it dedicated and `unifiedMemory` is false. Nothing but that
+// size separates it from a real card — and it is no rival for a model.
+test('assess: an adapter too small to hold a model is not a rival for one', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      extraGpus: [
+        {
+          vramTotalBytes: 128 * MIB,
+          vramUsedBytes: 8 * MIB,
+          name: 'Intel(R) UHD Graphics'
+        }
+      ]
+    }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'likely-fits')
+  t.is(result.budget?.totalBytes, 20 * GIB, 'the real card carries the budget on its own')
+  t.ok(result.assumptions.some((a) => a.includes('Test Discrete GPU')))
+})
+
+// A VM's paravirtual display adapter is enumerated as a GPU by the collector,
+// but the engine has no backend for it and runs on the CPU — which is exactly
+// what these platforms' own coefficients describe. Cloud hosts and CI runners
+// are the common case, so this is where the CPU fixtures earn their keep.
+test('assess: a virtual display adapter is not a GPU the engine can use', (t) => {
+  const withVirtualGpu = resources({ gpu: true })
+  const gpus = withVirtualGpu.capabilities.gpus
+  if (gpus.status === 'supported') {
+    const provenance = { source: 'test', scope: 'device' as const }
+    gpus.value[0] = {
+      ...gpus.value[0]!,
+      name: { status: 'supported', value: 'Microsoft Basic Render Driver', provenance },
+      // gpuType.VIRTUAL
+      type: { status: 'supported', value: 3, provenance }
+    }
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: withVirtualGpu,
+    platform: 'linux-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'system-memory')
+  t.is(result.verdict, 'likely-fits', 'the platform fixture applies, as it would with no GPU')
+  t.ok(
+    result.assumptions.some((a) => a.includes('no GPU reported')),
+    'and the f16 KV default is assumed, as the engine would use'
+  )
+})
+
+// The driver flags are library-presence checks, and ggml's backends need the
+// same libraries to load. A device with none is a device the engine passes over.
+test('assess: a GPU with no graphics API the engine talks to is passed over', (t) => {
+  const noDrivers = resources({ gpu: true })
+  const gpus = noDrivers.capabilities.gpus
+  if (gpus.status === 'supported') {
+    gpus.value[0] = {
+      ...gpus.value[0]!,
+      drivers: { ...gpus.value[0]!.drivers, metal: { status: 'unavailable' } }
+    }
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: noDrivers,
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'likely-fits')
+})
+
+// An AMD APU under amdgpu exposes a VRAM carve-out, so libgpuinfo infers
+// `dedicated` from sysfs and `unifiedMemory` reads false — a Ryzen 5000U
+// laptop reported over a gigabyte of "VRAM". Applying the discrete card's
+// fixture and budgeting against the carve-out would be wrong twice over.
+test('assess: an AMD GPU on linux cannot be placed, so it stays unknown', (t) => {
+  const resources = discreteGpuResources({ vramTotalBytes: 2 * GIB, vramUsedBytes: 256 * MIB })
+  const gpus = resources.capabilities.gpus
+  if (gpus.status === 'supported') {
+    const provenance = { source: 'test', scope: 'device' as const }
+    gpus.value[0] = {
+      ...gpus.value[0]!,
+      name: { status: 'supported', value: 'Lucienne', provenance },
+      driverName: { status: 'supported', value: 'amdgpu', provenance }
+    }
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources,
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveSharedGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'unknown')
+  t.is(result.basis, 'system-memory', 'and no device budget is formed from the carve-out')
+  t.ok(result.reasons.some((r) => r.includes('cannot say where the model would execute')))
+
+  // The same card on windows is unambiguous: DXGI reports real dedicated VRAM.
+  const onWindows = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+  t.is(onWindows.verdict, 'likely-fits')
+})
+
+// ---------------------------------------------------------------------------
+// Integrated GPUs — the ordinary consumer desktop
+// ---------------------------------------------------------------------------
+
+// An integrated GPU allocates out of system RAM, so the engine runs on the GPU
+// while the system basis still bounds it. That needs coefficients measured
+// that way: the platform's own fixture was measured with the offload disabled.
+test('assess: an integrated GPU keeps the system basis, with its own coefficients', (t) => {
+  const igpuOnly = {
+    models: [candidate()],
+    execution: 'sequential' as const,
+    resources: resources({ gpu: true }),
+    platform: 'linux-x64' as const,
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  }
+
+  const measured = assessModelFitFromResources({
+    ...igpuOnly,
+    resolveSharedGpuCalibration: () => calibration()
+  })
+  t.is(measured.basis, 'system-memory')
+  t.is(measured.verdict, 'likely-fits')
+  t.ok(measured.assumptions.some((a) => a.includes('integrated GPU allocates out of system RAM')))
+
+  const unmeasured = assessModelFitFromResources({
+    ...igpuOnly,
+    resolveSharedGpuCalibration: () => undefined
+  })
+  t.is(unmeasured.verdict, 'unknown')
+  t.ok(
+    unmeasured.reasons.some((r) => r.includes('integrated metal GPU')),
+    'the refusal names the platform and backend whose fixture is missing'
+  )
+})
+
+// The host `win32-x64:vulkan-shared` exists for: an ordinary Windows laptop
+// whose only GPU is the Intel iGPU. DXGI types it dedicated for a 128 MiB
+// carve-out and `unifiedMemory` reads false, so the size floor is the only
+// thing that identifies it — and with no discrete card beside it, nothing else
+// can carry the budget.
+test('assess: a Windows laptop with only an iGPU takes the shared fixture', (t) => {
+  const igpuOnly = discreteGpuResources({
+    vramTotalBytes: 128 * MIB,
+    vramUsedBytes: 8 * MIB,
+    gpuScope: 'budget',
+    systemTotalBytes: 32 * GIB,
+    systemUsedBytes: 8 * GIB
+  })
+  const gpus = igpuOnly.capabilities.gpus
+  if (gpus.status === 'supported') {
+    const provenance = { source: 'test', scope: 'device' as const }
+    gpus.value[0] = {
+      ...gpus.value[0]!,
+      name: { status: 'supported', value: 'Intel(R) UHD Graphics 770', provenance }
+    }
+  }
+
+  const measured = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: igpuOnly,
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveSharedGpuCalibration: () => calibration({ weightUpperCoeff: 2.044 }),
+    resolveProfile: () => profile()
+  })
+
+  t.is(measured.basis, 'system-memory', 'not the 128 MiB carve-out')
+  t.is(measured.budget?.totalBytes, 32 * GIB)
+  t.is(measured.verdict, 'likely-fits')
+  t.ok(measured.assumptions.some((a) => a.includes('Intel(R) UHD Graphics 770')))
+
+  // Without the shared fixture it must not fall back to the CPU coefficients.
+  const unmeasured = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: igpuOnly,
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveSharedGpuCalibration: () => undefined,
+    resolveProfile: () => profile()
+  })
+  t.is(unmeasured.verdict, 'unknown')
+  t.ok(unmeasured.reasons.some((r) => r.includes('integrated vulkan GPU')))
+})
+
+// A dedicated card next to the integrated one is where the engine would put
+// the model: `chooseBackend` fills its GPU list before its iGPU list and takes
+// the first non-empty one.
+test('assess: a dedicated card beside an integrated one takes the device basis', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      extraGpus: [
+        {
+          vramTotalBytes: 16 * GIB,
+          vramUsedBytes: 2 * GIB,
+          unifiedMemory: true,
+          name: 'Integrated Graphics'
+        }
+      ]
+    }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveSharedGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'device-memory')
+  t.is(result.budget?.totalBytes, 20 * GIB)
+  t.ok(result.assumptions.some((a) => a.includes('Test Discrete GPU')))
+})
+
+// Windows GPU readings are per-process, so the collector never grades them
+// device-scoped and no GPU budget can form.
+test('assess: unverified GPU samples cannot form a device budget', (t) => {
+  const resources = discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB })
+  const samples = resources.sample!.gpus
+  if (samples.status === 'supported') {
+    samples.value[0]!.memoryTotalBytes = { status: 'unverified' }
+    samples.value[0]!.memoryUsedBytes = { status: 'unverified' }
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources,
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'unknown')
+  t.is(result.basis, 'system-memory')
+})
+
+// DXGI gives a per-process budget, not the device's memory. It still answers
+// the question admission asks — what may this process allocate — so it gets
+// its own basis rather than being discarded.
+test('assess: windows budgets against the GPU allowance it is granted', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      gpuScope: 'budget'
+    }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'device-budget')
+  t.is(result.verdict, 'likely-fits')
+  t.ok(result.models[0]!.estimate)
+})
+
+// The bound that a GPU load also costs system RAM has to reach the per-model
+// verdicts, not just the combined one, or the two contradict each other.
+test('assess: the system bound reaches per-model verdicts as well as the combined one', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      systemTotalBytes: 8 * GIB,
+      systemUsedBytes: 7 * GIB,
+      gpuScope: 'budget'
+    }),
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.verdict, 'likely-too-large', 'plenty of VRAM, no system RAM')
+  t.is(result.models[0]!.verdict, 'likely-too-large', 'and the model agrees with the whole')
+  t.ok(result.reasons.some((r) => r.includes('system RAM')))
+})
+
+// Windows classifies the Intel iGPU as dedicated because it declares 128 MiB
+// of its own, so the count alone would refuse a host with one real card.
+test('assess: an adapter too small to hold a model is not a rival candidate', (t) => {
+  const resources = discreteGpuResources({
+    vramTotalBytes: 20 * GIB,
+    vramUsedBytes: 1 * GIB,
+    gpuScope: 'budget'
+  })
+  const gpus = resources.capabilities.gpus
+  const samples = resources.sample!.gpus
+  if (gpus.status === 'supported' && samples.status === 'supported') {
+    gpus.value.push({
+      ...gpus.value[0]!,
+      id: 'igpu',
+      memoryTotalBytes: {
+        status: 'supported',
+        value: 128 * 1024 * 1024,
+        provenance: { source: 'test', scope: 'device' }
+      }
+    })
+    samples.value.push({
+      ...samples.value[0]!,
+      id: 'igpu',
+      memoryTotalBytes: {
+        status: 'supported',
+        value: 128 * 1024 * 1024,
+        provenance: { source: 'test', scope: 'budget' }
+      },
+      memoryUsedBytes: {
+        status: 'supported',
+        value: 0,
+        provenance: { source: 'test', scope: 'budget' }
+      }
+    })
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources,
+    platform: 'win32-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'device-budget', 'the real card still resolves')
+  t.is(result.budget?.totalBytes, 20 * GIB)
+})
+
+// A card whose reading failed is still a card the engine can use, so it must
+// not drop out of the count and leave its neighbour looking unambiguous.
+test('assess: a second GPU with an unusable reading still makes the choice ambiguous', (t) => {
+  const resources = discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB })
+  const gpus = resources.capabilities.gpus
+  const samples = resources.sample!.gpus
+  if (gpus.status === 'supported' && samples.status === 'supported') {
+    gpus.value.push({ ...gpus.value[0]!, id: 'gpu1' })
+    samples.value.push({
+      ...samples.value[0]!,
+      id: 'gpu1',
+      memoryTotalBytes: { status: 'failed', reason: 'sampling failed' },
+      memoryUsedBytes: { status: 'failed', reason: 'sampling failed' }
+    })
+  }
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources,
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => calibration(),
+    resolveProfile: () => profile()
+  })
+
+  t.is(result.basis, 'system-memory', 'no device budget is formed')
+  t.is(result.verdict, 'unknown')
 })

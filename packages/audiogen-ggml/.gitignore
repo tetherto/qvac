@@ -37,6 +37,9 @@ models/
 # cannot cover.
 benchmarks/results/
 
+# Local generation and comparison audio (never committed)
+output/
+
 # IDE and editor files
 .vscode/
 .idea/

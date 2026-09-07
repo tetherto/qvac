@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.48.0",
+  "version": "0.49.1",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -31,7 +31,7 @@
     "test:integration:generate": "npm run generate:benchmark-shards && brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:prestage": "node --test scripts/__tests__/*.test.js ../../.github/actions/cache-models/warm-models.test.mjs",
-    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:prestage",
+    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:prestage && npm run test:mobile:validate",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:models": "node scripts/download-unit-test-models.js",
     "test:cpp:models:ci": "node scripts/download-unit-test-models.js --ci",

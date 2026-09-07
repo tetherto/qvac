@@ -1,7 +1,7 @@
-import { collectCheckSections, isReportOk } from './checks/index.js'
-import { collectDeepCheckSection } from './deep.js'
-import { formatJsonReport, formatReport } from './format.js'
-import type { DoctorReport, RunDoctorOptions } from './types.js'
+import { collectCheckSections, isReportOk } from '@/doctor/checks/index'
+import { collectDeepCheckSection } from '@/doctor/deep'
+import { formatJsonReport, formatReport } from '@/doctor/format'
+import type { DoctorReport, RunDoctorOptions } from '@/doctor/types'
 
 // lunte-disable-next-line require-await
 export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorReport> {
@@ -26,4 +26,4 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
   return report
 }
 
-export type { DoctorReport, RunDoctorOptions } from './types.js'
+export type { DoctorReport, RunDoctorOptions } from '@/doctor/types'

@@ -1,5 +1,5 @@
-import { buildCoverageReport } from './coverage/build-report.js'
-import { filterCoverageRows, formatCoverageReportHuman } from './coverage/format.js'
+import { buildCoverageReport } from '@/openai/coverage/build-report'
+import { filterCoverageRows, formatCoverageReportHuman } from '@/openai/coverage/format'
 
 export interface RunOpenAiCoverageOptions {
   json?: boolean

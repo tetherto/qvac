@@ -157,7 +157,14 @@ const FUNCTIONAL_MANIFEST = {
       targetName: 'supertonic2.gguf',
       url: 'https://s3/s2-q4.gguf'
     }
-  ])
+  ]),
+  parler: [
+    {
+      name: 'parler-mini-v1-q8_0.gguf',
+      targetName: 'parler-mini-v1-q8_0.gguf',
+      url: 'https://s3/parler-q8.gguf'
+    }
+  ]
 }
 
 function decodeBlockTsv(block) {
@@ -302,7 +309,10 @@ test('functionalModelsByTest maps each functional runner to only its required st
     modelsByTest.runSupertonicTest.map((entry) => entry.targetName),
     ['supertonic.gguf']
   )
-  assert.deepEqual(modelsByTest.runParlerTest, [])
+  assert.deepEqual(
+    modelsByTest.runParlerTest.map((entry) => entry.targetName),
+    ['parler-mini-v1-q8_0.gguf']
+  )
   assert.deepEqual(
     modelsByTest.runCosyvoice3Test.map((entry) => entry.targetName),
     [
@@ -386,13 +396,15 @@ test('selectFunctionalEntries regex-matches runner names and deduplicates shared
     ['chatterbox-t3-turbo.gguf', 'chatterbox-s3gen.gguf']
   )
 
-  // An empty grep is benign (no shard resolved -> stage nothing). A model-free
-  // but KNOWN runner (runParlerTest -> []) still matches its manifest key, so it
-  // stages nothing without erroring. A zero-match typo or an invalid regex is a
-  // test-groups <-> model-map drift and fails CLOSED: the workflow_call lanes
-  // never run validate-devices, so an under-staged run must surface here.
+  // An empty grep is benign (no shard resolved -> stage nothing). A zero-match
+  // typo or an invalid regex is a test-groups <-> model-map drift and fails
+  // CLOSED: the workflow_call lanes never run validate-devices, so an
+  // under-staged run must surface here.
   assert.deepEqual(selectFunctionalEntries(mappings, ''), [])
-  assert.deepEqual(selectFunctionalEntries(mappings, 'runParlerTest'), [])
+  assert.deepEqual(
+    selectFunctionalEntries(mappings, 'runParlerTest').map((entry) => entry.targetName),
+    ['parler-mini-v1-q8_0.gguf']
+  )
   assert.throws(
     () => selectFunctionalEntries(mappings, 'runMissingTest'),
     /matched no known runner/
@@ -413,6 +425,10 @@ test('functional mapping fails when any required manifest target is absent', () 
     () => functionalModelsByTest({ ...FUNCTIONAL_MANIFEST, lavasr: [] }),
     /Missing LavaSR manifest target/
   )
+  assert.throws(
+    () => functionalModelsByTest({ ...FUNCTIONAL_MANIFEST, parler: [] }),
+    /Missing Parler manifest target/
+  )
 })
 
 test('functional prestage script reads the explicit shard grep and deduplicates targets', () => {
@@ -428,7 +444,7 @@ test('functional prestage script reads the explicit shard grep and deduplicates 
   assert.match(script, /adb push/)
 })
 
-test('functional selector executes deduplication and accepts a zero-model Parler shard', () => {
+test('functional selector executes deduplication and stages the Parler shard GGUF', () => {
   const directory = mkdtempSync(join(tmpdir(), 'tts-functional-prestage-'))
   const manifestPath = join(directory, 'manifest.json')
   const listPath = join(directory, 'list.tsv')
@@ -477,11 +493,14 @@ test('functional selector executes deduplication and accepts a zero-model Parler
   assert.notEqual(typo.status, 0)
   assert.match(typo.stderr, /matched no known runner/)
 
-  // A model-free but KNOWN runner (runParlerTest -> []) matches its manifest key,
-  // so it stages nothing without erroring.
+  // Parler stages its single GGUF like every other runner — it used to be the
+  // one on-device downloader and its registry fetch was the CI timeout flake.
   const parler = run('runParlerTest')
   assert.equal(parler.status, 0, parler.stderr)
-  assert.equal(readFileSync(listPath, 'utf8'), '')
+  assert.equal(
+    readFileSync(listPath, 'utf8'),
+    'parler-mini-v1-q8_0.gguf\thttps://s3/parler-q8.gguf\n'
+  )
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -491,7 +510,10 @@ test('functional prestage block embeds CosyVoice and LavaSR mappings without sta
   assert.ok(match)
   const mappings = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'))
 
-  assert.equal(mappings.runParlerTest.length, 0)
+  assert.deepEqual(
+    mappings.runParlerTest.map((entry) => entry.targetName),
+    ['parler-mini-v1-q8_0.gguf']
+  )
   assert.ok(
     mappings.runCosyvoice3Test.some(
       (entry) => entry.targetName === 'cosyvoice3/cosyvoice3-llm-q8_0.gguf'

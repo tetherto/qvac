@@ -9,7 +9,7 @@ schemaType: APIReference
 
 [Bare module](https://bare.pears.com) that adds support for text-to-speech in QVAC, backed by the [`qvac-tts.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/tts) GGML library.
 
-It runs in-process with a persistent native engine — the GGUFs, the S3Gen preload, the ggml backend, and any voice-conditioning tensors are loaded once and reused across every synthesis call. GPU acceleration (Metal on macOS/iOS, Vulkan / OpenCL on Linux/Windows/Android) is **opt-in** via `config: { useGPU: true }`; the default is CPU.
+It runs in-process with a persistent native engine — the GGUFs, the S3Gen preload, the ggml backend, and any voice-conditioning tensors are loaded once and reused across every synthesis call. GPU acceleration (Metal on macOS/iOS, CUDA on NVIDIA Linux x64, Vulkan / OpenCL on Linux/Windows/Android) is **opt-in** via `config: { useGPU: true }`; the default is CPU.
 
 ## Models
 
@@ -48,6 +48,14 @@ Prebuilds are published for Linux x64/arm64, macOS x64/arm64, Windows x64,
 Android arm64, iOS arm64 devices, and iOS x64/arm64 simulators. Unsupported
 targets require an explicit source build; installation does not automatically
 compile a local addon.
+
+The Linux x64 prebuild bundles the CUDA and Vulkan backends as runtime-loaded
+modules. With `useGPU: true` the engine prefers CUDA when the NVIDIA driver and
+the CUDA 13 runtime libraries (`cudart`, `cuBLAS`) resolve at load time;
+otherwise the CUDA module is skipped and it falls back to Vulkan or CPU. Where
+more than one backend is usable, `TTS_CPP_GPU_BACKEND` (`cuda` | `vulkan` |
+`metal` | `opencl`) pins the choice — the SDK worker inherits the host process
+environment, so exporting it before starting the SDK is enough.
 
 ## Quickstart
 
@@ -200,7 +208,7 @@ The most common constructor options:
 | `streamChunkTokens`                  | number  | 0       | `> 0` enables native chunk streaming (25 tokens ≈ 1 s of audio)         |
 | `cfmSteps`                           | number  | 2       | `1` halves CFM cost for faster synthesis                                |
 | `config.language`                    | string  | `'en'`  | Language code; multilingual models accept `es/fr/de/pt/it/zh/ja/ko/...` |
-| `config.useGPU`                      | boolean | `false` | Route through Metal / Vulkan / OpenCL if available                      |
+| `config.useGPU`                      | boolean | `false` | Route through Metal / CUDA / Vulkan / OpenCL if available               |
 | `config.outputSampleRate`            | number  | 24000   | Resample the native 24 kHz output                                       |
 | `opts.stats`                         | boolean | `false` | Populate `response.stats` with RTF, backend info, etc.                  |
 

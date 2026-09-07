@@ -41,9 +41,10 @@ const moduleLogger = getEngineLogger()
  * 4. `activeCachePaths` — per-path refs that block in-flight eviction.
  * 5. `.auto-cache-<key>` markers — engine-generated cache ownership.
  *
- * Every turn must finish through `commitTurn` or `rollback` so all
- * inference state stays aligned, the active-path ref is released, and
- * marker metadata follows the cache directory lifecycle.
+ * Every turn must finish through `commitTurn`, `rollback`, or the
+ * non-destructive `releaseTurn` so all inference state stays aligned,
+ * the active-path ref is released, and marker metadata follows the
+ * cache directory lifecycle.
  */
 
 // ----- module-scoped state. The session is the single mutation point
@@ -394,6 +395,12 @@ export interface KvCacheSession {
    * itself via `commitTurn`).
    */
   rollback(turn: TurnHandle): Promise<void>
+  /**
+   * Non-destructive counterpart of `rollback`: releases locks and refs but
+   * keeps the committed disk cache and its recorded prefix valid for a retry.
+   * A cache freshly primed by this same turn rolls back instead.
+   */
+  releaseTurn(turn: TurnHandle): Promise<void>
 
   /**
    * Forget the in-memory saved-message count for the turn's path
@@ -416,6 +423,8 @@ interface InternalTurnState {
   committed: boolean
   /** Flipped at the end of `rollback`; protects against double-rollback. */
   rolledBack: boolean
+  /** True when this turn primed the cache (nothing committed exists to keep). */
+  freshlyPrimed: boolean
 }
 
 // ----- factory -----
@@ -454,7 +463,8 @@ export function createKvCacheSession(
       ...(signal !== undefined && { signal }),
       releaseWriteLock,
       committed: false,
-      rolledBack: false
+      rolledBack: false,
+      freshlyPrimed: false
     })
     markCachePathActive(cachePath)
     return handle
@@ -513,6 +523,7 @@ export function createKvCacheSession(
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
         initializedCaches.add(cachePath)
+        turnState.get(handle)!.freshlyPrimed = true
       }
 
       return handle
@@ -600,6 +611,7 @@ export function createKvCacheSession(
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
         initializedCaches.add(cachePath)
+        turnState.get(handle)!.freshlyPrimed = true
       }
 
       return handle
@@ -738,6 +750,22 @@ export function createKvCacheSession(
     await runRollback(state)
   }
 
+  async function releaseTurn(turn: TurnHandle): Promise<void> {
+    const state = turnState.get(turn)
+    if (!state) return
+    if (state.committed || state.rolledBack) return
+    // A cache this same turn primed has no committed state to keep — a failed
+    // first turn must not leave its own prime behind.
+    if (state.freshlyPrimed) {
+      await runRollback(state)
+      return
+    }
+    releaseCachePath(state.cachePath)
+    state.rolledBack = true
+    state.releaseWriteLock()
+    if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
+  }
+
   async function runRollback(state: InternalTurnState): Promise<void> {
     // Order matters only weakly: unlink first so a partial disk-state
     // can't be re-loaded by a sibling turn between the file delete and
@@ -774,6 +802,7 @@ export function createKvCacheSession(
     beginTurn,
     commitTurn,
     rollback,
+    releaseTurn,
     dropStaleSavedCount
   }
 }

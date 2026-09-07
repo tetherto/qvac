@@ -8,7 +8,7 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "10297.0.0",
+      "version>=": "10297.1.1",
       "features": [
         "vector-index"
       ]

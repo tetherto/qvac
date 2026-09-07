@@ -74,7 +74,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -176,7 +176,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
         modelId = await loadModel({
           modelSrc,
           modelType: 'llamacpp-completion',
-          modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+          modelConfig: { verbosity: 0, ctx_size: 2048 }
         })
         this.resources.register('llm', modelId)
       } else {
@@ -198,7 +198,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -216,7 +216,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -234,7 +234,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -246,7 +246,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
   ): Promise<TestResult> {
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)

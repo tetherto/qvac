@@ -13,15 +13,7 @@
       "version>=": "1.4.4#3"
     },
     "sentencepiece",
-    "ssplit",
-    {
-      "name": "qvac-fabric",
-      "version>=": "10297.0.0",
-      "default-features": false,
-      "features": [
-        "gpu-backends"
-      ]
-    }
+    "ssplit"
   ],
   "features": {
     "tests": {

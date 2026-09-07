@@ -43,6 +43,22 @@ int64_t backendDeviceFromName(const std::string& name) {
   return name == "CPU" ? K_BACKEND_DEVICE_CPU : K_BACKEND_DEVICE_GPU;
 }
 
+// Wire codes for AudiogenStats.gpuFallbackReason. Mapped explicitly rather than
+// cast from the enum so reordering it upstream cannot silently remap them.
+int64_t gpuFallbackReasonCode(tts_cpp::GpuFallbackReason reason) {
+  switch (reason) {
+  case tts_cpp::GpuFallbackReason::none:
+    return 0;
+  case tts_cpp::GpuFallbackReason::not_requested:
+    return 1;
+  case tts_cpp::GpuFallbackReason::no_devices:
+    return 2;
+  case tts_cpp::GpuFallbackReason::init_failed:
+    return 3;
+  }
+  return 99;
+}
+
 class CancellationReset {
 public:
   explicit CancellationReset(std::atomic_bool& requested)
@@ -146,6 +162,7 @@ void MinimaxModel::loadLocked() {
     throw std::runtime_error("MinimaxModel: failed to create MiniMax engine");
   }
   backendName_ = engine_->backend_name();
+  gpuFallbackReason_ = engine_->gpu_fallback_reason();
   sampleRate_ = engine_->sample_rate();
   channels_ = K_STEREO_CHANNELS;
 }
@@ -235,6 +252,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats MinimaxModel::runtimeStats() const {
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("backendDevice", backendDeviceFromName(backendName_));
   stats.emplace_back("backendId", backendIdFromName(backendName_));
+  stats.emplace_back(
+      "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
   return stats;
 }
 

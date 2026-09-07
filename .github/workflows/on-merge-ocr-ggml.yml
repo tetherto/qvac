@@ -102,12 +102,24 @@ jobs:
       - build
       - publish-logic
       - verify-generated
+    # `!cancelled()` is required, not cosmetic. `build` depends on
+    # release-merge-guard, which is SKIPPED on every non-release-* branch;
+    # `build` survives that because its own `if` opens with `!cancelled()`, but
+    # without the same opt-out here GitHub's skip propagation reaches this job
+    # through `build` and it never runs. That is why no @tetherto/ocr-ggml-mono
+    # dev build has ever existed, so ocr-ggml could not be mobile-tested against
+    # branch-native code at all (QVAC-24365).
+    #
+    # `!cancelled()` alone would also disable the implicit "all needs succeeded"
+    # check and let a FAILED build publish stale or missing prebuilds, so the
+    # explicit needs.build.result test replaces that guarantee. Same shape as
+    # publish-npm below, which already had it and therefore was never affected.
     if: >-
       needs.verify-generated.result == 'success' &&
-      ((needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
+      ((!cancelled() && needs.build.result == 'success' && (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')))
     timeout-minutes: 20
     outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.gpr_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -235,11 +247,35 @@ jobs:
           set -euo pipefail
           should="false"
 
-          if [ "${{ needs.publish-gpr.result }}" = "success" ] || \
-             [ "${{ needs.publish-npm.result }}" = "success" ]; then
+          # Deliberately keyed on publish-npm ONLY, not publish-gpr.
+          #
+          # Publishing a GPR dev build is not a reason to re-run integration
+          # tests: they already ran on the PR, and the PR's merge-guard consumes
+          # their result as `integration-tests-status` before the merge is
+          # allowed (see on-pr-<addon>.yml). Re-running the same 6-leg
+          # GPU/Windows/macOS matrix on merge duplicates that for no new signal.
+          #
+          # NOTE, so nobody mistakes this for a live cost saving: the
+          # integration-tests job below cannot currently run on merge at all,
+          # whatever this gate decides. It is `needs: [post-build-gate]` with no
+          # !cancelled()/always(), and post-build-gate needs both publish-gpr and
+          # publish-npm — exactly one of which is skipped on any given branch. So
+          # the skip propagates through this (successful) gate and into the
+          # consumer, the same transitive mechanism QVAC-24365 fixed one level up.
+          # Observed both ways round: tts-ggml run 33366149312 on main
+          # (publish-gpr success, gate true) and ocr-ggml run 32745082430 on
+          # release-* (publish-npm success, gate true) both left
+          # integration-tests skipped.
+          #
+          # This keying is therefore forward-looking protection: it is what keeps
+          # the matrix off merge once that consumer is given its own status
+          # function. Fixing the consumer is deliberately NOT part of QVAC-24365 —
+          # it affects five workflows and wants its own ticket.
+          if [ "${{ needs.publish-npm.result }}" = "success" ]; then
             should="true"
           fi
 
+          echo "publish-gpr=${{ needs.publish-gpr.result }} publish-npm=${{ needs.publish-npm.result }} should_run_tests=$should"
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
