@@ -692,10 +692,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   //     a fully new image. N>=2 is "fusion" mode -- addressable in the prompt
   //     as @image1, @image2, ...
   //
-  //   FLUX (FLUX_FLOW_PRED) with a single reference image:
-  //     Same ref_images path as FLUX2, just a single ref. Multi-image is
-  //     rejected here because only FLUX2 defines the @imageN placeholders.
-  //
   //   All other models (SD1.x, SD2.x, SDXL, SD3):
   //     Uses init_image -- traditional SDEdit. The input image is noised to
   //     the level specified by `strength`, then denoised for the remaining
@@ -727,8 +723,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       new std::vector<sd_image_t>(), refImgsDeleter);
 
   if (gen.mode == "img2img") {
-    const bool isFluxFamily =
-        config_.flux2Requested || config_.prediction == FLUX_FLOW_PRED;
     const bool isFlux2 = config_.flux2Requested;
     const size_t nMulti = job.initImagesBytes.size();
 
@@ -838,7 +832,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       const int imgW = static_cast<int>(initImg.width);
       const int imgH = static_cast<int>(initImg.height);
 
-      if (isFluxFamily) {
+      if (isFlux2) {
         // FLUX in-context conditioning: ref_images handles its own resizing
         // via ref_image_args' resize_before_vae, so only override genParams
         // dimensions when they are still at the 512x512 default.

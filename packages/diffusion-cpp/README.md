@@ -201,7 +201,7 @@ All file paths must be absolute.
 | `files.model`                   |      yes | Main model. All-in-one checkpoint for SD, diffusion model for split layouts |
 | `files.clipL`                   |       no | CLIP-L text encoder for SD3 / split layouts                                 |
 | `files.clipG`                   |       no | CLIP-G text encoder for SDXL / SD3                                          |
-| `files.t5Xxl`                   |       no | T5-XXL text encoder for SD3 / FLUX.1                                        |
+| `files.t5Xxl`                   |       no | T5-XXL text encoder for SD3                                                  |
 | `files.llm`                     |       no | Qwen3 LLM text encoder for FLUX.2 [klein]                                   |
 | `files.vae`                     |       no | Separate VAE                                                                |
 | `files.esrgan`                  |       no | ESRGAN model for post-generation upscale                                    |
