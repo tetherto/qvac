@@ -9,7 +9,7 @@ Principles are not aspirational platitudes. If a principle doesn't help resolve 
 | 1 | Device-First Design | Every feature must work fully on-device before considering network enhancement |
 | 2 | Cross-Platform Parity | A capability on one platform must work on all supported platforms |
 | 3 | Modular at the Interface, Pragmatic at the Boundary | Modularity lives in contracts and excludability, not in repo count or package granularity |
-| 4 | P2P as Infrastructure | Use peer-to-peer networks for distribution, sync, and compute -- not centralized infra |
+| 4 | P2P as Infrastructure | Use peer-to-peer networks for distribution and sync -- not centralized infra |
 | 5 | Verifiable Trust Boundaries | Every trust boundary is enforced cryptographically where feasible, structurally where not — never by policy alone |
 | 6 | Developer Experience is Architecture | DX is determined by API shape, extension symmetry, and error structure — not by docs |
 | 7 | Observable Without Phoning Home | Rich local diagnostics; zero telemetry |
@@ -24,7 +24,7 @@ Principles are not aspirational platitudes. If a principle doesn't help resolve 
 
 **Statement:** Every feature must work fully on-device before considering network enhancement.
 
-**Rationale:** QVAC runs on user hardware in environments where network may be absent, unreliable, or hostile. The on-device path is not a fallback — it is the primary mode. Network capabilities (delegated inference, P2P model sharing, cross-device sync) are enhancements layered on top of a complete local experience.
+**Rationale:** QVAC runs on user hardware in environments where network may be absent, unreliable, or hostile. The on-device path is not a fallback — it is the primary mode. Network capabilities such as P2P model sharing and cross-device sync are enhancements layered on top of a complete local experience.
 
 **Manifesto trace:** The device is sovereign, Network is enhancement not dependency.
 
@@ -39,7 +39,7 @@ Principles are not aspirational platitudes. If a principle doesn't help resolve 
 
 **What this does NOT mean:**
 - It does NOT mean models must appear on the device by magic. Network-based model download (P2P or HTTP) is expected for initial provisioning. The principle requires that after provisioning, the device operates independently.
-- It does NOT mean we avoid network features. Delegated inference, P2P model distribution, and cross-device sync are valuable and encouraged — as enhancements.
+- It does NOT mean we avoid network features. P2P model distribution and cross-device sync are valuable and encouraged — as enhancements.
 - It does NOT mean every device runs every capability. A microcontroller runs a different subset than a workstation. But what each device does run, it runs locally.
 
 ---
@@ -91,16 +91,16 @@ Principles are not aspirational platitudes. If a principle doesn't help resolve 
 
 ## 4. P2P as Infrastructure
 
-**Statement:** Use peer-to-peer networks for distribution, sync, and compute — not centralized infrastructure.
+**Statement:** Use peer-to-peer networks for distribution and sync — not centralized infrastructure.
 
-**Rationale:** QVAC's architecture rejects central servers in core paths. P2P is not a feature layered on top; it is the infrastructure layer. Model distribution uses Hyperswarm/Hyperdrive, not a CDN. The model registry uses HyperDB, not a centralized database. Delegated inference routes through Hyperswarm topic-based discovery, not a load balancer. This makes the infrastructure censorship-resistant, scales with the number of participating devices, and has no single point of failure.
+**Rationale:** QVAC's architecture rejects central servers in core paths. P2P is not a feature layered on top; it is the infrastructure layer. Model distribution uses Hyperswarm/Hyperdrive, not a CDN. The model registry uses HyperDB, not a centralized database. These paths make the infrastructure censorship-resistant, scale with the number of participating devices, and avoid a single point of failure.
 
 **Manifesto trace:** No servers, only peers.
 
 **Trade-off:** P2P introduces latency variance, NAT traversal complexity, and discovery time that centralized infrastructure doesn't have. Initial model downloads may be slower than a CDN when few peers are available. Debugging distributed systems is harder than debugging client-server. These costs are accepted because centralized infrastructure contradicts the manifesto.
 
 **Implications:**
-- Model distribution, registry, and delegated inference must use Holepunch (Hyperswarm, Hyperdrive, HyperDB) as the primary path.
+- Model distribution and the registry must use Holepunch (Hyperswarm, Hyperdrive, HyperDB) as the primary path.
 - HTTP model download exists as a developer convenience and enterprise accommodation, not as the default or recommended path.
 - New features that require coordination between devices must use P2P, not introduce a central server.
 - Connection setup, relay configuration, and peer discovery must be handled by the SDK transparently — developers should not need to understand DHT mechanics to use `loadModel()`.
@@ -115,7 +115,7 @@ Principles are not aspirational platitudes. If a principle doesn't help resolve 
 
 **Statement:** Every trust boundary enforces its security properties through cryptography, isolation, or sandboxing — never through policy, review, or assumed-good-actors. Where cryptographic verification is technically feasible, it is required, not optional. Where it is not feasible (in-process calls, hardware-rooted attestation gaps), the boundary must be documented and the gap tracked as debt.
 
-**Rationale:** QVAC handles intimate user data: health records, personal conversations, documents, credentials for device automation. "We promise not to look" is not a security model, and neither is "we reviewed the code." The only durable assurances are mechanical: cryptographic proof, process isolation, hardware sandboxing. Every boundary that data crosses — P2P transport, plugin execution, delegated inference, cross-device sync, local IPC — must have an enforcement mechanism a third party can verify, not a policy a maintainer can forget.
+**Rationale:** QVAC handles intimate user data: health records, personal conversations, documents, credentials for device automation. "We promise not to look" is not a security model, and neither is "we reviewed the code." The only durable assurances are mechanical: cryptographic proof, process isolation, hardware sandboxing. Every boundary that data crosses — P2P transport, plugin execution, cross-device sync, local IPC — must have an enforcement mechanism a third party can verify, not a policy a maintainer can forget.
 
 **Manifesto trace:** Data stays with its owner, Integrity of the core, No servers only peers.
 
