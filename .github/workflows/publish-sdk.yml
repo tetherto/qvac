@@ -170,18 +170,20 @@ jobs:
           "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
           EOF
 
-      - name: Install dependencies
-        run: bun install
-        working-directory: ${{ env.WORKDIR }}
-
       # Compile the SDK against the in-repo @qvac/inference at this commit, not
       # the previously-published npm release (which lags behind engine API the
-      # SDK already consumes). This only affects the dist built here; the
-      # published dependency is set per channel below — GPR is pinned to the
-      # co-published @tetherto/inference-mono (see publish-gpr), npm keeps its
-      # committed range (resolved to the inference released in the same run).
+      # SDK already consumes). Link before bun install: lockstep cuts publish
+      # inference in this same workflow, so the committed range is not on npm
+      # yet. This only affects the dist built here; the published dependency
+      # is set per channel below — GPR is pinned to the co-published
+      # @tetherto/inference-mono (see publish-gpr), npm keeps its committed
+      # range (resolved to the inference released in the same run).
       - name: Build against workspace @qvac/inference
         run: bun run sdk-source:workspace
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Install dependencies
+        run: bun install
         working-directory: ${{ env.WORKDIR }}
 
       - name: Modify package name for branch-based builds
