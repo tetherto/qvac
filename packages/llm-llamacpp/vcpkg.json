@@ -12,10 +12,10 @@
       "features": [
         {
           "name": "cuda-backend",
-          "platform": "linux"
+          "platform": "linux | (windows & x64)"
         }
       ],
-      "version>=": "10297.1.1#1"
+      "version>=": "10297.1.1#2"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
@@ -27,6 +27,18 @@
     }
   ],
   "features": {
+    "cuda-jetson": {
+      "description": "Build the CUDA 12 Jetson backend module",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "platform": "linux & arm64",
+          "features": [
+            "cuda-jetson-backend"
+          ]
+        }
+      ]
+    },
     "tests": {
       "description": "Build tests",
       "dependencies": [
