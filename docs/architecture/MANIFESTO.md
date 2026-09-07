@@ -16,7 +16,7 @@ This follows from the physical reality that QVAC targets: autonomous cars don't 
 
 ## 2. Network is enhancement, not dependency
 
-Every QVAC capability must work without network connectivity. When network is available, it amplifies — P2P model sharing, delegated inference, cross-device sync — but its absence never degrades core function.
+Every QVAC capability must work without network connectivity. When network is available, it amplifies — P2P model sharing and cross-device sync — but its absence never degrades core function.
 
 QVAC systems must operate in environments where connectivity is intermittent, expensive, censored, or nonexistent: disaster zones, deep-sea operations, rural clinics, air-gapped corporate networks, or simply a user on a plane. Progressive enhancement from network availability is welcome; graceful degradation to "no network" is not — because "no network" is the baseline, not the failure mode.
 
@@ -24,7 +24,7 @@ QVAC systems must operate in environments where connectivity is intermittent, ex
 
 ## 3. No servers, only peers
 
-QVAC's target state has no central servers in core paths. Devices connect directly to each other — for model distribution, inference delegation, and data sync. Central infrastructure may exist as a bootstrap mechanism to seed the network until it can self-sustain through peer redistribution, but it must never become a permanent dependency. The test is: if the central server disappears tomorrow, does the system continue to function for devices that have already participated?
+QVAC's target state has no central servers in core paths. Devices connect directly to each other for model distribution and data sync. Central infrastructure may exist as a bootstrap mechanism to seed the network until it can self-sustain through peer redistribution, but it must never become a permanent dependency. The test is: if the central server disappears tomorrow, does the system continue to function for devices that have already participated?
 
 Central servers are single points of failure, censorship targets, and trust assumptions. The QVAC ecosystem cannot depend on any entity — including Tether — remaining operational, cooperative, or uncensored for the system to function long-term. Centralized components are scaffolding: necessary during construction, removed once the structure stands on its own.
 
