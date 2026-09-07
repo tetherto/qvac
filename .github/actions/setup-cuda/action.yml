@@ -227,7 +227,13 @@ runs:
           curl -fsSL --retry 3 "$url" -o "$out"
           echo "$sha  $out" | sha256sum -c -
           case "$out" in
-            *.zip) tar -xf "$out" --strip-components=1 -C "$prefix" ;;
+            *.zip)
+              if [ "$RUNNER_OS" = "Windows" ]; then
+                tar -xf "$(cygpath -u "$out")" --strip-components=1 -C "$(cygpath -u "$prefix")"
+              else
+                tar -xf "$out" --strip-components=1 -C "$prefix"
+              fi
+              ;;
             *) tar -xJf "$out" --strip-components=1 -C "$prefix" ;;
           esac
           rm -f "$out"
