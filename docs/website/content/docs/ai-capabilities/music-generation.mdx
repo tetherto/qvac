@@ -1,12 +1,14 @@
 ---
 title: Music generation
-description: Generate music and other audio from text, lyrics, and musical controls using ACE-Step.
+description: Generate music and other audio from text, lyrics, and musical controls using ACE-Step or MiniMax-Music3.
 schemaType: HowTo
 ---
 
 ## Overview
 
-Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml), a GGML-backed ACE-Step 1.5 engine. Load the four model stages with `modelType: "audiogen"`, then call `audioGen()` with a caption and optional lyrics or musical controls. You can also condition the timbre on a reference recording (`referenceAudio`) or re-render an existing song with a new caption (`taskType: "cover-nofsq"` with `sourceAudio`).
+Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml), with your choice of either [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) as the inference engine. Load a model with `modelType: "audiogen"` and select the engine with `modelConfig.engine` — `"minimax"` for MiniMax-Music3; ACE-Step is the default. Then call `audioGen()` with a caption and any engine-specific inputs.
+
+Pick ACE-Step when you need lyrics, per-song musical controls (BPM, key, time signature, vocal language), reference-audio timbre conditioning, or cover generation. Pick MiniMax-Music3 when you want a lighter API surface — just a caption and a handful of sampling knobs — on desktop hardware with a capable GPU.
 
 `audioGen()` returns immediately with:
 
@@ -15,14 +17,13 @@ Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/t
 - `audio` — a promise resolving to interleaved PCM, its sample rate, channel count, and `bitsPerSample`.
 - `stats` — a promise resolving to timing statistics.
 
+Both engines return through this same shape; only the inputs to `loadModel()` and `audioGen()` differ.
+
 <Callout type="info">
-  `@qvac/audiogen-ggml` 0.2.1 ships prebuilds for desktop (Linux, macOS,
-  Windows) and mobile (Android arm64, iOS arm64), with CPU inference
-  everywhere and GPU acceleration through Metal on Apple platforms and Vulkan
-  on Android (including ARM Mali devices). The SDK end-to-end suite currently
-  validates AudioGen on desktop Node.js/Bare; the four-model pipeline needs
-  roughly 3.3 GB on disk and several gigabytes of memory, so confirm the
-  headroom of your target devices before shipping to mobile.
+  **Platform support:** ACE-Step runs on desktop (Linux, macOS, Windows) and
+  mobile (Android arm64, iOS arm64), with GPU acceleration via Metal (Apple)
+  and Vulkan (Android). MiniMax-Music3 runs on desktop only and needs
+  ~22 GB of device memory for its f16 model pair when `useGPU: true`.
 </Callout>
 
 ## Functions
@@ -55,27 +56,27 @@ If `plugins` is omitted or empty, all built-in plugins are included. See the [pl
 
 ## Models
 
-ACE-Step uses four independent GGUF files:
+Unlike single-file model families, AudioGen does not use a top-level `modelSrc`. Supply every model source in `modelConfig`, and select the engine with `modelConfig.engine`.
+
+### ACE-Step
+
+ACE-Step uses four GGUF files — text encoder, LM, one DiT variant of the three listed, and VAE:
 
 | Stage | SDK model constant | Purpose |
 | --- | --- | --- |
 | Text encoder | `AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0` | Encodes captions and lyrics |
 | Language model | `AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0` | Plans the song and musical structure |
-| DiT | `AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M` | Fast, lower-memory waveform generation |
+| DiT | `AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M` | Fast, lower-memory Turbo generation |
 | DiT | `AUDIOGEN_ACESTEP_V15_TURBO_Q8_0` | Higher-precision Turbo generation |
 | DiT | `AUDIOGEN_ACESTEP_V15_SFT_Q8_0` | Supervised fine-tuned generation |
 | VAE | `AUDIOGEN_VAE_BF16` | Decodes the latent into PCM audio |
 
 <Callout type="warning">
-  The first AudioGen load downloads approximately 3.3 GB across these four
-  files. The SDK downloads them sequentially to avoid splitting P2P bandwidth
-  across four registry streams. On slow or unstable links, set
-  `registryStreamTimeoutMs: 600000` and `registryDownloadMaxRetries: 10` in
-  `qvac.config.json`, then point `QVAC_CONFIG_PATH` at that file before running
-  the example.
+  The first ACE-Step load downloads ~3.3 GB across these four files. On slow
+  or unstable links, set `registryStreamTimeoutMs: 600000` and
+  `registryDownloadMaxRetries: 10` in `qvac.config.json` and point
+  `QVAC_CONFIG_PATH` at that file before loading.
 </Callout>
-
-Unlike single-file model families, AudioGen does not use a top-level `modelSrc`. Supply every stage in `modelConfig`:
 
 ```ts
 import {
@@ -89,6 +90,7 @@ import {
 const modelId = await loadModel({
   modelType: "audiogen",
   modelConfig: {
+    engine: "acestep",
     textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
     lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
     ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
@@ -98,13 +100,37 @@ const modelId = await loadModel({
 });
 ```
 
-Advanced load-time controls are `inferenceSteps`, `shift`, `nGpuLayers`, `threads`, and `backendsDir`. Turbo and SFT variants have different tuning requirements; omit `inferenceSteps` and `shift` unless you need to override the addon's defaults.
+Advanced load-time controls (`inferenceSteps`, `shift`, `nGpuLayers`, `threads`, `backendsDir`) are ACE-Step's to tune; omit `inferenceSteps` and `shift` unless you need to override the addon's per-variant defaults. `backendsDir` is needed on arm64, where the CPU backend ships as per-microarch modules.
 
 For more about model constants and sources, see [SDK — Models](/introduction#models).
 
+### MiniMax-Music3
+
+MiniMax-Music3 uses two GGUF files that you supply as local paths — the language model (`mm3-lm-*.gguf`) and the synthesis model (`mm3-synth-*.gguf`). The SDK does not download MiniMax-Music3 from the registry, so bring your own converted files and point `lmModelSrc` and `synthModelSrc` at them. Weights are governed by the [MiniMax-Music3 Community License](https://huggingface.co/MiniMaxAI/MiniMax-Music3).
+
+```ts
+import { loadModel } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    engine: "minimax",
+    lmModelSrc: "/path/to/mm3-lm-q8.gguf",
+    synthModelSrc: "/path/to/mm3-synth-q8.gguf",
+    useGPU: true,
+  },
+});
+```
+
 ## Generate audio
 
-`caption` is required and cannot be empty. Lyrics and musical controls are optional:
+`caption` is required and cannot be empty. Everything else is engine-specific.
+
+The SDK returns raw interleaved PCM rather than a WAV file for both engines. Use `bitsPerSample` when calculating sample counts or constructing a WAV header so consumers remain correct if the addon changes sample width. The complete examples below include a dependency-free WAV writer.
+
+### With ACE-Step
+
+Pass optional lyrics and musical controls to steer the LM:
 
 ```ts
 import { audioGen } from "@qvac/sdk";
@@ -139,19 +165,55 @@ Omit `lyrics` or use `"[Instrumental]"` for instrumental output. Omitted musical
 
 `duration` is approximate. ACE-Step rounds the requested length to its latent frame grid, so the generated clip can be shorter or longer than requested. Use `stats.audioDurationMs` or calculate the duration from the returned PCM frame count and `sampleRate`; those values describe the actual output.
 
-The SDK returns raw interleaved PCM rather than a WAV file. Use `bitsPerSample` when calculating sample counts or constructing a WAV header so consumers remain correct if the addon changes sample width. The complete example below includes a dependency-free WAV writer.
-
-### Sampling and DCW controls
+#### Sampling and DCW controls (ACE-Step only)
 
 Advanced per-run controls map 1:1 to the ACE-Step engine and are only needed for reproducible quality comparisons; omit them to keep the engine defaults:
 
 | Field | Purpose |
 | --- | --- |
-| `lmTemperature`, `lmTopP`, `lmTopK`, `lmCfgScale` | LM sampling temperature (default 0.85), nucleus probability (default 0.9), top-k cutoff (`0` disables), and classifier-free guidance scale |
+| `lmTemperature` | LM sampling temperature (default 0.85) |
+| `lmTopP` | LM nucleus-sampling probability (default 0.9) |
+| `lmTopK` | LM top-k cutoff; `0` disables top-k filtering |
+| `lmCfgScale` | Classifier-free guidance scale used by the LM |
 | `lmPhase1` | Let the LM infer missing metadata before semantic-code generation |
-| `dcwEnabled`, `dcwScaler`, `dcwHighScaler` | Official Haar DCW correction during DiT sampling (enabled by default; low/high-frequency strengths default to 0.05 / 0.02) |
+| `dcwEnabled` | Apply the official Haar DCW correction during DiT sampling (default: true) |
+| `dcwScaler` | DCW low-frequency correction strength (default 0.05) |
+| `dcwHighScaler` | DCW high-frequency correction strength (default 0.02) |
+
+### With MiniMax-Music3
+
+MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical controls (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`), the ACE-Step-only LM and DCW knobs above, and every reference/cover field. Pass the caption and, when useful, any of these MiniMax-only controls:
+
+| Field | When to set it |
+| --- | --- |
+| `lyrics` | Vocal lyrics; use `"[Instrumental]"` for instrumental output. |
+| `seed` | RNG seed for reproducible generation. |
+| `duration` | Target length in seconds. Internally converted to the model's 25 semantic frames per second. Cannot be combined with `maxFrames`. |
+| `maxFrames` | Explicit semantic-frame cap when you want direct control over length instead of a seconds-based target. Cannot be combined with `duration`. |
+| `inferenceSteps` | Per-run flow sampling steps; leave unset (or `0`) to use the model default. Raise it to trade generation time for higher quality. |
+| `cfgScale` | Per-run flow classifier-free guidance scale; leave unset (or `0`) to use the model default. Raise it to follow the caption more literally, lower it for more freedom. |
+
+```ts
+import { audioGen } from "@qvac/sdk";
+
+const run = audioGen({
+  modelId,
+  caption: "Warm cinematic piano with gentle strings",
+  lyrics: "[Instrumental]",
+  seed: 7,
+  cfgScale: 1.7,
+  inferenceSteps: 8,
+});
+
+const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all([
+  run.audio,
+  run.stats,
+]);
+```
 
 ## Reference audio and covers
+
+Reference and cover generation is **ACE-Step only** — MiniMax-Music3 rejects `referenceAudio`, `sourceAudio`, and `taskType`.
 
 `referenceAudio` conditions the generated timbre without changing the text-to-music task. `taskType: "cover-nofsq"` re-renders `sourceAudio` with a new caption while keeping its structure, optionally combined with a timbre reference:
 
@@ -179,14 +241,13 @@ const cover = audioGen({
 });
 ```
 
-Both inputs accept either form:
+- `referenceAudio` — Optional timbre reference. Provide it to nudge the generated timbre toward the reference recording; omit it to let the engine pick freely.
+- `taskType` — `"text2music"` (default) for caption-driven generation, or `"cover-nofsq"` to re-render `sourceAudio` with a new caption while keeping its structure.
+- `sourceAudio` — The source recording for the cover. Required when `taskType` is `"cover-nofsq"`.
+- `audioCoverStrength` — Fraction of DiT steps (0..1) that keep the source context. `"cover-nofsq"` currently requires `1`; the SDK rejects any other value, so omit it or pass `1`.
+- `coverNoiseStrength` — Blends the initial noise toward the source latent (0..1). Closer to `0` gives more variation; closer to `1` stays nearer the source. Default `0`.
 
-- A **file path** (string). The SDK decodes `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`, and `.aac` files server-side to 48 kHz float PCM (down-mixed to mono and duplicated onto both channels). Any other extension is read as raw interleaved stereo 48 kHz Float32 LE PCM, matching `ffmpeg -f f32le -ar 48000 -ac 2`.
-- A **`Buffer` / `Uint8Array`** holding raw interleaved stereo 48 kHz Float32 LE PCM. The `AUDIOGEN_INPUT_SAMPLE_RATE` (48000) and `AUDIOGEN_INPUT_CHANNELS` (2) constants describe that layout.
-
-Inputs are capped at `AUDIOGEN_INPUT_MAX_SECONDS` (600 s) per clip. Malformed PCM — a byte length that is not whole stereo frames, non-finite samples, or a clip over the limit — fails the run with `INVALID_AUDIO_INPUT` before the engine is invoked; a missing file fails with `AUDIO_FILE_NOT_FOUND`.
-
-`sourceAudio` is required for cover tasks and is validated on the client before the request is sent. `audioCoverStrength` (0..1) is the fraction of DiT steps that keep the source context; the engine does not implement partial source context yet, so for `cover-nofsq` the SDK rejects any value other than `1` (omit it or pass `1`). `coverNoiseStrength` (0..1) blends the initial noise toward the source latent (`0` = pure noise, `1` ≈ source). The FSQ-roundtrip `cover` task is reserved by the engine but not implemented, so the SDK offers only `text2music` (default) and `cover-nofsq` (see `AUDIOGEN_TASK_TYPES`).
+Both `referenceAudio` and `sourceAudio` accept either a file path (the SDK decodes `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`, and `.aac` server-side; any other extension is read as raw interleaved stereo 48 kHz Float32 LE PCM) or a `Buffer` / `Uint8Array` in that same raw PCM layout (see `AUDIOGEN_INPUT_SAMPLE_RATE` and `AUDIOGEN_INPUT_CHANNELS`). Clips are capped at 600 s.
 
 ## Cancellation
 
@@ -205,11 +266,13 @@ try {
 }
 ```
 
-AudioGen supports hard cancellation: the addon interrupts the active ACE-Step generation. The stream terminates with `stopReason: "cancelled"`, and the `audio` and `stats` promises reject with `InferenceCancelledError`. You can also broad-cancel AudioGen work with `cancel({ modelId, kind: "audiogen" })`.
+AudioGen supports hard cancellation on both engines: the addon interrupts the active generation. The stream terminates with `stopReason: "cancelled"`, and the `audio` and `stats` promises reject with `InferenceCancelledError`. You can also broad-cancel AudioGen work with `cancel({ modelId, kind: "audiogen" })`.
 
 See [Runtime — Cancellation](/runtime/cancellation) for cancellation behavior shared across the SDK.
 
 ## Example
+
+### ACE-Step
 
 This example loads the registry-hosted ACE-Step models, reports progress, generates an instrumental, and writes the PCM output as WAV.
 
@@ -241,6 +304,17 @@ The cover example takes an existing recording (any FFmpeg-decodable file), an op
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-cover.ts title="generate-cover.ts" lineNumbers
+```
+
+</WrapCode>
+
+### MiniMax-Music3
+
+This example loads a local MiniMax-Music3 pair from the `AUDIOGEN_MINIMAX_LM_MODEL` and `AUDIOGEN_MINIMAX_SYNTH_MODEL` environment variables, generates an instrumental, and writes the PCM output as WAV. Set `AUDIOGEN_MAX_FRAMES`, `AUDIOGEN_STEPS`, and `AUDIOGEN_CFG_SCALE` to override the MiniMax-only per-run controls (`maxFrames`, `inferenceSteps`, `cfgScale`).
+
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-music-minimax.ts title="generate-music-minimax.ts" lineNumbers
 ```
 
 </WrapCode>

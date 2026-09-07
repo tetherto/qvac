@@ -7,8 +7,25 @@ import {
 import { HttpError, errorType } from '@/serve/lib/http-error'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
 
+export interface ErrorHandlerOptions {
+  /**
+   * Request field to error code, contributed by the mounted extensions. A key
+   * may name the validation failure too — `field:<zod issue code>` wins over
+   * the bare `field` when that is how the body failed.
+   */
+  fieldCodes?: Record<string, string>
+}
+
+// `model` is core's: every route resolves it through `requireModel`. Each
+// extension contributes the fields of its own request bodies.
+const CORE_FIELD_CODES: Record<string, string> = {
+  model: 'missing_model'
+}
+
 // lunte-disable-next-line require-await
-const plugin: FastifyPluginAsync = async (app) => {
+const plugin: FastifyPluginAsync<ErrorHandlerOptions> = async (app, opts) => {
+  const fieldCodes = { ...CORE_FIELD_CODES, ...opts.fieldCodes }
+
   app.setErrorHandler((err: FastifyError, req, reply) => {
     const sseSentinel = req.routeOptions?.config?.sseSentinel ?? true
     const message = err.message ?? 'An internal error occurred.'
@@ -37,7 +54,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       const issue = err.validation[0] as
         { instancePath?: string; message?: string; keyword?: string } | undefined
       const head = headFromInstancePath(issue?.instancePath)
-      const code = head in ZOD_PATH_TO_CODE ? ZOD_PATH_TO_CODE[head]! : 'invalid_request'
+      const code = fieldCode(fieldCodes, head, issue?.keyword)
       const detail = issue?.message ?? 'Request body failed validation.'
       reply.code(400).send({
         error: {
@@ -119,25 +136,21 @@ const plugin: FastifyPluginAsync = async (app) => {
   })
 }
 
-const ZOD_PATH_TO_CODE: Record<string, string> = {
-  model: 'missing_model',
-  messages: 'missing_messages',
-  input: 'missing_input',
-  prompt: 'missing_prompt',
-  file: 'missing_file',
-  image: 'missing_image',
-  'image[]': 'missing_image',
-  query: 'missing_query',
-  file_id: 'missing_file_id',
-  voice: 'missing_voice',
-  mask: 'mask_not_supported',
-  size: 'invalid_size',
-  seconds: 'invalid_seconds'
-}
-
 function formatServerError(label: string, method: string, url: string, err: FastifyError): string {
   const stack = err.stack ?? `${err.name}: ${err.message}`
   return `${label} ${method} ${url}\n${stack}`
+}
+
+function fieldCode(
+  fieldCodes: Record<string, string>,
+  head: string,
+  keyword: string | undefined
+): string {
+  if (keyword !== undefined) {
+    const specific = fieldCodes[`${head}:${keyword}`]
+    if (specific !== undefined) return specific
+  }
+  return fieldCodes[head] ?? 'invalid_request'
 }
 
 function headFromInstancePath(instancePath: string | undefined): string {
