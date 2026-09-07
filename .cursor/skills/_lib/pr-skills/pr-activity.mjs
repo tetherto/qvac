@@ -14,7 +14,7 @@ const PR_PAGE_SIZE = 30;
 const APPROVAL_GATE_RE = /^(check-approvals|tier-based approval check)/i;
 const FAILING_STATES = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ERROR"]);
 const PENDING_STATES = new Set(["IN_PROGRESS", "QUEUED", "PENDING"]);
-const E2E_PLATFORM_RE = /^run-tests \/ (\w+)-tests/;
+const E2E_PLATFORM_RE = /^(?:run-tests \/ )?(android|desktop|ios)-tests(?: \/|$)/;
 const E2E_ICONS = {
   success: "✅",
   failure: "❌",
@@ -332,7 +332,6 @@ export function computeE2e(contexts) {
     if ([...states].some((s) => FAILING_STATES.has(s))) out[platform] = "failure";
     else if ([...states].some((s) => PENDING_STATES.has(s))) out[platform] = "pending";
     else if (states.has("SUCCESS")) out[platform] = "success";
-    else out[platform] = "skipped";
   }
   return out;
 }

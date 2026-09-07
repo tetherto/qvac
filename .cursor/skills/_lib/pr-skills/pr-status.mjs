@@ -252,7 +252,7 @@ function laneAttention(buckets) {
 }
 
 function tierAttentionCount(lanes) {
-  return laneAttention(lanes.impl) + laneAttention(lanes.docs);
+  return laneAttention(lanes.impl);
 }
 
 function docsAttention(byTier) {
