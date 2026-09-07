@@ -680,7 +680,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
   // -- img2img --------------------------------------------------------------
   //
-  // Three code paths depending on model architecture and input shape:
+  // Two code paths depending on model architecture and input shape:
   //
   //   FLUX2 (prediction='flux2_flow', engine-side auto-detected) with N
   //   reference images (N>=1):
