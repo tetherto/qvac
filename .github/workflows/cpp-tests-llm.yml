@@ -107,12 +107,19 @@ jobs:
         shell: bash
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
+      # QVAC-23763: cuda-backend hard-errors without the pinned nvcc. Linux and
+      # Windows must not fall back to a runner's system CUDA installation.
+      - if: ${{ matrix.platform == 'linux' || matrix.platform == 'windows' }}
+        id: setup-cuda
+        name: Setup CUDA toolkit for the ggml CUDA backend
+        uses: ./.github/actions/setup-cuda
+
       - name: Get vcpkg cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
+          key: cpp-tests-v5-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ steps.setup-cuda.outputs.msvc-version || 'non-windows' }}-${{ hashFiles('.github/actions/setup-cuda/action.yml', 'vcpkg-overlays/ports/qvac-fabric/portfile.cmake', 'vcpkg-overlays/triplets/x64-windows.cmake') }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
-          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+          restore-keys: cpp-tests-v5-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ steps.setup-cuda.outputs.msvc-version || 'non-windows' }}-${{ hashFiles('.github/actions/setup-cuda/action.yml', 'vcpkg-overlays/ports/qvac-fabric/portfile.cmake', 'vcpkg-overlays/triplets/x64-windows.cmake') }}-
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -146,12 +153,6 @@ jobs:
           echo "Verify downloaded models..."
           ls -lh models/unit-test/
           du -sh models/unit-test/*
-
-      # QVAC-23763: cuda-backend hard-errors without nvcc, so linux needs the
-      # toolkit. Compile-only, no NVIDIA GPU required.
-      - if: ${{ matrix.platform == 'linux' }}
-        name: Setup CUDA toolkit for the ggml CUDA backend
-        uses: ./.github/actions/setup-cuda
 
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
@@ -229,4 +230,3 @@ jobs:
             cat build/test/unit/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
-
