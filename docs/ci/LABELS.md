@@ -55,7 +55,7 @@ The `verified` label is **no longer used to authorize CI**. It may still appear 
 | `publish` | Triggers a GitHub Packages publish from the PR (pre-release / dev build). | Publish workflows | Use sparingly; consumes a published version slot. |
 | `docs-deploy` | Marks docs as ready for production deploy. | Docs deploy workflows | Set when the docs changes are ready to go live alongside PR merge. |
 | `tier1`, `tier2` | Approval-bot review-tier groupings. | `approval-check-worker.yml` | The bot uses these to compute whether a PR has met its required approval tier. |
-| `test-e2e-smoke` | Runs the smoke E2E suite (currently SDK-only). | E2E test workflows | Faster subset; prefer for PR feedback. |
+| `test-e2e-smoke` | Runs the smoke E2E suite **plus the tests the PR touched** (currently SDK-only). | E2E test workflows | Faster subset; prefer for PR feedback. See [Smoke runs cover the tests a PR touched](#smoke-runs-cover-the-tests-a-pr-touched). |
 | `test-e2e-full` | Runs the full E2E suite (currently SDK-only). | E2E workflows | Long-running; use for release branches and major changes. |
 | `e2e-tested` | Set automatically by the E2E workflow once a run has completed against the PR. | E2E workflows | Status indicator only; does not pass/fail by itself — see linked run. |
 | `NLP` | Marks PRs touching `packages/llm-llamacpp/` or `packages/embed-llamacpp/`. | Routing in approval workflows | Casing matters: it's `NLP`, not `nlp`. |
@@ -69,6 +69,45 @@ The `verified` label is **no longer used to authorize CI**. It may still appear 
 > future re-enable; do not rely on it to launch a per-addon mobile run.
 
 Standard GitHub labels (`bug`, `documentation`, `enhancement`, `good first issue`, `help wanted`, `question`, `wontfix`, `duplicate`, `invalid`) and Dependabot/CodeQL labels (`dependencies`, `javascript`, `github_actions`) are unchanged.
+
+---
+
+## Smoke runs cover the tests a PR touched
+
+The smoke suite is a fraction of the SDK e2e catalog, and a test belongs to it only if someone tagged it `suites: ['smoke']`. Tests a PR adds or changes are therefore invisible to a smoke run unless the author remembered a manual filter, so a green smoke run routinely says nothing about the tests the PR actually touched.
+
+`test-e2e-smoke` now runs **the smoke suite plus the tests the PR touched**. Nothing to configure; `test-e2e-full` is unchanged and still runs everything.
+
+A PR comment reports what happened: tests touched, how many smoke already covered, how many the run added and at what runtime cost, and any changed file the mapper could not attribute. To get the same answer before pushing, run the mapper — it is the code CI runs, so it reports against today's catalog rather than a number written down here:
+
+```bash
+cd packages/sdk/e2e
+node scripts/impacted-tests.mjs --base main --head HEAD
+```
+
+Six relations connect a changed file to testIds:
+
+| Changed file | Resolved via |
+|---|---|
+| `tests/*-tests.ts`, `tests/test-definitions.ts` | the testIds it declares — narrowed to the changed lines when they name tests, widened to the whole file otherwise |
+| `tests/**/executors/*.ts` | the executor's `pattern` regex |
+| anything else under `tests/` | the import graph, via the executors that reach it |
+| `packages/inference/src/plugins/builtin/<engine>/**` | the models that engine serves — directory name → `engine` in the SDK model contract → the resource constants naming those models → the tests depending on those resources |
+| `packages/sdk/src/client/api/*.ts` | the functions it exports, and the executors importing them |
+| a handler module registered in `packages/inference/src/registry.ts` | the same way, via the operation the registry binds it to. Operations dispatched to a plugin rather than a module are left to the engine relation |
+
+The last three relations are the only ones that reach outside `packages/sdk/e2e/`. It needs no table: the plugin directory name *is* the engine id the SDK loads by, the contract is regenerated and checked by `contract:check`, a wrong model constant fails the download, and a wrong `dependency` throws `Unknown dependency` at run time. Every link is already load-bearing, so none of them can rot silently to suit this mapper.
+
+Deliberate limits:
+
+- **Source with no declared link to a test is out of scope.** A PR touching only `packages/sdk/src/**` or the parts of inference that are neither an engine nor a registered handler maps to nothing and gets a plain smoke run. Inventing a link — a hand-kept `path -> category` table — would rot without anything failing.
+- **Lifecycle handlers legitimately pull in most of the catalog.** Changing `unload-model` or `cancelHandler` resolves to ~500 tests, because every test loads and cancels. That is real coverage rather than a bug, and it is still bounded by `test-e2e-full`; the comment reports the size so it is never a surprise.
+- **An engine or handler nothing exercises is reported, not silently empty.** It appears in the comment's unmapped list, so the gap shows up the first time someone changes it.
+- **Unattributable files are reported, not expanded.** `tests/*/consumer.ts`, `fixtures/`, and `assets/` map to no single test — a consumer change formally touches every test on its platform. The comment lists these files so they get a human look, and nothing is added for them.
+- **The impact set is never truncated.** It is bounded by the catalog, so extending a smoke run can never cost more than `test-e2e-full` would; capping it would only reduce coverage while pushing the author to the more expensive option. The comment states the added runtime so a broad change is visible.
+- **The mapper never blocks e2e.** If it fails, the smoke run proceeds unchanged and the comment says the analysis was unavailable.
+
+Implementation: [`impacted-tests.mjs`](../../packages/sdk/e2e/scripts/impacted-tests.mjs), the `sdk-e2e-report-impacted` action, and `--include` in `@qvac/test-suite`.
 
 ---
 

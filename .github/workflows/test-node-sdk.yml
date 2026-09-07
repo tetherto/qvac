@@ -40,6 +40,11 @@ on:
         description: "Exclude suites (comma-separated)"
         required: false
         type: string
+      include:
+        description: "Exact testIds to run on top of the suite/filter selection (comma-separated)"
+        required: false
+        type: string
+        default: ""
       test-version:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
@@ -574,6 +579,9 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         timeout-minutes: 60
         shell: node {0}
+        env:
+          # Read via env, not interpolation: the id list is derived from the PR diff.
+          INCLUDE_TESTS: ${{ inputs.include }}
         run: |
           (async () => {
             const { spawn, spawnSync } = require('child_process');
@@ -581,6 +589,8 @@ jobs:
 
             const filter = '${{ inputs.filter }}';
             const filterArgs = filter ? ['--filter=' + filter] : [];
+            const includeTests = process.env.INCLUDE_TESTS || '';
+            const includeArgs = includeTests ? ['--include=' + includeTests] : [];
             const suite = '${{ inputs.suite }}';
             const suiteArgs = suite ? ['--suite=' + suite] : [];
             const excludeSuite = '${{ inputs.exclude-suite }}';
@@ -644,7 +654,8 @@ jobs:
               '--report-dir=./reports',
               ...filterArgs,
               ...suiteArgs,
-              ...excludeSuiteArgs
+              ...excludeSuiteArgs,
+              ...includeArgs
             ];
             console.log('Producer command: npx ' + producerArgs.join(' '));
 

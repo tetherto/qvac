@@ -53,6 +53,13 @@ on:
       filter:
         description: "Test filters (blank = all; comma-separated categories or prefixes)"
         type: string
+      # Unions with Suite/Filter instead of narrowing them: "the smoke suite
+      # plus exactly these tests". Took the slot of the mobile connection
+      # timeout, which nobody was overriding — workflow_dispatch allows at most
+      # 25 inputs and this workflow is at the ceiling.
+      include:
+        description: "Extra testIds to run on top of Suite/Filter (exact ids, comma-separated)"
+        type: string
       test-version:
         description: "Code ref to test (branch, tag, or SHA; blank = selected workflow branch)"
         type: string
@@ -86,10 +93,6 @@ on:
         description: "Desktop/Electron/Snap connection timeout (seconds)"
         type: number
         default: 60
-      mobile-consumer-timeout:
-        description: "Mobile connection timeout (seconds)"
-        type: number
-        default: 1200
       device-farm-timeout:
         description: "Device Farm run timeout (minutes)"
         type: number
@@ -152,6 +155,12 @@ on:
       filter:
         description: "Test filter (comma-separated categories/prefixes)"
         type: string
+      include:
+        description: >-
+          Exact testIds to run in addition to the suite/filter selection
+          (comma-separated). Used to extend a smoke run with the tests a PR touched.
+        type: string
+        default: ""
       desktop-consumer-timeout:
         type: number
         default: 60
@@ -509,6 +518,7 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
       test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
       inference-source: ${{ needs.prepare-inference.outputs.source }}
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
@@ -534,6 +544,7 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
       test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
       inference-source: ${{ needs.prepare-inference.outputs.source }}
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
@@ -559,6 +570,7 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
       test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
       inference-source: ${{ needs.prepare-inference.outputs.source }}
       inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
@@ -588,6 +600,7 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
@@ -621,6 +634,7 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
