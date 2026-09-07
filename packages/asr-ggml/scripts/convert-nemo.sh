@@ -17,7 +17,7 @@
 #   ./scripts/convert-nemo.sh [flags]
 #
 # Flags:
-#   --type, -t <ctc|tdt|unified|eou|sortformer|sortformer-streaming-v2.1|all>
+#   --type, -t <ctc|tdt|unified|eou|nemotron|sortformer|sortformer-streaming-v2.1|all>
 #                                               Which model(s) (default: all)
 #   --quant, -q <f16|q8_0|q5_0|q4_0|f32>        Quant tier (default: q8_0)
 #   --python <bin>                              Python interpreter (default:
@@ -63,8 +63,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$TYPE" in
-  ctc|tdt|unified|eou|sortformer|sortformer-streaming-v2.1|all) ;;
-  *) echo "Error: --type must be ctc|tdt|unified|eou|sortformer|sortformer-streaming-v2.1|all" >&2; exit 2;;
+  ctc|tdt|unified|eou|nemotron|sortformer|sortformer-streaming-v2.1|all) ;;
+  *) echo "Error: --type must be ctc|tdt|unified|eou|nemotron|sortformer|sortformer-streaming-v2.1|all" >&2; exit 2;;
 esac
 case "$QUANT" in
   f32|f16|q8_0|q5_0|q4_0) ;;
@@ -129,6 +129,7 @@ nemo_filename() {
     tdt)        echo "parakeet-tdt-0.6b-v3.nemo";;
     unified)    echo "parakeet-unified-en-0.6b.nemo";;
     eou)        echo "parakeet_realtime_eou_120m-v1.nemo";;
+    nemotron)   echo "nemotron-3.5-asr-streaming-0.6b.nemo";;
     sortformer) echo "diar_sortformer_4spk-v1.nemo";;
     sortformer-streaming-v2.1) echo "diar_streaming_sortformer_4spk-v2.1.nemo";;
   esac
@@ -140,6 +141,7 @@ gguf_filename() {
     tdt)        echo "parakeet-tdt-0.6b-v3.${q}.gguf";;
     unified)    echo "parakeet-unified-en-0.6b.${q}.gguf";;
     eou)        echo "parakeet-eou-120m-v1.${q}.gguf";;
+    nemotron)   echo "nemotron-3.5-asr-streaming-0.6b.${q}.gguf";;
     sortformer) echo "sortformer-4spk-v1.${q}.gguf";;
     sortformer-streaming-v2.1) echo "diar_streaming_sortformer_4spk-v2.1.${q}.gguf";;
   esac
@@ -201,7 +203,7 @@ echo
 
 failures=0
 if [[ "$TYPE" == "all" ]]; then
-  for t in ctc tdt unified eou sortformer sortformer-streaming-v2.1; do
+  for t in ctc tdt unified eou nemotron sortformer sortformer-streaming-v2.1; do
     convert_one "$t" || failures=$((failures + 1))
   done
 else

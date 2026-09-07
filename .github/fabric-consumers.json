@@ -1,6 +1,9 @@
 {
   "npm_runtime": [
     "classification-ggml",
-    "vla-ggml"
+    "vla-ggml",
+    "translation-nmtcpp",
+    "model-fit",
+    "ocr-ggml"
   ]
 }

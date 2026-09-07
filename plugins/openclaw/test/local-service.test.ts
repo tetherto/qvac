@@ -105,13 +105,13 @@ test('local service launcher tells pre-upgrade installs to re-onboard', () => {
     (error: unknown) => {
       assert.ok(error instanceof TypeError)
       assert.match(error.message, /--api-key-file/)
-      assert.match(error.message, /openclaw onboard --auth-choice qvac/)
+      assert.match(error.message, /openclaw onboard --auth-choice provider-plugin:qvac/)
       return true
     }
   )
   assert.match(
     formatLauncherError(new TypeError(parseFailureMessage())),
-    /openclaw onboard --auth-choice qvac/
+    /openclaw onboard --auth-choice provider-plugin:qvac/
   )
 })
 

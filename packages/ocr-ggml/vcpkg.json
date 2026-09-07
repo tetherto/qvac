@@ -18,14 +18,6 @@
       "platform": "android"
     },
     {
-      "name": "qvac-fabric",
-      "default-features": false,
-      "version>=": "10297.1.1",
-      "features": [
-        "gpu-backends"
-      ]
-    },
-    {
       "name": "qvac-lib-inference-addon-cpp",
       "version>=": "1.3.3"
     },
