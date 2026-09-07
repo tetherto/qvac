@@ -5,7 +5,7 @@ const fs = require('fs').promises
 
 const RegistryConfig = require('../lib/config')
 const logger = require('../lib/logger')
-const { connectToRegistry } = require('./utils/rpc-client')
+const { connectToRegistry, connectToRegistryByCapacity } = require('./utils/rpc-client')
 const { parseCanonicalSource } = require('../lib/source-helpers')
 const QVACRegistryClient = require('../client/lib/client')
 
@@ -35,7 +35,8 @@ async function syncModels() {
   const client = new QVACRegistryClient({ registryCoreKey, logger })
   await client.ready()
 
-  let connection = await connectToRegistry({ config, logger })
+  let connection = null
+  let selectedPeerKey = null
 
   try {
     const configModels = JSON.parse(await fs.readFile(path.resolve(filePath), 'utf8'))
@@ -54,6 +55,11 @@ async function syncModels() {
     }
 
     logger.info(`Found ${dbModels.length} model(s) in database`)
+
+    if (!dryRun) {
+      connection = await connectToRegistryByCapacity({ config, logger })
+      selectedPeerKey = connection.peerKey
+    }
 
     const report = { added: [], updated: [], skipped: [], autoDeprecated: [], errors: [] }
     const configKeys = new Set()
@@ -122,7 +128,13 @@ async function syncModels() {
                 sourceInfo,
                 logger,
                 connection,
-                reconnect: () => connectToRegistry({ config, logger })
+                reconnect: () =>
+                  connectToRegistry({
+                    config,
+                    logger,
+                    targetPeer: selectedPeerKey,
+                    indexerKeys: [selectedPeerKey]
+                  })
               })
               connection = recovery.connection
 
@@ -214,7 +226,7 @@ async function syncModels() {
     return report
   } finally {
     await client.close()
-    await connection.cleanup()
+    if (connection) await connection.cleanup()
   }
 }
 
