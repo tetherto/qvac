@@ -13,8 +13,8 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "packages/audiogen-ggml/scripts/download-audiogen-ggml-models.js"
+      - tmp-QVAC-24630-seed-proof
+
   # Longest gap must stay under the cache server's five-day prune window.
   schedule:
     - cron: "17 12 * * 1,4"

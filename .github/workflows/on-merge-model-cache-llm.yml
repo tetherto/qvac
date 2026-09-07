@@ -13,8 +13,8 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "packages/llm-llamacpp/test/integration/models.manifest.json"
+      - tmp-QVAC-24630-seed-proof
+
   # Longest gap must stay under the cache server's five-day prune window.
   schedule:
     - cron: "17 4 * * 1,4"

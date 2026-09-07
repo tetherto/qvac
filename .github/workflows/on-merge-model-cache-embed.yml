@@ -9,8 +9,8 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "packages/embed-llamacpp/test/integration/models.manifest.json"
+      - tmp-QVAC-24630-seed-proof
+
   # Longest gap must stay under the cache server's five-day prune window.
   # Offset from the other seeds so they do not contend for the same runner.
   schedule:

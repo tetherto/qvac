@@ -13,10 +13,8 @@ on:
   push:
     branches:
       - main
-    # The cache key hashes this script, so it is the only file whose change can
-    # invalidate the entry.
-    paths:
-      - "packages/tts-ggml/scripts/download-tts-ggml-models.js"
+      - tmp-QVAC-24630-seed-proof
+
   # Longest gap must stay under the cache server's five-day prune window.
   schedule:
     - cron: "17 10 * * 1,4"

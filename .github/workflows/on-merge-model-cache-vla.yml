@@ -13,10 +13,8 @@ on:
   push:
     branches:
       - main
-    # Both entries' cache keys hash these composites.
-    paths:
-      - ".github/actions/download-vla-models/action.yml"
-      - ".github/actions/download-vla-groot-parity/action.yml"
+      - tmp-QVAC-24630-seed-proof
+
   # Longest gap must stay under the cache server's five-day prune window.
   schedule:
     - cron: "17 18 * * 1,4"
