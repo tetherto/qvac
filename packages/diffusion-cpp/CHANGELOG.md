@@ -49,6 +49,9 @@ walk and CI guards that would have caught the regression.
   numbers (Vulkan build: 1.28 s/block, 11.5/14.6 GB VRAM, a dedicated 16 GB
   GPU as the practical minimum), and a Known-issues note on the engine
   prompt-row log's last-index semantics.
+- Build: `qvac-lib-inference-addon-cpp` floor raised to `>= 1.4.0`
+  (qvac-registry-vcpkg#359), which compiles against the `js_set_array_elements`
+  signature of `bare-headers` 1.32; build-time only, no runtime change.
 
 ### Pull Requests
 
