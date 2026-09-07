@@ -27,13 +27,14 @@ function parseArgs (argv) {
     jsonOutput: '',
     htmlOutput: '',
     manualDir: path.resolve('packages/bci-whispercpp/benchmarks/manual-results'),
-    expectDevices: []
+    expectDevices: [],
+    provenance: ''
   }
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     const next = argv[i + 1]
-    if ((arg === '--input' || arg === '--dir') && next) { args.input = next; i++ } else if (arg === '--output' && next) { args.output = next; i++ } else if ((arg === '--json-output' || arg === '--output-json') && next) { args.jsonOutput = next; i++ } else if (arg === '--output-html' && next) { args.htmlOutput = next; i++ } else if (arg === '--manual-dir' && next) { args.manualDir = next; i++ } else if (arg === '--expect-devices' && next) { args.expectDevices = next.split(',').map((device) => device.trim()).filter(Boolean); i++ }
+    if ((arg === '--input' || arg === '--dir') && next) { args.input = next; i++ } else if (arg === '--output' && next) { args.output = next; i++ } else if ((arg === '--json-output' || arg === '--output-json') && next) { args.jsonOutput = next; i++ } else if (arg === '--output-html' && next) { args.htmlOutput = next; i++ } else if (arg === '--manual-dir' && next) { args.manualDir = next; i++ } else if (arg === '--expect-devices' && next) { args.expectDevices = next.split(',').map((device) => device.trim()).filter(Boolean); i++ } else if (arg === '--provenance' && next) { args.provenance = next; i++ }
   }
 
   if (!args.input) throw new Error('Missing required --input argument')
@@ -372,11 +373,15 @@ function buildCoverage (records, expectedDevices = []) {
   return coverage
 }
 
-function renderMarkdown (records, expectedDevices = []) {
+function renderMarkdown (records, expectedDevices = [], provenance = '') {
   const coverage = buildCoverage(records, expectedDevices)
   const lines = [
     '## BCI Performance Findings',
     '',
+    // Channel numbers have been published from feature branches that were
+    // indistinguishable from main in the report (QVAC-24635), so the summarize
+    // workflow stamps repo@ref, run id and date here.
+    ...(provenance ? [`Source: ${provenance}`, ''] : []),
     '| Source | Device | Platform | Model | GPU | Backend | Mean tok/s | Stddev tok/s | P50 tok/s | Mean Wall (ms) | RTF | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Notes |',
     '|--------|--------|----------|-------|-----|---------|------------|--------------|-----------|----------------|-----|--------------|---------------|----------------|-------|'
   ]
@@ -401,7 +406,7 @@ function renderMarkdown (records, expectedDevices = []) {
   return lines.join('\n') + '\n'
 }
 
-function renderHtml (records, expectedDevices = []) {
+function renderHtml (records, expectedDevices = [], provenance = '') {
   const coverage = buildCoverage(records, expectedDevices)
   const expectedDeviceItems = []
   if (coverage.expectedDesktopDevices) {
@@ -441,6 +446,7 @@ function renderHtml (records, expectedDevices = []) {
     '</head>',
     '<body>',
     '  <h1>BCI Performance Findings</h1>',
+    ...(provenance ? [`  <p>Source: <code>${escapeHtml(provenance)}</code></p>`] : []),
     '  <table>',
     '    <thead>',
     '      <tr>',
@@ -490,8 +496,8 @@ function main () {
         .concat(loadManualRecords(manualDir))
     )
   )
-  const markdown = renderMarkdown(records, args.expectDevices)
-  const html = renderHtml(records, args.expectDevices)
+  const markdown = renderMarkdown(records, args.expectDevices, args.provenance)
+  const html = renderHtml(records, args.expectDevices, args.provenance)
 
   if (args.output) {
     const outputPath = path.resolve(args.output)
@@ -501,7 +507,7 @@ function main () {
   if (args.jsonOutput) {
     const jsonOutputPath = path.resolve(args.jsonOutput)
     ensureParentDir(jsonOutputPath)
-    fs.writeFileSync(jsonOutputPath, JSON.stringify({ records, coverage: buildCoverage(records, args.expectDevices) }, null, 2) + '\n', 'utf8')
+    fs.writeFileSync(jsonOutputPath, JSON.stringify({ provenance: args.provenance || undefined, records, coverage: buildCoverage(records, args.expectDevices) }, null, 2) + '\n', 'utf8')
   }
   if (args.htmlOutput) {
     const htmlOutputPath = path.resolve(args.htmlOutput)

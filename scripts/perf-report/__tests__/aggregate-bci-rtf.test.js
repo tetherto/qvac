@@ -234,3 +234,12 @@ test('a fully reporting device list renders without the missing-devices warning'
   assert.ok(markdown.includes('- Expected desktop devices reporting: 1/1'))
   assert.ok(!markdown.includes('MISSING desktop devices'))
 })
+
+test('provenance is stamped into markdown and html, and absent without it', () => {
+  const records = [normalizeReport(desktopReport(true), 'rtf-benchmark-linux-x64-ggml-bci-windowed-gpu.json', 'desktop-ci')]
+  const stamp = 'tetherto/qvac@main run 123, generated 2026-09-07 10:00 UTC'
+  assert.ok(renderMarkdown(records, [], stamp).includes(`Source: ${stamp}`))
+  assert.ok(renderHtml(records, [], stamp).includes('tetherto/qvac@main run 123'))
+  assert.ok(!renderMarkdown(records).includes('Source:'))
+  assert.ok(!renderHtml(records).includes('Source:'))
+})

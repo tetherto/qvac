@@ -652,3 +652,10 @@ test('markdown surfaces missing expected devices and stays silent without the fl
   assert.ok(complete.includes('- Expected desktop devices reporting: 1/1'))
   assert.ok(!complete.includes('MISSING desktop devices'))
 })
+
+test('provenance is stamped into markdown, and absent without it', () => {
+  const records = [normalizeDesktopRecord(desktopReport(true), 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json')]
+  const stamp = 'tetherto/qvac@main run 123, generated 2026-09-07 10:00 UTC'
+  assert.ok(renderMarkdown(records, [], [], stamp).includes(`Source: ${stamp}`))
+  assert.ok(!renderMarkdown(records, []).includes('Source:'))
+})

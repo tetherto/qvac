@@ -50,7 +50,8 @@ function parseArgs (argv) {
     jsonOutput: '',
     htmlOutput: '',
     manualDir: path.resolve('packages/asr-ggml/benchmarks/manual-results'),
-    expectDevices: []
+    expectDevices: [],
+    provenance: ''
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -73,6 +74,9 @@ function parseArgs (argv) {
       i++
     } else if (arg === '--expect-devices' && next) {
       args.expectDevices = next.split(',').map(device => device.trim()).filter(Boolean)
+      i++
+    } else if (arg === '--provenance' && next) {
+      args.provenance = next
       i++
     }
   }
@@ -682,12 +686,19 @@ function buildBestPerDevice (records) {
   })
 }
 
-function renderMarkdown (records, expectedDevices = []) {
+function renderMarkdown (records, expectedDevices = [], provenance = '') {
   const lines = []
   const coverage = buildCoverage(records, expectedDevices)
 
   lines.push('## ASR GGML Performance Findings')
   lines.push('')
+  // Channel numbers have been published from feature branches that were
+  // indistinguishable from main in the report (QVAC-24635), so the summarize
+  // workflow stamps repo@ref, run id and date here.
+  if (provenance) {
+    lines.push(`Source: ${provenance}`)
+    lines.push('')
+  }
   lines.push('| Source | Engine | Device | Platform | Model | Quant | GPU | Backend | GPU Model | Version | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Notes |')
   lines.push('|--------|--------|--------|----------|-------|-------|-----|---------|-----------|---------|----------|----------|-----|-----|----------------|--------------|---------------|----------------|-------|')
 
@@ -732,7 +743,7 @@ function renderMarkdown (records, expectedDevices = []) {
   return lines.join('\n') + '\n'
 }
 
-function renderHtml (records, expectedDevices = []) {
+function renderHtml (records, expectedDevices = [], provenance = '') {
   const coverage = buildCoverage(records, expectedDevices)
   const rows = records.map(record => {
     return [
@@ -806,6 +817,7 @@ function renderHtml (records, expectedDevices = []) {
     '</head>',
     '<body>',
     '  <h1>ASR GGML Performance Findings</h1>',
+    ...(provenance ? [`  <p>Source: <code>${escapeHtml(provenance)}</code></p>`] : []),
     '  <table>',
     '    <thead>',
     '      <tr>',
@@ -878,8 +890,8 @@ function main () {
   const mobileRecords = loadMobilePerformanceRecords(inputDir)
   const manualRecords = loadManualRecords(manualDir)
   const records = sortRecords(dedupeRecords(desktopRecords.concat(mobileRecords, manualRecords)))
-  const markdown = renderMarkdown(records, args.expectDevices)
-  const html = renderHtml(records, args.expectDevices)
+  const markdown = renderMarkdown(records, args.expectDevices, args.provenance)
+  const html = renderHtml(records, args.expectDevices, args.provenance)
 
   if (args.output) {
     const outputPath = path.resolve(args.output)
@@ -890,7 +902,7 @@ function main () {
   if (args.jsonOutput) {
     const jsonOutputPath = path.resolve(args.jsonOutput)
     ensureParentDir(jsonOutputPath)
-    fs.writeFileSync(jsonOutputPath, JSON.stringify({ records, coverage: buildCoverage(records, args.expectDevices) }, null, 2) + '\n', 'utf8')
+    fs.writeFileSync(jsonOutputPath, JSON.stringify({ provenance: args.provenance || undefined, records, coverage: buildCoverage(records, args.expectDevices) }, null, 2) + '\n', 'utf8')
   }
 
   if (args.htmlOutput) {

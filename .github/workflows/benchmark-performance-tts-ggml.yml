@@ -159,8 +159,13 @@ jobs:
       - name: Generate consolidated benchmark report
         env:
           EXPECTED_DESKTOP_DEVICES: ${{ needs.desktop-benchmarks.outputs.rtf_expected_devices }}
+          # Repo@ref + run id, stamped into the report: a report generated from
+          # a feature branch must never pass for main in the channel
+          # (QVAC-24635).
+          REPORT_PROVENANCE: ${{ needs.context.outputs.repository }}@${{ needs.context.outputs.ref }} run ${{ github.run_id }}
         run: |
           mkdir -p benchmark-artifacts
+          provenance="$REPORT_PROVENANCE, generated $(date -u '+%Y-%m-%d %H:%M UTC')"
           expect_args=()
           if [ -n "$EXPECTED_DESKTOP_DEVICES" ]; then
             expect_args=(--expect-devices "$EXPECTED_DESKTOP_DEVICES")
@@ -170,6 +175,7 @@ jobs:
             --manual-dir packages/tts-ggml/benchmarks/manual-results \
             --output benchmark-artifacts/tts-ggml-performance-findings.md \
             --output-json benchmark-artifacts/tts-ggml-performance-findings.json \
+            --provenance "$provenance" \
             "${expect_args[@]}"
 
       - name: Add summary
@@ -197,4 +203,7 @@ jobs:
           path: |
             benchmark-artifacts/tts-ggml-performance-findings.md
             benchmark-artifacts/tts-ggml-performance-findings.json
-          retention-days: 30
+          # 90 is the GitHub maximum. The 2026-08-06 mobile sweep expired at 30
+          # days before anyone could re-read it (QVAC-24635); the consolidated
+          # findings are the durable record, keep them as long as GitHub allows.
+          retention-days: 90

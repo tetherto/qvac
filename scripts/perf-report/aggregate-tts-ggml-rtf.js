@@ -36,7 +36,8 @@ function parseArgs (argv) {
     output: '',
     jsonOutput: '',
     manualDir: path.resolve('packages/tts-ggml/benchmarks/manual-results'),
-    expectDevices: []
+    expectDevices: [],
+    provenance: ''
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -56,6 +57,9 @@ function parseArgs (argv) {
       i++
     } else if (arg === '--expect-devices' && next) {
       args.expectDevices = next.split(',').map(device => device.trim()).filter(Boolean)
+      i++
+    } else if (arg === '--provenance' && next) {
+      args.provenance = next
       i++
     }
   }
@@ -725,7 +729,7 @@ function missingExpectedDevices (records, expectedDevices) {
   return expectedDevices.filter(device => !reporting.has(device))
 }
 
-function renderMarkdown (records, streamingRecords, expectedDevices = []) {
+function renderMarkdown (records, streamingRecords, expectedDevices = [], provenance = '') {
   const lines = []
   const gpuCoverage = new Set(
     records.filter(r => r.gpu === 'gpu').map(r => r.backend).filter(Boolean)
@@ -736,6 +740,13 @@ function renderMarkdown (records, streamingRecords, expectedDevices = []) {
 
   lines.push('## GGML TTS Performance Findings')
   lines.push('')
+  // Channel numbers have been published from feature branches that were
+  // indistinguishable from main in the report (QVAC-24635), so the summarize
+  // workflow stamps repo@ref, run id and date here.
+  if (provenance) {
+    lines.push(`Source: ${provenance}`)
+    lines.push('')
+  }
   lines.push('RTF = generation_time / audio_duration. Lower is faster. RTF < 1 is faster than real-time.')
   lines.push('')
   lines.push('WER and CER are optional Whisper round-trip quality metrics. Lower is better.')
@@ -849,7 +860,7 @@ function main () {
 
   const records = sortRecords(dedupeRecords(fromArtifacts.records.concat(fromManual.records)))
   const streaming = sortRecords(dedupeRecords(fromArtifacts.streaming.concat(fromManual.streaming)))
-  const markdown = renderMarkdown(records, streaming, args.expectDevices)
+  const markdown = renderMarkdown(records, streaming, args.expectDevices, args.provenance)
 
   if (args.output) {
     const outputPath = path.resolve(args.output)
@@ -860,7 +871,7 @@ function main () {
   if (args.jsonOutput) {
     const jsonOutputPath = path.resolve(args.jsonOutput)
     ensureParentDir(jsonOutputPath)
-    fs.writeFileSync(jsonOutputPath, JSON.stringify({ records, streaming }, null, 2) + '\n', 'utf8')
+    fs.writeFileSync(jsonOutputPath, JSON.stringify({ provenance: args.provenance || undefined, records, streaming }, null, 2) + '\n', 'utf8')
   }
 
   process.stdout.write(markdown)
