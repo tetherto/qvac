@@ -1,10 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [0.37.1] - 2026-09-07
 
 ### Changed
 
 - `qvac-fabric` dependency bumped `10297.1.1` -> `10297.1.2` (mtmd temporal merge is now opt-in per bitmap; no API change for this package).
+
+  Released as a **patch** rather than a minor deliberately: `@qvac/inference`, `@qvac/rag` and `@qvac/sdk` depend on `"@qvac/embed-llamacpp": "^0.37.0"`, which on a `0.x` version resolves `>=0.37.0 <0.38.0`. A `0.38.0` would fall outside those ranges and none of them would pick up the new fabric.
 
 ## [0.37.0] - 2026-08-29
 

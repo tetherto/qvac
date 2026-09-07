@@ -1,10 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [0.49.2] - 2026-09-07
 
 ### Fixed
 
 - Two separate still images of equal size passed in one request are no longer fused into a single two-frame video chunk on temporal-merge-capable models (Qwen-VL). `clip_encode` was writing a two-frame embedding into a buffer sized for one frame and aborting the process with `Output buffer size mismatch` (exit 134). Fixed in `qvac-fabric`, whose dependency is bumped `10297.1.1` -> `10297.1.2`; temporal merge is now opt-in per bitmap, so only real video frames merge.
+
+  Released as a **patch** rather than a minor deliberately: `@qvac/inference` and `@qvac/sdk` depend on `"@qvac/llm-llamacpp": "^0.49.1"` and `@qvac/rag` on `"^0.49.0"`, all of which resolve `>=0.49.x <0.50.0` on a `0.x` version. A `0.50.0` would fall outside every one of those ranges and none of them would pick up the fix.
 
 ## [0.49.1] - 2026-09-02
 
