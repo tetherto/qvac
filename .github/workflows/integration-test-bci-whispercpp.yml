@@ -63,7 +63,8 @@ on:
       # benchmark-performance-bci-whispercpp.yml feeds this to the aggregator's
       # --expect-devices gate so a lane that loses its rtf-results artifact
       # fails the summarize job instead of silently shrinking the report.
-      # Keep in step with the matrix `include` list below.
+      # Keep in step with the matrix `include` list below — the arity is
+      # asserted by scripts/perf-report/__tests__/rtf-expected-devices-guard.test.js.
       rtf_expected_devices:
         description: "Comma-separated device labels every RTF benchmark matrix row reports as"
         value: ${{ format('{0},{1},{2},{3},{4},{5},{6}', jobs.runner_names.outputs.linux_ubuntu2204_x64_gpu, jobs.runner_names.outputs.linux_ubuntu2404_x64_gpu, jobs.runner_names.outputs.ubuntu_2604, jobs.runner_names.outputs.ubuntu_2404_arm, jobs.runner_names.outputs.macos_arm64_gpu, jobs.runner_names.outputs.macos_15_large, jobs.runner_names.outputs.win_2025_x64_gpu) }}
@@ -365,13 +366,17 @@ jobs:
           QVAC_BCI_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
           QVAC_BCI_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
 
-      # Two attempts, and losing both fails the lane: the job runs with
-      # continue-on-error, so a swallowed upload failure (the asr-ggml matrix
-      # lost all 48 darwin-arm64 rows of run 34062003154 to a CreateArtifact
-      # ETIMEDOUT) would silently drop this device from the consolidated
-      # report. `if-no-files-found: error` instead of `ignore`: the benchmark
-      # steps above tolerate per-entry failures, so zero files means the whole
-      # lane produced nothing and must be loud, not absent.
+      # Two attempts. The retry exists for DATA RECOVERY: a transient upload
+      # failure (the asr-ggml matrix lost all 48 darwin-arm64 rows of run
+      # 34062003154 to a CreateArtifact ETIMEDOUT) silently drops this device
+      # from the consolidated report, and a second attempt keeps the report
+      # COMPLETE rather than merely flagged. Losing both attempts does not by
+      # itself turn the run red — this job runs with job-level
+      # continue-on-error — the summarize job's --expect-devices gate is what
+      # fails the run on a missing device. `if-no-files-found: error` instead
+      # of `ignore`: the benchmark steps above tolerate per-entry failures, so
+      # zero files means the whole lane produced nothing and must be loud, not
+      # absent.
       - name: Upload RTF benchmark results
         id: upload-rtf-results
         if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
