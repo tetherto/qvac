@@ -377,7 +377,7 @@
         },
         "policy": {
           "default": "interactive-v1",
-          "description": "Headroom policy. `interactive-v1` leaves the larger of 2 GiB or 15% of total RAM on desktop, 1 GiB or 20% on mobile.",
+          "description": "Headroom policy. `interactive-v1` withholds 20% of the memory available right now, capped at 2 GiB on desktop and 1 GiB on mobile.",
           "type": "string",
           "const": "interactive-v1"
         },
@@ -400,8 +400,8 @@
         },
         "basis": {
           "type": "string",
-          "enum": ["system-memory", "process-memory"],
-          "description": "The evidence the budget was derived from — system RAM, or the per-process ceiling on iOS. GPU/VRAM metrics are deliberately excluded either way; they are `unverified`-scoped by design.",
+          "enum": ["system-memory", "process-memory", "device-memory", "device-budget"],
+          "description": "The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.",
           "title": "AssessModelFitResponseBasis"
         },
         "execution": {
@@ -422,16 +422,26 @@
               "type": "number",
               "description": "Memory in use at sample time under the same basis (system-wide, or this process)."
             },
+            "availableBytes": {
+              "type": "number",
+              "description": "Headroom before the policy applies: total − used, or the process allowance under process-memory. The reserve is a share of this."
+            },
             "reservedBytes": {
               "type": "number",
               "description": "Headroom withheld by the policy."
             },
             "availableAfterReserveBytes": {
               "type": "number",
-              "description": "Budget the estimate is compared against: total − used − reserved."
+              "description": "Budget the estimate is compared against: available − reserved."
             }
           },
-          "required": ["totalBytes", "usedBytes", "reservedBytes", "availableAfterReserveBytes"],
+          "required": [
+            "totalBytes",
+            "usedBytes",
+            "availableBytes",
+            "reservedBytes",
+            "availableAfterReserveBytes"
+          ],
           "additionalProperties": false,
           "title": "AssessModelFitResponseBudget"
         },

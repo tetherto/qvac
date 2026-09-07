@@ -47,7 +47,7 @@
     "test:unit": "npx tsx --test 'test/unit/**/*.test.ts' && npm run typecheck:bench-serve-openai-providers && npm run test:bench-serve-openai-providers",
     "test:bench-serve-openai-providers": "tsx --test benchmarks/serve-openai-providers/*.test.ts",
     "test:e2e": "npm run test:e2e:js",
-    "test:e2e:js": "tsx --test 'test/e2e/*.test.ts' 'test/e2e/cli/*.test.ts' 'test/e2e/core/*.test.ts' 'test/e2e/openai/*.test.ts' && tsx --test --test-concurrency=1 'test/e2e/model/*.test.ts'",
+    "test:e2e:js": "tsx --test 'test/e2e/*.test.ts' 'test/e2e/cli/*.test.ts' 'test/e2e/core/*.test.ts' 'test/e2e/default/*.test.ts' 'test/e2e/openai/*.test.ts' && tsx --test --test-concurrency=1 'test/e2e/model/*.test.ts'",
     "test:e2e:js:coverage": "tsx --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-exclude='**/test/**' 'test/e2e/**/*.test.ts'",
     "dev:link": "npm install ../sdk",
     "dev:unlink": "node scripts/dev-unlink.cjs",

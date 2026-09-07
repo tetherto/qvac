@@ -11,10 +11,13 @@
 //   npm run build
 //   bare scripts/calibrate-model-fit.ts            # measure and print
 //   bare scripts/calibrate-model-fit.ts --write    # also rewrite the fixture
+//   bare scripts/calibrate-model-fit.ts --gpu      # model resident on a discrete GPU
+//   bare scripts/calibrate-model-fit.ts --igpu     # model on an integrated GPU
 //
 // Models are downloaded on first run and cached, so the first pass is slow and
 // needs registry access. See calibration/METHODOLOGY.md for what the numbers
-// mean and how the held-out check works.
+// mean and how the held-out check works, and "Windows" there for why that
+// platform loads weights with `load_mode: 'none'`.
 
 import os from 'bare-os'
 import fs from 'bare-fs'
@@ -29,7 +32,7 @@ import {
 import * as catalog from '../dist/models/registry/index.js'
 import { MODEL_RESOURCE_PROFILES } from '../dist/models/registry/resource-profiles.js'
 import { kvElementBytes, kvCacheBytesForWidth } from '../dist/resources/model-fit/estimators/llm.js'
-import { fitResidentMemory } from '../dist/resources/model-fit/calibration/fit.js'
+import { fitResidentMemory, kvObservation } from '../dist/resources/model-fit/calibration/fit.js'
 import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js'
 import type { GgufFacts } from '../dist/schemas/model-resource-profile.js'
 import type { PlatformCalibration } from '../dist/resources/model-fit/types.js'
@@ -54,10 +57,26 @@ const REPEATS = 3
 // allocation behaviour changed and this methodology needs re-checking.
 const WORKING_DRIFT_WARN_BYTES = 64 * 1024 * 1024
 
+// The KV cache grows by a known amount between the two contexts, so the deltas
+// must too. A shortfall means the wrong KV width, or a counter missing memory.
+const KV_OBSERVATION_FLOOR = 0.9
+
+// The ratio multiplies the largest term and used to ship with no margin, which
+// cost linux-x64 a held-out failure. 1% is how far the fitted slope moves
+// between runs on one host. See METHODOLOGY.md.
+const WEIGHT_UPPER_SLACK = 1.01
+
 // Small, medium, large — plus one held out of the fit entirely, used only to
 // check that the derived upper bound actually holds.
 const FIT_MODELS = ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_4B_INST_Q4_K_M']
 const HELD_OUT_MODEL = 'QWEN3_8B_INST_Q4_K_M'
+
+/**
+ * What the run measures, and against which counter: `cpu` and `shared` read
+ * RSS, `gpu` reads device memory. `shared` is a separate fixture from `gpu`
+ * because an integrated GPU allocates out of system RAM.
+ */
+type Pass = 'cpu' | 'gpu' | 'shared'
 
 interface Measurement {
   name: string
@@ -66,6 +85,8 @@ interface Measurement {
   facts: GgufFacts
   persistentBytes: number
   workingBytes: number
+  /** What the engine reported executing on, when the addon supplies it. */
+  backendDevice?: 'cpu' | 'gpu'
 }
 
 interface FitPoint extends Measurement {
@@ -75,6 +96,15 @@ interface FitPoint extends Measurement {
 function rssBytes() {
   const usage = os.memoryUsage()
   return usage && usage.rss > 0 ? usage.rss : 0
+}
+
+// Load anonymously wherever the CPU backend is forced. It copies mapped weights
+// into its own buffers, so RSS counts them twice — linux read 1.7x the artifact
+// — while win32 prefetches to the standby list and counts almost none. The
+// anonymous copy is the memory the system must actually find; the mapped pages
+// the default keeps are file-backed and evictable.
+function calibrationLoadMode(platform: string) {
+  return forcesCpu(platform) ? 'none' : undefined
 }
 
 function createSampler() {
@@ -109,50 +139,176 @@ function settle() {
   return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
 }
 
-// Registry downloads can stall without erroring; bound each load so a stall
-// fails in minutes instead of consuming the whole job timeout.
+// A stalled download or a wedged engine call would otherwise run to the job
+// timeout while holding an exclusive drained host, so every phase is bounded.
 const LOAD_TIMEOUT_MS = 30 * 60 * 1000
+const COMPLETION_TIMEOUT_MS = 15 * 60 * 1000
+const UNLOAD_TIMEOUT_MS = 5 * 60 * 1000
 
-function withLoadTimeout<T>(promise: Promise<T>, label: string) {
+function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs: number, hint: string) {
   let timer: ReturnType<typeof setTimeout>
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      reject(
-        new Error(
-          `${label} did not finish within ${LOAD_TIMEOUT_MS / 60000} minutes; a registry download has likely stalled. Check the registry's reachability from this host.`
-        )
-      )
-    }, LOAD_TIMEOUT_MS)
+      reject(new Error(`${label} did not finish within ${timeoutMs / 60000} minutes; ${hint}`))
+    }, timeoutMs)
     if (timer && typeof timer.unref === 'function') timer.unref()
   })
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
-/**
- * Best-effort label for the backend in play, from the drivers the resource
- * collector reports. Recorded with the coefficients because the buffers they
- * measure are allocated by the backend, while the fixture is keyed by platform.
- *
- * Ordered by what llama.cpp prefers, so the label matches the likely choice
- * rather than whichever driver happens to be listed first.
- */
-function detectBackend(gpuList: readonly Record<string, unknown>[]) {
-  for (const gpu of gpuList) {
+function metricValue(metric: unknown) {
+  const m = metric as { status?: string; value?: unknown } | undefined
+  return m?.status === 'supported' ? m.value : undefined
+}
+
+// An adapter this small holds no model: Windows types its Intel iGPU as
+// dedicated because it declares 128 MiB of its own, so declared memory is the
+// only field that separates the two there. Same floor as `MIN_USABLE_GPU_BYTES`
+// in `assess.ts`.
+const MIN_USABLE_GPU_BYTES = 1024 * 1024 * 1024
+
+// Whether this device's memory is system RAM: an integrated GPU, or the
+// Windows iGPU case above. Such a device is what a `shared` pass measures, and
+// what `assess.ts` keeps on the system basis.
+function isSharedMemoryGpu(gpu: Record<string, unknown>) {
+  // `=== true`, not `!== false`: an unreported flag is not evidence of sharing,
+  // and `allocatesFromSystemMemory` in `assess.ts` reads it the same way.
+  if (metricValue(gpu.unifiedMemory) === true) return true
+  const declared = metricValue(gpu.memoryTotalBytes)
+  return typeof declared === 'number' && declared < MIN_USABLE_GPU_BYTES
+}
+
+// `gpuType.VIRTUAL`: a VM's paravirtual adapter, which has no compute backend.
+// Mirrors `assess.ts`, so both agree on which devices count.
+const GPU_TYPE_VIRTUAL = 3
+
+function isVirtualDisplayAdapter(gpu: Record<string, unknown>) {
+  return metricValue(gpu.type) === GPU_TYPE_VIRTUAL
+}
+
+// Ordered as `GPU_BACKENDS` in `assess.ts` is: by what the addon actually
+// builds, not by what the drivers advertise.
+const GPU_BACKENDS = ['metal', 'vulkan', 'rocm', 'cuda', 'levelZero', 'opencl'] as const
+
+function hasKnownBackend(gpu: Record<string, unknown>) {
+  const drivers = (gpu.drivers ?? {}) as Record<string, { status?: string; value?: unknown }>
+  return GPU_BACKENDS.some((name) => drivers[name]?.status === 'supported' && drivers[name]?.value)
+}
+
+// Largest dedicated GPU first. The win25 runner reports an Intel iGPU ahead of
+// its RTX 4000, and first-wins named the iGPU as the device on every fixture.
+// A `shared` pass wants the opposite order: it pins the integrated device, so
+// the backend and name recorded on the fixture have to be that device's.
+function byCapability(gpuList: readonly Record<string, unknown>[], preferShared = false) {
+  return [...gpuList].sort((a, b) => {
+    const rank = (gpu: Record<string, unknown>) => {
+      const shared = isSharedMemoryGpu(gpu)
+      return (preferShared ? shared : !shared) ? 1 : 0
+    }
+    const memory = (gpu: Record<string, unknown>) =>
+      (metricValue(gpu.memoryTotalBytes) as number) ?? 0
+    return rank(b) - rank(a) || memory(b) - memory(a)
+  })
+}
+
+// Bytes resident on the GPU the engine would pick. Read through the collector
+// so the calibration and the estimator agree on which device counts and on
+// whether its readings are device-scoped at all.
+async function readGpuUsedBytes() {
+  // `sample: true` is required: the default response carries capabilities only.
+  const resources = await getSystemResources({ sample: true })
+  const gpus = resources.capabilities.gpus
+  const samples = resources.sample?.gpus
+  if (gpus.status !== 'supported' || samples?.status !== 'supported') {
+    throw new Error('no GPU sample is available, so a GPU pass cannot be measured')
+  }
+
+  for (const gpu of byCapability(gpus.value as unknown as Record<string, unknown>[])) {
+    const sample = samples.value.find((entry) => entry.id === (gpu.id as string))
+    if (sample?.memoryUsedBytes.status === 'supported') return sample.memoryUsedBytes.value
+  }
+
+  // Returning 0 here would read as "nothing allocated" and quietly fit garbage.
+  throw new Error(
+    'no GPU reports device-scoped used memory, so this host cannot be calibrated for GPU residency'
+  )
+}
+
+// The driver frees device memory asynchronously, so a fixed settle can read a
+// baseline that still holds the previous load: one repeat measured 1781 MiB
+// against 690 for the same model. Wait for two readings to agree instead.
+const GPU_SETTLE_TOLERANCE_BYTES = 16 * 1024 * 1024
+const GPU_SETTLE_ATTEMPTS = 40
+
+// Device memory during a completion, polled rather than sampled at 25 ms: the
+// counter is only readable through an async collector call. Coarser than the
+// RSS sampler, and the reason a GPU pass used to record a flat zero — which
+// this PR's own sampler fix showed was an assumption, not a measurement.
+const GPU_SAMPLE_INTERVAL_MS = 250
+
+function createGpuSampler() {
+  let running = false
+  let peak = 0
+  let loop: Promise<void> | undefined
+
+  return {
+    start() {
+      running = true
+      loop = (async () => {
+        while (running) {
+          try {
+            const used = await readGpuUsedBytes()
+            if (used > peak) peak = used
+          } catch {
+            // One failed reading must not end the sample.
+          }
+          await new Promise((resolve) => setTimeout(resolve, GPU_SAMPLE_INTERVAL_MS))
+        }
+      })()
+    },
+    async stop() {
+      running = false
+      await loop
+      return peak
+    }
+  }
+}
+
+async function settledGpuUsedBytes() {
+  let previous = await readGpuUsedBytes()
+  for (let attempt = 0; attempt < GPU_SETTLE_ATTEMPTS; attempt++) {
+    await settle()
+    const current = await readGpuUsedBytes()
+    if (Math.abs(current - previous) <= GPU_SETTLE_TOLERANCE_BYTES) return current
+    previous = current
+  }
+  throw new Error(
+    `GPU memory did not settle within ${(GPU_SETTLE_ATTEMPTS * SETTLE_MS) / 1000}s; the device is not idle enough to calibrate`
+  )
+}
+
+// Label for the backend in play, recorded with the coefficients because the
+// buffers they measure are allocated by the backend, and used as the GPU
+// fixture key. Must stay in step with `GPU_BACKENDS` in `assess.ts`: the
+// estimator derives the same key the same way, and a fixture filed under a
+// backend the engine does not use would be served to hosts it never measured.
+function detectBackend(gpuList: readonly Record<string, unknown>[], preferShared = false) {
+  for (const gpu of byCapability(gpuList, preferShared)) {
     const drivers = (gpu.drivers ?? {}) as Record<
       string,
       { status: string; value?: unknown } | undefined
     >
-    for (const name of ['metal', 'cuda', 'rocm', 'vulkan', 'levelZero', 'opencl']) {
+    for (const name of GPU_BACKENDS) {
       if (drivers[name]?.status === 'supported' && drivers[name].value) return name
     }
   }
   return 'cpu'
 }
 
-function gpuName(gpuList: readonly Record<string, unknown>[]) {
-  for (const gpu of gpuList) {
-    const name = gpu.name as { status: string; value?: string } | undefined
-    if (name?.status === 'supported' && name.value) return name.value
+function gpuName(gpuList: readonly Record<string, unknown>[], preferShared = false) {
+  for (const gpu of byCapability(gpuList, preferShared)) {
+    const name = metricValue(gpu.name)
+    if (typeof name === 'string' && name) return name
   }
   return undefined
 }
@@ -183,39 +339,84 @@ function exactKvBytes(
   return kv.lower
 }
 
-async function measure(name: string, contextTokens: number): Promise<Measurement> {
+// RSS cannot observe VRAM, so these platforms calibrate CPU-resident execution.
+// Must be `device`, not `gpu_layers: 0`: the addon takes its KV default from the
+// backend `device` selects, so a GPU device builds q8_0 against a subtracted f16.
+function forcesCpu(platform: string) {
+  return platform.startsWith('linux') || platform.startsWith('win32') || platform === 'darwin-x64'
+}
+
+async function measure(
+  name: string,
+  contextTokens: number,
+  cpuForced: boolean,
+  loadMode: 'none' | undefined,
+  pass: Pass
+): Promise<Measurement> {
   const model = (catalog as Record<string, { sha256Checksum: string } | undefined>)[name]
   if (!model) throw new Error(`unknown catalog constant: ${name}`)
 
   const profile = MODEL_RESOURCE_PROFILES[model.sha256Checksum]
   if (!profile?.ggufFacts) throw new Error(`no GGUF facts for ${name}`)
 
-  await settle()
-  const rssBefore = rssBytes()
+  const gpuPass = pass === 'gpu'
 
-  const modelId = await withLoadTimeout(
+  await settle()
+  const before = gpuPass ? await settledGpuUsedBytes() : rssBytes()
+
+  const modelId = await withTimeout(
     loadModel({
       modelSrc: model,
-      modelConfig: { ctx_size: contextTokens }
+      modelConfig: {
+        ctx_size: contextTokens,
+        ...(cpuForced && { device: 'cpu' }),
+        // Pin the class of device rather than an index: `chooseBackend` then
+        // considers only integrated ggml devices, so a host with a discrete
+        // card as well still measures the integrated one — the case ordinary
+        // laptops are in.
+        ...(pass === 'shared' && { 'main-gpu': 'integrated' as const }),
+        ...(loadMode && { load_mode: loadMode })
+      }
     }),
-    `loading ${name}`
+    `loading ${name}`,
+    LOAD_TIMEOUT_MS,
+    "a registry download has likely stalled. Check the registry's reachability from this host."
   )
 
   await settle()
-  const rssAfterLoad = rssBytes()
+  const afterLoad = gpuPass ? await settledGpuUsedBytes() : rssBytes()
 
-  const sampler = createSampler()
+  // Both passes sample across the completion, against their own counter.
+  const sampler = gpuPass ? createGpuSampler() : createSampler()
   sampler.start()
-  const result = completion({
-    modelId,
-    history: [{ role: 'user', content: 'Summarize the history of cartography.' }],
-    stream: false,
-    params: { maxTokens: 128 }
-  })
-  await result.response
-  const peak = sampler.stop()
+  let peak = afterLoad
+  let backendDevice: 'cpu' | 'gpu' | undefined
+  try {
+    const result = completion({
+      modelId,
+      history: [{ role: 'user', content: 'Summarize the history of cartography.' }],
+      stream: false,
+      generationParams: { predict: 128 }
+    })
+    // `final`, not `text`: it carries the stats the device check reads, and it
+    // is the promise that resolves when generation has actually finished.
+    const final = await withTimeout(
+      result.final,
+      `completion for ${name}`,
+      COMPLETION_TIMEOUT_MS,
+      'the weights loaded, so this is a wedged engine call rather than a download stall.'
+    )
+    backendDevice = final.stats?.backendDevice
+  } finally {
+    peak = Math.max(afterLoad, await sampler.stop())
+  }
 
-  await unloadModel({ modelId })
+  await withTimeout(
+    unloadModel({ modelId }),
+    `unloading ${name}`,
+    UNLOAD_TIMEOUT_MS,
+    'the engine call is wedged.'
+  )
   await settle()
 
   return {
@@ -223,15 +424,37 @@ async function measure(name: string, contextTokens: number): Promise<Measurement
     contextTokens,
     artifactBytes: profile.artifactBytes,
     facts: profile.ggufFacts,
-    persistentBytes: Math.max(0, rssAfterLoad - rssBefore),
-    workingBytes: Math.max(0, peak - rssAfterLoad)
+    persistentBytes: Math.max(0, afterLoad - before),
+    workingBytes: Math.max(0, peak - afterLoad),
+    ...(backendDevice && { backendDevice })
+  }
+}
+
+/**
+ * Aborts when the engine did not execute where the pass assumes: a `shared`
+ * pass on a host with no integrated device falls back to the CPU, and would
+ * file CPU numbers under a GPU backend key.
+ */
+function checkBackendDevice(measurement: Measurement, expected: 'cpu' | 'gpu' | undefined) {
+  if (!expected) return
+  if (!measurement.backendDevice) {
+    console.log(
+      `    warning: the addon reported no backendDevice, so this run cannot confirm the model executed on the ${expected}`
+    )
+    return
+  }
+  if (measurement.backendDevice !== expected) {
+    throw new Error(
+      `${measurement.name} executed on the ${measurement.backendDevice}, but this pass measures ${expected}-resident execution. No fixture written.`
+    )
   }
 }
 
 function fixtureSource(platform: string, calibration: PlatformCalibration) {
-  const json = JSON.stringify(calibration, null, 2)
-    .replace(/"([a-zA-Z]+)":/g, '$1:')
-    .replace(/"/g, "'")
+  // Unquote the keys only. Values stay JSON-quoted, which is already valid
+  // TypeScript; replacing every quote breaks any value containing one, and
+  // prettier settles the house quote style afterwards anyway.
+  const json = JSON.stringify(calibration, null, 2).replace(/"([a-zA-Z]+)":/g, '$1:')
   return `import type { PlatformCalibration } from '@/resources/model-fit/types'
 
 /**
@@ -246,8 +469,27 @@ export const ${platform.toUpperCase().replace(/-/g, '_')}_CALIBRATION: PlatformC
 
 async function main() {
   const write = Bare.argv.includes('--write')
+  // `--gpu` calibrates the same models resident on a discrete GPU: no device
+  // override, the SDK's own load mode, and device memory as the counter.
+  // `--igpu` pins the integrated GPU instead and keeps RSS as the counter,
+  // because an integrated device allocates out of system RAM.
+  const pass: Pass = Bare.argv.includes('--gpu')
+    ? 'gpu'
+    : Bare.argv.includes('--igpu') || Bare.argv.includes('--shared')
+      ? 'shared'
+      : 'cpu'
   const platform = `${os.platform()}-${os.arch()}`
-  console.log(`calibrating ${platform}`)
+  const passLabel = {
+    cpu: '',
+    gpu: ' (GPU-resident)',
+    shared: ' (integrated GPU, system memory)'
+  }[pass]
+  console.log(`calibrating ${platform}${passLabel}`)
+
+  const loadMode = pass === 'cpu' ? calibrationLoadMode(platform) : undefined
+  if (loadMode) {
+    console.log(`weights loaded with load_mode '${loadMode}' — see METHODOLOGY.md, "Windows"`)
+  }
 
   registerPlugin(llmPlugin)
 
@@ -259,19 +501,83 @@ async function main() {
   // design exists to isolate.
   const resources = await getSystemResources()
   const gpus = resources.capabilities.gpus
-  const gpuList = gpus.status === 'supported' ? gpus.value : []
-  const hasGpu = gpuList.length > 0
-  const backend = detectBackend(gpuList)
-  const device = gpuName(gpuList)
-  console.log(`backend: ${backend}${device ? ` (${device})` : ''}`)
+  const reported = gpus.status === 'supported' ? gpus.value : []
+  // The metric helpers read fields off whatever the collector reported, so they
+  // take an index-signature view of it rather than the normalized type.
+  const gpuRecords = (reported as unknown as Record<string, unknown>[]).filter(
+    (gpu) => !isVirtualDisplayAdapter(gpu) && hasKnownBackend(gpu)
+  )
+  if (gpuRecords.length < reported.length) {
+    console.log(
+      `ignoring ${reported.length - gpuRecords.length} reported GPU(s) the engine cannot use: a paravirtual display adapter, or no graphics API this build talks to — the same devices \`assess.ts\` discounts`
+    )
+  }
+  const cpuForced = pass === 'cpu' && forcesCpu(platform)
+  // `device: 'cpu'` selects the CPU backend, and with it the f16 KV default.
+  const hasGpu = gpuRecords.length > 0 && !cpuForced
+  const shared = pass === 'shared'
+  const backend = cpuForced ? 'cpu' : detectBackend(gpuRecords, shared)
+  // No device on a CPU-forced fixture: naming a card the run deliberately did
+  // not use would misdescribe what the coefficients cover.
+  const device = cpuForced ? undefined : gpuName(gpuRecords, shared)
+  console.log(
+    `backend: ${backend}${device ? ` (${device})` : ''}${cpuForced ? ' — GPU offload disabled for calibration' : ''}`
+  )
+
+  // A shared pass needs an integrated device to select, and a platform whose
+  // own fixture is CPU-resident. On Apple silicon it would duplicate it.
+  if (shared) {
+    if (!forcesCpu(platform)) {
+      console.log(
+        `\n${platform} calibrates on its GPU already: its platform fixture is measured with the GPU active and RSS as the counter, because unified memory makes that the system basis. A separate integrated-GPU pass would measure the same thing. No fixture written.`
+      )
+      Bare.exit(1)
+    }
+    // Deliberately no check that the collector called one of these integrated:
+    // it is the weaker source. An AMD APU under amdgpu exposes a VRAM
+    // carve-out, so libgpuinfo infers `dedicated` from sysfs while Vulkan
+    // reports INTEGRATED_GPU and `chooseBackend` selects it happily — a check
+    // here refused a Ryzen 5000U laptop that the engine would have measured.
+    // Let the engine decide, and let `checkBackendDevice` catch a real CPU
+    // fallback on a host with no integrated device at all.
+    if (gpuRecords.length === 0) {
+      console.log(
+        `\nno usable GPU is reported on this host, so there is nothing for 'main-gpu: integrated' to select. No fixture written.`
+      )
+      Bare.exit(1)
+    }
+  }
+
+  // What the engine must report executing on for the counter this pass reads to
+  // be the right one. Left unconstrained only where the platform fixture is not
+  // CPU-forced and no GPU is reported at all.
+  const expectedDevice: 'cpu' | 'gpu' | undefined = cpuForced
+    ? 'cpu'
+    : gpuRecords.length > 0
+      ? 'gpu'
+      : undefined
 
   const mib = (n: number) => (n / 1024 / 1024).toFixed(0)
+
+  // The first load in a process reads high — arenas and caches that later loads
+  // reuse — and these coefficients describe warm loads. Left in, it landed as a
+  // 30% spread the repeat check reported as a busy host, and skewed the linux
+  // weight ratio to 1.7. Warm up on the smallest model and throw it away.
+  console.log('warm-up load (not measured)')
+  // Checked on the warm-up too, so a host that cannot honour this pass fails
+  // before spending half an hour measuring the wrong thing.
+  checkBackendDevice(
+    await measure(FIT_MODELS[0]!, CONTEXTS[0]!, cpuForced, loadMode, pass),
+    expectedDevice
+  )
+
   const elementWidths = new Set<number>()
   const measurements: FitPoint[] = []
   for (const name of FIT_MODELS) {
     for (const contextTokens of CONTEXTS) {
       for (let repeat = 0; repeat < REPEATS; repeat++) {
-        const measurement = await measure(name, contextTokens)
+        const measurement = await measure(name, contextTokens, cpuForced, loadMode, pass)
+        checkBackendDevice(measurement, expectedDevice)
         // `.lower` is the width a GPU backend defaults to (q8_0), and equals
         // f16 when no GPU is reported — what the engine allocates in each
         // case, not an optimistic bound borrowed from the estimator's range.
@@ -295,6 +601,28 @@ async function main() {
     console.log(
       `\nwarning: the fit mixes KV element widths (${[...elementWidths].join(', ')} bytes), so the points do not describe a single cache type`
     )
+  }
+
+  // Judge the counter before the fit: the KV cache grows by an exactly known
+  // amount between the two contexts, and every sound counter has to see it.
+  const observation = kvObservation(measurements)
+  console.log('\nKV growth between contexts, computed vs observed:')
+  for (const growth of observation.models) {
+    const model = measurements.find((m) => m.artifactBytes === growth.artifactBytes)
+    console.log(
+      `  ${model?.name ?? mib(growth.artifactBytes) + ' MiB'}: kv +${mib(growth.kvDeltaBytes)} MiB, persistent +${mib(growth.observedDeltaBytes)} MiB (${((growth.observedDeltaBytes / growth.kvDeltaBytes) * 100).toFixed(0)}%)`
+    )
+  }
+  if (observation.ratio < KV_OBSERVATION_FLOOR) {
+    // The same shortfall read against the other width the engine could have
+    // chosen: a ratio near 1 there names the cause outright.
+    const width = Math.max(...elementWidths)
+    const other = kvElementBytes(measurements[0]!.facts, !hasGpu).bytes.lower
+    const otherRatio = (observation.ratio * width) / other
+    console.log(
+      `\nthe persistent deltas grew by ${(observation.ratio * 100).toFixed(0)}% of the KV cache computed at ${width} bytes per element (floor ${KV_OBSERVATION_FLOOR * 100}%); at ${other} bytes per element the same growth reads as ${(otherRatio * 100).toFixed(0)}%. Either the engine built a different cache type than the one subtracted, or RSS is missing allocation; nothing fitted on these points is an upper bound. No fixture written.`
+    )
+    Bare.exit(1)
   }
 
   // Fail loudly rather than fitting nonsense: a load that measured smaller
@@ -353,8 +681,24 @@ async function main() {
     }
   }
 
+  // The peak a completion adds on top of the load: measured directly, since
+  // the fit reads persistent deltas only. Lower bound 0 — points measured 0.
+  const worstWorking = Math.max(...measurements.map((m) => m.workingBytes))
+  const notes: string[] = []
+  if (loadMode) {
+    notes.push(
+      `weights were loaded with load_mode '${loadMode}' so RSS counted them in full at load; a mapped weight set keeps at most the artifact size resident, so weightUpperCoeff remains an upper bound for the default mmap load`
+    )
+  }
+  if (shared) {
+    notes.push(
+      "measured with 'main-gpu: integrated' and the SDK's default load mode, against process RSS: an integrated GPU allocates out of system RAM, so these coefficients belong to the system-memory basis and not to a device budget"
+    )
+  }
+
   const calibration: PlatformCalibration = {
-    weightUpperCoeff: Number(Math.max(1, fit.weightRatio).toFixed(3)),
+    weightUpperCoeff: Number((Math.max(1, fit.weightRatio) * WEIGHT_UPPER_SLACK).toFixed(3)),
+    workingPeakBytes: { lower: 0, upper: Math.round(worstWorking * 1.2) },
     fixedOverheadBytes: {
       lower: Math.round(fit.fixedBytes * 0.8),
       // Floored at the worst point observed: an upper bound that does not
@@ -371,6 +715,7 @@ async function main() {
     audioWindowBytes: { lower: 0, upper: 0 },
     audioStreamingBytes: { lower: 0, upper: 0 },
     validated: false,
+    ...(notes.length > 0 && { notes }),
     measuredAt: new Date().toISOString().slice(0, 10),
     measuredOn: {
       backend,
@@ -390,7 +735,8 @@ async function main() {
   let heldOutKv = 0
   let heldOutArtifactBytes = 0
   for (let repeat = 0; repeat < REPEATS; repeat++) {
-    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!)
+    const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!, cpuForced, loadMode, pass)
+    checkBackendDevice(heldOut, expectedDevice)
     const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
     heldOutKv = exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
     heldOutArtifactBytes = heldOut.artifactBytes
@@ -400,6 +746,7 @@ async function main() {
     heldOutArtifactBytes * calibration.weightUpperCoeff +
     calibration.fixedOverheadBytes.upper +
     calibration.computeBufferBytesPerToken.upper * CONTEXTS[1]! +
+    (calibration.workingPeakBytes?.upper ?? 0) +
     heldOutKv
   const holds = heldOutWorstTotal <= predictedUpper
 
@@ -412,23 +759,35 @@ async function main() {
   }
 
   if (write) {
+    // A GPU pass is keyed by backend as well as platform, so it neither
+    // overwrites the CPU fixture nor claims to cover another backend. A shared
+    // pass is keyed the same way plus a `-shared` suffix: same platform, same
+    // backend, but a system-memory basis rather than a device one.
+    const fixtureKey =
+      pass === 'gpu'
+        ? `${platform}-${backend}`
+        : pass === 'shared'
+          ? `${platform}-${backend}-shared`
+          : platform
     const target = path.join(
       os.cwd(),
       'src',
       'resources',
       'model-fit',
       'calibration',
-      `${platform}.ts`
+      `${fixtureKey}.ts`
     )
-    fs.writeFileSync(target, fixtureSource(platform, calibration))
+    fs.writeFileSync(target, fixtureSource(fixtureKey, calibration))
     console.log(`\nwrote ${target}`)
     console.log('remember to add the platform to calibration/index.ts and run prettier')
   } else {
     console.log('\nre-run with --write to update the fixture')
   }
 
-  // Non-zero so the CI job cannot rot green on a failed gate.
-  if (!holds) Bare.exit(1)
+  // Exit explicitly either way. The registry client keeps handles open, so a
+  // returning main() leaves the process alive until the job times out — and the
+  // fixture, already written, never reaches the upload step.
+  Bare.exit(holds ? 0 : 1)
 }
 
 main().catch((error) => {

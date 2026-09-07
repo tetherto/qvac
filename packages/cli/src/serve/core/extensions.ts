@@ -12,6 +12,13 @@ export interface ServeExtension {
   description: string
   /** Swagger tag name to description, merged into the document. */
   tags?: Record<string, string>
+  /**
+   * Request field to error code, or `field:<zod issue code>` to give one
+   * validation failure its own code. One error handler serves every route, so
+   * these share a namespace across extensions: two extensions mapping the same
+   * key to different codes is refused at startup.
+   */
+  errorCodes?: Record<string, string>
   /** Parses this extension's `serve.<name>` config block. */
   parseConfig?(raw: unknown): unknown
   /** Builds the state this extension's routes read, before any route is mounted. */
@@ -25,6 +32,27 @@ export function extensionSummary(extensions: readonly ServeExtension[]): string 
   if (extensions.length === 0) return 'No surfaces are mounted.'
   const mounted = extensions.map((e) => `${e.name} (${e.description})`).join(', ')
   return `Mounted surfaces: ${mounted}.`
+}
+
+export function extensionErrorCodes(extensions: readonly ServeExtension[]): Record<string, string> {
+  const codes: Record<string, string> = {}
+  const owners: Record<string, string> = {}
+
+  for (const extension of extensions) {
+    for (const [field, code] of Object.entries(extension.errorCodes ?? {})) {
+      const claimed = codes[field]
+      if (claimed !== undefined && claimed !== code) {
+        throw new Error(
+          `Serve extensions "${owners[field]}" and "${extension.name}" both map the "${field}" ` +
+            `request field, to "${claimed}" and "${code}". Rename one field or agree on one code.`
+        )
+      }
+      codes[field] = code
+      owners[field] = extension.name
+    }
+  }
+
+  return codes
 }
 
 export function extensionTags(
