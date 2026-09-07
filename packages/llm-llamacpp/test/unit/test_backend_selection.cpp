@@ -1643,7 +1643,8 @@ TEST_F(BackendSelectionTest, StrictOverrideThrowsWhenMatchWasFiltered) {
     FAIL() << "expected a StatusError";
   } catch (const qvac_errors::StatusError& e) {
     const std::string what = e.what();
-    EXPECT_NE(what.find("kv-cache-type-unsupported"), std::string::npos) << what;
+    EXPECT_NE(what.find("kv-cache-type-unsupported"), std::string::npos)
+        << what;
   }
 }
 
@@ -1651,6 +1652,16 @@ TEST_F(BackendSelectionTest, StrictOverrideIsSatisfiedByAMatch) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   EXPECT_EQ(chooseWithRequired(mockBackend, {"vulkan"}, true).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, StrictOverrideRejectsCpuDevice) {
+  BackendRequest request;
+  request.preferred = BackendType::CPU;
+  request.backendOverride = {"cuda"};
+  request.backendRequired = true;
+  EXPECT_THROW(
+      chooseBackend(request, mockBackend.toBackendInterface()),
+      qvac_errors::StatusError);
 }
 
 TEST_F(BackendSelectionTest, BackendRequiredParsing) {
@@ -1696,8 +1707,8 @@ TEST_F(BackendSelectionTest, BackendRequiredWithoutBackendThrows) {
 
 // ---- main-gpu addressing (QVAC-23763 R13) ----
 
-static BackendChoice chooseWithMainGpu(
-    MockBackendInterface& mockBackend, const MainGpu& mainGpu) {
+static BackendChoice
+chooseWithMainGpu(MockBackendInterface& mockBackend, const MainGpu& mainGpu) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   BackendRequest request;
   request.preferred = BackendType::GPU;
@@ -1730,7 +1741,8 @@ TEST_F(BackendSelectionTest, MainGpuBusIdNotMisparsedAsZero) {
   // the short form, without the domain
   const auto shortForm = parseMainGpu("65:00.0");
   ASSERT_TRUE(shortForm.has_value());
-  EXPECT_TRUE(std::holds_alternative<MainGpuBusId>(shortForm.value()));
+  ASSERT_TRUE(std::holds_alternative<MainGpuBusId>(shortForm.value()));
+  EXPECT_EQ(std::get<MainGpuBusId>(shortForm.value()).id, "0000:65:00.0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuQualifiedParsing) {
@@ -1746,6 +1758,8 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedParsing) {
 
 TEST_F(BackendSelectionTest, MainGpuQualifiedRejectsUnknownFamily) {
   EXPECT_THROW(parseMainGpu("nvidia:0"), qvac_errors::StatusError);
+  EXPECT_THROW(
+      parseMainGpu("cuda:999999999999999999999"), qvac_errors::StatusError);
 }
 
 TEST_F(BackendSelectionTest, MainGpuQualifiedSelectsNthOfFamily) {
@@ -1753,7 +1767,8 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedSelectsNthOfFamily) {
   mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA1_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 1}).name, "cuda1");
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 1}).name,
+      "cuda1");
   EXPECT_EQ(
       chooseWithMainGpu(mockBackend, MainGpuQualified{"vulkan", 0}).name,
       "vulkan0");
@@ -1765,7 +1780,8 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedIsIndependentOfEnumerationOrder) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
   EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 0}).name, "cuda0");
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 0}).name,
+      "cuda0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeFallsThrough) {
@@ -1774,7 +1790,8 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeFallsThrough) {
   // device 4 of the cuda family does not exist; selection warns and uses the
   // default order rather than failing, as an out-of-range integer does
   EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}).name, "cuda0");
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}).name,
+      "cuda0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuBusIdSelectsMatchingDevice) {
@@ -1785,6 +1802,28 @@ TEST_F(BackendSelectionTest, MainGpuBusIdSelectsMatchingDevice) {
   EXPECT_EQ(
       chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:b3:00.0"}).name,
       "cuda1");
+}
+
+TEST_F(BackendSelectionTest, MainGpuBusIdKeepsBackendRepresentations) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, VULKAN0_BACK), "0000:65:00.0"));
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.mainGpu = MainGpuBusId{"0000:65:00.0"};
+  request.backendOverride = {"vulkan"};
+  request.backendRequired = true;
+  EXPECT_EQ(
+      chooseBackend(request, mockBackend.toBackendInterface()).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuShortBusIdSelectsMatchingDevice) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, parseMainGpu("65:00.0").value()).name,
+      "cuda0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuBusIdNotFoundFallsThrough) {
@@ -1988,9 +2027,10 @@ static MockDevice createGPUDeviceInRegistry(
 }
 
 static std::vector<std::string> splitDevicesFor(
-    MockBackendInterface& mockBackend, const std::string& selected) {
+    MockBackendInterface& mockBackend, const std::string& selected,
+    const LoadConstraints& constraints = {}) {
   BackendInterface bckI = mockBackend.toBackendInterface();
-  return splitModeDeviceNames(bckI, selected);
+  return splitModeDeviceNames(bckI, selected, constraints);
 }
 
 // Every pre-CUDA host: one registry, so --device keeps being omitted and
@@ -2001,6 +2041,39 @@ TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyOnSingleRegistry) {
   mockBackend.addDevice(
       createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG));
   EXPECT_TRUE(splitDevicesFor(mockBackend, "vulkan0").empty());
+}
+
+TEST_F(BackendSelectionTest, ExactMainGpuForcesSingleRegistryDeviceList) {
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG));
+  LoadConstraints constraints;
+  constraints.requireExplicitDeviceList = true;
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan1", constraints),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+TEST_F(BackendSelectionTest, StrictBackendFiltersEverySplitDevice) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry("AMD", VULKAN1_BACK, VULKAN_REG),
+      "0000:02:00.0"));
+  LoadConstraints constraints;
+  constraints.requiredBackendFamilies = {"cuda"};
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0", constraints),
+      (std::vector<std::string>{"cuda0"}));
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(
+          mockBackend.toBackendInterface(), "cuda0", constraints),
+      (std::vector<std::string>{"cuda0"}));
 }
 
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyWithNoGpuAtAll) {

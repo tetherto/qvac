@@ -160,6 +160,12 @@ struct LoadConstraints {
   /// KV-cache types the device must be able to write with SET_ROWS from F32.
   /// Empty when the caller set no cache-type, or set one that is not quantized.
   std::vector<enum ggml_type> kvCacheTypes;
+  /// When non-empty, every device used by a split load must belong to one of
+  /// these backend families.
+  std::vector<std::string> requiredBackendFamilies;
+  /// Exact main-GPU selectors need an explicit device list so they can be
+  /// translated to an index in that final list.
+  bool requireExplicitDeviceList = false;
 };
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };

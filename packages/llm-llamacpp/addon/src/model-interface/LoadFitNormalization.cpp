@@ -873,6 +873,12 @@ NormalizedLoad normalizeLoadForFit(
         constraints.kvCacheTypes.push_back(kvType);
       }
     }
+    if (backendRequired) {
+      constraints.requiredBackendFamilies = backendOverride;
+    }
+    constraints.requireExplicitDeviceList =
+        splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value() &&
+        !std::holds_alternative<MainGpuType>(mainGpu.value());
 
     BackendRequest request;
     request.preferred = preferredBackend;
@@ -990,14 +996,18 @@ NormalizedLoad normalizeLoadForFit(
       result.runtimeBackendDevice = 1;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
-        if (std::holds_alternative<int>(mainGpu.value())) {
-          configFilemap["main-gpu"] =
-              std::to_string(std::get<int>(mainGpu.value()));
-        } else {
+        if (std::holds_alternative<MainGpuType>(mainGpu.value())) {
           QLOG_IF(
               Priority::WARNING,
               "[LlamaModel] main-gpu 'dedicated'/'integrated' ignored in "
               "multi-GPU split-mode; use an integer device index instead\n");
+        } else if (std::holds_alternative<int>(mainGpu.value())) {
+          configFilemap["main-gpu"] =
+              std::to_string(std::get<int>(mainGpu.value()));
+        } else {
+          // Exact selectors are resolved during backend selection. This marker
+          // is rewritten to the selected device's position in the final list.
+          configFilemap["main-gpu"] = "0";
         }
       }
     } else if (selected.type == BackendType::CPU) {
@@ -1043,6 +1053,23 @@ NormalizedLoad normalizeLoadForFit(
     // too once one physical card registers under two backends, so they pass
     // the chosen backend's own devices instead. splitModeDeviceNames() returns
     // empty on a single-registry host, where --device stays omitted as before.
+    auto remapMainGpu = [&](const std::vector<std::string>& devices) {
+      const auto mainGpuIt = configFilemap.find("main-gpu");
+      if (mainGpuIt == configFilemap.end()) {
+        return;
+      }
+      const auto selectedPos = std::ranges::find(devices, selected.name);
+      if (selectedPos != devices.end()) {
+        mainGpuIt->second = std::to_string(selectedPos - devices.begin());
+        return;
+      }
+      configFilemap.erase(mainGpuIt);
+      QLOG_IF(
+          Priority::WARNING,
+          "[LlamaModel] main-gpu dropped: the selected device is not in the "
+          "scoped --device list\n");
+    };
+
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(selected.name);
@@ -1068,6 +1095,7 @@ NormalizedLoad normalizeLoadForFit(
         }
         configVector.emplace_back("--device");
         configVector.emplace_back(deviceList);
+        remapMainGpu(tensorDevices);
         QLOG_IF(
             Priority::INFO,
             string_format(
@@ -1099,25 +1127,7 @@ NormalizedLoad normalizeLoadForFit(
                 selected.name.c_str()));
         configVector.emplace_back("--device");
         configVector.emplace_back(std::move(deviceList));
-        // QVAC-23763: --main-gpu indexes the list llama.cpp is handed, which is
-        // now this scoped one rather than every enumerated device, so the
-        // caller's index would point at a different card. Rewrite it to the
-        // selected device's position.
-        if (const auto mainGpuIt = configFilemap.find("main-gpu");
-            mainGpuIt != configFilemap.end()) {
-          const auto selectedPos =
-              std::ranges::find(splitDevices, selected.name);
-          if (selectedPos != splitDevices.end()) {
-            mainGpuIt->second =
-                std::to_string(selectedPos - splitDevices.begin());
-          } else {
-            configFilemap.erase(mainGpuIt);
-            QLOG_IF(
-                Priority::WARNING,
-                "[LlamaModel] main-gpu dropped: the selected device is not in "
-                "the scoped --device list\n");
-          }
-        }
+        remapMainGpu(splitDevices);
       }
     }
     configFilemap.erase("device");

@@ -549,6 +549,53 @@ TEST_F(LoadFitNormalizationTest, SplitModeRewritesMainGpuToTheScopedPosition) {
   EXPECT_EQ(result.params.main_gpu, 0);
 }
 
+TEST_F(LoadFitNormalizationTest, SplitModeRewritesQualifiedMainGpu) {
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  dependencies.splitModeDeviceNames =
+      [](const std::string&, const backend_selection::LoadConstraints&) {
+        return std::vector<std::string>{"none"};
+      };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["main-gpu"] = "cuda:1";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  EXPECT_EQ(result.params.main_gpu, 0);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorModeRewritesBusIdMainGpu) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  config["main-gpu"] = "65:00.0";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "none"}, false, {"none"}));
+  EXPECT_EQ(result.params.main_gpu, 0);
+}
+
+TEST_F(LoadFitNormalizationTest, StrictBackendConstrainsSplitDevices) {
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  std::vector<std::string> requiredFamilies;
+  dependencies.splitModeDeviceNames =
+      [&requiredFamilies](
+          const std::string&,
+          const backend_selection::LoadConstraints& constraints) {
+        requiredFamilies = constraints.requiredBackendFamilies;
+        return std::vector<std::string>{"none"};
+      };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+  EXPECT_EQ(requiredFamilies, (std::vector<std::string>{"cuda"}));
+}
+
 // A single-registry host omits --device, so llama.cpp still sees every device
 // and the caller's index must survive untouched.
 TEST_F(LoadFitNormalizationTest, SplitModeKeepsMainGpuWhenDeviceIsOmitted) {

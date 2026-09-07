@@ -131,6 +131,8 @@ ExclusionKind kindOf(ExclusionReason reason);
 /// @brief What the load requires of a device beyond its being a GPU.
 struct LoadConstraints {
   std::vector<enum ggml_type> kvCacheTypes;
+  std::vector<std::string> requiredBackendFamilies;
+  bool requireExplicitDeviceList = false;
 };
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
@@ -167,8 +169,8 @@ BackendChoice
 chooseBackend(const BackendRequest& request, const BackendInterface& bckI);
 
 /// @brief `chooseBackend()` against the real ggml backend registry.
-BackendChoice
-chooseBackend(const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
+BackendChoice chooseBackend(
+    const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
 
 /// @brief Adapter for the positional form. Retained so existing callers and
 /// tests are unaffected by the request/choice split; prefer the overload above
@@ -233,9 +235,11 @@ bool gpuBackendSupportsRowSplit();
 /// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
 /// caller then keeps omitting `--device`.
 std::vector<std::string> splitModeDeviceNames(
-    const BackendInterface& bckI, const std::string& selectedDeviceName);
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
 
 /// @brief `splitModeDeviceNames()` against the real ggml backend registry.
-std::vector<std::string>
-splitModeDeviceNames(const std::string& selectedDeviceName);
+std::vector<std::string> splitModeDeviceNames(
+    const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
 } // namespace backend_selection
