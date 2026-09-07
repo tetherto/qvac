@@ -7,10 +7,14 @@ import type { PlatformCalibration } from '@/resources/model-fit/types'
  * to this file for how the numbers are derived and validated.
  */
 export const LINUX_X64_VULKAN_CALIBRATION: PlatformCalibration = {
-  weightUpperCoeff: 1.011,
+  weightUpperCoeff: 1.019,
+  workingPeakBytes: {
+    lower: 0,
+    upper: 0
+  },
   fixedOverheadBytes: {
-    lower: 226824342,
-    upper: 368029858
+    lower: 234775431,
+    upper: 368894651
   },
   computeBufferBytesPerToken: {
     lower: 0,
@@ -25,6 +29,9 @@ export const LINUX_X64_VULKAN_CALIBRATION: PlatformCalibration = {
     upper: 0
   },
   validated: true,
+  notes: [
+    'workingPeakBytes is an unsampled zero, not a measurement: this run polled no device counter during completions. Re-measure before trusting a per-completion budget on this backend'
+  ],
   measuredAt: '2026-09-03',
   measuredOn: {
     backend: 'vulkan',
