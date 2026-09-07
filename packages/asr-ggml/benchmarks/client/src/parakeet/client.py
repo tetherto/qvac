@@ -16,6 +16,7 @@ class AddonResult(NamedTuple):
     load_time_ms: float
     run_time_ms: float
     model_version: str
+    first_partial_ms: List[float] = []
 
 
 class AddonResults(NamedTuple):
@@ -27,6 +28,7 @@ class AddonResults(NamedTuple):
     total_load_time_ms: float
     total_run_time_ms: float
     model_version: str
+    first_partial_ms: List[float] = []
 
 
 class ParakeetClient:
@@ -57,8 +59,6 @@ class ParakeetClient:
             httpx.HTTPStatusError: for non-2xx responses
             httpx.RequestError: for network issues
         """
-        parakeet_config = self.build_parakeet_config()
-
         parakeet_info = {"lib": self.lib}
         if self.version:
             parakeet_info["version"] = self.version
@@ -69,31 +69,12 @@ class ParakeetClient:
                 "engine": "parakeet",
                 "inputs": batch,
                 "parakeet": parakeet_info,
-                "config": {
-                    "path": self.model_cfg.path,
-                    "parakeetConfig": parakeet_config,
-                    "sampleRate": self.model_cfg.sample_rate,
-                    "streaming": self.model_cfg.streaming,
-                    "streamingChunkSize": self.model_cfg.streaming_chunk_size,
-                },
+                "config": self.build_run_config(),
             },
         )
         resp.raise_for_status()
-        payload = resp.json()
 
-        data = payload.get("data", {})
-        outputs = data.get("outputs", [])
-        times = data.get("time", {})
-        model_version = data.get("parakeetVersion", "")
-
-        normalized_outputs = [self.processor.tokenizer.normalize(output) for output in outputs]
-
-        return AddonResult(
-            transcriptions=normalized_outputs,
-            model_version=model_version,
-            load_time_ms=times.get("loadModelMs", 0.0),
-            run_time_ms=times.get("runMs", 0.0),
-        )
+        return self.parse_run_response(resp.json())
 
     def build_parakeet_config(self) -> dict:
         config = {
@@ -106,6 +87,35 @@ class ParakeetClient:
         if self.model_cfg.language:
             config["language"] = self.model_cfg.language
         return config
+
+    def build_run_config(self) -> dict:
+        config = {
+            "path": self.model_cfg.path,
+            "parakeetConfig": self.build_parakeet_config(),
+            "sampleRate": self.model_cfg.sample_rate,
+            "streaming": self.model_cfg.streaming,
+            "streamingChunkMs": self.model_cfg.streaming_chunk_ms,
+            "streamingEmitPartials": self.model_cfg.streaming_emit_partials,
+        }
+        if self.model_cfg.streaming_history_ms:
+            config["streamingHistoryMs"] = self.model_cfg.streaming_history_ms
+        return config
+
+    def parse_run_response(self, payload: dict) -> AddonResult:
+        data = payload.get("data", {})
+        outputs = data.get("outputs", [])
+        times = data.get("time", {})
+
+        normalized_outputs = [self.processor.tokenizer.normalize(output) for output in outputs]
+        first_partial_ms = [value for value in times.get("firstPartialMs", []) if value is not None]
+
+        return AddonResult(
+            transcriptions=normalized_outputs,
+            model_version=data.get("parakeetVersion", ""),
+            load_time_ms=times.get("loadModelMs", 0.0),
+            run_time_ms=times.get("runMs", 0.0),
+            first_partial_ms=first_partial_ms,
+        )
 
     def transcribe(self, sources: List[str]) -> AddonResults:
         """
@@ -120,6 +130,7 @@ class ParakeetClient:
         all_transcriptions: List[str] = []
         load_times: List[float] = []
         run_times: List[float] = []
+        first_partials: List[float] = []
 
         num_batches = (len(sources) + self.batch_size - 1) // self.batch_size
 
@@ -142,6 +153,7 @@ class ParakeetClient:
                     all_transcriptions.extend(result.transcriptions)
                     load_times.append(result.load_time_ms)
                     run_times.append(result.run_time_ms)
+                    first_partials.extend(result.first_partial_ms)
                     break
                 except (httpx.RemoteProtocolError, httpx.ReadTimeout) as e:
                     if attempt < max_retries - 1:
@@ -160,6 +172,7 @@ class ParakeetClient:
             total_load_time_ms=sum(load_times),
             total_run_time_ms=sum(run_times),
             model_version=result.model_version if result else "",
+            first_partial_ms=first_partials,
         )
 
     def close(self) -> None:
