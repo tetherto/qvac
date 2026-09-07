@@ -89,11 +89,15 @@ function pngLuminanceStddev(png) {
 // Prompt-row census of a scene pack (safetensors), read from its bytes.
 //
 // The producer zeroes every embedding row past the last real token, mirroring
-// the reference text encoder's `u[v:] = 0`, so `live` is the prompt's token
-// count and `live === rows` means the padding was NOT zeroed - the pack will
-// condition the walk on pad embeddings. `prefix` is the live rows, for
-// comparing two packs (a prompt-insensitive encoder returns the same bytes for
-// different prompts).
+// the reference text encoder's `u[v:] = 0`. `live` is the COUNT of rows that
+// carry any non-zero value - the prompt's token count when the padding is
+// intact - and `lastNonZero` is the highest such row, so
+// `live === lastNonZero + 1` proves the live rows form one leading block with
+// no interior holes. Counting (rather than taking the last non-zero index)
+// matters: a pack whose padding was only *partially* zeroed still reports a
+// `live` near `rows`, where a last-index scan would have hidden it as
+// "< rows". `prefix` is the leading live rows, for comparing two packs (a
+// prompt-insensitive encoder returns the same bytes for different prompts).
 function readScenePackPromptRows(buf) {
   const headerLen = Number(buf.readBigUInt64LE(0))
   const header = JSON.parse(buf.toString('utf8', 8, 8 + headerLen))
@@ -107,9 +111,10 @@ function readScenePackPromptRows(buf) {
   const base = 8 + headerLen + meta.data_offsets[0]
 
   let live = 0
-  for (let r = rows - 1; r >= 0; r--) {
-    let nonZero = false
+  let lastNonZero = -1
+  for (let r = 0; r < rows; r++) {
     const rowStart = base + r * emb * 4
+    let nonZero = false
     for (let i = 0; i < emb; i++) {
       if (buf.readFloatLE(rowStart + i * 4) !== 0) {
         nonZero = true
@@ -117,14 +122,15 @@ function readScenePackPromptRows(buf) {
       }
     }
     if (nonZero) {
-      live = r + 1
-      break
+      live++
+      lastNonZero = r
     }
   }
   return {
     rows,
     emb,
     live,
+    lastNonZero,
     prefix: buf.subarray(base, base + live * emb * 4)
   }
 }

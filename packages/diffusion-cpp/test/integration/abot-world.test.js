@@ -394,16 +394,23 @@ test(
     t.ok(/"scene"/.test(sceneMsg), 'scene-creation completion JSON received')
 
     // Conditioning invariants, straight off the pack - no DiT, no GPU, no
-    // frames. `live < rows` is the reference's zeroed prompt padding: without
-    // it the walk cross-attends to pad-token embeddings in all 512 rows and
-    // collapses into blur from the first block (the 2026-08-11 port
-    // regression). `live > 0` means the prompt survived at all.
+    // frames. `live` is a COUNT of non-zero rows, so the bound carries a real
+    // margin: a healthy prompt sits far below rows/2 (26/512 measured), the
+    // 2026-08-11 regression left all 512 live, and a *partial* zeroing
+    // regression (tail zeroed, middle live) still lands near `rows` and trips
+    // the bound instead of hiding behind a mere "< rows". The contiguity check
+    // catches interior holes, which a count alone would not.
     const census = readScenePackPromptRows(fs.readFileSync(scenePath))
     t.ok(census.live > 0, `prompt encoded into the pack (${census.live} live rows)`)
     t.ok(
-      census.live < census.rows,
+      census.live < census.rows / 2,
       `prompt padding is zeroed (${census.live}/${census.rows} rows live; ` +
-        'all rows live = pad embeddings condition the walk)'
+        'a healthy prompt is far below half - pad embeddings drive it toward all)'
+    )
+    t.ok(
+      census.live === census.lastNonZero + 1,
+      `live rows form one leading block with no interior holes ` +
+        `(count ${census.live}, last live row ${census.lastNonZero})`
     )
 
     // ...and the embeddings must actually depend on the prompt. One extra

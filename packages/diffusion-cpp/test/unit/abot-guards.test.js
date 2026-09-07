@@ -159,21 +159,46 @@ test('pngLuminanceStddev: handles every PNG row filter', function (t) {
 
 test('readScenePackPromptRows: counts live prompt rows', function (t) {
   // Reference behaviour: rows past the last token are zeroed, so `live` is the
-  // token count.
+  // token count and the live rows are one leading block.
   const healthy = makeScenePack(16, 4, (r, i) => (r < 5 ? 0.5 + i : 0))
   const census = readScenePackPromptRows(healthy)
   t.is(census.rows, 16, 'row count read from the header')
   t.is(census.emb, 4, 'embedding width read from the header')
-  t.is(census.live, 5, 'live rows stop at the zero padding')
+  t.is(census.live, 5, 'live rows counted up to the zero padding')
+  t.is(census.lastNonZero, 4, 'last live row is the end of the leading block')
+  t.ok(census.live === census.lastNonZero + 1, 'no interior holes in a healthy pack')
   t.is(census.prefix.length, 5 * 4 * 4, 'prefix covers exactly the live rows')
 })
 
 test('readScenePackPromptRows: flags a pack whose padding is not zeroed', function (t) {
   // The shape of the 2026-08-11 regression: every row carries an embedding,
-  // so the walk is conditioned on pad tokens. The lane asserts live < rows.
+  // so the walk is conditioned on pad tokens.
   const regressed = makeScenePack(16, 4, (r, i) => 0.25 + i * 0.1)
   const census = readScenePackPromptRows(regressed)
   t.is(census.live, census.rows, 'all rows live - padding was never zeroed')
+  t.is(census.lastNonZero, census.rows - 1, 'last row is live too')
+})
+
+test('readScenePackPromptRows: a partially zeroed pack still reads as mostly live', function (t) {
+  // Only the final row zeroed, everything else carrying pad embeddings. A
+  // last-non-zero-index scan would report live = rows - 1 and slip past a
+  // plain "< rows" gate; counting reports the same number but the lane bounds
+  // it at rows / 2, so this fails loudly.
+  const partial = makeScenePack(16, 4, (r, i) => (r < 15 ? 0.25 + i * 0.1 : 0))
+  const census = readScenePackPromptRows(partial)
+  t.is(census.live, 15, 'fifteen of sixteen rows are live')
+  t.ok(census.live >= census.rows / 2, 'lands above the rows / 2 bound the lane enforces')
+})
+
+test('readScenePackPromptRows: an interior hole breaks the leading-block invariant', function (t) {
+  // Live rows 0..2, a zeroed row 3, then a stray live row 5. The count is 4
+  // but the last live row is 5, so live !== lastNonZero + 1 - which is how the
+  // lane detects non-contiguous conditioning that a bare count would accept.
+  const holed = makeScenePack(8, 4, (r, i) => (r < 3 || r === 5 ? 1 + i : 0))
+  const census = readScenePackPromptRows(holed)
+  t.is(census.live, 4, 'four rows are live in total')
+  t.is(census.lastNonZero, 5, 'the stray row is the last live one')
+  t.ok(census.live !== census.lastNonZero + 1, 'count and last index disagree - hole detected')
 })
 
 test('readScenePackPromptRows: prompt sensitivity is visible in the prefix', function (t) {
