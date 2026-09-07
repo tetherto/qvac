@@ -33,15 +33,15 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
 | Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA (NVIDIA), Vulkan |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
-| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
+| Windows | x64 | 10+ | ✅ Tier 1 | CUDA (NVIDIA), Vulkan |
 
 
-**Note on CUDA (Linux, NVIDIA):**
-On Linux the CUDA backend ships as a dynamically loaded module alongside Vulkan, and is preferred
-over Vulkan when an NVIDIA device is present. Windows is Vulkan-only because it has no dynamic
-backend loading.
+**Note on CUDA (Linux and Windows, NVIDIA):**
+The CUDA backend ships as a dynamically loaded module alongside Vulkan, and is preferred over
+Vulkan when an NVIDIA device is present. On Windows, CUDA 13 runtime DLLs must be available on
+`PATH`: `cudart64_13.dll`, `cublas64_13.dll`, and `cublasLt64_13.dll`.
 
-- If the CUDA module or the NVIDIA driver is missing, the device never registers and selection
+- If the CUDA module, driver, or required runtime DLL is missing, the device never registers and selection
   falls through to Vulkan, then CPU. Nothing needs configuring for that.
 - `backend: "vulkan"` forces Vulkan on an NVIDIA machine. Setting `CUDA_VISIBLE_DEVICES=-1` in the
   environment has the same effect without touching the load config.
@@ -207,14 +207,9 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | main-gpu          | integer, `"integrated"`, `"dedicated"`, `"<backend>:<n>"`, or a PCI bus id | — | GPU selection for multi-GPU systems. A bare integer indexes ggml's full device list, **whose order depends on which backends loaded** — prefer `"cuda:0"` (the nth device of that family) or `"0000:65:00.0"` (a PCI bus id), which are stable. The whole value must be an integer for the index form: `"1abc"` is rejected. A value matching no device warns and falls back to the default order |
 | backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm`, `sycl`, or `auto` | —   | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU |
-<<<<<<< HEAD
 | backend-required  | `"true"` or `"false"`                       | `"false"`                    | Make `backend` binding. By default a backend list matching no device logs a warning and runs the default cascade, so the pin is advisory; with this set it fails the load instead, naming every device that *was* found. Only meaningful alongside `backend` — setting it without one is rejected |
-| split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
-| tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for layer/row parallelism ([details](./docs/multi-gpu.md)) |
-=======
 | split-mode        | `"none"`, `"layer"`, `"row"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
->>>>>>> origin/feat/QVAC-23763-capability-cascade
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
 | flash-attn        | `"on"`/`"enabled"`/`"true"`/`"1"`, `"off"`/`"disabled"`/`"false"`/`"0"`, or `"auto"` | `"on"`, except when finetuning or on a BitNet model, where it is forced off | Flash attention. The four truthy and four falsey spellings are equivalent; `"auto"` is a third state that defers to qvac-fabric's runtime capability probe. Lower-case only — matching is case-sensitive and any other value is rejected. Affects the KV-cache auto-default — see below. Also accepted as `flash_attn`; supplying both spellings is an error |
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |

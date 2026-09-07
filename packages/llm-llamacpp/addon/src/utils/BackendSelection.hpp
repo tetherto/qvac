@@ -110,8 +110,8 @@ struct BackendInterface {
   // because the answer then corrects itself when a backend gains those kernels.
   //
   // Deliberately last so existing positional initialisers keep compiling. Null
-  // means "unknown" and fails OPEN - no exclusion, pre-QVAC-23763 behaviour - so
-  // an initialiser that omits it stays correct, just unfiltered.
+  // means "unknown" and fails OPEN - no exclusion, pre-QVAC-23763 behaviour -
+  // so an initialiser that omits it stays correct, just unfiltered.
   bool (*deviceSupportsKvCacheType)(
       ggml_backend_dev_t device, enum ggml_type kvType);
 };
@@ -119,8 +119,8 @@ struct BackendInterface {
 /// @brief Map a `cache-type-k`/`cache-type-v` value to its ggml_type.
 ///
 /// Returns GGML_TYPE_COUNT when the string names no type. The caller drops that
-/// rather than erroring, because tuneLoadConfigMap still validates the value and
-/// is the right place for the message.
+/// rather than erroring, because tuneLoadConfigMap still validates the value
+/// and is the right place for the message.
 enum ggml_type kvCacheTypeFromString(const std::string& name);
 
 /// @brief Why a candidate device was passed over.
@@ -143,8 +143,8 @@ enum class ExclusionReason : std::uint8_t {
 ///
 /// PreferOther means the guard actively wants another backend, and CPU is a
 /// legitimate destination - this is every Adreno/BitNet/finetune rule, and
-/// falling to CPU is what they already do. Incapable means the device cannot run
-/// the load at all; if nothing else can either, that is worth failing over
+/// falling to CPU is what they already do. Incapable means the device cannot
+/// run the load at all; if nothing else can either, that is worth failing over
 /// rather than silently running somewhere far slower than the caller asked for.
 enum class ExclusionKind : std::uint8_t { PreferOther, Incapable };
 
@@ -198,12 +198,12 @@ struct BackendChoice {
   SelectionTrace trace;
 };
 
-BackendChoice chooseBackend(
-    const BackendRequest& request, const BackendInterface& bckI);
+BackendChoice
+chooseBackend(const BackendRequest& request, const BackendInterface& bckI);
 
 /// @brief `chooseBackend()` against the real ggml backend registry.
-BackendChoice
-chooseBackend(const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
+BackendChoice chooseBackend(
+    const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
 
 /// @brief Adapter for the positional form. Retained so existing callers and
 /// tests are unaffected by the request/choice split; prefer the overload above
@@ -264,8 +264,8 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 /// keeps everything whose buffer type is not the CPU buffer type, so
 /// integrated GPUs are included unconditionally and a physical GPU registered
 /// by two backends (e.g. Vulkan and HIP under GGML_BACKEND_DL) is added twice
-/// and receives two shards. `layer` and `row` route through fabric's filtered
-/// branch and are unaffected, so only tensor mode needs an explicit list.
+/// and receives two shards. Tensor mode therefore always needs an explicit
+/// list.
 ///
 /// Selection mirrors qvac-fabric's own filtered branch (`src/llama.cpp`) so the
 /// pinned list matches what fabric would have picked for `layer`/`row`:
@@ -280,14 +280,19 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 ///     the description to the raw device name, which is identical for two
 ///     identical cards, so a 2x RTX 4090 host would silently collapse to one.
 ///     A device whose `device_id` is null is kept rather than dropped.
+///   - Devices that cannot meet @p constraints are excluded, and duplicate
+///     representations prefer @p selectedDeviceName's registry.
 ///
 /// Returns an empty vector when no GPU device is present; callers must then
 /// leave `--device` alone rather than emitting an empty list.
-std::vector<std::string>
-getTensorSplitDeviceNames(const BackendInterface& bckI);
+std::vector<std::string> getTensorSplitDeviceNames(
+    const BackendInterface& bckI, const std::string& selectedDeviceName = {},
+    const LoadConstraints& constraints = {});
 
 /// @brief `getTensorSplitDeviceNames()` against the real ggml backend registry.
-std::vector<std::string> getTensorSplitDeviceNames();
+std::vector<std::string> getTensorSplitDeviceNames(
+    const std::string& selectedDeviceName = {},
+    const LoadConstraints& constraints = {});
 
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
 /// True only when at least one GPU device is present AND every available
@@ -316,15 +321,17 @@ bool gpuBackendSupportsRowSplit();
 /// A device whose backend publishes no bus id falls back to registry scoping,
 /// since it cannot be matched against its own duplicate.
 ///
-/// Empty when every GPU/iGPU device comes from one registry, which is every
-/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
-/// caller then keeps omitting `--device`.
+/// Empty when every usable GPU/iGPU device comes from one registry and no
+/// device was excluded by @p constraints, or when @p selectedDeviceName
+/// matches nothing. The caller then keeps omitting `--device`.
 std::vector<std::string> splitModeDeviceNames(
-    const BackendInterface& bckI, const std::string& selectedDeviceName);
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
 
 /// @brief `splitModeDeviceNames()` against the real ggml backend registry.
-std::vector<std::string>
-splitModeDeviceNames(const std::string& selectedDeviceName);
+std::vector<std::string> splitModeDeviceNames(
+    const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
 
 /// @brief Inputs to the CUDA PTX JIT cache check, gathered from the
 /// environment so the policy below stays testable.

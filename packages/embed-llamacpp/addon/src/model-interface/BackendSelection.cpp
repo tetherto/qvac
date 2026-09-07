@@ -65,8 +65,8 @@ struct DeviceDescription {
 };
 
 // QVAC-23763: one candidate list with a family tag, rather than five buckets.
-// Mirrors llm-llamacpp's BackendSelection.cpp; keeping the two the same shape is
-// what makes a diff between them reviewable.
+// Mirrors llm-llamacpp's BackendSelection.cpp; keeping the two the same shape
+// is what makes a diff between them reviewable.
 enum class DeviceFamily : std::uint8_t {
   OpenClAdreno,
   OpenClOther,
@@ -92,8 +92,9 @@ struct Enumeration {
 };
 
 void emplaceIfValidDevice(
-    const BackendInterface& bckI, Enumeration& out, const ggml_backend_dev_t dev,
-    const ggml_backend_reg_t reg, const DeviceDescription& devDescr,
+    const BackendInterface& bckI, Enumeration& out,
+    const ggml_backend_dev_t dev, const ggml_backend_reg_t reg,
+    const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   if (bckI.ggml_backend_reg_name(reg) == std::string("RPC")) {
     return;
@@ -101,11 +102,11 @@ void emplaceIfValidDevice(
 
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
-    std::string text = string_format(
-        "Emplacing backend: gpuBackend = %s", gpuBackend.c_str());
+    std::string text =
+        string_format("Emplacing backend: gpuBackend = %s", gpuBackend.c_str());
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
 #else
-    (void) gpuBackend;
+    (void)gpuBackend;
 #endif
   };
 
@@ -140,12 +141,13 @@ void emplaceIfValidDevice(
     return;
   }
 
-  out.candidates.push_back(Candidate{
-      devDescr.gpuBackend,
-      bckI.ggml_backend_reg_name(reg),
-      family.value(),
-      dev,
-      backend_selection::ExclusionReason::None});
+  out.candidates.push_back(
+      Candidate{
+          devDescr.gpuBackend,
+          bckI.ggml_backend_reg_name(reg),
+          family.value(),
+          dev,
+          backend_selection::ExclusionReason::None});
 }
 
 bool shouldProcessDevice(
@@ -253,7 +255,8 @@ std::optional<size_t> resolveNamedMainGpu(
 
 /// Every device the request makes eligible, in ggml enumeration order.
 Enumeration enumerateCandidates(
-    const BackendInterface& bckI, const backend_selection::BackendRequest& req) {
+    const BackendInterface& bckI,
+    const backend_selection::BackendRequest& req) {
   Enumeration out;
   if (req.preferred != BackendType::GPU) {
     return out;
@@ -381,10 +384,11 @@ const char* cascadeLogFor(DeviceFamily family) {
   return "Chosen GPU Backend";
 }
 
-/// First surviving candidate of @p family. Callers iterate family-major and this
-/// iterates enumeration-order-minor, which together preserve
+/// First surviving candidate of @p family. Callers iterate family-major and
+/// this iterates enumeration-order-minor, which together preserve
 /// first-registered-wins within a family.
-const Candidate* firstUsable(const Enumeration& enumeration, DeviceFamily family) {
+const Candidate*
+firstUsable(const Enumeration& enumeration, DeviceFamily family) {
   for (const Candidate& c : enumeration.candidates) {
     if (c.family == family &&
         c.excluded == backend_selection::ExclusionReason::None) {
@@ -724,8 +728,7 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     for (const std::string& family : request.backendOverride) {
       for (const DeviceFamily deviceFamily : ::K_OVERRIDE_ORDER) {
         for (const Candidate& c : enumeration.candidates) {
-          if (c.family != deviceFamily ||
-              c.excluded != ExclusionReason::None) {
+          if (c.family != deviceFamily || c.excluded != ExclusionReason::None) {
             continue;
           }
           if (::backendNameMatchesFamily(c.name, family)) {

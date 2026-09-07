@@ -50,9 +50,6 @@ jobs:
 
     env:
       WORKDIR: packages/vla-ggml
-      # QVAC-23763: not CUDA_VISIBLE_DEVICES directly, because an unset matrix
-      # field is the empty string, which hides every CUDA device like -1.
-      FORCE_VULKAN: ${{ matrix.force_vulkan || 'false' }}
 
     strategy:
       fail-fast: false
@@ -70,12 +67,14 @@ jobs:
             platform: linux
             arch: x64
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
+            expected_backend: cuda
           # QVAC-23763: same NVIDIA box, Vulkan half. The entry above runs CUDA.
           - os: ubuntu-24.04
             platform: linux
             arch: x64
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
             force_vulkan: 'true'
+            expected_backend: vulkan
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
@@ -404,7 +403,7 @@ jobs:
       # positive pass — we'd rather see the workflow fail when the
       # assets are out of sync.
       - name: Download π₀.₅ test artefacts from S3
-        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        if: ${{ matrix.force_vulkan != 'true' && !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -439,7 +438,7 @@ jobs:
       # No `|| true`: a missing artefact fails the step loudly (a silently
       # skipped groot e2e under a green CI would be a false-positive pass).
       - name: Download GR00T test artefacts from S3
-        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        if: ${{ matrix.force_vulkan != 'true' && !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -485,7 +484,7 @@ jobs:
           & $vsdir.FullName /dependents $addon.FullName
 
       - name: Run integration test (Linux/macOS)
-        if: ${{ matrix.platform != 'win32' }}
+        if: ${{ matrix.platform != 'win32' && matrix.force_vulkan != 'true' }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
@@ -495,13 +494,9 @@ jobs:
           PI05_TEST_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/activations.safetensors', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_ACTIVATIONS_V4: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_v4.safetensors', github.workspace, env.WORKDIR) || '' }}
+          QVAC_VLA_EXPECTED_BACKEND: ${{ matrix.expected_backend }}
         run: |
           set +e
-          # Only for the Vulkan leg, see FORCE_VULKAN above.
-          if [ "${FORCE_VULKAN}" = "true" ]; then
-            echo "FORCE_VULKAN=true: hiding CUDA devices so the addon selects Vulkan"
-            export CUDA_VISIBLE_DEVICES=-1
-          fi
           # Stream test output AND capture it so we can inspect the TAP summary
           # if the process exits with a non-zero code. Some GPU configurations
           # (qvac-ubuntu2404-x64-gpu with NVIDIA RTX 4000 SFF Ada + Vulkan)
@@ -516,6 +511,30 @@ jobs:
           fi
           if [ "$EXIT" -eq 139 ] && grep -qE '^# ok$' "$TESTLOG" && grep -qE '^# tests = [0-9]+/[0-9]+ pass$' "$TESTLOG"; then
             echo "::warning::Tests all passed but process crashed at teardown with SIGSEGV (exit 139) on $(uname -srvmo). Known ggml/Vulkan static-destructor issue; treating as pass."
+            exit 0
+          fi
+          exit "$EXIT"
+
+      - name: Verify Vulkan fallback selection
+        if: ${{ matrix.force_vulkan == 'true' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          QVAC_VLA_MODEL: ${{ format('{0}/{1}/model/vla/smolvla-libero-vision-q8.gguf', github.workspace, env.WORKDIR) }}
+          QVAC_VLA_EXPECTED_BACKEND: ${{ matrix.expected_backend }}
+          QVAC_VLA_BACKEND_SELECTION_SMOKE: 'true'
+          CUDA_VISIBLE_DEVICES: '-1'
+        run: |
+          npm run build:ts
+          set +e
+          TESTLOG=$(mktemp)
+          bare test/integration/backend-selection.test.js --exit 2>&1 | tee "$TESTLOG"
+          EXIT=${PIPESTATUS[0]}
+          if [ "$EXIT" -eq 0 ]; then
+            exit 0
+          fi
+          if [ "$EXIT" -eq 139 ] && grep -qE '^# ok$' "$TESTLOG" && grep -qE '^# tests = [0-9]+/[0-9]+ pass$' "$TESTLOG"; then
+            echo "::warning::Backend selection passed but the process crashed at teardown with SIGSEGV (exit 139) on $(uname -srvmo). Known ggml/Vulkan static-destructor issue; treating as pass."
             exit 0
           fi
           exit "$EXIT"
@@ -539,7 +558,7 @@ jobs:
       # `performance-report.json`, pi05's `performance-report-pi05.json`, and
       # groot's `performance-report-groot.json`; missing files are tolerated.
       - name: Render performance Step Summary (Linux/macOS)
-        if: ${{ always() && !cancelled() && matrix.platform != 'win32' }}
+        if: ${{ always() && !cancelled() && matrix.platform != 'win32' && matrix.force_vulkan != 'true' }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -571,7 +590,7 @@ jobs:
           }
 
       - name: Upload performance report
-        if: ${{ always() && !cancelled() }}
+        if: ${{ always() && !cancelled() && matrix.force_vulkan != 'true' }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           # -vulkan matches the job name, or both u24 legs collide and one 409s.
@@ -582,4 +601,3 @@ jobs:
           path: ${{ env.WORKDIR }}/test/results/performance-report*.json
           if-no-files-found: ignore
           retention-days: 14
-

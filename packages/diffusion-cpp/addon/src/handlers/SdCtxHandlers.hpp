@@ -86,6 +86,9 @@ struct SdCtxConfig {
                              // per-layer to GPU (applied via the engine's
                              // params_backend assignment spec)
   std::string device = "gpu"; // "cpu" or "gpu" -- selects compute backend
+  // Optional comma-separated GPU backend priority list. Empty uses the default
+  // CUDA, Vulkan, Metal, OpenCL, ROCm, and SYCL cascade.
+  std::string backend;
   // Optional GPU pick when device == "gpu": a device index, "integrated", or
   // "dedicated" (the discrete GPU with the most VRAM). Empty = let the backend
   // choose. Resolved to a concrete ggml device backend name in SdModel::load().

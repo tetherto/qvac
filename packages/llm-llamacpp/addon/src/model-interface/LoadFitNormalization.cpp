@@ -670,11 +670,17 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
       .gpuBackendSupportsRowSplit =
           []() { return backend_selection::gpuBackendSupportsRowSplit(); },
       .splitModeDeviceNames =
-          [](const std::string& selectedDeviceName) {
-            return backend_selection::splitModeDeviceNames(selectedDeviceName);
+          [](const std::string& selectedDeviceName,
+             const backend_selection::LoadConstraints& constraints) {
+            return backend_selection::splitModeDeviceNames(
+                selectedDeviceName, constraints);
           },
       .tensorSplitDeviceNames =
-          []() { return backend_selection::getTensorSplitDeviceNames(); }};
+          [](const std::string& selectedDeviceName,
+             const backend_selection::LoadConstraints& constraints) {
+            return backend_selection::getTensorSplitDeviceNames(
+                selectedDeviceName, constraints);
+          }};
 }
 
 NormalizedLoad normalizeLoadForFit(
@@ -861,7 +867,9 @@ NormalizedLoad normalizeLoadForFit(
       const enum ggml_type kvType = kvCacheTypeFromString(it->second);
       // An unrecognised value is left to tuneLoadConfigMap, which owns
       // validating it and has the better message.
-      if (kvType != GGML_TYPE_COUNT) {
+      if (kvType != GGML_TYPE_COUNT &&
+          std::ranges::find(constraints.kvCacheTypes, kvType) ==
+              constraints.kvCacheTypes.end()) {
         constraints.kvCacheTypes.push_back(kvType);
       }
     }
@@ -1040,7 +1048,8 @@ NormalizedLoad normalizeLoadForFit(
       configVector.emplace_back(selected.name);
     } else if (splitMode == LLAMA_SPLIT_MODE_TENSOR) {
       const std::vector<std::string> tensorDevices =
-          dependencies.tensorSplitDeviceNames();
+          dependencies.tensorSplitDeviceNames(
+              selected.name, request.constraints);
       if (tensorDevices.empty()) {
         // No enumerable GPU device: leave --device alone rather than emitting
         // an empty list, and let fabric's own selection and checks decide.
@@ -1071,7 +1080,7 @@ NormalizedLoad normalizeLoadForFit(
         selected.type == BackendType::GPU &&
         dependencies.splitModeDeviceNames) {
       const std::vector<std::string> splitDevices =
-          dependencies.splitModeDeviceNames(selected.name);
+          dependencies.splitModeDeviceNames(selected.name, request.constraints);
       if (!splitDevices.empty()) {
         std::string deviceList;
         for (const std::string& deviceName : splitDevices) {

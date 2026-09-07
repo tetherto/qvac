@@ -115,9 +115,9 @@ struct BackendInterface {
 /// @brief Why a candidate device was passed over.
 ///
 /// QVAC-23763: llm-llamacpp expresses the Adreno/BitNet/finetune guards and the
-/// KV-cache capability filter through this. embed has none of those rules today,
-/// so only None is ever set - the enum exists to keep the two implementations
-/// the same shape.
+/// KV-cache capability filter through this. embed has none of those rules
+/// today, so only None is ever set - the enum exists to keep the two
+/// implementations the same shape.
 enum class ExclusionReason : std::uint8_t {
   None = 0,
   KvCacheTypeUnsupported,
@@ -163,8 +163,8 @@ struct BackendChoice {
   SelectionTrace trace;
 };
 
-BackendChoice chooseBackend(
-    const BackendRequest& request, const BackendInterface& bckI);
+BackendChoice
+chooseBackend(const BackendRequest& request, const BackendInterface& bckI);
 
 /// @brief `chooseBackend()` against the real ggml backend registry.
 BackendChoice
