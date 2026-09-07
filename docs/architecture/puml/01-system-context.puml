@@ -6,15 +6,15 @@ title QVAC SDK Family - System Context
 
 Person(dev, "Application Developer", "Builds JS, Python, Bare, desktop, and mobile apps")
 
-System(sdk, "QVAC SDK Family", "Local-first P2P inference. JS, Python, and Bare entry points share one engine")
+System(sdk, "QVAC SDK Family", "Local-first inference. JS, Python, and Bare entry points share one engine")
 
 System_Ext(registry, "QVAC Model Registry", "Catalog, search, and blob download")
 System_Ext(http, "HTTP / CDN", "Direct model file downloads")
-System_Ext(p2p, "Holepunch P2P Network", "Hyperswarm DHT, Hyperdrive seeders, delegated inference providers")
+System_Ext(p2p, "Holepunch P2P Network", "Hyperswarm DHT and Hyperdrive seeders")
 
 Rel_D(dev, sdk, "Calls SDK API")
 Rel_L(sdk, registry, "Queries catalog and downloads", "Holepunch")
 Rel_D(sdk, http, "Downloads models", "HTTPS")
-Rel_R(sdk, p2p, "Peer discovery, sync, delegated inference", "Hyperswarm")
+Rel_R(sdk, p2p, "Discovers peers and syncs model blobs", "Hyperswarm / Hyperdrive")
 
 @enduml

@@ -20,6 +20,24 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   including locale prompting, cache-aware streaming operating points,
   conversion tooling, and a model-specific 320 ms streaming default.
 
+- Add Core ML (Apple Neural Engine) RTF benchmark lanes for the Parakeet TDT
+  models on the darwin-arm64 desktop runner, covering f16/q8_0/q4_0. A matrix
+  entry opts in with `"coreml": true`; the encoder then runs on the ANE via an
+  exported `<stem>-encoder.mlmodelc` sidecar while the TDT decoder stays on
+  Metal. Because the sidecar is picked up by presence alone — and one sidecar
+  serves every quantisation of its stem — Core ML entries run against an
+  isolated `models/coreml/` copy so the existing CPU and Metal lanes cannot
+  silently start measuring the Neural Engine. `activeBackend` is now derived
+  from the observed per-run `encoderOnCoreml` stat rather than the requested
+  backend, and the benchmark refuses to write an artifact whose label would not
+  match what actually ran, in either direction. Sidecars are pinned in
+  `test/integration/parakeet-coreml.manifest.json` and staged by
+  `scripts/stage-integration-models.mjs`; lanes skip themselves loudly where no
+  sidecar is staged, so the matrix is unaffected until one is published. Core ML
+  covers the offline TDT encoder only, and the aggregate report expects it for
+  the parakeet engine alone. Measured on an Apple M1 Pro: 1.20-1.27x faster than
+  the Metal lane (mean RTF, five runs per lane) — see the package README.
+
 ### Changed
 
 - Raise the `speech-cpp` floor to 2026-09-03. Silero VAD now honors
