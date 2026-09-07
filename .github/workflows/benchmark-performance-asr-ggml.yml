@@ -5,6 +5,13 @@ name: Benchmark Performance (ASR GGML)
 # benchmark lanes for BOTH engines, then aggregate one consolidated report.
 
 on:
+  # Weekly full sweep (desktop + mobile) on main, so the channel numbers stop
+  # going stale between manual dispatches. Staggered against the TTS (04:00)
+  # and BCI (07:00) sweeps because the desktop legs share the self-hosted
+  # qvac-* runner fleet. On a scheduled run every dispatch input is empty, so
+  # the desktop/mobile gates below treat `schedule` as "run everything".
+  schedule:
+    - cron: "0 1 * * 1" # Every Monday 1am UTC
   workflow_dispatch:
     inputs:
       repository:
@@ -87,7 +94,7 @@ jobs:
       run_integration_tests: false
       run_rtf_benchmarks: true
 
-    if: ${{ !cancelled() && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.run_desktop) && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
   mobile-benchmarks:
     needs:
       - context
@@ -105,7 +112,7 @@ jobs:
       prebuild_package: ${{ inputs.prebuild_package }}
       run_rtf_benchmarks: true
 
-    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.run_mobile) && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
   summarize:
     needs:
       - context

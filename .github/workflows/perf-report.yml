@@ -13,7 +13,7 @@ on:
           - nmtcpp
           - llamacpp-llm
           - vlm
-          - parakeet
+          - asr-ggml
           - diffusion-cpp
           - audiogen-ggml
       workflow_name:
@@ -24,7 +24,7 @@ on:
           - "Integration Tests (NMTCPP)"
           - "Integration Tests (LLM)"
           - "Mobile Integration Tests (LLM)"
-          - "Mobile Integration Tests (Parakeet)"
+          - "Mobile Integration Tests (ASR GGML)"
           - "Integration Tests (Stable Diffusion)"
           - "Mobile Integration Tests (Diffusion CPP)"
           - "Benchmark Performance (AudioGen GGML)"
@@ -150,14 +150,17 @@ jobs:
             --output-json reports/vlm-mobile-performance.json \
             --output-html reports/vlm-mobile-performance.html || true
 
-          echo "=== Parakeet (Mobile) ==="
+          # QVAC-24635: "Mobile Integration Tests (Parakeet)" was retired when
+          # parakeet folded into the unified asr-ggml addon; querying the old
+          # name aggregated nothing (swallowed by `|| true`) every week.
+          echo "=== ASR GGML (Mobile) ==="
           node scripts/perf-report/aggregate.js \
-            --addon parakeet \
-            --workflow "Mobile Integration Tests (Parakeet)" \
+            --addon asr-ggml \
+            --workflow "Mobile Integration Tests (ASR GGML)" \
             --runs 6 \
-            --output reports/parakeet-mobile-performance.md \
-            --output-json reports/parakeet-mobile-performance.json \
-            --output-html reports/parakeet-mobile-performance.html || true
+            --output reports/asr-ggml-mobile-performance.md \
+            --output-json reports/asr-ggml-mobile-performance.json \
+            --output-html reports/asr-ggml-mobile-performance.html || true
 
           echo "=== Diffusion (Desktop) ==="
           node scripts/perf-report/aggregate.js \

@@ -7,6 +7,13 @@ name: Benchmark Performance (BCI Whispercpp)
 # registry model, so the sweep is platform × CPU/GPU backend (no quant axis).
 
 on:
+  # Weekly full sweep (desktop + mobile) on main, so the channel numbers stop
+  # going stale between manual dispatches. Staggered against the ASR (01:00)
+  # and TTS (04:00) sweeps because the desktop legs share the self-hosted
+  # qvac-* runner fleet. The desktop/mobile gates below already read the
+  # dispatch toggles as `!= 'false'`, so empty scheduled inputs run everything.
+  schedule:
+    - cron: "0 7 * * 1" # Every Monday 7am UTC
   workflow_dispatch:
     inputs:
       repository:
