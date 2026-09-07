@@ -698,7 +698,8 @@ Accuracy (WER / CER / AraDiaWER) and RTF benchmarks live under
   `src/main.py` dispatches on the config's required top-level `engine:` key
   over `src/whisper/` and `src/parakeet/`.
 - `benchmarks/client/config/config-whisper*.yaml` (incl. three Common Voice
-  Arabic variants) and `config-parakeet{,-ctc,-eou,-sortformer}.yaml`.
+  Arabic variants) and
+  `config-parakeet{,-unified,-ctc,-eou,-sortformer,-indic-conformer}.yaml`.
 - `benchmarks/manual-results/{whisper,parakeet}/` — drop RTF artifacts for
   backends CI cannot host.
 - `benchmarks/ci/` — the HuggingFace → GGML conversion step the accuracy
