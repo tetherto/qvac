@@ -31,6 +31,11 @@ inputs:
     required: false
     default: "server"
 
+outputs:
+  msvc-version:
+    description: "Selected Windows MSVC toolset version, empty on non-Windows runners"
+    value: ${{ steps.select-msvc.outputs.version }}
+
 runs:
   using: composite
   steps:
@@ -61,6 +66,48 @@ runs:
           key="cuda-redist-$CUDA_VERSION-$CUDA_TARGET-$RUNNER_ARCH-r4"
         fi
         echo "key=$key" >> "$GITHUB_OUTPUT"
+
+    - name: Select CUDA-compatible MSVC
+      id: select-msvc
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+        if (-not (Test-Path $vswhere)) {
+          throw "setup-cuda: vswhere.exe is required to select a CUDA-compatible MSVC toolset"
+        }
+
+        $candidates = @()
+        $installations = & $vswhere -all -products * -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        foreach ($installation in $installations) {
+          $toolsetRoot = Join-Path $installation "VC\Tools\MSVC"
+          if (-not (Test-Path $toolsetRoot)) {
+            continue
+          }
+          foreach ($directory in (Get-ChildItem -Path $toolsetRoot -Directory)) {
+            $version = $null
+            if ([version]::TryParse($directory.Name, [ref]$version) -and $version.Major -eq 14 -and $version.Minor -lt 50) {
+              $candidates += [PSCustomObject]@{
+                Installation = $installation
+                Version = $version
+              }
+            }
+          }
+        }
+
+        $selected = $candidates | Sort-Object Version -Descending | Select-Object -First 1
+        if ($null -eq $selected) {
+          throw "setup-cuda: CUDA 13.0 requires an MSVC toolset older than 14.50, but none is installed"
+        }
+
+        $hostCompiler = Join-Path $selected.Installation "VC\Tools\MSVC\$($selected.Version)\bin\Hostx64\x64\cl.exe"
+        if (-not (Test-Path $hostCompiler)) {
+          throw "setup-cuda: selected MSVC host compiler does not exist at $hostCompiler"
+        }
+
+        "installation=$($selected.Installation)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "version=$($selected.Version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        Write-Host "Selected MSVC $($selected.Version) for CUDA 13.0"
 
     - name: Restore CUDA toolkit
       id: cache-cuda
@@ -203,6 +250,50 @@ runs:
         path: ${{ runner.temp }}/cuda/${{ inputs.cuda-target }}
         key: ${{ steps.cache-key.outputs.key }}
 
+    - name: Activate CUDA-compatible MSVC
+      if: runner.os == 'Windows'
+      shell: powershell
+      env:
+        MSVC_INSTALLATION: ${{ steps.select-msvc.outputs.installation }}
+        MSVC_VERSION: ${{ steps.select-msvc.outputs.version }}
+      run: |
+        $selectedVersion = [version]$env:MSVC_VERSION
+        $vcvars = Join-Path $env:MSVC_INSTALLATION "VC\Auxiliary\Build\vcvars64.bat"
+        $toolsetFamily = "$($selectedVersion.Major).$($selectedVersion.Minor)"
+        $environment = & cmd.exe /s /c "`"$vcvars`" -vcvars_ver=$toolsetFamily >nul && set"
+        if ($LASTEXITCODE -ne 0) {
+          throw "setup-cuda: failed to activate MSVC $toolsetFamily"
+        }
+
+        $hostCompiler = Join-Path $env:MSVC_INSTALLATION "VC\Tools\MSVC\$env:MSVC_VERSION\bin\Hostx64\x64\cl.exe"
+
+        $names = @(
+          "INCLUDE",
+          "LIB",
+          "LIBPATH",
+          "PATH",
+          "UCRTVersion",
+          "UniversalCRTSdkDir",
+          "VCINSTALLDIR",
+          "VCToolsInstallDir",
+          "VCToolsVersion",
+          "VSINSTALLDIR",
+          "VisualStudioVersion",
+          "WindowsSdkDir",
+          "WindowsSDKVersion"
+        )
+        foreach ($name in $names) {
+          $prefix = "$name="
+          $line = $environment | Where-Object { $_.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
+          if ($line) {
+            $line | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+        }
+        "CUDAHOSTCXX=$hostCompiler" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "QVAC_MSVC_INSTALLATION=$env:MSVC_INSTALLATION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "QVAC_MSVC_VERSION=$env:MSVC_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        Write-Host "Activated MSVC $env:MSVC_VERSION for CUDA 13.0"
+
     - name: Export CUDA environment
       shell: bash
       env:
@@ -219,17 +310,12 @@ runs:
         echo "CUDA_PATH=$cuda_prefix" >> "$GITHUB_ENV"
         echo "CUDACXX=$nvcc" >> "$GITHUB_ENV"
         echo "$cuda_prefix/bin" >> "$GITHUB_PATH"
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          # windows-2025 may carry MSVC newer than CUDA 13's host allow-list.
-          # Let the real build determine compatibility instead of compiler ID.
-          echo "NVCC_PREPEND_FLAGS=-allow-unsupported-compiler" >> "$GITHUB_ENV"
-        fi
         # vcpkg scrubs the environment, so the port's enable_language(CUDA)
         # only sees the toolkit through an explicit keep-list. Append rather
         # than assign so a sibling setup action's keep-list survives.
         cuda_keep_vars="CUDA_PATH;CUDACXX"
         if [ "$RUNNER_OS" = "Windows" ]; then
-          cuda_keep_vars="$cuda_keep_vars;NVCC_PREPEND_FLAGS"
+          cuda_keep_vars="$cuda_keep_vars;CUDAHOSTCXX;INCLUDE;LIB;LIBPATH;PATH;QVAC_MSVC_INSTALLATION;QVAC_MSVC_VERSION;UCRTVersion;UniversalCRTSdkDir;VCINSTALLDIR;VCToolsInstallDir;VCToolsVersion;VSINSTALLDIR;VisualStudioVersion;WindowsSdkDir;WindowsSDKVersion"
         fi
         echo "VCPKG_KEEP_ENV_VARS=${VCPKG_KEEP_ENV_VARS:+$VCPKG_KEEP_ENV_VARS;}$cuda_keep_vars" >> "$GITHUB_ENV"
         if [ "$RUNNER_OS" != "Windows" ]; then
