@@ -134,6 +134,14 @@ the same way a real app would add a third-party or in-repo custom plugin. `Plugi
 own client wrapper (`custom-echo-plugin/client`) for the happy-path tests, mirroring how a real consumer would
 use a custom plugin rather than calling `invokePlugin` directly.
 
+[`fixtures/fit-stub-plugin/`](./fixtures/fit-stub-plugin) is a second custom plugin, this one with a native
+dependency (`@qvac/model-fit`). The `fit-stub-check` test loads a small catalogue GGUF through it (the plugin only
+records the cache path), then inside the worker writes a header-only copy truncated to the full length, checks the
+filesystem made it sparse, and runs the fitter on both files. It passes when the stub is sparse and the two plans are
+identical; the whole JSON report is the test output. Run it alone with `--filter fit-stub`. On Android pass
+`backendsDir` in the test params if the fitter reports `nDevices: 0` (the ggml backends ship as shared libraries
+there). Electron skips it because the plugin is not in `qvac.config.electron.json`.
+
 Both `qvac.config.*` files list built-in plugins explicitly, not just `custom-echo-plugin/plugin`: an empty
 or missing `plugins` array bundles all built-ins by default, but as soon as it's non-empty only the listed
 plugins are included (see `resolvePluginSpecifiers` in `@qvac/sdk/commands/bundle`). Omitting the built-ins here

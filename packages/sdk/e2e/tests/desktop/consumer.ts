@@ -8,6 +8,7 @@ import {
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
+  QWEN3_600M_INST_Q4,
   OCR_CRAFT,
   OCR_LATIN,
   OCR_DOCTR,
@@ -102,6 +103,7 @@ import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-b
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
+import { FitStubExecutor } from '../shared/executors/fit-stub-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'desktop'
@@ -250,6 +252,13 @@ resources.define('echo', {
   type: 'echo',
   modelSrc: '',
   skipPreDownload: true
+})
+
+// Small catalogue GGUF loaded through the fit-stub fixture: the SDK downloads
+// it and hands the cache path to the plugin, which never loads it into an engine.
+resources.define('fit-stub', {
+  constant: QWEN3_600M_INST_Q4,
+  type: 'fit-stub-check'
 })
 
 resources.define('sharded-embeddings', {
@@ -737,6 +746,7 @@ export const executor = createExecutor({
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
+    new FitStubExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {
