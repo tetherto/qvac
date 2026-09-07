@@ -116,6 +116,16 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
      [](SdCtxConfig& c, const std::string& v) {
        c.offloadToCpu = parseBool(v, "offload_to_cpu");
      }},
+    {"backend",
+     [](SdCtxConfig& c, const std::string& v) { c.backendSpec = v; }},
+    {"params_backend",
+     [](SdCtxConfig& c, const std::string& v) { c.paramsBackendSpec = v; }},
+    {"max_vram",
+     [](SdCtxConfig& c, const std::string& v) { c.maxVramSpec = v; }},
+    {"stream_layers",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.streamLayers = parseBool(v, "stream_layers");
+     }},
     {"device", [](SdCtxConfig& c, const std::string& v) { c.device = v; }},
     {"clip_on_cpu",
      [](SdCtxConfig& c, const std::string& v) {
@@ -241,9 +251,9 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
          c.prediction = EDM_V_PRED;
        else if (v == "flow")
          c.prediction = FLOW_PRED;
-       else if (v == "flux_flow")
+       else if (v == "flux_flow") {
          c.prediction = FLUX_FLOW_PRED;
-       else if (v == "flux2_flow") {
+       } else if (v == "flux2_flow") {
          c.prediction = PREDICTION_COUNT; // auto: no FLUX.2 override exists
          c.flux2Requested = true;
        } else
