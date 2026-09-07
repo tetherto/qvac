@@ -45,12 +45,6 @@ target_compile_options(
 # Disable POSIX regex in gtest - clang cross-compilation target doesn't find regex.h properly
 target_compile_definitions(addon-test PRIVATE GTEST_HAS_POSIX_RE=0)
 
-# Under GGML_BACKEND_DL the backend modules (libqvac-ggml-*.so) live in the ggml
-# lib dir, which ggml's default loader doesn't search. Inject that dir so the
-# test env (backend_env.cpp) preloads the backends before any test runs.
-target_compile_definitions(
-  addon-test PRIVATE GGML_BACKEND_DIR="$<TARGET_FILE_DIR:ggml::ggml>")
-
 if(NOT WIN32)
   target_compile_options(
     addon-test
@@ -96,7 +90,8 @@ target_link_libraries(
   addon-test
   PRIVATE
     ${SENTENCEPIECE_TARGET}
-    ggml::ggml
+    qvac-fabric::headers
+    ${qvac_fabric_target}_module
     protobuf::libprotobuf
     GTest::gtest
     GTest::gtest_main
@@ -111,6 +106,16 @@ if(USE_BERGAMOT)
   )
 endif()
 
+# Stage the shared Fabric runtime and its dlopen'd ggml backends beside the
+# test binary. backend_env.cpp uses GGML_BACKEND_DIR to preload them.
+qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
+
+# AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
+# addon-test dynamically links the shared @qvac/fabric runtime
+# (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
+# -static-libstdc++. See packages/classification-ggml/test/unit/CMakeLists.txt
+# for the full rationale. scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI
+# runs: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1.
 if(NOT WIN32)
   target_link_libraries(
     addon-test
