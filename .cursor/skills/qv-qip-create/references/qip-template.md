@@ -2,6 +2,8 @@
 
 This is the skill-local copy of the Slack Canvas QIP template.
 
+Keep the proposal to 600-900 words; treat 1,200 words as a soft ceiling. Link detailed technical analysis and PoC evidence instead of embedding it.
+
 ## Approvers
 
 The following approvers are required in priority order:
@@ -16,15 +18,15 @@ The following approvers are required in priority order:
 
 ### :mag: Problem
 
-What do we want to do and why.
+What do we want to do, why does it matter, and why is a decision needed now.
 
 ### :bulb: Solution
 
-How do we plan on solving it. This can be case by case: the solution can include POCs, links to diagrams, links to docs, or anything that makes the solution clear.
+Start with the exact direction reviewers are being asked to approve. Explain how it solves the problem, where it belongs in the architecture, and which important responsibilities or boundaries change. Link PoCs, diagrams, or technical design docs for implementation detail.
 
 ### :twisted_rightwards_arrows: Alternatives considered
 
-What other options did we consider. Keep each alternative to 1-2 sentences, or link to research if there is detailed analysis.
+What other credible options did we consider and why is the proposed direction preferable. Include no more than three alternatives, keep each to 1-2 sentences, and link detailed research.
 
 ### :scales: Consequences
 
@@ -37,3 +39,7 @@ What is not in scope that might mistakenly be assumed to be in scope.
 ### :sparkles: Nice to haves (optional)
 
 What we would ideally add but can be postponed if we don't make it.
+
+### :link: Supporting material (optional)
+
+Link technical design notes, research, diagrams, or PoC PRs that support the decision. Do not reproduce their detailed content here.
