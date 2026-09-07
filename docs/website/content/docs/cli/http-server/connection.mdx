@@ -47,8 +47,8 @@ Install OpenClaw, the QVAC OpenClaw plugin, and the QVAC CLI:
 
 ```bash
 npm install -g openclaw @qvac/openclaw-plugin @qvac/cli @qvac/sdk
-openclaw plugins install @qvac/openclaw-plugin
-openclaw plugins enable qvac
+openclaw plugins install @qvac/openclaw-plugin --force --accept-capabilities
+openclaw plugins enable qvac --accept-capabilities
 openclaw config set plugins.allow '["qvac"]' --strict-json
 ```
 
@@ -67,7 +67,7 @@ openclaw onboard \
   --non-interactive \
   --accept-risk \
   --mode local \
-  --auth-choice qvac \
+  --auth-choice provider-plugin:qvac \
   --skip-search \
   --skip-health
 
@@ -130,7 +130,7 @@ openclaw onboard \
   --non-interactive \
   --accept-risk \
   --mode local \
-  --auth-choice qvac \
+  --auth-choice provider-plugin:qvac \
   --skip-search \
   --skip-health
 ```

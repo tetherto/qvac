@@ -14,6 +14,16 @@ on:
         default: "HEAD"
   workflow_call:
     inputs:
+      fabric-overlay-artifact:
+        description: "Artifact holding this PR's fabric prebuilds, overlaid into node_modules/@qvac/fabric after npm install. Applied only to packages in fabric-consumers."
+        required: false
+        type: string
+        default: ""
+      fabric-consumers:
+        description: "JSON array of packages that consume @qvac/fabric at runtime, read from .github/fabric-consumers.json."
+        required: false
+        type: string
+        default: "[]"
       ref:
         type: string
         required: false
@@ -222,6 +232,23 @@ jobs:
       - name: Install npm dependencies
         working-directory: ${{ matrix.workdir }}
         run: ${{ matrix.mode == 'standard' && 'npm install --ignore-scripts' || 'npm install' }}
+
+      # After npm install, which would otherwise restore the released fabric.
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers), matrix.package) }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers), matrix.package) }}
+        uses: ./.github/actions/overlay-local-fabric
+        with:
+          workdir: ${{ matrix.workdir }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       # ROCm SDK (options.ci.installRocm) — vla HIP cross-compile on ubuntu-24.04.
       - name: Setup ROCm SDK for HIP cross-compile
@@ -479,6 +506,7 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'model-fit') && inputs.fabric-overlay-artifact || '' }}
 
   cpp-tests-translation:
     needs: matrix
@@ -493,6 +521,7 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'translation-nmtcpp') && inputs.fabric-overlay-artifact || '' }}
 
   coverage-report:
     permissions:

@@ -34,6 +34,16 @@ on:
         required: false
         type: string
         default: ""
+      fabric-overlay-artifact:
+        description: "Artifact holding this PR's fabric prebuilds, overlaid into node_modules/@qvac/fabric. Applied only to packages in fabric-consumers. Empty = build against the released @qvac/fabric."
+        required: false
+        type: string
+        default: ""
+      fabric-consumers:
+        description: "JSON array of packages that consume @qvac/fabric at runtime, read from .github/fabric-consumers.json."
+        required: false
+        type: string
+        default: "[]"
       packages:
         description: "JSON array of explicit package short-names to build, bypassing nx-affected (no transitive dependents). Used by on-merge-nx for per-package publish. Empty = normal nx-affected."
         required: false
@@ -90,6 +100,8 @@ jobs:
       include-cuda: ${{ matrix.includeCuda == true }}
       extra-cmake-defines: ${{ matrix.extraCmakeDefines }}
       platform-cmake-defines: ${{ matrix.platformCmakeDefines }}
+      # Consumers only: overlaying fabric's own build into itself is meaningless.
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), matrix.package) && inputs.fabric-overlay-artifact || '' }}
       reuse-workflow-file: ${{ inputs.reuse-workflow-file }}
     secrets: inherit
 
