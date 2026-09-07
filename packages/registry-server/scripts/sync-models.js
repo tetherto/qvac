@@ -12,6 +12,19 @@ const QVACRegistryClient = require('../client/lib/client')
 const ADD_MODEL_RPC_TIMEOUT_MS = 60 * 60 * 1000
 const ADD_MODEL_POLL_INTERVAL_MS = 10 * 1000
 
+function hasNewModelEntries(configModels, dbByKey) {
+  return configModels.some((entry) => {
+    if (!entry.source) return false
+
+    try {
+      const sourceInfo = parseCanonicalSource(entry.source)
+      return !dbByKey.has(`${sourceInfo.path}:${sourceInfo.protocol}`)
+    } catch {
+      return false
+    }
+  })
+}
+
 async function syncModels() {
   const args = process.argv.slice(2)
   const fileArg = args.find((arg) => arg.startsWith('--file='))
@@ -57,7 +70,10 @@ async function syncModels() {
     logger.info(`Found ${dbModels.length} model(s) in database`)
 
     if (!dryRun) {
-      connection = await connectToRegistryByCapacity({ config, logger })
+      const connect = hasNewModelEntries(configModels, dbByKey)
+        ? connectToRegistryByCapacity
+        : connectToRegistry
+      connection = await connect({ config, logger })
       selectedPeerKey = connection.peerKey
     }
 
@@ -418,6 +434,7 @@ if (require.main === module) {
 
 module.exports = {
   ADD_MODEL_RPC_TIMEOUT_MS,
+  hasNewModelEntries,
   recoverAfterAmbiguousAdd,
   isAmbiguousRpcError,
   syncModels,
