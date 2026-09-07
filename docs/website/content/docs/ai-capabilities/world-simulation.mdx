@@ -26,7 +26,7 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 ### `worldCreateScene()`
 
-Builds the world from a text `prompt` and a first-frame `image` (`Uint8Array` of PNG or JPEG bytes, ≤ 3 MB). Optional `width` and `height` are positive multiples of **32** and default to the model's tier.
+Builds the world from a text `prompt` and a first-frame `image` (`Uint8Array` of PNG or JPEG bytes, ≤ 3 MB). Optional `width` and `height` are positive multiples of **32**, at most **4096** each, and `width × height` must stay within **2,088,960** pixels (1920×1088). They default to **832×480**.
 
 It returns `{ requestId, stats }`, plus `scene` (a `Promise<Uint8Array>` holding the scene pack) when you pass `returnPack: true`. Save that pack and load it back later with `modelConfig.sceneSrc` to walk the same world again without regenerating it. Calling `worldCreateScene()` twice on the same session replaces the world and restarts the walk.
 
