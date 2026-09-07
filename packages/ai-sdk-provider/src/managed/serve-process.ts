@@ -266,8 +266,7 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
     ...baseArgs,
     'serve',
     // `--no-default` keeps the QVAC surface off the port: this provider only
-    // speaks /v1/*, and the pair is what the retired `serve openai` subcommand
-    // expanded to.
+    // speaks /v1/*.
     '--openai',
     '--no-default',
     '--config',
