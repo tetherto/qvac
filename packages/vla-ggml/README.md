@@ -200,10 +200,11 @@ When no acceptable GPU is found the addon falls back to CPU; to force CPU
 regardless, pass `backend: 'cpu'` to `load()`.
 
 Among accepted devices the order is CUDA, then HIP/ROCm, then anything else
-(Vulkan or Metal). CUDA is available on Linux only, where it ships as a
-dynamically loaded module alongside Vulkan; Windows has no dynamic backend
-loading. If the CUDA module or the NVIDIA driver is missing, the device never
-registers and selection simply continues down that order.
+(Vulkan or Metal). CUDA ships as a dynamically loaded module alongside Vulkan
+on Linux x64, Linux arm64, and Windows x64. Linux arm64 includes separate CUDA
+13 and CUDA 12 modules for DGX Spark and Jetson. Windows needs the CUDA 13
+runtime DLLs on `PATH`. If the CUDA module, driver, or runtime is missing, the
+device never registers and selection simply continues down that order.
 
 `backend` also takes a comma-separated GPU priority list, so
 `backend: 'vulkan'` forces Vulkan on an NVIDIA machine and
