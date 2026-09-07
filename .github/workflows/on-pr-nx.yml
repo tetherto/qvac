@@ -114,6 +114,7 @@ jobs:
       prebuilds: ${{ steps.filter.outputs.prebuilds }}
       packages: ${{ steps.filter.outputs.packages }}
       linking: ${{ steps.filter.outputs.linking }}
+      fabricconsumers: ${{ steps.filter.outputs.fabricconsumers }}
     steps:
       # Load the action + options.ci ONLY from the trusted default branch (never
       # PR head). Full checkout: sparse config leaks into the action and breaks the pnpm pin.
@@ -148,14 +149,70 @@ jobs:
             # self-affect against its own target and miss the on-pr carveOut.
             echo "packages=$(echo "$M" | jq -c '[.[] | .package] | unique')"
             echo "linking=$(echo "$M" | jq -c '[.[] | select(.prebuildLinkingScript != null) | {package, workdir, prebuildLinkingScript}] | unique_by(.package)')"
+            # Read from the trusted checkout, not duplicated into project.json:
+            # fabric-consumers.json is the one list on-pr-fabric already fans out over.
+            echo "fabricconsumers=$(jq -c '.npm_runtime' .github/fabric-consumers.json)"
           } >> "$GITHUB_OUTPUT"
+
+  detect-fabric-stack:
+    needs: [fork-approval, authorize, ci-router]
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
+      # Only wait when on-pr-fabric will actually publish. Every downstream
+      # clause reads this, not fabric_stack, so the two cannot drift into a
+      # 120-minute poll for an artifact nobody builds.
+      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && github.event_name == 'pull_request_target' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - id: detect
+        uses: ./.github/actions/detect-fabric-stack
+      - name: Warn when a stack PR builds against released fabric
+        if: steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds != 'true'
+        shell: bash
+        run: echo "::warning::This PR changes packages/fabric, but no prebuilds label is set, so on-pr-fabric publishes nothing. Native jobs build against the released @qvac/fabric. Add the 'prebuilds' label to exercise the stack."
+
+  resolve-fabric-prebuilds:
+    needs: [fork-approval, authorize, detect-fabric-stack]
+    if: needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Wait for fabric-prebuilds from on-pr-fabric
+        uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        with:
+          github-token: ${{ github.token }}
+          head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Re-publish fabric-prebuilds for downstream jobs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fabric-prebuilds
+          path: fabric-prebuilds-staging
 
   # Leaves get the on-pr package list explicitly so carved-out packages (fabric,
   # classification-ggml, vla-ggml) are not built here as well as by their own
   # orchestrators. The list is already transitive.
   prebuild:
-    needs: [fork-approval, authorize, ci-router, matrix]
-    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && needs.matrix.outputs.packages != '[]'
+    needs: [fork-approval, authorize, ci-router, matrix, detect-fabric-stack, resolve-fabric-prebuilds]
+    # A failed detection leaves needs_fabric_artifact empty, which satisfies
+    # != 'true'; without the result guard a stack PR would build against the
+    # released @qvac/fabric and still read as green.
+    if: |
+      always() && !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.matrix.outputs.packages != '[]' &&
+      needs.detect-fabric-stack.result == 'success' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     # actions: read required down the chain: the reuse action lists prior runs +
     # downloads artifacts (else the reusable's request exceeds the grant -> startup_failure).
     permissions:
@@ -170,13 +227,23 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
       packages: ${{ needs.matrix.outputs.packages }}
+      fabric-consumers: ${{ needs.matrix.outputs.fabricconsumers }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
       # Enable cross-run prebuild reuse: a PR push that doesn't touch a
       # package's native tree reuses that package's prior prebuilds-<pkg>.
-      reuse-workflow-file: on-pr-nx.yml
+      # Suppressed on any fabric-stack PR: a bundle cached before the fabric
+      # change is stale whether or not this run overlays the PR's fabric.
+      reuse-workflow-file: ${{ needs.detect-fabric-stack.outputs.fabric_stack == 'true' && '' || 'on-pr-nx.yml' }}
 
   cpp-tests:
-    needs: [fork-approval, authorize, ci-router, matrix]
-    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.matrix.outputs.packages != '[]'
+    needs: [fork-approval, authorize, ci-router, matrix, detect-fabric-stack, resolve-fabric-prebuilds]
+    if: |
+      always() && !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.ci-router.outputs.run_cpp_tests == 'true' &&
+      needs.matrix.outputs.packages != '[]' &&
+      needs.detect-fabric-stack.result == 'success' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     permissions:
       contents: read
       packages: read
@@ -190,10 +257,19 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
       packages: ${{ needs.matrix.outputs.packages }}
+      fabric-consumers: ${{ needs.matrix.outputs.fabricconsumers }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   run-integration-tests:
-    needs: [fork-approval, authorize, ci-router, prebuild, matrix]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_desktop == 'true' && needs.prebuild.result != 'cancelled' && needs.matrix.outputs.packages != '[]'
+    needs: [fork-approval, authorize, ci-router, prebuild, matrix, detect-fabric-stack, resolve-fabric-prebuilds]
+    if: |
+      always() && !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.ci-router.outputs.run_desktop == 'true' &&
+      needs.prebuild.result != 'cancelled' &&
+      needs.matrix.outputs.packages != '[]' &&
+      needs.detect-fabric-stack.result == 'success' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     permissions:
       contents: read
       packages: read
@@ -204,6 +280,8 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
       packages: ${{ needs.matrix.outputs.packages }}
+      fabric-consumers: ${{ needs.matrix.outputs.fabricconsumers }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   # Mobile integration tests are NOT run on PRs (QVAC-23665 moved them to on-demand
   # dispatch). ci-router's run_mobile output is retained but triggers nothing here.
@@ -498,10 +576,13 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, verify-prebuild-linking, cpp-tests, run-integration-tests, coload-smoke, coload-smoke-mobile]
+    needs: [fork-approval, authorize, ci-router, matrix, detect-fabric-stack, resolve-fabric-prebuilds, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, verify-prebuild-linking, cpp-tests, run-integration-tests, coload-smoke, coload-smoke-mobile]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
-      build-status: ${{ (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') && needs.verify-prebuild-linking.result != 'failure' }}
-      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
+      # Every status leads with the fabric guard: a failed detection leaves
+      # needs_fabric_artifact empty, which would otherwise satisfy != 'true'
+      # and let a stack PR built against released fabric read as a pass.
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
+      build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') && needs.verify-prebuild-linking.result != 'failure' }}
+      integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}
