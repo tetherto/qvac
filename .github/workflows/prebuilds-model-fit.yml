@@ -33,6 +33,13 @@ on:
         required: false
         type: string
         default: "packages/model-fit"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -51,4 +58,5 @@ jobs:
       artifact-name-prefix: model-fit-
       include-vulkan-sdk: true
       extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
+      fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
     secrets: inherit

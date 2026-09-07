@@ -13,7 +13,7 @@ Translation input is defined by:
 - `to: string`: target language id
 - `text: string | string[]`: text to be translated
 
-`translate()` returns an object containing `text` and when streaming is enabled, a `tokenStream` for real-time output.
+`translate()` returns an object containing `translations` — one entry per input, in the order the inputs were given — and `text`, those entries joined by newlines. When streaming is enabled it returns a `tokenStream` for real-time output instead; a batch emits one whole translation per token, so the position of each token is the position of its input.
 
 For a list of supported languages and their ids (string abbreviations), see [qvac-sdk/schemas/translation-config.ts](https://github.com/tetherto/qvac/blob/main/packages/sdk/schemas/translation-config.ts).
 

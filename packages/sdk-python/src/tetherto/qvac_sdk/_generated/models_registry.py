@@ -3953,6 +3953,24 @@ MMPROJ_QWEN3_8_27B_MULTIMODAL_F16 = ModelConstant(
     params="27B",
 )
 
+MMPROJ_QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_F16 = ModelConstant(
+    name="MMPROJ_QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_F16",
+    src="registry://hf/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/mmproj-F16.gguf",
+    registry_path="unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/mmproj-F16.gguf",
+    registry_source="hf",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=10274174,
+    blob_block_length=13795,
+    blob_byte_offset=673315081002,
+    model_id="mmproj-F16.gguf",
+    expected_size=904004000,
+    sha256_checksum="1f7b7f0b984cf065c604360c29c8098362ed61b290db0ff12c6f360bb1a8a980",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="f16",
+    params="177B",
+)
+
 MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16 = ModelConstant(
     name="MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16",
     src="registry://hf/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf",
@@ -5049,6 +5067,42 @@ QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL = ModelConstant(
     engine="llamacpp-completion",
     quantization="UD-Q8_K_XL",
     params="27B",
+)
+
+QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD = ModelConstant(
+    name="QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD",
+    src="registry://hf/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/UD-Q2_K_XL/Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00003.gguf",
+    registry_path="unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/UD-Q2_K_XL/Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00003.gguf",
+    registry_source="hf",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=6396262,
+    blob_block_length=168,
+    blob_byte_offset=419172484266,
+    model_id="Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00003.gguf",
+    expected_size=78869128864,
+    sha256_checksum="a4f3b21e77353999829f2f767e9ac21ce9c71d29a74f2cc9eda48c9bf23c8b86",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="UD-Q2_K_XL",
+    params="177B",
+)
+
+QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD = ModelConstant(
+    name="QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD",
+    src="registry://hf/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+    registry_path="unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+    registry_source="hf",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=7599711,
+    blob_block_length=168,
+    blob_byte_offset=498041613130,
+    model_id="Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+    expected_size=111334654784,
+    sha256_checksum="4448186216b3af4cc558bbce2c3213f01608f8f8b2e5267a9767971dd3ec8082",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="UD-Q4_K_XL",
+    params="177B",
 )
 
 REALESRGAN_X4PLUS = ModelConstant(
@@ -7593,6 +7647,7 @@ __all__ = [
     "MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_BF16",
     "MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_F16",
     "MMPROJ_QWEN3_8_27B_MULTIMODAL_F16",
+    "MMPROJ_QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_F16",
     "MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16",
     "MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0",
     "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0",
@@ -7654,6 +7709,8 @@ __all__ = [
     "QWEN3_8B_INST_Q4_K_M",
     "QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL",
     "QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL",
+    "QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD",
+    "QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD",
     "REALESRGAN_X4PLUS",
     "REALESRGAN_X4PLUS_ANIME_6B",
     "REALESRNET_X4PLUS",

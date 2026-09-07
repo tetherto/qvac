@@ -8,9 +8,10 @@ export interface FitConfig {
      */
     modelPath: string;
     /**
-     * Directory holding the packaged ggml backends. Required wherever backends
-     * ship as separate shared libraries — without it the fitter sees no devices
-     * and reports ERROR. Omit for a statically linked build.
+     * Directory holding ggml backend shared libraries. `@qvac/fabric`'s
+     * `prebuilds/` is used when omitted (desktop); on mobile the packed worklet
+     * falls back to this package's `prebuilds/`. Native code appends
+     * `BACKENDS_SUBDIR` (`<host>/qvac__fabric`).
      *
      * Must be an absolute path that resolves to an existing directory; anything
      * else throws.
@@ -187,9 +188,10 @@ export declare const FIT_STATUS: Readonly<{
  * logger state and is not thread safe, so concurrent callers block instead of
  * running together.
  *
- * Backends must be registered before the fitter can see any device, so pass
- * `backendsDir` wherever the packaged ggml backends ship as separate shared
- * libraries; omit it for a statically linked build, which self-registers.
+ * Backends must be registered before the fitter can see any device. When
+ * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
+ * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
+ * statically linked build, which self-registers.
  * Every backend library in that directory is `dlopen`ed into this process, so
  * it must be an application-controlled location — never remote or user input.
  */
