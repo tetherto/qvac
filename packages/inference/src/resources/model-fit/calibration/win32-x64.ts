@@ -7,14 +7,18 @@ import type { PlatformCalibration } from '@/resources/model-fit/types'
  * to this file for how the numbers are derived and validated.
  */
 export const WIN32_X64_CALIBRATION: PlatformCalibration = {
-  weightUpperCoeff: 1,
+  weightUpperCoeff: 1.01,
+  workingPeakBytes: {
+    lower: 0,
+    upper: 10587341
+  },
   fixedOverheadBytes: {
-    lower: 49636985,
-    upper: 136840271
+    lower: 55193195,
+    upper: 134358525
   },
   computeBufferBytesPerToken: {
-    lower: 821,
-    upper: 1232
+    lower: 0,
+    upper: 0
   },
   audioWindowBytes: {
     lower: 0,
@@ -31,7 +35,6 @@ export const WIN32_X64_CALIBRATION: PlatformCalibration = {
   measuredAt: '2026-09-03',
   measuredOn: {
     backend: 'cpu',
-    device: 'NVIDIA RTX 4000 SFF Ada Generation',
     kvElementBytes: 2
   }
 }

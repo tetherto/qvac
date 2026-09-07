@@ -140,6 +140,7 @@ const stats = await response.await()
 // backendDevice:     0 = CPU, 1 = GPU
 // backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
+// lyricsScore + lrc: alignment confidence and LRC text, only with generateLrc
 // qualityScore:      [0, 1], present only when the run set computeQualityScore
 
 await gen.destroy()
@@ -291,6 +292,59 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:simple
 ```
 
+### LRC generation: karaoke-style synchronized lyrics
+
+With `generateLrc: true` the engine aligns the lyrics with the generated
+audio (a DiT cross-attention probe plus DTW over the validated lyric heads)
+and delivers standard LRC text — one `[mm:ss.xx]` timestamp per lyric line —
+in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`:
+
+```js
+const response = await gen.run(caption, {
+  generateLrc: true,
+  lyrics: '[verse]\nDancing with you under the moonlight'
+})
+// ...collect the PCM...
+const stats = await response.await()
+fs.writeFileSync('song.lrc', stats.lrc)
+```
+
+It requires lyrics to align — pass them explicitly or let Simple Mode write
+them; instrumental requests are rejected — and `taskType: 'text2music'`.
+End to end from the repo (writes `audiogen-lrc.wav` + `audiogen-lrc.lrc`):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:lrc
+```
+
+### Query Rewriting: keep your lyrics, upgrade your caption
+
+With `rewriteQuery: true` the LM FORMAT pass reworks a full request before
+synthesis: your caption is rewritten into a detailed musical description and
+the lyric content is preserved, with any unset metadata filled the same way
+Simple Mode does. Unlike Simple Mode — which expands a bare query and writes
+lyrics from scratch — Query Rewriting takes caption AND lyrics as input, so
+real `lyrics` are required (`'[Instrumental]'` belongs to Simple Mode) and the
+two options are mutually exclusive:
+
+```js
+const response = await gen.run('a short salsa idea', {
+  rewriteQuery: true,
+  lyrics: '[verse]\nsuena el tambor y el barrio se enciende',
+  seed: 4242
+})
+```
+
+Faithful rewriting (lyrics back verbatim, caption on-genre) needs the 1.7B LM
+(`acestep-5Hz-lm-1.7B`); the 0.6B drifts genre, voice, and language. End to
+end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:rewrite
+```
+
 ### Quality scoring: rank a batch of takes
 
 With `computeQualityScore: true` the engine teacher-forces the generated audio
@@ -312,6 +366,32 @@ code path (`taskType: 'text2music'`). End to end from the repo:
 ```bash
 AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:best-of
+```
+
+### Audio understanding: the pipeline in reverse
+
+`understand()` describes an audio clip instead of generating one: the engine
+encodes the PCM, recovers the FSQ semantic codes, and the LM reports metadata
+and a caption. The input is interleaved stereo float PCM at 48 kHz — the same
+layout `sourceAudio` uses:
+
+```js
+const response = await gen.understand(pcm, { seed: 42 })
+const stats = await response.await()
+const heard = stats.understand
+// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes }
+```
+
+The description streams as an `understand` output item (progress ticks report
+the `source`, `tok`, and `understand` stages) and is repeated on the terminal
+stats. `audioCodes` are the recovered semantic codes — pass them back as a
+generation's `audioCodes` to re-synthesize or remix the clip. A
+`vocalLanguage` hint forces the language field instead of the LM's guess.
+End to end from the repo (generates a clip, then describes it):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:understand
 ```
 
 ### Ordered audio editing
@@ -478,7 +558,9 @@ wrapped by a level-gated `QvacLogger`.
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
 | `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
+| `rewriteQuery` | LM FORMAT pass: rewrite the caption into a detailed description, preserving the lyric content. Requires real `lyrics` and `taskType: 'text2music'`; mutually exclusive with `simpleMode`. |
 | `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
+| `generateLrc` | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`. |
 | `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
