@@ -23,6 +23,9 @@ namespace vla_backend_selection {
 // device", so a typo went unnoticed. It now throws.
 std::vector<std::string> parseBackendOverride(const std::string& backendStr);
 
+/// Parse the native binding's backendRequired value. Empty means false.
+bool parseBackendRequired(std::string_view value);
+
 // Extract the Adreno model number from a device description string.
 // Returns 0 for non-Adreno devices.
 //

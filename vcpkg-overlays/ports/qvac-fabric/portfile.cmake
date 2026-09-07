@@ -1,8 +1,8 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-fabric-llm.cpp
-  REF v${VERSION}
-  SHA512 4a4a480c582899d6a8caf9fac6a3e51ea367e2b4c6beab1d1cc73edfb10f996ec1efa98d212846f8972d44a471fa1f4676cffb6da63794aa15b5390f6ea762b1
+  REF 44efc15696f759670e2457e19a7c9b34002f8d1f
+  SHA512 0effd72e3bf4ec06bd160173bfba0397065364a590414d675e699d6f865f837bed116672145c08bf5802ba45ce48886a963fe694ab4f842a71a89f99d93cdf53
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
@@ -23,7 +23,12 @@ vcpkg_check_features(
     openmp BUILD_OPENMP
     hip-backend BUILD_HIP_BACKEND
     cuda-backend BUILD_CUDA_BACKEND
+    cuda-jetson-backend BUILD_CUDA_JETSON_BACKEND
 )
+
+if(BUILD_CUDA_JETSON_BACKEND AND NOT BUILD_CUDA_BACKEND)
+  message(FATAL_ERROR "qvac-fabric: cuda-jetson-backend requires cuda-backend")
+endif()
 
 # gpu-backends is default-on via default-features in vcpkg.json. CPU-only
 # consumers (e.g. @qvac/classification-ggml) disable it with
@@ -91,6 +96,11 @@ else()
   set(DL_BACKENDS OFF)
 endif()
 
+if(VCPKG_TARGET_IS_WINDOWS AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
+  set(DL_BACKENDS ON)
+  list(APPEND PLATFORM_OPTIONS -DGGML_BACKEND_DL=ON)
+endif()
+
 # HIP/ROCm backend — opt-in via the 'hip-backend' feature (Linux + AMD only).
 # Only @qvac/vla-ggml requests it, so every other consumer builds with no HIP
 # and gains no ROCm dependency. Builds libqvac-ggml-hip.so as a standalone DL
@@ -125,14 +135,13 @@ if(VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" AND BUILD_
     -DCMAKE_HIP_ARCHITECTURES=gfx1151)
 endif()
 
-# CUDA backend — opt-in via the 'cuda-backend' feature (Linux + NVIDIA only).
+# CUDA backend, opt-in via the 'cuda-backend' feature.
 # Mirrors hip-backend: builds libqvac-ggml-cuda.so as a standalone DL module
 # alongside Vulkan, so the addon dlopen's whichever GPU backend it picks at
-# runtime. Both x64 (RTX 30xx/50xx, Tesla) and arm64 are in scope, unlike HIP
-# which is x64-only. On arm64 that means the DGX Spark and NOT the Jetson Orin,
-# whose driver caps at CUDA 12.6 while this builds against 13; see the arch-list
-# comment below. Windows is deliberately excluded: it has no GGML_BACKEND_DL
-# support, so a second GPU backend cannot be stacked there.
+# runtime. Linux x64 and arm64 are in scope, unlike HIP which is x64-only.
+# The normal arm64 build uses CUDA 13 for DGX Spark. The cuda-jetson-backend
+# feature emits a separate CUDA 12 module for Jetson Orin. Windows x64 uses the
+# same hybrid layout, with CUDA and Vulkan as DLL modules beside the addon.
 #
 # DETERMINISTIC, same reasoning as hip-backend above: requesting cuda-backend
 # REQUIRES nvcc at build time. A host-dependent skip would produce a no-CUDA
@@ -148,24 +157,24 @@ endif()
 # silently install a package with no CUDA in it and the same vcpkg ABI as a real
 # CUDA build, which is the cache conflation this feature exists to avoid. Refuse
 # it up front rather than one condition lower.
-if(BUILD_CUDA_BACKEND AND NOT VCPKG_TARGET_IS_LINUX)
-  message(FATAL_ERROR "qvac-fabric: cuda-backend is linux-only, Windows has no GGML_BACKEND_DL support and no other target builds it. Got ${VCPKG_TARGET_TRIPLET}.")
+if(BUILD_CUDA_BACKEND AND NOT (VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS))
+  message(FATAL_ERROR "qvac-fabric: cuda-backend supports Linux and Windows only. Got ${VCPKG_TARGET_TRIPLET}.")
 endif()
 if(BUILD_CUDA_BACKEND AND NOT BUILD_GPU_BACKENDS)
   message(FATAL_ERROR "qvac-fabric: cuda-backend requires the gpu-backends feature, which brings the GGML_BACKEND_DL setup the CUDA module is loaded through.")
 endif()
 
-if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
-  if(NOT (VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" OR VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64"))
-    message(FATAL_ERROR "qvac-fabric: cuda-backend supports linux x64 and arm64 only, got ${VCPKG_TARGET_ARCHITECTURE}.")
+if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
+  if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_ARCHITECTURE STREQUAL "x64")
+    message(FATAL_ERROR "qvac-fabric: cuda-backend supports Windows x64 only, got ${VCPKG_TARGET_ARCHITECTURE}.")
+  endif()
+  if(VCPKG_TARGET_IS_LINUX AND NOT (VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" OR VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64"))
+    message(FATAL_ERROR "qvac-fabric: cuda-backend supports Linux x64 and arm64 only, got ${VCPKG_TARGET_ARCHITECTURE}.")
   endif()
 
-  set(QVAC_CUDA_JETSON OFF)
-  if(VCPKG_TARGET_TRIPLET STREQUAL "arm64-linux-cuda12")
-    if(NOT VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
-      message(FATAL_ERROR "qvac-fabric: the CUDA 12 Jetson variant is arm64-only.")
-    endif()
-    set(QVAC_CUDA_JETSON ON)
+  set(QVAC_CUDA_JETSON ${BUILD_CUDA_JETSON_BACKEND})
+  if(QVAC_CUDA_JETSON AND NOT (VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64"))
+    message(FATAL_ERROR "qvac-fabric: the CUDA 12 Jetson variant is arm64-only.")
   endif()
 
   # ggml's own CUDA CMake calls enable_language(CUDA), which fails with "No
@@ -195,8 +204,10 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # only symptom is a crash on hardware CI does not have.
   if(QVAC_CUDA_JETSON)
     set(QVAC_FABRIC_CUDA_TOOLKIT "12.6.3-jetson")
+    set(QVAC_FABRIC_CUDA_VERSION_PATTERN "V12\\.6\\.85([^0-9]|$)")
   else()
     set(QVAC_FABRIC_CUDA_TOOLKIT "13.0.3-server")
+    set(QVAC_FABRIC_CUDA_VERSION_PATTERN "V13\\.0\\.88([^0-9]|$)")
   endif()
   if(DEFINED ENV{CUDACXX} AND EXISTS "$ENV{CUDACXX}")
     set(NVCC_EXECUTABLE "$ENV{CUDACXX}")
@@ -218,134 +229,37 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
   # which nvcc a given build actually used.
   execute_process(
     COMMAND "${NVCC_EXECUTABLE}" --version
+    RESULT_VARIABLE QVAC_NVCC_RESULT
     OUTPUT_VARIABLE QVAC_NVCC_VERSION_OUT
     ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT QVAC_NVCC_RESULT EQUAL 0 OR NOT QVAC_NVCC_VERSION_OUT MATCHES "${QVAC_FABRIC_CUDA_VERSION_PATTERN}")
+    message(FATAL_ERROR "qvac-fabric: expected ${QVAC_FABRIC_CUDA_TOOLKIT}, got: ${QVAC_NVCC_VERSION_OUT}")
+  endif()
   string(REGEX MATCH "release [0-9]+\\.[0-9]+, V[0-9.]+" QVAC_NVCC_VERSION "${QVAC_NVCC_VERSION_OUT}")
   message(STATUS "qvac-fabric: cuda-backend using nvcc at ${NVCC_EXECUTABLE} (${QVAC_NVCC_VERSION}, port expects ${QVAC_FABRIC_CUDA_TOOLKIT})")
 
-  # CMAKE_CUDA_ARCHITECTURES is pinned to what we actually ship to. ggml picks
-  # its own list when the variable is undefined, but that list is much wider
-  # than our targets and the cubins are not free:
-  #     ggml default (7 arches)              148.4 MB
-  #     80-virtual;86-real;120a-real          78.9 MB
-  # measured on the built libqvac-ggml-cuda.so before the per-architecture
-  # tiering below; both tiers still need re-measuring. The 70 MB difference
-  # matters because the consumer prebuild is published to GitHub Packages, which
-  # caps a package at 256 MiB, and the llm-llamacpp linux-x64 prebuild already
-  # carries a 93 MB Vulkan module beside this one. The default list pushed it to
-  # 303 MB and the publish failed with a 413.
+  # Keep both virtual floors on x64. The sm_75 PTX serves Turing and newer
+  # unlisted GPUs, while sm_80 PTX keeps ggml's feature resolution aligned for
+  # Ada and Hopper. The fabric source probes a no-op kernel before registering a
+  # CUDA module, so a module that cannot load code falls through safely.
   #
-  #   86-real     RTX 3090, the qvac-ubuntu*-x64-gpu CI runners        (x64)
-  #   120a-real   RTX 5090                                             (x64)
-  #   121-real    DGX Spark GB10                                       (arm64)
-  #   80-virtual  PTX floor, both tiers. JITs onto sm_89, sm_90 and
-  #               anything newer that is not pinned above.
-  #
-  # QVAC-24470: `87-real` was here for the Jetson Orin and has been REMOVED,
-  # because it never reached one. The Orin's driver caps at CUDA 12.6 and it has
-  # only libcudart.so.12, while this module is built against CUDA 13 and links
-  # libcudart.so.13. A CUDA soname is major-versioned, so the module cannot load
-  # there at all and those cubins shipped to the single arm64 machine that could
-  # not open the file containing them. Verified on the device 2026-09-03: L4T
-  # R36.4.7, JetPack 6.2.1, driver 540.4.0, and no cuda-toolkit-13-0 in any
-  # configured source including jetson/t234, Orin's own SoC repo.
-  #
-  # Removing it changes no runtime behaviour. The Orin ran Vulkan before and runs
-  # Vulkan now; it only stops paying about 16 MiB for unreachable code.
-  #
-  # Supporting Jetson CUDA is still possible and is a product decision, not a
-  # packaging one: it means building arm64 against CUDA 12.x, which the Orin has
-  # natively. The DGX Spark boxes would then need a CUDA 12 runtime installed,
-  # since they ship with 13 only, though their driver is backward compatible.
-  # Put `87-real` back at the same time as that build, not before.
-  #
-  # THE LOWEST ENTRY MUST STAY -virtual, ON BOTH TIERS.
-  #
-  # NOT TRUE YET. The guard described below is tetherto/qvac-fabric-llm.cpp#231,
-  # which is still a draft, and no v10297.2.0 tag exists. Until both land, a
-  # device below this floor still enumerates and still dies at the first kernel
-  # launch, which is the open QVAC-23763 bug. Stated as intent, not as behaviour
-  # the shipped release provides.
-  #
-  # Once it lands: ggml_cuda_compiled_code_available() in
-  # ggml/src/ggml-cuda/common.cuh refuses at registration any NVIDIA device whose
-  # compute capability is below every entry here. Such a device never reaches
-  # ggml_backend_dev_count(), so a consumer's backend cascade falls through to
-  # Vulkan and then CPU. That is what will stop a Turing card from enumerating,
-  # winning selection, and then aborting at the first kernel launch.
-  #
-  # That guard is a floor test, not a loadability test: __CUDA_ARCH_LIST__
-  # records numeric compute capabilities only and cannot distinguish -real from
-  # -virtual. A device at or above the lowest entry therefore passes the guard
-  # whether or not any PTX exists for it to JIT from. Replace 80-virtual with
-  # 80-real, or drop it so a -real entry becomes the minimum, and the guard is
-  # silently disarmed for every architecture above the floor -- no build error,
-  # no failing test. ports/ggml-speech/portfile.cmake is a live example of the
-  # hazard: its floor is 75-real, and it is safe only because no NVIDIA device
-  # exists between compute capability 7.5 and 8.0.
-  #
-  # Ordering within the list does not matter to the guard, which keys off the
-  # minimum entry, so both tiers floor at 800.
-  #
-  # Which architectures we ship to is a product decision and is still open, so
-  # this list is not a statement that the missing ones are unsupported. A local
-  # build on a Turing box needs -DCMAKE_CUDA_ARCHITECTURES=75 as an override.
-  #
-  # Note for whoever widens this: the architectures served by PTX rather than
-  # native SASS pay a JIT cost on first launch, cached by the driver under
-  # $HOME/.nv/ComputeCache. A read-only or absent HOME disables that cache and
-  # the cost is paid on every process start. See the CUDA note in the
-  # llm-llamacpp and embed-llamacpp READMEs.
-  #
-  # The semicolons MUST stay backslash-escaped. vcpkg_cmake_configure(OPTIONS)
-  # treats its argument as a CMake list, so an unescaped value splits and the
-  # define silently truncates to its first element, leaving the other two as
-  # stray arguments:
-  #     -DCMAKE_CUDA_ARCHITECTURES=80-virtual / 86-real / 120a-real
-  # which would build sm_80 only and not fail until something ran on a 5090.
+  # The semicolons must stay backslash-escaped so vcpkg passes the architecture
+  # list to CMake as one argument.
   #
   # Tiered by target architecture: an arm64 package has no use for the x64
-  # cubins and vice versa. QVAC-24442 widened llm-llamacpp and embed-llamacpp
-  # from "linux & x64" to "linux", so the arm64 tier is now exercised by their
-  # linux-arm64 prebuild.
+  # cubins and vice versa. Jetson gets its own CUDA 12 module, while the normal
+  # arm64 module stays on CUDA 13 for DGX Spark.
   set(QVAC_CUDA_NO_VMM OFF)
   if(QVAC_CUDA_JETSON)
-    # Jetson Orin is the CUDA 12 arm64 target. Its Tegra driver cannot reserve
-    # ggml's fixed 32 GB VMM address-space pool, and this fabric version has no
-    # runtime fallback when cuMemAddressReserve fails.
+    # The fabric VMM pool falls back to cudaMalloc if Tegra cannot reserve its
+    # fixed address space, so keep VMM enabled and exercise that runtime path.
     set(QVAC_CUDA_ARCHS "87-real")
-    set(QVAC_CUDA_NO_VMM ON)
   elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
-    # 121-real is the DGX Spark's GB10, native rather than JITted. Gianfranco,
-    # 2026-09-04: "spark should run native". Measured before it was added: 27.3 s
-    # to first token on a cold JIT cache against 143.9 ms warm, because sm_121 sat
-    # above every entry and had to compile the 80-virtual PTX at run time. A
-    # native cubin removes the JIT, so neither the cold cost nor its dependence on
-    # a writable $HOME applies to that card any more.
-    #
-    # 80-virtual stays, and stays the lowest entry, for two separate reasons: it
-    # is the PTX floor that lets an unlisted newer card run at all, and the
-    # registration guard keys off the lowest entry being virtual. Making 121-real
-    # the floor would silently disarm that guard.
-    # No 87-real here on purpose. The Orin is the only sm_87 device and it cannot
-    # load a CUDA 13 module at all, so those cubins would ship to the one machine
-    # that cannot open the file. It belongs in the separate CUDA 12 module, when
-    # that exists.
     set(QVAC_CUDA_ARCHS "80-virtual\;121-real")
   else()
-    # QVAC-24470, Gianfranco's target: Ampere and Blackwell native, everything
-    # from sm_75 upward served by PTX. 80-real is the A100, 86-real the 3090 CI
-    # runners, 120a-real the 5090.
-    #
-    # BOTH floors are here on purpose and 75-virtual is NOT a replacement for
-    # 80-virtual. A -virtual entry costs the same whichever arch it names, so
-    # swapping looks free, but ggml resolves features through
-    # ggml_cuda_highest_compiled_arch(cc) across the whole __CUDA_ARCH_LIST__.
-    # With 80 gone the list reads {750, 860, 1200}, so an sm_89 Ada resolves to
-    # 860 and the host enables Ampere paths while the driver has only 75 PTX to
-    # JIT from, which carries none of them. Our own RTX 4000 Ada CI runner is
-    # sm_89 and sits exactly in that gap, as does Hopper at sm_90. Keeping
-    # 80-virtual means both JIT from PTX that matches what the host thinks it has.
+    # Ampere and Blackwell are native. The sm_75 floor serves Turing and newer
+    # unlisted GPUs through PTX, while sm_80 PTX preserves Ampere feature
+    # resolution for Ada and Hopper.
     set(QVAC_CUDA_ARCHS "75-virtual\;80-virtual\;80-real\;86-real\;120a-real")
   endif()
   message(STATUS "qvac-fabric: cuda-backend ON, building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
@@ -353,7 +267,9 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
     -DGGML_CUDA=ON
     -DGGML_CUDA_NO_VMM=${QVAC_CUDA_NO_VMM}
     "-DCMAKE_CUDA_ARCHITECTURES=${QVAC_CUDA_ARCHS}"
-    -DCMAKE_CUDA_COMPILER=${NVCC_EXECUTABLE}
+    -DCMAKE_CUDA_COMPILER=${NVCC_EXECUTABLE})
+  if(VCPKG_TARGET_IS_LINUX)
+    list(APPEND PLATFORM_OPTIONS
     # The triplet compiles C++ with clang and -stdlib=libc++. nvcc defaults its
     # host compiler to g++, which then chokes on the clang-only -stdlib flag it
     # inherits from the link flags. Point it at clang++ so one toolchain drives
@@ -366,6 +282,7 @@ if(VCPKG_TARGET_IS_LINUX AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
     # monorepo standardises on clang-22 (.github/actions/setup-llvm). Revisit
     # when a CUDA release accepts clang 22.
     "-DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler")
+  endif()
 endif()
 
 if(VCPKG_TARGET_IS_ANDROID AND BUILD_KLEIDIAI)
@@ -448,15 +365,22 @@ vcpkg_cmake_install()
 vcpkg_cmake_config_fixup(
   PACKAGE_NAME ggml)
 
+if(BUILD_CUDA_BACKEND)
+  if(VCPKG_TARGET_IS_WINDOWS)
+    set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/bin/qvac-ggml-cuda.dll")
+  else()
+    set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda.so")
+  endif()
+  if(NOT EXISTS "${QVAC_CUDA_MODULE}")
+    message(FATAL_ERROR "qvac-fabric: expected CUDA module was not installed at ${QVAC_CUDA_MODULE}")
+  endif()
+endif()
+
 if(BUILD_CUDA_BACKEND AND QVAC_CUDA_JETSON)
   # Keep both CUDA majors in one prebuild directory. ggml's loader scans every
   # libqvac-ggml-cuda*.so candidate and skips the one whose runtime major is not
   # available on the host.
-  set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda.so")
   set(QVAC_CUDA_JETSON_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda-jetson.so")
-  if(NOT EXISTS "${QVAC_CUDA_MODULE}")
-    message(FATAL_ERROR "qvac-fabric: expected CUDA module was not installed at ${QVAC_CUDA_MODULE}")
-  endif()
   file(RENAME "${QVAC_CUDA_MODULE}" "${QVAC_CUDA_JETSON_MODULE}")
 
   set(QVAC_GGML_TARGETS "${CURRENT_PACKAGES_DIR}/share/ggml/ggml-targets-release.cmake")
@@ -491,7 +415,7 @@ endif()
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
 
-if (VCPKG_LIBRARY_LINKAGE MATCHES "static")
+if (VCPKG_LIBRARY_LINKAGE MATCHES "static" AND NOT (VCPKG_TARGET_IS_WINDOWS AND DL_BACKENDS))
   file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/bin")
   file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/bin")
 endif()

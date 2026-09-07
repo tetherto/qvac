@@ -115,9 +115,9 @@ struct BackendInterface {
 /// @brief Why a candidate device was passed over.
 ///
 /// QVAC-23763: llm-llamacpp expresses the Adreno/BitNet/finetune guards and the
-/// KV-cache capability filter through this. embed has none of those rules today,
-/// so only None is ever set - the enum exists to keep the two implementations
-/// the same shape.
+/// KV-cache capability filter through this. embed has none of those rules
+/// today, so only None is ever set - the enum exists to keep the two
+/// implementations the same shape.
 enum class ExclusionReason : std::uint8_t {
   None = 0,
   KvCacheTypeUnsupported,
@@ -131,6 +131,8 @@ ExclusionKind kindOf(ExclusionReason reason);
 /// @brief What the load requires of a device beyond its being a GPU.
 struct LoadConstraints {
   std::vector<enum ggml_type> kvCacheTypes;
+  std::vector<std::string> requiredBackendFamilies;
+  bool requireExplicitDeviceList = false;
 };
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
@@ -163,12 +165,12 @@ struct BackendChoice {
   SelectionTrace trace;
 };
 
-BackendChoice chooseBackend(
-    const BackendRequest& request, const BackendInterface& bckI);
+BackendChoice
+chooseBackend(const BackendRequest& request, const BackendInterface& bckI);
 
 /// @brief `chooseBackend()` against the real ggml backend registry.
-BackendChoice
-chooseBackend(const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
+BackendChoice chooseBackend(
+    const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
 
 /// @brief Adapter for the positional form. Retained so existing callers and
 /// tests are unaffected by the request/choice split; prefer the overload above
@@ -233,11 +235,8 @@ bool gpuBackendSupportsRowSplit();
 /// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
 /// caller then keeps omitting `--device`.
 std::vector<std::string> splitModeDeviceNames(
-    const BackendInterface& bckI, const std::string& selectedDeviceName);
-
-/// @brief `splitModeDeviceNames()` against the real ggml backend registry.
-std::vector<std::string>
-splitModeDeviceNames(const std::string& selectedDeviceName);
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
 
 /// @brief `splitModeDeviceNames()` plus each device's registry.
 ///
@@ -255,9 +254,16 @@ struct SplitDeviceList {
 };
 
 SplitDeviceList splitModeDeviceNamesDetailed(
-    const BackendInterface& bckI, const std::string& selectedDeviceName);
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
+
+/// @brief `splitModeDeviceNames()` against the real ggml backend registry.
+std::vector<std::string> splitModeDeviceNames(
+    const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
 
 /// @brief `splitModeDeviceNamesDetailed()` against the real ggml registry.
-SplitDeviceList
-splitModeDeviceNamesDetailed(const std::string& selectedDeviceName);
+SplitDeviceList splitModeDeviceNamesDetailed(
+    const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
 } // namespace backend_selection

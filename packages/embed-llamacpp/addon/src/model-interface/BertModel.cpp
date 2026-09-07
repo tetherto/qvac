@@ -431,6 +431,12 @@ BertModelSetup setupParams(
     backendRequest.mainGpu = mainGpu;
     backendRequest.backendOverride = backendOverride;
     backendRequest.backendRequired = backendRequired;
+    if (backendRequired) {
+      backendRequest.constraints.requiredBackendFamilies = backendOverride;
+    }
+    backendRequest.constraints.requireExplicitDeviceList =
+        splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value() &&
+        !std::holds_alternative<MainGpuType>(mainGpu.value());
     const BackendChoice choice =
         chooseBackend(backendRequest, llamaLogCallback);
     const std::pair<BackendType, std::string> chosenBackend{
@@ -456,15 +462,19 @@ BertModelSetup setupParams(
       params.split_mode = splitMode;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
-        if (std::holds_alternative<int>(mainGpu.value())) {
-          configFilemap["main-gpu"] =
-              std::to_string(std::get<int>(mainGpu.value()));
-        } else {
+        if (std::holds_alternative<MainGpuType>(mainGpu.value())) {
           qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
               GGML_LOG_LEVEL_WARN,
               "[BertModel] main-gpu 'dedicated'/'integrated' ignored in "
               "multi-GPU split-mode; use an integer device index instead\n",
               nullptr);
+        } else if (std::holds_alternative<int>(mainGpu.value())) {
+          configFilemap["main-gpu"] =
+              std::to_string(std::get<int>(mainGpu.value()));
+        } else {
+          // Exact selectors are resolved during backend selection. This marker
+          // is rewritten to the selected device's position in the final list.
+          configFilemap["main-gpu"] = "0";
         }
       }
     } else if (chosenBackend.first == BackendType::CPU) {
@@ -498,7 +508,8 @@ BertModelSetup setupParams(
       configVector.emplace_back(chosenBackend.second);
     } else if (chosenBackend.first == BackendType::GPU) {
       const backend_selection::SplitDeviceList split =
-          splitModeDeviceNamesDetailed(chosenBackend.second);
+          splitModeDeviceNamesDetailed(
+              chosenBackend.second, backendRequest.constraints);
       const std::vector<std::string>& splitDevices = split.names;
       if (!splitDevices.empty()) {
         std::string deviceList;

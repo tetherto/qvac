@@ -1093,7 +1093,9 @@ TEST_F(TuneConfigMapTest, AutoDefault_AdrenoOpenCl_StaysF16) {
 // are deliberately not deleted: it is the only thing between a regression in
 // the filter and a native abort. Standard quantized types and CPU stay allowed.
 
-TEST_F(TuneConfigMapTest, Cuda_TurboQuantKCacheTypeIsAnInternalErrorAfterFiltering) {
+TEST_F(
+    TuneConfigMapTest,
+    Cuda_TurboQuantKCacheTypeIsAnInternalErrorAfterFiltering) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["cache-type-k"] = "tbq4_0";
 
@@ -1110,7 +1112,9 @@ TEST_F(TuneConfigMapTest, Cuda_TurboQuantKCacheTypeIsAnInternalErrorAfterFilteri
       qvac_errors::StatusError);
 }
 
-TEST_F(TuneConfigMapTest, Cuda_PolarQuantVCacheTypeIsAnInternalErrorAfterFiltering) {
+TEST_F(
+    TuneConfigMapTest,
+    Cuda_PolarQuantVCacheTypeIsAnInternalErrorAfterFiltering) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["cache-type-v"] = "pq3_0";
 

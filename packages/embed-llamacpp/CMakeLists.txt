@@ -12,6 +12,11 @@ if(VK_PROFILING)
   list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
 endif()
 
+option(QVAC_CUDA_JETSON "Build the CUDA 12 Jetson backend module" OFF)
+if(QVAC_CUDA_JETSON)
+  list(APPEND VCPKG_MANIFEST_FEATURES "cuda-jetson")
+endif()
+
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
@@ -53,11 +58,16 @@ endif()
 
 # Install dynamic libs to prebuild folder
 set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
+if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+    if(TARGET ggml::${_backend})
+      get_target_property(_backend_type ggml::${_backend} TYPE)
+      if(_backend_type STREQUAL "SHARED_LIBRARY" OR _backend_type STREQUAL "MODULE_LIBRARY")
+        list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+      endif()
+    endif()
   endforeach()
-endif()  
+endif()
 
 add_bare_module(embed-llamacpp EXPORTS ${BACKEND_DL_LIBS})
 

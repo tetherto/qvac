@@ -85,7 +85,7 @@ public:
   mutable std::vector<std::string> string_storage;
 
   // Static pointer for function pointer callbacks (thread-safe for tests)
-  static thread_local MockBackendInterface* currentInstance;
+  static thread_local MockBackendInterface* g_currentInstance;
 
   void addDevice(const MockDevice& device) { devices.push_back(device); }
 
@@ -100,17 +100,17 @@ public:
     const_cast<MockBackendInterface*>(this)->setCurrentInstance();
 
     return BackendInterface{
-        &MockBackendInterface::static_dev_count,
-        &MockBackendInterface::static_dev_backend_reg,
-        &MockBackendInterface::static_dev_get,
-        &MockBackendInterface::static_reg_name,
-        &MockBackendInterface::static_dev_description,
-        &MockBackendInterface::static_dev_name,
-        &MockBackendInterface::static_dev_type,
-        &MockBackendInterface::static_reg_get_proc_address,
-        &MockBackendInterface::static_dev_get_props,
-        &MockBackendInterface::static_llamaLogCallback,
-        &MockBackendInterface::static_supports_kv_cache_type};
+        &MockBackendInterface::staticDevCount,
+        &MockBackendInterface::staticDevBackendReg,
+        &MockBackendInterface::staticDevGet,
+        &MockBackendInterface::staticRegName,
+        &MockBackendInterface::staticDevDescription,
+        &MockBackendInterface::staticDevName,
+        &MockBackendInterface::staticDevType,
+        &MockBackendInterface::staticRegGetProcAddress,
+        &MockBackendInterface::staticDevGetProps,
+        &MockBackendInterface::staticLlamaLogCallback,
+        &MockBackendInterface::staticSupportsKvCacheType};
   }
 
   /// A BackendInterface with the capability probe left null, which is how a
@@ -122,88 +122,76 @@ public:
   }
 
 private:
-  void setCurrentInstance() { currentInstance = this; }
+  void setCurrentInstance() { g_currentInstance = this; }
 
   // Static callback functions
-  static size_t static_dev_count() {
-    if (currentInstance != nullptr) {
-      return currentInstance->devices.size();
+  static size_t staticDevCount() {
+    if (g_currentInstance != nullptr) {
+      return g_currentInstance->devices.size();
     }
     return 0;
   }
 
-  static ggml_backend_reg_t static_dev_backend_reg(ggml_backend_dev_t dev) {
+  static ggml_backend_reg_t staticDevBackendReg(ggml_backend_dev_t dev) {
     return reinterpret_cast<ggml_backend_reg_t>(dev);
   }
 
-  static ggml_backend_dev_t static_dev_get(size_t index) {
-    if (currentInstance && index < currentInstance->devices.size()) {
+  static ggml_backend_dev_t staticDevGet(size_t index) {
+    if (g_currentInstance && index < g_currentInstance->devices.size()) {
       return reinterpret_cast<ggml_backend_dev_t>(
-          const_cast<MockDevice*>(&currentInstance->devices[index]));
+          const_cast<MockDevice*>(&g_currentInstance->devices[index]));
     }
     return nullptr;
   }
 
-  static const char* static_reg_name(ggml_backend_reg_t reg) {
-    if (!currentInstance)
+  static const char* staticRegName(ggml_backend_reg_t reg) {
+    if (!g_currentInstance)
       return "";
     MockDevice* dev = reinterpret_cast<MockDevice*>(reg);
     if (dev) {
-      currentInstance->string_storage.push_back(dev->regName);
-      return currentInstance->string_storage.back().c_str();
+      g_currentInstance->string_storage.push_back(dev->regName);
+      return g_currentInstance->string_storage.back().c_str();
     }
     return "";
   }
 
-  static const char* static_dev_description(ggml_backend_dev_t dev) {
-    if (!currentInstance)
+  static const char* staticDevDescription(ggml_backend_dev_t dev) {
+    if (!g_currentInstance)
       return "";
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (mock_dev) {
-      currentInstance->string_storage.push_back(mock_dev->description);
-      return currentInstance->string_storage.back().c_str();
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    if (mockDev) {
+      g_currentInstance->string_storage.push_back(mockDev->description);
+      return g_currentInstance->string_storage.back().c_str();
     }
     return "";
   }
 
-  static const char* static_dev_name(ggml_backend_dev_t dev) {
-    if (!currentInstance)
+  static const char* staticDevName(ggml_backend_dev_t dev) {
+    if (!g_currentInstance)
       return "";
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (mock_dev) {
-      currentInstance->string_storage.push_back(mock_dev->backend_name);
-      return currentInstance->string_storage.back().c_str();
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    if (mockDev) {
+      g_currentInstance->string_storage.push_back(mockDev->backend_name);
+      return g_currentInstance->string_storage.back().c_str();
     }
     return "";
   }
 
-  static void static_dev_get_props(
-      ggml_backend_dev_t dev, struct ggml_backend_dev_props* props) {
-    *props = {};
-    if (!currentInstance)
-      return;
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (mock_dev && !mock_dev->deviceId.empty()) {
-      currentInstance->string_storage.push_back(mock_dev->deviceId);
-      props->device_id = currentInstance->string_storage.back().c_str();
-    }
-  }
-
-  static enum ggml_backend_dev_type static_dev_type(ggml_backend_dev_t dev) {
-    if (!currentInstance)
+  static enum ggml_backend_dev_type staticDevType(ggml_backend_dev_t dev) {
+    if (!g_currentInstance)
       return GGML_BACKEND_DEVICE_TYPE_CPU;
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (mock_dev) {
-      return mock_dev->type;
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    if (mockDev) {
+      return mockDev->type;
     }
     return GGML_BACKEND_DEVICE_TYPE_CPU;
   }
 
-  // `static_dev_backend_reg` hands back the device pointer as the registry
+  // `staticDevBackendReg` hands back the device pointer as the registry
   // handle, so recover the MockDevice from it to answer per-device.
   static void*
-  static_reg_get_proc_address(ggml_backend_reg_t reg, const char* name) {
-    if (currentInstance == nullptr || reg == nullptr || name == nullptr) {
+  staticRegGetProcAddress(ggml_backend_reg_t reg, const char* name) {
+    if (g_currentInstance == nullptr || reg == nullptr || name == nullptr) {
       return nullptr;
     }
     MockDevice* dev = reinterpret_cast<MockDevice*>(reg);
@@ -218,46 +206,46 @@ private:
   // Only `device_id` is read by the code under test; a device with no id
   // leaves it null, which is how a backend without VK_EXT_pci_bus_info reports.
   static void
-  static_dev_get_props(ggml_backend_dev_t dev, ggml_backend_dev_props* props) {
+  staticDevGetProps(ggml_backend_dev_t dev, ggml_backend_dev_props* props) {
     if (props == nullptr) {
       return;
     }
     *props = {};
-    if (currentInstance == nullptr || dev == nullptr) {
+    if (g_currentInstance == nullptr || dev == nullptr) {
       return;
     }
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    props->type = mock_dev->type;
-    if (!mock_dev->deviceId.empty()) {
-      currentInstance->string_storage.push_back(mock_dev->deviceId);
-      props->device_id = currentInstance->string_storage.back().c_str();
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    props->type = mockDev->type;
+    if (!mockDev->deviceId.empty()) {
+      g_currentInstance->string_storage.push_back(mockDev->deviceId);
+      props->device_id = g_currentInstance->string_storage.back().c_str();
     }
   }
 
   // Stands in for the SET_ROWS supports_op probe. A device lists the KV-cache
   // type names its backend cannot run; everything else it can.
   static bool
-  static_supports_kv_cache_type(ggml_backend_dev_t dev, enum ggml_type kvType) {
-    if (currentInstance == nullptr || dev == nullptr) {
+  staticSupportsKvCacheType(ggml_backend_dev_t dev, enum ggml_type kvType) {
+    if (g_currentInstance == nullptr || dev == nullptr) {
       return true;
     }
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
     const char* name = ggml_type_name(kvType);
     if (name == nullptr) {
       return true;
     }
-    return std::ranges::find(mock_dev->unsupportedKvTypes, std::string(name)) ==
-           mock_dev->unsupportedKvTypes.end();
+    return std::ranges::find(mockDev->unsupportedKvTypes, std::string(name)) ==
+           mockDev->unsupportedKvTypes.end();
   }
 
-  static void static_llamaLogCallback(
+  static void staticLlamaLogCallback(
       ggml_log_level level, const char* text, void* userData) {
     std::cout << "LLAMA LOG CALLBACK: " << text << std::endl;
   }
 };
 
 // Thread-local storage for the current instance
-thread_local MockBackendInterface* MockBackendInterface::currentInstance =
+thread_local MockBackendInterface* MockBackendInterface::g_currentInstance =
     nullptr;
 
 class BackendSelectionTest : public ::testing::Test {
@@ -266,11 +254,11 @@ protected:
 
   void SetUp() override {
     mockBackend.clearDevices();
-    MockBackendInterface::currentInstance = nullptr;
+    MockBackendInterface::g_currentInstance = nullptr;
   }
 
   void TearDown() override {
-    MockBackendInterface::currentInstance = nullptr;
+    MockBackendInterface::g_currentInstance = nullptr;
     mockBackend.clearDevices();
   }
 };
@@ -1424,7 +1412,8 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
 // BitNet TQ on Adreno <800 is CPU only (TQ kernels run faster there), so no
 // override may reach a GPU. The 800+ arm of this guard is pinned above.
 TEST_F(
-    BackendSelectionTest, OverrideCannotResurrectGpuClearedByBitNetGuardSub800) {
+    BackendSelectionTest,
+    OverrideCannotResurrectGpuClearedByBitNetGuardSub800) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
   MockModelMetaData bitnetMeta(true, "bitnet");
@@ -1464,10 +1453,11 @@ TEST_F(
 }
 
 // clearAllGpuBackends() grew a cudaBackends.clear() for QVAC-23763. Nothing
-// pinned it, so a CUDA device could be resurrected out of a cleared bucket by an
-// override. Contrived host - CUDA beside an Adreno - but the mechanism is the
-// point, and it is the arm a per-candidate filter is most likely to miss.
-TEST_F(BackendSelectionTest, OverrideCannotResurrectCudaClearedByFinetuneGuard) {
+// pinned it, so a CUDA device could be resurrected out of a cleared bucket by
+// an override. Contrived host - CUDA beside an Adreno - but the mechanism is
+// the point, and it is the arm a per-candidate filter is most likely to miss.
+TEST_F(
+    BackendSelectionTest, OverrideCannotResurrectCudaClearedByFinetuneGuard) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
   MockModelMetaData meta(false, "qwen3");
@@ -1504,17 +1494,20 @@ static BackendChoice chooseWithKvTypes(
 // The headline: a TurboQuant load on an NVIDIA host that also has Vulkan used
 // to be refused after CUDA was already chosen. It now steps down instead.
 TEST_F(BackendSelectionTest, CudaDemotedToVulkanForTurboQuant) {
-  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
   EXPECT_EQ(choice.type, BackendType::GPU);
   EXPECT_EQ(choice.name, "vulkan0");
   EXPECT_EQ(choice.trace.skippedName, "cuda0");
-  EXPECT_EQ(choice.trace.skippedReason, ExclusionReason::KvCacheTypeUnsupported);
+  EXPECT_EQ(
+      choice.trace.skippedReason, ExclusionReason::KvCacheTypeUnsupported);
 }
 
 TEST_F(BackendSelectionTest, CudaDemotedForPolarQuantToo) {
-  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"pq3_0"}).name, "vulkan0");
 }
@@ -1522,7 +1515,8 @@ TEST_F(BackendSelectionTest, CudaDemotedForPolarQuantToo) {
 // A quantized type CUDA *can* run must not trigger the filter, or every
 // quantized-KV load on an NVIDIA host silently moves to Vulkan.
 TEST_F(BackendSelectionTest, CudaKeptForStandardQuantizedKvType) {
-  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"q8_0"}).name, "cuda0");
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"f16"}).name, "cuda0");
@@ -1530,7 +1524,8 @@ TEST_F(BackendSelectionTest, CudaKeptForStandardQuantizedKvType) {
 
 // Either side of the cache being unsupported is enough to pass the device over.
 TEST_F(BackendSelectionTest, KvConstraintChecksEveryRequestedType) {
-  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"q8_0", "tbq4_0"}).name, "vulkan0");
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0", "q8_0"}).name, "vulkan0");
@@ -1539,7 +1534,8 @@ TEST_F(BackendSelectionTest, KvConstraintChecksEveryRequestedType) {
 // No GPU can run it and the caller asked for a GPU: failing is better than
 // quietly running an order of magnitude slower on CPU.
 TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantThrows) {
-  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
   try {
     chooseWithKvTypes(mockBackend, {"tbq4_0"});
     FAIL() << "expected a StatusError";
@@ -1553,7 +1549,8 @@ TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantThrows) {
 // ...but a deliberate CPU load must not throw. No devices are enumerated, so
 // there is nothing to be incapable.
 TEST_F(BackendSelectionTest, CpuLoadWithTurboQuantDoesNotThrow) {
-  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
   const BackendChoice choice =
       chooseWithKvTypes(mockBackend, {"tbq4_0"}, BackendType::CPU);
   EXPECT_EQ(choice.type, BackendType::CPU);
@@ -1576,7 +1573,8 @@ TEST_F(BackendSelectionTest, PreferOtherGuardsStillFallToCpuWithoutThrowing) {
 // must fail OPEN, or a forgotten initialiser silently disables the filter in
 // the other direction and refuses a device that works.
 TEST_F(BackendSelectionTest, NullKvCapabilityProbeFailsOpen) {
-  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   BackendInterface bckI = mockBackend.toBackendInterface();
   bckI.deviceSupportsKvCacheType = nullptr;
@@ -1589,7 +1587,8 @@ TEST_F(BackendSelectionTest, NullKvCapabilityProbeFailsOpen) {
 // The resurrect invariant, for the new reason: an override naming a device the
 // capability filter ruled out must not bring it back.
 TEST_F(BackendSelectionTest, OverrideCannotResurrectKvExcludedCuda) {
-  mockBackend.addDevice(withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   const BackendChoice choice =
       chooseWithKvTypes(mockBackend, {"tbq4_0"}, BackendType::GPU, {"cuda"});
@@ -1644,7 +1643,8 @@ TEST_F(BackendSelectionTest, StrictOverrideThrowsWhenMatchWasFiltered) {
     FAIL() << "expected a StatusError";
   } catch (const qvac_errors::StatusError& e) {
     const std::string what = e.what();
-    EXPECT_NE(what.find("kv-cache-type-unsupported"), std::string::npos) << what;
+    EXPECT_NE(what.find("kv-cache-type-unsupported"), std::string::npos)
+        << what;
   }
 }
 
@@ -1652,6 +1652,16 @@ TEST_F(BackendSelectionTest, StrictOverrideIsSatisfiedByAMatch) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   EXPECT_EQ(chooseWithRequired(mockBackend, {"vulkan"}, true).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, StrictOverrideRejectsCpuDevice) {
+  BackendRequest request;
+  request.preferred = BackendType::CPU;
+  request.backendOverride = {"cuda"};
+  request.backendRequired = true;
+  EXPECT_THROW(
+      chooseBackend(request, mockBackend.toBackendInterface()),
+      qvac_errors::StatusError);
 }
 
 TEST_F(BackendSelectionTest, BackendRequiredParsing) {
@@ -1697,8 +1707,8 @@ TEST_F(BackendSelectionTest, BackendRequiredWithoutBackendThrows) {
 
 // ---- main-gpu addressing (QVAC-23763 R13) ----
 
-static BackendChoice chooseWithMainGpu(
-    MockBackendInterface& mockBackend, const MainGpu& mainGpu) {
+static BackendChoice
+chooseWithMainGpu(MockBackendInterface& mockBackend, const MainGpu& mainGpu) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   BackendRequest request;
   request.preferred = BackendType::GPU;
@@ -1731,7 +1741,8 @@ TEST_F(BackendSelectionTest, MainGpuBusIdNotMisparsedAsZero) {
   // the short form, without the domain
   const auto shortForm = parseMainGpu("65:00.0");
   ASSERT_TRUE(shortForm.has_value());
-  EXPECT_TRUE(std::holds_alternative<MainGpuBusId>(shortForm.value()));
+  ASSERT_TRUE(std::holds_alternative<MainGpuBusId>(shortForm.value()));
+  EXPECT_EQ(std::get<MainGpuBusId>(shortForm.value()).id, "0000:65:00.0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuQualifiedParsing) {
@@ -1747,6 +1758,8 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedParsing) {
 
 TEST_F(BackendSelectionTest, MainGpuQualifiedRejectsUnknownFamily) {
   EXPECT_THROW(parseMainGpu("nvidia:0"), qvac_errors::StatusError);
+  EXPECT_THROW(
+      parseMainGpu("cuda:999999999999999999999"), qvac_errors::StatusError);
 }
 
 TEST_F(BackendSelectionTest, MainGpuQualifiedSelectsNthOfFamily) {
@@ -1754,7 +1767,8 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedSelectsNthOfFamily) {
   mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA1_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 1}).name, "cuda1");
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 1}).name,
+      "cuda1");
   EXPECT_EQ(
       chooseWithMainGpu(mockBackend, MainGpuQualified{"vulkan", 0}).name,
       "vulkan0");
@@ -1766,7 +1780,8 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedIsIndependentOfEnumerationOrder) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
   EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 0}).name, "cuda0");
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 0}).name,
+      "cuda0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeFallsThrough) {
@@ -1775,7 +1790,8 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeFallsThrough) {
   // device 4 of the cuda family does not exist; selection warns and uses the
   // default order rather than failing, as an out-of-range integer does
   EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}).name, "cuda0");
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}).name,
+      "cuda0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuBusIdSelectsMatchingDevice) {
@@ -1786,6 +1802,28 @@ TEST_F(BackendSelectionTest, MainGpuBusIdSelectsMatchingDevice) {
   EXPECT_EQ(
       chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:b3:00.0"}).name,
       "cuda1");
+}
+
+TEST_F(BackendSelectionTest, MainGpuBusIdKeepsBackendRepresentations) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, VULKAN0_BACK), "0000:65:00.0"));
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.mainGpu = MainGpuBusId{"0000:65:00.0"};
+  request.backendOverride = {"vulkan"};
+  request.backendRequired = true;
+  EXPECT_EQ(
+      chooseBackend(request, mockBackend.toBackendInterface()).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuShortBusIdSelectsMatchingDevice) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, parseMainGpu("65:00.0").value()).name,
+      "cuda0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuBusIdNotFoundFallsThrough) {
@@ -1835,6 +1873,9 @@ TEST_F(BackendSelectionTest, KvCacheTypeFromStringIsCaseInsensitive) {
 TEST_F(BackendSelectionTest, KvCacheTypeFromStringRejectsNonsense) {
   EXPECT_EQ(kvCacheTypeFromString(""), GGML_TYPE_COUNT);
   EXPECT_EQ(kvCacheTypeFromString("not_a_type"), GGML_TYPE_COUNT);
+  EXPECT_EQ(
+      kvCacheTypeFromString(std::string(1, static_cast<char>(0xff))),
+      GGML_TYPE_COUNT);
   // a prefix of a real name must not resolve
   EXPECT_EQ(kvCacheTypeFromString("tbq"), GGML_TYPE_COUNT);
 }
@@ -1986,9 +2027,10 @@ static MockDevice createGPUDeviceInRegistry(
 }
 
 static std::vector<std::string> splitDevicesFor(
-    MockBackendInterface& mockBackend, const std::string& selected) {
+    MockBackendInterface& mockBackend, const std::string& selected,
+    const LoadConstraints& constraints = {}) {
   BackendInterface bckI = mockBackend.toBackendInterface();
-  return splitModeDeviceNames(bckI, selected);
+  return splitModeDeviceNames(bckI, selected, constraints);
 }
 
 // Every pre-CUDA host: one registry, so --device keeps being omitted and
@@ -2001,9 +2043,63 @@ TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyOnSingleRegistry) {
   EXPECT_TRUE(splitDevicesFor(mockBackend, "vulkan0").empty());
 }
 
+TEST_F(BackendSelectionTest, ExactMainGpuForcesSingleRegistryDeviceList) {
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG));
+  LoadConstraints constraints;
+  constraints.requireExplicitDeviceList = true;
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan1", constraints),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+TEST_F(BackendSelectionTest, StrictBackendFiltersEverySplitDevice) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry("AMD", VULKAN1_BACK, VULKAN_REG),
+      "0000:02:00.0"));
+  LoadConstraints constraints;
+  constraints.requiredBackendFamilies = {"cuda"};
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0", constraints),
+      (std::vector<std::string>{"cuda0"}));
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(
+          mockBackend.toBackendInterface(), "cuda0", constraints),
+      (std::vector<std::string>{"cuda0"}));
+}
+
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyWithNoGpuAtAll) {
   mockBackend.addDevice(createCPUDevice("host", "CPU"));
   EXPECT_TRUE(splitDevicesFor(mockBackend, "cuda0").empty());
+}
+
+TEST_F(BackendSelectionTest, SplitModeDevicesKeepOnlyCapableRepresentations) {
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(
+          createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG)),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(createGPUDeviceInRegistry(
+          "NVIDIA RTX 4090 #2", CUDA1_BACK, CUDA_REG)),
+      "0000:02:00.0"));
+
+  LoadConstraints constraints;
+  constraints.kvCacheTypes.push_back(GGML_TYPE_PQ3_0);
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      splitModeDeviceNames(bckI, "vulkan0", constraints),
+      (std::vector<std::string>{"vulkan0"}));
 }
 
 // The case this exists for: two NVIDIA cards, each registered twice. Without
@@ -2431,6 +2527,23 @@ TEST_F(BackendSelectionTest, TensorDevices_DedupesDualRegisteredGpu) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(
       getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+}
+
+TEST_F(BackendSelectionTest, TensorDevicesPreferCapableSelectedBackend) {
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(
+          createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG)),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:01:00.0"));
+
+  LoadConstraints constraints;
+  constraints.kvCacheTypes.push_back(GGML_TYPE_PQ3_0);
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI, "vulkan0", constraints),
+      (std::vector<std::string>{"vulkan0"}));
 }
 
 // Two identical cards: Vulkan reports the SAME description for both and

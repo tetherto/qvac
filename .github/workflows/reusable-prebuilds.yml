@@ -108,16 +108,40 @@ on:
         type: boolean
         required: false
         default: false
+      include-cuda-windows:
+        description: >-
+          Extend include-cuda to the win32-x64 job. The pinned Windows toolkit
+          is assembled by setup-cuda and the consumer must enable its CUDA
+          feature only for win32-x64.
+        type: boolean
+        required: false
+        default: false
       include-cuda-arm64-jetson:
         description: >-
           Build a second linux-arm64 CUDA module for Jetson after the normal
-          CUDA 13 SBSA prebuild. This uses CUDA 12.6.3, the
-          arm64-linux-cuda12 triplet, and installs a distinct
+          CUDA 13 SBSA prebuild. This uses CUDA 12.6.3, enables a distinct
+          vcpkg feature for binary-cache isolation, and installs
           libqvac-ggml-cuda-jetson.so beside the CUDA 13 module. It has no
           effect unless include-cuda and include-cuda-arm64 are also enabled.
         type: boolean
         required: false
         default: false
+      cuda-arm64-jetson-cmake-option:
+        description: >-
+          CMake option enabled for the second Jetson module build. The default
+          is used by qvac-fabric consumers. Addons with their own option name
+          can override it.
+        type: string
+        required: false
+        default: QVAC_CUDA_JETSON
+      cuda-arm64-jetson-primary-cmake-option:
+        description: >-
+          Primary CUDA CMake option to disable for the second Jetson module
+          build. Leave empty when the Jetson option selects the variant within
+          the same CUDA feature.
+        type: string
+        required: false
+        default: ""
       extra-cmake-defines:
         description: >-
           Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
@@ -342,7 +366,7 @@ jobs:
       # arm64 is named rather than implied by "not x64", so a linux arch added
       # later does not inherit the toolkit from include-cuda-arm64 without
       # anyone asking for it.
-      - if: ${{ inputs.include-cuda && matrix.platform == 'linux' && (matrix.arch == 'x64' || (matrix.arch == 'arm64' && inputs.include-cuda-arm64)) }}
+      - if: ${{ inputs.include-cuda && ((matrix.platform == 'linux' && (matrix.arch == 'x64' || (matrix.arch == 'arm64' && inputs.include-cuda-arm64))) || (matrix.platform == 'win32' && matrix.arch == 'x64' && inputs.include-cuda-windows)) }}
         name: Setup CUDA toolkit for nvcc compile
         uses: ./.github/actions/setup-cuda
 
@@ -453,6 +477,28 @@ jobs:
         shell: bash
         run: bare-make install
 
+      - if: ${{ inputs.include-cuda && inputs.include-cuda-windows && matrix.platform == 'win32' && matrix.arch == 'x64' }}
+        name: Verify Windows CUDA and Vulkan modules
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          shopt -s nullglob globstar
+          cuda_modules=(prebuilds/win32-x64/**/*ggml-cuda.dll)
+          vulkan_modules=(prebuilds/win32-x64/**/*ggml-vulkan.dll)
+          for entry in \
+            "CUDA module:${#cuda_modules[@]}" \
+            "Vulkan module:${#vulkan_modules[@]}"; do
+            label=${entry%%:*}
+            count=${entry##*:}
+            if [ "$count" -ne 1 ]; then
+              echo "::error::expected one $label, found $count"
+              exit 1
+            fi
+          done
+          ls -l \
+            "${cuda_modules[0]}" \
+            "${vulkan_modules[0]}"
+
       - if: ${{ inputs.include-cuda && inputs.include-cuda-arm64 && inputs.include-cuda-arm64-jetson && matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         name: Setup CUDA 12 toolkit for Jetson module
         uses: ./.github/actions/setup-cuda
@@ -464,14 +510,30 @@ jobs:
         name: Generate Jetson CUDA module build
         working-directory: ${{ env.WORKDIR }}
         shell: bash
-        run: >-
-          bare-make generate
-          --build build-cuda12
-          --platform ${{ matrix.platform }}
-          --arch ${{ matrix.arch }}
-          ${{ matrix.flags }}
-          $DEFINES
-          -D VCPKG_TARGET_TRIPLET=arm64-linux-cuda12
+        env:
+          JETSON_CMAKE_OPTION: ${{ inputs.cuda-arm64-jetson-cmake-option }}
+          PRIMARY_CUDA_CMAKE_OPTION: ${{ inputs.cuda-arm64-jetson-primary-cmake-option }}
+        run: |
+          option_pattern='^[A-Za-z_][A-Za-z0-9_]*$'
+          if [[ ! "$JETSON_CMAKE_OPTION" =~ $option_pattern ]]; then
+            echo "::error::invalid Jetson CMake option name"
+            exit 1
+          fi
+          jetson_defines=(-D "$JETSON_CMAKE_OPTION=ON")
+          if [ -n "$PRIMARY_CUDA_CMAKE_OPTION" ]; then
+            if [[ ! "$PRIMARY_CUDA_CMAKE_OPTION" =~ $option_pattern ]]; then
+              echo "::error::invalid primary CUDA CMake option name"
+              exit 1
+            fi
+            jetson_defines+=(-D "$PRIMARY_CUDA_CMAKE_OPTION=OFF")
+          fi
+          bare-make generate \
+            --build build-cuda12 \
+            --platform "${{ matrix.platform }}" \
+            --arch "${{ matrix.arch }}" \
+            ${{ matrix.flags }} \
+            $DEFINES \
+            "${jetson_defines[@]}"
 
       - if: ${{ inputs.include-cuda && inputs.include-cuda-arm64 && inputs.include-cuda-arm64-jetson && matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         name: Build Jetson CUDA module
@@ -491,8 +553,8 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          server_modules=(prebuilds/linux-arm64/*/libqvac-ggml-cuda.so)
-          jetson_modules=(prebuilds/linux-arm64/*/libqvac-ggml-cuda-jetson.so)
+          server_modules=(prebuilds/linux-arm64/*/*ggml-cuda.so)
+          jetson_modules=(prebuilds/linux-arm64/*/*ggml-cuda-jetson.so)
           if [ "${#server_modules[@]}" -ne 1 ]; then
             echo "::error::expected one CUDA 13 arm64 module, found ${#server_modules[@]}"
             exit 1

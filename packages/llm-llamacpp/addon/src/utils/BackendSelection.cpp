@@ -4,9 +4,11 @@
 #include <array>
 #include <cctype>
 #include <charconv>
+#include <mutex>
 #include <optional>
 #include <regex>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <variant>
 #include <vector>
@@ -150,9 +152,38 @@ struct Enumeration {
   bool sawMaliGpu = false;
 };
 
+std::string
+deviceId(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  if (bckI.ggml_backend_dev_get_props == nullptr) {
+    return {};
+  }
+
+  const bool production =
+      bckI.ggml_backend_dev_get_props == ggml_backend_dev_get_props;
+  if (production) {
+    // Backend device handles and ids live for the process. Cache only the id,
+    // since the other properties, such as free memory, can change.
+    static std::mutex cacheMutex;
+    static std::unordered_map<ggml_backend_dev_t, std::string> cache;
+    const std::lock_guard lock(cacheMutex);
+    if (const auto it = cache.find(dev); it != cache.end()) {
+      return it->second;
+    }
+    ggml_backend_dev_props props{};
+    bckI.ggml_backend_dev_get_props(dev, &props);
+    return cache.emplace(dev, props.device_id != nullptr ? props.device_id : "")
+        .first->second;
+  }
+
+  ggml_backend_dev_props props{};
+  bckI.ggml_backend_dev_get_props(dev, &props);
+  return props.device_id != nullptr ? props.device_id : "";
+}
+
 void emplaceIfValidDevice(
-    const BackendInterface& bckI, Enumeration& out, const ggml_backend_dev_t dev,
-    const ggml_backend_reg_t reg, const DeviceDescription& devDescr,
+    const BackendInterface& bckI, Enumeration& out,
+    const ggml_backend_dev_t dev, const ggml_backend_reg_t reg,
+    const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   if (bckI.ggml_backend_reg_name(reg) == std::string("RPC")) {
     return;
@@ -160,11 +191,11 @@ void emplaceIfValidDevice(
 
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
-    std::string text = string_format(
-        "Emplacing backend: gpuBackend = %s", gpuBackend.c_str());
+    std::string text =
+        string_format("Emplacing backend: gpuBackend = %s", gpuBackend.c_str());
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
 #else
-    (void) gpuBackend;
+    (void)gpuBackend;
 #endif
   };
 
@@ -213,12 +244,13 @@ void emplaceIfValidDevice(
     return;
   }
 
-  out.candidates.push_back(Candidate{
-      devDescr.gpuBackend,
-      bckI.ggml_backend_reg_name(reg),
-      family.value(),
-      dev,
-      backend_selection::ExclusionReason::None});
+  out.candidates.push_back(
+      Candidate{
+          devDescr.gpuBackend,
+          bckI.ggml_backend_reg_name(reg),
+          family.value(),
+          dev,
+          backend_selection::ExclusionReason::None});
 }
 
 bool shouldProcessDevice(
@@ -259,13 +291,14 @@ void tryEmplaceDevice(
   }
 }
 
-/// Resolve a backend-qualified or bus-id `main-gpu` to a device index.
+/// Resolve a backend-qualified or bus-id `main-gpu` to device indices.
 ///
 /// Scans rather than indexes: that is what makes these forms stable against
-/// backend load order. Returns nullopt and warns when nothing matches, so the
-/// caller can fall through to the full enumeration.
-std::optional<size_t> resolveNamedMainGpu(
-    const BackendInterface& bckI, const MainGpu& mainGpuValue) {
+/// backend load order. Returns empty and warns when nothing matches, so the
+/// caller can fall through to the full enumeration. A bus id keeps every
+/// backend representation of that physical device so `backend` can choose.
+std::vector<size_t>
+resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
   const size_t deviceCount = bckI.ggml_backend_dev_count();
 
   if (std::holds_alternative<MainGpuQualified>(mainGpuValue)) {
@@ -274,12 +307,14 @@ std::optional<size_t> resolveNamedMainGpu(
     for (size_t i = 0; i < deviceCount; ++i) {
       const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
       std::string name = bckI.ggml_backend_dev_name(dev);
-      std::ranges::transform(name, name.begin(), ::tolower);
+      std::ranges::transform(name, name.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
       if (!::backendNameMatchesFamily(name, want.family)) {
         continue;
       }
       if (seen == want.index) {
-        return i;
+        return {i};
       }
       ++seen;
     }
@@ -291,42 +326,48 @@ std::optional<size_t> resolveNamedMainGpu(
         seen,
         want.family.c_str());
     bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, msg.c_str(), nullptr);
-    return std::nullopt;
+    return {};
   }
 
   const MainGpuBusId& want = std::get<MainGpuBusId>(mainGpuValue);
   if (bckI.ggml_backend_dev_get_props == nullptr) {
     bckI.llamaLogCallback(
         GGML_LOG_LEVEL_WARN,
-        "main-gpu was given a PCI bus id, but this build cannot read device bus "
+        "main-gpu was given a PCI bus id, but this build cannot read device "
+        "bus "
         "ids; using the default device order instead",
         nullptr);
-    return std::nullopt;
+    return {};
   }
+  std::vector<size_t> matches;
   for (size_t i = 0; i < deviceCount; ++i) {
     const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
-    ggml_backend_dev_props props{};
-    bckI.ggml_backend_dev_get_props(dev, &props);
-    if (props.device_id == nullptr) {
+    std::string id = ::deviceId(bckI, dev);
+    if (id.empty()) {
       continue;
     }
-    std::string id = props.device_id;
-    std::ranges::transform(id, id.begin(), ::tolower);
+    std::ranges::transform(id, id.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
     if (id == want.id) {
-      return i;
+      matches.push_back(i);
     }
+  }
+  if (!matches.empty()) {
+    return matches;
   }
   std::string msg = string_format(
       "main-gpu bus id '%s' matched no device; using the default device order "
       "instead",
       want.id.c_str());
   bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, msg.c_str(), nullptr);
-  return std::nullopt;
+  return {};
 }
 
 /// Every device the request makes eligible, in ggml enumeration order.
 Enumeration enumerateCandidates(
-    const BackendInterface& bckI, const backend_selection::BackendRequest& req) {
+    const BackendInterface& bckI,
+    const backend_selection::BackendRequest& req) {
   Enumeration out;
   if (req.preferred != BackendType::GPU) {
     return out;
@@ -368,10 +409,12 @@ Enumeration enumerateCandidates(
       // Not found is a WARN and a fall-through to the full enumeration, exactly
       // as an out-of-range integer behaves: the device may simply be absent on
       // this machine, which is not a config error.
-      const std::optional<size_t> resolved =
+      const std::vector<size_t> resolved =
           ::resolveNamedMainGpu(bckI, mainGpuValue);
-      if (resolved.has_value()) {
-        ::tryEmplaceDevice(bckI, resolved.value(), std::nullopt, out);
+      if (!resolved.empty()) {
+        for (const size_t index : resolved) {
+          ::tryEmplaceDevice(bckI, index, std::nullopt, out);
+        }
         loopAllDevices = false;
       }
     }
@@ -561,13 +604,31 @@ void emitSelectionLog(
 /// Mirrors qvac-fabric's own probe in llama-kv-cache.cpp. Only TBQ/PQ is asked
 /// about: every other type is either universally supported or is refused for a
 /// reason supports_op cannot see - OpenCL answers true for q8_0, whose real
-/// failure is the shift/requantize path rather than the write path. So this is a
-/// necessary capability test, not a sufficient one, and the hand-written OpenCL
-/// rule in LoadFitNormalization stays.
+/// failure is the shift/requantize path rather than the write path. So this is
+/// a necessary capability test, not a sufficient one, and the hand-written
+/// OpenCL rule in LoadFitNormalization stays.
 bool productionSupportsKvCacheType(ggml_backend_dev_t dev, ggml_type kvType) {
   if (dev == nullptr || !ggml_is_tbq_or_pq(kvType)) {
     return true;
   }
+  // Backend devices live for the process, so selection and split-list
+  // construction can share one capability result instead of rebuilding the
+  // probe graph for the same device and type.
+  static std::mutex cacheMutex;
+  static std::unordered_map<ggml_backend_dev_t, std::unordered_map<int, bool>>
+      cache;
+  const int typeKey = static_cast<int>(kvType);
+  {
+    const std::lock_guard lock(cacheMutex);
+    const auto deviceIt = cache.find(dev);
+    if (deviceIt != cache.end()) {
+      const auto typeIt = deviceIt->second.find(typeKey);
+      if (typeIt != deviceIt->second.end()) {
+        return typeIt->second;
+      }
+    }
+  }
+
   ggml_init_params probeParams = {
       /*mem_size=*/4096, /*mem_buffer=*/nullptr, /*no_alloc=*/true};
   ggml_context* probeCtx = ggml_init(probeParams);
@@ -581,13 +642,30 @@ bool productionSupportsKvCacheType(ggml_backend_dev_t dev, ggml_type kvType) {
   const bool ok =
       ggml_backend_dev_supports_op(dev, ggml_set_rows(probeCtx, dst, src, idx));
   ggml_free(probeCtx);
+  {
+    const std::lock_guard lock(cacheMutex);
+    cache[dev][typeKey] = ok;
+  }
   return ok;
 }
 
-/// First surviving candidate of @p family. Callers iterate family-major and this
-/// iterates enumeration-order-minor, which together preserve
+bool deviceMeetsConstraints(
+    const BackendInterface& bckI, ggml_backend_dev_t dev,
+    const backend_selection::LoadConstraints& constraints) {
+  if (bckI.deviceSupportsKvCacheType == nullptr) {
+    return true;
+  }
+  return std::ranges::all_of(
+      constraints.kvCacheTypes, [&](const enum ggml_type kvType) {
+        return bckI.deviceSupportsKvCacheType(dev, kvType);
+      });
+}
+
+/// First surviving candidate of @p family. Callers iterate family-major and
+/// this iterates enumeration-order-minor, which together preserve
 /// first-registered-wins within a family.
-const Candidate* firstUsable(const Enumeration& enumeration, DeviceFamily family) {
+const Candidate*
+firstUsable(const Enumeration& enumeration, DeviceFamily family) {
   for (const Candidate& c : enumeration.candidates) {
     if (c.family == family &&
         c.excluded == backend_selection::ExclusionReason::None) {
@@ -645,6 +723,17 @@ std::string canonicaliseFamily(std::string family) {
   return family == "hip" ? "rocm" : family;
 }
 
+bool backendAllowedByConstraints(
+    const std::string& lowercasedBackendName,
+    const backend_selection::LoadConstraints& constraints) {
+  return constraints.requiredBackendFamilies.empty() ||
+         std::ranges::any_of(
+             constraints.requiredBackendFamilies,
+             [&](const std::string& family) {
+               return backendNameMatchesFamily(lowercasedBackendName, family);
+             });
+}
+
 } // namespace
 
 std::optional<MainGpu>
@@ -654,11 +743,13 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
   }
 
   std::string lowerStr = mainGpuStr;
-  std::ranges::transform(lowerStr, lowerStr.begin(), ::tolower);
+  std::ranges::transform(lowerStr, lowerStr.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
 
   // QVAC-23763: the integer arm must consume the WHOLE value. It used to be
-  // std::stoi, which parses a leading prefix and discards the rest, so a PCI bus
-  // id like "0000:65:00.0" parsed silently as device 0. Requiring full
+  // std::stoi, which parses a leading prefix and discards the rest, so a PCI
+  // bus id like "0000:65:00.0" parsed silently as device 0. Requiring full
   // consumption is what makes the string forms below safe to add - and it is a
   // behaviour change in its own right: "1abc" no longer parses as 1.
   int deviceIndex = 0;
@@ -692,7 +783,13 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
     }
     int index = 0;
     const std::string digits = m[2].str();
-    std::from_chars(digits.data(), digits.data() + digits.size(), index);
+    const auto [ptr, ec] =
+        std::from_chars(digits.data(), digits.data() + digits.size(), index);
+    if (ec != std::errc() || ptr != digits.data() + digits.size()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "main-gpu backend-qualified index is out of range.");
+    }
     return MainGpu(MainGpuQualified{family, index});
   }
 
@@ -701,7 +798,8 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
   static const std::regex busIdRe(
       R"(^([0-9a-f]{4}:)?[0-9a-f]{2}:[0-9a-f]{2}\.[0-9a-f]$)");
   if (std::regex_match(lowerStr, busIdRe)) {
-    return MainGpu(MainGpuBusId{lowerStr});
+    return MainGpu(
+        MainGpuBusId{lowerStr.size() == 7 ? "0000:" + lowerStr : lowerStr});
   }
 
   throw qvac_errors::StatusError(
@@ -815,7 +913,9 @@ bool backend_selection::tryBackendRequiredFromMap(
   }
 
   std::string value = it->second;
-  std::ranges::transform(value, value.begin(), ::tolower);
+  std::ranges::transform(value, value.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
   value.erase(0, value.find_first_not_of(K_BACKEND_TRIM));
   const size_t end = value.find_last_not_of(K_BACKEND_TRIM);
   if (end != std::string::npos) {
@@ -866,11 +966,14 @@ std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
   return mainGpu;
 }
 
-enum ggml_type backend_selection::kvCacheTypeFromString(const std::string& name) {
+enum ggml_type
+backend_selection::kvCacheTypeFromString(const std::string& name) {
   // qvac-fabric's own kv_cache_type_from_str is static in common/arg.cpp and
   // cannot be linked, so scan ggml's names instead. Both sides are lowercase.
   std::string lowered = name;
-  std::transform(lowered.begin(), lowered.end(), lowered.begin(), ::tolower);
+  std::ranges::transform(lowered, lowered.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
   for (int t = 0; t < GGML_TYPE_COUNT; ++t) {
     const enum ggml_type type = static_cast<enum ggml_type>(t);
     const char* typeName = ggml_type_name(type);
@@ -940,6 +1043,11 @@ backend_selection::kindOf(const ExclusionReason reason) {
 
 backend_selection::BackendChoice backend_selection::chooseBackend(
     const BackendRequest& request, const BackendInterface& bckI) {
+  if (request.backendRequired && request.preferred != BackendType::GPU) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "backend-required cannot be used when device is cpu.");
+  }
   Enumeration enumeration = ::enumerateCandidates(bckI, request);
   ::applyExclusions(bckI, enumeration, request);
 
@@ -947,8 +1055,8 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
   choice.adrenoVersion = enumeration.maxAdrenoVersion;
   choice.isMaliGpu = enumeration.sawMaliGpu;
 
-  // The highest-priority candidate that was passed over, for the trace. Recorded
-  // before a winner is picked so it survives whichever path wins.
+  // The highest-priority candidate that was passed over, for the trace.
+  // Recorded before a winner is picked so it survives whichever path wins.
   const Candidate* skipped = nullptr;
   for (const DeviceFamily family : ::K_CASCADE_ORDER) {
     for (const Candidate& c : enumeration.candidates) {
@@ -979,7 +1087,8 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
 
   // QVAC-23763: an explicit `backend` override wins over the cascade below, but
   // only over candidates that survived the guards: firstUsable() skips excluded
-  // ones, so a request for a backend a guard just ruled out cannot resurrect it.
+  // ones, so a request for a backend a guard just ruled out cannot resurrect
+  // it.
   //
   // Skipped entirely for a CPU load. No devices are enumerated in that case, so
   // the block could only ever reach its "matched no available device" warning,
@@ -989,8 +1098,7 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     for (const std::string& family : request.backendOverride) {
       for (const DeviceFamily deviceFamily : ::K_OVERRIDE_ORDER) {
         for (const Candidate& c : enumeration.candidates) {
-          if (c.family != deviceFamily ||
-              c.excluded != ExclusionReason::None) {
+          if (c.family != deviceFamily || c.excluded != ExclusionReason::None) {
             continue;
           }
           if (::backendNameMatchesFamily(c.name, family)) {
@@ -1252,12 +1360,17 @@ backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
   return gpuCount > 0 ? gpuCount : igpuCount;
 }
 
-std::vector<std::string>
-backend_selection::getTensorSplitDeviceNames(const BackendInterface& bckI) {
-  std::vector<std::string> discrete;
-  std::vector<std::string> integrated;
-  std::unordered_set<std::string> seenDiscrete;
-  std::unordered_set<std::string> seenIntegrated;
+std::vector<std::string> backend_selection::getTensorSplitDeviceNames(
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints) {
+  struct TensorCandidate {
+    std::string name;
+    std::string registry;
+    std::string deviceId;
+  };
+  std::vector<TensorCandidate> discrete;
+  std::vector<TensorCandidate> integrated;
+  std::string selectedRegistry;
 
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
@@ -1267,13 +1380,19 @@ backend_selection::getTensorSplitDeviceNames(const BackendInterface& bckI) {
     if (!isDiscrete && devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
       continue;
     }
+    if (!::deviceMeetsConstraints(bckI, dev, constraints)) {
+      continue;
+    }
     // Skip RPC devices, matching both qvac-fabric's filtered branch and
     // emplaceIfValidDevice above. ggml types them as GPU, so without this an
     // iGPU + RPC host would see a non-empty `discrete` bucket and drop its own
     // integrated GPU from the list.
     const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
-    if (reg != nullptr &&
-        bckI.ggml_backend_reg_name(reg) == std::string("RPC")) {
+    if (reg == nullptr) {
+      continue;
+    }
+    const std::string registry = bckI.ggml_backend_reg_name(reg);
+    if (registry == "RPC") {
       continue;
     }
     // Materialise each string before the next interface call. The returned
@@ -1282,30 +1401,60 @@ backend_selection::getTensorSplitDeviceNames(const BackendInterface& bckI) {
     // against any implementation that stores results in a reallocating
     // container. DeviceDescription above is safe for the same reason: its
     // std::string members copy in declaration order.
-    ggml_backend_dev_props props{};
-    bckI.ggml_backend_dev_get_props(dev, &props);
-    const std::string deviceId = props.device_id != nullptr
-                                     ? std::string(props.device_id)
-                                     : std::string();
     const char* namePtr = bckI.ggml_backend_dev_name(dev);
     // An empty name would join into a leading or trailing comma and make the
     // whole --device list unparseable, so it is skipped like a null one.
     if (namePtr == nullptr || *namePtr == '\0') {
       continue;
     }
-    auto& bucket = isDiscrete ? discrete : integrated;
-    auto& seen = isDiscrete ? seenDiscrete : seenIntegrated;
-    // A null device_id cannot be deduped against; keep the device rather than
-    // dropping it, since omitting a real GPU is worse than a duplicate. This
-    // mirrors fabric, whose find_if only matches when both ids are non-null.
-    if (deviceId.empty() || seen.insert(deviceId).second) {
-      bucket.emplace_back(namePtr);
+    std::string name = namePtr;
+    std::ranges::transform(name, name.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    if (!::backendAllowedByConstraints(name, constraints)) {
+      continue;
     }
+    const std::string deviceId = ::deviceId(bckI, dev);
+    if (name == selectedDeviceName) {
+      selectedRegistry = registry;
+    }
+    auto& bucket = isDiscrete ? discrete : integrated;
+    bucket.push_back(
+        {std::move(name), std::move(registry), std::move(deviceId)});
   }
-  return !discrete.empty() ? discrete : integrated;
+
+  const auto& candidates = !discrete.empty() ? discrete : integrated;
+  std::vector<std::string> names;
+  std::unordered_set<std::string> seenIds;
+  for (size_t i = 0; i < candidates.size(); ++i) {
+    const TensorCandidate& candidate = candidates[i];
+    // A null device_id cannot be deduped against; keep the device rather than
+    // dropping it, since omitting a real GPU is worse than a duplicate.
+    if (candidate.deviceId.empty()) {
+      names.push_back(candidate.name);
+      continue;
+    }
+    if (!seenIds.insert(candidate.deviceId).second) {
+      continue;
+    }
+    const TensorCandidate* chosen = &candidate;
+    if (!selectedRegistry.empty() && candidate.registry != selectedRegistry) {
+      const auto preferred =
+          std::ranges::find_if(candidates, [&](const TensorCandidate& other) {
+            return other.deviceId == candidate.deviceId &&
+                   other.registry == selectedRegistry;
+          });
+      if (preferred != candidates.end()) {
+        chosen = &*preferred;
+      }
+    }
+    names.push_back(chosen->name);
+  }
+  return names;
 }
 
-std::vector<std::string> backend_selection::getTensorSplitDeviceNames() {
+std::vector<std::string> backend_selection::getTensorSplitDeviceNames(
+    const std::string& selectedDeviceName, const LoadConstraints& constraints) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -1316,8 +1465,9 @@ std::vector<std::string> backend_selection::getTensorSplitDeviceNames() {
       ggml_backend_dev_type,
       ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
-      nullptr};
-  return getTensorSplitDeviceNames(bckI);
+      nullptr,
+      ::productionSupportsKvCacheType};
+  return getTensorSplitDeviceNames(bckI, selectedDeviceName, constraints);
 }
 
 bool backend_selection::gpuBackendSupportsRowSplit(
@@ -1369,7 +1519,8 @@ bool backend_selection::gpuBackendSupportsRowSplit() {
 }
 
 backend_selection::SplitDeviceList backend_selection::splitModeDeviceNamesDetailed(
-    const BackendInterface& bckI, const std::string& selectedDeviceName) {
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints) {
   // Kept in ggml's enumeration order, so the list matches what qvac-fabric
   // would have discovered on its own.
   struct SplitCandidate {
@@ -1382,6 +1533,7 @@ backend_selection::SplitDeviceList backend_selection::splitModeDeviceNamesDetail
   std::vector<std::string> registries;
   std::string selectedRegistry;
   bool selectedIsIgpu = false;
+  bool excludedByConstraints = false;
 
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
@@ -1389,6 +1541,10 @@ backend_selection::SplitDeviceList backend_selection::splitModeDeviceNamesDetail
     const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
     if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
         devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    if (!::deviceMeetsConstraints(bckI, dev, constraints)) {
+      excludedByConstraints = true;
       continue;
     }
     ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
@@ -1405,6 +1561,10 @@ backend_selection::SplitDeviceList backend_selection::splitModeDeviceNamesDetail
     std::ranges::transform(deviceName, deviceName.begin(), [](unsigned char c) {
       return static_cast<char>(std::tolower(c));
     });
+    if (!::backendAllowedByConstraints(deviceName, constraints)) {
+      excludedByConstraints = true;
+      continue;
+    }
     const bool isIgpu = devType == GGML_BACKEND_DEVICE_TYPE_IGPU;
     if (deviceName == selectedDeviceName) {
       selectedRegistry = registry;
@@ -1416,14 +1576,7 @@ backend_selection::SplitDeviceList backend_selection::splitModeDeviceNamesDetail
     // Both CUDA and Vulkan publish the PCI bus id here, lowercased and in the
     // same "domain:bus:device.function" form, which is what makes them
     // comparable across registries. An absent id is left empty; see below.
-    std::string deviceId;
-    if (bckI.ggml_backend_dev_get_props != nullptr) {
-      ggml_backend_dev_props props{};
-      bckI.ggml_backend_dev_get_props(dev, &props);
-      if (props.device_id != nullptr) {
-        deviceId = props.device_id;
-      }
-    }
+    std::string deviceId = ::deviceId(bckI, dev);
     devices.push_back(
         {std::move(registry),
          std::move(deviceName),
@@ -1431,7 +1584,9 @@ backend_selection::SplitDeviceList backend_selection::splitModeDeviceNamesDetail
          isIgpu});
   }
 
-  if (registries.size() < 2 || selectedRegistry.empty()) {
+  if ((registries.size() < 2 && !excludedByConstraints &&
+       !constraints.requireExplicitDeviceList) ||
+      selectedRegistry.empty()) {
     return {};
   }
 
@@ -1525,12 +1680,14 @@ backend_selection::SplitDeviceList backend_selection::splitModeDeviceNamesDetail
 }
 
 std::vector<std::string> backend_selection::splitModeDeviceNames(
-    const BackendInterface& bckI, const std::string& selectedDeviceName) {
-  return splitModeDeviceNamesDetailed(bckI, selectedDeviceName).names;
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints) {
+  return splitModeDeviceNamesDetailed(bckI, selectedDeviceName, constraints)
+      .names;
 }
 
-std::vector<std::string>
-backend_selection::splitModeDeviceNames(const std::string& selectedDeviceName) {
+std::vector<std::string> backend_selection::splitModeDeviceNames(
+    const std::string& selectedDeviceName, const LoadConstraints& constraints) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -1543,12 +1700,13 @@ backend_selection::splitModeDeviceNames(const std::string& selectedDeviceName) {
       ggml_backend_dev_get_props,
       nullptr,
       ::productionSupportsKvCacheType};
-  return backend_selection::splitModeDeviceNames(bckI, selectedDeviceName);
+  return backend_selection::splitModeDeviceNames(
+      bckI, selectedDeviceName, constraints);
 }
 
 backend_selection::SplitDeviceList
 backend_selection::splitModeDeviceNamesDetailed(
-    const std::string& selectedDeviceName) {
+    const std::string& selectedDeviceName, const LoadConstraints& constraints) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -1562,5 +1720,5 @@ backend_selection::splitModeDeviceNamesDetailed(
       nullptr,
       ::productionSupportsKvCacheType};
   return backend_selection::splitModeDeviceNamesDetailed(
-      bckI, selectedDeviceName);
+      bckI, selectedDeviceName, constraints);
 }
