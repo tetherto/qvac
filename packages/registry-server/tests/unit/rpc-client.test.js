@@ -56,11 +56,17 @@ test('connectToRegistryByCapacity probes each peer once and connects to the winn
 test('connectToRegistryByCapacity does not hide writer authorization failures', async (t) => {
   const peerKey = randomPeerKey()
   let cleaned = false
+  const warnings = []
 
   try {
     await connectToRegistryByCapacity({
       config: { getIndexerKeys: () => [peerKey] },
-      logger: noopLogger,
+      logger: {
+        info() {},
+        warn(context, message) {
+          warnings.push({ context, message })
+        }
+      },
       connect: () =>
         Promise.resolve({
           rpc: {
@@ -82,7 +88,43 @@ test('connectToRegistryByCapacity does not hide writer authorization failures', 
   } catch (err) {
     t.is(err.cause.code, 'ERR_WRITER_UNAUTHORIZED')
     t.ok(cleaned)
+    t.is(warnings[0].context.peer, peerKey)
+    t.is(warnings[0].context.code, 'ERR_WRITER_UNAUTHORIZED')
   }
+})
+
+test('connectToRegistryByCapacity uses legacy selection when every probe fails', async (t) => {
+  const peerKeys = [randomPeerKey(), randomPeerKey()]
+  const calls = []
+  const cleaned = []
+  const fallbackConnection = { peerKey: peerKeys[0] }
+
+  const result = await connectToRegistryByCapacity({
+    config: { getIndexerKeys: () => peerKeys },
+    logger: noopLogger,
+    connect: (opts) => {
+      calls.push(opts)
+      if (!opts.targetPeer) return Promise.resolve(fallbackConnection)
+
+      return Promise.resolve({
+        rpc: {
+          request: () => Promise.reject(new Error('Capacity unavailable'))
+        },
+        cleanup: () => {
+          cleaned.push(opts.targetPeer)
+          return Promise.resolve()
+        }
+      })
+    }
+  })
+
+  t.is(result, fallbackConnection)
+  t.alike(
+    calls.slice(0, peerKeys.length).map((call) => call.targetPeer),
+    peerKeys
+  )
+  t.absent(calls[peerKeys.length].targetPeer)
+  t.alike(cleaned, peerKeys)
 })
 
 test('selectPeerByCapacity chooses the peer with the most available bytes', (t) => {

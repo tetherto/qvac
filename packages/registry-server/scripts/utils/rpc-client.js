@@ -223,10 +223,17 @@ async function connectToRegistryByCapacity({
 
       candidates.push({ peerKey, availableBytes })
     } catch (err) {
-      if (getErrorCode(err) === 'ERR_WRITER_UNAUTHORIZED') throw err
+      const errorCode = getErrorCode(err)
+      if (errorCode === 'ERR_WRITER_UNAUTHORIZED') {
+        logger.warn(
+          { peer: peerKey, error: err.message, code: errorCode },
+          'RPC Client: Capacity probe authorization failed'
+        )
+        throw err
+      }
 
       logger.warn(
-        { peer: peerKey, error: err.message, code: getErrorCode(err) },
+        { peer: peerKey, error: err.message, code: errorCode },
         'RPC Client: Capacity probe failed'
       )
     } finally {
