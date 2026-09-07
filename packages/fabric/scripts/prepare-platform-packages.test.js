@@ -5,8 +5,14 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { expectedImports, expectedOptionalDependencies, npmPackageName, SLICES } = require('./platform-slices')
-const { prepare } = require('./prepare-platform-packages')
+const {
+  ADDON_UNAVAILABLE,
+  expectedImports,
+  expectedOptionalDependencies,
+  npmPackageName,
+  SLICES
+} = require('./platform-slices')
+const { ADDON_DIR, prepare } = require('./prepare-platform-packages')
 
 function makePrebuilds (root) {
   const prebuilds = path.join(root, 'prebuilds')
@@ -39,7 +45,7 @@ function metaPath (root, extras) {
   return file
 }
 
-test('prepare-platform-packages slices hosts, groups mobile flavours, and aliases cmake-bare names', () => {
+test('prepare-platform-packages slices hosts and groups mobile flavours', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fabric-slices-'))
   try {
     const source = makePrebuilds(tmp)
@@ -57,24 +63,63 @@ test('prepare-platform-packages slices hosts, groups mobile flavours, and aliase
       if (slice.libc) assert.deepEqual(manifest.libc, [slice.libc])
     }
 
-    const android = path.join(output, 'android-arm64', 'prebuilds')
+    const android = path.join(output, 'android-arm64', ADDON_DIR, 'prebuilds')
     for (const flavour of ['android-arm64', 'android-arm', 'android-ia32', 'android-x64']) {
       assert.ok(fs.existsSync(path.join(android, flavour, 'qvac__fabric.bare')))
     }
-    const ios = path.join(output, 'ios', 'prebuilds')
+    const ios = path.join(output, 'ios', ADDON_DIR, 'prebuilds')
     assert.ok(fs.existsSync(path.join(ios, 'ios-arm64', 'qvac__fabric.bare')))
     assert.ok(fs.existsSync(path.join(ios, 'ios-arm64-simulator', 'qvac__fabric.bare')))
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})
 
-    const linuxDir = path.join(output, 'linux-x64', 'prebuilds', 'linux-x64')
-    const linuxAlias = path.join(linuxDir, 'qvac__fabric-linux-x64.bare')
+// The inner manifest is what keeps the artifact named qvac__fabric.bare, so both
+// require.addon('./addon') and cmake-bare's include_bare_module find it without a
+// renamed second copy of the runtime.
+test('platform slices nest the runtime under addon/ named after the meta package', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fabric-slices-'))
+  try {
+    const source = makePrebuilds(tmp)
+    const output = path.join(tmp, 'platforms')
+    prepare(source, output, metaPath(tmp))
+
+    const slice = path.join(output, 'linux-x64')
     assert.equal(
-      fs.readFileSync(linuxAlias, 'utf8'),
-      fs.readFileSync(path.join(linuxDir, 'qvac__fabric.bare'), 'utf8')
+      fs.readFileSync(path.join(slice, 'index.js'), 'utf8'),
+      "module.exports = require.addon('./addon')\n"
     )
-    assert.equal(fs.lstatSync(linuxAlias).isSymbolicLink(), false)
-    assert.equal(
-      fs.readFileSync(path.join(linuxDir, 'qvac__fabric-linux-x64.bare.exports'), 'utf8'),
-      fs.readFileSync(path.join(linuxDir, 'qvac__fabric.bare.exports'), 'utf8')
+
+    const inner = JSON.parse(fs.readFileSync(path.join(slice, ADDON_DIR, 'package.json'), 'utf8'))
+    assert.equal(inner.name, '@qvac/fabric')
+    assert.equal(inner.addon, true)
+    assert.equal(inner.version, '0.11.0')
+
+    const hostDir = path.join(slice, ADDON_DIR, 'prebuilds', 'linux-x64')
+    assert.ok(fs.existsSync(path.join(hostDir, 'qvac__fabric.bare')))
+    assert.deepEqual(
+      fs.readdirSync(hostDir).filter((entry) => entry.endsWith('.bare')),
+      ['qvac__fabric.bare']
+    )
+
+    const manifest = JSON.parse(fs.readFileSync(path.join(slice, 'package.json'), 'utf8'))
+    assert.deepEqual(manifest.files, ['index.js', ADDON_DIR, 'LICENSE', 'NOTICE'])
+    assert.deepEqual(manifest.exports, { '.': './index.js', './package': './package.json' })
+    assert.equal(manifest.addon, undefined)
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+test('prepare-platform-packages refuses a host dir with no .bare addon', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fabric-slices-'))
+  try {
+    const source = makePrebuilds(tmp)
+    fs.rmSync(path.join(source, 'darwin-x64', 'qvac__fabric.bare'))
+    assert.throws(
+      () => prepare(source, path.join(tmp, 'platforms'), metaPath(tmp)),
+      /binary-less platform package/
     )
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
@@ -100,3 +145,31 @@ test('meta package.json imports map matches the slice table', () => {
   const meta = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
   assert.deepEqual(meta.imports, expectedImports())
 })
+
+// Every host arm must stay resolvable without its platform package installed:
+// that is what lets bare-pack traverse require('#binding') on any host, and it
+// routes an uninstalled slice to the actionable error instead of a resolver throw.
+test('every imports-map arm falls back to a shipped addon-unavailable module', () => {
+  const meta = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
+  const fallbacks = []
+  collectTargets(meta.imports['#binding'], fallbacks)
+  assert.ok(fallbacks.length > 0)
+  for (const target of fallbacks) assert.equal(target, ADDON_UNAVAILABLE)
+
+  assert.ok(meta.files.includes(ADDON_UNAVAILABLE.replace('./', '')))
+  assert.ok(fs.existsSync(path.join(__dirname, '..', ADDON_UNAVAILABLE)))
+})
+
+function collectTargets (node, out) {
+  if (typeof node === 'string') {
+    out.push(node)
+    return
+  }
+  if (Array.isArray(node)) {
+    assert.equal(node.length, 2)
+    out.push(node[1])
+    return
+  }
+  assert.ok(node.default !== undefined, 'condition object needs a default arm')
+  for (const key of Object.keys(node)) collectTargets(node[key], out)
+}

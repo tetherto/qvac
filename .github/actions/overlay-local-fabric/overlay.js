@@ -9,9 +9,11 @@ function platformPackageDirName (platKey) {
   return `fabric-${platKey}`
 }
 
-function bareAddonBasename (packageName) {
-  return packageName.replace(/^@/, '').replace('/', '__')
-}
+// Mirror of packages/fabric/scripts/prepare-platform-packages.js: the runtime
+// nests under addon/, whose manifest is named @qvac/fabric so the .bare basename
+// (and cmake-bare's include_bare_module lookup) matches a published slice.
+const ADDON_DIR = 'addon'
+const META_PACKAGE = '@qvac/fabric'
 
 function validate (directory, relative) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -42,36 +44,20 @@ function renameArtifacts (root) {
   }
 }
 
-function addBareAliases (prebuildDir, packageName) {
-  const alias = `${bareAddonBasename(packageName)}.bare`
-  const source = 'qvac__fabric.bare'
-  if (alias === source) return
-  const sourcePath = path.join(prebuildDir, source)
-  if (!fs.existsSync(sourcePath)) return
-  linkOrCopy(sourcePath, path.join(prebuildDir, alias))
-  const exportsSource = `${source}.exports`
-  const exportsSourcePath = path.join(prebuildDir, exportsSource)
-  if (fs.existsSync(exportsSourcePath)) {
-    linkOrCopy(exportsSourcePath, path.join(prebuildDir, `${alias}.exports`))
-  }
-}
-
-function linkOrCopy (from, to) {
-  // Copy, do not symlink: matches prepare-platform-packages (npm pack omits
-  // symlinks, and require.addon() looks up qvac__fabric-<platform>.bare).
-  fs.rmSync(to, { force: true })
-  fs.copyFileSync(from, to)
-}
-
 function writePlatformStub (packageDir, packageName) {
-  fs.mkdirSync(packageDir, { recursive: true })
-  fs.writeFileSync(path.join(packageDir, 'binding.js'), 'module.exports = require.addon()\n')
+  const addonDir = path.join(packageDir, ADDON_DIR)
+  fs.mkdirSync(addonDir, { recursive: true })
+  fs.writeFileSync(path.join(packageDir, 'index.js'), `module.exports = require.addon('./${ADDON_DIR}')\n`)
   fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({
     name: packageName,
     version: '0.0.0-overlay',
-    addon: true,
-    files: ['binding.js', 'prebuilds'],
-    exports: { '.': './binding.js', './package': './package.json' }
+    files: ['index.js', ADDON_DIR],
+    exports: { '.': './index.js', './package': './package.json' }
+  }, null, 2) + '\n')
+  fs.writeFileSync(path.join(addonDir, 'package.json'), JSON.stringify({
+    name: META_PACKAGE,
+    version: '0.0.0-overlay',
+    addon: true
   }, null, 2) + '\n')
 }
 
@@ -91,19 +77,33 @@ function overlayHost (src, metaPrebuilds, scopeDir, platKey) {
   const packageName = `@qvac/${dirName}`
   const packageDir = path.join(scopeDir, dirName)
   writePlatformStub(packageDir, packageName)
-  const destPlat = path.join(packageDir, 'prebuilds', platKey)
+  const destPlat = path.join(packageDir, ADDON_DIR, 'prebuilds', platKey)
   copyTree(platDir, destPlat)
   renameArtifacts(destPlat)
-  addBareAliases(destPlat, packageName)
   return packageDir
 }
 
 function overlayMetaJs (metaPkg, workspace) {
   const source = path.join(workspace, 'packages', 'fabric')
-  for (const file of ['binding.js', 'platform.js', 'platform.d.ts']) {
+  for (const file of ['addon-unavailable.js', 'binding.js', 'platform.js', 'platform.d.ts']) {
     const from = path.join(source, file)
     if (fs.existsSync(from)) fs.copyFileSync(from, path.join(metaPkg, file))
   }
+  overlayMetaImports(metaPkg, path.join(source, 'package.json'))
+}
+
+// The overlaid binding.js resolves the host through "#binding", so the installed
+// manifest needs the PR's imports map — an older fat install has none, and a
+// stale one can name packages this overlay no longer plants.
+function overlayMetaImports (metaPkg, sourceManifestPath) {
+  if (!fs.existsSync(sourceManifestPath)) return
+  const imports = JSON.parse(fs.readFileSync(sourceManifestPath, 'utf8')).imports
+  if (!imports) return
+  const manifestPath = path.join(metaPkg, 'package.json')
+  if (!fs.existsSync(manifestPath)) return
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  manifest.imports = imports
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
 }
 
 function overlayTree (src, metaPkg, platform, arch, tags) {
@@ -197,7 +197,7 @@ function main () {
 }
 
 module.exports = {
-  addBareAliases,
+  ADDON_DIR,
   overlayTree,
   platformPackageDirName,
   validate

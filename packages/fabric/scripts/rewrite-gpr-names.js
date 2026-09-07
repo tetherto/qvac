@@ -2,7 +2,6 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { addBareAliases } = require('./prepare-platform-packages')
 const { gprPackageName, npmPackageName, SLICES } = require('./platform-slices')
 
 function platformReplacements () {
@@ -56,11 +55,8 @@ function rewriteSliceGprName (directory, version) {
   manifest.name = gprPackageName(match[1])
   if (version) manifest.version = version
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
-  const prebuilds = path.join(directory, 'prebuilds')
-  if (!fs.existsSync(prebuilds)) return
-  for (const entry of fs.readdirSync(prebuilds, { withFileTypes: true })) {
-    if (entry.isDirectory()) addBareAliases(path.join(prebuilds, entry.name), manifest.name)
-  }
+  // Only the outer manifest is renamed. addon/package.json keeps the @qvac/fabric
+  // name that pins the .bare basename, so the GPR build ships the same artifact.
 }
 
 if (require.main === module) {

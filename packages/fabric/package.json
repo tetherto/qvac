@@ -18,6 +18,7 @@
     "prepare-platform-packages": "node scripts/prepare-platform-packages.js"
   },
   "files": [
+    "addon-unavailable.js",
     "binding.js",
     "platform.js",
     "platform.d.ts",
@@ -36,19 +37,44 @@
   },
   "imports": {
     "#binding": {
-      "android": "@qvac/fabric-android-arm64",
+      "android": [
+        "@qvac/fabric-android-arm64",
+        "./addon-unavailable.js"
+      ],
       "darwin": {
-        "arm64": "@qvac/fabric-darwin-arm64",
-        "x64": "@qvac/fabric-darwin-x64"
+        "arm64": [
+          "@qvac/fabric-darwin-arm64",
+          "./addon-unavailable.js"
+        ],
+        "x64": [
+          "@qvac/fabric-darwin-x64",
+          "./addon-unavailable.js"
+        ],
+        "default": "./addon-unavailable.js"
       },
-      "ios": "@qvac/fabric-ios",
+      "ios": [
+        "@qvac/fabric-ios",
+        "./addon-unavailable.js"
+      ],
       "linux": {
-        "arm64": "@qvac/fabric-linux-arm64",
-        "x64": "@qvac/fabric-linux-x64"
+        "arm64": [
+          "@qvac/fabric-linux-arm64",
+          "./addon-unavailable.js"
+        ],
+        "x64": [
+          "@qvac/fabric-linux-x64",
+          "./addon-unavailable.js"
+        ],
+        "default": "./addon-unavailable.js"
       },
       "win32": {
-        "x64": "@qvac/fabric-win32-x64"
-      }
+        "x64": [
+          "@qvac/fabric-win32-x64",
+          "./addon-unavailable.js"
+        ],
+        "default": "./addon-unavailable.js"
+      },
+      "default": "./addon-unavailable.js"
     }
   },
   "author": "Tether",

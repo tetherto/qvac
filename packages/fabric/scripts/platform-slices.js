@@ -39,10 +39,6 @@ function packageNameForBareTarget (bareTarget) {
   return npmPackageName(bareTarget)
 }
 
-function bareAddonBasename (packageName) {
-  return packageName.replace(/^@/, '').replace('/', '__')
-}
-
 function unpackedBudgetBytes (sliceName) {
   if (sliceName === 'linux-x64') return LINUX_X64_BUDGET
   if (sliceName === 'android-arm64') return ANDROID_BUDGET
@@ -55,30 +51,47 @@ function expectedOptionalDependencies (version) {
   return deps
 }
 
+// Every target is `[<platform package>, ADDON_UNAVAILABLE]`. Bare resolves array
+// targets left to right, so the host package wins when installed and the fallback
+// keeps the specifier resolvable when it is not — which is what lets bare-pack
+// traverse `require('#binding')` on a host whose slice is not staged. The
+// `default` arms give unpublished hosts the same actionable error instead of a
+// bare resolution failure. Android and iOS stay unconditioned on arch: their
+// slices ship every flavour under one package name.
+const ADDON_UNAVAILABLE = './addon-unavailable.js'
+
+function hostTarget (sliceName) {
+  return [npmPackageName(sliceName), ADDON_UNAVAILABLE]
+}
+
 function expectedImports () {
   return {
     '#binding': {
-      android: npmPackageName('android-arm64'),
+      android: hostTarget('android-arm64'),
       darwin: {
-        arm64: npmPackageName('darwin-arm64'),
-        x64: npmPackageName('darwin-x64')
+        arm64: hostTarget('darwin-arm64'),
+        x64: hostTarget('darwin-x64'),
+        default: ADDON_UNAVAILABLE
       },
-      ios: npmPackageName('ios'),
+      ios: hostTarget('ios'),
       linux: {
-        arm64: npmPackageName('linux-arm64'),
-        x64: npmPackageName('linux-x64')
+        arm64: hostTarget('linux-arm64'),
+        x64: hostTarget('linux-x64'),
+        default: ADDON_UNAVAILABLE
       },
       win32: {
-        x64: npmPackageName('win32-x64')
-      }
+        x64: hostTarget('win32-x64'),
+        default: ADDON_UNAVAILABLE
+      },
+      default: ADDON_UNAVAILABLE
     }
   }
 }
 
 module.exports = {
+  ADDON_UNAVAILABLE,
   ANDROID_FLAVOURS,
   SLICES,
-  bareAddonBasename,
   expectedImports,
   expectedOptionalDependencies,
   gprPackageName,

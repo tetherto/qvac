@@ -10,6 +10,7 @@ on:
       - ".github/workflows/test-fabric-stack-actions.yml"
       - "packages/fabric/scripts/**"
       - "packages/fabric/package.json"
+      - "packages/fabric/addon-unavailable.js"
       - "packages/fabric/binding.js"
       - "packages/fabric/platform.js"
       - "packages/fabric/platform.d.ts"
@@ -295,7 +296,7 @@ jobs:
             )
             const platformDestination = path.join(
               root,
-              "consumer/node_modules/@qvac/fabric-linux-x64/prebuilds",
+              "consumer/node_modules/@qvac/fabric-linux-x64/addon/prebuilds",
             )
 
             const planted = path.join(root, "planted")
@@ -323,6 +324,13 @@ jobs:
               path.join(planted, "share/qvac-fabricTargets.cmake"),
             )
 
+            // A pre-split fat install: no imports map, so the overlay has to
+            // bring the PR's own map along with the PR's binding.js.
+            fs.writeFileSync(
+              path.join(root, "consumer/node_modules/@qvac/fabric/package.json"),
+              JSON.stringify({ name: "@qvac/fabric", version: "0.10.0" }, null, 2) + "\n",
+            )
+
             fs.writeFileSync(path.join(source, "include/fabric.h"), "header")
             fs.writeFileSync(path.join(source, "share/qvac-fabric.cmake"), "cmake")
             fs.writeFileSync(
@@ -347,14 +355,15 @@ jobs:
         shell: bash
         env:
           META: ${{ runner.temp }}/fabric-overlay-test/consumer/node_modules/@qvac/fabric/prebuilds
-          PLATFORM: ${{ runner.temp }}/fabric-overlay-test/consumer/node_modules/@qvac/fabric-linux-x64/prebuilds
+          PLATFORM: ${{ runner.temp }}/fabric-overlay-test/consumer/node_modules/@qvac/fabric-linux-x64
         run: |
           set -euo pipefail
           node -e '
             const fs = require("node:fs")
             const path = require("node:path")
             const meta = process.argv[1]
-            const platform = process.argv[2]
+            const platformPkg = process.argv[2]
+            const platform = path.join(platformPkg, "addon/prebuilds")
             for (const file of ["include/fabric.h", "share/qvac-fabric.cmake"]) {
               if (!fs.existsSync(path.join(meta, file))) {
                 throw new Error(`Missing overlaid file: ${file}`)
@@ -362,6 +371,21 @@ jobs:
             }
             if (!fs.existsSync(path.join(platform, "linux-x64/qvac_fabric.so"))) {
               throw new Error("Missing overlaid runtime: linux-x64/qvac_fabric.so")
+            }
+            // The inner manifest is what pins the .bare basename to qvac__fabric.
+            const inner = JSON.parse(
+              fs.readFileSync(path.join(platformPkg, "addon/package.json"), "utf8"),
+            )
+            if (inner.name !== "@qvac/fabric" || inner.addon !== true) {
+              throw new Error(`Bad inner addon manifest: ${JSON.stringify(inner)}`)
+            }
+            // The overlaid binding.js resolves through "#binding", so the map has
+            // to reach the meta manifest even though it started without one.
+            const metaManifest = JSON.parse(
+              fs.readFileSync(path.join(meta, "../package.json"), "utf8"),
+            )
+            if (!metaManifest.imports || !metaManifest.imports["#binding"]) {
+              throw new Error("Overlay did not bring the #binding imports map")
             }
             for (const file of [
               "linux-x64/qvac_fabric.so",

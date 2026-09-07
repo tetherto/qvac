@@ -8,7 +8,6 @@ const path = require('node:path')
 const {
   ANDROID_FLAVOURS,
   SLICES,
-  bareAddonBasename,
   expectedImports,
   expectedOptionalDependencies,
   npmPackageName,
@@ -16,6 +15,14 @@ const {
 } = require('./platform-slices')
 
 const root = path.resolve(__dirname, '..')
+
+// The runtime lives under `addon/`, whose package.json is named @qvac/fabric.
+// require.addon('./addon') and cmake-bare's include_bare_module both derive the
+// artifact basename from the nearest manifest, so the .bare keeps the name every
+// consumer already links against (qvac__fabric) without a renamed second copy.
+const ADDON_DIR = 'addon'
+const ADDON_FILE = 'qvac__fabric.bare'
+const ADDON_INDEX = `module.exports = require.addon('./${ADDON_DIR}')\n`
 
 function copy (from, to) {
   fs.mkdirSync(path.dirname(to), { recursive: true })
@@ -50,26 +57,13 @@ function assertImports (meta) {
   assertEqualJson(meta.imports || {}, expectedImports(), 'imports')
 }
 
-function addBareAliases (prebuildDir, packageName) {
-  const alias = `${bareAddonBasename(packageName)}.bare`
-  const source = 'qvac__fabric.bare'
-  if (alias === source) return
-  const sourcePath = path.join(prebuildDir, source)
-  if (!fs.existsSync(sourcePath)) return
-  linkOrCopy(sourcePath, path.join(prebuildDir, alias))
-  const exportsSource = `${source}.exports`
-  const exportsSourcePath = path.join(prebuildDir, exportsSource)
-  if (fs.existsSync(exportsSourcePath)) {
-    linkOrCopy(exportsSourcePath, path.join(prebuildDir, `${alias}.exports`))
+function assertHostAddonPresent (prebuildDir, host, packageName) {
+  if (!fs.existsSync(path.join(prebuildDir, ADDON_FILE))) {
+    throw new Error(
+      `No ${ADDON_FILE} under prebuilds/${host} of ${packageName}. ` +
+      'Refusing to publish a binary-less platform package.'
+    )
   }
-}
-
-function linkOrCopy (from, to) {
-  // Copy, do not symlink: `npm pack` omits symlinks, so a published platform
-  // package would ship qvac__fabric.bare while require.addon() looks for
-  // qvac__fabric-<platform>.bare.
-  fs.rmSync(to, { force: true })
-  fs.copyFileSync(from, to)
 }
 
 function groupedDirectories (source, slice) {
@@ -94,17 +88,23 @@ function writeSliceManifest (destination, slice, meta) {
     name: npmPackageName(slice.name),
     version: meta.version,
     description: `Platform runtime for @qvac/fabric (${slice.name})`,
-    addon: true,
     os: [slice.os],
     engines: meta.engines,
-    files: ['binding.js', 'prebuilds', 'LICENSE', 'NOTICE'],
-    exports: { '.': './binding.js', './package': './package.json' },
+    files: ['index.js', ADDON_DIR, 'LICENSE', 'NOTICE'],
+    exports: { '.': './index.js', './package': './package.json' },
     license: meta.license,
     repository: meta.repository
   }
   if (slice.cpu) manifest.cpu = [slice.cpu]
   if (slice.libc) manifest.libc = [slice.libc]
   fs.writeFileSync(path.join(destination, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
+}
+
+// Named @qvac/fabric, not @qvac/fabric-<slice>: this is what pins the .bare
+// basename and keeps the GPR rename from touching the artifact.
+function writeInnerAddonManifest (addonDir, meta) {
+  const manifest = { name: meta.name, version: meta.version, addon: true }
+  fs.writeFileSync(path.join(addonDir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
 }
 
 function prepare (source, output, metaPath) {
@@ -117,7 +117,8 @@ function prepare (source, output, metaPath) {
 
   for (const slice of SLICES) {
     const destination = path.join(output, slice.name)
-    const prebuilds = path.join(destination, 'prebuilds')
+    const addonDir = path.join(destination, ADDON_DIR)
+    const prebuilds = path.join(addonDir, 'prebuilds')
     const grouped = slice.groupPrefix
       ? groupedDirectories(source, slice)
       : { directories: [slice.name], aliases: [] }
@@ -133,13 +134,14 @@ function prepare (source, output, metaPath) {
       const arm64 = path.join(prebuilds, 'android-arm64')
       for (const flavour of grouped.aliases) copy(arm64, path.join(prebuilds, flavour))
     }
-    fs.writeFileSync(path.join(destination, 'binding.js'), 'module.exports = require.addon()\n')
+    fs.writeFileSync(path.join(destination, 'index.js'), ADDON_INDEX)
     fs.copyFileSync(path.join(root, 'LICENSE'), path.join(destination, 'LICENSE'))
     fs.copyFileSync(path.join(root, 'NOTICE'), path.join(destination, 'NOTICE'))
     writeSliceManifest(destination, slice, meta)
+    writeInnerAddonManifest(addonDir, meta)
     const packageName = npmPackageName(slice.name)
     for (const directory of fs.readdirSync(prebuilds)) {
-      addBareAliases(path.join(prebuilds, directory), packageName)
+      assertHostAddonPresent(path.join(prebuilds, directory), directory, packageName)
     }
     const size = directorySize(destination)
     const budget = unpackedBudgetBytes(slice.name)
@@ -158,4 +160,4 @@ if (require.main === module) {
   )
 }
 
-module.exports = { addBareAliases, prepare }
+module.exports = { ADDON_DIR, prepare }

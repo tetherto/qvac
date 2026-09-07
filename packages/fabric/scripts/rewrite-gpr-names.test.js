@@ -5,7 +5,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { expectedImports, expectedOptionalDependencies } = require('./platform-slices')
+const { ADDON_UNAVAILABLE, expectedImports, expectedOptionalDependencies } = require('./platform-slices')
 const { rewriteMetaGprNames } = require('./rewrite-gpr-names')
 
 test('rewriteMetaGprNames rewrites imports and optionalDependencies', () => {
@@ -21,8 +21,16 @@ test('rewriteMetaGprNames rewrites imports and optionalDependencies', () => {
     rewriteMetaGprNames(tmp, '0.11.0-tmp.runid-1')
     const manifest = JSON.parse(fs.readFileSync(path.join(tmp, 'package.json'), 'utf8'))
     assert.equal(manifest.optionalDependencies['@tetherto/fabric-linux-x64-mono'], '0.11.0-tmp.runid-1')
-    assert.equal(manifest.imports['#binding'].linux.x64, '@tetherto/fabric-linux-x64-mono')
-    assert.equal(manifest.imports['#binding'].ios, '@tetherto/fabric-ios-mono')
+    // Only the package name is rewritten; the fallback arm stays a local file.
+    assert.deepEqual(manifest.imports['#binding'].linux.x64, [
+      '@tetherto/fabric-linux-x64-mono',
+      ADDON_UNAVAILABLE
+    ])
+    assert.deepEqual(manifest.imports['#binding'].ios, [
+      '@tetherto/fabric-ios-mono',
+      ADDON_UNAVAILABLE
+    ])
+    assert.equal(manifest.imports['#binding'].linux.default, ADDON_UNAVAILABLE)
     assert.match(fs.readFileSync(path.join(tmp, 'platform.js'), 'utf8'), /@tetherto\/fabric-linux-x64-mono/)
     assert.doesNotMatch(fs.readFileSync(path.join(tmp, 'platform.js'), 'utf8'), /@qvac\/fabric-linux-x64/)
   } finally {

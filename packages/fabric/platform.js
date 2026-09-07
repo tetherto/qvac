@@ -8,6 +8,10 @@ const PLATFORM_PACKAGES = {
   'win32-x64': '@qvac/fabric-win32-x64'
 }
 
+// Hosts we publish a runtime for. Android and iOS are grouped: every flavour
+// resolves to the one package, so they are listed by platform, not by arch.
+const PREBUILT_HOSTS = [...Object.keys(PLATFORM_PACKAGES), 'android', 'ios']
+
 function dirname (file) {
   const index = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'))
   return index === -1 ? '.' : file.slice(0, index)
@@ -32,14 +36,22 @@ function platformPackageName (platform, arch) {
   return PLATFORM_PACKAGES[`${platform}-${arch}`] || null
 }
 
+// Platform packages nest the runtime under addon/, whose manifest is named
+// @qvac/fabric so the artifact stays qvac__fabric.bare. Keep this the only place
+// that knows the layout: every consumer reaches the backends through here.
 function resolvePlatformPrebuilds () {
   const packageName = platformPackageName()
   if (!packageName) return null
   try {
-    return dirname(require.resolve(`${packageName}/package`)) + '/prebuilds'
+    return dirname(require.resolve(`${packageName}/package`)) + '/addon/prebuilds'
   } catch {
     return null
   }
 }
 
-module.exports = { platformPackageName, resolvePlatformPrebuilds, runtimeHost }
+module.exports = {
+  PREBUILT_HOSTS,
+  platformPackageName,
+  resolvePlatformPrebuilds,
+  runtimeHost
+}

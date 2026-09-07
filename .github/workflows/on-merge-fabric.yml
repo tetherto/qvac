@@ -160,13 +160,14 @@ jobs:
           GPR_TAG: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
         run: |
           set -euo pipefail
+          source .github/scripts/npm-version-state.sh
           PACKAGE_VERSION=$(node -p "require('./packages/fabric/package.json').version")
           VERSION="${PACKAGE_VERSION}-tmp.runid-${GITHUB_RUN_ID}"
           echo "gpr_slice_version=$VERSION" >> "$GITHUB_ENV"
           for package in packages/fabric/dist/platforms/*; do
             node packages/fabric/scripts/rewrite-gpr-names.js --slice "$package" "$VERSION"
             NAME=$(node -e "console.log(require('./' + process.argv[1] + '/package.json').name)" "$package")
-            if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+            if npm_version_published "$NAME" "$VERSION"; then
               echo "Skipping ${NAME}@${VERSION} (already published)"
               continue
             fi
@@ -244,10 +245,11 @@ jobs:
           NPM_TAG: ${{ inputs.npm_tag }}
         run: |
           set -euo pipefail
+          source .github/scripts/npm-version-state.sh
           VERSION=$(node -p "require('./packages/fabric/package.json').version")
           for package in packages/fabric/dist/platforms/*; do
             NAME=$(node -e "console.log(require('./' + process.argv[1] + '/package.json').name)" "$package")
-            if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+            if npm_version_published "$NAME" "$VERSION"; then
               echo "Skipping ${NAME}@${VERSION} (already published)"
               continue
             fi
