@@ -173,7 +173,74 @@ void AcestepModel::cancel() const {
 
 std::any AcestepModel::process(const std::any& input) {
   const auto& in = std::any_cast<const AnyInput&>(input);
+  if (in.understand)
+    return std::any(understandAudio(in));
   return std::any(generate(in));
+}
+
+std::shared_ptr<tts_cpp::acestep::Engine> AcestepModel::acquireEngine() {
+  std::lock_guard lk(engineMu_);
+  if (!engine_)
+    loadLocked();
+  return engine_;
+}
+
+AcestepModel::UnderstandOutput
+AcestepModel::understandAudio(const AnyInput& in) {
+  CancellationReset cancellationReset(cancelRequested_);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step understanding cancelled");
+  }
+  const auto t0 = std::chrono::steady_clock::now();
+
+  std::shared_ptr<tts_cpp::acestep::Engine> engine = acquireEngine();
+
+  tts_cpp::acestep::UnderstandParams params;
+  params.audio = in.sourceAudio;
+  params.vocal_language = in.vocalLanguage;
+  params.lm_temperature = in.lmTemperature;
+  params.lm_top_p = in.lmTopP;
+  params.lm_top_k = in.lmTopK;
+  params.seed = in.seed;
+
+  auto progress =
+      [this](const std::string& stage, int step, int total) -> bool {
+    if (progressSink_)
+      progressSink_(AudioGenProgress{stage, step, total});
+    return !cancelRequested_.load();
+  };
+
+  tts_cpp::acestep::UnderstandResult result =
+      engine->understand(params, progress);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step understanding cancelled");
+  }
+
+  const auto t1 = std::chrono::steady_clock::now();
+  totalTime_ = std::chrono::duration<double, std::milli>(t1 - t0).count();
+  // The run analyses audio instead of producing it: report the input clip's
+  // duration so realTimeFactor still reads as time spent per audio second.
+  sampleRate_ = engine->sample_rate();
+  channels_ = 2;
+  totalSamples_ = static_cast<int64_t>(in.sourceAudio.size());
+  audioDurationMs_ =
+      sampleRate_ > 0
+          ? (static_cast<double>(totalSamples_) / channels_ / sampleRate_) *
+                1000.0
+          : 0.0;
+  realTimeFactor_ =
+      audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
+  hasQualityScore_ = false;
+
+  UnderstandOutput out;
+  out.caption = std::move(result.caption);
+  out.bpm = result.bpm;
+  out.duration = result.duration;
+  out.keyscale = std::move(result.keyscale);
+  out.timesignature = std::move(result.timesignature);
+  out.vocalLanguage = std::move(result.vocal_language);
+  out.audioCodes = std::move(result.audio_codes);
+  return out;
 }
 
 AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
@@ -183,13 +250,7 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   }
   const auto t0 = std::chrono::steady_clock::now();
 
-  std::shared_ptr<tts_cpp::acestep::Engine> engine;
-  {
-    std::lock_guard lk(engineMu_);
-    if (!engine_)
-      loadLocked();
-    engine = engine_;
-  }
+  std::shared_ptr<tts_cpp::acestep::Engine> engine = acquireEngine();
 
   tts_cpp::acestep::GenerateParams params;
   params.caption = in.caption;
@@ -209,7 +270,9 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.lm_cfg_scale = in.lmCfgScale;
   params.lm_phase1 = in.lmPhase1;
   params.simple_mode = in.simpleMode;
+  params.rewrite_query = in.rewriteQuery;
   params.normalize_loudness = in.normalizeLoudness;
+  params.generate_lrc = in.generateLrc;
   params.compute_quality_score = in.computeQualityScore;
   params.dcw_enabled = in.dcwEnabled;
   params.dcw_scaler = in.dcwScaler;
@@ -273,6 +336,9 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   if (cancelRequested_.load()) {
     throw std::runtime_error("ACE-Step generation cancelled");
   }
+  hasLyricsScore_ = in.generateLrc;
+  lyricsScore_ = result.metadata.lyrics_score;
+  lrc_ = result.metadata.lrc;
   hasQualityScore_ = in.computeQualityScore;
   qualityScore_ = result.metadata.quality_score;
 
@@ -333,6 +399,9 @@ qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
   stats.emplace_back("backendId", backendIdFromName(backendName_));
   stats.emplace_back(
       "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
+  if (hasLyricsScore_) {
+    stats.emplace_back("lyricsScore", lyricsScore_);
+  }
   if (hasQualityScore_) {
     stats.emplace_back("qualityScore", qualityScore_);
   }

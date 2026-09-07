@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Vendored from qvac-fabric-speech.cpp@c3203333a4041c180eaa57bfd5d309402900c9ff
+# Vendored from qvac-fabric-speech.cpp@5b51971eff74bfa21e3031892ada8276179e77a4
 #   (engines/parakeet/scripts/convert-nemo-to-gguf.py).
 # qvac-fabric-speech.cpp owns the GGUF tensor/metadata layout this script
 # produces; if the layout changes upstream, resync the file rather than
@@ -35,6 +35,10 @@ Auto-detects the model flavour from ``cfg['target']``:
                                             cache-aware streaming, end-of-
                                             utterance token detection;
                                             parakeet_realtime_eou_120m-v1)
+  - ``EncDecRNNTBPEModelWithPrompt``      -> Nemotron (cache-aware
+                                            FastConformer-RNN-T with a
+                                            128-wide locale prompt;
+                                            nemotron-3.5-asr-streaming-0.6b)
   - ``EncDecDiarLabelModel``             -> Sortformer    (diar_sortformer_4spk-v1,
                                             diar_streaming_sortformer_4spk-v2)
 
@@ -55,7 +59,8 @@ src/parakeet_sortformer.h for the consumer structs):
   Metadata:
     general.architecture  = "parakeet-ctc"  (kept for GGUF compat)
     general.name          = "<derived from cfg>"
-    parakeet.model.type   = "ctc", "rnnt", "tdt", "eou", or "sortformer"
+    parakeet.model.type   = "ctc", "rnnt", "tdt", "eou", "nemotron",
+                            or "sortformer"
     parakeet.encoder.*    (hyperparameters, incl. use_bias, xscaling,
                            conv_norm_type, att_context_size,
                            causal_downsampling, conv_context_size)
@@ -70,6 +75,8 @@ src/parakeet_sortformer.h for the consumer structs):
                            encoder_chunk_mel_frames,
                            cache_lookback_frames, cache_time_steps,
                            max_symbols_per_step)                     [EOU only]
+    parakeet.nemotron.*   (RNNT, prompt, locale, and cache-aware
+                           streaming metadata)                       [Nemotron only]
     parakeet.sortformer.* (num_spks, fc/tf dims, tf layer count, ...)[Sortformer only]
     tokenizer.ggml.model  = "sentencepiece"                          [CTC, RNN-T, TDT, EOU]
     tokenizer.ggml.sentencepiece_model = <raw tokenizer.model bytes> [CTC, RNN-T, TDT, EOU]
@@ -95,6 +102,9 @@ src/parakeet_sortformer.h for the consumer structs):
     eou.predict.lstm.0.{w_ih,w_hh,b_ih,b_hh}                         [EOU only]
     eou.joint.{enc,pred}.{weight,bias}                               [EOU only]
     eou.joint.out.{weight,bias}                                      [EOU only]
+    nemotron.predict.*                                                [Nemotron only]
+    nemotron.joint.*                                                  [Nemotron only]
+    nemotron.prompt.proj.{0,2}.{weight,bias}                          [Nemotron only]
     sortformer.encoder_proj.{weight,bias}                            [Sortformer only]
     sortformer.transformer.blk.{i}.* (18 blocks)                     [Sortformer only]
     sortformer.head.{weight,bias}                                    [Sortformer only]
@@ -114,6 +124,19 @@ from converter_args import parse_args
 
 
 ARCH = "parakeet-ctc"
+
+NEMOTRON_TARGET = (
+    "nemo.collections.asr.models.rnnt_bpe_models_prompt."
+    "EncDecRNNTBPEModelWithPrompt"
+)
+NEMOTRON_VARIANT = "nemotron-3.5-asr-streaming-0.6b-v1"
+NEMOTRON_ALLOWED_RIGHT_CONTEXTS = [0, 1, 3, 6, 13]
+NEMOTRON_ALLOWED_CHUNK_MS = [80, 160, 320, 560, 1120]
+NEMOTRON_LEFT_CONTEXT = 56
+NEMOTRON_DEFAULT_ATT_CONTEXT_RIGHT = 3
+NEMOTRON_NUM_PROMPTS = 128
+NEMOTRON_PROMPT_INPUT = 1152
+NEMOTRON_PROMPT_HIDDEN = 2048
 
 QUANT_MAP = {
     "q8_0": gguf.GGMLQuantizationType.Q8_0,
@@ -352,10 +375,183 @@ def emit_tokenizer_metadata(writer, tok_bytes: bytes, multilingual_tok: dict, cf
     return len(pieces)
 
 
+def nested_config_value(cfg: dict, path):
+    value = cfg
+    for key in path:
+        if not isinstance(value, dict) or key not in value:
+            return None
+        value = value[key]
+    return value
+
+
+def tensor_shape(sd: dict, name: str):
+    tensor = sd.get(name)
+    if tensor is None or not hasattr(tensor, "shape"):
+        return None
+    return tuple(int(dimension) for dimension in tensor.shape)
+
+
+def validate_config_value(errors, cfg: dict, path, expected):
+    actual = nested_config_value(cfg, path)
+    if actual != expected:
+        errors.append(
+            f"{'.'.join(path)}={actual!r}, expected {expected!r}"
+        )
+
+
+def validate_tensor_shape(errors, sd: dict, name: str, expected):
+    actual = tensor_shape(sd, name)
+    if actual != expected:
+        errors.append(f"{name} shape={actual}, expected {expected}")
+
+
+def validate_nemotron_prompt_dictionary(errors, cfg: dict):
+    prompt_dictionary = nested_config_value(
+        cfg,
+        ("model_defaults", "prompt_dictionary"),
+    )
+    if not isinstance(prompt_dictionary, dict) or not prompt_dictionary:
+        errors.append("model_defaults.prompt_dictionary is missing or empty")
+        return
+
+    invalid_ids = [
+        f"{alias}={prompt_id!r}"
+        for alias, prompt_id in prompt_dictionary.items()
+        if not isinstance(prompt_id, int)
+        or prompt_id < 0
+        or prompt_id >= NEMOTRON_NUM_PROMPTS
+    ]
+    if invalid_ids:
+        errors.append(
+            "prompt ids must be integers in [0, 127]: "
+            + ", ".join(invalid_ids)
+        )
+    if prompt_dictionary.get("auto") != 101:
+        errors.append(
+            "model_defaults.prompt_dictionary.auto must resolve to 101"
+        )
+
+
+def validate_nemotron_attention_contexts(errors, cfg: dict):
+    contexts = nested_config_value(cfg, ("encoder", "att_context_size"))
+    if not isinstance(contexts, list):
+        errors.append("encoder.att_context_size must be a list of [left, right] pairs")
+        return
+
+    expected_checkpoint_contexts = {
+        (NEMOTRON_LEFT_CONTEXT, 0),
+        (NEMOTRON_LEFT_CONTEXT, 3),
+        (NEMOTRON_LEFT_CONTEXT, 6),
+        (NEMOTRON_LEFT_CONTEXT, 13),
+    }
+    try:
+        actual_contexts = {tuple(int(value) for value in pair) for pair in contexts}
+    except (TypeError, ValueError):
+        errors.append("encoder.att_context_size contains an invalid context pair")
+        return
+    missing = sorted(expected_checkpoint_contexts - actual_contexts)
+    if missing:
+        errors.append(
+            f"encoder.att_context_size is missing required contexts: {missing}"
+        )
+
+
+def validate_nemotron_contract(cfg: dict, sd: dict):
+    errors = []
+    config_expectations = (
+        (("target",), NEMOTRON_TARGET),
+        (("encoder", "n_layers"), 24),
+        (("encoder", "d_model"), 1024),
+        (("encoder", "n_heads"), 8),
+        (("encoder", "subsampling_factor"), 8),
+        (("encoder", "conv_kernel_size"), 9),
+        (("encoder", "att_context_style"), "chunked_limited"),
+        (("encoder", "conv_context_size"), "causal"),
+        (("encoder", "causal_downsampling"), True),
+        (("encoder", "conv_norm_type"), "layer_norm"),
+        (("num_prompts",), NEMOTRON_NUM_PROMPTS),
+        (("decoder", "vocab_size"), 13087),
+        (("decoder", "prednet", "pred_hidden"), 640),
+        (("decoder", "prednet", "pred_rnn_layers"), 2),
+        (("joint", "num_classes"), 13087),
+        (("joint", "jointnet", "encoder_hidden"), 1024),
+        (("joint", "jointnet", "pred_hidden"), 640),
+        (("joint", "jointnet", "joint_hidden"), 640),
+        (("model_defaults", "initialize_prompt_feature"), True),
+        (("model_defaults", "num_prompts"), NEMOTRON_NUM_PROMPTS),
+    )
+    for path, expected in config_expectations:
+        validate_config_value(errors, cfg, path, expected)
+
+    validate_nemotron_prompt_dictionary(errors, cfg)
+    validate_nemotron_attention_contexts(errors, cfg)
+
+    tensor_expectations = (
+        ("prompt_kernel.0.weight", (NEMOTRON_PROMPT_HIDDEN, NEMOTRON_PROMPT_INPUT)),
+        ("prompt_kernel.0.bias", (NEMOTRON_PROMPT_HIDDEN,)),
+        ("prompt_kernel.2.weight", (1024, NEMOTRON_PROMPT_HIDDEN)),
+        ("prompt_kernel.2.bias", (1024,)),
+        ("decoder.prediction.embed.weight", (13088, 640)),
+        ("decoder.prediction.dec_rnn.lstm.weight_ih_l0", (2560, 640)),
+        ("decoder.prediction.dec_rnn.lstm.weight_hh_l0", (2560, 640)),
+        ("decoder.prediction.dec_rnn.lstm.bias_ih_l0", (2560,)),
+        ("decoder.prediction.dec_rnn.lstm.bias_hh_l0", (2560,)),
+        ("decoder.prediction.dec_rnn.lstm.weight_ih_l1", (2560, 640)),
+        ("decoder.prediction.dec_rnn.lstm.weight_hh_l1", (2560, 640)),
+        ("decoder.prediction.dec_rnn.lstm.bias_ih_l1", (2560,)),
+        ("decoder.prediction.dec_rnn.lstm.bias_hh_l1", (2560,)),
+        ("joint.enc.weight", (640, 1024)),
+        ("joint.enc.bias", (640,)),
+        ("joint.pred.weight", (640, 640)),
+        ("joint.pred.bias", (640,)),
+        ("joint.joint_net.2.weight", (13088, 640)),
+        ("joint.joint_net.2.bias", (13088,)),
+    )
+    for name, expected in tensor_expectations:
+        validate_tensor_shape(errors, sd, name, expected)
+
+    if errors:
+        details = "\n  - ".join(errors)
+        raise ValueError(
+            "Nemotron checkpoint does not match the supported "
+            f"{NEMOTRON_VARIANT} contract:\n  - {details}"
+        )
+
+
+def resolve_attention_context(enc: dict, default_right=None):
+    raw_context = enc.get("att_context_size", [-1, -1])
+    if (
+        isinstance(raw_context, (list, tuple))
+        and raw_context
+        and isinstance(raw_context[0], (list, tuple))
+    ):
+        if default_right is not None:
+            for pair in raw_context:
+                if (
+                    isinstance(pair, (list, tuple))
+                    and len(pair) >= 2
+                    and int(pair[1]) == default_right
+                ):
+                    return int(pair[0]), int(pair[1])
+        raw_context = raw_context[0]
+    if isinstance(raw_context, (list, tuple)) and len(raw_context) >= 2:
+        return int(raw_context[0]), int(raw_context[1])
+    return -1, -1
+
+
+def nemotron_prompt_entries(cfg: dict):
+    prompt_dictionary = cfg["model_defaults"]["prompt_dictionary"]
+    aliases = [str(alias) for alias in prompt_dictionary]
+    prompt_ids = [int(prompt_dictionary[alias]) for alias in prompt_dictionary]
+    return aliases, prompt_ids
+
+
 def detect_model_type(cfg: dict) -> str:
     target = str(cfg.get("target", ""))
     if "sortformer" in target.lower() or "sortformer_modules" in cfg:
         return "sortformer"
+    if target == NEMOTRON_TARGET:
+        return "nemotron"
     # Hybrid RNNT+CTC targets contain "RNNT", so resolve them before the
     # generic RNNT branch. Vanilla hybrid (IndicConformer) exports CTC for
     # v1; hybrid+TDT keeps the TDT export path.
@@ -393,7 +589,7 @@ def write_transducer_metadata(writer, cfg: dict, model_type: str):
     writer.add_uint32(f"{prefix}.pred_rnn_layers", pred_rnn_layers)
     writer.add_uint32(f"{prefix}.joint_hidden", joint_hidden)
 
-    if model_type == "rnnt":
+    if model_type in ("rnnt", "nemotron"):
         max_symbols = int(cfg.get("decoding", {}).get("greedy", {}).get("max_symbols", 10))
         writer.add_uint32(f"{prefix}.max_symbols_per_step", max_symbols)
         return
@@ -406,6 +602,43 @@ def write_transducer_metadata(writer, cfg: dict, model_type: str):
         )
     writer.add_uint32(f"{prefix}.num_durations", num_durations)
     writer.add_array(f"{prefix}.durations", durations)
+
+
+def write_nemotron_metadata(writer, cfg: dict):
+    write_transducer_metadata(writer, cfg, "nemotron")
+    aliases, prompt_ids = nemotron_prompt_entries(cfg)
+
+    writer.add_uint32(
+        "parakeet.nemotron.num_prompts",
+        NEMOTRON_NUM_PROMPTS,
+    )
+    writer.add_uint32(
+        "parakeet.nemotron.prompt_width",
+        NEMOTRON_NUM_PROMPTS,
+    )
+    writer.add_uint32(
+        "parakeet.nemotron.prompt_input_width",
+        NEMOTRON_PROMPT_INPUT,
+    )
+    writer.add_uint32(
+        "parakeet.nemotron.left_context_frames",
+        NEMOTRON_LEFT_CONTEXT,
+    )
+    writer.add_uint32(
+        "parakeet.nemotron.cache_time_steps",
+        int(cfg["encoder"]["conv_kernel_size"]) - 1,
+    )
+    writer.add_array(
+        "parakeet.nemotron.allowed_right_context_frames",
+        NEMOTRON_ALLOWED_RIGHT_CONTEXTS,
+    )
+    writer.add_array(
+        "parakeet.nemotron.allowed_chunk_ms",
+        NEMOTRON_ALLOWED_CHUNK_MS,
+    )
+    writer.add_array("parakeet.nemotron.locale_aliases", aliases)
+    writer.add_array("parakeet.nemotron.locale_prompt_ids", prompt_ids)
+    writer.add_string("parakeet.nemotron.default_locale", "auto")
 
 
 def write_transducer_tensors(cfg: dict, sd: dict, model_type: str, add_2d, add_f32):
@@ -427,6 +660,25 @@ def write_transducer_tensors(cfg: dict, sd: dict, model_type: str, add_2d, add_f
     add_f32(f"{prefix}.joint.pred.bias", sd["joint.pred.bias"])
     add_2d(f"{prefix}.joint.out.weight", sd["joint.joint_net.2.weight"])
     add_f32(f"{prefix}.joint.out.bias", sd["joint.joint_net.2.bias"])
+
+
+def write_nemotron_prompt_tensors(sd: dict, add_2d, add_f32):
+    add_2d(
+        "nemotron.prompt.proj.0.weight",
+        sd["prompt_kernel.0.weight"],
+    )
+    add_f32(
+        "nemotron.prompt.proj.0.bias",
+        sd["prompt_kernel.0.bias"],
+    )
+    add_2d(
+        "nemotron.prompt.proj.2.weight",
+        sd["prompt_kernel.2.weight"],
+    )
+    add_f32(
+        "nemotron.prompt.proj.2.bias",
+        sd["prompt_kernel.2.bias"],
+    )
 
 
 def ctc_decoder_config(cfg: dict) -> dict:
@@ -497,6 +749,8 @@ def detect_sortformer_variant(ckpt: Path) -> str:
 def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes,
                multilingual_tok: dict, quant: str):
     model_type = detect_model_type(cfg)
+    if model_type == "nemotron":
+        validate_nemotron_contract(cfg, sd)
 
     enc = cfg["encoder"]
     pre = cfg["preprocessor"]
@@ -533,10 +787,27 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes,
         "rnnt":        f"parakeet-rnnt-{d_model}-{n_layers}l",
         "tdt":         f"parakeet-tdt-{d_model}-{n_layers}l",
         "eou":         f"parakeet-eou-{d_model}-{n_layers}l",
+        "nemotron":    f"nemotron-3.5-asr-streaming-{d_model}-{n_layers}l",
         "sortformer":  f"sortformer-{d_model}-{n_layers}l",
     }[model_type]
     writer.add_name(model_name)
-    writer.add_description(f"NVIDIA Parakeet-{model_type.upper()} FastConformer ASR (CC-BY-4.0)")
+    if model_type == "nemotron":
+        writer.add_description(
+            "NVIDIA Nemotron 3.5 ASR Streaming 0.6B "
+            "(OpenMDW-1.1)"
+        )
+        writer.add_string("general.license", "OpenMDW-1.1")
+        writer.add_string(
+            "general.source.url",
+            "https://huggingface.co/nvidia/"
+            "nemotron-3.5-asr-streaming-0.6b",
+        )
+        writer.add_string("parakeet.model_variant", NEMOTRON_VARIANT)
+    else:
+        writer.add_description(
+            f"NVIDIA Parakeet-{model_type.upper()} "
+            "FastConformer ASR (CC-BY-4.0)"
+        )
     writer.add_file_type(FILE_TYPE_MAP[quant])
 
     writer.add_string("parakeet.model.type", model_type)
@@ -546,11 +817,14 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes,
     conv_context_style = str(enc.get("conv_context_style", "regular"))
     causal_downsample = bool(enc.get("causal_downsampling", False))
     att_style        = str(enc.get("att_context_style", "regular"))
-    att_ctx_raw      = enc.get("att_context_size", [-1, -1])
-    if isinstance(att_ctx_raw, (list, tuple)) and len(att_ctx_raw) >= 2:
-        att_ctx_left, att_ctx_right = int(att_ctx_raw[0]), int(att_ctx_raw[1])
-    else:
-        att_ctx_left, att_ctx_right = -1, -1
+    att_ctx_left, att_ctx_right = resolve_attention_context(
+        enc,
+        default_right=(
+            NEMOTRON_DEFAULT_ATT_CONTEXT_RIGHT
+            if model_type == "nemotron"
+            else None
+        ),
+    )
 
     writer.add_uint32("parakeet.encoder.d_model",                     d_model)
     writer.add_uint32("parakeet.encoder.n_layers",                    n_layers)
@@ -572,8 +846,11 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes,
     writer.add_string("parakeet.encoder.att_context_style",           att_style)
     writer.add_int32 ("parakeet.encoder.att_context_size_left",       att_ctx_left)
     writer.add_int32 ("parakeet.encoder.att_context_size_right",      att_ctx_right)
-    if model_type == "rnnt":
-        writer.add_bool("parakeet.encoder.streaming.enabled", False)
+    if model_type in ("rnnt", "nemotron"):
+        writer.add_bool(
+            "parakeet.encoder.streaming.enabled",
+            model_type == "nemotron",
+        )
 
     normalize_str = str(pre.get("normalize", "per_feature"))
 
@@ -640,6 +917,8 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes,
         variant = detect_sortformer_variant(ckpt)
         if variant:
             writer.add_string("parakeet.model_variant", variant)
+    elif model_type == "nemotron":
+        write_nemotron_metadata(writer, cfg)
     else:
         write_transducer_metadata(writer, cfg, model_type)
 
@@ -822,6 +1101,15 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes,
                 sd["sortformer_modules.single_hidden_to_spks.weight"])
         add_f32("sortformer.head.single_hidden_to_spks.bias",
                 sd["sortformer_modules.single_hidden_to_spks.bias"])
+    elif model_type == "nemotron":
+        write_transducer_tensors(
+            cfg,
+            sd,
+            model_type,
+            add_2d,
+            add_f32,
+        )
+        write_nemotron_prompt_tensors(sd, add_2d, add_f32)
     else:
         write_transducer_tensors(cfg, sd, model_type, add_2d, add_f32)
 
@@ -848,6 +1136,12 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes,
         vocab_note = (
             f"rnnt_vocab={int(cfg['decoder']['vocab_size'])} "
             f"max_symbols={int(cfg.get('decoding', {}).get('greedy', {}).get('max_symbols', 10))}"
+        )
+    elif model_type == "nemotron":
+        vocab_note = (
+            f"nemotron_vocab={int(cfg['decoder']['vocab_size'])} "
+            f"prompts={NEMOTRON_NUM_PROMPTS} "
+            f"contexts={NEMOTRON_ALLOWED_RIGHT_CONTEXTS}"
         )
     else:
         vocab_note = f"tdt_vocab={int(cfg['decoder']['vocab_size'])} durations={cfg['model_defaults']['tdt_durations']}"
