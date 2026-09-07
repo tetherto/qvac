@@ -1,7 +1,7 @@
 {
   "name": "qvac-fabric",
   "version": "10297.1.1",
-  "port-version": 1,
+  "port-version": 2,
   "description": "LLM inference in C/C++",
   "homepage": "https://github.com/tetherto/qvac-fabric-llm.cpp",
   "license": "MIT",
@@ -25,7 +25,10 @@
   ],
   "features": {
     "cuda-backend": {
-      "description": "Build the NVIDIA CUDA GPU backend (libqvac-ggml-cuda.so) on Linux as a DL module alongside Vulkan. Opt-in, the same way 'hip-backend' is. Linux x64 and arm64 only: Windows has no GGML_BACKEND_DL support, so a second GPU backend cannot be stacked there. Requires a CUDA toolkit (nvcc) at build time and hard-errors without one, for the same binary-cache reason as hip-backend. At runtime an absent or unloadable CUDA module is simply not registered, so device enumeration falls through to Vulkan and then CPU with no addon change."
+      "description": "Build the NVIDIA CUDA GPU backend as a runtime-loaded module alongside Vulkan. Supports Linux x64 and arm64, and Windows x64. Requires a CUDA toolkit at build time. Windows also requires the CUDA 13 runtime DLLs on PATH at runtime. An absent or unloadable CUDA module is skipped so selection falls through to Vulkan and then CPU."
+    },
+    "cuda-jetson-backend": {
+      "description": "Build the CUDA 12 Jetson arm64 variant as libqvac-ggml-cuda-jetson.so. Requires cuda-backend and gives the variant a distinct vcpkg binary-cache identity."
     },
     "force-profiler": {
       "description": "Force vk performance logging in ggml"

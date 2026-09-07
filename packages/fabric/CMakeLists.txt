@@ -7,6 +7,11 @@ if(VK_PROFILING)
   list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
 endif()
 
+option(QVAC_CUDA_JETSON "Build the CUDA 12 Jetson backend module" OFF)
+if(QVAC_CUDA_JETSON)
+  list(APPEND VCPKG_MANIFEST_FEATURES "cuda-jetson")
+endif()
+
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
@@ -68,7 +73,7 @@ find_package(ggml CONFIG REQUIRED)
 # linked directly into qvac__fabric.bare and self-register via static
 # initializers, so there is nothing to stage (and we must not ship the .a files).
 set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
+if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if(TARGET ggml::${_backend})
       get_target_property(_backend_type ggml::${_backend} TYPE)

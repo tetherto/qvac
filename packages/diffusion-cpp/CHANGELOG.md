@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- CUDA prebuilds for Linux x64, Linux arm64, Jetson arm64, and Windows x64.
+- A `backend` priority override. The automatic GPU path prefers CUDA on
+  NVIDIA hardware and falls through to Vulkan, then CPU.
+
 ## [0.21.0] - 2026-08-28
 
 This release makes the diffusion addon load on Linux hosts with no graphics

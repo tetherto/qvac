@@ -6,13 +6,16 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "10297.1.1#1",
+      "version>=": "10297.1.1#2",
       "features": [
         {
           "name": "cuda-backend",
-          "platform": "linux & x64"
+          "platform": "linux | (windows & x64)"
         },
-        "hip-backend"
+        {
+          "name": "hip-backend",
+          "platform": "linux & x64"
+        }
       ]
     },
     {
@@ -21,6 +24,18 @@
     }
   ],
   "features": {
+    "cuda-jetson": {
+      "description": "Build the CUDA 12 Jetson backend module",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "platform": "linux & arm64",
+          "features": [
+            "cuda-jetson-backend"
+          ]
+        }
+      ]
+    },
     "vk-profiling": {
       "description": "Force vk performance logging in qvac-fabric",
       "dependencies": [
