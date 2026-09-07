@@ -357,7 +357,7 @@ inline int js_get_element(
 }
 
 inline int js_set_array_elements(
-    js_env_t* env, js_value_t* object, const js_value_t** values, size_t count,
+    js_env_t* env, js_value_t* object, js_value_t* const values[], size_t count,
     size_t offset) {
   return -1;
 }
