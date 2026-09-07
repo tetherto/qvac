@@ -1,4 +1,7 @@
+from pathlib import Path
+
 import pytest
+import yaml
 from src.parakeet.config import (
     Config,
     ServerConfig,
@@ -77,6 +80,24 @@ class TestModelConfig:
         )
         assert config.model_type == ModelType.CTC
 
+    def test_unified_model_type(self):
+        config = ModelConfig.model_construct(
+            path="./models/test",
+            model_type=ModelType.UNIFIED
+        )
+        assert config.model_type == ModelType.UNIFIED
+
+    def test_unified_does_not_require_language(self, tmp_path):
+        model_path = tmp_path / "unified.gguf"
+        model_path.touch()
+
+        config = ModelConfig(
+            path=str(model_path),
+            model_type=ModelType.UNIFIED,
+        )
+
+        assert config.language is None
+
     def test_indic_conformer_requires_language(self, tmp_path):
         model_path = tmp_path / "indic.gguf"
         model_path.touch()
@@ -103,7 +124,31 @@ class TestModelConfig:
 class TestModelTypes:
     def test_all_model_types(self):
         assert ModelType.TDT.value == "tdt"
+        assert ModelType.UNIFIED.value == "unified"
         assert ModelType.CTC.value == "ctc"
         assert ModelType.EOU.value == "eou"
         assert ModelType.SORTFORMER.value == "sortformer"
         assert ModelType.INDIC_CONFORMER.value == "indic-conformer"
+
+
+CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
+PARAKEET_CONFIGS = sorted(CONFIG_DIR.glob("config-parakeet*.yaml"))
+
+
+class TestShippedConfigs:
+    def test_parakeet_configs_are_discovered(self):
+        assert PARAKEET_CONFIGS, f"no parakeet configs found under {CONFIG_DIR}"
+
+    @pytest.mark.parametrize(
+        "config_path", PARAKEET_CONFIGS, ids=lambda path: path.name
+    )
+    def test_declared_model_type_is_known(self, config_path):
+        """Every shipped config must name a model type the client can load.
+
+        The benchmark workflow picks one of these templates per lane and only
+        overwrites the values in place, so a config naming an unknown type
+        fails at config load, before a single sample is transcribed.
+        """
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+        ModelType(raw["model"]["model_type"])
