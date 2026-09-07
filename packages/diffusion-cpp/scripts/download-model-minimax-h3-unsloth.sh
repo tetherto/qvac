@@ -73,7 +73,7 @@ fetch_verified() {
   local url="https://huggingface.co/$HF_REPO/resolve/$H3_REV/$relative_path"
   local partial="$destination.partial"
 
-  if [[ -f "$destination" ]] && [[ "$(stat -c %s "$destination")" == "$expected_size" ]]; then
+  if [[ -f "$destination" ]] && [[ "$(file_size "$destination")" == "$expected_size" ]]; then
     echo "verified: $relative_path"
     return
   fi
@@ -87,7 +87,7 @@ fetch_verified() {
     curl -fL --progress-bar --retry 5 --retry-delay 3 --retry-connrefused -C - \
       -o "$partial" "$url"
   fi
-  if [[ "$(stat -c %s "$partial")" != "$expected_size" ]]; then
+  if [[ "$(file_size "$partial")" != "$expected_size" ]]; then
     echo "size verification failed for $relative_path" >&2
     rm -f "$partial"
     exit 1
@@ -105,6 +105,6 @@ cat <<EOF
 
 MiniMax-H3 $QUANT model set is ready in: $MODELS_DIR
 
-Use text-to-audio-video mode with all four paths, cfg_scale 1.0, guidance 7.0,
-and 24 FPS. MiniMax-H3 aligns frame counts to 17*k + 5.
+Use text-to-audio-video mode with all four paths, cfg_scale 1.0, and 24 FPS.
+MiniMax-H3 aligns frame counts to 17*k + 5.
 EOF

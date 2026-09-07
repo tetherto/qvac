@@ -76,6 +76,8 @@ if [[ "$ALLOW_UNSUPPORTED_COMFYUI_LAYOUT" != true ]]; then
     exit 2
 fi
 
+source "$SCRIPT_DIR/dl-functions.sh"
+
 case "$VARIANT" in
     fl2va) DENOISER_PREFIX="MiniMax-H3-FL2VA" ;;
     ref2va) DENOISER_PREFIX="MiniMax-H3-REF2VA" ;;
@@ -103,14 +105,6 @@ case "$QUANT" in
         exit 2
         ;;
 esac
-
-file_size() {
-    if stat -f '%z' "$1" >/dev/null 2>&1; then
-        stat -f '%z' "$1"
-    else
-        stat -c '%s' "$1"
-    fi
-}
 
 download_verified() {
     local repo="$1"
@@ -162,6 +156,6 @@ Example:
     --audio-vae "$MODELS_DIR/vae/minimax_h3_audio_vae_fp32.safetensors" \\
     --prompt "A realistic cinematic coffee advertisement" \\
     --width 960 --height 544 --video-frames 124 --steps 8 \\
-    --cfg-scale 1.0 --guidance 7.0 --backend te=cpu --diffusion-fa \\
+    --cfg-scale 1.0 --backend te=cpu --diffusion-fa \\
     --offload-to-cpu --output output.webm
 EOF

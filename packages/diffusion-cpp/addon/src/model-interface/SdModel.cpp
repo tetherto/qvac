@@ -1191,6 +1191,11 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
       throw StatusError(
           general_error::InvalidArgument,
           "MiniMax-H3 requires scheduler='discrete'");
+    if (vid.fps != 24)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 output is always 24 FPS; got: " +
+              std::to_string(vid.fps));
   }
 
   const bool hasReferenceImages = !job.referenceImagesBytes.empty();
@@ -1268,8 +1273,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
         "txt2vid does not accept init_image; use img2vid instead");
 
   // -- Model-aware frame/dimension validation -------------------------------
-  // The generic handler enforces Wan's 4*k+1 frame rule and 16-pixel spatial
-  // grid. Spatial alignment is derived from the model's GGUF tensor
+  // The generic handler only validates scalar types and positivity. Frame
+  // packing and spatial alignment are derived from the model's GGUF tensor
   // descriptors at load time, rather than the caller-controlled model path.
   // This keeps renamed TI2V checkpoints and direct native callers on the
   // correct 32-pixel grid.
