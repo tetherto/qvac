@@ -98,6 +98,19 @@ function pngLuminanceStddev(png) {
 // `live` near `rows`, where a last-index scan would have hidden it as
 // "< rows". `prefix` is the leading live rows, for comparing two packs (a
 // prompt-insensitive encoder returns the same bytes for different prompts).
+//
+// KNOWN DIVERGENCE FROM THE ENGINE LOG (read this before "fixing" a mismatch):
+// the engine's load-time line `scene pack: prompt rows N live / M`
+// (qvac-ext-stable-diffusion.cpp#37, AbotScenePack::load) computes N as
+// "last non-zero row index + 1" and only WARNs at exactly N == M. This guard
+// COUNTS the non-zero rows, bounds them at rows / 2 and checks contiguity. On
+// a partially zeroed pack (e.g. 511/512 live) the two therefore disagree: the
+// engine prints a high N at INFO level while this guard goes red. This guard
+// is the authoritative gate; the engine line is observability only, and output
+// quality is unaffected either way (the pad-zeroing fix itself is correct).
+// Aligning the engine diagnostic to count semantics is deliberately deferred
+// to the next ABot engine change (review thread on qvac#4232). Do not resolve
+// the disagreement by loosening this guard.
 function readScenePackPromptRows(buf) {
   const headerLen = Number(buf.readBigUInt64LE(0))
   const header = JSON.parse(buf.toString('utf8', 8, 8 + headerLen))

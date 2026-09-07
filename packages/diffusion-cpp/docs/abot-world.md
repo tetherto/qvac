@@ -341,8 +341,11 @@ within one block). The model was trained with a fixed 512-row context whose
 padding rows act as attention sinks — the padding must be present, and it must
 be zeroed. A pack whose padding is *not* zeroed (the shape of the 2026-08-11
 regression) instead conditions the walk on live pad-token embeddings and
-washes the output out; the scene-pack log line `scene pack: prompt rows N live
-/ 512` reports the live-row count, and the CI guards fail if `N == 512`.
+washes the output out. Two independent signals watch for this: the engine logs
+`scene pack: prompt rows N live / 512` at load (warning only at `N == 512`),
+and the addon's CI guard counts the live rows itself, failing the
+world-generation lane if they exceed half the rows or are not contiguous. The
+two can disagree on a partially zeroed pack — see [Known issues](#known-issues).
 
 ## Performance vs the PyTorch reference
 
@@ -383,6 +386,23 @@ reference, scene-pack cosine gates) lives in the engine repo's PR #22/#27
 documentation. The full shipped pipeline — registry engine port, P2P model
 set, native scene creation, 45+ block walks over an SSH tunnel — was
 validated hands-on on an RTX 5090 with zero errors and flat VRAM.
+
+## Known issues
+
+**Engine prompt-row log under-warns on partially zeroed packs.** The engine
+computes `N` in `scene pack: prompt rows N live / 512` as *last non-zero row
+index + 1*, not a count of live rows, and raises its warning only at exactly
+`512/512`. A pack whose padding is only partially zeroed (say 511 live rows) is
+therefore logged at INFO with a suspiciously high `N` rather than at WARN, and
+interior holes go undetected. The addon's CI guard
+(`test/integration/abot-guards.js`, `readScenePackPromptRows`) counts the rows,
+bounds them at `rows / 2` and checks contiguity, so on such a pack the engine
+log and the guard disagree — **the guard is authoritative; the engine line is
+observability only.** Output quality is unaffected: the fix that zeroes the
+padding (engine #37) is correct, and no partially-zeroing producer is known.
+Aligning the engine diagnostic to count semantics is deliberately deferred to
+the next ABot engine change (review thread on qvac#4232); do not "fix" the
+disagreement by loosening the addon guard.
 
 ## Troubleshooting
 
