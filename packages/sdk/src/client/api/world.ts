@@ -23,16 +23,16 @@ import {
  * `sceneSrc` takes a path or URL, so persist the bytes yourself.
  *
  * Scene creation cannot be interrupted — the engine exposes no abort hook for
- * it — so `cancel({ requestId })` stops the SDK from yielding but the encode runs
- * to completion. Await the result before unloading the model.
+ * it — so cancelling by request id stops the SDK from yielding but the encode
+ * runs to completion. Await the result before unloading the model.
  *
  * @param params - Loaded world model ID, scene prompt, first-frame image bytes, optional dimensions, and `returnPack`.
  * @returns `requestId` and `stats`; plus `scene` (promise of the pack) when `returnPack: true`.
  * @throws {RequestValidationFailedError} Client-side, before any RPC, if the
  *   prompt is empty, the dimensions are not positive multiples of 32 within the
  *   per-axis and total-pixel ceilings, or the first frame exceeds 3 MB.
- * @throws Server-side, before the session is touched, if the first frame's
- *   header declares more than 8192x8192 pixels or cannot be read. Raised as
+ *   Server-side, before the session is touched, if the first frame's header
+ *   declares more than 8192x8192 pixels or cannot be read. Raised as
  *   `PluginRequestValidationFailedError` on the engine; that class is not
  *   exported from the client package and is not in the RPC reconstructor map, so
  *   match it on message rather than with `instanceof`.
@@ -40,7 +40,7 @@ import {
  *   `mode: "world"`.
  * @throws {RequestRejectedByPolicyError} If a world job is already running on
  *   this model — world refuses rather than queues.
- * @throws {InferenceCancelledError} If `cancel({ requestId })` is accepted.
+ * @throws {InferenceCancelledError} If cancel by request id is accepted.
  *   Scene creation is uninterruptible, so this stops delivery while the encode
  *   runs to completion.
  * @throws {StreamEndedError} If the RPC stream closes without a terminal
@@ -111,7 +111,7 @@ export function worldCreateScene(
  * `keys` accepts an array, a key-state object, or a raw 8-bit mask. WASD move,
  * IJKL steer the camera; omit for an idle block.
  *
- * `progressStream` forwards the engine's `{ step, totalSteps, elapsedMs }` tick,
+ * `progressStream` forwards the engine's step / totalSteps / elapsedMs tick,
  * the same shape `video` and `diffusion` emit. The engine fires it once per
  * block, AFTER the frames, so it is an end-of-block summary rather than
  * mid-block liveness — one tick per `worldStep` call.
@@ -124,7 +124,7 @@ export function worldCreateScene(
  *   `mode: "world"`.
  * @throws {RequestRejectedByPolicyError} If a block is already in flight on
  *   this model.
- * @throws {InferenceCancelledError} If `cancel({ requestId })` is accepted. The
+ * @throws {InferenceCancelledError} If cancel by request id is accepted. The
  *   step rejects rather than resolving with a truncated block, and the session
  *   is rebuilt on the next call.
  * @throws {StreamEndedError} If the RPC stream closes without a terminal

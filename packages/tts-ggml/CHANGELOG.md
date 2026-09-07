@@ -11,8 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Raise the `speech-cpp` floor to 2026-09-01#1, which brings in ggml-speech
-  2026-09-01. The CUDA backend now skips, at registration, GPUs whose
+- Drop CUDA from the published linux-x64 prebuild so the npm tarball stays
+  under the registry size limit. `useGPU: true` uses Vulkan on Linux. CUDA
+  remains opt-in at build time via `ENABLE_CUDA=ON`.
+
+- Raise the `speech-cpp` floor to 2026-09-01#2, which brings in ggml-speech
+  2026-09-02. The CUDA backend now skips, at registration, GPUs whose
   compute capability has no compiled code in the fatbin, so a
   `useGPU: true` run on such a card (Turing and older) falls back to Vulkan
   or CPU instead of failing at the first kernel launch. The CUDA fatbin
@@ -20,7 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Turing (7.5), Ampere (8.0, 8.6), Ada (8.9), Hopper (9.0) and Blackwell
   (12.0, 12.1) — with 8.0 PTX for anything newer, so Turing is supported
   again and Blackwell no longer pays a first-use JIT. The roll also brings
-  the compute-buffer OOM handling and k-quant GET_ROWS fixes.
+  the compute-buffer OOM handling and k-quant GET_ROWS fixes, and fixes two
+  multi-GPU faults on a host that mixes supported and unsupported NVIDIA
+  cards: backend initialisation no longer aborts when the unsupported card
+  enumerates first, and a row-split buffer no longer allocates on the
+  skipped card.
 
 ## [0.8.0] - 2026-08-28
 

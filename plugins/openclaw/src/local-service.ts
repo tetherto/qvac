@@ -65,6 +65,14 @@ function parseOptions(argv: readonly string[]): ReadonlyMap<string, string> {
   return options
 }
 
+// openclaw 2026.8.1 moved plugin-contributed auth choices behind a
+// `provider-plugin:` prefix. The plugin supports openclaw >=2026.6.0, so
+// remediation text names both forms rather than one that fails on half the
+// supported range.
+const ONBOARD_COMMAND_HINT =
+  '`openclaw onboard --auth-choice provider-plugin:qvac` ' +
+  '(on openclaw < 2026.8.1, `--auth-choice qvac`)'
+
 // A pre-auth OpenClaw install has `localService.args` persisted in openclaw.json
 // without `--api-key-file`. Failing closed is deliberate — the launcher must not
 // start an unauthenticated serve — so the message has to name the remedy.
@@ -73,8 +81,9 @@ function requireApiKeyFile(options: ReadonlyMap<string, string>): string {
   if (value === undefined) {
     throw new TypeError(
       '--api-key-file requires a value. This QVAC provider entry was created before the managed ' +
-        'qvac serve required bearer authentication; re-run `openclaw onboard --auth-choice qvac` ' +
-        'to regenerate it.'
+        'qvac serve required bearer authentication; re-run ' +
+        ONBOARD_COMMAND_HINT +
+        ' to regenerate it.'
     )
   }
   return value
@@ -139,7 +148,9 @@ export function loadApiKey(keyFile: string): string {
     if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
       throw new TypeError(
         `QVAC API key file ${keyFile} is readable beyond its owner. Run \`chmod 600 ${keyFile}\`, ` +
-          'or re-run `openclaw onboard --auth-choice qvac` to regenerate it.'
+          'or re-run ' +
+          ONBOARD_COMMAND_HINT +
+          ' to regenerate it.'
       )
     }
     return normalizeApiKey(readFileSync(fd, 'utf8'), 'stored QVAC API key')

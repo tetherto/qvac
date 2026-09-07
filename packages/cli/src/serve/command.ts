@@ -1,6 +1,7 @@
 import type { Command } from 'commander'
 import { collect } from '@/cli/options'
 import { handleError } from '@/errors'
+import { DEFAULT_EXTENSION, EXTENSIONS } from '@/serve/extensions'
 
 interface ServeOptions {
   config?: string
@@ -19,14 +20,53 @@ interface ServeOptions {
   loadTimeout?: string
   cancelLoadOnDisconnect?: boolean
   verbose?: boolean
+  /** One boolean per registered extension, plus `default` from `--no-default`. */
+  [extension: string]: unknown
 }
 
 export function registerServeCommand(program: Command): void {
-  const serveCmd = program.command('serve').description('Start an API server backed by QVAC')
+  const serveCmd = program
+    .command('serve')
+    .description('Start an API server backed by QVAC')
+    .option('--no-default', `Do not mount the ${DEFAULT_EXTENSION} surface`)
 
-  serveCmd
-    .command('openai')
-    .description('Start an OpenAI-compatible REST API server')
+  for (const extension of optionalExtensions()) {
+    serveCmd.option(`--${extension.name}`, `Mount the ${extension.description}`)
+  }
+
+  addServeOptions(serveCmd).action(runServe)
+
+  // Options are declared on both `serve` and this alias so they still show in
+  // `serve openai --help`, but commander routes the values to `serve`, so the
+  // handler reads the merged view rather than its own (defaults-only) opts.
+  addServeOptions(
+    serveCmd
+      .command('openai')
+      .description(
+        'Deprecated: start the OpenAI-compatible REST API server with `qvac serve --openai --no-default`'
+      )
+  ).action(async (_options: ServeOptions, command: Command) => {
+    console.warn('`qvac serve openai` is deprecated. Use `qvac serve --openai --no-default`.')
+    const merged = command.optsWithGlobals() as ServeOptions
+    await runServe({ ...merged, openai: true, [DEFAULT_EXTENSION]: false })
+  })
+}
+
+/** Every extension a flag can mount; the default one is always mounted instead. */
+function optionalExtensions(): typeof EXTENSIONS {
+  return EXTENSIONS.filter((extension) => extension.name !== DEFAULT_EXTENSION)
+}
+
+function resolveExtensionNames(options: ServeOptions): string[] {
+  const names = options[DEFAULT_EXTENSION] === false ? [] : [DEFAULT_EXTENSION]
+  for (const extension of optionalExtensions()) {
+    if (options[extension.name] === true) names.push(extension.name)
+  }
+  return names
+}
+
+function addServeOptions(command: Command): Command {
+  return command
     .option('-c, --config <path>', 'Config file path (default: auto-detect qvac.config.*)')
     .option('-p, --port <number>', 'Port to listen on', '11434')
     .option('-H, --host <address>', 'Host to bind to', '127.0.0.1')
@@ -63,7 +103,6 @@ export function registerServeCommand(program: Command): void {
       'Keep loading a model even if the client that triggered the load disconnects'
     )
     .option('-v, --verbose', 'Detailed output')
-    .action(runServe)
 }
 
 async function runServe(options: ServeOptions): Promise<void> {
@@ -82,6 +121,7 @@ async function runServe(options: ServeOptions): Promise<void> {
       corsOrigins: options.corsOrigin.length > 0 ? options.corsOrigin : undefined,
       publicBaseUrl: options.publicBaseUrl,
       docs: options.docs,
+      extensions: resolveExtensionNames(options),
       // Only forward when explicitly disabled so config can still opt out.
       lazyLoad: options.lazyLoad === false ? false : undefined,
       loadConcurrency:

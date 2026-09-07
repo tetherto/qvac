@@ -28,6 +28,7 @@ Values marked with `<placeholders>` should be replaced with your actual values.
   "requireSecureTransport": false,
   "registryDownloadMaxRetries": 3,
   "registryStreamTimeoutMs": 60000,
+  "rpcInitTimeoutMs": 30000,
   "deviceDefaults": [
     {
       "name": "Samsung Galaxy force CPU",
@@ -70,6 +71,7 @@ The following table lists all supported configuration options for `qvac.config.*
 | `requireSecureTransport` | Reject plaintext `http://` and HTTPS→HTTP downgrade redirects for **every** HTTP source (loopback exempt). When off, this is enforced only for Hugging Face sources; bring-your-own HTTP is left as-is. | `boolean` | No | `false` |
 | `registryDownloadMaxRetries` | Maximum retry attempts for registry (P2P) downloads on timeout. | `number` | No | `3` |
 | `registryStreamTimeoutMs` | Timeout in milliseconds for stalled registry (P2P) download streams. Raise on slow or high-latency connections where the default triggers spurious retries. | `number` | No | `60000` |
+| `rpcInitTimeoutMs` | Timeout in milliseconds for the worker RPC handshake performed when the SDK initializes. Raise on slow storage or embedded hardware where the first worker start legitimately exceeds the default. Overridden by the `QVAC_RPC_INIT_TIMEOUT_MS` environment variable. | `number` | No | `30000` |
 | `deviceDefaults` | Override loaded model config for specific devices. First matching pattern wins. Use it to optimize for different hardware. | [`DevicePattern[]`](#devicepattern) | No | — |
 | `bareRuntimeVersion` | Bare runtime version used for native addon ABI verification during bundling (`qvac bundle sdk` / `qvac verify bundle`). When omitted, the bundler auto-detects it from `node_modules` (`bare-runtime`, then `bare`). | `string` | No | Auto-detected |
 | `serve` | Configuration for the [HTTP server](/cli/http-server). | [`ServeConfig`](#serveconfig) | No | — |
@@ -115,7 +117,7 @@ Model types (allowed keys): `llm` | `embeddings` | `whisper` | `parakeet` | `bci
 | `models` | Map of model aliases to model entries (see [`ModelEntry`](#modelentry) below). Required when running the server. | `Record<string, string \| ModelEntry>` | Yes | — |
 | `publicBaseUrl` | Externally reachable origin (e.g., `"https://api.example.com"`). Required for image `response_format=url`. Must start with `http://` or `https://`. The CLI flag `--public-base-url` overrides this value. | `string` | No | — |
 | `cors` | Browser origins trusted to make cross-origin requests. See [`CorsOptions`](#corsoptions). | `CorsOptions` | No | — |
-| `openai` | OpenAI-adapter–specific options. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
+| `openai` | Options for the `openai` extension, mounted with `qvac serve --openai`. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
 
 #### `CorsOptions`
 
@@ -177,7 +179,7 @@ Example:
 
 #### `LoadOptions` (`serve.load`)
 
-Controls how models are loaded on demand. Each field has a matching CLI flag on `qvac serve openai`.
+Controls how models are loaded on demand. Each field has a matching CLI flag on `qvac serve`.
 
 | Field | Description | Type | Required | Default |
 | --- | --- | --- | --- | --- |

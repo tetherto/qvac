@@ -75,6 +75,7 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
+    "@qvac/fabric": "^0.10.0",
     "bare-fs": "^4.5.1",
     "bare-https": "^3.0.0",
     "bare-path": "^3.0.0",
