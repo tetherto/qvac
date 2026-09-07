@@ -1,10 +1,12 @@
 // NOLINTBEGIN
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cstring>
 #include <ranges>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 
 #include <ggml-backend.h>
@@ -15,6 +17,7 @@
 #endif
 
 #include "nmt.hpp"
+#include "nmt_utils.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 std::string sanitizePrintableAscii(const std::string& input) {
@@ -71,7 +74,7 @@ int64_t get_time_us() {
 
 bool ggml_graph_compute_helper(
     ggml_backend_sched_t sched, struct ggml_cgraph* graph, int n_threads,
-    bool sched_reset = true) {
+    bool sched_reset) {
   for (int i = 0; i < ggml_backend_sched_get_n_backends(sched); ++i) {
     ggml_backend_t backend = ggml_backend_sched_get_backend(sched, i);
     ggml_backend_dev_t dev = ggml_backend_get_device(backend);
@@ -109,10 +112,107 @@ bool nmtNameContainsCi(const char* name, const std::string& needleLower) {
   return nameLower.find(needleLower) != std::string::npos;
 }
 
+namespace {
+enum class NmtGpuFamily : std::uint8_t { None, Vulkan, Metal, OpenCl };
+
+NmtGpuFamily familyFromSelector(const std::string& selectorLower) {
+  if (selectorLower.find("opencl") != std::string::npos) {
+    return NmtGpuFamily::OpenCl;
+  }
+  if (selectorLower.find("vulkan") != std::string::npos) {
+    return NmtGpuFamily::Vulkan;
+  }
+  if (selectorLower.find("metal") != std::string::npos ||
+      selectorLower.find("mtl") != std::string::npos) {
+    return NmtGpuFamily::Metal;
+  }
+  return NmtGpuFamily::None;
+}
+
+bool nameHasMetalPrefix(const char* name) {
+  if (name == nullptr) {
+    return false;
+  }
+  std::string lower(name, strnlen(name, 256));
+  std::ranges::transform(lower, lower.begin(), [](unsigned char chr) {
+    return static_cast<char>(std::tolower(chr));
+  });
+  return lower.starts_with("mtl") || lower.starts_with("metal");
+}
+
+bool nameEqualsCi(const char* name, std::string_view expectedLower) {
+  if (name == nullptr) {
+    return false;
+  }
+  std::string lower(name, strnlen(name, 256));
+  std::ranges::transform(lower, lower.begin(), [](unsigned char chr) {
+    return static_cast<char>(std::tolower(chr));
+  });
+  return lower == expectedLower;
+}
+
+NmtGpuFamily deviceFamily(
+    const NmtBackendInterface& backend, ggml_backend_dev_t device) {
+  const enum ggml_backend_dev_type type = backend.deviceType(device);
+  if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
+      type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+    return NmtGpuFamily::None;
+  }
+  const char* deviceName = backend.deviceName(device);
+  const ggml_backend_reg_t registry = backend.deviceRegistry(device);
+  const char* registryName =
+      registry != nullptr ? backend.registryName(registry) : nullptr;
+  if (nameEqualsCi(registryName, "rpc")) {
+    return NmtGpuFamily::None;
+  }
+  if (nmtNameContainsCi(deviceName, "opencl") ||
+      nmtNameContainsCi(registryName, "opencl")) {
+    return NmtGpuFamily::OpenCl;
+  }
+  if (nmtNameContainsCi(deviceName, "vulkan") ||
+      nmtNameContainsCi(registryName, "vulkan")) {
+    return NmtGpuFamily::Vulkan;
+  }
+  if (nameHasMetalPrefix(deviceName) || nameHasMetalPrefix(registryName)) {
+    return NmtGpuFamily::Metal;
+  }
+  return NmtGpuFamily::None;
+}
+
+bool matchesExplicitSelector(
+    const NmtBackendInterface& backend, ggml_backend_dev_t device,
+    const std::string& selectorLower) {
+  if ((selectorLower == "metal" || selectorLower == "mtl") &&
+      deviceFamily(backend, device) == NmtGpuFamily::Metal) {
+    return true;
+  }
+  const ggml_backend_reg_t registry = backend.deviceRegistry(device);
+  return nmtNameContainsCi(backend.deviceName(device), selectorLower) ||
+         (registry != nullptr &&
+          nmtNameContainsCi(backend.registryName(registry), selectorLower));
+}
+} // namespace
+
 ggml_backend_dev_t
 nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
     bool useGpu, const std::string& gpuBackend, int gpuDevice,
     const char* logPrefix) {
+  const NmtBackendInterface backend{
+      .deviceCount = ggml_backend_dev_count,
+      .deviceGet = ggml_backend_dev_get,
+      .deviceType = ggml_backend_dev_type,
+      .deviceName = ggml_backend_dev_name,
+      .deviceRegistry = ggml_backend_dev_backend_reg,
+      .registryName = ggml_backend_reg_name,
+      .deviceBufferType = ggml_backend_dev_buffer_type};
+  return nmtSelectGpuDevice(
+      backend, useGpu, gpuBackend, gpuDevice, logPrefix);
+}
+
+ggml_backend_dev_t
+nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
+    const NmtBackendInterface& backend, bool useGpu,
+    const std::string& gpuBackend, int gpuDevice, const char* logPrefix) {
   if (!useGpu) {
     return nullptr;
   }
@@ -123,9 +223,18 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       });
 
   ggml_backend_dev_t dev = nullptr;
-  const size_t devCount = ggml_backend_dev_count();
+  const size_t devCount = backend.deviceCount();
 
   if (!gpuBackendLower.empty()) {
+    const NmtGpuFamily requestedFamily = familyFromSelector(gpuBackendLower);
+    if (requestedFamily == NmtGpuFamily::None) {
+      std::ostringstream oss;
+      oss << "[" << logPrefix << "] Explicit gpu_backend='" << gpuBackend
+          << "' is not a supported Vulkan, Metal, or OpenCL backend — "
+             "falling back to CPU";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
+      return nullptr;
+    }
 #ifndef QVAC_NMTCPP_USE_OPENCL
     // OpenCL is opt-in via explicit gpu_backend even when the build-time
     // guard is off. Warn loudly because the guard exists specifically to
@@ -145,20 +254,19 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
     bool deviceFoundButBuftNull = false;
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t devCur = ggml_backend_dev_get(i);
+      ggml_backend_dev_t devCur = backend.deviceGet(i);
       if (devCur == nullptr) {
         continue;
       }
-      enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
-      const char* name = ggml_backend_dev_name(devCur);
-      if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
+      const char* name = backend.deviceName(devCur);
+      if (deviceFamily(backend, devCur) != requestedFamily) {
         continue;
       }
-      if (!nmtNameContainsCi(name, gpuBackendLower)) {
+      if (!matchesExplicitSelector(backend, devCur, gpuBackendLower)) {
         continue;
       }
       if (cnt == gpuDevice) {
-        ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(devCur);
+        ggml_backend_buffer_type_t buft = backend.deviceBufferType(devCur);
         if (buft != nullptr) {
           dev = devCur;
           std::ostringstream oss;
@@ -203,20 +311,16 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   {
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t devCur = ggml_backend_dev_get(i);
+      ggml_backend_dev_t devCur = backend.deviceGet(i);
       if (devCur == nullptr) {
         continue;
       }
-      enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
-      const char* name = ggml_backend_dev_name(devCur);
-      if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
-        continue;
-      }
-      if (!nmtNameContainsCi(name, "opencl")) {
+      const char* name = backend.deviceName(devCur);
+      if (deviceFamily(backend, devCur) != NmtGpuFamily::OpenCl) {
         continue;
       }
       if (cnt == gpuDevice) {
-        ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(devCur);
+        ggml_backend_buffer_type_t buft = backend.deviceBufferType(devCur);
         if (buft != nullptr) {
           dev = devCur;
           std::ostringstream oss;
@@ -246,7 +350,7 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   // OpenCL is always skipped here because Mode 2a already handles it when
   // QVAC_NMTCPP_USE_OPENCL is defined, and it's unwanted when the guard is
   // off. This ensures gpuDevice ordinals map to distinct physical GPUs
-  // (Vulkan/CUDA/Metal) without OpenCL duplicates occupying slots.
+  // (Vulkan/Metal) without OpenCL duplicates occupying slots.
   if (dev == nullptr) {
 #ifdef QVAC_NMTCPP_USE_OPENCL
     if (oclDeviceFoundButBuftNull) {
@@ -260,20 +364,17 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
     const int fallbackOrdinal = gpuDevice;
     int cnt2 = 0;
     for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t devCur = ggml_backend_dev_get(i);
+      ggml_backend_dev_t devCur = backend.deviceGet(i);
       if (devCur == nullptr) {
         continue;
       }
-      enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
-      const char* name = ggml_backend_dev_name(devCur);
-      if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
-        continue;
-      }
-      if (nmtNameContainsCi(name, "opencl")) {
+      const char* name = backend.deviceName(devCur);
+      const NmtGpuFamily family = deviceFamily(backend, devCur);
+      if (family != NmtGpuFamily::Vulkan && family != NmtGpuFamily::Metal) {
         continue;
       }
       if (cnt2 == fallbackOrdinal) {
-        ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(devCur);
+        ggml_backend_buffer_type_t buft = backend.deviceBufferType(devCur);
         if (buft != nullptr) {
           dev = devCur;
           std::ostringstream oss;

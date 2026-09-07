@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <thread>
 
@@ -25,6 +26,16 @@ std::string sanitizePrintableAscii(const std::string& input);
 // in lock-step.
 bool nmtNameContainsCi(const char* name, const std::string& needleLower);
 
+struct NmtBackendInterface {
+  size_t (*deviceCount)();
+  ggml_backend_dev_t (*deviceGet)(size_t index);
+  enum ggml_backend_dev_type (*deviceType)(ggml_backend_dev_t device);
+  const char* (*deviceName)(ggml_backend_dev_t device);
+  ggml_backend_reg_t (*deviceRegistry)(ggml_backend_dev_t device);
+  const char* (*registryName)(ggml_backend_reg_t registry);
+  ggml_backend_buffer_type_t (*deviceBufferType)(ggml_backend_dev_t device);
+};
+
 // Shared GPU device selection used by both nmt_backend_init_gpu (for backend
 // init) and make_buft_list (for buffer-type assignment). Returning the same
 // dev pointer from one helper guarantees compute and tensor-buffer placement
@@ -43,3 +54,7 @@ bool nmtNameContainsCi(const char* name, const std::string& needleLower);
 ggml_backend_dev_t nmtSelectGpuDevice(
     bool useGpu, const std::string& gpuBackend, int gpuDevice,
     const char* logPrefix);
+
+ggml_backend_dev_t nmtSelectGpuDevice(
+    const NmtBackendInterface& backend, bool useGpu,
+    const std::string& gpuBackend, int gpuDevice, const char* logPrefix);
