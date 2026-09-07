@@ -96,7 +96,7 @@ export const assessModelFitInputSchema = z.object({
     .literal('interactive-v1')
     .default('interactive-v1')
     .describe(
-      'Headroom policy. `interactive-v1` leaves the larger of 2 GiB or 15% of total RAM on desktop, 1 GiB or 20% on mobile.'
+      'Headroom policy. `interactive-v1` withholds 20% of the memory available right now, capped at 2 GiB on desktop and 1 GiB on mobile.'
     )
 })
 
@@ -114,7 +114,12 @@ const byteRangeSchema = z.object({
  *   on its per-process footprint against a limit well below device RAM, so a
  *   system-wide budget there would defend verdicts the OS does not honor.
  */
-export const modelFitBasisSchema = z.enum(['system-memory', 'process-memory'])
+export const modelFitBasisSchema = z.enum([
+  'system-memory',
+  'process-memory',
+  'device-memory',
+  'device-budget'
+])
 
 export const modelFitBudgetSchema = z.object({
   totalBytes: z
@@ -125,10 +130,15 @@ export const modelFitBudgetSchema = z.object({
   usedBytes: z
     .number()
     .describe('Memory in use at sample time under the same basis (system-wide, or this process).'),
+  availableBytes: z
+    .number()
+    .describe(
+      'Headroom before the policy applies: total − used, or the process allowance under process-memory. The reserve is a share of this.'
+    ),
   reservedBytes: z.number().describe('Headroom withheld by the policy.'),
   availableAfterReserveBytes: z
     .number()
-    .describe('Budget the estimate is compared against: total − used − reserved.')
+    .describe('Budget the estimate is compared against: available − reserved.')
 })
 
 export const modelFitModelResultSchema = z.object({
@@ -145,7 +155,7 @@ export const modelFitModelResultSchema = z.object({
 export const assessModelFitResultSchema = z.object({
   verdict: modelFitVerdictSchema.describe('Combined verdict across every candidate.'),
   basis: modelFitBasisSchema.describe(
-    'The evidence the budget was derived from — system RAM, or the per-process ceiling on iOS. GPU/VRAM metrics are deliberately excluded either way; they are `unverified`-scoped by design.'
+    'The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.'
   ),
   execution: modelFitExecutionSchema.describe('The declared execution mode this result assumed.'),
   budget: modelFitBudgetSchema.optional().describe('Absent when memory evidence was unusable.'),
