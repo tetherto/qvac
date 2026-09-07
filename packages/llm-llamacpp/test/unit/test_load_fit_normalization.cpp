@@ -326,14 +326,14 @@ class LoadFitNormalizationTest : public ::testing::Test {
 protected:
   test_common::MockModelMetaData metadata_{false, "llama"};
 
-  // tensorDevices defaults to empty on purpose: a non-empty list is forwarded
+  // splitDevices defaults to empty on purpose: a non-empty list is forwarded
   // as `--device a,b`, and qvac-fabric's parser rejects names that do not
   // exist on the host running the test. Tests that care about the list either
   // supply one deliberately (see TensorSplitForwardsExplicitDeviceList) or
   // exercise the selection logic in test_backend_selection.cpp.
   static lfn::NormalizationDependencies backend(
       lfn::SelectedBackend selected, bool supportsRowSplit = false,
-      std::vector<std::string> tensorDevices = {}) {
+      std::vector<std::string> splitDevices = {}) {
     return {
         .resolveBackend = [selected](
                               backend_selection::BackendType,
@@ -342,7 +342,7 @@ protected:
                               bool) { return selected; },
         .gpuBackendSupportsRowSplit =
             [supportsRowSplit]() { return supportsRowSplit; },
-        .tensorSplitDeviceNames = [tensorDevices]() { return tensorDevices; }};
+        .splitDeviceNames = [splitDevices]() { return splitDevices; }};
   }
 
   static lfn::ConfigMap baseConfig() {
@@ -523,60 +523,37 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFitOverrideBeatsExplicitFitOn) {
   }
 }
 
-// QVAC-24253: tensor mode must pin an explicit device list, because fabric's
-// tensor branch applies no device-type filter and no dedupe — it would
-// otherwise recruit integrated GPUs and shard a dual-registered GPU twice.
-// Asserting the list reaches fabric's parser: a name that cannot exist makes
-// the arg loop throw naming --device, which only happens if it was forwarded.
-TEST_F(LoadFitNormalizationTest, TensorSplitForwardsExplicitDeviceList) {
-  auto config = baseConfig();
-  config["split-mode"] = "tensor";
-  try {
-    static_cast<void>(lfn::normalizeLoadForFit(
-        "/tmp/model.gguf",
-        std::move(config),
-        metadata_,
-        {},
-        backend(
-            {.type = backend_selection::GPU, .name = "vulkan0"},
-            false,
-            {"qvac-nonexistent-device-0", "qvac-nonexistent-device-1"})));
-    FAIL() << "tensor mode must forward --device with the enumerated list";
-  } catch (const qvac_errors::StatusError& error) {
-    EXPECT_THAT(error.what(), ::testing::HasSubstr("--device"));
-    // qvac-fabric's parse_device_list splits on ',' and reports only the first
-    // element it cannot resolve, so seeing element 0 named back proves the
-    // list was forwarded and split as intended.
-    EXPECT_THAT(
-        error.what(), ::testing::HasSubstr("qvac-nonexistent-device-0"));
-  }
-}
-
-// The other split modes keep omitting --device so fabric's own filtered
-// selection runs; only tensor mode pins a list.
-TEST_F(LoadFitNormalizationTest, NonTensorSplitModesDoNotForwardDeviceList) {
-  for (const char* mode : {"layer", "row"}) {
+// Every multi-GPU mode must pin the eligible device list so a backend that the
+// addon cannot execute on is never recruited by fabric. A nonexistent name
+// makes fabric's parser throw naming --device, proving the list was forwarded.
+TEST_F(LoadFitNormalizationTest, SplitModesForwardEligibleDeviceList) {
+  for (const char* mode : {"layer", "row", "tensor"}) {
     auto config = baseConfig();
     config["split-mode"] = mode;
-    const auto result = lfn::normalizeLoadForFit(
-        "/tmp/model.gguf",
-        std::move(config),
-        metadata_,
-        {},
-        backend(
-            {.type = backend_selection::GPU, .name = "vulkan0"},
-            true,
-            {"qvac-nonexistent-device-0"}));
-    // Reaching here at all proves no --device was emitted: the bogus name
-    // would have thrown in the arg loop.
-    EXPECT_EQ(result.runtimeBackendDevice, 1) << "mode: " << mode;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend(
+              {.type = backend_selection::GPU, .name = "vulkan0"},
+              true,
+              {"qvac-nonexistent-device-0", "qvac-nonexistent-device-1"})));
+      FAIL() << mode << " mode must forward --device";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("--device"))
+          << "mode: " << mode;
+      EXPECT_THAT(
+          error.what(), ::testing::HasSubstr("qvac-nonexistent-device-0"))
+          << "mode: " << mode;
+    }
   }
 }
 
 // No enumerable GPU: fall back to fabric's own selection rather than emitting
 // an empty --device, which the parser would reject.
-TEST_F(
-    LoadFitNormalizationTest, TensorSplitWithNoEnumerableDevicesDoesNotThrow) {
+TEST_F(LoadFitNormalizationTest, SplitModeWithNoEnumerableDevicesDoesNotThrow) {
   auto config = baseConfig();
   config["split-mode"] = "tensor";
   const auto result = lfn::normalizeLoadForFit(

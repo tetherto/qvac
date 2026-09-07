@@ -194,7 +194,7 @@ function assertMetaDeviceEngaged(t, devices, logs) {
   // yields backend name + index (`Vulkan0`, `CUDA1`, `ROCm0`) and never
   // encodes the device type — so a /igpu/ test would be vacuous and pass on a
   // host where the iGPU had in fact been recruited. Whether the iGPU is
-  // excluded is pinned by the unit tests over getTensorSplitDeviceNames, which
+  // excluded is pinned by the unit tests over getSplitDeviceNames, which
   // can see the device type. A real end-to-end check would have to match the
   // known iGPU description against fabric's `using device ...` INFO lines,
   // which is CI-host-specific.

@@ -659,8 +659,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
           },
       .gpuBackendSupportsRowSplit =
           []() { return backend_selection::gpuBackendSupportsRowSplit(); },
-      .tensorSplitDeviceNames =
-          []() { return backend_selection::getTensorSplitDeviceNames(); }};
+      .splitDeviceNames =
+          []() { return backend_selection::getSplitDeviceNames(); }};
 }
 
 NormalizedLoad normalizeLoadForFit(
@@ -960,36 +960,23 @@ NormalizedLoad normalizeLoadForFit(
           "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
           "'cpu'.\n");
     }
-    // In multi-GPU split mode we intentionally omit --device so llama.cpp
-    // distributes layers/rows across all available GPUs rather than pinning
-    // to the single backend that chooseBackend selected.
-    //
-    // QVAC-24253: tensor mode is the exception and must pass an explicit list.
-    // 'layer' and 'row' route through qvac-fabric's filtered device selection,
-    // which excludes integrated GPUs unless they are all that is available and
-    // dedupes a physical GPU registered by two backends. SPLIT_MODE_TENSOR
-    // takes a different branch that does neither, so omitting --device there
-    // splits weights and the KV cache onto the iGPU on any dGPU + iGPU host —
-    // pacing the whole model by the weakest participant — and shards a
-    // dual-registered GPU twice. main-gpu cannot correct it: fabric's pruning
-    // is gated on split_mode == NONE, and string forms are dropped above.
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(selected.name);
-    } else if (splitMode == LLAMA_SPLIT_MODE_TENSOR) {
-      const std::vector<std::string> tensorDevices =
-          dependencies.tensorSplitDeviceNames();
-      if (tensorDevices.empty()) {
+    } else {
+      const std::vector<std::string> splitDevices =
+          dependencies.splitDeviceNames();
+      if (splitDevices.empty()) {
         // No enumerable GPU device: leave --device alone rather than emitting
         // an empty list, and let fabric's own selection and checks decide.
         QLOG_IF(
             Priority::WARNING,
-            "[LlamaModel] split-mode 'tensor': no GPU device could be "
+            "[LlamaModel] split mode: no eligible GPU device could be "
             "enumerated for an explicit device list; falling back to "
             "qvac-fabric's own device selection\n");
       } else {
         std::string deviceList;
-        for (const std::string& device : tensorDevices) {
+        for (const std::string& device : splitDevices) {
           if (!deviceList.empty()) {
             deviceList += ",";
           }
@@ -1000,9 +987,9 @@ NormalizedLoad normalizeLoadForFit(
         QLOG_IF(
             Priority::INFO,
             string_format(
-                "[LlamaModel] split-mode 'tensor': pinning to %zu device(s): "
+                "[LlamaModel] split mode: pinning to %zu eligible device(s): "
                 "%s\n",
-                tensorDevices.size(),
+                splitDevices.size(),
                 deviceList.c_str()));
       }
     }

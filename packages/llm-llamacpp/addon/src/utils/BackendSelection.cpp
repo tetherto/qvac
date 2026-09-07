@@ -106,14 +106,65 @@ struct DeviceDescription {
   }
 };
 
+std::string lowerCopy(const char* value) {
+  if (value == nullptr) {
+    return {};
+  }
+  std::string lower(value);
+  std::transform(
+      lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
+  return lower;
+}
+
+bool hasBackendFamily(
+    std::string_view deviceName, std::string_view registryName,
+    std::string_view family) {
+  return deviceName.find(family) != std::string_view::npos ||
+         registryName.find(family) != std::string_view::npos;
+}
+
+bool hasMetalFamily(
+    std::string_view deviceName, std::string_view registryName) {
+  const auto hasMetalPrefix = [](std::string_view name) {
+    return name.starts_with("mtl") || name.starts_with("metal");
+  };
+  return hasMetalPrefix(deviceName) || hasMetalPrefix(registryName);
+}
+
+bool isEligibleGpuDevice(
+    const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  const enum ggml_backend_dev_type type = bckI.ggml_backend_dev_type(dev);
+  if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
+      type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+    return false;
+  }
+
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  const std::string registryName =
+      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr);
+  if (registryName == "rpc") {
+    return false;
+  }
+
+  const std::string deviceName = lowerCopy(bckI.ggml_backend_dev_name(dev));
+  if (hasBackendFamily(deviceName, registryName, "opencl")) {
+    return lowerCopy(bckI.ggml_backend_dev_description(dev)).find("dreno") !=
+           std::string::npos;
+  }
+  return hasBackendFamily(deviceName, registryName, "vulkan") ||
+         hasMetalFamily(deviceName, registryName);
+}
+
 void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
     std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu,
-    const ggml_backend_reg_t reg, const DeviceDescription& devDescr,
+    const ggml_backend_dev_t dev, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
-  if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
+  if (isEligibleGpuDevice(bckI, dev)) {
     auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
       std::string text = string_format(
@@ -178,7 +229,6 @@ void tryEmplaceDevice(
     std::vector<std::string>& openClBackends,
     std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
-  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const enum ggml_backend_dev_type backendTypeEnum =
       bckI.ggml_backend_dev_type(dev);
   const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
@@ -193,7 +243,7 @@ void tryEmplaceDevice(
         openClBackends,
         maxAdrenoVersion,
         sawMaliGpu,
-        reg,
+        dev,
         devDescr,
         backendTypeEnum);
   } else {
@@ -432,6 +482,9 @@ backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
     ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    if (!isEligibleGpuDevice(bckI, dev)) {
+      continue;
+    }
     enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
     if (devType == GGML_BACKEND_DEVICE_TYPE_GPU) {
       ++gpuCount;
@@ -443,7 +496,7 @@ backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
 }
 
 std::vector<std::string>
-backend_selection::getTensorSplitDeviceNames(const BackendInterface& bckI) {
+backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
   std::vector<std::string> discrete;
   std::vector<std::string> integrated;
   std::unordered_set<std::string> seenDiscrete;
@@ -452,6 +505,9 @@ backend_selection::getTensorSplitDeviceNames(const BackendInterface& bckI) {
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
     ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    if (!isEligibleGpuDevice(bckI, dev)) {
+      continue;
+    }
     const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
     const bool isDiscrete = devType == GGML_BACKEND_DEVICE_TYPE_GPU;
     if (!isDiscrete && devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
@@ -495,7 +551,7 @@ backend_selection::getTensorSplitDeviceNames(const BackendInterface& bckI) {
   return !discrete.empty() ? discrete : integrated;
 }
 
-std::vector<std::string> backend_selection::getTensorSplitDeviceNames() {
+std::vector<std::string> backend_selection::getSplitDeviceNames() {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -507,22 +563,23 @@ std::vector<std::string> backend_selection::getTensorSplitDeviceNames() {
       ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
       nullptr};
-  return getTensorSplitDeviceNames(bckI);
+  return getSplitDeviceNames(bckI);
 }
 
 bool backend_selection::gpuBackendSupportsRowSplit(
     const BackendInterface& bckI) {
   // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
-  // make_gpu_buft_list() for EVERY device it was given and throws "device %s
-  // does not support split buffers" on the first one whose backend registry
-  // lacks `ggml_backend_split_buffer_type`. Split mode omits `--device`, so
-  // that set is every GPU device across every registered backend — a single
-  // unsupported backend in the process is enough to fail the load. So require
-  // all of them, not any one, and treat "no GPU devices at all" as unsupported.
+  // make_gpu_buft_list() for every eligible device it was given and throws
+  // "device %s does not support split buffers" on the first registry without
+  // `ggml_backend_split_buffer_type`. Require all eligible devices, not any
+  // one, and treat an empty eligible inventory as unsupported.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
     ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    if (!isEligibleGpuDevice(bckI, dev)) {
+      continue;
+    }
     const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
     if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
         devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
