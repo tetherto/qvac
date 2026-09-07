@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.22.0] - 2026-09-07
+
+This release adds production MiniMax-H3 text-to-audio-video generation. The
+addon detects the H3 model family from its GGUF tensors, applies its native
+sampling contract, and returns synchronised video and audio through the
+existing video API.
+
+### Added
+
+#### MiniMax-H3 prompt-to-video with native audio
+
+- MiniMax-H3 GGUFs are recognised from either their video or audio
+  patch-projector tensors, so renamed compatible model files receive the H3
+  generation path rather than generic video defaults.
+- Text-only H3 requests use the validated native contract: 960x544 frames,
+  124-frame `17*k + 5` grids, 24 FPS, eight distilled sampling steps,
+  discrete scheduling, and `cfg_scale: 1.0`. Unsupported image/reference
+  conditioning and incompatible controls now fail before inference.
+- Generated H3 audio is muxed with video into AVI; container metadata and
+  runtime statistics report the engine's effective playback FPS.
+- H3 model downloaders (Unsloth and RealRebelAI sources) and
+  `examples/generate-video-minimax-h3.js` provide a reproducible
+  prompt-to-audio-video path.
+
+### Changed
+
+- The package-local vcpkg registry baseline selects H3-capable
+  `stable-diffusion-cpp` and GGML revisions.
+- JavaScript/TypeScript video bindings and documentation expose the
+  validated H3 workflow while preserving existing Wan and LTX contracts.
+
+### Pull Requests
+
+- [#3923](https://github.com/tetherto/qvac/pull/3923) - feat(diffusion-cpp):
+  add MiniMax-H3 video generation
+
 ## [0.21.1] - 2026-09-07
 
 This release restores ABot-World generation quality. The `2026-08-11` engine
