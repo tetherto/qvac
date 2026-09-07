@@ -201,14 +201,24 @@ bool isGpu(const BackendDevice& device) {
          device.type == BackendDeviceType::IntegratedGpu;
 }
 
-bool isEligibleGpu(const BackendDevice& device) {
+bool isEligibleGpu(const BackendDevice& device, bool isEmbedding) {
   if (!isGpu(device) || lower(device.registryName) == "rpc") {
     return false;
   }
-  const bool isOpenCl = lower(device.name).find("opencl") != std::string::npos;
-  const bool isAdreno =
-      lower(device.description).find("adreno") != std::string::npos;
-  return !isOpenCl || isAdreno;
+  const std::string name = lower(device.name);
+  const std::string registry = lower(device.registryName);
+  const bool isOpenCl = name.find("opencl") != std::string::npos ||
+                        registry.find("opencl") != std::string::npos;
+  if (isOpenCl) {
+    const std::string adrenoToken = isEmbedding ? "adreno" : "dreno";
+    return lower(device.description).find(adrenoToken) != std::string::npos;
+  }
+  const bool isVulkan = name.find("vulkan") != std::string::npos ||
+                        registry.find("vulkan") != std::string::npos;
+  const auto isMetal = [](const std::string& value) {
+    return value.starts_with("mtl") || value.starts_with("metal");
+  };
+  return isVulkan || isMetal(name) || isMetal(registry);
 }
 
 int adrenoVersion(const BackendDevice& device) {
@@ -241,7 +251,7 @@ BackendSelection selectGpu(
     const int index = requestedIndex.value();
     if (index >= 0 && static_cast<size_t>(index) < devices.size()) {
       const BackendDevice& selected = devices[static_cast<size_t>(index)];
-      if (isEligibleGpu(selected)) {
+      if (isEligibleGpu(selected, isEmbedding)) {
         return {
             .selected = &selected, .adrenoVersion = adrenoVersion(selected)};
       }
@@ -254,7 +264,7 @@ BackendSelection selectGpu(
   const BackendDevice* integrated = nullptr;
   int maxAdrenoVersion = 0;
   for (const BackendDevice& device : devices) {
-    if (!isEligibleGpu(device)) {
+    if (!isEligibleGpu(device, isEmbedding)) {
       continue;
     }
     const std::string name = lower(device.name);
@@ -291,10 +301,11 @@ BackendSelection selectGpu(
       .adrenoVersion = maxAdrenoVersion};
 }
 
-bool allGpuDevicesSupportSplit(const std::vector<BackendDevice>& devices) {
+bool allGpuDevicesSupportSplit(
+    const std::vector<BackendDevice>& devices, bool isEmbedding) {
   bool sawGpu = false;
   for (const BackendDevice& device : devices) {
-    if (!isGpu(device)) {
+    if (!isEligibleGpu(device, isEmbedding)) {
       continue;
     }
     sawGpu = true;
@@ -478,6 +489,34 @@ std::vector<BackendDevice> discoverBackendDevices() {
   return devices;
 }
 
+std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
+    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind) {
+  const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;
+  std::vector<ggml_backend_dev_t> discrete;
+  std::vector<ggml_backend_dev_t> integrated;
+  for (const BackendDevice& device : devices) {
+    if (!isEligibleGpu(device, isEmbedding) || device.handle == nullptr) {
+      continue;
+    }
+    if (device.type == BackendDeviceType::Gpu) {
+      discrete.push_back(device.handle);
+    } else {
+      integrated.push_back(device.handle);
+    }
+  }
+  std::vector<ggml_backend_dev_t> selected =
+      !discrete.empty() ? std::move(discrete) : std::move(integrated);
+  selected.push_back(nullptr);
+  return selected;
+}
+
+void applyBackendDeviceAllowlist(
+    llama_model_params& params, std::vector<ggml_backend_dev_t>& storage,
+    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind) {
+  storage = eligibleBackendDeviceHandles(devices, loadKind);
+  params.devices = storage.data();
+}
+
 ModelTraits readModelTraits(const std::string& modelPath) {
   gguf_init_params params = {};
   params.no_alloc = true;
@@ -622,15 +661,20 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     config.erase("tensor-split");
   } else if (
       splitMode == LLAMA_SPLIT_MODE_ROW &&
-      !allGpuDevicesSupportSplit(devices)) {
+      !allGpuDevicesSupportSplit(devices, isEmbedding)) {
     splitMode = LLAMA_SPLIT_MODE_LAYER;
   }
 
   const std::string backendName =
       selected == nullptr ? "" : lower(selected->name);
-  const bool isOpenCl = backendName.find("opencl") != std::string::npos;
+  const std::string registryName =
+      selected == nullptr ? "" : lower(selected->registryName);
+  const bool isOpenCl = backendName.find("opencl") != std::string::npos ||
+                        registryName.find("opencl") != std::string::npos;
   const bool isMetal = backendName.find("metal") != std::string::npos ||
-                       backendName.starts_with("mtl");
+                       backendName.starts_with("mtl") ||
+                       registryName.starts_with("metal") ||
+                       registryName.starts_with("mtl");
   const bool isBitnet =
       traits.architecture == "bitnet" && traits.hasOneBitQuantization;
   const bool isAdrenoVulkan =
@@ -747,6 +791,7 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
       out.params.devices = {selected->handle, nullptr};
       out.params.main_gpu = 0;
     } else {
+      out.params.devices = eligibleBackendDeviceHandles(devices, loadKind);
       out.params.main_gpu = mainGpu.value_or(0);
     }
   }

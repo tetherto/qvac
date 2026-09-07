@@ -231,6 +231,10 @@ FitResult runFit(const FitRequest& req) {
   // registry down afterwards — see registerBackends.
   registerBackends(req.backendsDir);
   countDevices(out.nDevices, out.nGpuDevices);
+  const std::vector<BackendDevice> discoveredDevices = discoverBackendDevices();
+  std::vector<ggml_backend_dev_t> eligibleDevices =
+      eligibleBackendDeviceHandles(discoveredDevices, LlamaLoadKind::Completion);
+  const size_t eligibleGpuDevices = eligibleDevices.size() - 1;
 
   // No registered device means backend loading failed outright. The fitter
   // would still return a verdict, computed against a machine it cannot see, so
@@ -269,24 +273,21 @@ FitResult runFit(const FitRequest& req) {
     // NONE means "put the whole model on one GPU". With no GPU registered
     // there is no such device, and llama rejects every index including the
     // default 0, except for the exact CPU-only sentinel configuration.
-    if (!explicitCpuPlacement && out.nGpuDevices == 0) {
+    if (!explicitCpuPlacement && eligibleGpuDevices == 0) {
       throw std::invalid_argument(
           "model-fit: splitMode NONE places the whole model on one GPU, but no "
-          "GPU device is registered");
+          "supported GPU device is registered");
     }
 
-    // The bound is deliberately loose. llama indexes a list it builds itself —
-    // RPC servers and discrete GPUs, falling back to integrated ones only when
-    // that list would otherwise be empty — which is never longer than the
-    // GPU-class devices ggml registered. Bounding by that count rejects only
-    // what llama could not accept, and leaves the narrower judgement to llama,
-    // which knows its own list.
+    // `main_gpu` indexes the allowlisted list handed to llama below. Validate
+    // against that same list so unsupported registered devices cannot make an
+    // otherwise invalid placement appear usable.
     if (!explicitCpuPlacement && req.hasMainGpu &&
-        static_cast<size_t>(req.mainGpu) >= out.nGpuDevices) {
+        static_cast<size_t>(req.mainGpu) >= eligibleGpuDevices) {
       throw std::invalid_argument(
           "model-fit: mainGpu " + std::to_string(req.mainGpu) +
-          " is out of range (" + std::to_string(out.nGpuDevices) +
-          " GPU device(s) registered)");
+          " is out of range (" + std::to_string(eligibleGpuDevices) +
+          " supported GPU device(s) registered)");
     }
   }
 
@@ -365,6 +366,20 @@ FitResult runFit(const FitRequest& req) {
   // `common_fit_params` only rewrites fields that still hold their default
   // value, so pin a field only when the caller explicitly requested one.
   applyFitRequest(req, mparams, cparams);
+  const bool explicitCpuPlacement = req.hasNGpuLayers && req.nGpuLayers == 0 &&
+                                    req.hasMainGpu && req.mainGpu == -1;
+  if (explicitCpuPlacement) {
+    eligibleDevices = {nullptr};
+  }
+  if (!explicitCpuPlacement) {
+    applyBackendDeviceAllowlist(
+        mparams,
+        eligibleDevices,
+        discoveredDevices,
+        LlamaLoadKind::Completion);
+  } else {
+    mparams.devices = eligibleDevices.data();
+  }
 
   // Writable scratch buffers the fit API requires. Sizes are dictated by the
   // library, not the caller.

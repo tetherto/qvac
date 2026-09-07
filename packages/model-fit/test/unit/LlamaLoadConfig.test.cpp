@@ -612,8 +612,8 @@ int main() {
         ModelTraits{},
         {splitCapable, rpcWithoutSplit, cpu()});
     expect(
-        rpcRow.params.split_mode == LLAMA_SPLIT_MODE_LAYER,
-        "RPC GPU without split buffers must force row fallback");
+        rpcRow.params.split_mode == LLAMA_SPLIT_MODE_ROW,
+        "RPC GPU must not participate in row-split capability checks");
 
     const BackendDevice openClWithoutSplit =
         device("OpenCL0", "Mali GPU", BackendDeviceType::Gpu, 36, "OpenCL");
@@ -623,8 +623,8 @@ int main() {
         ModelTraits{},
         {splitCapable, openClWithoutSplit, cpu()});
     expect(
-        openClRow.params.split_mode == LLAMA_SPLIT_MODE_LAYER,
-        "non-Adreno OpenCL GPU without split buffers must force row fallback");
+        openClRow.params.split_mode == LLAMA_SPLIT_MODE_ROW,
+        "unsupported OpenCL GPU must not participate in row-split checks");
   }
 
   {
@@ -649,6 +649,47 @@ int main() {
     expect(
         isPinnedGpu(mixed.params, vulkan),
         "mixed inventory must ignore RPC and select local GPU");
+
+    const BackendDevice rocm =
+        device("ROCm0", "AMD Radeon", BackendDeviceType::Gpu, 45, "HIP");
+    const auto rocmOnly = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {rocm, cpu()});
+    expect(
+        isCpuPlacement(rocmOnly.params),
+        "ROCm-only inventory must fall back to CPU");
+
+    const auto splitMixed = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{},
+        {rocm, vulkan, cpu()});
+    expect(
+        splitMixed.params.devices.size() == 2 &&
+            splitMixed.params.devices.front() == vulkan.handle &&
+            splitMixed.params.devices.back() == nullptr,
+        "split-mode device list must exclude ROCm and remain terminated");
+
+    const auto handles = model_fit::eligibleBackendDeviceHandles(
+        {rocm, vulkan, cpu()}, model_fit::LlamaLoadKind::Completion);
+    expect(
+        handles.size() == 2 && handles.front() == vulkan.handle &&
+            handles.back() == nullptr,
+        "generic fit device seam must exclude ROCm");
+    llama_model_params fitParams = llama_model_default_params();
+    std::vector<ggml_backend_dev_t> fitDeviceStorage;
+    model_fit::applyBackendDeviceAllowlist(
+        fitParams,
+        fitDeviceStorage,
+        {rocm, vulkan, cpu()},
+        model_fit::LlamaLoadKind::Completion);
+    expect(
+        fitParams.devices == fitDeviceStorage.data() &&
+            fitParams.devices[0] == vulkan.handle &&
+            fitParams.devices[1] == nullptr,
+        "generic common_fit_params input must contain only eligible devices");
 
     const auto nonAdrenoOpenCl = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
