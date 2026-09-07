@@ -340,7 +340,8 @@ TEST_F(SdWanValidationTest, MiniMaxH3RejectsOffGridFrameCounts) {
   expectThrowContains(std::move(offGrid), "MiniMax-H3 video_frames");
 }
 
-TEST_F(SdWanValidationTest, MiniMaxH3RejectsUnsupportedControlsAndPinnedSettings) {
+TEST_F(
+    SdWanValidationTest, MiniMaxH3RejectsUnsupportedControlsAndPinnedSettings) {
   configureMiniMaxH3();
 
   SdModel::GenerationJob imageConditioning;
@@ -376,7 +377,8 @@ TEST_F(SdWanValidationTest, MiniMaxH3RejectsUnsupportedControlsAndPinnedSettings
     "mode": "txt2vid", "prompt": "test", "video_frames": 124
   })";
   reference.referenceImagesBytes = {{0x01}};
-  expectThrowContains(std::move(reference), "does not support reference_images");
+  expectThrowContains(
+      std::move(reference), "does not support reference_images");
 
   SdModel::GenerationJob cfg;
   cfg.paramsJson = R"({
