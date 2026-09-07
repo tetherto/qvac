@@ -16,6 +16,8 @@ on:
     paths:
       - "packages/ocr-ggml/**"
       - ".github/workflows/*ocr-ggml*.yml"
+      - "packages/fabric/vcpkg.json"
+      - "packages/fabric/vcpkg-configuration.json"
   workflow_dispatch:
     inputs:
       base_sha:
@@ -97,6 +99,66 @@ jobs:
         uses: ./.github/actions/authorize-pr
         with:
           github-token: ${{ github.token }}
+
+  detect-fabric-stack:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
+      # A stack PR only produces an artifact to wait for when on-pr-fabric will
+      # actually publish one. That producer needs the prebuilds label (or a
+      # label implying it) and, because wait-and-download only trusts a
+      # pull_request_target producer, a pull_request_target event. Every
+      # downstream fabric clause reads this rather than fabric_stack so the two
+      # sides cannot drift into a 120-minute poll for an artifact nobody builds.
+      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && github.event_name == 'pull_request_target' }}
+    steps:
+      - name: Checkout repository (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect fabric-stack PR
+        id: detect
+        uses: tetherto/qvac/.github/actions/detect-fabric-stack@6620d695d3a07cafe3931182e7844dde376a23f8
+      - name: Warn when a stack PR builds against released fabric
+        if: steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds != 'true'
+        shell: bash
+        run: |
+          echo "::warning::This PR changes packages/fabric, but no prebuilds label is set, so on-pr-fabric publishes nothing. Native jobs here build against the released @qvac/fabric, not this PR's. Add the 'prebuilds' label to exercise the stack."
+
+  resolve-fabric-prebuilds:
+    if: needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - detect-fabric-stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Wait for fabric-prebuilds from on-pr-fabric
+        uses: tetherto/qvac/.github/actions/wait-and-download-fabric-prebuilds@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          github-token: ${{ github.token }}
+          # needs_fabric_artifact pins this job to pull_request_target, where the
+          # PR payload always carries a head SHA. The fallback stays because the
+          # action rejects an empty SHA outright, and every other head-SHA
+          # consumer in this workflow reads it the same way.
+          head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Re-publish fabric-prebuilds for downstream jobs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fabric-prebuilds
+          path: fabric-prebuilds-staging
 
   verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
@@ -200,10 +262,16 @@ jobs:
           workdir: packages/ocr-ggml
 
   prebuild-artifact-reuse:
-    if: needs.detect-native-changes.outputs.native_changed == 'false'
+    # Deliberately the broad fabric_stack signal, not needs_fabric_artifact: a
+    # prebuild cached before the fabric change is stale for any stack PR,
+    # whether or not this run is the one that overlays the PR's fabric.
+    if: |
+      needs.detect-native-changes.outputs.native_changed == 'false' &&
+      needs.detect-fabric-stack.outputs.fabric_stack != 'true'
     needs:
       - fork-approval
       - detect-native-changes
+      - detect-fabric-stack
       - sanity-checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -240,19 +308,28 @@ jobs:
       - ci-router
       - sanity-checks
       - detect-native-changes
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
       - prebuild-artifact-reuse
+    # A failed detection leaves needs_fabric_artifact empty, which satisfies
+    # needs_fabric_artifact != 'true' — without the result guard a stack PR would
+    # build against the released @qvac/fabric and prebuild-artifact-save would
+    # then publish that bundle as reusable.
     if: |
       always() &&
       !cancelled() &&
       needs.sanity-checks.result == 'success' &&
+      needs.detect-fabric-stack.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-ocr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   prebuild-artifact-save:
     if: always() && !cancelled() && needs.prebuild.result == 'success'
@@ -282,13 +359,28 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, fork-approval]
-    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    needs:
+      - authorize
+      - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
+      - fork-approval
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.detect-fabric-stack.result == 'success' &&
+      needs.ci-router.outputs.run_desktop == 'true' &&
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
+      (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-test-ocr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   # Mobile integration tests are no longer run on PRs. They run on demand via
   # `integration-mobile-test-ocr-ggml.yml` (workflow_dispatch), where the
@@ -368,7 +460,7 @@ jobs:
 
   merge-guard:
     # run-mobile-integration-tests removed — mobile is on-demand only now.
-    needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests]
+    needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, detect-fabric-stack, resolve-fabric-prebuilds, run-integration-tests]
     # Always run so the PR still gets a status check even if fork-approval is
     # skipped or fails; matches on-pr-tts-ggml.yml's pattern. !cancelled()
     # ensures this doesn't hold the concurrency group open after a
@@ -376,7 +468,12 @@ jobs:
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      # Every status below opens with the same fabric-stack guard: a skipped
+      # downstream job is only a deliberate no-op when the decision that skipped
+      # it is trustworthy. If detection failed, or the prebuild hand-off failed
+      # on a stack PR, the skips are consequences of that failure and must not
+      # read as passes.
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') }}
       # run-mobile-integration-tests removed — mobile is on-demand only now.
-      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
+      integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}
