@@ -388,8 +388,7 @@ std::vector<std::string> splitModeDeviceNames(
     const LoadConstraints& constraints = {});
 
 /// @brief `splitModeDeviceNamesDetailed()` against the real ggml registry.
-SplitDeviceList
-splitModeDeviceNamesDetailed(
+SplitDeviceList splitModeDeviceNamesDetailed(
     const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});
 

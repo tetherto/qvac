@@ -563,9 +563,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeRewritesQualifiedMainGpu) {
   dependencies.splitModeDeviceNames =
       [](const std::string&, const backend_selection::LoadConstraints&) {
         return backend_selection::SplitDeviceList{
-            .names = {"none"},
-            .registries = {"CUDA"},
-            .heterogeneous = false};
+            .names = {"none"}, .registries = {"CUDA"}, .heterogeneous = false};
       };
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -598,9 +596,7 @@ TEST_F(LoadFitNormalizationTest, StrictBackendConstrainsSplitDevices) {
           const backend_selection::LoadConstraints& constraints) {
         requiredFamilies = constraints.requiredBackendFamilies;
         return backend_selection::SplitDeviceList{
-            .names = {"none"},
-            .registries = {"CUDA"},
-            .heterogeneous = false};
+            .names = {"none"}, .registries = {"CUDA"}, .heterogeneous = false};
       };
   auto config = baseConfig();
   config["split-mode"] = "layer";

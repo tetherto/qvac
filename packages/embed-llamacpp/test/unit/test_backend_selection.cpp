@@ -1361,7 +1361,8 @@ TEST_F(BackendSelectionTest, TracePopulatedOnCascade) {
 TEST_F(BackendSelectionTest, TracePopulatedOnOverride) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
-  const BackendChoice choice = chooseWithRequired(mockBackend, {"vulkan"}, false);
+  const BackendChoice choice =
+      chooseWithRequired(mockBackend, {"vulkan"}, false);
   EXPECT_EQ(choice.trace.selectedName, "vulkan0");
   EXPECT_EQ(choice.trace.path, SelectionPath::Override);
 }

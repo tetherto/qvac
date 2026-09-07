@@ -897,8 +897,8 @@ NormalizedLoad normalizeLoadForFit(
     // `runtimeBackendDevice` below is only cpu/gpu, so without these a load
     // that silently moved from one GPU backend to another looks identical to
     // one that got what it asked for.
-    result.runtimeBackendFamily = static_cast<int64_t>(
-        backendFamilyCodeOf(selected.type, selected.name));
+    result.runtimeBackendFamily =
+        static_cast<int64_t>(backendFamilyCodeOf(selected.type, selected.name));
     result.runtimeBackendSkipReason =
         static_cast<int64_t>(selected.trace.skippedReason);
 

@@ -1518,7 +1518,8 @@ bool backend_selection::gpuBackendSupportsRowSplit() {
   return backend_selection::gpuBackendSupportsRowSplit(bckI);
 }
 
-backend_selection::SplitDeviceList backend_selection::splitModeDeviceNamesDetailed(
+backend_selection::SplitDeviceList
+backend_selection::splitModeDeviceNamesDetailed(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints) {
   // Kept in ggml's enumeration order, so the list matches what qvac-fabric

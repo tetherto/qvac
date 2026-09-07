@@ -2362,7 +2362,8 @@ TEST_F(BackendSelectionTest, TracePopulatedOnCascade) {
 TEST_F(BackendSelectionTest, TracePopulatedOnOverride) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
-  const BackendChoice choice = chooseWithRequired(mockBackend, {"vulkan"}, false);
+  const BackendChoice choice =
+      chooseWithRequired(mockBackend, {"vulkan"}, false);
   EXPECT_EQ(choice.trace.selectedName, "vulkan0");
   EXPECT_EQ(choice.trace.path, SelectionPath::Override);
 }
@@ -2385,7 +2386,8 @@ TEST_F(BackendSelectionTest, TraceNamesTheSkippedCandidateAndReason) {
   const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
   EXPECT_EQ(choice.trace.selectedName, "vulkan0");
   EXPECT_EQ(choice.trace.skippedName, "cuda0");
-  EXPECT_EQ(choice.trace.skippedReason, ExclusionReason::KvCacheTypeUnsupported);
+  EXPECT_EQ(
+      choice.trace.skippedReason, ExclusionReason::KvCacheTypeUnsupported);
   // and the family code reports what actually ran, not what was asked for
   EXPECT_EQ(
       backendFamilyCodeOf(choice.type, choice.name), BackendFamilyCode::Vulkan);
@@ -2467,8 +2469,7 @@ TEST_F(BackendSelectionTest, SplitDetailedKeepsRegistriesAlignedWithNames) {
   for (size_t i = 0; i < split.names.size(); ++i) {
     // every ggml device name is prefixed by its registry, lowercased
     std::string registryLower = split.registries[i];
-    std::ranges::transform(
-        registryLower, registryLower.begin(), ::tolower);
+    std::ranges::transform(registryLower, registryLower.begin(), ::tolower);
     EXPECT_EQ(split.names[i].rfind(registryLower, 0), 0U)
         << split.names[i] << " vs " << split.registries[i];
   }
