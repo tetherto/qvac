@@ -162,6 +162,8 @@ const stats: LlmLlamacpp.RuntimeStats = {
   thinkingBlockDiscards: 0,
   avgConcurrentSeq: 1,
   backendDevice: "gpu",
+  backendFamily: "cuda",
+  backendSkipReason: "none",
   stopReason: "eos",
 };
 void stats;
