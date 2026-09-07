@@ -1,5 +1,98 @@
 # Changelog
 
+## [0.22.0] - 2026-09-07
+
+This release adds production MiniMax-H3 text-to-audio-video generation. The
+addon detects the H3 model family from its GGUF tensors, applies its native
+sampling contract, and returns synchronised video and audio through the
+existing video API.
+
+### Added
+
+#### MiniMax-H3 prompt-to-video with native audio
+
+- MiniMax-H3 GGUFs are recognised from either their video or audio
+  patch-projector tensors, so renamed compatible model files receive the H3
+  generation path rather than generic video defaults.
+- Text-only H3 requests use the validated native contract: 960x544 frames,
+  124-frame `17*k + 5` grids, 24 FPS, eight distilled sampling steps,
+  discrete scheduling, and `cfg_scale: 1.0`. Unsupported image/reference
+  conditioning and incompatible controls now fail before inference.
+- Generated H3 audio is muxed with video into AVI; container metadata and
+  runtime statistics report the engine's effective playback FPS.
+- H3 model downloaders (Unsloth and RealRebelAI sources) and
+  `examples/generate-video-minimax-h3.js` provide a reproducible
+  prompt-to-audio-video path.
+
+### Changed
+
+- The package-local vcpkg registry baseline selects H3-capable
+  `stable-diffusion-cpp` and GGML revisions.
+- JavaScript/TypeScript video bindings and documentation expose the
+  validated H3 workflow while preserving existing Wan and LTX contracts.
+
+### Pull Requests
+
+- [#3923](https://github.com/tetherto/qvac/pull/3923) - feat(diffusion-cpp):
+  add MiniMax-H3 video generation
+
+## [0.21.1] - 2026-09-07
+
+This release restores ABot-World generation quality. The `2026-08-11` engine
+line shipped in 0.21.0 had dropped the scene-creation prompt-padding zeroing,
+so walks collapsed into blur from the first generated block; the fix lands
+through a new registry revision of the engine, together with a ~1.9x faster
+walk and CI guards that would have caught the regression.
+
+### Fixed
+
+- **ABot-World blur regression.** Scene creation again zeroes every
+  prompt-embedding row past the last real token (the reference's
+  `u[v:] = 0`). The forward-ported engine had kept live pad-token embeddings
+  in all 512 context rows, and the walk DiT cross-attends the full context
+  every block, so generated frames washed out from block 0 while the first
+  decoded frame still looked fine. Delivered via
+  `stable-diffusion-cpp 2026-08-11#1` (qvac-ext-stable-diffusion.cpp#37 /
+  qvac-registry-vcpkg#357). Scene packs written by 0.21.0 carry the defect
+  and must be regenerated.
+- `ABOT_JPEG_QUALITY=85` no longer crashes `examples/world-walk-server.js`
+  at startup: the env value is coerced to a number before it reaches
+  `frameJpegQuality`'s `Number.isInteger` validation. The public API guard is
+  unchanged (`'85'` still throws) and is now pinned by a unit test.
+
+### Changed
+
+- ABot-World walk performance ~1.9x on the engine side: the compute
+  buffer/allocator is retained across the 5-6 graphs per block (also cuts
+  cold start 12 s -> 2.2 s), the masked attention softmax is one fused pass,
+  the per-block action planes are reused, and the taehv decoder uses direct
+  convolution — all byte-identical; the score matmul runs on the tensor-core
+  path (F16 accumulation, ~0.3/255 mean drift, quality unchanged). Measured
+  2.25 s -> 1.28 s/block (~5 -> ~9.4 fps) on an RTX 5090 (Vulkan, Q8, KV
+  cache).
+- `stable-diffusion-cpp` is pinned to `>= 2026-08-11#1` in `vcpkg.json`; the
+  registry baseline is unchanged. The engine logs
+  `scene pack: prompt rows N live / M` when a scene pack is loaded.
+- CI now gates ABot conditioning and frame quality: the world-generation
+  lane asserts the scene pack's live prompt rows form one leading block below
+  half the context and that a different prompt changes the embeddings, and
+  every walk lane asserts a luminance-stddev floor on generated frames (a
+  collapse measures 8-12, healthy 30+); a no-GPU unit lane exercises both
+  guards, including all five PNG row filters. The best-effort registry probe
+  for the unpublished `scene.safetensors` was removed — it only logged a
+  `MODEL_NOT_FOUND` false alarm on every run.
+- `docs/abot-world.md`: a Prompt-behaviour section, refreshed hardware/perf
+  numbers (Vulkan build: 1.28 s/block, 11.5/14.6 GB VRAM, a dedicated 16 GB
+  GPU as the practical minimum), and a Known-issues note on the engine
+  prompt-row log's last-index semantics.
+
+### Pull Requests
+
+- [#4232](https://github.com/tetherto/qvac/pull/4232) - QVAC-21981
+  fix[notask]: gate ABot conditioning regressions and fix ABOT_JPEG_QUALITY
+- [#4139](https://github.com/tetherto/qvac/pull/4139) - QVAC-21981 test:
+  drop the registry probe for the unpublished ABot scene pack
+
 ## [0.21.0] - 2026-08-28
 
 This release makes the diffusion addon load on Linux hosts with no graphics
