@@ -81,11 +81,15 @@ npm install
 npm run build
 ```
 
-CUDA builds can be generated explicitly:
+CUDA builds can be generated explicitly on Linux x64 with an NVIDIA CUDA
+toolkit and Clang available:
 
 ```bash
 npm run build:cuda
 ```
+
+See [build.md](./build.md#cuda-build-linux-x64) for the CUDA prerequisites and
+the explicit `npm run test:cuda` runtime smoke test.
 
 ## Downloading Models
 
