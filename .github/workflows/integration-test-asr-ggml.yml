@@ -467,6 +467,61 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
+      # Preflight-only bisection probes for the silent win32 CUDA crash in the
+      # whisper GPU test: run the same suite under brittle-bare directly (so
+      # the native exit code is not masked by npm) with one variable flipped
+      # per probe. The unmodified control step below still gates the job.
+      - name: Probe setup - build TS once
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: npm run build:ts
+
+      - name: Probe A - CUDA graphs disabled
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          npx brittle-bare test/integration/gpu.test.js
+          Write-Host "probe A exit code: $LASTEXITCODE"
+          exit $LASTEXITCODE
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
+          INTEGRATION_TEST_TIMEOUT: '1800'
+          GGML_CUDA_DISABLE_GRAPHS: '1'
+
+      - name: Probe B - CUDA fusion disabled
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          npx brittle-bare test/integration/gpu.test.js
+          Write-Host "probe B exit code: $LASTEXITCODE"
+          exit $LASTEXITCODE
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
+          INTEGRATION_TEST_TIMEOUT: '1800'
+          GGML_CUDA_DISABLE_FUSION: '1'
+
+      - name: Probe C - CUDA hidden, Vulkan path
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          npx brittle-bare test/integration/gpu.test.js
+          Write-Host "probe C exit code: $LASTEXITCODE"
+          exit $LASTEXITCODE
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
+          INTEGRATION_TEST_TIMEOUT: '1800'
+          CUDA_VISIBLE_DEVICES: '-1'
+
       - name: Run integration GPU test (Windows)
         if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
