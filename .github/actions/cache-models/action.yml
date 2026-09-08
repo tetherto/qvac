@@ -65,11 +65,26 @@ inputs:
       sent only to exact HTTPS huggingface.co requests for gated repositories.
     required: false
     default: ''
+  seed-probe:
+    description: |
+      Set to 'true' ONLY by the on-merge-model-cache-* seed workflows. Adds a
+      `lookup-only` probe before the real cache step: on an exact key hit the
+      restore, warm and post-job save are all skipped, so a warm refresh costs
+      seconds instead of a full download of an archive it is about to discard.
+      A seed run has no use for the files -- it only needs the entry to exist.
+      Callers that consume the models must leave this off, or they get a
+      cache-hit with an empty directory.
+    required: false
+    default: 'false'
 
 outputs:
   cache-hit:
     description: "'true' only when the exact primary cache key was restored"
-    value: ${{ steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit }}
+    # `||` cannot chain here: a step that ran and missed reports the string
+    # 'false', which is truthy in a GitHub expression and would short-circuit
+    # the later terms. Only an empty value (step skipped) may fall through, so
+    # the probe is compared explicitly.
+    value: ${{ steps.probe.outputs.cache-hit == 'true' && 'true' || steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit }}
 
 runs:
   using: composite
@@ -113,6 +128,21 @@ runs:
           --root "$GITHUB_WORKSPACE" \
           --paths-output "$GITHUB_OUTPUT"
 
+    # Seed-only: does this entry already exist? `lookup-only` answers that
+    # without transferring the archive. No restore-keys on purpose -- a prefix
+    # hit means the key has moved and the seed must still write the new one, and
+    # restore-keys would report that as cache-hit 'false' anyway. Needs the same
+    # enableCrossOsArchive as the real step so it computes the same version.
+    - name: Probe for an existing entry (seed mode)
+      id: probe
+      if: inputs.seed-probe == 'true'
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
+        key: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
+        lookup-only: true
+        enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
+
     # Restore + automatic post-job save on trusted contexts (same-repo head,
     # push, workflow_dispatch, merge_group, schedule). `schedule` runs only from
     # the default branch, so it is as trusted as `push`; without it a cron
@@ -130,11 +160,12 @@ runs:
     - name: Cache test models (restore + save, trusted contexts)
       id: cache
       if: >-
+        steps.probe.outputs.cache-hit != 'true' && (
         github.event_name == 'push' ||
         github.event_name == 'workflow_dispatch' ||
         github.event_name == 'merge_group' ||
         github.event_name == 'schedule' ||
-        github.event.pull_request.head.repo.full_name == github.repository
+        github.event.pull_request.head.repo.full_name == github.repository )
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
@@ -147,6 +178,7 @@ runs:
     - name: Cache test models (restore-only, untrusted contexts)
       id: cache-restore-only
       if: >-
+        steps.probe.outputs.cache-hit != 'true' &&
         github.event_name != 'push' &&
         github.event_name != 'workflow_dispatch' &&
         github.event_name != 'merge_group' &&
@@ -171,7 +203,9 @@ runs:
     # post-step then saves the selected set so subsequent runs restore it
     # instead of re-downloading.
     - name: Warm models (download any missing from manifest)
-      if: ${{ inputs.warm == 'true' }}
+      # A seed-mode probe hit means the entry already exists, so there is
+      # nothing to download and nothing to save.
+      if: ${{ inputs.warm == 'true' && steps.probe.outputs.cache-hit != 'true' }}
       shell: bash
       env:
         PKG: ${{ inputs.package }}

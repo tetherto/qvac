@@ -75,3 +75,4 @@ jobs:
           group: ${{ matrix.group }}
           cache-key-suffix: ${{ matrix.group }}
           cache-version: v2
+          seed-probe: 'true'

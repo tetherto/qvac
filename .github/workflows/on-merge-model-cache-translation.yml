@@ -83,6 +83,7 @@ jobs:
           package: translation-nmtcpp
           paths: packages/translation-nmtcpp/model
           hash-files-glob: .github/actions/download-translation-models/action.yml
+          seed-probe: 'true'
 
       - name: Download NMT models from S3
         if: steps.model-cache.outputs.cache-hit != 'true'

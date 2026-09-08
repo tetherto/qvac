@@ -86,6 +86,7 @@ jobs:
           hash-files-glob: packages/audiogen-ggml/scripts/download-audiogen-ggml-models.js
           cache-key-suffix: ${{ matrix.cache_key_suffix }}
           enable-cross-os: 'true'
+          seed-probe: 'true'
 
       - name: Download GGUF models from registry
         if: steps.model-cache.outputs.cache-hit != 'true'

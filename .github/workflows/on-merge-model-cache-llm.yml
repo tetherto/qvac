@@ -68,3 +68,4 @@ jobs:
         uses: ./.github/actions/cache-models
         with:
           package: llm-llamacpp
+          seed-probe: 'true'

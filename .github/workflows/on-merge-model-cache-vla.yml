@@ -84,6 +84,7 @@ jobs:
           package: vla-ggml
           paths: packages/vla-ggml/model/vla
           hash-files-glob: .github/actions/download-vla-models/action.yml
+          seed-probe: 'true'
 
       # Gated as a whole, unlike the integration lane. There the pi05 and GR00T
       # pulls run unconditionally because the tests also need the oracle dirs
@@ -144,6 +145,7 @@ jobs:
             packages/vla-ggml/model/vla/groot
             packages/vla-ggml/test/groot-oracle
           hash-files-glob: .github/actions/download-vla-groot-parity/action.yml
+          seed-probe: 'true'
 
       - name: Download GR00T parity artefacts from S3
         if: steps.groot-cache.outputs.cache-hit != 'true'

@@ -96,6 +96,7 @@ jobs:
           hash-files-glob: packages/asr-ggml/test/integration/*.manifest.json
           warm: 'false'
           enable-cross-os: 'false'
+          seed-probe: 'true'
 
       # stage-integration-models.mjs imports only node builtins and shells out
       # to the AWS CLI, so no npm install is needed here.

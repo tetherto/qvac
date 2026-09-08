@@ -77,6 +77,7 @@ jobs:
           paths: packages/tts-ggml/models
           hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
           enable-cross-os: 'true'
+          seed-probe: 'true'
 
       - name: Download GGUF models from registry
         if: steps.model-cache.outputs.cache-hit != 'true'
