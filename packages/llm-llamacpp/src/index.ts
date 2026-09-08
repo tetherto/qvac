@@ -10,6 +10,9 @@ import type * as AddonModule from "./addon";
 
 const { runBusyError } = BatchHandler;
 
+// DO NOT MERGE - deliberate type error to show old ts-checks (base) stays green while the new PR-head check fails.
+const __CI_BEFORE_AFTER_EVIDENCE__: number = "intentional type error";
+
 type BareEventMap = Record<string | symbol, unknown[]>;
 
 /** Aliases: inside the namespace, `QvacResponse` resolves to its own member. */
