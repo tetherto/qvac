@@ -45,7 +45,7 @@ jobs:
     # reusable workflow's release tag is being cut. Repin to the 0.3.0 tag's
     # immutable commit SHA (freeze-and-pin convention, never `@main`) once
     # tetherto/qvac-actions#12 merges and the tag is published.
-    uses: tetherto/qvac-actions/.github/workflows/public-reusable-license.yml@ce61672c6a49861ee5ff2e5e6617e4f0df665d37 # pending 0.3.0
+    uses: tetherto/qvac-actions/.github/workflows/public-reusable-license.yml@d39968bc7ad83635e465ec14d2518bc9c47f4378 # TEMP: ARG_MAX fix test, do not merge
     permissions:
       contents: read
       pull-requests: write
