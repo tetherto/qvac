@@ -23,4 +23,4 @@ model:
   caption_enabled: false
   timestamps_enabled: true
   streaming: false
-  streaming_chunk_size: 64000
+  streaming_chunk_ms: 320
