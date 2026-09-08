@@ -287,7 +287,6 @@ FitResult runFit(const FitRequest& req) {
           "model-fit: splitMode NONE places the whole model on one GPU, but no "
           "supported GPU device is registered");
     }
-
   }
 
   // `common_fit_params` segfaults on a path it cannot open: gguf_init_from_file
