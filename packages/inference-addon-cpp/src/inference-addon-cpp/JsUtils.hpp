@@ -500,7 +500,7 @@ struct Array : Value<Array> {
 
   using Value<Array>::create;
 
-  static Array create(js_env_t* env, std::span<const js_value_t*> elements) {
+  static Array create(js_env_t* env, std::span<js_value_t* const> elements) {
     auto array = Array::create(env, elements.size());
     array.set(env, elements);
     return array;
@@ -527,8 +527,10 @@ struct Array : Value<Array> {
     return JsType{env, result};
   }
 
-  void set(js_env_t* env, std::span<const js_value_t*> elements, size_t offset = 0) {
-    JS(js_set_array_elements(env, value_, elements.data(), elements.size(), offset));
+  void set(
+      js_env_t* env, std::span<js_value_t* const> elements, size_t offset = 0) {
+    JS(js_set_array_elements(
+        env, value_, elements.data(), elements.size(), offset));
   }
 
   void set(js_env_t* env, uint32_t index, js_value_t* value) {
