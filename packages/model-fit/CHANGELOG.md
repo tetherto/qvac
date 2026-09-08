@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.9.0] - 2026-09-07
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.3.3` -> `1.4.0`, which requires libjs 1.32 headers (`bare-headers` >= 1.32). Compile-time only; no API or runtime behaviour change for this package. Released as a minor bump so dependents on `^0.8.x` adopt the new build floor deliberately rather than automatically.
+
+## [0.8.0] - 2026-08-29
+
+### Fixed
+
+- Mobile integration test bundling. The two raw-fitter cases in
+  `test/integration/fit.test.js` reached the private `binding-internal.js`
+  surface, which the mobile test framework does not shim into its generated
+  `backend/` tree, so `bare-pack` failed with `MODULE_NOT_FOUND` and no mobile
+  suite could build on either platform. Those cases now live in
+  `test/integration/fit-internal.test.js`, which is excluded from the generated
+  mobile suite via `scripts/mobile-integration-exclusions.js`. Both still run on
+  desktop; no assertion changed. Broken since 0.6.0.
+
+- `bare-url` is now declared. `test/mobile/integration-runtime.cjs` requires it
+  and nothing in this package listed it.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader; no API change for this package).
+
 ## [0.7.0] - 2026-08-24
 
 ### Changed

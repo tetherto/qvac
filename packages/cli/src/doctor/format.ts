@@ -1,4 +1,4 @@
-import type { CheckResult, CheckStatus, DoctorReport } from './types.js'
+import type { CheckResult, CheckStatus, DoctorReport } from '@/doctor/types'
 
 const STATUS_ICON: Record<CheckStatus, string> = {
   pass: '✅',

@@ -1,5 +1,7 @@
 import test from 'brittle'
 import { createErrorResponse } from '@/schemas/error'
+// Type-only import from the public surface pins the exported record type.
+import type { ContextOverflowErrorSizes } from '@/surface'
 import {
   ContextOverflowError,
   RequestIdConflictError,
@@ -62,13 +64,96 @@ test('createErrorResponse: ContextOverflowError carries overflow fields on typed
   })
 })
 
+// The canonical sizes-record form: one record in, all fields out.
+test('createErrorResponse: ContextOverflowError sizes-record form carries every field', (t) => {
+  const contextSizes: ContextOverflowErrorSizes = {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192
+  }
+  const err = new ContextOverflowError(contextSizes, 'model-1')
+  t.ok(err.message.includes('8201'), 'the message factory sees the record fields')
+  t.alike(createErrorResponse(err).typedFields, {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192,
+    modelId: 'model-1'
+  })
+})
+
+// The positional form is deprecated but must keep working for existing callers.
+test('createErrorResponse: ContextOverflowError carries warm-cache fields on typedFields', (t) => {
+  const err = new ContextOverflowError(31, 8192, 'model-1', undefined, {
+    cachedTokens: 8170,
+    requiredTokens: 8201
+  })
+  const response = createErrorResponse(err)
+
+  t.is(response.name, 'CONTEXT_OVERFLOW')
+  t.alike(response.typedFields, {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192,
+    modelId: 'model-1'
+  })
+})
+
+test('ContextOverflowError message names both halves on a warm cache', (t) => {
+  const err = new ContextOverflowError(31, 8192, 'model-1', undefined, {
+    cachedTokens: 8170,
+    requiredTokens: 8201
+  })
+  t.ok(err.message.includes('uses 8201 context units'), 'leads with the failing total')
+  t.ok(err.message.includes('8170 already cached'), 'names the cached half')
+})
+
+// A lone total can be a cached sum or KV cells — the message must not blame
+// a "prompt" of that size or call the value tokens.
+test('ContextOverflowError message stays unit-neutral when only requiredTokens is known', (t) => {
+  const err = new ContextOverflowError(undefined, 512, 'model-1', undefined, {
+    requiredTokens: 600
+  })
+  t.ok(err.message.includes('Request uses 600 context units'), 'unit-neutral phrasing')
+  t.absent(err.message.includes('600 prompt tokens'), 'the total is not labelled a prompt')
+  t.absent(err.message.includes('600 tokens'), 'the total is not labelled tokens')
+})
+
+// A wider, structurally assignable extras object must not override the
+// positional arguments — the deprecated overload reads only its two fields.
+test('ContextOverflowError legacy extras cannot override positional args', (t) => {
+  const wideExtras = {
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    promptTokens: 999,
+    ctxSize: 999,
+    modelId: 'other-model',
+    cause: 'shadowed'
+  }
+  const err = new ContextOverflowError(31, 8192, 'model-1', undefined, wideExtras)
+  t.is(err.promptTokens, 31)
+  t.is(err.ctxSize, 8192)
+  t.is(err.modelId, 'model-1')
+  t.is(err.cachedTokens, 8170)
+  t.is(err.requiredTokens, 8201)
+})
+
+// The guards trigger at equality (a free output slot is needed), so the
+// message must not read as a contradiction at total == capacity.
+test('ContextOverflowError message reads coherently at the equality boundary', (t) => {
+  const err = new ContextOverflowError(undefined, 512, 'model-1', undefined, {
+    requiredTokens: 512
+  })
+  t.ok(err.message.includes('leaves no room to generate'), 'equality is about the output slot')
+})
+
 test('createErrorResponse: ContextOverflowError omits absent fields from typedFields', (t) => {
-  // The bare `LlamaModel::processPromptImpl` overflow path emits a
-  // message without prompt/ctx numbers — the addon-wrap throws
-  // `new ContextOverflowError()` with all fields undefined. The
-  // envelope must omit them (rather than send `undefined` values) so
-  // the client reconstructor's optional-number readers see `undefined`
-  // and the class re-instance carries `undefined` for those fields.
+  // A bare overflow (the `processPromptImpl` wording) parses to no numbers,
+  // so every size field can be absent. The envelope must omit absent fields
+  // (rather than send `undefined` values) so the client reconstructor's
+  // optional-number readers see `undefined` on the re-instance.
   const err = new ContextOverflowError()
   const response = createErrorResponse(err)
 

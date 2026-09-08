@@ -14,7 +14,7 @@ Container_Boundary(engine_side, "Engine (@qvac/inference)") {
     Component(dispatch, "Dispatch", "TypeScript", "Validate, route, stream, apply device defaults")
     Component(plugin_registry, "Plugin Registry", "TypeScript", "Handlers keyed by modelType")
     Component(plugins, "Plugins", "TypeScript/C++", "Built-in and custom addons")
-    Component(model_registry, "Model Registry", "TypeScript", "Loaded local and delegated models")
+    Component(model_registry, "Model Registry", "TypeScript", "Loaded local model instances")
     Component(distribution, "Model Distribution", "TypeScript", "HTTP, registry, Hyperdrive, local")
     Component(rag, "RAG", "TypeScript", "HyperDB workspaces and vector search")
 }

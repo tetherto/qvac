@@ -1,7 +1,11 @@
 import type { TestDefinition } from '@qvac/test-suite'
 
 type ParakeetDependency =
-  'parakeet-tdt' | 'parakeet-ctc' | 'parakeet-sortformer' | 'parakeet-indic-conformer'
+  | 'parakeet-tdt'
+  | 'parakeet-ctc'
+  | 'parakeet-sortformer'
+  | 'parakeet-indic-conformer'
+  | 'parakeet-unified'
 
 const createParakeetTest = (
   testId: string,
@@ -127,6 +131,45 @@ export const parakeetCtcCorruptedWav = createParakeetTest(
   60000
 )
 
+// ── Unified RNN-T tests ───────────────────────────────────────────────────────
+// Parakeet Unified 0.6B — English batch + low-latency streaming from one
+// checkpoint (standard RNN-T with punctuation and capitalization). The engine
+// auto-detects the model type from the GGUF metadata.
+
+export const parakeetUnifiedWav = createParakeetTest(
+  'parakeet-unified-wav',
+  'parakeet-unified',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  300000, // download ~400 MB (q4_0)
+  ['smoke']
+)
+
+export const parakeetUnifiedMp3 = createParakeetTest(
+  'parakeet-unified-mp3',
+  'parakeet-unified',
+  'transcription-short-mp3.mp3',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
+export const parakeetUnifiedSilence = createParakeetTest(
+  'parakeet-unified-silence',
+  'parakeet-unified',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+// Corrupted WAV on the Unified path
+export const parakeetUnifiedCorruptedWav = createParakeetTest(
+  'parakeet-unified-corrupted-wav',
+  'parakeet-unified',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000
+)
+
 // ── Indic Conformer CTC (desktop-only) ────────────────────────────────────────
 // Multilingual CTC with a required `modelConfig.language` mask. Happy path
 // uses the asr-ggml Hindi sample (`sample_hi.raw` wrapped as WAV) and asserts
@@ -205,6 +248,13 @@ export const parakeetCtcTests = [
   parakeetCtcCorruptedWav
 ]
 
+export const parakeetUnifiedTests = [
+  parakeetUnifiedWav,
+  parakeetUnifiedMp3,
+  parakeetUnifiedSilence,
+  parakeetUnifiedCorruptedWav
+]
+
 export const parakeetIndicConformerTests = [
   parakeetIndicConformerHi,
   parakeetIndicConformerSilence,
@@ -216,6 +266,7 @@ export const parakeetSortformerTests = [parakeetSortformerSingle, parakeetSortfo
 export const parakeetTests = [
   ...parakeetTdtTests,
   ...parakeetCtcTests,
+  ...parakeetUnifiedTests,
   ...parakeetIndicConformerTests,
   ...parakeetSortformerTests
 ]

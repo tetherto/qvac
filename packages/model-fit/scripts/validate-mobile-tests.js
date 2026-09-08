@@ -3,6 +3,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const excluded = new Set(require('./mobile-integration-exclusions.js'))
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
@@ -15,7 +16,7 @@ function getIntegrationTestFiles() {
 
   return fs
     .readdirSync(integrationDir)
-    .filter((f) => f.endsWith('.test.js'))
+    .filter((f) => f.endsWith('.test.js') && !excluded.has(f))
     .sort()
 }
 

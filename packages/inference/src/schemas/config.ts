@@ -121,6 +121,15 @@ export const qvacConfigSchema = z.object({
   loggerConsoleOutput: z.boolean().optional(),
 
   /**
+   * Timeout in milliseconds for the worker RPC handshake performed when the SDK
+   * initializes. Raise this on slow storage or embedded hardware where the first
+   * worker start (native addon load) legitimately exceeds the default.
+   * The `QVAC_RPC_INIT_TIMEOUT_MS` environment variable takes precedence.
+   * Defaults to 30000 (30 seconds).
+   */
+  rpcInitTimeoutMs: z.number().int().positive().optional(),
+
+  /**
    * Maximum number of concurrent HTTP downloads for sharded models.
    * Higher values may improve download speed but increase memory usage.
    * Defaults to 3.

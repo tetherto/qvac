@@ -26,8 +26,8 @@ shape, same public surface — only the inference engine differs.
 
 The C++ implementation is lifted from
 [`EasyOcr-ggml`](https://github.com/tetherto/easy-ocr-ggml); GGML is pulled
-from `qvac-fabric` (instead of the upstream submodule), matching how the
-sibling `translation-nmtcpp` addon consumes ggml.
+from the `@qvac/fabric` runtime (instead of the upstream submodule), matching
+how the sibling `translation-nmtcpp` addon consumes ggml.
 
 ## Install
 
@@ -781,8 +781,8 @@ python benchmarks/quality_eval/benchmark_100.py \
 ```
 packages/ocr-ggml/
 ├── package.json             # @qvac/ocr-ggml (bare addon)
-├── CMakeLists.txt           # bare_module(ocr-ggml), links ggml + opencv4
-├── vcpkg.json               # ggml from qvac-fabric, opencv4, inference-addon-cpp
+├── CMakeLists.txt           # bare_module(ocr-ggml), Fabric headers + opencv4
+├── vcpkg.json               # opencv4, inference-addon-cpp
 ├── vcpkg-configuration.json
 ├── ocr-ggml-cli             # dev-time CLI (mirrors nmt-cli), not shipped to npm
 ├── binding.js               # require.addon() entry
@@ -815,7 +815,7 @@ packages/ocr-ggml/
   (Apache-2.0).
 - **Build / addon plumbing** modelled on
   [`@qvac/translation-nmtcpp`](../translation-nmtcpp) (ggml from
-  `qvac-fabric`, `cmake-bare` + `cmake-vcpkg`, `inference-addon-cpp` base
+  `@qvac/fabric`, `cmake-bare` + `cmake-vcpkg`, `inference-addon-cpp` base
   classes).
 - **Public JS surface** modelled on `@qvac/ocr-onnx` (retired; git tag
   `ocr-onnx-v0.7.2`) so callers can swap engines transparently.

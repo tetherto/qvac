@@ -1,10 +1,12 @@
 import { emitKeypressEvents } from 'node:readline'
 import { select, search, editor, confirm, input } from '@inquirer/prompts'
-import type { ModelCatalogEntry } from '../serve/core/model-catalog.js'
-import { parseServeConfig } from '../serve/config.js'
+import type { ModelCatalogEntry } from '@/serve/core/model-catalog'
+import { parseServeConfig } from '@/serve/core/config'
 import {
   MODALITIES,
   RECOMMENDED,
+  TTS_ENGINES,
+  TTS_ENGINE_TEMPLATES,
   aliasFor,
   buildEntry,
   buildGenericEntry,
@@ -13,15 +15,17 @@ import {
   type BuiltEntry,
   type Modality,
   type ServeModelEntry
-} from './presets.js'
-import { docsUrlForAddon } from './docs-links.js'
+} from '@/configure/presets'
+import { docsUrlForAddon } from '@/configure/docs-links'
 import {
   configSchemaForAddon,
+  configParamModel,
   coerceParam,
-  paramFields,
   validateParam,
+  validateValue,
+  type ConfigParamModel,
   type ParamField
-} from './param-schemas.js'
+} from '@/configure/param-schemas'
 
 // Sentinel a prompt resolves to when the user backs out (Esc, or a "Back"
 // choice). The delimiters can't occur in a model id or a modality value.
@@ -193,19 +197,137 @@ async function editEntry(alias: string, entry: ServeModelEntry): Promise<ServeMo
   }
 }
 
-// Guided, schema-driven editing of a model's config params: each field carries
-// its type hint and description from the SDK schema, and input is validated
-// against the real field schema. Esc / "Done" returns the updated entry.
-async function configureParams(
+// Resolve the field list to edit. A plain object edits its fields directly; a
+// discriminated union (tts / nmt / audiogen) first picks a variant, records the
+// discriminator in the config, then edits that variant's fields.
+async function configureFromModel(
   entry: ServeModelEntry,
-  fields: ParamField[]
+  model: ConfigParamModel
 ): Promise<ServeModelEntry> {
-  const config: Record<string, unknown> = { ...(entry.config ?? {}) }
+  if (model.kind === 'object') return configureParams(entry, model.fields)
+
+  // The discriminator (e.g. tts `ttsEngine`) is fixed by the model being
+  // configured, so if the entry already pins it — preset templates do — edit
+  // that variant's fields directly rather than offering to switch it, which
+  // would desync the config from the model. Only ask when it's unset (a model
+  // added via "search all" with no preset config).
+  const current = entry.config?.[model.discriminator]
+  let value = model.variants.find((v) => v.value === current)?.value
+  if (value === undefined) {
+    const picked = await askWithBack((ctx) =>
+      select<string>(
+        {
+          message: `Select ${model.discriminator} (Esc to go back)`,
+          choices: [
+            ...model.variants.map((v) => ({ name: v.value, value: v.value })),
+            { name: '<- Back', value: BACK }
+          ]
+        },
+        ctx
+      )
+    )
+    if (picked === BACK) return entry
+    value = picked
+  }
+  const chosen = model.variants.find((v) => v.value === value)
+  if (!chosen) return entry
+  const withVariant: ServeModelEntry = {
+    ...entry,
+    config: { ...(entry.config ?? {}), [model.discriminator]: value }
+  }
+  return configureParams(withVariant, chosen.fields)
+}
+
+// Type hint plus a `required` marker, so mandatory fields are visible at a glance.
+function fieldHint(field: ParamField): string {
+  return field.required ? `${field.type}, required` : field.type
+}
+
+// Result of editing one field: a new value, clear it, or back out.
+type FieldEdit = { value: unknown } | { clear: true } | typeof BACK
+
+// Edit a single field. An object-capable field (e.g. a modelSrc
+// `string | { src, … }`) offers text vs object, then drills into the object's
+// own fields — edited exactly like top-level config, with descriptions — and
+// the assembled object is validated before it's accepted.
+async function editField(field: ParamField, current: unknown): Promise<FieldEdit> {
+  if (field.objectFields) {
+    let asObject = !field.acceptsString
+    if (field.acceptsString) {
+      const form = await askWithBack((ctx) =>
+        select<string>(
+          {
+            message: `${field.name} — value type? (Esc to go back)`,
+            choices: [
+              {
+                name: 'Text',
+                value: 'text',
+                description: field.description || 'A plain string value'
+              },
+              { name: 'Object', value: 'object', description: 'Edit its fields one by one' },
+              { name: '<- Back', value: BACK }
+            ]
+          },
+          ctx
+        )
+      )
+      if (form === BACK) return BACK
+      asObject = form === 'object'
+    }
+    if (asObject) {
+      const base: Record<string, unknown> =
+        current && typeof current === 'object' && !Array.isArray(current)
+          ? { ...(current as Record<string, unknown>) }
+          : {}
+      for (;;) {
+        const obj = await editProperties(base, field.objectFields, field.name)
+        if (Object.keys(obj).length === 0) return { clear: true }
+        const check = validateValue(field, obj)
+        if (check === true) return { value: obj }
+        const again = await confirm({ message: `${check} — keep editing?`, default: true })
+        if (!again) return { clear: true }
+        Object.assign(base, obj)
+      }
+    }
+  }
+
+  const raw = await askWithBack((ctx) =>
+    input(
+      {
+        message: `${field.name} [${fieldHint(field)}]${field.description ? ` - ${field.description}` : ''}`,
+        default:
+          current !== undefined
+            ? JSON.stringify(current)
+            : field.default !== undefined
+              ? JSON.stringify(field.default)
+              : '',
+        validate: (v) => validateParam(field, v)
+      },
+      ctx
+    )
+  )
+  if (raw === BACK) return BACK
+  const coerced = coerceParam(raw)
+  return coerced === undefined ? { clear: true } : { value: coerced }
+}
+
+// Edit a set of properties one-by-one (search, pick, edit) — shared by
+// top-level config and nested object fields, so objects are configured the same
+// guided way as everything else. `label` names the object being edited, if nested.
+async function editProperties(
+  initial: Record<string, unknown>,
+  fields: ParamField[],
+  label?: string
+): Promise<Record<string, unknown>> {
+  const config: Record<string, unknown> = { ...initial }
+  const message = label
+    ? `Set a field of ${label} (Esc when done)`
+    : 'Set a parameter (Esc when done)'
   for (;;) {
     const pick = await askWithBack((ctx) =>
       search<string>(
         {
-          message: 'Set a parameter (Esc when done)',
+          message,
           source: (term) => {
             const t = term?.toLowerCase().trim()
             const list = t
@@ -216,8 +338,8 @@ async function configureParams(
             const rows = list.slice(0, 100).map((f) => ({
               name:
                 config[f.name] !== undefined
-                  ? `${f.name} = ${JSON.stringify(config[f.name])}   [${f.type}]`
-                  : `${f.name}   [${f.type}]`,
+                  ? `${f.name} = ${JSON.stringify(config[f.name])}   [${fieldHint(f)}]`
+                  : `${f.name}   [${fieldHint(f)}]`,
               value: f.name,
               description: f.description
             }))
@@ -233,22 +355,22 @@ async function configureParams(
     if (pick === BACK) break
     const field = fields.find((f) => f.name === pick)
     if (!field) continue
-    const current = config[field.name]
-    const raw = await askWithBack((ctx) =>
-      input(
-        {
-          message: `${field.name} [${field.type}]${field.description ? ` - ${field.description}` : ''}`,
-          default: current !== undefined ? JSON.stringify(current) : '',
-          validate: (v) => validateParam(field, v)
-        },
-        ctx
-      )
-    )
-    if (raw === BACK) continue
-    const coerced = coerceParam(raw)
-    if (coerced === undefined) delete config[field.name]
-    else config[field.name] = coerced
+    const result = await editField(field, config[field.name])
+    if (result === BACK) continue
+    if ('clear' in result) delete config[field.name]
+    else config[field.name] = result.value
   }
+  return config
+}
+
+// Guided, schema-driven editing of a model's config params: each field carries
+// its type hint and description from the SDK schema; object fields drill in.
+// Esc / "Done" returns the updated entry.
+async function configureParams(
+  entry: ServeModelEntry,
+  fields: ParamField[]
+): Promise<ServeModelEntry> {
+  const config = await editProperties(entry.config ?? {}, fields)
   if (Object.keys(config).length === 0) {
     const next = { ...entry }
     delete next.config
@@ -269,7 +391,9 @@ async function confirmEntry(
   let alias = aliasFor(built.aliasBase, taken)
   let entry = built.entry
   const schema = configSchemaForAddon(built.addon)
-  const fields = schema ? paramFields(schema) : null
+  const model = schema ? configParamModel(schema) : null
+  const hasParams =
+    !!model && (model.kind === 'object' ? model.fields.length > 0 : model.variants.length > 0)
   for (;;) {
     const proceed = await askWithBack((ctx) =>
       select<string>(
@@ -278,7 +402,7 @@ async function confirmEntry(
           choices: [
             { name: `Add it (alias: ${alias})`, value: 'add' },
             { name: 'Rename alias...', value: 'alias' },
-            ...(fields ? [{ name: 'Set config parameters...', value: 'params' }] : []),
+            ...(hasParams ? [{ name: 'Set config parameters...', value: 'params' }] : []),
             ...(canEdit ? [{ name: 'Edit in $EDITOR...', value: 'edit' }] : []),
             { name: '<- Back', value: 'back' }
           ]
@@ -287,8 +411,8 @@ async function confirmEntry(
       )
     )
     if (proceed === BACK || proceed === 'back') return BACK
-    if (proceed === 'params' && fields) {
-      entry = await configureParams(entry, fields)
+    if (proceed === 'params' && model) {
+      entry = await configureFromModel(entry, model)
       continue
     }
     if (proceed === 'alias') {
@@ -336,7 +460,28 @@ async function addByCapability(
 
     const info = modalityInfo(modality)
     let constantName: string | undefined
-    if (info.pick) {
+    if (modality === 'speech') {
+      // TTS isn't a single pickable constant — it's a per-engine assembly. Let
+      // the user choose the engine; buildEntry supplies that engine's template.
+      const engine = await askWithBack((ctx) =>
+        select<string>(
+          {
+            message: 'Which TTS engine? (Esc to go back)',
+            choices: [
+              ...TTS_ENGINES.map((e) => ({
+                name: TTS_ENGINE_TEMPLATES[e].label,
+                value: e,
+                description: TTS_ENGINE_TEMPLATES[e].hint
+              })),
+              { name: '<- Back', value: BACK }
+            ]
+          },
+          ctx
+        )
+      )
+      if (engine === BACK) continue
+      constantName = engine
+    } else if (info.pick) {
       const pool = catalog.filter((e) => e.role === info.role)
       const picked = await pickModel(pool, `Pick a ${info.label} model (type to search)`, {
         recommended: RECOMMENDED[modality],

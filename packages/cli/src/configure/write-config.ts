@@ -8,8 +8,8 @@ import {
   writeFileSync
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { CONFIG_CANDIDATES } from '../config.js'
-import type { ServeModelEntry } from './presets.js'
+import { CONFIG_CANDIDATES } from '@/config'
+import type { ServeModelEntry } from '@/configure/presets'
 
 export interface QvacConfig {
   serve?: { models?: Record<string, ServeModelEntry>; [k: string]: unknown }

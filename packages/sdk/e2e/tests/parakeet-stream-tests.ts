@@ -46,6 +46,28 @@ export const parakeetStreamHappy: TestDefinition = {
   }
 }
 
+/**
+ * Unified RNN-T streaming coverage: the `parakeet-unified-en-0.6b`
+ * checkpoint serves batch and low-latency streaming from one GGUF, so
+ * drive the same happy-path duplex stream against it to lock down the
+ * `StreamSession` path on the Unified decoder.
+ */
+export const parakeetStreamUnifiedHappy: TestDefinition = {
+  testId: 'parakeet-stream-unified-happy',
+  params: {
+    audioFileName: AUDIO_FIXTURE,
+    chunkMs: 1000,
+    emitPartials: true,
+    trailingSilenceMs: 1500
+  },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: {
+    category: 'parakeet',
+    dependency: 'parakeet-unified',
+    estimatedDurationMs: 120000
+  }
+}
+
 export const parakeetStreamMetadataRejected: TestDefinition = {
   testId: 'parakeet-stream-metadata-rejected',
   params: {
@@ -128,12 +150,13 @@ export const parakeetStreamIteratorThrow: TestDefinition = {
   metadata: {
     category: 'parakeet',
     dependency: 'parakeet-tdt',
-    estimatedDurationMs: 180000
+    estimatedDurationMs: 200000
   }
 }
 
 export const parakeetStreamTests = [
   parakeetStreamHappy,
+  parakeetStreamUnifiedHappy,
   parakeetStreamMetadataRejected,
   parakeetStreamEou,
   parakeetStreamDestroyMidUtterance,

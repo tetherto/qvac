@@ -2,7 +2,8 @@ import {
   audioGen,
   AUDIOGEN_INPUT_CHANNELS,
   AUDIOGEN_INPUT_SAMPLE_RATE,
-  type AudioGenClientParams
+  type AudioGenClientParams,
+  type AudioGenProgress
 } from '@qvac/sdk'
 import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
@@ -62,8 +63,13 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
 
     try {
       const run = audioGen({ modelId, ...params })
-      const progressPromise = collect(run.progressStream)
-      const [audio, stats, progress] = await Promise.all([run.audio, run.stats, progressPromise])
+      const progressPromise = collectStageTimings(run.progressStream)
+      const [audio, stats, progressReport] = await Promise.all([
+        run.audio,
+        run.stats,
+        progressPromise
+      ])
+      const progress = progressReport.ticks
       const sampleCount = audio.pcm.byteLength / ((audio.bitsPerSample / 8) * audio.channels)
       const valid =
         sampleCount > 0 &&
@@ -82,9 +88,14 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
         }
       }
 
+      // Report the resolved backend: the same generation costs ~3s on macOS and
+      // ~600s on the Ubuntu GPU runner, which no amount of contention explains.
+      const backend = `backend=${stats?.backendId ?? '?'}/${stats?.backendDevice ?? '?'}`
+      const timing = `rtf=${stats?.realTimeFactor ?? '?'} totalMs=${stats?.totalTimeMs ?? '?'}`
       return ValidationHelpers.validate(
         `generated ${sampleCount} samples at ${audio.sampleRate} Hz with ` +
-          `${progress.length} progress ticks and stats`,
+          `${progress.length} progress ticks and stats ` +
+          `[${backend} ${timing} stages: ${progressReport.summary}]`,
         expectation
       )
     } catch (error) {
@@ -167,8 +178,22 @@ function synthesizeStereoTone(seconds: number, frequency: number) {
   return new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength)
 }
 
-async function collect<T>(events: AsyncIterable<T>) {
-  const collected: T[] = []
-  for await (const event of events) collected.push(event)
-  return collected
+/**
+ * Wall time spent per pipeline stage, from the gaps between progress ticks.
+ * `cover-nofsq` renders one second of audio in ~1.5s on the same Ubuntu runner
+ * where `short-duration` needs ~307s for one second, so the cost sits in a
+ * stage rather than in the models or the host.
+ */
+async function collectStageTimings(events: AsyncIterable<AudioGenProgress>) {
+  const ticks: AudioGenProgress[] = []
+  const elapsedByStage = new Map<string, number>()
+  let previous = Date.now()
+  for await (const event of events) {
+    const now = Date.now()
+    elapsedByStage.set(event.stage, (elapsedByStage.get(event.stage) ?? 0) + (now - previous))
+    previous = now
+    ticks.push(event)
+  }
+  const summary = Array.from(elapsedByStage, ([stage, ms]) => `${stage}:${(ms / 1000).toFixed(1)}s`)
+  return { ticks, summary: summary.join(' ') }
 }

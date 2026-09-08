@@ -7,6 +7,12 @@ const { spawnSync } = require('child_process')
 const { builtinModules } = require('module')
 const test = require('brittle')
 
+// The lexer must be the one `bare-pack` (the mobile bundler) resolves, not an
+// ambient copy — the desync this test hunts for differs between lexer
+// releases. Mirrors scripts/ci/check-bundler-requires.mjs.
+const BARE_PACK_ROOT = path.dirname(require.resolve('bare-pack/package'))
+const lex = require(require.resolve('bare-module-lexer', { paths: [BARE_PACK_ROOT] }))
+
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const COMMAND_NAME = 'qvac-audiogen-download-models'
 const DOWNLOADER_PATH = 'scripts/download-audiogen-ggml-models.js'
@@ -41,6 +47,7 @@ const REQUIRED_PATHS = [
   ...BENCHMARK_PATHS
 ]
 const FORBIDDEN_PREFIXES = ['package/test/integration/', 'package/test/mobile/']
+const SOURCE_ROOT = path.join(PACKAGE_ROOT, 'src')
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8' })
@@ -111,6 +118,27 @@ function assertDeclaredImports(t, packageRoot, entries, packageJson) {
   })
 }
 
+// `exports.<name>` anywhere inside a template-literal substitution derails
+// bare-module-lexer: every require() later in that file is dropped from the
+// bare-pack mobile bundle (this is how ./binding went missing on Device Farm).
+// tsc rewrites references to exported consts into that form, so interpolating
+// them is the pattern to ban. The scan stops at the substitution's first `}`,
+// which covers every shape tsc emits for a const reference.
+const LEXER_BREAKING_PATTERN = /\$\{[^}]*\bexports\./
+
+function assertMobileBundlerLexable(t, packageRoot, entries) {
+  const scriptEntries = entries.filter(
+    (entry) => entry.startsWith('package/') && /\.(?:c?js|mjs)$/.test(entry)
+  )
+  scriptEntries.forEach((entry) => {
+    const source = fs.readFileSync(path.join(packageRoot, entry.slice('package/'.length)), 'utf8')
+    t.absent(
+      LEXER_BREAKING_PATTERN.test(source),
+      `${entry} avoids \${exports.*} template substitutions (breaks bare-module-lexer)`
+    )
+  })
+}
+
 function assertRuntimePathsResolve(t, consumerRoot) {
   const probe = `
 require.resolve('@qvac/audiogen-ggml')
@@ -142,6 +170,38 @@ function assertForbiddenPaths(t, entries) {
     )
   }
   t.absent(entries.some(isInternalTestUtility), 'tarball excludes internal test utilities')
+}
+
+function walkFiles(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name)
+    return entry.isDirectory() ? walkFiles(entryPath) : [entryPath]
+  })
+}
+
+function generatedScripts() {
+  return walkFiles(SOURCE_ROOT)
+    .filter((filePath) => filePath.endsWith('.ts') && !filePath.endsWith('.d.ts'))
+    .map((filePath) => `${path.relative(SOURCE_ROOT, filePath).slice(0, -'.ts'.length)}.js`)
+    .map((filePath) => filePath.split(path.sep).join('/'))
+    .filter((filePath) => fs.existsSync(path.join(PACKAGE_ROOT, filePath)))
+}
+
+function relativeSpecifiers(specifiers) {
+  return new Set(specifiers.filter((specifier) => specifier.startsWith('.')))
+}
+
+function lexedSpecifiers(source) {
+  return lex(Buffer.from(source)).imports.map((entry) => entry.specifier)
+}
+
+function assertBundlerSeesRequires(t, scriptPath) {
+  const source = fs.readFileSync(path.join(PACKAGE_ROOT, scriptPath), 'utf8')
+  const written = relativeSpecifiers(importedModules(source))
+  const lexed = relativeSpecifiers(lexedSpecifiers(source))
+  for (const specifier of written) {
+    t.ok(lexed.has(specifier), `bare-pack resolves ${specifier} from ${scriptPath}`)
+  }
 }
 
 function runDownloader(downloaderPath, cwd) {
@@ -215,6 +275,7 @@ test('published package contains only consumer contract files', (t) => {
     'package installs the benchmark process runtime'
   )
   assertDeclaredImports(t, packedPackageRoot, entries, packedPackage)
+  assertMobileBundlerLexable(t, packedPackageRoot, entries)
   const consumerRoot = path.join(temporaryDirectory, 'consumer')
   installTarball(consumerRoot, tarballPath)
   assertRuntimePathsResolve(t, consumerRoot)
@@ -234,4 +295,10 @@ test('published package contains only consumer contract files', (t) => {
     missingRegistryClient.stderr.includes('Install @qvac/registry-client'),
     'downloader explains how to install its optional runtime'
   )
+})
+
+test('generated scripts keep every relative require visible to the bundler', (t) => {
+  const scripts = generatedScripts()
+  t.ok(scripts.includes('index.js'), 'entry point is a generated script')
+  scripts.forEach((scriptPath) => assertBundlerSeesRequires(t, scriptPath))
 })

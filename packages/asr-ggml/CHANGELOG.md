@@ -14,6 +14,65 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- Add NVIDIA Nemotron 3.5 ASR Streaming 0.6B support to the Parakeet engine,
+  including locale prompting, cache-aware streaming operating points,
+  conversion tooling, and a model-specific 320 ms streaming default.
+
+- Add Core ML (Apple Neural Engine) RTF benchmark lanes for the Parakeet TDT
+  models on the darwin-arm64 desktop runner, covering f16/q8_0/q4_0. A matrix
+  entry opts in with `"coreml": true`; the encoder then runs on the ANE via an
+  exported `<stem>-encoder.mlmodelc` sidecar while the TDT decoder stays on
+  Metal. Because the sidecar is picked up by presence alone — and one sidecar
+  serves every quantisation of its stem — Core ML entries run against an
+  isolated `models/coreml/` copy so the existing CPU and Metal lanes cannot
+  silently start measuring the Neural Engine. `activeBackend` is now derived
+  from the observed per-run `encoderOnCoreml` stat rather than the requested
+  backend, and the benchmark refuses to write an artifact whose label would not
+  match what actually ran, in either direction. Sidecars are pinned in
+  `test/integration/parakeet-coreml.manifest.json` and staged by
+  `scripts/stage-integration-models.mjs`; lanes skip themselves loudly where no
+  sidecar is staged, so the matrix is unaffected until one is published. Core ML
+  covers the offline TDT encoder only, and the aggregate report expects it for
+  the parakeet engine alone. Measured on an Apple M1 Pro: 1.20-1.27x faster than
+  the Metal lane (mean RTF, five runs per lane) — see the package README.
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-03. Silero VAD now honors
+  `use_gpu`: the compute backends match the weight placement, fixing the
+  ggml_backend_sched abort ("pre-allocated tensor in a buffer that cannot
+  run the operation") that killed every `use_gpu=true` VAD context init on
+  GPU builds (Metal, Vulkan, CUDA, HIP), and the VAD LSTM input is made
+  contiguous to satisfy the CUDA mul-mat-vec kernel's stride requirement.
+  The addon creates its VAD context with the default (CPU) parameters, so
+  runtime behavior is unchanged; the fix matters for anything that opts
+  VAD into the GPU.
+
+## [0.4.2] - 2026-09-01
+
+### Changed
+
+- Drop CUDA from the published linux-x64 prebuild so the npm tarball stays
+  under the registry size limit. `use_gpu` / `useGPU: true` uses Vulkan on
+  Linux. CUDA remains opt-in at build time via `ASR_CUDA=ON`.
+
+- Raise the `speech-cpp` floor to 2026-09-01#2, which brings in ggml-speech
+  2026-09-02. The CUDA backend now skips, at registration, GPUs whose
+  compute capability has no compiled code in the fatbin, so a
+  `use_gpu` / `useGPU: true` run on such a card (Turing and older) falls
+  back to Vulkan or CPU instead of failing at the first kernel launch. The
+  CUDA fatbin now carries native code for every architecture the prebuilds
+  target — Turing (7.5), Ampere (8.0, 8.6), Ada (8.9), Hopper (9.0) and
+  Blackwell (12.0, 12.1) — with 8.0 PTX for anything newer, so Turing is
+  supported again and Blackwell no longer pays a first-use JIT. The roll
+  also brings the compute-buffer OOM handling and k-quant GET_ROWS fixes, and
+  fixes two multi-GPU faults on a host that mixes supported and unsupported
+  NVIDIA cards: backend initialisation no longer aborts when the unsupported
+  card enumerates first, and a row-split buffer no longer allocates on the
+  skipped card.
+
 ## [0.4.1] - 2026-08-28
 
 ### Added

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.38.0] - 2026-09-07
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.3.3` -> `1.4.0`, which requires libjs 1.32 headers (`bare-headers` >= 1.32). Compile-time only; no API or runtime behaviour change for this package. Released as a minor bump so dependents on `^0.37.x` adopt the new build floor deliberately rather than automatically.
+
+## [0.37.0] - 2026-08-29
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader; no API change for this package).
+
 ## [0.36.0] - 2026-08-24
 
 ### Changed

@@ -11,3 +11,10 @@ export {
   type EmbedConfigInput as LlamacppEmbeddingConfig,
   type ModelSrcInput as ModelSource
 } from '@qvac/inference/surface'
+
+// Resolve any model's `modelConfig` schema by model type (canonical, alias, or
+// engine string) and read its field descriptions — the map is the single source
+// of truth, so a newly added model type is available here automatically. Lets
+// tools such as the CLI's `qvac configure` document every addon's config
+// without a hand-maintained per-addon list.
+export { configSchemaForModelType, MODEL_CONFIG_SCHEMA_BY_TYPE } from '@qvac/inference/surface'

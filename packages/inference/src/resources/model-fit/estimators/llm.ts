@@ -83,25 +83,31 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   assumptions.push(element.assumption)
   const kv = kvCacheBytes(facts, contextTokens, element.bytes, assumptions, reasons)
 
-  // The KV cache is persistent, not a working peak: llama.cpp builds the
-  // context when the model loads, so every loaded model's cache is resident
-  // for its whole lifetime. Parking it in `working` would let `sequential`
-  // aggregation count only the largest cache while all of them are resident.
+  // llama.cpp builds the context at load — KV cache, engine overhead, compute
+  // buffers — so all of it is resident for the model's lifetime. Parking any of
+  // it in `working` would let `sequential` count only the largest. What a
+  // completion adds on top is released afterwards, so that part is `working`.
   const persistent: ByteRange = {
-    lower: Math.ceil(artifactBytes + kv.lower),
-    upper: Math.ceil(artifactBytes * calibration.weightUpperCoeff + kv.upper)
+    lower: Math.ceil(
+      artifactBytes +
+        kv.lower +
+        calibration.fixedOverheadBytes.lower +
+        calibration.computeBufferBytesPerToken.lower * contextTokens
+    ),
+    upper: Math.ceil(
+      artifactBytes * calibration.weightUpperCoeff +
+        kv.upper +
+        calibration.fixedOverheadBytes.upper +
+        calibration.computeBufferBytesPerToken.upper * contextTokens
+    )
   }
   assumptions.push(
-    'the KV cache counts as resident for the model’s whole lifetime; llama.cpp allocates it when the model loads, not per operation'
+    'the KV cache, engine overhead and compute buffers count as resident for the model’s whole lifetime; llama.cpp allocates them when the model loads, not per operation'
   )
-
-  const working: ByteRange = {
-    lower:
-      calibration.fixedOverheadBytes.lower +
-      calibration.computeBufferBytesPerToken.lower * contextTokens,
-    upper:
-      calibration.fixedOverheadBytes.upper +
-      calibration.computeBufferBytesPerToken.upper * contextTokens
+  if (calibration.workingPeakBytes && calibration.workingPeakBytes.upper > 0) {
+    assumptions.push(
+      'one operation is assumed in flight per model; the working peak is what a single completion was measured to add on top of the resident cost'
+    )
   }
 
   assumptions.push(
@@ -112,7 +118,10 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
     kind: 'estimate',
     estimatorVersion: LLM_ESTIMATOR_VERSION,
     persistent,
-    working: { lower: Math.ceil(working.lower), upper: Math.ceil(working.upper) },
+    working: {
+      lower: calibration.workingPeakBytes?.lower ?? 0,
+      upper: calibration.workingPeakBytes?.upper ?? 0
+    },
     reasons,
     assumptions
   }

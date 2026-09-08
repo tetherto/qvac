@@ -3,11 +3,10 @@ import { before, after, type TestContext } from 'node:test'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildServer, type StartServerOptions } from '../../../src/serve/index.js'
-import { preloadModels } from '../../../src/serve/core/lifecycle.js'
+import { buildServer, type StartServerOptions } from '@/serve/index'
+import { preloadModels } from '@/serve/core/lifecycle'
+import type { OpenAIExtensionOptions } from '@/serve/extensions/openai/state'
 import { MODELLESS_CONFIG, writeConfigDir } from './config.js'
-// Side-effect import: augments FastifyInstance with `.qvac`.
-import '../../../src/serve/lib/types.js'
 
 export interface CreateServerOptions {
   config?: unknown
@@ -17,7 +16,7 @@ export interface CreateServerOptions {
   publicBaseUrl?: string
   docs?: boolean
   model?: string[]
-  transcribeOverride?: StartServerOptions['transcribeOverride']
+  transcribeOverride?: OpenAIExtensionOptions['transcribeOverride']
   loadModelOverride?: StartServerOptions['loadModelOverride']
 }
 
@@ -34,7 +33,7 @@ function serverOptions(projectRoot: string, opts: CreateServerOptions): StartSer
     ...(opts.docs !== undefined ? { docs: opts.docs } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.transcribeOverride !== undefined
-      ? { transcribeOverride: opts.transcribeOverride }
+      ? { extensionOptions: { openai: { transcribeOverride: opts.transcribeOverride } } }
       : {}),
     ...(opts.loadModelOverride !== undefined ? { loadModelOverride: opts.loadModelOverride } : {})
   }

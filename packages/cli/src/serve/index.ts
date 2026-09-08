@@ -1,45 +1,25 @@
-import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
-import autoload from '@fastify/autoload'
-import cors from '@fastify/cors'
-import multipart from '@fastify/multipart'
-import swagger from '@fastify/swagger'
-import swaggerUi from '@fastify/swagger-ui'
-import {
-  jsonSchemaTransform,
-  serializerCompiler,
-  validatorCompiler,
-  type ZodTypeProvider
-} from 'fastify-type-provider-zod'
 import closeWithGrace from 'close-with-grace'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-import { createLogger } from '../logger.js'
-import type { Logger } from '../logger.js'
-import { findConfigFile, loadConfig } from '../config.js'
-import { parseServeConfig } from './config.js'
-import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from './cors.js'
-import { resolveServeApiKey } from './api-key.js'
-import { checkNetworkExposure, validateServeStartup } from './startup.js'
-import { createModelRegistry } from './core/model-registry.js'
-import { createLoadManager, defaultLoadFn } from './core/load-manager.js'
-import { preloadModels, shouldRefuseStart, shutdownSDK } from './core/lifecycle.js'
-import { createResponsesStore } from './adapters/openai/responses-store.js'
-import { createChunkAttributionStore } from './adapters/openai/chunk-attribution-store.js'
-import { createEphemeralFilesStore } from './adapters/openai/ephemeral-files-store.js'
-import { createVectorStoresStore } from './adapters/openai/vector-stores-store.js'
-import { createVideoJobsStore } from './core/video-jobs-store.js'
-import { probeFfmpegAvailable } from './lib/video-transcode.js'
-import { tearDownJob } from './routes/videos.js'
-import type { QvacContext } from './lib/types.js'
-import contextPlugin from './plugins/context.js'
-import errorHandlerPlugin from './plugins/error-handler.js'
-import authPlugin from './plugins/auth.js'
-import cancelBridgePlugin from './plugins/cancel-bridge.js'
-import { TAG_DESCRIPTIONS } from './route-meta.js'
-
-import './lib/types.js'
+import { createLogger } from '@/logger'
+import type { Logger } from '@/logger'
+import { findConfigFile, loadConfig } from '@/config'
+import { parseServeConfig, unknownServeKeys } from '@/serve/core/config'
+import { resolveServeApiKey } from '@/serve/core/api-key'
+import { checkNetworkExposure, validateServeStartup } from '@/serve/core/startup'
+import { createModelRegistry } from '@/serve/core/model-registry'
+import { createLoadManager, defaultLoadFn } from '@/serve/core/load-manager'
+import { preloadModels, shouldRefuseStart } from '@/serve/core/lifecycle'
+import type { QvacContext } from '@/serve/core/context'
+import { createCoreServer } from '@/serve/core/server'
+import {
+  extensionBanners,
+  extensionSummary,
+  mountExtensions,
+  setupExtensions,
+  type ServeExtension
+} from '@/serve/core/extensions'
+import { EXTENSIONS, resolveExtensions } from '@/serve/extensions'
 
 export interface StartServerOptions {
   projectRoot: string
@@ -63,16 +43,32 @@ export interface StartServerOptions {
   loadConcurrency?: number | undefined
   loadTimeoutMs?: number | null | undefined
   cancelLoadOnDisconnect?: boolean | undefined
-  transcribeOverride?: QvacContext['transcribeOverride']
+  /** Extension names to mount. Defaults to every registered extension. */
+  extensions?: string[] | undefined
+  /** Per-extension options, keyed by extension name, passed to its `setup`. */
+  extensionOptions?: Record<string, unknown> | undefined
   loadModelOverride?: QvacContext['loadModelOverride']
 }
 
 export async function buildServer(options: StartServerOptions): Promise<FastifyInstance> {
+  return (await buildServerParts(options)).app
+}
+
+async function buildServerParts(
+  options: StartServerOptions
+): Promise<{ app: FastifyInstance; extensions: ServeExtension[] }> {
   const logger = createLogger(options.quiet ? 'silent' : options.verbose ? 'debug' : 'info')
+  const extensions = resolveExtensions(options.extensions)
 
   const configPath = findConfigFile(options.projectRoot, options.config)
   const rawConfig = configPath ? ((await loadConfig(configPath)) as Record<string, unknown>) : {}
-  const serveConfig = parseServeConfig(rawConfig as Parameters<typeof parseServeConfig>[0], options)
+  const typedConfig = rawConfig as Parameters<typeof parseServeConfig>[0]
+  // Every registered extension validates its own `serve.<name>` block, whether
+  // or not it is mounted.
+  const serveConfig = parseServeConfig(typedConfig, options, EXTENSIONS)
+  for (const key of unknownServeKeys(typedConfig, EXTENSIONS)) {
+    logger.warn(`Ignoring unknown config key: serve.${key}`)
+  }
   validateServeStartup(serveConfig.cors.origins, options)
   const { apiKey, warning: apiKeyWarning } = resolveServeApiKey(options)
   if (apiKeyWarning !== undefined) logger.warn(apiKeyWarning)
@@ -81,30 +77,6 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
   const exposureWarning = checkNetworkExposure({ ...options, apiKey })
   if (exposureWarning !== undefined) logger.warn(exposureWarning)
   const registry = createModelRegistry()
-
-  const responsesStore = createResponsesStore()
-  const vectorStores = createVectorStoresStore()
-  const ephemeralFiles = createEphemeralFilesStore(undefined, {
-    onEvict: (id, reason) => {
-      logger.warn(`ephemeral file evicted id=${id} reason=${reason}`)
-    }
-  })
-  const chunkAttributions = createChunkAttributionStore()
-  const ffmpegAvailable = await probeFfmpegAvailable()
-  if (!ffmpegAvailable) {
-    logger.warn(
-      'ffmpeg not on PATH — /v1/videos/{id}/content defaults to video/avi and /v1/audio/speech rejects mp3/opus/aac/flac. Install ffmpeg to serve those. See: qvac doctor'
-    )
-  }
-  // `onEvict` captures `qvacContext` by reference; the closure runs lazily
-  // (only when the store actually evicts), long after `qvacContext` is wired
-  // below, so the forward reference is safe at invocation time.
-  const videoJobsStore = createVideoJobsStore({
-    onEvict: (job, reason) => {
-      logger.warn(`video job evicted id=${job.id} reason=${reason} status=${job.status}`)
-      tearDownJob(qvacContext, job)
-    }
-  })
 
   // The load fn resolves the override lazily via this ref, so the manager can be
   // built before the context (loadManager is a real required field, no placeholder)
@@ -124,15 +96,7 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     serveConfig,
     loadManager,
     logger,
-    vectorStores,
-    ephemeralFiles,
-    chunkAttributions,
-    responsesStore,
-    videoJobsStore,
-    ffmpegAvailable,
-    ...(options.transcribeOverride !== undefined
-      ? { transcribeOverride: options.transcribeOverride }
-      : {}),
+    extensions: {},
     get loadModelOverride() {
       return overrideRef.current
     },
@@ -141,113 +105,24 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     }
   }
 
-  const app = Fastify({
-    logger: false,
-    disableRequestLogging: true,
-    bodyLimit: 100 * 1024 * 1024,
-    ajv: { customOptions: { allErrors: false } }
-  }).withTypeProvider<ZodTypeProvider>()
+  await setupExtensions(qvacContext, extensions, options.extensionOptions ?? {})
 
-  app.setValidatorCompiler(validatorCompiler)
-  app.setSerializerCompiler(serializerCompiler)
-
-  await app.register(errorHandlerPlugin)
-  await app.register(contextPlugin, { context: qvacContext })
-
-  await app.register(swagger, {
-    openapi: {
-      openapi: '3.1.0',
-      info: {
-        title: 'QVAC OpenAI-compatible API',
-        description: 'OpenAI-compatible REST API served by `qvac serve openai`.',
-        version: '1.0.0'
-      },
-      servers: [{ url: `http://${options.host}:${options.port}`, description: 'this server' }],
-      tags: Object.entries(TAG_DESCRIPTIONS).map(([name, description]) => ({ name, description })),
-      components: {
-        securitySchemes: {
-          bearerAuth: { type: 'http', scheme: 'bearer' }
-        }
-      },
-      ...(apiKey ? { security: [{ bearerAuth: [] }] } : {})
-    },
-    transform: jsonSchemaTransform
+  const app = await createCoreServer(qvacContext, {
+    host: options.host,
+    port: options.port,
+    apiKey,
+    docs: options.docs,
+    corsOrigins: serveConfig.cors.origins,
+    extensions
   })
 
-  // lunte-disable-next-line require-await
-  app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger())
+  await mountExtensions(app, extensions)
 
-  if (options.docs) {
-    await app.register(swaggerUi, {
-      routePrefix: '/docs',
-      uiConfig: { docExpansion: 'list', deepLinking: true }
-    })
-  }
-
-  const corsOrigins = resolveCorsOrigins(serveConfig.cors.origins, options)
-  if (corsOrigins.length > 0) {
-    const matchCorsOrigin = createCorsOriginMatcher(corsOrigins)
-    await app.register(cors, {
-      origin(origin, callback) {
-        matchCorsOrigin(origin, (error, allowed) => callback(error, allowed ?? false))
-      },
-      methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-      strictPreflight: false
-    })
-  }
-
-  await app.register(multipart, {
-    limits: {
-      fileSize: 100 * 1024 * 1024,
-      files: 10
-    }
-  })
-
-  await app.register(cancelBridgePlugin)
-
-  if (apiKey) {
-    await app.register(authPlugin, { apiKey })
-  }
-
-  // lunte-disable-next-line require-await
-  app.addHook('onRequest', async (req) => {
-    if (!isIntrospectionPath(req.url)) {
-      logger.info(`→ ${req.method} ${req.url.split('?')[0]}`)
-    }
-    ;(req as unknown as { qvacStart: number }).qvacStart = performance.now()
-  })
-  // lunte-disable-next-line require-await
-  app.addHook('onResponse', async (req, reply) => {
-    if (isIntrospectionPath(req.url)) return
-    const start = (req as unknown as { qvacStart?: number }).qvacStart
-    const ms = start !== undefined ? performance.now() - start : 0
-    const duration = ms < 1000 ? `${ms.toFixed(0)}ms` : `${(ms / 1000).toFixed(2)}s`
-    logger.info(`← ${reply.statusCode} ${req.method} ${req.url.split('?')[0]} (${duration})`)
-  })
-
-  // Preload is intentionally NOT registered as an `onReady` hook: Fastify
-  // bounds those hooks by `pluginTimeout` (default 10 s) and model preload
-  // routinely takes minutes (a single uncached LLM blob is hundreds of MB
-  // over the P2P registry). `startServer()` drives preload imperatively
-  // between `app.ready()` and `app.listen()`, matching the legacy
-  // pre-Fastify behavior: port doesn't open until models are loaded.
-  app.addHook('onClose', async () => {
-    await shutdownSDK(logger)
-  })
-
-  const __dirname = dirname(fileURLToPath(import.meta.url))
-  await app.register(autoload, {
-    dir: join(__dirname, 'routes'),
-    forceESM: true,
-    encapsulate: false
-  })
-
-  return app as unknown as FastifyInstance
+  return { app, extensions }
 }
 
 export async function startServer(options: StartServerOptions): Promise<FastifyInstance> {
-  const app = await buildServer(options)
+  const { app, extensions } = await buildServerParts(options)
 
   // Resolve plugin registrations (decorators, route table) but DON'T listen
   // yet — that way the imperative preload below can use `app.qvac` while
@@ -264,8 +139,9 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
     await app.close().catch(() => {})
     throw new Error(`All ${preload.attempted} preload model(s) failed to load; refusing to start.`)
   }
-  app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
-  app.qvac.logger.warn(app.qvac.videoJobsStore.bannerLine())
+  for (const banner of extensionBanners(app.qvac, extensions)) {
+    app.qvac.logger.warn(banner)
+  }
 
   closeWithGrace({ delay: 10_000 }, async ({ signal }) => {
     app.log.info?.({ signal }, 'shutdown signal received')
@@ -274,30 +150,9 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
 
   await app.listen({ port: options.port, host: options.host })
   app.qvac.logger.info(`QVAC API server listening on http://${options.host}:${options.port}`)
+  app.qvac.logger.info(extensionSummary(extensions))
   logStartupSummary(app, app.qvac.logger)
   return app
-}
-
-function isIntrospectionPath(url: string): boolean {
-  return url === '/openapi.json' || url === '/docs' || url.startsWith('/docs/')
-}
-
-function resolveCorsOrigins(origins: readonly string[], options: StartServerOptions): string[] {
-  const resolved = [...origins]
-  if (options.docs) {
-    resolved.push(
-      `http://localhost:${options.port}`,
-      `http://127.0.0.1:${options.port}`,
-      `http://[::1]:${options.port}`
-    )
-    if (isLoopbackHost(options.host)) {
-      const host = options.host.includes(':')
-        ? `[${options.host.replace(/^\[(.*)\]$/, '$1')}]`
-        : options.host
-      resolved.push(`http://${host}:${options.port}`)
-    }
-  }
-  return [...new Set(resolved.map(normalizeCorsOrigin))]
 }
 
 function logStartupSummary(app: FastifyInstance, logger: Logger): void {

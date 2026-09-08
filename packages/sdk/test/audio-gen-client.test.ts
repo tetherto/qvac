@@ -58,7 +58,13 @@ test('audioGen client collects progress, PCM, stats, and requestId', async (t) =
         stats: {
           audioDurationMs: 10,
           totalTimeMs: 5,
-          realTimeFactor: 0.5
+          realTimeFactor: 0.5,
+          backendDevice: 0,
+          backendId: 0
+        },
+        diagnostics: {
+          selectedBackend: 'cpu',
+          selectedDevice: 'cpu'
         }
       }
     ],
@@ -71,6 +77,7 @@ test('audioGen client collects progress, PCM, stats, and requestId', async (t) =
   const progress = await collect(run.progressStream)
   const audio = await run.audio
   const stats = await run.stats
+  const diagnostics = await run.diagnostics
 
   t.alike(progress, [{ stage: 'dit', step: 1, total: 2 }])
   t.alike(Array.from(audio.pcm), [0, 1, 2, 3])
@@ -80,9 +87,39 @@ test('audioGen client collects progress, PCM, stats, and requestId', async (t) =
   t.alike(stats, {
     audioDurationMs: 10,
     totalTimeMs: 5,
-    realTimeFactor: 0.5
+    realTimeFactor: 0.5,
+    backendDevice: 0,
+    backendId: 0
+  })
+  t.alike(diagnostics, {
+    selectedBackend: 'cpu',
+    selectedDevice: 'cpu'
   })
   t.is(capturedRequest?.requestId, run.requestId)
+})
+
+test('audioGen client yields indeterminate LM progress', async (t) => {
+  const run = createRun([
+    {
+      type: 'audioGenStream',
+      progress: { stage: 'lm', step: 1, total: -1 }
+    },
+    {
+      type: 'audioGenStream',
+      data: 'AAE=',
+      sampleRate: 44100,
+      channels: 2,
+      bitsPerSample: 16
+    },
+    {
+      type: 'audioGenStream',
+      done: true,
+      stopReason: 'completed'
+    }
+  ])
+
+  t.alike(await collect(run.progressStream), [{ stage: 'lm', step: 1, total: -1 }])
+  await run.audio
 })
 
 test('audioGen client forwards MiniMax frame and flow controls', async (t) => {
@@ -134,7 +171,7 @@ test('audioGen client rejects aggregates with a typed cancellation error', async
   ])
 
   const progress = await collect(run.progressStream)
-  const settled = await Promise.allSettled([run.audio, run.stats])
+  const settled = await Promise.allSettled([run.audio, run.stats, run.diagnostics])
 
   t.is(progress.length, 1)
   for (const outcome of settled) {
@@ -156,7 +193,12 @@ test('audioGen client rejects a stream without a terminal frame', async (t) => {
     }
   ])
 
-  const settled = await Promise.allSettled([run.audio, run.stats, collect(run.progressStream)])
+  const settled = await Promise.allSettled([
+    run.audio,
+    run.stats,
+    run.diagnostics,
+    collect(run.progressStream)
+  ])
 
   for (const outcome of settled) {
     t.is(outcome.status, 'rejected')

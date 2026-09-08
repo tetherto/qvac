@@ -2,9 +2,11 @@ import { ragIngest } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import {
+  describeErrorChain,
   getRagWorkspaceName,
   runTurboVecRag,
-  type RagParams
+  type RagParams,
+  type TurboVecCheckpointProbe
 } from '../../shared/rag-turbovec-runner.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import { ragTests } from '../../rag-tests.js'
@@ -19,14 +21,17 @@ async function prepareTurboVecWorkspace(workspace: string) {
   marker.write(`${JSON.stringify({ version: 1, adapterType: 'turbovec' })}\n`)
 }
 
-async function hasTurboVecCheckpoint(workspace: string) {
+// Mobile sets no cacheDirectory, so the engine's RAG roots sit under
+// Paths.document/.qvac. Add one and this must follow it, as the node probe does.
+async function inspectTurboVecCheckpoint(workspace: string): Promise<TurboVecCheckpointProbe> {
   // @ts-ignore - expo-file-system is a peer dependency available in mobile context
   const { Directory, File, Paths } = await import('expo-file-system')
   const checkpointDir = new Directory(Paths.document, '.qvac', 'rag-turbovec', workspace)
-  if (!checkpointDir.exists) return false
-  return checkpointDir.list().some((entry) => {
+  if (!checkpointDir.exists) return { state: 'no-root', root: checkpointDir.uri }
+  const hasManifest = checkpointDir.list().some((entry) => {
     return entry instanceof Directory && new File(entry, 'manifest.json').exists
   })
+  return hasManifest ? { state: 'present' } : { state: 'no-manifest', root: checkpointDir.uri }
 }
 
 export class MobileRagExecutor extends ModelAssetExecutor<typeof ragTests> {
@@ -121,12 +126,11 @@ export class MobileRagExecutor extends ModelAssetExecutor<typeof ragTests> {
         embeddingModelId,
         workspace,
         prepareWorkspace: prepareTurboVecWorkspace,
-        hasCheckpoint: hasTurboVecCheckpoint
+        inspectCheckpoint: inspectTurboVecCheckpoint
       })
       return ValidationHelpers.validate(output, expectation)
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      return { passed: false, output: `TurboVec RAG failed: ${errorMsg}` }
+      return { passed: false, output: `TurboVec RAG failed: ${describeErrorChain(error)}` }
     }
   }
 }

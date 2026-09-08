@@ -4,6 +4,7 @@ import {
   AUDIOGEN_ENGINES,
   audioGenClientParamsSchema,
   audioGenConfigSchema,
+  audioGenProgressSchema,
   audioGenRuntimeConfigSchema,
   audioGenStreamRequestSchema,
   audioGenStreamResponseSchema
@@ -150,6 +151,14 @@ test('audioGen client params validate generation controls', (t) => {
     }).success,
     false
   )
+})
+
+test('audioGen progress accepts indeterminate integer totals', (t) => {
+  t.ok(audioGenProgressSchema.safeParse({ stage: 'lm', step: 1, total: -1 }).success)
+  t.ok(audioGenProgressSchema.safeParse({ stage: 'lm', step: 0, total: 0 }).success)
+  t.is(audioGenProgressSchema.safeParse({ stage: 'lm', step: -1, total: -1 }).success, false)
+  t.is(audioGenProgressSchema.safeParse({ stage: 'lm', step: 0.5, total: -1 }).success, false)
+  t.is(audioGenProgressSchema.safeParse({ stage: 'lm', step: 1, total: -1.5 }).success, false)
 })
 
 test('audioGen client params validate MiniMax frame and flow controls', (t) => {
@@ -407,5 +416,31 @@ test('audioGenStreamResponseSchema accepts progress, PCM, and terminal frames', 
       done: true,
       stopReason: 'cancelled'
     }).success
+  )
+})
+
+test('audioGenStreamResponseSchema carries backend diagnostics on the terminal frame', (t) => {
+  const terminal = audioGenStreamResponseSchema.parse({
+    type: 'audioGenStream',
+    done: true,
+    stopReason: 'completed',
+    stats: { backendDevice: 0, backendId: 0 },
+    diagnostics: {
+      selectedBackend: 'cpu',
+      selectedDevice: 'cpu'
+    }
+  })
+
+  t.alike(terminal.diagnostics, {
+    selectedBackend: 'cpu',
+    selectedDevice: 'cpu'
+  })
+  t.absent(
+    audioGenStreamResponseSchema.safeParse({
+      type: 'audioGenStream',
+      done: true,
+      diagnostics: { selectedBackend: 'vulkan', selectedDevice: 'tpu' }
+    }).success,
+    'selectedDevice is limited to the backend device enum'
   )
 })

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
-import { initSSE, sendSSE, endSSE } from '../../src/serve/lib/sse.js'
+import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { collectSSE, multipart, assertError, type InjectResponse } from './helpers/http.js'
 
 // Harness self-tests. The SSE case confirms app.inject captures hijacked
@@ -38,7 +38,7 @@ describe('e2e harness helpers', () => {
       { name: 'model', value: 'whisper' },
       { name: 'file', filename: 'a.wav', contentType: 'audio/wav', data: Buffer.from('RIFF') }
     ])
-    assert.match(headers['content-type'], /multipart\/form-data; boundary=/)
+    assert.match(headers['content-type']!, /multipart\/form-data; boundary=/)
     assert.ok(payload.includes('name="model"'))
     assert.ok(payload.includes('filename="a.wav"'))
   })

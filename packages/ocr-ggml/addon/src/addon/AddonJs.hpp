@@ -46,15 +46,10 @@ namespace {
 
 js_value_t*
 createArrayFromElements(js_env_t* env, std::span<js_value_t*> elements) {
-  js_value_t* jsArray = nullptr;
-  js_create_array_with_length(env, elements.size(), &jsArray);
-  js_set_array_elements(
-      env,
-      jsArray,
-      const_cast<const js_value_t**>(elements.data()),
-      elements.size(),
-      0);
-  return jsArray;
+  auto array =
+      qvac_lib_inference_addon_cpp::js::Array::create(env, elements.size());
+  array.set(env, std::span<js_value_t* const>{elements});
+  return array;
 }
 
 // Mirrors @qvac/ocr-onnx's `getJsArrayFromOutput`. Output schema for each

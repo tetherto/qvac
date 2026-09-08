@@ -148,7 +148,13 @@ export const systemResourceSampleSchema = z.object({
   cpu: resourceMetricSchema(utilizationSchema),
   memory: z.object({
     usedBytes: resourceMetricSchema(nonnegativeNumberSchema),
-    totalBytes: resourceMetricSchema(nonnegativeNumberSchema)
+    totalBytes: resourceMetricSchema(nonnegativeNumberSchema),
+    processUsedBytes: resourceMetricSchema(nonnegativeNumberSchema).describe(
+      'This process’s resident footprint (RSS). Process-scoped, unlike usedBytes.'
+    ),
+    processAvailableBytes: resourceMetricSchema(nonnegativeNumberSchema).describe(
+      'How much more this process may allocate before the OS intervenes. On iOS this is os_proc_available_memory() — the limit jetsam enforces. Unavailable where no per-process limit is exposed.'
+    )
   }),
   gpus: resourceMetricSchema(z.array(gpuResourceSampleSchema))
 })

@@ -43,6 +43,39 @@ const config: LlmLlamacpp.LlamaConfig = {
 };
 void config;
 
+// QVAC-24253: 'tensor' must be assignable, and the union must stay closed —
+// the @ts-expect-error below fails to compile if split-mode ever widens to
+// `string`, which would silently drop the compile-time check on every mode.
+const tensorConfig: LlmLlamacpp.LlamaConfig = {
+  device: "gpu",
+  "split-mode": "tensor",
+  ctx_size: "4096",
+};
+void tensorConfig;
+
+// @ts-expect-error - 'sharded' is not a split mode
+const badSplitMode: LlmLlamacpp.LlamaConfig = { device: "gpu", "split-mode": "sharded" };
+void badSplitMode;
+
+// flash-attn is now a narrowed field rather than reaching callers only through
+// the [key: string] escape hatch, so the tensor-mode requirement is visible at
+// compile time. Both spellings are typed.
+const flashAttnConfig: LlmLlamacpp.LlamaConfig = {
+  device: "gpu",
+  "split-mode": "tensor",
+  "flash-attn": "on",
+};
+void flashAttnConfig;
+
+// The underscore spelling stays untyped, reaching the addon through the index
+// signature — the same treatment main-gpu and split-mode get.
+const flashAttnUnderscore: LlmLlamacpp.LlamaConfig = { device: "gpu", flash_attn: "auto" };
+void flashAttnUnderscore;
+
+// @ts-expect-error - 'yes' is not a value qvac-fabric accepts for flash-attn
+const badFlashAttn: LlmLlamacpp.LlamaConfig = { device: "gpu", "flash-attn": "yes" };
+void badFlashAttn;
+
 const generationParams: LlmLlamacpp.GenerationParams = {
   temp: 0.7,
   json_schema: { type: "object" },
