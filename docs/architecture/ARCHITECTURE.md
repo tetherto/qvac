@@ -2,7 +2,7 @@
 
 Author(s): [Yuri Samarin](https://github.com/yuranich) - QVAC Team
 
-Last Update: Aug 21, 2026
+Last Update: Sep 7, 2026
 
 Related Documents & Links
 
@@ -13,7 +13,7 @@ Related Documents & Links
 
 # Product Executive Summary
 
-QVAC SDK is a local-first, peer-to-peer AI platform for JavaScript, Bare, and Python applications. The architecture is split by responsibility:
+QVAC SDK is a local-first AI platform for JavaScript, Bare, and Python applications. The architecture is split by responsibility:
 
 - **`@qvac/inference`** is the engine: dispatch, plugins, models, P2P, RAG, schemas, and request lifecycle. Direct Bare apps import this package and call it in process.
 - **`@qvac/sdk`** is the TypeScript host for Node.js, Bun, Electron, Expo/React Native, and Pear. It owns the client, worker shell, RPC, bundling, and the default all-plugin distribution. The worker runs `@qvac/inference` inside Bare and re-exports the engine public API.
@@ -25,6 +25,7 @@ The core execution model is the same across packages:
 
 - Plugins implement `QvacPlugin`, provide Zod schemas, create model instances, and expose unary, server-streaming, or duplex handlers.
 - Host clients either call the engine in process or send the same request envelope to a Bare worker over the platform transport.
+- Models load and execute in the local engine. The runtime model registry contains local model instances only.
 - Model distribution uses HTTP, the QVAC Model Registry, Hyperdrive, or local filesystem paths.
 
 ---
@@ -182,27 +183,6 @@ In-process Bare (`@qvac/inference`) bypasses sockets and calls the dispatch laye
 
 ---
 
-# Delegated Inference Component Diagram
-
-![Delegated Inference Components](puml/images/09-delegated-inference.png)
-
-[PlantUML source](puml/09-delegated-inference.puml)
-
-*Key - Consumer above, provider below. Wire path is delegated inference [Noise / Hyperswarm]. The provider invokes a local model in process.*
-
-**Delegation Workflow:**
-
-1. **Provider** loads model locally, calls `startQVACProvider({ firewall? })`
-2. Provider waits for DHT bootstrap, binds its swarm keypair with `swarm.listen()`, and returns its `publicKey`
-3. **Consumer** calls `loadModel({ modelSrc, delegate: { providerPublicKey, timeout?, healthCheckTimeout?, fallbackToLocal?, forceNewConnection? } })`
-4. Consumer dials the provider directly with `dht.connect(providerPublicKey)`
-5. All inference calls proxy through encrypted P2P stream
-6. Provider executes inference locally, streams results back
-
-**Firewall Configuration:** `mode: "allow"|"deny"` with `publicKeys` array
-
----
-
 # RAG Component Diagram
 
 ![RAG Components](puml/images/10-rag-components.png)
@@ -244,8 +224,7 @@ The Python package provides:
 
 | Boundary | Mechanism |
 |----------|-----------|
-| P2P Transport | Noise protocol encryption (Hyperswarm default) |
-| Delegated Inference | Firewall allow/deny lists by public key |
+| P2P Model Distribution | Noise protocol encryption (Hyperswarm default) |
 | Model Integrity | SHA256 checksum verification (model constants include checksums; optional for custom URLs) |
 | Path Security | Path traversal protection for model file resolution |
 | Local Worker RPC | Local IPC/loopback only; trusted local process model |
@@ -259,7 +238,6 @@ The Python package provides:
 
 | Failure | Behavior |
 |---------|----------|
-| P2P peer disconnects mid-inference | Consumer receives error; `fallbackToLocal` option triggers local model load if configured |
 | Download interrupted | Partial file cached; resume on retry (HTTP range requests, Hyperdrive sparse sync) |
 | Model load fails (corrupt/incompatible) | Error with cause chain; model not registered |
 | Native addon crash | Server process may terminate; client receives RPC error |
@@ -290,7 +268,7 @@ The Python package provides:
 
 **Error Handling:** All SDK errors expose a numeric `code` property for programmatic handling, with original errors preserved via `cause` chain. Errors are structured classes extending `QvacErrorBase`. Client (50,001-52,000) and server (52,001-54,000) error codes are strictly separated.
 
-**Worker Lifecycle:** The SDK worker shell frames RPC, acquires the process lock, and calls `@qvac/inference` `send` / `stream` / `duplex`. Startup registers SIGTERM/SIGINT handlers, registers built-in plugins on the engine, then `ensureRPCSetup()` creates the IPC client (desktop) or BareKit RPC server (mobile). Direct Bare imports `@qvac/inference` and skips the worker. On termination, the engine clears registries, unloads models, destroys the swarm, closes RAG instances, cancels downloads, closes the registry client, and releases the worker lock where the runtime owns process exit.
+**Worker Lifecycle:** The SDK worker shell frames RPC, acquires the process lock, and calls `@qvac/inference` `send` / `stream` / `duplex`. Startup registers SIGTERM/SIGINT handlers, registers built-in plugins on the engine, then `ensureRPCSetup()` creates the IPC client (desktop) or BareKit RPC server (mobile). Direct Bare imports `@qvac/inference` and skips the worker. On termination, the engine clears registries, unloads models, closes RAG instances, cancels downloads, and closes the registry client; those shutdown paths tear down their P2P resources before the worker lock is released where the runtime owns process exit.
 
 **Request Lifecycle:** Long-running operations run through request lifecycle primitives (`RequestRegistry`, `RequestContext`, `DisposableScope`) that provide request IDs, cancellation, structured cleanup, concurrency policy, and per-request logging. Client-side `completion`, `loadModel`, and `downloadAsset` expose request IDs synchronously so callers can cancel in-flight work.
 
@@ -341,5 +319,3 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | `error` | `@qvac/error` | Base error types |
 | `langdetect-text` | `@qvac/langdetect-text` | Language detection |
 | `registry-server` | process package plus `@qvac/registry-client` / shared packages | Distributed model registry service and client/shared contracts |
-
-

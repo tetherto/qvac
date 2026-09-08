@@ -1,6 +1,6 @@
 # inference-addon-cpp Architecture Documentation
 
-**Version:** 1.3.3
+**Version:** 1.4.0
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime  
 **Package Type:** Header-only C++ library
 
