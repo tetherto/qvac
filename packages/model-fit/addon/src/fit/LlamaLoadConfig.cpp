@@ -202,11 +202,16 @@ bool isGpu(const BackendDevice& device) {
 }
 
 bool isEligibleGpu(const BackendDevice& device, bool isEmbedding) {
-  if (!isGpu(device) || lower(device.registryName) == "rpc") {
+  if (!isGpu(device)) {
     return false;
   }
   const std::string name = lower(device.name);
   const std::string registry = lower(device.registryName);
+  const bool isCuda = name.starts_with("cuda") || registry == "cuda";
+  const bool isRpc = name.starts_with("rpc") || registry == "rpc";
+  if (isCuda || isRpc) {
+    return true;
+  }
   const bool isOpenCl =
       name == "gpuopencl" || name.starts_with("opencl") || registry == "opencl";
   if (isOpenCl) {

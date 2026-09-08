@@ -611,8 +611,8 @@ int main() {
         ModelTraits{},
         {splitCapable, rpcWithoutSplit, cpu()});
     expect(
-        rpcRow.params.split_mode == LLAMA_SPLIT_MODE_ROW,
-        "RPC GPU must not participate in row-split capability checks");
+        rpcRow.params.split_mode == LLAMA_SPLIT_MODE_LAYER,
+        "eligible RPC GPU without split buffers must force row fallback");
 
     const BackendDevice openClWithoutSplit =
         device("OpenCL0", "Mali GPU", BackendDeviceType::Gpu, 36, "OpenCL");
@@ -637,8 +637,18 @@ int main() {
         ModelTraits{},
         {rpc, cpu()});
     expect(
-        isCpuPlacement(rpcOnly.params),
-        "RPC-only inventory must fall back to CPU");
+        isPinnedGpu(rpcOnly.params, rpc), "RPC-only inventory must select RPC");
+
+    const BackendDevice cudaOnlyDevice =
+        device("CUDA0", "NVIDIA GPU", BackendDeviceType::Gpu, 42, "CUDA");
+    const auto cudaOnly = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {cudaOnlyDevice, cpu()});
+    expect(
+        isPinnedGpu(cudaOnly.params, cudaOnlyDevice),
+        "CUDA-only inventory must select CUDA");
 
     const auto mixed = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
@@ -646,8 +656,8 @@ int main() {
         ModelTraits{},
         {rpc, vulkan, cpu()});
     expect(
-        isPinnedGpu(mixed.params, vulkan),
-        "mixed inventory must ignore RPC and select local GPU");
+        isPinnedGpu(mixed.params, rpc),
+        "mixed inventory must preserve eligible registry order");
 
     const BackendDevice rocm =
         device("ROCm0", "AMD Radeon", BackendDeviceType::Gpu, 45, "HIP");
@@ -814,9 +824,8 @@ int main() {
     expect(
         model_fit::eligibleBackendDeviceHandles(
             {cuda, sameGpuVulkan, cpu()}, model_fit::LlamaLoadKind::Completion)
-                .front() == sameGpuVulkan.handle,
-        "an unsupported alias must not hide an eligible device with the same "
-        "id");
+                .front() == cuda.handle,
+        "eligible aliases must deduplicate by device id in registry order");
 
     BackendDevice rocmDiscrete = rocm;
     BackendDevice adrenoIntegrated = adreno();
