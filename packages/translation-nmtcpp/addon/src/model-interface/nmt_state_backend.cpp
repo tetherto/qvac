@@ -367,8 +367,8 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   //      pick the first eligible device whose name contains gpu_backend
   //      (case-insensitive substring). `gpu_device` is the ordinal
   //      within matches, so {gpu_backend="vulkan", gpu_device=1} picks
-  //      the second Vulkan adapter. Bypasses the OpenCL guard — an
-  //      explicit "opencl" request is an informed opt-in.
+  //      the second Vulkan adapter. Any explicit selector resolving to an
+  //      OpenCL device bypasses the guard as an informed opt-in.
   //   2. params.gpu_backend empty → gated default: when
   //      QVAC_NMTCPP_USE_OPENCL is defined, prefer an OpenCL-named
   //      device first; otherwise (and always as a fallback) pick any

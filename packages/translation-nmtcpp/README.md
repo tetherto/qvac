@@ -298,10 +298,12 @@ The three GPU control keys each accept a camelCase alias alongside the snake_cas
 | Key | Alias | Type | Description |
 |-----|-------|------|-------------|
 | `use_gpu` | `useGPU` | boolean | Enable GPU inference. When `false` (default), only the CPU backend is used. Bergamot is CPU-only by design — this flag is effectively a no-op for Bergamot. |
-| `gpu_backend` | `gpuBackend` | string | Case-insensitive **substring** match against eligible Vulkan, Metal, or OpenCL device names (e.g. `"vulkan"`, `"vulkan0"`, `"opencl"`, `"metal"`). When unset, the default gated selection runs (see [Backends](#backends)). Explicit `"opencl"` bypasses the build-time `USE_OPENCL` guard — an informed opt-in. |
+| `gpu_backend` | `gpuBackend` | string | Case-insensitive **substring** match against eligible Vulkan, Metal, or OpenCL device names (e.g. `"vulkan"`, `"vulkan0"`, `"opencl"`, `"metal"`). When unset, the default gated selection runs (see [Backends](#backends)). Any explicit selector that resolves to OpenCL bypasses the build-time `USE_OPENCL` guard — an informed opt-in. |
 | `gpu_device` | `gpuDevice` | int | Ordinal within the matching devices. Defaults to `0` (first match). Example: `{gpu_backend: "vulkan", gpu_device: 1}` picks the second Vulkan adapter. |
 | `backendsDir` | — | string | Path to the directory containing the runtime backend shared libraries (`libqvac-ggml-vulkan.so`, etc.). Defaults to `<package>/prebuilds` when unset, which is where `npm install` places the shipped prebuilds. Must be an absolute path; paths with `..` segments or unresolvable symlinks are rejected with a warning and fall back to the default prebuilds directory. |
 | `openclCacheDir` | — | string | **Android only.** Writable directory the OpenCL backend uses for its JIT kernel cache (forwarded via `GGML_OPENCL_CACHE_DIR`). Must be an absolute path; paths with `..` segments are rejected. The OpenCL backend falls back to a non-writable relative path if this is unset, which `ggml_abort()`s during init inside the app sandbox — always provide an app-writable path when exercising OpenCL on Android. |
+
+GPU execution is limited to Vulkan, Metal/MTL, and Adreno OpenCL devices reported as GPU or integrated GPU. ROCm/HIP, CUDA, SYCL, RPC, ACCEL, META, and unknown backend families fall back to CPU. An explicit selector only narrows this eligible set; it cannot enable an unsupported family.
 
 > **Tip:** Use `model.getActiveBackendName()` after `load()` to confirm which backend actually took the request — see [Additional Features](#additional-features). The GGML scheduler silently falls back to CPU when no usable GPU ICD is registered, and this is the only way to detect that.
 

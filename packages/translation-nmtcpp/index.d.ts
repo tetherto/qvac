@@ -120,7 +120,7 @@ declare namespace TranslationNmtcpp {
          * Case-insensitive substring filter over eligible ggml device names when selecting
          * a compute backend (e.g. "vulkan", "vulkan0", "opencl", "metal"). When set,
          * replaces the default gated selector with a single explicit pass.
-         * An explicit "opencl" bypasses the build-time USE_OPENCL guard.
+         * Any explicit selector resolving to OpenCL bypasses the build-time USE_OPENCL guard.
          *
          * `gpu_backend` mirrors the C-struct field and is the primary key.
          * `gpuBackend` is the camelCase alias matching the sibling-addon convention.

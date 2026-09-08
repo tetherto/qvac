@@ -228,20 +228,6 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   const size_t devCount = backend.deviceCount();
 
   if (!gpuBackendLower.empty()) {
-#ifndef QVAC_NMTCPP_USE_OPENCL
-    // OpenCL is opt-in via explicit gpu_backend even when the build-time
-    // guard is off. Warn loudly because the guard exists specifically to
-    // mitigate the Adreno 830 q4_0 transpose abort (QVAC-17790); callers
-    // bypassing it must accept the risk.
-    if (gpuBackendLower.find("opencl") != std::string::npos) {
-      std::ostringstream oss;
-      oss << "[" << logPrefix
-          << "] Explicit gpu_backend='opencl' bypasses the "
-             "QVAC_NMTCPP_USE_OPENCL=OFF guard — Adreno 830 devices may still "
-             "abort with GGML_ASSERT(M % 4 == 0). Caller assumes risk.";
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
-    }
-#endif
     // Mode 1: explicit gpu_backend filter — pick the gpuDevice-th matching
     // non-CPU device whose name contains the substring.
     bool deviceFoundButBuftNull = false;
@@ -282,6 +268,16 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
         break;
       }
     }
+#ifndef QVAC_NMTCPP_USE_OPENCL
+    if (dev != nullptr && deviceFamily(backend, dev) == NmtGpuFamily::OpenCl) {
+      std::ostringstream oss;
+      oss << "[" << logPrefix << "] Explicit gpu_backend='" << gpuBackend
+          << "' selected OpenCL while QVAC_NMTCPP_USE_OPENCL=OFF — Adreno 830 "
+             "devices may still abort with GGML_ASSERT(M % 4 == 0). Caller "
+             "assumes risk.";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
+    }
+#endif
     if (dev == nullptr) {
       std::ostringstream oss;
       if (deviceFoundButBuftNull) {
@@ -290,7 +286,8 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
                "— falling back to CPU";
       } else {
         oss << "[" << logPrefix << "] Explicit gpu_backend='" << gpuBackend
-            << "' matched no registered device — falling back to CPU";
+            << "' matched no eligible registered device — falling back to "
+               "CPU";
       }
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
