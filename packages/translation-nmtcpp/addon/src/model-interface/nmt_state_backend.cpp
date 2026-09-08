@@ -360,9 +360,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
 
   // Compute-device selection when use_gpu=true.
   //
-  // Primary compute selection admits only GPU/IGPU devices from the Vulkan,
-  // Metal/MTL, and guarded OpenCL families. Android Vulkan is IGPU in the
-  // pinned fabric; ACCEL and META are rejected as primary devices.
+  // Primary selection accepts GPU/IGPU Vulkan, Metal, and OpenCL only.
   //
   // Two selection modes:
   //   1. params.gpu_backend non-empty → explicit single-pass filter:
@@ -458,8 +456,7 @@ nmt_backend_init(const nmt_context_params& params) {
 
   ggml_backend_t backend_gpu = nmt_backend_init_gpu(params);
 
-  // Track the primary pointer for symmetry with the legacy secondary ACCEL
-  // walk below. The allowlist guarantees the primary itself is GPU or IGPU.
+  // Track the primary so the secondary ACCEL walk cannot reinitialize it.
   ggml_backend_dev_t primary_dev =
       backend_gpu ? ggml_backend_get_device(backend_gpu) : nullptr;
 
@@ -467,9 +464,7 @@ nmt_backend_init(const nmt_context_params& params) {
     result.push_back(backend_gpu);
   }
 
-  // Legacy secondary ACCEL backends. This cannot admit HIP/ROCm, which the
-  // pinned fabric registers as GPU. Unknown ACCEL entries remain auxiliary
-  // scheduler backends and are outside primary placement eligibility.
+  // HIP/ROCm is GPU-typed and cannot enter this legacy ACCEL walk.
   //
   // Multiple ACCEL entries may represent the same auxiliary hardware.
   // Initialising all of them adds synchronisation overhead in

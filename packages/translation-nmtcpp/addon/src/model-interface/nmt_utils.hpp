@@ -36,13 +36,8 @@ struct NmtBackendInterface {
   ggml_backend_buffer_type_t (*deviceBufferType)(ggml_backend_dev_t device);
 };
 
-// Shared deterministic GPU selection policy used independently by
-// nmt_backend_init_gpu (backend init) and make_buft_list (buffer assignment),
-// keeping compute and tensor-buffer placement aligned for an unchanged
-// registry. Drift between these callers has been a recurring maintenance
-// hazard (see QVAC-17790 round-8 R8-D1).
-// gpuDevice is an ordinal within devices matching the eligible family set;
-// unsupported registered families do not occupy the execution list.
+// Shared selection keeps backend init and buffer assignment on the same device.
+// gpuDevice is an ordinal within the eligible family inventory.
 //
 // `logPrefix` is used only for diagnostic WARN/DEBUG messages so each caller
 // can be identified in logcat (e.g. "[nmt_backend_init_gpu]" vs
