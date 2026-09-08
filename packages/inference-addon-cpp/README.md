@@ -1,6 +1,6 @@
 # inference-addon-cpp
 
-**Version:** 1.3.3  
+**Version:** 1.4.0  
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime  
 **Package Type:** Header-only C++ library
 
@@ -65,7 +65,7 @@ This is a header-only library. Include it in your addon's `vcpkg.json`:
   "dependencies": [
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.3.3"
+      "version>=": "1.4.0"
     }
   ]
 }

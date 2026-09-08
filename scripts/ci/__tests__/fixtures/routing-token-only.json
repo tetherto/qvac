@@ -1,0 +1,52 @@
+{
+  "payloads": [],
+  "meta": {
+    "durationMs": 106026,
+    "agentMeta": {
+      "sessionId": "qvac-openclaw-upstream-compat",
+      "sessionFile": "/home/runner/work/_temp/openclaw-compat-smoke/home/.openclaw/agents/main/sessions/qvac-openclaw-upstream-compat.jsonl",
+      "provider": "qvac",
+      "model": "qwen3.5-0.8b",
+      "contextTokens": 32768,
+      "agentHarnessId": "openclaw",
+      "usage": {
+        "output": 5,
+        "cacheRead": 7912,
+        "total": 7917
+      },
+      "lastCallUsage": {
+        "input": 0,
+        "output": 5,
+        "cacheRead": 7912,
+        "cacheWrite": 0,
+        "total": 7917
+      },
+      "promptTokens": 7912
+    },
+    "aborted": false,
+    "finalPromptText": "Reply with one short sentence that includes qvac-ok.",
+    "finalAssistantVisibleText": "[[reply_to_current]]",
+    "finalAssistantRawText": "[[reply_to_current]]",
+    "replayInvalid": false,
+    "livenessState": "working",
+    "stopReason": "stop",
+    "executionTrace": {
+      "winnerProvider": "qvac",
+      "winnerModel": "qwen3.5-0.8b",
+      "attempts": [
+        {
+          "provider": "qvac",
+          "model": "qwen3.5-0.8b",
+          "result": "success",
+          "stage": "assistant"
+        }
+      ],
+      "fallbackUsed": false,
+      "runner": "embedded"
+    },
+    "completion": {
+      "stopReason": "stop",
+      "finishReason": "stop"
+    }
+  }
+}
