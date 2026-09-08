@@ -360,7 +360,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
 
   // Compute-device selection when use_gpu=true.
   //
-  // Primary selection accepts GPU/IGPU Vulkan, Metal, and OpenCL only.
+  // Primary selection accepts GPU/IGPU Vulkan, Metal, OpenCL, CUDA, and RPC.
   //
   // Two selection modes:
   //   1. params.gpu_backend non-empty → explicit single-pass filter:
@@ -372,8 +372,8 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   //      bypasses the guard as an informed opt-in.
   //   2. params.gpu_backend empty → gated default: when
   //      QVAC_NMTCPP_USE_OPENCL is defined, prefer an OpenCL-named
-  //      device first; otherwise (and always as a fallback) pick any
-  //      eligible Vulkan or Metal device. When the guard is off, the fallback
+  //      device first; otherwise (and always as a fallback) pick an eligible
+  //      non-OpenCL device. When the guard is off, the fallback
   //      skips OpenCL-named devices so Bergamot/IndicTrans on Adreno
   //      830 don't hit the q4_0 transpose crash (QVAC-17790).
   // Delegate to the shared selector so make_buft_list (in nmt_loader.cpp)

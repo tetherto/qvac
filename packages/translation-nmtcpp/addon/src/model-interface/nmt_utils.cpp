@@ -113,7 +113,14 @@ bool nmtNameContainsCi(const char* name, const std::string& needleLower) {
 }
 
 namespace {
-enum class NmtGpuFamily : std::uint8_t { None, Vulkan, Metal, OpenCl };
+enum class NmtGpuFamily : std::uint8_t {
+  None,
+  Vulkan,
+  Metal,
+  OpenCl,
+  Cuda,
+  Rpc
+};
 
 bool nameHasMetalPrefix(const char* name) {
   if (name == nullptr) {
@@ -148,9 +155,6 @@ deviceFamily(const NmtBackendInterface& backend, ggml_backend_dev_t device) {
   const ggml_backend_reg_t registry = backend.deviceRegistry(device);
   const char* registryName =
       registry != nullptr ? backend.registryName(registry) : nullptr;
-  if (nameEqualsCi(registryName, "rpc")) {
-    return NmtGpuFamily::None;
-  }
   const std::string deviceNameLower =
       deviceName == nullptr ? ""
                             : std::string(deviceName, strnlen(deviceName, 256));
@@ -159,6 +163,14 @@ deviceFamily(const NmtBackendInterface& backend, ggml_backend_dev_t device) {
       normalizedDeviceName,
       normalizedDeviceName.begin(),
       [](unsigned char chr) { return static_cast<char>(std::tolower(chr)); });
+  if (normalizedDeviceName.starts_with("rpc") ||
+      nameEqualsCi(registryName, "rpc")) {
+    return NmtGpuFamily::Rpc;
+  }
+  if (normalizedDeviceName.starts_with("cuda") ||
+      nameEqualsCi(registryName, "cuda")) {
+    return NmtGpuFamily::Cuda;
+  }
   if (normalizedDeviceName == "gpuopencl" ||
       normalizedDeviceName.starts_with("opencl") ||
       nameEqualsCi(registryName, "opencl")) {
@@ -340,12 +352,11 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
     }
   }
 
-  // Mode 2b: resolve gpuDevice within the eligible Vulkan/Metal inventory.
+  // Mode 2b: resolve gpuDevice within the eligible non-OpenCL inventory.
   // OpenCL is always skipped here because Mode 2a already handles it when
   // QVAC_NMTCPP_USE_OPENCL is defined, and it's unwanted when the guard is
-  // off. This ensures gpuDevice ordinals map to distinct physical GPUs
-  // (Vulkan/Metal) without OpenCL duplicates or unsupported families
-  // occupying slots.
+  // off. This ensures gpuDevice ordinals map to distinct physical GPUs without
+  // OpenCL duplicates or unsupported families occupying slots.
   if (dev == nullptr) {
     if (allowDefaultOpenCl && oclDeviceFoundButBuftNull) {
       std::ostringstream oss;
@@ -363,7 +374,7 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       }
       const char* name = backend.deviceName(devCur);
       const NmtGpuFamily family = deviceFamily(backend, devCur);
-      if (family != NmtGpuFamily::Vulkan && family != NmtGpuFamily::Metal) {
+      if (family == NmtGpuFamily::None || family == NmtGpuFamily::OpenCl) {
         continue;
       }
       if (cnt2 == fallbackOrdinal) {

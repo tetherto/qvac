@@ -131,9 +131,22 @@ TEST_F(NmtGpuSelectionTest, UnknownGpuFamilyFallsBackToCpu) {
   EXPECT_EQ(select(), nullptr);
 }
 
-TEST_F(NmtGpuSelectionTest, RpcRegistryIsRejected) {
-  inventory = {{"Vulkan0", "RPC", GGML_BACKEND_DEVICE_TYPE_GPU}};
-  EXPECT_EQ(select(), nullptr);
+TEST_F(NmtGpuSelectionTest, RpcRegistryIsEligible) {
+  inventory = {{"RPC0", "RPC", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), deviceGet(0));
+}
+
+TEST_F(NmtGpuSelectionTest, CudaRegistryIsEligible) {
+  inventory = {{"CUDA0", "CUDA", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), deviceGet(0));
+}
+
+TEST_F(NmtGpuSelectionTest, ExplicitCudaAndRpcSelectorsAreEligible) {
+  inventory = {
+      {"CUDA0", "CUDA", GGML_BACKEND_DEVICE_TYPE_GPU},
+      {"RPC0", "RPC", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select("cuda"), deviceGet(0));
+  EXPECT_EQ(select("rpc"), deviceGet(1));
 }
 
 TEST_F(NmtGpuSelectionTest, RegistryFamilyNamesRequireExactIdentity) {
