@@ -2,8 +2,6 @@
 
 This is the skill-local copy of the Slack Canvas QIP template.
 
-Keep the proposal to 600-900 words; treat 1,200 words as a soft ceiling. Link detailed technical analysis and PoC evidence instead of embedding it.
-
 ## Approvers
 
 The following approvers are required in priority order:

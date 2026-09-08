@@ -18,30 +18,35 @@ Before drafting:
 2. Read `docs/architecture/PRINCIPLES.md`.
 3. When the proposal affects public SDK API, native bindings, runtime, mobile support, storage, transport, model registry, release flow, or security boundaries, inspect the relevant current docs or code. Establish the current behavior and proposed architectural delta.
 
-Do not draft from general knowledge alone. Ground substantive claims in user-provided context, repository sources, or clearly labeled assumptions. Do not invent motivations, commitments, supported platforms, release plans, security or performance properties, or ownership decisions.
+Do not draft from general knowledge alone. Ground substantive claims in user-provided context, repository sources, or clearly labeled assumptions. Prefer questions over assumptions; when a first pass needs assumptions, label them so the author can confirm or remove them. Do not invent motivations, commitments, supported platforms, release plans, security or performance properties, or ownership decisions.
 
 Investigation may be extensive; publication should not be. Use research to validate and compress the QIP rather than reproducing it.
 
 ## Intake and readiness
 
-Ask only for missing decision context, one question at a time unless the user requests a batch. A terse or fuzzy prompt requires at least one clarifying question. Skip questions when the brief already satisfies the readiness gate or the user requests a first pass with assumptions.
+Ask only for missing decision context, one question at a time unless the user requests a batch. For a terse or fuzzy idea, ask about the next unanswered readiness item below rather than jumping directly to a draft. Skip questions when the brief already satisfies the readiness gate or the user requests a first pass with assumptions.
 
 A QIP is ready to draft when these are known:
 
 - problem and why a decision is needed now;
-- affected architectural or product surface and current behavior;
+- affected architectural or product surface, current behavior, and the proposed change;
 - one recommended direction and the exact approval ask;
-- at least one credible alternative;
-- decision-driving benefits, costs, and new responsibilities;
-- relevant trust-boundary, compatibility, migration, or release impact.
+- at least one credible alternative and why the recommendation is preferable;
+- decision-driving benefits, costs, new responsibilities, and failure modes;
+- relevant trust-boundary, compatibility, migration, or release impact;
+- likely out-of-scope areas when readers could reasonably assume they are included.
 
 A technology list, package name, or desired outcome without this context is a fuzzy idea. Help the author shape it, but do not choose the primary motivation or direction for them. If no direction is ready to recommend, continue discovery or explain what is missing; do not label an option survey as an approval-ready QIP.
+
+Stop and ask rather than draft when the primary motivation, recommended direction, material impact, or accepted trade-off remains unresolved or would have to be inferred.
 
 ## Draft contract
 
 - Target 600-900 words of proposal content and treat 1,200 words as a soft ceiling, excluding the approvers table and short supporting-material links.
 - Write at the architectural level: responsibilities, boundaries, interactions, and constraints that could change approval.
-- Cover security, compatibility, migration, and release effects only when decision-relevant. If an unchanged dimension is likely to concern reviewers, address it in one sentence rather than adding a boilerplate section.
+- Explain why the chosen direction is preferable to the most credible alternative.
+- When transport, RPC, storage, authentication, sandboxing, plugin execution, model provenance, or another cross-process or cross-peer trust boundary changes, state the architectural security properties explicitly.
+- Call out observable behavior, public API or install-contract changes, migration needs, and expected release or versioning impact when they could affect approval. If an unchanged dimension is likely to concern reviewers, address it in one sentence rather than adding a boilerplate section.
 - Use a diagram only when a boundary is otherwise hard to understand. Link it or use a normal image reference; never embed base64 image data.
 - Move API sketches, file-level changes, protocols, complete failure-mode analysis, rollout steps, test plans, phase breakdowns, and large comparisons to linked technical notes, diagrams, research, or PoC PRs unless the detail is itself the decision.
 - Never claim human approval.
