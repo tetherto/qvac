@@ -229,7 +229,20 @@ runs:
           case "$out" in
             *.zip)
               if [ "$RUNNER_OS" = "Windows" ]; then
-                tar -xf "$(cygpath -u "$out")" --strip-components=1 -C "$(cygpath -u "$prefix")"
+                extract_dir="$RUNNER_TEMP/cuda-extract-$CUDA_TARGET"
+                rm -rf "$extract_dir"
+                mkdir -p "$extract_dir"
+                archive_windows=$(cygpath -w "$out")
+                extract_windows=$(cygpath -w "$extract_dir")
+                powershell.exe -NoProfile -NonInteractive -Command \
+                  "Expand-Archive -LiteralPath '$archive_windows' -DestinationPath '$extract_windows' -Force"
+                archive_root=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d -print -quit)
+                if [ -z "$archive_root" ]; then
+                  echo "::error::setup-cuda: no root directory in $out"
+                  exit 1
+                fi
+                cp -a "$archive_root/." "$prefix/"
+                rm -rf "$extract_dir"
               else
                 tar -xf "$out" --strip-components=1 -C "$prefix"
               fi
