@@ -178,8 +178,7 @@ struct FitResult {
   /// machine it cannot see.
   size_t nDevices = 0;
 
-  /// Subset of `nDevices` that are accelerators (GPU or integrated GPU). Zero
-  /// means the projection is host-only and carries no GPU offload information.
+  /// Raw GPU/iGPU subset of `nDevices`; may include unsupported families.
   size_t nGpuDevices = 0;
 };
 
@@ -192,9 +191,9 @@ struct FitResult {
 /// Throws `std::invalid_argument` for arguments that cannot be acted on:
 ///  - a `modelPath` that is empty or relative;
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
-///  - a pinned `splitMode` of NONE on a host with no GPU device, unless the
-///    request is explicitly CPU-only, or with a `mainGpu` past the registered
-///    ones;
+///  - a pinned `splitMode` of NONE on a host with no supported GPU, unless the
+///    request is CPU-only, or a `mainGpu` outside the default llama device
+///    list;
 ///  - an `nCtx`, or an explicitly requested `nCtxMin`, above the context
 ///    length the model declares.
 FitResult runFit(const FitRequest& req);

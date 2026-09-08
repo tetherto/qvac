@@ -608,7 +608,7 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
   )
 })
 
-test('an invalid raw mainGpu identity is rejected for every split mode', async function (t) {
+test('an invalid mainGpu identity is rejected for every split mode', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const invalidMainGpu = fitParams({ modelPath }).nDevices
 

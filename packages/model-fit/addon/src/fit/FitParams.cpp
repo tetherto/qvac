@@ -288,8 +288,6 @@ FitResult runFit(const FitRequest& req) {
           "supported GPU device is registered");
     }
 
-    // Non-negative mainGpu values were resolved from registry identity above
-    // and will be translated to the filtered-list ordinal handed to llama.
   }
 
   // `common_fit_params` segfaults on a path it cannot open: gguf_init_from_file

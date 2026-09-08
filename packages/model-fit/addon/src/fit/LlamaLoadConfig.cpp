@@ -240,6 +240,35 @@ int adrenoVersion(const BackendDevice& device) {
   }
 }
 
+std::vector<ggml_backend_dev_t>
+defaultLlamaDeviceHandles(const std::vector<BackendDevice>& devices) {
+  std::vector<ggml_backend_dev_t> rpc;
+  std::vector<ggml_backend_dev_t> discrete;
+  std::vector<ggml_backend_dev_t> integrated;
+  std::unordered_set<std::string> seenDiscrete;
+  for (const BackendDevice& device : devices) {
+    if (device.handle == nullptr) {
+      continue;
+    }
+    if (device.type == BackendDeviceType::Gpu) {
+      if (lower(device.registryName) == "rpc") {
+        rpc.push_back(device.handle);
+      } else if (
+          device.deviceId.empty() ||
+          seenDiscrete.insert(device.deviceId).second) {
+        discrete.push_back(device.handle);
+      }
+    } else if (
+        device.type == BackendDeviceType::IntegratedGpu && integrated.empty()) {
+      integrated.push_back(device.handle);
+    }
+  }
+  const std::vector<ggml_backend_dev_t>& local =
+      discrete.empty() ? integrated : discrete;
+  rpc.insert(rpc.end(), local.begin(), local.end());
+  return rpc;
+}
+
 struct BackendSelection {
   const BackendDevice* selected = nullptr;
   int adrenoVersion = 0;
@@ -250,11 +279,16 @@ BackendSelection selectGpu(
     const std::optional<int>& requestedIndex, bool isEmbedding) {
   if (requestedIndex.has_value()) {
     const int index = requestedIndex.value();
-    if (index >= 0 && static_cast<size_t>(index) < devices.size()) {
-      const BackendDevice& selected = devices[static_cast<size_t>(index)];
-      if (isEligibleGpu(selected, isEmbedding)) {
+    const std::vector<ggml_backend_dev_t> defaults =
+        defaultLlamaDeviceHandles(devices);
+    if (index >= 0 && static_cast<size_t>(index) < defaults.size()) {
+      const auto selected = std::ranges::find_if(
+          devices,
+          [handle = defaults[static_cast<size_t>(index)]](
+              const BackendDevice& device) { return device.handle == handle; });
+      if (selected != devices.end() && isEligibleGpu(*selected, isEmbedding)) {
         return {
-            .selected = &selected, .adrenoVersion = adrenoVersion(selected)};
+            .selected = &*selected, .adrenoVersion = adrenoVersion(*selected)};
       }
       return {};
     }
@@ -527,14 +561,13 @@ std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
 
 std::optional<size_t> eligibleBackendDeviceOrdinal(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
-    size_t registryIndex) {
-  if (registryIndex >= devices.size()) {
+    size_t mainGpuIndex) {
+  const std::vector<ggml_backend_dev_t> defaults =
+      defaultLlamaDeviceHandles(devices);
+  if (mainGpuIndex >= defaults.size()) {
     return std::nullopt;
   }
-  const ggml_backend_dev_t requested = devices[registryIndex].handle;
-  if (requested == nullptr) {
-    return std::nullopt;
-  }
+  const ggml_backend_dev_t requested = defaults[mainGpuIndex];
   const std::vector<ggml_backend_dev_t> eligible =
       eligibleBackendDeviceHandles(devices, loadKind);
   const auto found = std::ranges::find(eligible, requested);
@@ -547,14 +580,14 @@ std::optional<size_t> eligibleBackendDeviceOrdinal(
 bool applyBackendDeviceAllowlist(
     llama_model_params& params, std::vector<ggml_backend_dev_t>& storage,
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
-    std::optional<size_t> registryIndex) {
+    std::optional<size_t> mainGpuIndex) {
   storage = eligibleBackendDeviceHandles(devices, loadKind);
   params.devices = storage.data();
-  if (!registryIndex.has_value()) {
+  if (!mainGpuIndex.has_value()) {
     return true;
   }
   const std::optional<size_t> mapped =
-      eligibleBackendDeviceOrdinal(devices, loadKind, registryIndex.value());
+      eligibleBackendDeviceOrdinal(devices, loadKind, mainGpuIndex.value());
   if (!mapped.has_value()) {
     return false;
   }

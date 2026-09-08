@@ -554,7 +554,7 @@ int main() {
     const auto selected = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
-            {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "2"}},
+            {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "1"}},
         ModelTraits{},
         {cpu(), gpuOne, gpuTwo});
     expect(selected.supported, "valid global main-gpu index must be supported");
@@ -574,32 +574,31 @@ int main() {
         isPinnedGpu(fallback.params, gpuOne),
         "invalid main-gpu must fall back to ordinary GPU selection");
 
-    const auto selectedCpu = model_fit::normalizeLlamaLoadConfig(
+    const auto cpuFirst = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
             {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "0"}},
         ModelTraits{},
         {cpu(), gpuOne});
-    expect(selectedCpu.supported, "valid CPU main-gpu index must be supported");
+    expect(cpuFirst.supported, "CPU must not occupy a main-gpu index");
     expect(
-        isCpuPlacement(selectedCpu.params),
-        "valid CPU main-gpu index must examine only CPU and fall back to CPU");
+        isPinnedGpu(cpuFirst.params, gpuOne),
+        "main-gpu zero must select the first llama GPU");
 
     const BackendDevice accelerator =
         device("ANE0", "accelerator", BackendDeviceType::Accelerator, 33);
-    const auto selectedAccelerator = model_fit::normalizeLlamaLoadConfig(
+    const auto acceleratorFirst = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
             {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "0"}},
         ModelTraits{},
         {accelerator, gpuOne});
     expect(
-        selectedAccelerator.supported,
-        "valid accelerator main-gpu index must be supported");
+        acceleratorFirst.supported,
+        "accelerators must not occupy a main-gpu index");
     expect(
-        isCpuPlacement(selectedAccelerator.params),
-        "valid accelerator main-gpu index must examine only it and fall back "
-        "to CPU");
+        isPinnedGpu(acceleratorFirst.params, gpuOne),
+        "main-gpu zero must skip accelerators and select the first llama GPU");
 
     BackendDevice splitCapable =
         device("Vulkan0", "local GPU", BackendDeviceType::Gpu, 34, "Vulkan");
@@ -693,7 +692,18 @@ int main() {
     expect(
         mappedMainGpu.params.main_gpu == 0 &&
             mappedMainGpu.params.devices.front() == vulkan.handle,
-        "main-gpu registry identity must map to its filtered-list ordinal");
+        "main-gpu device identity must map to its filtered-list ordinal");
+
+    const auto cpuFirstMainGpu = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "0"}},
+        ModelTraits{},
+        {cpu(), vulkan, vulkan1});
+    expect(
+        cpuFirstMainGpu.params.main_gpu == 0 &&
+            cpuFirstMainGpu.params.devices.front() == vulkan.handle,
+        "main-gpu zero must remain valid when CPU is first in the registry");
 
     const BackendDevice splitVulkan =
         device("Vulkan0", "NVIDIA GPU", BackendDeviceType::Gpu, 47, "Vulkan");
@@ -721,7 +731,13 @@ int main() {
             {rocm, vulkan, vulkan1, cpu()},
             model_fit::LlamaLoadKind::Completion,
             1) == 0,
-        "generic fit must preserve registry identity when mapping main-gpu");
+        "generic fit must preserve device identity when mapping main-gpu");
+    expect(
+        model_fit::eligibleBackendDeviceOrdinal(
+            {cpu(), vulkan, vulkan1},
+            model_fit::LlamaLoadKind::Completion,
+            0) == 0,
+        "main-gpu must index llama's GPU list rather than the raw registry");
     expect(
         !model_fit::eligibleBackendDeviceOrdinal(
              {rocm, vulkan, vulkan1, cpu()},
