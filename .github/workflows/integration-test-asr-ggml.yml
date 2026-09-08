@@ -11,7 +11,11 @@ on:
     inputs:
       prebuild_package:
         description: "NPM package containing prebuilds (e.g. @qvac/asr-ggml@0.1.0)"
-        required: true
+        required: false
+        type: string
+      prebuild_run_id:
+        description: "Workflow run id to download prebuild artifacts from (alternative to prebuild_package for preflight branches)"
+        required: false
         type: string
       ref:
         description: "Git ref (branch/tag/SHA) to test"
@@ -170,6 +174,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
+      actions: read
 
     strategy:
       fail-fast: false
@@ -271,11 +276,20 @@ jobs:
         run: npm install -g --force bare bare-make
 
       - name: Download prebuilds from artifact
-        if: ${{ !inputs.prebuild_package }}
+        if: ${{ !inputs.prebuild_package && !inputs.prebuild_run_id }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Download prebuilds from a prior prebuild run
+        if: ${{ !inputs.prebuild_package && inputs.prebuild_run_id }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/prebuilds-staging
+          merge-multiple: true
+          run-id: ${{ inputs.prebuild_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Move prebuilds from staging to workspace (Unix)
         if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
