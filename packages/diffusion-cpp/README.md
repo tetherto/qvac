@@ -675,3 +675,5 @@ must be released under a compatible CC BY-SA license.
 ## License
 
 Apache-2.0 — see [LICENSE](./LICENSE) for details.
+
+<!-- QVAC-24630 throwaway: fires the diffusion-cpp on-pr lane so its integration legs reach the model cache step. Never merged. -->

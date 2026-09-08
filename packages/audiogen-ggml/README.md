@@ -700,3 +700,5 @@ version bump.
 
 Apache-2.0. ACE-Step model weights belong to ACE Studio and StepFun.
 MiniMax-Music3 weights are governed by the MiniMax-Music3 Community License.
+
+<!-- QVAC-24630 throwaway: fires the audiogen-ggml on-pr lane so its integration legs reach the model cache step. Never merged. -->

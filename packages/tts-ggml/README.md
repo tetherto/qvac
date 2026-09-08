@@ -1045,3 +1045,5 @@ OpenCL; Xclipse and Mali use Vulkan).
 ## License
 
 Apache-2.0.  See [LICENSE](./LICENSE).
+
+<!-- QVAC-24630 throwaway: fires the tts-ggml on-pr lane so its integration legs reach the model cache step. Never merged. -->
