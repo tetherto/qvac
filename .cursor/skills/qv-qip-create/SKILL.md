@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # QIP Proposal Create
 
-Help an author produce a concise architectural decision brief for Slack Canvas. It tells stakeholders why a decision is needed, what direction is proposed, where it fits in the architecture, and which important trade-offs they must accept. It is not a technical design document or implementation plan.
+Help an author produce a concise architectural decision brief for Slack Canvas. It tells stakeholders why a decision is needed, what direction is proposed, where it fits in the architecture, and which important trade-offs they must accept. Keep the main proposal focused on that decision; place useful supporting detail in an optional Appendix.
 
 Use `qv-qip-triage` to decide whether a QIP is needed and `qv-qip-review` to assess an existing draft.
 
@@ -42,16 +42,17 @@ Stop and ask rather than draft when the primary motivation, recommended directio
 
 ## Draft contract
 
-- Target 600-900 words of proposal content and treat 1,200 words as a soft ceiling, excluding the approvers table and short supporting-material links.
+- Target 600-900 words of core proposal content and treat 1,200 words as a soft ceiling, excluding the approvers table and Appendix.
 - Write at the architectural level: responsibilities, boundaries, interactions, and constraints that could change approval.
 - Explain why the chosen direction is preferable to the most credible alternative.
 - When transport, RPC, storage, authentication, sandboxing, plugin execution, model provenance, or another cross-process or cross-peer trust boundary changes, state the architectural security properties explicitly.
 - Call out observable behavior, public API or install-contract changes, migration needs, and expected release or versioning impact when they could affect approval. If an unchanged dimension is likely to concern reviewers, address it in one sentence rather than adding a boilerplate section.
 - Use a diagram only when a boundary is otherwise hard to understand. Link it or use a normal image reference; never embed base64 image data.
-- Move API sketches, file-level changes, protocols, complete failure-mode analysis, rollout steps, test plans, phase breakdowns, and large comparisons to linked technical notes, diagrams, research, or PoC PRs unless the detail is itself the decision.
+- Move useful API sketches, protocols, failure-mode analysis, rollout notes, test strategy, phase breakdowns, and larger comparisons to an Appendix in the same QIP unless the detail is itself the decision. Omit file-level change lists unless they provide meaningful evidence.
+- Link external artifacts such as PoC PRs, source research, or separately maintained specifications from the Appendix and summarize why they matter; do not copy their full content.
 - Never claim human approval.
 
-Before keeping a paragraph, ask whether it helps a reviewer approve, reject, or reshape the direction. If not, remove it or move it to supporting material. If the draft exceeds the soft ceiling, shorten it before proposing a separate supporting file; create that file only when the user requested or agreed to it.
+Before keeping a paragraph in the core proposal, ask whether it helps a reviewer approve, reject, or reshape the direction. If not, remove it or move useful supporting detail to the Appendix. Keep the Appendix relevant and organized; use a separate technical document only when the material has an independent lifecycle or is too large for the QIP.
 
 ## Consultation
 
@@ -65,7 +66,7 @@ Final approvers come from the current template; do not treat them as default ear
 
 ## Save and present
 
-For a non-trivial or iterative draft, use the user's path or default to `arch/qips/<short-slug>.md` in this repository. Save only the approvers table, proposal sections, and supporting-material links; keep consultation in the response.
+For a non-trivial or iterative draft, use the user's path or default to `arch/qips/<short-slug>.md` in this repository. Save only the approvers table, proposal sections, and optional Appendix; keep consultation in the response.
 
 For a file-based draft, return the path, a brief summary, and the consultation note. Do not paste the QIP unless asked. For a chat-only draft, show the consultation note first and then the Canvas-ready QIP.
 

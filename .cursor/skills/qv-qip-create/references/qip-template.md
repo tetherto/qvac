@@ -20,11 +20,11 @@ What do we want to do, why does it matter, and why is a decision needed now.
 
 ### :bulb: Solution
 
-Start with the exact direction reviewers are being asked to approve. Explain how it solves the problem, where it belongs in the architecture, and which important responsibilities or boundaries change. Link PoCs, diagrams, or technical design docs for implementation detail.
+Start with the exact direction reviewers are being asked to approve. Explain how it solves the problem, where it belongs in the architecture, and which important responsibilities or boundaries change. Put supporting implementation detail in the Appendix.
 
 ### :twisted_rightwards_arrows: Alternatives considered
 
-What other credible options did we consider and why is the proposed direction preferable. Include no more than three alternatives, keep each to 1-2 sentences, and link detailed research.
+What other credible options did we consider and why is the proposed direction preferable. Include no more than three alternatives and keep each to 1-2 sentences. Put supporting research in the Appendix.
 
 ### :scales: Consequences
 
@@ -38,6 +38,6 @@ What is not in scope that might mistakenly be assumed to be in scope.
 
 What we would ideally add but can be postponed if we don't make it.
 
-### :link: Supporting material (optional)
+### :paperclip: Appendix (optional)
 
-Link technical design notes, research, diagrams, or PoC PRs that support the decision. Do not reproduce their detailed content here.
+Keep useful supporting technical detail, research summaries, diagrams, or additional comparisons here so the QIP remains self-contained. Link external artifacts such as PoC PRs, source research, or independently maintained specifications and briefly explain their relevance.
