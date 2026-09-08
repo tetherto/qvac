@@ -15,6 +15,14 @@
 # Example:
 #   dl "https://huggingface.co/example/file.safetensors" "./models/file.safetensors"
 #
+file_size() {
+  if stat -f '%z' "$1" >/dev/null 2>&1; then
+    stat -f '%z' "$1"
+  else
+    stat -c '%s' "$1"
+  fi
+}
+
 dl() {
   local url="$1" dest="$2"
 
