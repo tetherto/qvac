@@ -76,6 +76,18 @@ bool hasToolCallBlock(const std::string& text) {
   return text.find("<tool_call>") != std::string::npos;
 }
 
+/// The first `<tool_call>` block, so a name assertion reads only the call and
+/// not any prose around it. Empty when the output carries no call.
+std::string firstToolCallBlock(const std::string& text) {
+  const size_t open = text.find("<tool_call>");
+  if (open == std::string::npos) {
+    return "";
+  }
+  const size_t close = text.find("</tool_call>", open);
+  return text.substr(
+      open, close == std::string::npos ? std::string::npos : close - open);
+}
+
 std::vector<uint8_t> readBinaryFile(const fs::path& path) {
   std::ifstream stream(path, std::ios::binary);
   return {
@@ -658,4 +670,122 @@ TEST_F(
   EXPECT_FALSE(budgetStillCounting)
       << "this slot's reasoning-budget matcher was still COUNTING after the "
          "close, so the substituted close never reached its sampler";
+}
+
+// `BatchToolGrammarIsPerRequest` above proves a tool grammar does not cross
+// slots. This proves the narrower thing per-request `tool_choice` adds: three
+// co-scheduled slots, three different choices, each honoured on its own slot
+// only. `required` and the named choice both resolve to an eager grammar, so
+// the two are distinguishable only by *which* tool the call names — which is
+// why the prompt declares two.
+TEST_F(ToolGrammarModelTest, BatchToolChoiceIsHonouredPerSlot) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  config_["parallel"] = "3";
+  config_["ctx_size"] = "8192";
+  config_["n_predict"] = "256";
+  auto model = createModel();
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr)
+      << "parallel=3 must build the scheduler";
+
+  // `reasoning_budget: 0` on the two constrained items for the reason recorded
+  // in tool-calling.test.js: a named choice resolves to `required`, whose eager
+  // grammar permits an arbitrarily long `<think>` prefix, and the whole
+  // n_predict budget can be spent inside it before the call is reached.
+  LlamaModel::Prompt required = makePrompt(TWO_TOOLS_PROMPT);
+  required.generationParams.tool_choice = "required";
+  required.generationParams.reasoning_budget = 0;
+
+  // Deliberately the tool the prompt does *not* ask for: TWO_TOOLS_PROMPT asks
+  // the time, so a slot that ignored its choice would call `get_time` and the
+  // assertion below would pass for the wrong reason.
+  LlamaModel::Prompt named = makePrompt(TWO_TOOLS_PROMPT);
+  named.generationParams.tool_choice = "get_weather";
+  named.generationParams.reasoning_budget = 0;
+
+  LlamaModel::Prompt none = makePrompt(TWO_TOOLS_PROMPT);
+  none.generationParams.tool_choice = "none";
+
+  // One call, so all three are genuinely in flight together rather than
+  // exercising only the per-request clear.
+  const auto results = model->processPromptBatch({required, named, none});
+  ASSERT_EQ(results.size(), 3u);
+
+  EXPECT_TRUE(hasToolCallBlock(results[0]))
+      << "required must force a call on its own slot: " << results[0];
+
+  const std::string namedCall = firstToolCallBlock(results[1]);
+  ASSERT_FALSE(namedCall.empty())
+      << "a named choice must force a call: " << results[1];
+  EXPECT_NE(namedCall.find("get_weather"), std::string::npos)
+      << "the named slot must call the tool its own choice names, overriding "
+         "what the prompt asks for: "
+      << namedCall;
+  EXPECT_EQ(namedCall.find("get_time"), std::string::npos)
+      << "the named slot must not reach the tool the prompt asks for, which "
+         "its co-scheduled siblings left unconstrained: "
+      << namedCall;
+
+  EXPECT_FALSE(results[2].empty())
+      << "the none slot must complete rather than inherit a peer's grammar";
+}
+
+// A rejected `tool_choice` must not cost the caller its warm cache. The throw
+// sits outside `processPromptImpl`'s try, whose catch-all runs
+// `resetAndInvalidateActiveCache()`, so this guards an ordering property
+// rather than repairing one — it fails the moment validation is moved inside
+// that try, which is exactly the change someone would make without knowing
+// why the call sits where it does.
+//
+// Scope: the cache *session* is resolved before this point, because
+// `resolveChatAndTools` calls `handleCache` itself. What is asserted here is
+// that the last known-good checkpoint survives on disk and in memory.
+TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  const fs::path cacheDir = "tool_choice_cache_dir";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
+
+  auto model = createModel();
+
+  LlamaModel::Prompt primed = makePrompt(TOOL_PROMPT);
+  primed.cacheKey = cacheKey;
+  primed.saveCacheToDisk = true;
+  EXPECT_FALSE(model->processPrompt(primed).empty());
+  ASSERT_TRUE(fs::exists(cacheKey)) << "the checkpoint must be on disk first";
+  const auto checkpointSize = fs::file_size(cacheKey);
+  const auto checkpointWrite = fs::last_write_time(cacheKey);
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  const llama_pos primedNPast = llama_memory_seq_pos_max(mem, 0) + 1;
+  ASSERT_GT(primedNPast, 0);
+
+  LlamaModel::Prompt rejected = makePrompt(TOOL_PROMPT);
+  rejected.cacheKey = cacheKey;
+  rejected.saveCacheToDisk = true;
+  rejected.generationParams.tool_choice = "notDeclared";
+  EXPECT_THROW(model->processPrompt(rejected), qvac_errors::StatusError);
+
+  EXPECT_EQ(fs::file_size(cacheKey), checkpointSize)
+      << "the failed request overwrote the on-disk checkpoint";
+  EXPECT_TRUE(fs::last_write_time(cacheKey) == checkpointWrite)
+      << "the failed request rewrote the on-disk checkpoint";
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, primedNPast)
+      << "the failed request advanced or wiped the live cursor, so it ran "
+         "either the eval or the catch-all's resetAndInvalidateActiveCache()";
+
+  LlamaModel::Prompt followUp = makePrompt(TOOL_PROMPT);
+  followUp.cacheKey = cacheKey;
+  followUp.saveCacheToDisk = true;
+  EXPECT_FALSE(model->processPrompt(followUp).empty())
+      << "the key must still be usable after the rejection";
+  EXPECT_GT(test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0)
+      << "the follow-up re-prefilled from empty instead of the checkpoint";
+
+  fs::remove_all(cacheDir);
 }

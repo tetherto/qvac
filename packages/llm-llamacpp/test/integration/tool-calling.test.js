@@ -239,7 +239,7 @@ async function collectResponse(response) {
   }
 }
 
-async function createToolModel(modelVariant) {
+async function createToolModel(modelVariant, configOverrides = {}) {
   const [modelName, dirPath] = await ensureModel({
     modelName: modelVariant.modelName,
     downloadUrl: modelVariant.downloadUrl
@@ -256,7 +256,7 @@ async function createToolModel(modelVariant) {
 
   const model = new LlmLlamacpp({
     files: { model: [modelPath] },
-    config: BASE_CONFIG,
+    config: { ...BASE_CONFIG, ...configOverrides },
     logger: console,
     opts: { stats: true }
   })
@@ -446,6 +446,67 @@ safeTest(
         /undeclared function/,
         'an undeclared function name is rejected'
       )
+    } finally {
+      await release()
+    }
+  }
+)
+
+// `tool_choice` travels per BatchPrompt item. The deterministic proof that
+// each slot keeps its own choice lives in the native suite
+// (`BatchToolChoiceIsHonouredPerSlot`); this is the thin API-plumbing test
+// above it, catching normalization or serialization dropping the per-item
+// field before it reaches `runJob`.
+safeTest(
+  '[tools] tool_choice is per BatchPrompt item',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    const modelVariant = TOOL_MODEL_VARIANTS[0]
+    // parallel=2 so the two items are genuinely co-scheduled rather than run
+    // one after the other through the single-prompt path.
+    const { model, release } = await createToolModel(modelVariant, { parallel: '2' })
+    try {
+      // `reasoning_budget: 0` for the reason recorded on the single-prompt
+      // tool_choice test above: both of these choices resolve to `required`,
+      // whose eager grammar admits an unbounded `<think>` prefix that can
+      // consume the whole token budget before the call is reached.
+      const batchPrompts = [
+        {
+          id: 'required-item',
+          prompt: clonePrompt(),
+          runOptions: {
+            generationParams: { tool_choice: 'required', reasoning_budget: 0 }
+          }
+        },
+        {
+          id: 'named-item',
+          prompt: clonePrompt(),
+          runOptions: {
+            generationParams: { tool_choice: 'queryDB', reasoning_budget: 0 }
+          }
+        }
+      ]
+
+      const response = await model.run(batchPrompts)
+      const results = await response.await()
+      t.is(results.length, 2, 'one result per batch item')
+
+      const byId = new Map(results.map((result) => [result.id, result.output]))
+      const required = byId.get('required-item')
+      const named = byId.get('named-item')
+      t.ok(typeof required === 'string', 'required item produced output')
+      t.ok(typeof named === 'string', 'named item produced output')
+
+      assertDeclaredToolCalls(t, required, clonePrompt(), 'batch required')
+
+      // The named item must call only its target, even though the shared
+      // prompt asks for three different tools and its sibling was free to
+      // call any of them.
+      const namedCalls = parseToolCalls(named, t)
+      t.ok(namedCalls.length > 0, `named item produced a tool call: ${named.slice(0, 200)}`)
+      for (const call of namedCalls) {
+        t.is(call.name, 'queryDB', 'named item restricts its own slot to that function')
+      }
     } finally {
       await release()
     }
