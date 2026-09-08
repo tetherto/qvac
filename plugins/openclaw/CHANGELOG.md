@@ -2,7 +2,7 @@
 
 ## [0.2.2]
 
-Release Date: 2026-09-04
+Release Date: 2026-09-08
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/openclaw-plugin/v/0.2.2
 
@@ -36,6 +36,16 @@ Both now name the `provider-plugin:qvac` form first, with the pre-2026.8.1 form 
 2026.8.1 dropped `plugin-sdk/config-types` from its exports map and left `plugin-sdk/provider-model-shared` without type declarations, so `SecretProviderConfig` and `ModelProviderConfig` could no longer be imported by name and the plugin failed to typecheck and build against it.
 
 Both are now derived from `OpenClawConfig`, which is exported with types from `plugin-sdk/plugin-entry` — already the entry the plugin imports `definePluginEntry` from. These are type-only imports, so the emitted JavaScript is unchanged.
+
+## Onboarding No Longer Generates an Unusable Key
+
+The bearer key is generated as 32 random bytes encoded base64url. That alphabet includes `-`, and the plugin refuses a key beginning with `-` so a stored key can never be mistaken for a command-line flag. The generator did not exclude that case, so about 1.5% of freshly generated keys were rejected the moment the launcher read them back:
+
+```
+stored QVAC API key must be 32-128 base64url characters and cannot start with "-"
+```
+
+The result was a provider entry that onboarded cleanly and then refused to start. Key generation now draws again whenever a candidate starts with `-`. The same generator backs the recovery path for a stored key that no longer parses, so that path could previously replace an unusable key with another unusable one; it is fixed by the same change.
 
 ## Requirements
 
