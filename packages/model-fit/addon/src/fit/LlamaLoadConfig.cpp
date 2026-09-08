@@ -207,18 +207,19 @@ bool isEligibleGpu(const BackendDevice& device, bool isEmbedding) {
   }
   const std::string name = lower(device.name);
   const std::string registry = lower(device.registryName);
-  const bool isOpenCl = name.find("opencl") != std::string::npos ||
-                        registry.find("opencl") != std::string::npos;
+  const bool isOpenCl =
+      name.find("opencl") != std::string::npos || registry == "opencl";
   if (isOpenCl) {
+    // Completion intentionally mirrors llm-llamacpp's historical "dreno"
+    // token; embedding uses its stricter "adreno" spelling.
     const std::string adrenoToken = isEmbedding ? "adreno" : "dreno";
     return lower(device.description).find(adrenoToken) != std::string::npos;
   }
-  const bool isVulkan = name.find("vulkan") != std::string::npos ||
-                        registry.find("vulkan") != std::string::npos;
-  const auto isMetal = [](const std::string& value) {
-    return value.starts_with("mtl") || value.starts_with("metal");
-  };
-  return isVulkan || isMetal(name) || isMetal(registry);
+  const bool isVulkan =
+      name.find("vulkan") != std::string::npos || registry == "vulkan";
+  const bool isMetal = name.starts_with("mtl") || name.starts_with("metal") ||
+                       registry == "mtl" || registry == "metal";
+  return isVulkan || isMetal;
 }
 
 int adrenoVersion(const BackendDevice& device) {
@@ -454,6 +455,8 @@ std::vector<BackendDevice> discoverBackendDevices() {
   devices.reserve(count);
   for (size_t index = 0; index < count; ++index) {
     ggml_backend_dev_t handle = ggml_backend_dev_get(index);
+    ggml_backend_dev_props properties{};
+    ggml_backend_dev_get_props(handle, &properties);
     const enum ggml_backend_dev_type type = ggml_backend_dev_type(handle);
     BackendDeviceType mapped = BackendDeviceType::Accelerator;
     switch (type) {
@@ -484,7 +487,9 @@ std::vector<BackendDevice> discoverBackendDevices() {
                  registry, "ggml_backend_split_buffer_type") != nullptr,
          .handle = handle,
          .registryName =
-             registry == nullptr ? "" : ggml_backend_reg_name(registry)});
+             registry == nullptr ? "" : ggml_backend_reg_name(registry),
+         .deviceId =
+             properties.device_id == nullptr ? "" : properties.device_id});
   }
   return devices;
 }
@@ -494,13 +499,23 @@ std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
   const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;
   std::vector<ggml_backend_dev_t> discrete;
   std::vector<ggml_backend_dev_t> integrated;
+  std::unordered_set<std::string> seenDiscrete;
+  std::unordered_set<std::string> seenIntegrated;
   for (const BackendDevice& device : devices) {
     if (!isEligibleGpu(device, isEmbedding) || device.handle == nullptr) {
       continue;
     }
     if (device.type == BackendDeviceType::Gpu) {
+      if (!device.deviceId.empty() &&
+          !seenDiscrete.insert(device.deviceId).second) {
+        continue;
+      }
       discrete.push_back(device.handle);
     } else {
+      if (!device.deviceId.empty() &&
+          !seenIntegrated.insert(device.deviceId).second) {
+        continue;
+      }
       integrated.push_back(device.handle);
     }
   }
@@ -510,11 +525,41 @@ std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
   return selected;
 }
 
-void applyBackendDeviceAllowlist(
+std::optional<size_t> eligibleBackendDeviceOrdinal(
+    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
+    size_t registryIndex) {
+  if (registryIndex >= devices.size()) {
+    return std::nullopt;
+  }
+  const ggml_backend_dev_t requested = devices[registryIndex].handle;
+  if (requested == nullptr) {
+    return std::nullopt;
+  }
+  const std::vector<ggml_backend_dev_t> eligible =
+      eligibleBackendDeviceHandles(devices, loadKind);
+  const auto found = std::ranges::find(eligible, requested);
+  if (found == eligible.end()) {
+    return std::nullopt;
+  }
+  return static_cast<size_t>(std::distance(eligible.begin(), found));
+}
+
+bool applyBackendDeviceAllowlist(
     llama_model_params& params, std::vector<ggml_backend_dev_t>& storage,
-    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind) {
+    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
+    std::optional<size_t> registryIndex) {
   storage = eligibleBackendDeviceHandles(devices, loadKind);
   params.devices = storage.data();
+  if (!registryIndex.has_value()) {
+    return true;
+  }
+  const std::optional<size_t> mapped =
+      eligibleBackendDeviceOrdinal(devices, loadKind, registryIndex.value());
+  if (!mapped.has_value()) {
+    return false;
+  }
+  params.main_gpu = static_cast<int>(mapped.value());
+  return true;
 }
 
 ModelTraits readModelTraits(const std::string& modelPath) {
@@ -670,11 +715,10 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
   const std::string registryName =
       selected == nullptr ? "" : lower(selected->registryName);
   const bool isOpenCl = backendName.find("opencl") != std::string::npos ||
-                        registryName.find("opencl") != std::string::npos;
-  const bool isMetal = backendName.find("metal") != std::string::npos ||
+                        registryName == "opencl";
+  const bool isMetal = backendName.starts_with("metal") ||
                        backendName.starts_with("mtl") ||
-                       registryName.starts_with("metal") ||
-                       registryName.starts_with("mtl");
+                       registryName == "metal" || registryName == "mtl";
   const bool isBitnet =
       traits.architecture == "bitnet" && traits.hasOneBitQuantization;
   const bool isAdrenoVulkan =
@@ -792,7 +836,20 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
       out.params.main_gpu = 0;
     } else {
       out.params.devices = eligibleBackendDeviceHandles(devices, loadKind);
-      out.params.main_gpu = mainGpu.value_or(0);
+      if (mainGpu.has_value()) {
+        const std::optional<size_t> mapped = eligibleBackendDeviceOrdinal(
+            devices, loadKind, static_cast<size_t>(mainGpu.value()));
+        if (!mapped.has_value()) {
+          out.params.devices = {nullptr};
+          out.params.main_gpu = -1;
+          out.params.n_gpu_layers = 0;
+          out.params.split_mode = LLAMA_SPLIT_MODE_NONE;
+          return out;
+        }
+        out.params.main_gpu = static_cast<int>(mapped.value());
+      } else {
+        out.params.main_gpu = 0;
+      }
     }
   }
   return out;

@@ -39,6 +39,7 @@ struct BackendDevice {
   bool supportsSplitBuffer = false;
   ggml_backend_dev_t handle = nullptr;
   std::string registryName;
+  std::string deviceId;
 };
 
 struct ModelTraits {
@@ -77,9 +78,13 @@ struct LlamaFitExecution {
 std::vector<BackendDevice> discoverBackendDevices();
 std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind);
-void applyBackendDeviceAllowlist(
+std::optional<size_t> eligibleBackendDeviceOrdinal(
+    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
+    size_t registryIndex);
+bool applyBackendDeviceAllowlist(
     llama_model_params& params, std::vector<ggml_backend_dev_t>& storage,
-    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind);
+    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
+    std::optional<size_t> registryIndex = std::nullopt);
 ModelTraits readModelTraits(const std::string& modelPath);
 void validateLlamaLoadFitCriticalIntegers(const LlamaConfigMap& config);
 std::optional<std::string>

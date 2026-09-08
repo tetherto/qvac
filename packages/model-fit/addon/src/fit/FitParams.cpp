@@ -233,8 +233,21 @@ FitResult runFit(const FitRequest& req) {
   countDevices(out.nDevices, out.nGpuDevices);
   const std::vector<BackendDevice> discoveredDevices = discoverBackendDevices();
   std::vector<ggml_backend_dev_t> eligibleDevices =
-      eligibleBackendDeviceHandles(discoveredDevices, LlamaLoadKind::Completion);
+      eligibleBackendDeviceHandles(
+          discoveredDevices, LlamaLoadKind::Completion);
   const size_t eligibleGpuDevices = eligibleDevices.size() - 1;
+  std::optional<size_t> mappedMainGpu;
+  if (req.hasMainGpu && req.mainGpu >= 0) {
+    mappedMainGpu = eligibleBackendDeviceOrdinal(
+        discoveredDevices,
+        LlamaLoadKind::Completion,
+        static_cast<size_t>(req.mainGpu));
+    if (!mappedMainGpu.has_value()) {
+      throw std::invalid_argument(
+          "model-fit: mainGpu " + std::to_string(req.mainGpu) +
+          " does not identify a supported GPU device");
+    }
+  }
 
   // No registered device means backend loading failed outright. The fitter
   // would still return a verdict, computed against a machine it cannot see, so
@@ -279,16 +292,8 @@ FitResult runFit(const FitRequest& req) {
           "supported GPU device is registered");
     }
 
-    // `main_gpu` indexes the allowlisted list handed to llama below. Validate
-    // against that same list so unsupported registered devices cannot make an
-    // otherwise invalid placement appear usable.
-    if (!explicitCpuPlacement && req.hasMainGpu &&
-        static_cast<size_t>(req.mainGpu) >= eligibleGpuDevices) {
-      throw std::invalid_argument(
-          "model-fit: mainGpu " + std::to_string(req.mainGpu) +
-          " is out of range (" + std::to_string(eligibleGpuDevices) +
-          " supported GPU device(s) registered)");
-    }
+    // Non-negative mainGpu values were resolved from registry identity above
+    // and will be translated to the filtered-list ordinal handed to llama.
   }
 
   // `common_fit_params` segfaults on a path it cannot open: gguf_init_from_file
@@ -372,11 +377,18 @@ FitResult runFit(const FitRequest& req) {
     eligibleDevices = {nullptr};
   }
   if (!explicitCpuPlacement) {
-    applyBackendDeviceAllowlist(
+    const bool applied = applyBackendDeviceAllowlist(
         mparams,
         eligibleDevices,
         discoveredDevices,
-        LlamaLoadKind::Completion);
+        LlamaLoadKind::Completion,
+        req.hasMainGpu && req.mainGpu >= 0
+            ? std::optional<size_t>(static_cast<size_t>(req.mainGpu))
+            : std::nullopt);
+    if (!applied) {
+      throw std::invalid_argument(
+          "model-fit: mainGpu identity changed while preparing fit inputs");
+    }
   } else {
     mparams.devices = eligibleDevices.data();
   }
