@@ -527,10 +527,10 @@ struct Array : Value<Array> {
     return JsType{env, result};
   }
 
-  void
-  set(js_env_t* env, std::span<js_value_t* const> elements, size_t offset = 0) {
-    JS(setArrayElements_(
-        &js_set_array_elements, env, value_, elements, offset));
+  void set(
+      js_env_t* env, std::span<js_value_t* const> elements, size_t offset = 0) {
+    JS(js_set_array_elements(
+        env, value_, elements.data(), elements.size(), offset));
   }
 
   void set(js_env_t* env, uint32_t index, js_value_t* value) {
@@ -543,28 +543,6 @@ struct Array : Value<Array> {
 
 protected:
   explicit Array(js_value_t* value) : Value<Array>{value} {}
-
-  template <typename Function>
-  static int setArrayElements_(
-      Function function, js_env_t* env, js_value_t* array,
-      std::span<js_value_t* const> elements, size_t offset) {
-    if constexpr (
-        std::is_invocable_r_v<
-            int,
-            Function,
-            js_env_t*,
-            js_value_t*,
-            js_value_t* const*,
-            size_t,
-            size_t>) {
-      return function(env, array, elements.data(), elements.size(), offset);
-    } else {
-      std::vector<const js_value_t*> constElements{
-          elements.begin(), elements.end()};
-      return function(
-          env, array, constElements.data(), constElements.size(), offset);
-    }
-  }
 
   static int create_(js_env_t* env, js_value_t** result) {
     return js_create_array(env, result);

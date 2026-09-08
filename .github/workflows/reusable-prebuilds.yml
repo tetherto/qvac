@@ -108,7 +108,7 @@ on:
         type: boolean
         required: false
         default: false
-      include-cuda-windows:
+      include-cuda-win32:
         description: >-
           Extend include-cuda to the win32-x64 job. The pinned Windows toolkit
           is assembled by setup-cuda and the consumer must enable its CUDA
@@ -366,7 +366,7 @@ jobs:
       # arm64 is named rather than implied by "not x64", so a linux arch added
       # later does not inherit the toolkit from include-cuda-arm64 without
       # anyone asking for it.
-      - if: ${{ inputs.include-cuda && ((matrix.platform == 'linux' && (matrix.arch == 'x64' || (matrix.arch == 'arm64' && inputs.include-cuda-arm64))) || (matrix.platform == 'win32' && matrix.arch == 'x64' && inputs.include-cuda-windows)) }}
+      - if: ${{ inputs.include-cuda && ((matrix.platform == 'linux' && (matrix.arch == 'x64' || (matrix.arch == 'arm64' && inputs.include-cuda-arm64))) || (matrix.platform == 'win32' && matrix.arch == 'x64' && inputs.include-cuda-win32)) }}
         name: Setup CUDA toolkit for nvcc compile
         uses: ./.github/actions/setup-cuda
 
@@ -477,7 +477,7 @@ jobs:
         shell: bash
         run: bare-make install
 
-      - if: ${{ inputs.include-cuda && inputs.include-cuda-windows && matrix.platform == 'win32' && matrix.arch == 'x64' }}
+      - if: ${{ inputs.include-cuda && inputs.include-cuda-win32 && matrix.platform == 'win32' && matrix.arch == 'x64' }}
         name: Verify Windows CUDA and Vulkan modules
         working-directory: ${{ env.WORKDIR }}
         shell: bash
