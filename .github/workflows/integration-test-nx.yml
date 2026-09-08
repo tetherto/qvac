@@ -24,6 +24,16 @@ on:
         default: "{}"
   workflow_call:
     inputs:
+      run_rtf_benchmarks:
+        description: "Forwarded to the carve-out reusables, which gate their RTF benchmark leg on it. benchmark-performance-nx sets it true. Does not affect the generic matrix jobs."
+        required: false
+        type: boolean
+        default: false
+      run_integration_tests:
+        description: "Forwarded to the carve-out reusables so a benchmark run does not also run their functional leg. Does not affect the generic matrix jobs."
+        required: false
+        type: boolean
+        default: true
       fabric-overlay-artifact:
         description: "Artifact holding this PR's fabric prebuilds, overlaid into node_modules/@qvac/fabric after npm install. Applied only to packages in fabric-consumers."
         required: false
@@ -103,6 +113,10 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      # The carve-out gates its whole RTF leg on run_rtf_benchmarks; without
+      # this the desktop benchmarks never run and only warn at the summarize step.
+      run_rtf_benchmarks: ${{ inputs.run_rtf_benchmarks }}
+      run_integration_tests: ${{ inputs.run_integration_tests }}
 
   run-integration-llm:
     needs: matrix
@@ -463,8 +477,13 @@ jobs:
           QVAC_ENV_VALUE: ${{ matrix.envSecretName && secrets[matrix.envSecretName] }}
           QVAC_PERF_RUNS: ${{ matrix.qvacPerfRuns }}
           QVAC_PERF_WARMUP_RUNS: ${{ matrix.qvacPerfWarmupRuns }}
+          QVAC_TEST_ENV: ${{ toJSON(matrix.testEnv) }}
         run: |
           [ -n "${QVAC_ENV_NAME:-}" ] && export "${QVAC_ENV_NAME}=${QVAC_ENV_VALUE}"
+          # options.ci.testEnv, settable per platform row; @sh quotes the values.
+          if [ -n "${QVAC_TEST_ENV:-}" ] && [ "$QVAC_TEST_ENV" != "null" ]; then
+            eval "$(echo "$QVAC_TEST_ENV" | jq -r 'to_entries[] | "export \(.key)=\(.value|tostring|@sh)"')"
+          fi
           if [ "${{ matrix.hasGenerateStep }}" = "true" ]; then
             npm run test:integration:generate
           fi
@@ -487,8 +506,25 @@ jobs:
         env:
           QVAC_PERF_RUNS: ${{ matrix.qvacPerfRuns }}
           QVAC_PERF_WARMUP_RUNS: ${{ matrix.qvacPerfWarmupRuns }}
+          QVAC_TEST_ENV: ${{ toJSON(matrix.testEnv) }}
+        # A bare pipe returns the tee's status, not the test's, so a failing run
+        # reads as green. Capture $LASTEXITCODE after each stage and propagate it.
         run: |
-          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} | Tee-Object test-output.log
+          $ErrorActionPreference = 'Continue'
+          if ($env:QVAC_TEST_ENV -and $env:QVAC_TEST_ENV -ne 'null') {
+            (ConvertFrom-Json $env:QVAC_TEST_ENV).PSObject.Properties | ForEach-Object {
+              Set-Item -Path "env:$($_.Name)" -Value $_.Value
+            }
+          }
+          if ("${{ matrix.hasGenerateStep }}" -eq "true") {
+            npm run test:integration:generate 2>&1 | Tee-Object test-output.log
+            $generateExit = $LASTEXITCODE
+            if ($generateExit -ne 0) { exit $generateExit }
+          }
+          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} 2>&1 | Tee-Object test-output.log -Append
+          $testExit = $LASTEXITCODE
+          Write-Host "Windows integration test exit code: $testExit"
+          exit $testExit
 
       - name: Run integration tests
         if: '!matrix.useTeeLogging'
