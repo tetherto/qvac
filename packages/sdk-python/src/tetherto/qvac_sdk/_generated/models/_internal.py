@@ -13926,7 +13926,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU with at least 20 GB free VRAM.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU with at least 20 GB free VRAM.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
@@ -14006,6 +14006,25 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
             description="Keep model weights in CPU memory and offload them during GPU compute"
         ),
     ] = None
+    backend: Annotated[
+        str | None,
+        Field(description="Native compute backend assignment; overrides main-gpu."),
+    ] = None
+    params_backend: Annotated[
+        str | None,
+        Field(
+            description="Native parameter placement; overrides legacy CPU-offload flags."
+        ),
+    ] = None
+    max_vram: Annotated[
+        float | str | None,
+        Field(
+            description="Native VRAM limit or per-backend limits, for example cuda0=6,vulkan0=2."
+        ),
+    ] = None
+    stream_layers: Annotated[
+        bool | None, Field(description="Stream model layers during native inference.")
+    ] = None
     flash_attn: Annotated[
         bool | None, Field(description="Enable flash attention to reduce memory usage")
     ] = None
@@ -14051,14 +14070,14 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc | None,
         Field(
             alias="llmModelSrc",
-            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Ideogram 4 (Qwen3-VL), and LTX-2 video (Gemma).",
+            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
         ),
     ] = None
     vae_model_src: Annotated[
         str | LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc | None,
         Field(
             alias="vaeModelSrc",
-            description="VAE decoder model — required for FLUX.2 [klein], Ideogram 4, and LTX-2 video (video VAE); optional for SDXL.",
+            description="VAE decoder model — required for FLUX.2 [klein], Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
         ),
     ] = None
     high_noise_diffusion_model_src: Annotated[
@@ -14088,7 +14107,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc | None,
         Field(
             alias="audioVaeModelSrc",
-            description="Audio VAE decoder model — LTX-2 video only. Enables the synchronized 48 kHz audio track muxed into the output AVI; omit for silent video. Ignored by the Wan layout.",
+            description="Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent LTX-2 video; unsupported by Wan.",
         ),
     ] = None
     embeddings_connectors_model_src: Annotated[
@@ -17764,7 +17783,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     width: Annotated[
         int | None,
         Field(
-            description="Video width in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
+            description="Video width in pixels (must be a multiple of 16). LTX-2, MiniMax-H3 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 and MiniMax-H3 are validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
             gt=0,
             le=9007199254740991,
             multiple_of=16,
@@ -17773,7 +17792,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     height: Annotated[
         int | None,
         Field(
-            description="Video height in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
+            description="Video height in pixels (must be a multiple of 16). LTX-2, MiniMax-H3 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 and MiniMax-H3 are validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
             gt=0,
             le=9007199254740991,
             multiple_of=16,
@@ -17782,8 +17801,8 @@ class VideoStreamRequest(GeneratedBaseModel):
     video_frames: Annotated[
         int | None,
         Field(
-            description="Frame count for the generated video; must satisfy (4*k + 1), where k>=1. LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, validated against the loaded model before generation.",
-            ge=-9007199254740991,
+            description="Frame count validated against the loaded model: Wan uses 4*k+1 (k>=1), LTX-2 uses 8*k+1 (9–257 frames), and MiniMax-H3 uses 17*k+5 (k>=0).",
+            gt=0,
             le=9007199254740991,
         ),
     ] = None
@@ -18094,7 +18113,7 @@ class VideoStreamResponseStats(GeneratedBaseModel):
         bool | None,
         Field(
             alias="hasAudio",
-            description="True when the output AVI includes a muxed audio track (LTX-2 loaded with audioVaeModelSrc), false otherwise.",
+            description="True when the output AVI includes a muxed audio track (MiniMax-H3 or LTX-2 loaded with audioVaeModelSrc), false otherwise.",
         ),
     ] = None
     audio_sample_rate: Annotated[
