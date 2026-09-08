@@ -403,7 +403,6 @@ std::vector<std::string> backend_selection::getSplitDeviceNames() {
 
 bool backend_selection::gpuBackendSupportsRowSplit(
     const BackendInterface& bckI) {
-  // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
   // Row split requires split buffers on every eligible device.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();

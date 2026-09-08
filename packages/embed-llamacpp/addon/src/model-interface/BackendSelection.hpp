@@ -12,8 +12,7 @@
 
 namespace backend_selection {
 
-// ggml's Metal registry identity is "MTL". The "Metal" prefix remains an
-// accepted device-name alias to mirror ocr-ggml's established matcher.
+// Accept Metal device prefixes alongside ggml's MTL registry identity.
 
 enum BackendType : std::uint8_t { CPU, GPU };
 
