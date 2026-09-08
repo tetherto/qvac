@@ -879,3 +879,5 @@ files are distributed under the **NVIDIA Open Model License**; see the
 upstream HuggingFace model cards for the per-checkpoint terms.
 
 For questions or issues, please open an issue on the GitHub repository.
+
+<!-- QVAC-24630 throwaway: fires the asr-ggml on-pr lane so its integration legs reach the model cache step. Never merged. -->

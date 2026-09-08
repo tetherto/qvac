@@ -233,3 +233,5 @@ see [`sim/README.md`](./sim/README.md).
 
 @qvac/vla-ggml itself is Apache-2.0. Bundled third-party components are governed
 by their respective licenses; see [`NOTICE`](./NOTICE).
+
+<!-- QVAC-24630 throwaway: fires the vla-ggml on-pr lane so its integration legs reach the model cache step. Never merged. -->

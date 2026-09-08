@@ -609,3 +609,5 @@ First-run downloads pull several GB from Hugging Face. Every fixture is SHA256-v
 This project is licensed under the Apache-2.0 [License](./LICENSE) – see the LICENSE file for details.
 
 _For questions or issues, please open an issue on the GitHub repository._
+
+<!-- QVAC-24630 throwaway: fires the llm-llamacpp on-pr lane so its integration legs reach the model cache step. Never merged. -->
