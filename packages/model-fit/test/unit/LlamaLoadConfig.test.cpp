@@ -561,9 +561,7 @@ int main() {
     const auto falsey = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
-            {"device", "gpu"},
-            {"flash-attn", "off"},
-            {"cache-type-v", "q8_0"}},
+            {"device", "gpu"}, {"flash-attn", "off"}, {"cache-type-v", "q8_0"}},
         ModelTraits{},
         {adreno(), cpu()});
     expect(
