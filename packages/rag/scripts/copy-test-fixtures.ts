@@ -3,8 +3,9 @@
 // non-TypeScript fixtures from test/integration next to the compiled tests.
 import fs from 'bare-fs'
 import path from 'bare-path'
+import url from 'bare-url'
 
-const scriptDir = path.dirname(new URL(import.meta.url).pathname)
+const scriptDir = path.dirname(url.fileURLToPath(import.meta.url))
 const packageRoot = path.join(scriptDir, '..')
 const sourceDir = path.join(packageRoot, 'test', 'integration')
 const destDir = path.join(packageRoot, 'test', 'dist', 'test', 'integration')

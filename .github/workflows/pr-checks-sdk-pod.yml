@@ -373,6 +373,12 @@ jobs:
             # Run the checks once per declared SDK source. The optional
             # sdk-source:<source> script does that source's setup (e.g. link the
             # in-repo SDK); absent = plain install of the committed dependency.
+            #
+            # Workspace must rewrite the committed range to a sibling file:
+            # dep *before* install. Otherwise lockstep backmerge PRs into
+            # main fail at bun/npm install when @qvac/inference@^x.y.z is
+            # not on npm yet. Published/default keep install-first so they
+            # still resolve from the registry.
             src_idx=0
             for SRC in $SOURCES; do
               # Bracketed source shown after each check name, e.g. "build [workspace]".
@@ -390,14 +396,19 @@ jobs:
 
               # npm run --if-present reads package.json scripts and works regardless
               # of the installer (bun lacks --if-present).
+              if [ "$SRC" = "workspace" ]; then
+                run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
+              fi
+
               if [ "$PKG" = "sdk" ]; then
                 run "install $src" bun install
               else
                 run "install $src" "$PM" install
               fi
 
-              # Per-source setup (no-op if the script is absent).
-              run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
+              if [ "$SRC" != "workspace" ]; then
+                run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
+              fi
 
               # Peer-resolution drift against this source's resolved @qvac/inference.
               if [ "$PKG" = "sdk" ]; then
