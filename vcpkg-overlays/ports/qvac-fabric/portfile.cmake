@@ -367,7 +367,7 @@ vcpkg_cmake_config_fixup(
 
 if(BUILD_CUDA_BACKEND)
   if(VCPKG_TARGET_IS_WINDOWS)
-    set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/bin/qvac-ggml-cuda.dll")
+    set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/lib/qvac-ggml-cuda.dll")
   else()
     set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda.so")
   endif()
