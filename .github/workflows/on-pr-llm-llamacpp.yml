@@ -155,7 +155,7 @@ jobs:
     if: github.event_name == 'pull_request_target'
     needs: authorize
     runs-on: ubuntu-latest
-    timeout-minutes: 17
+    timeout-minutes: 27
     permissions:
       checks: read
       contents: read
@@ -166,7 +166,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         with:
           script: |
-            const timeoutAt = Date.now() + 15 * 60 * 1000
+            const timeoutAt = Date.now() + 25 * 60 * 1000
 
             while (Date.now() < timeoutAt) {
               const response = await github.rest.checks.listForRef({
