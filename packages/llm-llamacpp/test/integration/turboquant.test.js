@@ -131,7 +131,7 @@ test(
 
     await t.exception(
       () => model.load(),
-      /(cache-type|TurboQuant|PolarQuant).*(Metal|not supported)/i,
+      /No available GPU can run KV-cache type.*\((MTL|Metal)\)/i,
       'model.load() rejects TBQ on Metal with a clear backend-not-supported error'
     )
   }
