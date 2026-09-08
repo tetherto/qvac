@@ -90,9 +90,8 @@ export const ERR_CODES_PARAKEET = Object.freeze({
  * to collide: any process that loads a pre-merge ASR package **and**
  * `@qvac/asr-ggml` against one hoisted `@qvac/error` would throw
  * ERROR_CODE_ALREADY_EXISTS at module scope, i.e. `require('@qvac/asr-ggml')`
- * would crash. That happens during the release-step flip (the co-load smoke
- * addon list transiently carries old and new names) and for any consumer that
- * upgrades one ASR dependency at a time.
+ * would crash. That happens for any consumer that upgrades one ASR dependency
+ * at a time.
  *
  * The happy path is unchanged — a single `addCodes` with package info, so the
  * same-package version-upgrade behavior in `@qvac/error` still applies. Only
