@@ -92,11 +92,7 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 ///
 /// Selection mirrors qvac-fabric's filtered branch (`src/llama.cpp`) while
 /// applying this addon's supported-backend allowlist:
-///   - RPC devices are excluded. ggml reports them as
-///     `GGML_BACKEND_DEVICE_TYPE_GPU` (`ggml-rpc.cpp`, with a TODO), and fabric
-///     segregates them precisely so they do not count as discrete GPUs —
-///     otherwise the local iGPU is dropped on an iGPU + RPC host. This also
-///     matches `emplaceIfValidDevice`, which already skips RPC.
+///   - CUDA and RPC GPU devices are eligible for their upcoming Fabric builds.
 ///   - Discrete GPUs when any are present, otherwise the integrated ones.
 ///   - Duplicates are dropped by `ggml_backend_dev_props::device_id`, the same
 ///     key fabric uses. Deduping by *description* would be wrong: Vulkan sets

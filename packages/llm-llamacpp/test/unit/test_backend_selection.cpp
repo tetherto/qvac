@@ -387,12 +387,16 @@ TEST_F(BackendSelectionTest, PreferredCPUAlwaysReturnsCPU) {
   expectChosen(mockBackend, BackendType::CPU, "none");
 }
 
-// RPC backend is ignored
-TEST_F(BackendSelectionTest, RPCBackendIsIgnored) {
+TEST_F(BackendSelectionTest, RpcBackendIsEligible) {
   mockBackend.addDevice(
-      MockDevice("Adreno 840", "OpenCL", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
-  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
-  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+      MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  expectChosen(mockBackend, BackendType::GPU, "rpc0");
+}
+
+TEST_F(BackendSelectionTest, CudaBackendIsEligible) {
+  mockBackend.addDevice(MockDevice(
+      "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
 }
 
 // Multiple Adreno OpenCL/Vulkan backends - chooses opencl
@@ -1072,6 +1076,15 @@ TEST_F(BackendSelectionTest, GpuCount_UnsupportedBackendsIgnored) {
   EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
 }
 
+TEST_F(BackendSelectionTest, GpuCount_CudaAndRpcAreEligible) {
+  mockBackend.addDevice(MockDevice(
+      "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));
+  mockBackend.addDevice(
+      MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 2u);
+}
+
 // ---- gpuBackendSupportsRowSplit ----
 //
 // qvac-fabric builds a split buffer list for EVERY device it distributes over
@@ -1339,26 +1352,21 @@ TEST_F(BackendSelectionTest, SplitDevices_KeepsDevicesWithoutDeviceId) {
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
-// ggml types RPC devices as GPU (ggml-rpc.cpp, with a TODO). qvac-fabric
-// segregates them so they do not count as discrete GPUs — otherwise the local
-// iGPU is dropped on an iGPU + RPC host. chooseBackend already skips RPC; this
-// enumeration must too.
-TEST_F(BackendSelectionTest, SplitDevices_ExcludesRpcDevices) {
+TEST_F(BackendSelectionTest, SplitDevices_IncludeRpcDevices) {
   mockBackend.addDevice(
       MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
   mockBackend.addDevice(withDeviceId(
       createGPUDevice("NVIDIA RTX 4090", "vulkan0"), "0000:01:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"rpc0", "vulkan0"}));
 }
 
-// The case fabric's comment calls out by name: an RPC device must not make the
-// discrete bucket non-empty and displace the host's own integrated GPU.
-TEST_F(BackendSelectionTest, SplitDevices_RpcDoesNotDisplaceLocalIgpu) {
+TEST_F(BackendSelectionTest, SplitDevices_RpcUsesDiscreteGpuPriority) {
   mockBackend.addDevice(
       MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
   mockBackend.addDevice(withDeviceId(
       createIGPUDevice("Intel UHD 770", "vulkan0"), "0000:00:02.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"rpc0"}));
 }

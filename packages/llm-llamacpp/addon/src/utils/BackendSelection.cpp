@@ -151,11 +151,11 @@ bool isEligibleGpuDevice(
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const std::string registryName =
       lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr);
-  if (registryName == "rpc") {
-    return false;
-  }
-
   const std::string deviceName = lowerCopy(bckI.ggml_backend_dev_name(dev));
+  if (hasBackendFamily(deviceName, registryName, "cuda") ||
+      hasBackendFamily(deviceName, registryName, "rpc")) {
+    return true;
+  }
   if (hasBackendFamily(deviceName, registryName, "opencl")) {
     return lowerCopy(bckI.ggml_backend_dev_description(dev)).find("dreno") !=
            std::string::npos;
@@ -518,15 +518,6 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
     const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
     const bool isDiscrete = devType == GGML_BACKEND_DEVICE_TYPE_GPU;
     if (!isDiscrete && devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
-      continue;
-    }
-    // Defensive: isEligibleGpuDevice already rejects RPC registries; kept to
-    // mirror fabric's filtered branch. ggml types RPC as GPU, so without a
-    // guard an iGPU + RPC host would see a non-empty `discrete` bucket and drop
-    // its own integrated GPU from the list.
-    const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
-    if (reg != nullptr &&
-        bckI.ggml_backend_reg_name(reg) == std::string("RPC")) {
       continue;
     }
     // Materialise each string before the next interface call. The returned
