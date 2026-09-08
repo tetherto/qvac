@@ -115,20 +115,6 @@ bool nmtNameContainsCi(const char* name, const std::string& needleLower) {
 namespace {
 enum class NmtGpuFamily : std::uint8_t { None, Vulkan, Metal, OpenCl };
 
-NmtGpuFamily familyFromSelector(const std::string& selectorLower) {
-  if (selectorLower.find("opencl") != std::string::npos) {
-    return NmtGpuFamily::OpenCl;
-  }
-  if (selectorLower.find("vulkan") != std::string::npos) {
-    return NmtGpuFamily::Vulkan;
-  }
-  if (selectorLower.find("metal") != std::string::npos ||
-      selectorLower.find("mtl") != std::string::npos) {
-    return NmtGpuFamily::Metal;
-  }
-  return NmtGpuFamily::None;
-}
-
 bool nameHasMetalPrefix(const char* name) {
   if (name == nullptr) {
     return false;
@@ -165,11 +151,20 @@ deviceFamily(const NmtBackendInterface& backend, ggml_backend_dev_t device) {
   if (nameEqualsCi(registryName, "rpc")) {
     return NmtGpuFamily::None;
   }
-  if (nmtNameContainsCi(deviceName, "opencl") ||
+  const std::string deviceNameLower =
+      deviceName == nullptr ? ""
+                            : std::string(deviceName, strnlen(deviceName, 256));
+  std::string normalizedDeviceName = deviceNameLower;
+  std::ranges::transform(
+      normalizedDeviceName,
+      normalizedDeviceName.begin(),
+      [](unsigned char chr) { return static_cast<char>(std::tolower(chr)); });
+  if (normalizedDeviceName == "gpuopencl" ||
+      normalizedDeviceName.starts_with("opencl") ||
       nameEqualsCi(registryName, "opencl")) {
     return NmtGpuFamily::OpenCl;
   }
-  if (nmtNameContainsCi(deviceName, "vulkan") ||
+  if (normalizedDeviceName.starts_with("vulkan") ||
       nameEqualsCi(registryName, "vulkan")) {
     return NmtGpuFamily::Vulkan;
   }
@@ -233,15 +228,6 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   const size_t devCount = backend.deviceCount();
 
   if (!gpuBackendLower.empty()) {
-    const NmtGpuFamily requestedFamily = familyFromSelector(gpuBackendLower);
-    if (requestedFamily == NmtGpuFamily::None) {
-      std::ostringstream oss;
-      oss << "[" << logPrefix << "] Explicit gpu_backend='" << gpuBackend
-          << "' is not a supported Vulkan, Metal, or OpenCL backend — "
-             "falling back to CPU";
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
-      return nullptr;
-    }
 #ifndef QVAC_NMTCPP_USE_OPENCL
     // OpenCL is opt-in via explicit gpu_backend even when the build-time
     // guard is off. Warn loudly because the guard exists specifically to
@@ -266,7 +252,7 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
         continue;
       }
       const char* name = backend.deviceName(devCur);
-      if (deviceFamily(backend, devCur) != requestedFamily) {
+      if (deviceFamily(backend, devCur) == NmtGpuFamily::None) {
         continue;
       }
       if (!matchesExplicitSelector(backend, devCur, gpuBackendLower)) {

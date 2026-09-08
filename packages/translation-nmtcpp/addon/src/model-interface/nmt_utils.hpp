@@ -44,7 +44,7 @@ struct NmtBackendInterface {
 // "[make_buft_list]"). Does NOT take the global init mutex; caller must
 // ensure backend registration is complete before calling.
 //
-// Returns the selected non-CPU device whose buffer type is verified non-null,
+// Returns the selected eligible GPU/iGPU device with a non-null buffer type,
 // or nullptr if no eligible device was found (including when a device matched
 // but its buffer type was null — a WARNING is emitted in that case). Callers
 // do NOT need to re-check the buffer type of a non-null return value.

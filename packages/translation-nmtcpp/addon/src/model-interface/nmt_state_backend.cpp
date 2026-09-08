@@ -364,7 +364,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   //
   // Two selection modes:
   //   1. params.gpu_backend non-empty → explicit single-pass filter:
-  //      pick the first non-CPU device whose name contains gpu_backend
+  //      pick the first eligible device whose name contains gpu_backend
   //      (case-insensitive substring). `gpu_device` is the ordinal
   //      within matches, so {gpu_backend="vulkan", gpu_device=1} picks
   //      the second Vulkan adapter. Bypasses the OpenCL guard — an
@@ -372,7 +372,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   //   2. params.gpu_backend empty → gated default: when
   //      QVAC_NMTCPP_USE_OPENCL is defined, prefer an OpenCL-named
   //      device first; otherwise (and always as a fallback) pick any
-  //      non-CPU device. When the guard is off, the fallback also
+  //      eligible Vulkan or Metal device. When the guard is off, the fallback
   //      skips OpenCL-named devices so Bergamot/IndicTrans on Adreno
   //      830 don't hit the q4_0 transpose crash (QVAC-17790).
   // Delegate to the shared selector so make_buft_list (in nmt_loader.cpp)

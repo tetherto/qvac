@@ -102,6 +102,11 @@ TEST_F(NmtGpuSelectionTest, ExplicitRocmFallsBackToCpu) {
   EXPECT_EQ(select("rocm"), nullptr);
 }
 
+TEST_F(NmtGpuSelectionTest, ExplicitDeviceNameSubstringRemainsSupported) {
+  inventory = {{"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select("kan0"), deviceGet(0));
+}
+
 TEST_F(NmtGpuSelectionTest, AccelTypedVulkanIsRejected) {
   inventory = {
       {"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_ACCEL},
@@ -133,6 +138,11 @@ TEST_F(NmtGpuSelectionTest, RpcRegistryIsRejected) {
 
 TEST_F(NmtGpuSelectionTest, RegistryFamilyNamesRequireExactIdentity) {
   inventory = {{"Future0", "NotVulkan", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), nullptr);
+}
+
+TEST_F(NmtGpuSelectionTest, DeviceFamilyNamesRequireKnownPrefixes) {
+  inventory = {{"NotVulkan0", "Future", GGML_BACKEND_DEVICE_TYPE_GPU}};
   EXPECT_EQ(select(), nullptr);
 }
 
