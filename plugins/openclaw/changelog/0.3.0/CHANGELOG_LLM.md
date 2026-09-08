@@ -1,6 +1,6 @@
 # QVAC OpenClaw Plugin v0.3.0 Release Notes
 
-Release Date: 2026-09-07
+Release Date: 2026-09-08
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/openclaw-plugin/v/0.3.0
 
@@ -33,6 +33,16 @@ Installs that pin `@qvac/cli` to `0.12.x` need to move to `0.13.x` with the plug
 Provider 0.7 narrows its own optional `@qvac/cli` peer to `^0.13.0`, so the two floors have to move together: a plugin still asking for `@qvac/cli@^0.12.0` next to provider 0.7 would leave the install unresolvable. The plugin uses the provider for the shared model catalog only — it drives its own launcher rather than the provider's managed serve — so nothing else about that dependency changes here.
 
 Provider 0.7 also carries the streamed file-upload fixes released in 0.6.2.
+
+## Onboarding No Longer Generates an Unusable Key
+
+The bearer key is generated as 32 random bytes encoded base64url. That alphabet includes `-`, and the plugin refuses a key beginning with `-` so a stored key can never be mistaken for a command-line flag. The generator did not exclude that case, so about 1.5% of freshly generated keys were rejected the moment the launcher read them back:
+
+```
+stored QVAC API key must be 32-128 base64url characters and cannot start with "-"
+```
+
+The result was a provider entry that onboarded cleanly and then refused to start. Key generation now draws again whenever a candidate starts with `-`. The same generator backs the recovery path for a stored key that no longer parses, so that path could previously replace an unusable key with another unusable one; it is fixed by the same change.
 
 ## Upgrading
 
