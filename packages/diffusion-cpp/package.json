@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.21.0",
+  "version": "0.23.0",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "addon": true,
   "scripts": {
@@ -62,7 +62,8 @@
     "coverage:cpp:summary": "cd build/test/unit && llvm-cov report ./addon-test --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build/test/unit/ && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
-    "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp",
+    "generate:h3-coffee": "bare examples/generate-video-minimax-h3.js"
   },
   "files": [
     "binding.js",
@@ -93,6 +94,7 @@
     "@qvac/registry-client": "^0.6.1",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
+    "bare-zlib": "^1.4.1",
     "bare-fs": "^4.5.1",
     "bare-os": "^3.7.1",
     "bare-process": "^4.2.2",

@@ -119,6 +119,8 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       base-ref: ${{ inputs.base-ref }}
       head-ref: ${{ inputs.head-ref }}
+      run_rtf_benchmarks: true
+      run_integration_tests: false
 
   # Mobile RTF benchmarks: one static reusable call per package (GitHub can't
   # matrix-template `uses:`), each gated on its package being nx-affected.

@@ -90,7 +90,10 @@
               "os": "macos-15-large", "platform": "darwin", "arch": "x64", "runner": "macos-15-large", "noGpu": true,
               "modelCache": [{ "group": "base", "cacheKeySuffix": "base", "cacheVersion": "v2" }]
             },
-            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu", "timeoutMinutes": 1800 }
+            {
+              "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu", "timeoutMinutes": 1800,
+              "testEnv": { "WAN_DEBUG": "1", "WAN_VERBOSITY": "3" }
+            }
           ]
         }
       }
