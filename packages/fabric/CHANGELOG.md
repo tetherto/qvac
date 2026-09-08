@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.11.0] - 2026-09-03
+
+### Changed
+
+- `@qvac/fabric` is now a meta package. Headers and CMake config stay here; each
+  host runtime publishes as `@qvac/fabric-<platform>` and is selected by npm
+  `optionalDependencies` + `os`/`cpu` (`libc` on Linux). `binding.js` loads the
+  host via `require('#binding')` and a `package.json` `"imports"` map (same
+  pattern as bare-collabora). `include_bare_module` and `resolveBackendsDir()`
+  must follow the platform package (see `require('@qvac/fabric/platform')`).
+  CUDA/HIP vendor packages are not part of this release.
+- Platform packages nest the runtime under `addon/`, whose manifest is named
+  `@qvac/fabric`. `require.addon()` and `include_bare_module()` both derive the
+  artifact basename from the nearest manifest, so the `.bare` keeps the
+  `qvac__fabric` name consumers link against without shipping a renamed second
+  copy of the runtime. Resolve the directory with
+  `require('@qvac/fabric/platform').resolvePlatformPrebuilds()`; it now returns
+  `<platform package>/addon/prebuilds`.
+- `binding.js` tries `require.addon()` before the `#binding` imports map, so a
+  local `prebuilds/` (source checkout, mobile flatten, `linked:` install) keeps
+  loading without a platform package installed.
+- Every arm of the `#binding` map falls back to the new `addon-unavailable.js`,
+  which throws an error naming the platform package to install and the package
+  managers that support `os`/`cpu` filtered optional dependencies. The fallback
+  also keeps `require('#binding')` resolvable for bare-pack on hosts whose slice
+  is not staged.
+
+### Fixed
+
+- The slicer refuses to stage a host directory that carries no `.bare`, instead
+  of publishing a binary-less platform package the meta then version-locks to.
+- Platform-slice publishing distinguishes a confirmed "not published" (E404)
+  from a transient registry error, so a re-run after a partial publish can no
+  longer publish blind into an immutable version and abort the release before
+  the meta ships.
+
 ## [0.10.0] - 2026-08-29
 
 ### Changed

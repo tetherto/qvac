@@ -17,6 +17,16 @@ const binding = require('./binding');
 // build still skips backendsDir.
 function resolveBackendsDir() {
     try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/fabric/platform is CJS and absent from 0.10.0 fat installs.
+        const fabricPlatform = require('@qvac/fabric/platform');
+        const fabricPrebuilds = fabricPlatform.resolvePlatformPrebuilds();
+        if (fabricPrebuilds && fs.statSync(fabricPrebuilds).isDirectory())
+            return fabricPrebuilds;
+    }
+    catch {
+        // Fat 0.10.0 install has no platform helper.
+    }
+    try {
         const fabricPkg = require.resolve('@qvac/fabric/package');
         const fabricPrebuilds = path.join(path.dirname(fabricPkg), 'prebuilds');
         if (fs.statSync(fabricPrebuilds).isDirectory())
@@ -110,8 +120,9 @@ function validateRelationships(config) {
  * running together.
  *
  * Backends must be registered before the fitter can see any device. When
- * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
- * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
+ * `backendsDir` is omitted this package resolves the host
+ * `@qvac/fabric-<platform>` package's `prebuilds/` (desktop) or this addon's
+ * `prebuilds/` (mobile worklet). Omit only for a
  * statically linked build, which self-registers.
  * Every backend library in that directory is `dlopen`ed into this process, so
  * it must be an application-controlled location — never remote or user input.

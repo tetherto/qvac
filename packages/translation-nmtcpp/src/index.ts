@@ -39,6 +39,14 @@ const BERGAMOT_TARGET_TOKEN_BY_PAIR: Record<string, string> = {
 // appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
 function resolveBackendsDir(): string {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/fabric/platform is CJS and absent from 0.10.0 fat installs.
+    const fabricPlatform = require("@qvac/fabric/platform") as {
+      resolvePlatformPrebuilds: () => string | null;
+    };
+    const fabricPrebuilds = fabricPlatform.resolvePlatformPrebuilds();
+    if (fabricPrebuilds && fs.existsSync(fabricPrebuilds)) return fabricPrebuilds;
+  } catch {}
+  try {
     const fabricPkg = require.resolve("@qvac/fabric/package");
     const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");
     if (fs.existsSync(fabricPrebuilds)) return fabricPrebuilds;
@@ -724,9 +732,10 @@ namespace TranslationNmtcpp {
 
     /**
      * Path to the directory containing backend shared libraries
-     * (libqvac-ggml-vulkan.so, etc.). Defaults to `@qvac/fabric`'s `prebuilds/`
-     * on desktop, falling back to this package's `prebuilds/` on mobile where
-     * the package tree isn't resolvable from the packed worklet.
+     * (libqvac-ggml-vulkan.so, etc.). Defaults to the host
+     * `@qvac/fabric-<platform>` package's `prebuilds/` on desktop, falling
+     * back to this package's `prebuilds/` on mobile where the package tree
+     * isn't resolvable from the packed worklet.
      */
     backendsDir?: string;
 

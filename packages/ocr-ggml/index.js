@@ -29,6 +29,14 @@ const NATIVE_LANGUAGE_ERROR = /unsupported languages|only compatible with englis
 // appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
 function resolveBackendsDir() {
     try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/fabric/platform is CJS and absent from 0.10.0 fat installs.
+        const fabricPlatform = require("@qvac/fabric/platform");
+        const fabricPrebuilds = fabricPlatform.resolvePlatformPrebuilds();
+        if (fabricPrebuilds && fs.existsSync(fabricPrebuilds))
+            return fabricPrebuilds;
+    }
+    catch { }
+    try {
         const fabricPkg = require.resolve("@qvac/fabric/package");
         const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");
         if (fs.existsSync(fabricPrebuilds))

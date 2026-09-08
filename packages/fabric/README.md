@@ -13,20 +13,42 @@ consumer guide.
 
 ## What it ships
 
-- **Prebuilt `.bare` shared library** (`prebuilds/<platform>/qvac__fabric.bare`)
+`@qvac/fabric` is a meta package. `npm install` pulls headers here and the host
+runtime via an `os`/`cpu` optional dependency (`@qvac/fabric-linux-x64`,
+`@qvac/fabric-darwin-arm64`, `@qvac/fabric-android-arm64`, `@qvac/fabric-ios`,
+…). Do not use `--omit=optional`. Yarn classic (v1) fetches every optional
+dependency and is unsupported. `require('@qvac/fabric')` resolves the host
+runtime through `require('#binding')` and the package `"imports"` map (Bare
+platform/arch conditions; same approach as
+[bare-collabora](https://github.com/holepunchto/bare-collabora/blob/82567e08897e44b5ff691e02fa06ebad23a35e7b/package.json#L13-L41)).
+A local `prebuilds/` in this package always wins — `binding.js` tries
+`require.addon()` before the imports map, so source checkouts, the mobile flatten
+layout, and `linked:` installs keep working without a platform package. When neither
+is present the map resolves to `addon-unavailable.js`, which throws an error naming
+the exact package to install.
+
+- **Prebuilt `.bare` shared library**
+  (`@qvac/fabric-<platform>/addon/prebuilds/<platform>/qvac__fabric.bare`)
   — contains `libllama`, `libcommon`, `libmtmd`, and `libggml-base`. It exports the full
   `llama_* / LLAMA_* / ggml_* / gguf_* / mtmd_*` C API plus the `common_*` and
-  `json_schema_to_grammar` C++ symbols.
+  `json_schema_to_grammar` C++ symbols. The runtime is nested under `addon/`, whose
+  `package.json` is named `@qvac/fabric`: both `require.addon()` and cmake-bare's
+  `include_bare_module()` take the artifact basename from the nearest manifest, so the
+  file keeps the `qvac__fabric` name that consumers link against
+  (`DT_NEEDED qvac__fabric@0.bare`) instead of needing a renamed second copy. Resolve it
+  through `require('@qvac/fabric/platform').resolvePlatformPrebuilds()` rather than
+  hardcoding the path.
 - **C++ headers** (`prebuilds/include/`) — `ggml*.h`, `gguf.h` at the root and
   `llama.h`, `llama-cpp.h`, `common/*.h`, `mtmd/*.h` under `include/llama/`.
 - **CMake config** (`prebuilds/share/qvac-fabric/`) — `find_package(qvac-fabric)`
   exposes `qvac-fabric::headers` for compile-time includes
 - **ggml compute backends** — on **Linux and Android**, separate shared libraries
-  ship under `prebuilds/<platform>/qvac__fabric/` and are loaded at runtime via
-  `ggml_backend_load_all_from_path()`. On **macOS, Windows, and iOS** the backends
-  are linked statically inside `qvac__fabric.bare` and self-register on load.
-  On **linux-x64** this includes the ROCm/HIP backend (`libqvac-ggml-hip.so`,
-  gfx1151) alongside Vulkan; the DL loader skips it on non-AMD hosts.
+  ship under the platform package's `addon/prebuilds/<platform>/qvac__fabric/` and are
+  loaded at runtime via `ggml_backend_load_all_from_path()`. On **macOS, Windows,
+  and iOS** the backends are linked statically inside `qvac__fabric.bare` and
+  self-register on load. On **linux-x64** this includes the ROCm/HIP backend
+  (`libqvac-ggml-hip.so`, gfx1151) alongside Vulkan; the DL loader skips it on
+  non-AMD hosts.
 
 ## Architecture
 
