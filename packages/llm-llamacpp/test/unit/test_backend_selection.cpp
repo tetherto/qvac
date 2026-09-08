@@ -25,8 +25,7 @@ struct MockDevice {
   std::string regName;
   enum ggml_backend_dev_type type;
   /// Whether this device's backend registry exposes
-  /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
-  /// SYCL does as of qvac-fabric v10069, so this defaults to false.
+  /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split.
   bool hasSplitBuffers = false;
   /// `ggml_backend_dev_props::device_id` — the PCI bus id for Vulkan, unique
   /// per physical card. Empty means ggml reported null, which is the "cannot
@@ -1300,10 +1299,10 @@ TEST_F(BackendSelectionTest, SplitDevices_FallsBackToIgpuWhenNoDiscrete) {
 }
 
 TEST_F(BackendSelectionTest, SplitDevices_DedupesDualRegisteredGpu) {
-  mockBackend.addDevice(withDeviceId(
-      createGPUDevice("AMD Radeon 8060S", "vulkan0"), "0000:03:00.0"));
-  mockBackend.addDevice(withDeviceId(
-      createGPUDevice("AMD Radeon 8060S", "vulkan1"), "0000:03:00.0"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice("Adreno 830", "vulkan0"), "0000:03:00.0"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice("Adreno 830", "gpuopencl"), "0000:03:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
 }
