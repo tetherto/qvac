@@ -1,7 +1,7 @@
 'use strict'
 
 /**
- * Drift guard for the rtf_expected_devices workflow outputs (QVAC-24713).
+ * Drift guard for the rtf_expected_devices workflow outputs.
  *
  * Each speech integration workflow exposes an expected-device list built as a
  * positional format() over runner_names outputs, and the list must stay in
