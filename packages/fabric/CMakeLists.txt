@@ -57,27 +57,19 @@ find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
 find_package(ggml CONFIG REQUIRED)
 
-# --- ggml vector-index ---------------------------------------------------------
 # The qvac-fabric[vector-index] feature exports the ANN index API
-# (ggml_vec_index_*) as a library separate from the ggml core, under a target
-# name that has moved between port revisions. Resolve it here so the
-# whole-archive and Windows .def blocks below can both refer to one variable.
-# Requested unconditionally by our manifest, so a miss is a port contract
-# break, not a configuration the runtime can ship without: @qvac/embed-llamacpp
-# resolves ggml_vec_index_* from this runtime and would fail to link.
-set(QVAC_FABRIC_VECTOR_INDEX_TARGET "")
-foreach(_vec_index_candidate ggml::ggml-vector-index ggml::vector-index ggml-vector-index)
-  if(TARGET ${_vec_index_candidate})
-    set(QVAC_FABRIC_VECTOR_INDEX_TARGET ${_vec_index_candidate})
-    break()
-  endif()
-endforeach()
-if(NOT QVAC_FABRIC_VECTOR_INDEX_TARGET)
+# (ggml_vec_index_*) as a static library separate from the ggml core. We request
+# the feature unconditionally, so a missing target is a port contract break
+# rather than a supported configuration. Assert it here because the miss is
+# otherwise silent on ELF/Mach-O: the whole-archive loop below skips absent
+# targets, leaving a runtime that builds and links fine but exports none of the
+# API, and the failure only surfaces a package away when @qvac/embed-llamacpp
+# cannot resolve ggml_vec_index_*.
+if(NOT TARGET ggml::ggml-vector-index)
   message(FATAL_ERROR
-    "qvac-fabric did not export a ggml vector-index target despite the "
+    "qvac-fabric did not export ggml::ggml-vector-index despite the "
     "vector-index feature being requested in vcpkg.json")
 endif()
-message(STATUS "qvac-fabric: vector-index target '${QVAC_FABRIC_VECTOR_INDEX_TARGET}'")
 
 # --- ggml backends -----------------------------------------------------------
 # When ggml backends are built as separate shared libraries (e.g. Android, or a
@@ -152,7 +144,7 @@ endif()
 # reason: no llama or ggml code calls ggml_vec_index_*, so nothing references
 # those members and a plain link would pull in none of them at all.
 if(UNIX)
-  foreach(_ggml_static ggml::ggml ggml::ggml-base ${QVAC_FABRIC_VECTOR_INDEX_TARGET})
+  foreach(_ggml_static ggml::ggml ggml::ggml-base ggml::ggml-vector-index)
     if(TARGET ${_ggml_static})
       get_target_property(_ggml_static_type ${_ggml_static} TYPE)
       if(_ggml_static_type STREQUAL "STATIC_LIBRARY")
@@ -207,15 +199,11 @@ elseif(WIN32)
     "$<TARGET_FILE:llama::llama-common>"
     "$<TARGET_FILE:llama::mtmd>"
     "$<TARGET_FILE:ggml::ggml>"
-    "$<TARGET_FILE:ggml::ggml-base>")
-  # Scanning the vector-index archive is what exports ggml_vec_index_*: the
-  # generated EXPORTS entries double as references that pull those members in,
-  # so unlike the ELF/Mach-O builds this needs no whole-archive.
-  get_target_property(_fabric_vec_index_type ${QVAC_FABRIC_VECTOR_INDEX_TARGET} TYPE)
-  if(NOT _fabric_vec_index_type STREQUAL "OBJECT_LIBRARY"
-     AND NOT _fabric_vec_index_type STREQUAL "INTERFACE_LIBRARY")
-    list(APPEND _fabric_export_libs "$<TARGET_FILE:${QVAC_FABRIC_VECTOR_INDEX_TARGET}>")
-  endif()
+    "$<TARGET_FILE:ggml::ggml-base>"
+    # Scanning the vector-index archive is what exports ggml_vec_index_*: the
+    # generated EXPORTS entries double as references that pull those members in,
+    # so unlike the ELF/Mach-O builds this needs no whole-archive.
+    "$<TARGET_FILE:ggml::ggml-vector-index>")
   # llama-common-base (formerly build_info) carries the LLAMA_BUILD_NUMBER /
   # LLAMA_COMMIT data globals. Scan it only when it is a real archive; if the
   # vcpkg export ships it as an INTERFACE (or OBJECT) target with no TARGET_FILE,
