@@ -12,7 +12,11 @@
 - Chat-template `additional_stops` are plumbed through per request alongside the
   load-time antiprompts. No template shipped by a qvac package populates the
   field, so this is inert for those models; a user-supplied model whose
-  template does populate it will now stop on those strings.
+  template does populate it will now stop on those strings. Template stops are
+  matched **byte-for-byte**, matching llama-server; the load-time `antiprompt`
+  list keeps its case-insensitive matching. A template stop is a protocol
+  delimiter, so folding its case would let a `</ASSISTANT>` the template never
+  emits truncate ordinary content.
 - `RuntimeStats.toolDefinitionsDropped` reports renders where the template
   rejected the tool definitions, or where the prompt was rendered without a
   Jinja template, and the model therefore never saw the tools.
@@ -26,6 +30,23 @@
   reached. Cap the reasoning channel with a positive `reasoning_budget`, which
   forces the block closed at the cap, or disable it with `reasoning_budget: 0`,
   when a call has to be emitted within a tight token budget.
+  A rejected `tool_choice` is now refused before any of the request's media is
+  staged on the multimodal context, so a bad value costs only the caller's own
+  request — previously the stray bitmap made the *next* multimodal request fail
+  in `mtmd_tokenize` with more bitmaps than markers.
+- Tool definitions in a prompt are validated before rendering, and two further
+  cases now fail with `InvalidArgument` alongside the existing duplicate-name
+  check, because each one leaves a declared tool unreachable:
+  - a tool named `auto`, `none` or `required`. Those are the `tool_choice` mode
+    words and are matched before any function lookup, so such a tool would be
+    advertised in the prompt and yet never be selectable by name.
+  - two tool names that fold to the same grammar rule — `get_weather` and
+    `get-weather`, say. Every tool grammar names its rules after the tool, so
+    both names resolve to whichever rule was registered last: under `"auto"` or
+    `"required"` both tools stay advertised while only one argument schema
+    constrains decoding, and the caller receives a well-formed call against the
+    wrong schema with nothing in the response to indicate it. This was a
+    warning in earlier pre-release builds of this feature.
 
 ### Fixed
 

@@ -24,6 +24,7 @@
 #include "utils/ReasoningSnapshotPolicy.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
 #include "utils/ScopeGuard.hpp"
+#include "utils/StopStringMatch.hpp"
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 
@@ -279,31 +280,18 @@ void MtmdLlmContext::initVisionContext() {
 }
 
 bool MtmdLlmContext::checkAntiprompt() {
-  if (antipromptLower_.empty() && templateStopsLower_.empty()) {
+  if (antipromptLower_.empty() && templateStops_.empty()) {
     return false;
   }
   constexpr int kNPrev = 32;
   std::string lastOutput =
       common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
 
-  // Check if each of the reverse prompts appears anywhere in the recent
-  // output. We search the full kNPrev-token window because a single token
-  // can decode to many characters, and a short antiprompt like "\n" may
-  // appear at the start of such a token, far from the string's tail.
-  // Matching is case-insensitive so callers don't have to list every
-  // casing variant the model might emit.
-  const std::string lastOutputLower =
-      qvac_lib_inference_addon_llama::utils::toLowerAscii(lastOutput);
-  auto containsAnyStop = [&](const std::vector<std::string>& stopsLower) {
-    for (const std::string& stopLower : stopsLower) {
-      if (lastOutputLower.find(stopLower) != std::string::npos) {
-        return true;
-      }
-    }
-    return false;
-  };
-  if (containsAnyStop(antipromptLower_) ||
-      containsAnyStop(templateStopsLower_)) {
+  // See TextLlmContext::checkAntiprompt: the same shared matcher, so the
+  // duplicated stop handling in the two contexts cannot drift apart on the
+  // rule that antiprompts fold case and template stops do not.
+  if (qvac_lib_inference_addon_llama::utils::matchesAnyStopString(
+          lastOutput, antipromptLower_, templateStops_)) {
     return true;
   }
 
@@ -427,13 +415,10 @@ void MtmdLlmContext::tokenizeChat(
   // template any qvac package ships populates `additional_stops`, so these
   // lists are empty for those models — but see TextLlmContext::tokenizeChat:
   // a user-supplied model can populate them.
+  // See TextLlmContext::tokenizeChat: stored raw, with no case-folded twin.
   templateStops_ = std::move(rendered.additionalStops);
   templateStopTokens_.clear();
-  templateStopsLower_.clear();
-  templateStopsLower_.reserve(templateStops_.size());
   for (const std::string& stop : templateStops_) {
-    templateStopsLower_.push_back(
-        qvac_lib_inference_addon_llama::utils::toLowerAscii(stop));
     const auto ids = tokenize(stop);
     if (ids.size() == 1) {
       templateStopTokens_.push_back(ids[0]);

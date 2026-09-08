@@ -203,6 +203,23 @@ public:
   void forcePrefillEntryRestoreFailureForTesting(bool value) noexcept {
     forcePrefillEntryRestoreFailureForTesting_ = value;
   }
+  /// Replaces the next token this context samples *while the reasoning block
+  /// is open*, before the sampler accepts it. Two reasons for that shape:
+  /// the EOS-inside-reasoning recovery only triggers on a genuinely sampled
+  /// EOS, so `forcedTokens_` cannot reach it (that queue marks a token as not
+  /// sampled by construction); and no template this package ships force-opens
+  /// the channel, so a substitution on the first sample would land before the
+  /// block exists. Consumed by the first qualifying sample after the call.
+  void
+  forceNextSampledTokenInsideReasoningForTesting(llama_token token) noexcept {
+    forcedNextSampledTokenForTesting_ = token;
+  }
+  /// The live sampler, for tests that have to probe fabric-side sampler state
+  /// no field on this class mirrors — the reasoning-budget matcher's, in
+  /// particular. Null when a failed restore left the context without one.
+  [[nodiscard]] common_sampler* samplerForTesting() const noexcept {
+    return smpl_.get();
+  }
 
 private:
   /**
@@ -309,11 +326,12 @@ private:
   // `tokenizeChat`, unlike the load-time `params_.antiprompt`.
   std::vector<std::string> templateStops_;
   std::vector<llama_token> templateStopTokens_;
-  // Lowercased copies of the two stop lists. `checkAntiprompt` runs once per
-  // generated token, and both lists are constant for a whole generation, so
-  // the case folding is done once rather than per token.
+  // Lowercased copy of the caller-supplied antiprompts only. Those match
+  // case-insensitively and are constant for a whole generation, so the fold is
+  // done once rather than in `checkAntiprompt`'s per-token scan. There is
+  // deliberately no twin for `templateStops_`: template delimiters match
+  // byte-for-byte (see `utils::matchesAnyStopString`).
   std::vector<std::string> antipromptLower_;
-  std::vector<std::string> templateStopsLower_;
   // Renders in the current request where the template dropped the tools.
   int32_t toolDefinitionsDropped_ = 0;
   // Per-request `tool_choice` for the chat-template render.
@@ -323,6 +341,7 @@ private:
   llama_pos nPast_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
   bool forcePrefillEntryRestoreFailureForTesting_ = false;
+  llama_token forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
   // Snapshot of `nPast_` at `evalMessageWithTools` entry. Restored by
   // `onCancel` to roll back to the pre-request cursor.
   llama_pos preRequestNPast_ = 0;

@@ -509,8 +509,9 @@ TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsDuplicateToolNames) {
       qvac_errors::StatusError);
 }
 
-// An exotic name is a warning, not an error — the grammar rule it maps to is
-// an internal detail of the vendored converter.
+// An exotic name on its own is a warning, not an error: the fold still gives
+// it a rule name no other tool claims, so nothing can be shadowed. Only a
+// *collision* is rejected — see the next test.
 TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceAllowsUnusualToolNames) {
   common_chat_tool odd = makeWeatherTool();
   odd.name = "get weather/now";
@@ -519,6 +520,90 @@ TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceAllowsUnusualToolNames) {
   EXPECT_EQ(
       resolveToolChoice(std::string("get weather/now"), tools).choice,
       COMMON_CHAT_TOOL_CHOICE_REQUIRED);
+}
+
+// Two names that fold to one grammar rule are rejected before rendering or
+// sampling. `get_weather` and `get-weather` both become `get-weather` under
+// fabric's `rule_name()`, and every handler that builds a tool grammar
+// registers its rules as `"tool-" + name` — so both refs would resolve to the
+// last rule registered, constraining a call to one tool with the other's
+// argument schema while both stay advertised in the prompt.
+//
+// The argument schemas differ on purpose: with identical schemas the case
+// could pass merely because either shadowed rule happens to accept the same
+// payload, which would make the test blind to the bug it exists for.
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsFoldedRuleNameCollision) {
+  common_chat_tool underscored = makeWeatherTool();
+  underscored.name = "get_weather";
+  underscored.parameters =
+      R"({"type":"object","properties":{"city":{"type":"string"}},"required":["city"]})";
+  common_chat_tool hyphenated = makeWeatherTool();
+  hyphenated.name = "get-weather";
+  hyphenated.parameters =
+      R"({"type":"object","properties":{"lat":{"type":"number"},"lon":{"type":"number"}},"required":["lat","lon"]})";
+  const std::vector<common_chat_tool> tools{underscored, hyphenated};
+
+  // Rejected under every choice that leaves both tools advertised, which is
+  // where the shadowing bites; a named choice narrows to one tool, but the
+  // check runs before the narrowing so it is refused there too.
+  EXPECT_THROW(
+      resolveToolChoice(std::nullopt, tools), qvac_errors::StatusError);
+  EXPECT_THROW(
+      resolveToolChoice(std::string("required"), tools),
+      qvac_errors::StatusError);
+  EXPECT_THROW(
+      resolveToolChoice(std::string("get_weather"), tools),
+      qvac_errors::StatusError);
+
+  // Either tool alone is fine: the rejection is about the pair, not about
+  // underscores or hyphens in a name.
+  EXPECT_NO_THROW(resolveToolChoice(std::nullopt, {underscored}));
+  EXPECT_NO_THROW(resolveToolChoice(std::nullopt, {hyphenated}));
+}
+
+// A run of unsafe bytes folds to a single '-' in fabric, so `a__b` and `a-b`
+// collide while `a__b` and `a-_b` (which folds to `a--b`) do not. Pinned
+// because getting the run-collapse wrong in either direction turns the check
+// above into a false negative or a false positive.
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceFoldCollapsesRunsOfUnsafeBytes) {
+  auto named = [](const char* name) {
+    common_chat_tool tool = makeWeatherTool();
+    tool.name = name;
+    return tool;
+  };
+  EXPECT_THROW(
+      resolveToolChoice(std::nullopt, {named("a__b"), named("a-b")}),
+      qvac_errors::StatusError)
+      << "a run of unsafe bytes collapses to one '-'";
+  EXPECT_NO_THROW(
+      resolveToolChoice(std::nullopt, {named("a__b"), named("a-_b")}))
+      << "'a-_b' folds to 'a--b', which is a different rule";
+}
+
+// The three `tool_choice` mode words are matched before any function lookup,
+// so a tool carrying one could be advertised and yet never be selectable.
+// Rejected at declaration time to keep the invariant that every accepted
+// definition can be named.
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsReservedToolNames) {
+  for (const char* reserved : {"auto", "none", "required"}) {
+    common_chat_tool tool = makeWeatherTool();
+    tool.name = reserved;
+    const std::vector<common_chat_tool> tools{tool};
+    EXPECT_THROW(
+        resolveToolChoice(std::nullopt, tools), qvac_errors::StatusError)
+        << "tool named " << reserved << " must be rejected under auto";
+    // And the mode words keep their mode meaning rather than being read as a
+    // reference to the tool that tried to claim them.
+    EXPECT_THROW(
+        resolveToolChoice(std::string(reserved), tools),
+        qvac_errors::StatusError)
+        << "tool named " << reserved << " must be rejected when named";
+  }
+
+  // The reservation is exact: only these three strings, and only in full.
+  common_chat_tool nearMiss = makeWeatherTool();
+  nearMiss.name = "auto_select";
+  EXPECT_NO_THROW(resolveToolChoice(std::nullopt, {nearMiss}));
 }
 
 TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsUnknownOrToolless) {

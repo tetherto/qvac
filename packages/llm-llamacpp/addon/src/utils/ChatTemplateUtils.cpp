@@ -535,18 +535,46 @@ bool applyToolGrammar(
 
 namespace {
 
-/// Two tools sharing a name make `tool_choice: "<name>"` ambiguous and give
-/// the template two blocks the model cannot tell apart. Rejected outright.
-/// Two other conditions are warned about rather than rejected: a name outside
-/// `[A-Za-z0-9_.-]`, and two names that fold to the same grammar rule and so
-/// can shadow each other. Both rest on how the vendored converter derives a
-/// rule name, which this package does not mirror on purpose, so neither is
-/// allowed to refuse a configuration that works in practice.
+/// `auto`, `none` and `required` are the `tool_choice` mode words, matched by
+/// `resolveToolChoiceCore` before it ever looks a function up. A tool carrying
+/// one of them would be advertised in the prompt and yet be unselectable:
+/// `none` would silently disable tools rather than choose one, and `required`
+/// would mean "any tool". Rejected at declaration time so the invariant holds
+/// that every accepted definition can be named.
+void rejectReservedToolName(const std::string& name) {
+  if (name != "auto" && name != "none" && name != "required") {
+    return;
+  }
+  throw qvac_errors::StatusError(
+      errors::ADDON_ID,
+      qvac_errors::general_error::toString(
+          qvac_errors::general_error::InvalidArgument),
+      string_format(
+          "prompt declares a tool named %s, which is reserved as a "
+          "generationParams.tool_choice mode and so could never be selected "
+          "by name",
+          forLogMessage(name).c_str()));
+}
+
+/// Three conditions are rejected outright, because each one makes a tool the
+/// caller declared unreachable or ambiguous:
+///  - two tools sharing a name: `tool_choice: "<name>"` cannot say which, and
+///    the template gets two blocks the model cannot tell apart;
+///  - a name equal to one of the `tool_choice` mode words: the mode branches in
+///    `resolveToolChoiceCore` run before the function lookup, so such a tool
+///    can never be selected by name;
+///  - two names that fold to the same grammar rule, which lets one shadow the
+///    other while both stay advertised in the prompt.
+///
+/// One condition remains a warning: a name outside `[A-Za-z0-9_.-]` that does
+/// *not* collide with another tool. Exotic characters alone are harmless — the
+/// fold below turns them into a rule name that is still unique — so the
+/// warning exists only to explain the collision if a second such name arrives.
 void validateToolNames(const std::vector<common_chat_tool>& tools) {
   std::set<std::string> seen;
-  // Names folded the way a rule-name sanitiser would, to catch two tools that
-  // are distinct here but collapse to one grammar rule. Maps each folded form
-  // back to the first raw name that produced it, for the warning text.
+  // Names folded the way fabric's rule-name sanitiser folds them, to catch two
+  // tools that are distinct here but collapse to one grammar rule. Maps each
+  // folded form back to the first raw name that produced it, for the error.
   std::map<std::string, std::string> folded;
   for (const common_chat_tool& tool : tools) {
     if (!seen.insert(tool.name).second) {
@@ -558,6 +586,7 @@ void validateToolNames(const std::vector<common_chat_tool>& tools) {
               "prompt declares two tools named %s",
               forLogMessage(tool.name).c_str()));
     }
+    rejectReservedToolName(tool.name);
     // Mirrors fabric's `rule_name()` (common/peg-parser.cpp), which is
     // `std::regex_replace(name, "[^a-zA-Z0-9-]+", "-")`: every byte outside
     // `[A-Za-z0-9-]` folds to '-', and a *run* of them collapses to a single
@@ -596,21 +625,33 @@ void validateToolNames(const std::vector<common_chat_tool>& tools) {
               "tool's\n",
               forLogMessage(tool.name).c_str()));
     }
-    // Deliberately a warning, not a rejection. The fold is a conservative
-    // approximation of the vendored converter's own rule-name sanitiser, which
-    // this package does not mirror on purpose. A heuristic that guesses an
-    // internal must not be able to refuse a tool set that actually works, so a
-    // false positive costs one log line rather than a failed request.
+    // A rejection, not a warning, because the fold above is byte-exact rather
+    // than a guess: fabric's `rule_name()` (common/peg-parser.cpp:1036) is
+    // `std::regex_replace(name, "[^a-zA-Z0-9-]+", "-")`, and the loop above
+    // reproduces it character for character. Every fabric handler that builds
+    // a tool grammar names its rules `"tool-" + name` (chat.cpp:1071, 1227,
+    // 1402, 1557, 1661, 1801) and registers them through
+    // `common_peg_parser_builder::rule`, which stores `rules_[clean_name]` and
+    // returns a `ref` resolved by name — so two folded-identical names leave
+    // both refs pointing at the last rule registered. Under `auto` or
+    // `required` both tools stay advertised in the prompt while only one
+    // argument schema constrains decoding, and the caller sees a well-formed
+    // call against the wrong schema with nothing in the response to say so. A
+    // log line the API caller never reads is not a proportionate answer to
+    // that.
     const auto collision = folded.emplace(foldedName, tool.name);
     if (!collision.second) {
-      QLOG_IF(
-          Priority::WARNING,
+      throw qvac_errors::StatusError(
+          errors::ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
           string_format(
-              "[ChatTemplateUtils] tool names %s and %s may fold to the same "
-              "grammar rule; one of them can be shadowed while still being "
-              "advertised in the prompt\n",
+              "prompt declares tools %s and %s, whose names fold to the same "
+              "grammar rule (%s); one would shadow the other while both stay "
+              "advertised in the prompt",
               forLogMessage(collision.first->second).c_str(),
-              forLogMessage(tool.name).c_str()));
+              forLogMessage(tool.name).c_str(),
+              forLogMessage(foldedName).c_str()));
     }
   }
 }

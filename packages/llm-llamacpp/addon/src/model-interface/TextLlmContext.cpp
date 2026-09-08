@@ -24,6 +24,7 @@
 #include "utils/ReasoningUtils.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
 #include "utils/ScopeGuard.hpp"
+#include "utils/StopStringMatch.hpp"
 
 using namespace qvac_lib_inference_addon_llama;
 using namespace qvac_lib_inference_addon_llama::errors;
@@ -271,31 +272,19 @@ void TextLlmContext::initializeOwnedThreadpools() {
 }
 
 bool TextLlmContext::checkAntiprompt() {
-  if (antipromptLower_.empty() && templateStopsLower_.empty()) {
+  if (antipromptLower_.empty() && templateStops_.empty()) {
     return false;
   }
   constexpr int kNPrev = 32;
   std::string lastOutput =
       common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
 
-  // Check if each of the reverse prompts appears anywhere in the recent
-  // output. We search the full kNPrev-token window because a single token
-  // can decode to many characters, and a short antiprompt like "\n" may
-  // appear at the start of such a token, far from the string's tail.
-  // Matching is case-insensitive so callers don't have to list every
-  // casing variant the model might emit.
-  const std::string lastOutputLower =
-      qvac_lib_inference_addon_llama::utils::toLowerAscii(lastOutput);
-  auto containsAnyStop = [&](const std::vector<std::string>& stopsLower) {
-    for (const std::string& stopLower : stopsLower) {
-      if (lastOutputLower.find(stopLower) != std::string::npos) {
-        return true;
-      }
-    }
-    return false;
-  };
-  if (containsAnyStop(antipromptLower_) ||
-      containsAnyStop(templateStopsLower_)) {
+  // Caller antiprompts fold case; template stops are compared raw. See
+  // `matchesAnyStopString` for why the two must not share one rule, and
+  // `MtmdLlmContext::checkAntiprompt`, which calls the same function so the
+  // two contexts cannot drift.
+  if (qvac_lib_inference_addon_llama::utils::matchesAnyStopString(
+          lastOutput, antipromptLower_, templateStops_)) {
     return true;
   }
 
@@ -434,13 +423,11 @@ void TextLlmContext::tokenizeChat(
   // fabric's PEG auto-parser pushes `"</assistant>"` for laguna_glm_thinking
   // templates — so a user-supplied model can legitimately land stops here and
   // generation will honour them.
+  // Stored as the template produced them, with no case-folded twin: these are
+  // protocol delimiters and `checkAntiprompt` compares them byte-for-byte.
   templateStops_ = std::move(rendered.additionalStops);
   templateStopTokens_.clear();
-  templateStopsLower_.clear();
-  templateStopsLower_.reserve(templateStops_.size());
   for (const std::string& stop : templateStops_) {
-    templateStopsLower_.push_back(
-        qvac_lib_inference_addon_llama::utils::toLowerAscii(stop));
     const auto ids = tokenize(stop);
     if (ids.size() == 1) {
       templateStopTokens_.push_back(ids[0]);
@@ -964,6 +951,27 @@ SequenceStepResult TextLlmContext::onLogitsReady(
       }
     }
     tokenId = common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
+    // Test-only substitution, never armed in production: the only writer is
+    // `forceNextSampledTokenInsideReasoningForTesting`, which exists so a
+    // test can drive the EOS-inside-reasoning recovery deterministically
+    // instead of waiting for a small model to emit a premature EOS.
+    //
+    // Gated on `inside_reasoning` rather than firing on the first sample, and
+    // that is the whole point of the arming rule: no template this package
+    // ships force-opens the reasoning channel (Qwen3 emits `<think>` itself as
+    // its first generated token), so an unconditional substitution would land
+    // *before* the block opens and the recovery would never run.
+    // `inside_reasoning` still describes the state before this token, which is
+    // exactly the "EOS sampled while the block is open" case.
+    //
+    // Placed BEFORE the accept so the sampler's history records what a genuine
+    // sample of this token would have recorded, which is what makes the branch
+    // below a faithful rehearsal rather than an approximation.
+    if (forcedNextSampledTokenForTesting_ != LLAMA_TOKEN_NULL &&
+        reasoningState_.inside_reasoning) {
+      tokenId = forcedNextSampledTokenForTesting_;
+      forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
+    }
     common_sampler_accept(smpl_.get(), tokenId, true);
   } else {
     tokenId = forcedTokens_.front();

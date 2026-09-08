@@ -925,22 +925,35 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
   // Load all prompt media (hoisted byte buffers and inline paths) in
   // prompt-marker order so each bitmap binds to its own MTMD marker.
-  auto loadPlannedMedia = [this, &prompt](const ParsedPromptPayload& parsed) {
-    if (state_->isTextLlm_ && !parsed.mediaPlan.empty()) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(MediaNotSupported),
-          "Media not supported by text-only models");
-    }
-    validateByteBufferCount(parsed.mediaPlan, prompt.media.size());
-    for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
-      if (step.source == MediaSource::ByteBuffer) {
-        loadMedia(prompt.media[step.byteIndex]);
-      } else {
-        state_->llmContext_->loadMedia(step.path);
-      }
-    }
-  };
+  auto validateAndLoadPlannedMedia =
+      [this, &prompt](const ParsedPromptPayload& parsed) {
+        // `tool_choice` is checked against the freshly parsed tool list here,
+        // before the first bitmap reaches the long-lived multimodal context.
+        // `bitmaps_` is drained only by `tokenizeChat`, so a choice rejected
+        // after the load would leave this request's media behind — and the next
+        // multimodal request would then hand `mtmd_tokenize` more bitmaps than
+        // its text has markers, which fabric refuses outright in
+        // `mtmd_tokenizer`'s constructor (tools/mtmd/mtmd.cpp). One caller's
+        // bad argument would cost the *following* request its turn. Both call
+        // sites below have the parsed tools in hand before they load anything,
+        // so the ordering costs nothing.
+        qvac_lib_inference_addon_llama::utils::validateToolChoice(
+            prompt.generationParams.tool_choice, parsed.tools);
+        if (state_->isTextLlm_ && !parsed.mediaPlan.empty()) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              toString(MediaNotSupported),
+              "Media not supported by text-only models");
+        }
+        validateByteBufferCount(parsed.mediaPlan, prompt.media.size());
+        for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
+          if (step.source == MediaSource::ByteBuffer) {
+            loadMedia(prompt.media[step.byteIndex]);
+          } else {
+            state_->llmContext_->loadMedia(step.path);
+          }
+        }
+      };
   if (state_->cacheManager_.has_value()) {
     ParsedPromptPayload parsedPrompt;
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
@@ -950,7 +963,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
           return this->formatPrompt(inputPrompt);
         },
         prompt.cacheKey);
-    loadPlannedMedia(parsedPrompt);
+    validateAndLoadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.shouldResetAfterInference =
@@ -958,7 +971,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
     ParsedPromptPayload parsedPrompt = formatPrompt(prompt.input);
-    loadPlannedMedia(parsedPrompt);
+    validateAndLoadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.shouldResetAfterInference = true;
@@ -1011,16 +1024,17 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     return out;
   }
 
-  // Validate `tool_choice` here, outside the try below, whose catch-all runs
-  // `resetAndInvalidateActiveCache()`. Throwing before it means a bad value
-  // costs the caller an error rather than the active KV cache, matching how an
-  // invalid `json_schema` already behaves via applyGenerationParams. Note the
-  // cache *session* is already resolved by this point —
-  // `resolveChatAndTools` calls `handleCache` itself — so what this ordering
-  // saves is the invalidation, not the session setup.
-  qvac_lib_inference_addon_llama::utils::validateToolChoice(
-      prompt.generationParams.tool_choice, resolved.tools);
-
+  // `tool_choice` was validated inside `resolveChatAndTools` above, before it
+  // loaded any media — see the comment there. Both properties that ordering
+  // buys are worth naming here, where the failure would be felt: the throw is
+  // outside the try below, whose catch-all runs
+  // `resetAndInvalidateActiveCache()`, so a bad value costs the caller an
+  // error rather than the active KV cache (matching how an invalid
+  // `json_schema` already behaves via applyGenerationParams); and no bitmap
+  // has been appended yet, so it cannot cost the *next* request its turn. The
+  // cache *session* is a third thing this ordering does NOT save —
+  // `resolveChatAndTools` calls `handleCache` itself, so the session is
+  // already resolved by the time the tool list exists to validate against.
   auto restore =
       state_->llmContext_->applyGenerationParams(prompt.generationParams);
   // Render-time overrides ride alongside the sampler overrides and are
