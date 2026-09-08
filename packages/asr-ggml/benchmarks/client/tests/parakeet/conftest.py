@@ -30,6 +30,6 @@ def sample_config():
             "caption_enabled": False,
             "timestamps_enabled": True,
             "streaming": False,
-            "streaming_chunk_size": 64000
+            "streaming_chunk_ms": 320
         }
     }
