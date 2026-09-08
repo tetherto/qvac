@@ -470,13 +470,10 @@ nmt_backend_init(const nmt_context_params& params) {
   // Initialise the remaining ACCEL backends. Only ACCEL-typed devices enter
   // this walk; GPU-typed families (including HIP/ROCm) never do.
   //
-  // On Android (and other mobile SoCs with a single physical GPU), multiple
-  // GGML backends (Vulkan, OpenCL) may register as separate ACCEL devices
-  // for the same hardware (historically observed; on the pinned fabric
-  // Vulkan is GPU/IGPU-typed, so today this walk only sees CPU-companion
-  // accelerators).  Initialising all of them adds synchronisation
-  // overhead in ggml_backend_sched without any parallel-compute benefit
-  // because the scheduler executes splits sequentially.
+  // Some builds may expose the same physical accelerator through multiple
+  // ACCEL entries. Initialising duplicates adds synchronisation overhead in
+  // ggml_backend_sched without any parallel-compute benefit because the
+  // scheduler executes splits sequentially.
   //
   // Filter strategy:
   //   1. Skip the device pointer already selected as primary (same as before).
