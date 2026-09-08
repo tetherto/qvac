@@ -34,24 +34,9 @@ function assertAbsolute(key, value) {
         throw new TypeError(`files.${key} must be an absolute path (got: ${value})`);
     }
 }
-function validateVideoFrames(frameCount, isLtx = false) {
-    const factor = isLtx ? 8 : 4;
-    const minimum = factor + 1;
-    if (!Number.isInteger(frameCount)) {
-        throw new Error(`video_frames must be an integer of the form (${factor}*k + 1) with k >= 1. Got: ${frameCount}`);
-    }
-    if (isLtx) {
-        if (frameCount < minimum || (frameCount - 1) % 8 !== 0 || frameCount > 257) {
-            throw new Error('LTX-2 video_frames must be an integer of the form (8*k + 1) in ' +
-                `[9, 257] (9, 17, 25, 33, ..., 257). Got: ${frameCount}`);
-        }
-        return;
-    }
-    if (frameCount < 5 || (frameCount - 1) % 4 !== 0) {
-        throw new Error('video_frames must be an integer >= 5 of the form (4*k + 1). ' +
-            'Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, ' +
-            '57, 61, 65, 69, 73, 77, 81 (Wan 1.3B native training length). ' +
-            `Got: ${frameCount}`);
+function validateVideoFrames(frameCount) {
+    if (!Number.isInteger(frameCount) || frameCount <= 0) {
+        throw new Error(`video_frames must be a positive integer. Got: ${frameCount}`);
     }
 }
 function coerceToUint8(name, value) {
@@ -260,7 +245,7 @@ class VideoStableDiffusion {
                 `Got: ${width}x${height}. Use ${suggestedWidth}x${suggestedHeight} instead.`);
         }
         if (params.video_frames != null) {
-            validateVideoFrames(params.video_frames, isLtx);
+            validateVideoFrames(params.video_frames);
         }
         if (params.fps != null &&
             (!Number.isFinite(params.fps) || params.fps <= 0 || params.fps > 120)) {

@@ -139,6 +139,16 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
   EXPECT_FALSE(SdCtxConfig{}.vaeDecodeOnly);
   EXPECT_TRUE(applyOne("mmap", "true").mmap);
   EXPECT_TRUE(applyOne("offload_to_cpu", "1").offloadToCpu);
+  EXPECT_EQ(
+      applyOne("backend", "diffusion=vulkan0").backendSpec,
+      "diffusion=vulkan0");
+  EXPECT_EQ(
+      applyOne("params_backend", "diffusion=cpu").paramsBackendSpec,
+      "diffusion=cpu");
+  EXPECT_EQ(applyOne("max_vram", "vulkan0=8").maxVramSpec, "vulkan0=8");
+  EXPECT_TRUE(applyOne("stream_layers", "true").streamLayers);
+  EXPECT_FALSE(SdCtxConfig{}.streamLayers);
+  EXPECT_THROW(applyOne("stream_layers", "maybe"), StatusError);
   EXPECT_FALSE(applyOne("clip_on_cpu", "false").keepClipOnCpu);
   EXPECT_TRUE(applyOne("vae_on_cpu", "true").keepVaeOnCpu);
   EXPECT_TRUE(applyOne("vae_auto_cpu_fallback", "true").vaeAutoCpuFallback);
