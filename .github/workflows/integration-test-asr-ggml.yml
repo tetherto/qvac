@@ -467,60 +467,61 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
-      # Preflight-only bisection probes for the silent win32 CUDA crash in the
-      # whisper GPU test: run the same suite under brittle-bare directly (so
-      # the native exit code is not masked by npm) with one variable flipped
-      # per probe. The unmodified control step below still gates the job.
+      # Preflight-only probes for the win32 GPU crash in the whisper test
+      # (round 1 proved a native 0xC0000094 during the first whisper GPU
+      # transcription, independent of CUDA graphs and fusion). Probe D asks
+      # whether parakeet's GPU path survives on the same hybrid build; probe
+      # E reruns the whisper test under ProcDump and uploads the crash dump
+      # so the faulting module and offset are visible. The unmodified
+      # control step below still gates the job.
       - name: Probe setup - build TS once
         if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: npm run build:ts
 
-      - name: Probe A - CUDA graphs disabled
+      - name: Probe D - parakeet GPU smoke
         if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
         continue-on-error: true
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: |
-          npx brittle-bare test/integration/gpu.test.js
-          Write-Host "probe A exit code: $LASTEXITCODE"
+          bare test/integration/parakeet-gpu-smoke.test.js
+          Write-Host "probe D exit code: $LASTEXITCODE"
           exit $LASTEXITCODE
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
           INTEGRATION_TEST_TIMEOUT: '1800'
-          GGML_CUDA_DISABLE_GRAPHS: '1'
 
-      - name: Probe B - CUDA fusion disabled
+      - name: Probe E - whisper GPU test under ProcDump
         if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
         continue-on-error: true
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: |
-          npx brittle-bare test/integration/gpu.test.js
-          Write-Host "probe B exit code: $LASTEXITCODE"
-          exit $LASTEXITCODE
+          $tools = "$env:RUNNER_TEMP\procdump"
+          $dumps = "$env:RUNNER_TEMP\crash-dumps"
+          New-Item -ItemType Directory -Force -Path $tools, $dumps | Out-Null
+          Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Procdump.zip" -OutFile "$tools\Procdump.zip"
+          Expand-Archive -Force "$tools\Procdump.zip" $tools
+          $bare = (Get-Command bare).Source
+          & "$tools\procdump64.exe" -accepteula -ma -e -x $dumps $bare test/integration/gpu.test.js
+          Write-Host "probe E procdump exit code: $LASTEXITCODE"
+          Get-ChildItem $dumps
+          exit 0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
           INTEGRATION_TEST_TIMEOUT: '1800'
-          GGML_CUDA_DISABLE_FUSION: '1'
 
-      - name: Probe C - CUDA hidden, Vulkan path
-        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
-        continue-on-error: true
-        working-directory: ${{ inputs.workdir }}
-        shell: powershell
-        run: |
-          npx brittle-bare test/integration/gpu.test.js
-          Write-Host "probe C exit code: $LASTEXITCODE"
-          exit $LASTEXITCODE
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
-          INTEGRATION_TEST_TIMEOUT: '1800'
-          CUDA_VISIBLE_DEVICES: '-1'
+      - name: Upload crash dumps
+        if: ${{ always() && matrix.platform == 'win32' && inputs.run_integration_tests != false }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: win32-whisper-gpu-crash-dumps
+          path: ${{ runner.temp }}/crash-dumps
+          if-no-files-found: ignore
 
       - name: Run integration GPU test (Windows)
         if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
