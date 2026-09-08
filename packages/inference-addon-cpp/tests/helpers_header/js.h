@@ -357,7 +357,7 @@ inline int js_get_element(
 }
 
 inline int js_set_array_elements(
-    js_env_t* env, js_value_t* object, const js_value_t** values, size_t count,
+    js_env_t* env, js_value_t* object, js_value_t* const values[], size_t count,
     size_t offset) {
   return -1;
 }
@@ -434,7 +434,7 @@ inline int js_get_global(js_env_t* env, js_value_t** result) { return -1; }
 
 inline int js_call_function(
     js_env_t* env, js_value_t* recv, js_value_t* func, size_t argc,
-    js_value_t* argv[], js_value_t** result) {
+    js_value_t* const argv[], js_value_t** result) {
   return -1;
 }
 

@@ -102,7 +102,7 @@
           "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "none",
-          "useVTag": true,
+          "repoName": "translation-nmtcpp",
           "testGateMode": "post-publish-integration"
         }
       }
