@@ -505,7 +505,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path $tools, $dumps | Out-Null
           Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Procdump.zip" -OutFile "$tools\Procdump.zip"
           Expand-Archive -Force "$tools\Procdump.zip" $tools
-          $bare = (Get-Command bare).Source
+          $shimDir = Split-Path (Get-Command bare).Source
+          $bare = (Get-ChildItem -Recurse -Filter bare.exe -Path (Join-Path $shimDir 'node_modules\bare') | Select-Object -First 1).FullName
+          if (-not $bare) {
+            $bare = (Get-ChildItem -Recurse -Filter bare.exe -Path (Join-Path $shimDir 'node_modules') | Select-Object -First 1).FullName
+          }
+          Write-Host "bare.exe: $bare"
           & "$tools\procdump64.exe" -accepteula -ma -e -x $dumps $bare test/integration/gpu.test.js
           Write-Host "probe E procdump exit code: $LASTEXITCODE"
           Get-ChildItem $dumps
