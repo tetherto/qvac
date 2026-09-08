@@ -951,8 +951,9 @@ NormalizedLoad normalizeLoadForFit(
       if (mmprojUseGpuOverride.value_or(false)) {
         QLOG_IF(
             Priority::WARNING,
-            "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available, "
-            "running the multimodal projector on CPU\n");
+            "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available or "
+            "no eligible split device, running the multimodal projector on "
+            "CPU\n");
       }
       result.runtimeBackendDevice = 0;
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
@@ -961,7 +962,8 @@ NormalizedLoad normalizeLoadForFit(
         QLOG_IF(
             Priority::WARNING,
             "[LlamaModel] split-mode, tensor-split and main-gpu ignored: "
-            "no GPU backend available, falling back to CPU\n");
+            "no GPU backend available or no eligible split device, falling "
+            "back to CPU\n");
         splitMode = LLAMA_SPLIT_MODE_NONE;
         configFilemap.erase("tensor-split");
       }

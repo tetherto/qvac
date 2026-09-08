@@ -25,7 +25,10 @@ struct MockDevice {
   std::string regName;
   enum ggml_backend_dev_type type;
   /// Whether this device's backend registry exposes
-  /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split.
+  /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
+  /// SYCL does as of qvac-fabric v10069, so this defaults to false. SYCL is
+  /// now outside this addon's allowlist, so fixtures that set it model a
+  /// hypothetical eligible backend.
   bool hasSplitBuffers = false;
   /// `ggml_backend_dev_props::device_id` — the PCI bus id for Vulkan, unique
   /// per physical card. Empty means ggml reported null, which is the "cannot
@@ -1250,12 +1253,14 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenPreferredCpu) {
 
 // ---- getSplitDeviceNames ----
 //
-// QVAC-24253: the explicit device list for LLAMA_SPLIT_MODE_TENSOR.
+// QVAC-24253: the explicit device list pinned to --device in every split mode
+// (LLAMA_SPLIT_MODE_LAYER, _ROW and _TENSOR).
 //
 // qvac-fabric's tensor branch selects devices with no type filter and no
 // dedupe, so without this list it recruits integrated GPUs alongside discrete
 // ones and shards a physical GPU registered by two backends twice. These pin
-// the filtering the addon does on fabric's behalf.
+// the filtering the addon does on fabric's behalf; the list also enforces the
+// addon's backend allowlist (isEligibleGpuDevice) in every split mode.
 
 TEST_F(BackendSelectionTest, SplitDevices_NoDevices_ReturnsEmpty) {
   BackendInterface bckI = mockBackend.toBackendInterface();

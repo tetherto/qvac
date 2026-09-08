@@ -326,7 +326,11 @@ class LoadFitNormalizationTest : public ::testing::Test {
 protected:
   test_common::MockModelMetaData metadata_{false, "llama"};
 
-  // "none" keeps split parsing host-independent; pass {} to test fallback.
+  // splitDevices defaults to {"none"} on purpose: a non-empty list is
+  // forwarded as `--device a,b`, and qvac-fabric's parser rejects names that
+  // do not exist on the host running the test, so a real device name cannot be
+  // the default. "none" keeps split parsing host-independent; pass {} to test
+  // the CPU fallback.
   static lfn::NormalizationDependencies backend(
       lfn::SelectedBackend selected, bool supportsRowSplit = false,
       std::vector<std::string> splitDevices = {"none"}) {
@@ -469,9 +473,11 @@ TEST_F(LoadFitNormalizationTest, TensorSplitParsesAndDisablesFit) {
 
 TEST_F(LoadFitNormalizationTest, TensorSplitLeavesFitEnabledForOtherModes) {
   // Only the split modes are exercised with a GPU name here. 'none' is covered
-  // separately below with the CPU backend: it is the one mode that forwards
-  // `--device <name>` to llama.cpp's parser, which rejects a device that does
-  // not exist on the host running the test.
+  // separately below with the CPU backend. Every mode forwards `--device`:
+  // NONE forwards the single chosen name, and the split modes forward the
+  // eligible list. The fixture default {"none"} keeps the split modes
+  // host-independent, since llama.cpp's parser rejects a device that does not
+  // exist on the host running the test.
   for (const char* mode : {"layer", "row"}) {
     auto config = baseConfig();
     config["split-mode"] = mode;
@@ -519,6 +525,11 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFitOverrideBeatsExplicitFitOn) {
   }
 }
 
+// Asserting the list reaches fabric's parser: a name that cannot exist makes
+// the arg loop throw naming --device, which only happens if it was forwarded.
+// parse_device_list splits on ',' and reports only the first element it cannot
+// resolve, so seeing element 0 named back proves the list was forwarded and
+// split.
 TEST_F(LoadFitNormalizationTest, SplitModesForwardEligibleDeviceList) {
   for (const char* mode : {"layer", "row", "tensor"}) {
     auto config = baseConfig();

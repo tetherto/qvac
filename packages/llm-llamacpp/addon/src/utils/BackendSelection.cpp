@@ -520,10 +520,10 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
     if (!isDiscrete && devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
       continue;
     }
-    // Skip RPC devices, matching both qvac-fabric's filtered branch and
-    // emplaceIfValidDevice above. ggml types them as GPU, so without this an
-    // iGPU + RPC host would see a non-empty `discrete` bucket and drop its own
-    // integrated GPU from the list.
+    // Defensive: isEligibleGpuDevice already rejects RPC registries; kept to
+    // mirror fabric's filtered branch. ggml types RPC as GPU, so without a
+    // guard an iGPU + RPC host would see a non-empty `discrete` bucket and drop
+    // its own integrated GPU from the list.
     const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
     if (reg != nullptr &&
         bckI.ggml_backend_reg_name(reg) == std::string("RPC")) {
@@ -575,7 +575,13 @@ std::vector<std::string> backend_selection::getSplitDeviceNames() {
 
 bool backend_selection::gpuBackendSupportsRowSplit(
     const BackendInterface& bckI) {
-  // Row split requires split buffers on every eligible device.
+  // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
+  // make_gpu_buft_list() for EVERY device it was given and throws "device %s
+  // does not support split buffers" on the first one whose backend registry
+  // lacks `ggml_backend_split_buffer_type`. Split mode now pins `--device` to
+  // the eligible list, so that set is every eligible GPU device — a single
+  // unsupported backend among them is enough to fail the load. So require
+  // all of them, not any one, and treat "no GPU devices at all" as unsupported.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
