@@ -1,6 +1,8 @@
 # .agent/ — Agent-First Development Framework
 
-Canonical source for agent config used by both **Claude Code** and **Cursor**. Run `/setup` after cloning to install everything.
+Canonical source for OCR-specific agent config used by both **Claude Code** and
+**Cursor**. Repository-wide skills live in `.agents/skills`. Run `/setup` after
+cloning to install the generated compatibility files.
 
 ## Quick Start
 
@@ -42,11 +44,15 @@ The `<task>` argument accepts an Asana task ID or full URL:
     ├── ci-validate/
     └── commit-trace/
 
-.claude/skills/setup/       # Bootstrap skill (tracked in git)
-.cursor/skills/setup/       # Bootstrap skill (tracked in git)
+.agents/skills/setup/       # Canonical bootstrap skill
+.claude/skills/setup/       # Tracked Claude bootstrap copy
 ```
 
-After running `/setup`, agents, knowledge, and skills are copied into `.claude/` (or `.cursor/`). Generated files are gitignored — edit sources in `.agent/` instead.
+After running `/setup`, repository skills are exposed in `.claude/` through local
+symlinks, or copied on Windows. OCR-specific agents, knowledge, and skills are
+copied into `.claude/` or `.cursor/`. Generated entries are gitignored. Edit
+repository skills in `.agents/skills` and OCR-specific sources in this `.agent`
+directory.
 
 ## Tool Compatibility
 
@@ -68,8 +74,9 @@ Not all features work identically in both tools:
 
 ## How Setup Works
 
-| Source in `.agent/` | Claude Code destination | Cursor destination |
+| Source | Claude Code destination | Cursor destination |
 |---|---|---|
+| Repository `.agents/skills/*` | `.claude/skills/` compatibility view | Native discovery; no copy |
 | `conduct.md` | `.claude/agent-conduct.md` | `.cursor/rules/agent-conduct.mdc` (always-applied rule) |
 | `knowledge/*.md` | `.claude/knowledge/` | `.cursor/rules/knowledge/*.mdc` (requestable rules) |
 | `agents/*.md` | `.claude/agents/` (named agents) | `.cursor/rules/agents/*.mdc` (Task sub-agent prompts) |
@@ -79,7 +86,8 @@ Not all features work identically in both tools:
 
 Agent files copied to Cursor have Claude-specific frontmatter (`model`, `color`, `memory`) stripped and `.claude/` path references replaced with Cursor equivalents.
 
-Existing skills in `.cursor/skills/` (`qv-addon-changelog`, `qv-sdk-changelog`, etc.) are not managed by setup — they remain as-is.
+Repository skills such as `qv-addon-changelog` and `qv-sdk-changelog` are managed
+in `.agents/skills`; setup mirrors them only for Claude Code.
 
 ## Full Pipeline (`/orchestrate`)
 

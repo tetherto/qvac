@@ -750,5 +750,5 @@ addons at once.
   test workflow; on Linux does one configure then builds and runs each target in
   turn, unit tests before fuzz, while darwin/win32 keep the `test:cpp` unit-only
   path.
-- `.cursor/rules/devops/github-actions.mdc` — CI trust policy for fork PRs
+- `.github/AGENTS.md` — CI trust policy for fork PRs
   (SHA-bound authorization) that any self-hosted fuzz job must follow.

@@ -5,11 +5,15 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
+      - ".agents/skills/**"
+      - ".claude/skills/setup/**"
       - ".github/workflows/on-pr-shared-ci-infra.yml"
       - ".github/actions/cache-models/**"
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
+      - "packages/ocr-ggml/.agent/setup.sh"
+      - "packages/ocr-ggml/.agent/skills/**"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
       # The rtf-expected-devices guard test asserts these workflows' matrix
@@ -79,6 +83,8 @@ jobs:
           node-version: lts/*
       - name: Run CI script unit tests
         run: node --test scripts/ci/__tests__/*.test.cjs
+      - name: Validate shared agent configuration
+        run: node scripts/ci/validate-agent-config.mjs
 
   model-availability:
     name: Model availability (${{ matrix.package }})
