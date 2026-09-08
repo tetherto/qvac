@@ -1,5 +1,114 @@
 # Changelog
 
+## [0.3.0]
+
+Release Date: 2026-09-08
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/openclaw-plugin/v/0.3.0
+
+The launcher moves onto the CLI 0.13 launch interface. `@qvac/cli` 0.13 mounts the serve surfaces as extensions and deprecates the `qvac serve openai` subcommand, so the plugin now starts `qvac serve --openai --no-default` and its dependency floors move with it.
+
+## Breaking Changes
+
+### Requires the @qvac/cli 0.13 line
+
+The bundled `local-service.js` launcher builds the serve command itself, and that command changes:
+
+**Before:**
+
+```bash
+qvac serve openai --config <path> --host 127.0.0.1 --port 11434 --model <id> --api-key-file <path>
+```
+
+**After:**
+
+```bash
+qvac serve --openai --no-default --config <path> --host 127.0.0.1 --port 11434 --model <id> --api-key-file <path>
+```
+
+Installs that pin `@qvac/cli` to `0.12.x` need to move to `0.13.x` with the plugin, since a 0.x caret range does not cross a minor.
+
+`--no-default` is part of the pair rather than an extra flag. Bare `--openai` would also mount the QVAC surface on the port, while the deprecated subcommand exposed `/v1/*` alone — keeping both preserves the previous behaviour and keeps the extra surface off a port the plugin authenticates and owns.
+
+### @qvac/ai-sdk-provider moves to 0.7
+
+Provider 0.7 narrows its own optional `@qvac/cli` peer to `^0.13.0`, so the two floors have to move together: a plugin still asking for `@qvac/cli@^0.12.0` next to provider 0.7 would leave the install unresolvable. The plugin uses the provider for the shared model catalog only — it drives its own launcher rather than the provider's managed serve — so nothing else about that dependency changes here.
+
+Provider 0.7 also carries the streamed file-upload fixes released in 0.6.2.
+
+## Onboarding No Longer Generates an Unusable Key
+
+The bearer key is generated as 32 random bytes encoded base64url. That alphabet includes `-`, and the plugin refuses a key beginning with `-` so a stored key can never be mistaken for a command-line flag. The generator did not exclude that case, so about 1.5% of freshly generated keys were rejected the moment the launcher read them back:
+
+```
+stored QVAC API key must be 32-128 base64url characters and cannot start with "-"
+```
+
+The result was a provider entry that onboarded cleanly and then refused to start. Key generation now draws again whenever a candidate starts with `-`. The same generator backs the recovery path for a stored key that no longer parses, so that path could previously replace an unusable key with another unusable one; it is fixed by the same change.
+
+## Upgrading
+
+No re-onboarding is needed. The argument list onboarding persists in `openclaw.json` holds only the plugin's own options — `--api-key-file`, `--model`, `--host`, `--port` and the rest — and the serve command is assembled at start time, so an existing provider entry keeps working. Configuration, the key file and your model choice are all untouched.
+
+The `openclaw` host peer is unchanged at `>=2026.6.0`.
+
+## Requirements
+
+- `@qvac/ai-sdk-provider@^0.7.0` for the shared model catalog
+- `@qvac/cli@^0.13.0` for `qvac serve --openai --no-default`
+- `openclaw >=2026.6.0` as the optional host peer
+
+## [0.2.2]
+
+Release Date: 2026-09-08
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/openclaw-plugin/v/0.2.2
+
+OpenClaw moved its `latest` release to 2026.8.1, which changed three of the commands a QVAC install depends on and removed two type entry points the plugin imported. This patch brings the documented commands, the launcher's own error messages, and the plugin's type surface back in line with it. Nothing in your configuration changes, and no dependency floors move.
+
+## Setup Commands Changed in OpenClaw 2026.8.1
+
+Installing a plugin now asks for trust and for capability consent, and plugin-contributed auth choices are namespaced behind a `provider-plugin:` prefix. Every documented invocation moves:
+
+| Before                       | 2026.8.1 and later                                     |
+| ---------------------------- | ------------------------------------------------------ |
+| `plugins install <spec>`     | `plugins install <spec> --force --accept-capabilities` |
+| `plugins enable qvac`        | `plugins enable qvac --accept-capabilities`            |
+| `onboard --auth-choice qvac` | `onboard --auth-choice provider-plugin:qvac`           |
+
+Without the consent flags the install cancels. With the old auth choice, onboarding rejects `qvac` and lists only OpenClaw's built-in choices. The plugin still registers `choiceId: "qvac"` — OpenClaw namespaces plugin-contributed choices now, so it is the invocation that moves, not the plugin.
+
+The plugin supports `openclaw >=2026.6.0`, so the README documents both forms rather than replacing one with the other. On openclaw before 2026.8.1, drop the two consent flags and use the bare `--auth-choice qvac`.
+
+## Launcher Errors Name a Command That Works
+
+Two failures in the local service told you to recover by running `openclaw onboard --auth-choice qvac` — a command 2026.8.1 rejects, leaving you with an error whose remedy also failed:
+
+- A provider entry created before the managed serve required bearer authentication, whose persisted `localService.args` has no `--api-key-file` value.
+- A QVAC key file whose permissions have drifted so it is readable beyond its owner.
+
+Both now name the `provider-plugin:qvac` form first, with the pre-2026.8.1 form alongside it.
+
+## Builds Against OpenClaw 2026.8.1 Again
+
+2026.8.1 dropped `plugin-sdk/config-types` from its exports map and left `plugin-sdk/provider-model-shared` without type declarations, so `SecretProviderConfig` and `ModelProviderConfig` could no longer be imported by name and the plugin failed to typecheck and build against it.
+
+Both are now derived from `OpenClawConfig`, which is exported with types from `plugin-sdk/plugin-entry` — already the entry the plugin imports `definePluginEntry` from. These are type-only imports, so the emitted JavaScript is unchanged.
+
+## Onboarding No Longer Generates an Unusable Key
+
+The bearer key is generated as 32 random bytes encoded base64url. That alphabet includes `-`, and the plugin refuses a key beginning with `-` so a stored key can never be mistaken for a command-line flag. The generator did not exclude that case, so about 1.5% of freshly generated keys were rejected the moment the launcher read them back:
+
+```
+stored QVAC API key must be 32-128 base64url characters and cannot start with "-"
+```
+
+The result was a provider entry that onboarded cleanly and then refused to start. Key generation now draws again whenever a candidate starts with `-`. The same generator backs the recovery path for a stored key that no longer parses, so that path could previously replace an unusable key with another unusable one; it is fixed by the same change.
+
+## Requirements
+
+Unchanged from 0.2.1: `@qvac/ai-sdk-provider@^0.6.0` for the shared model catalog, `@qvac/cli@^0.12.0` for `qvac serve`, and `openclaw >=2026.6.0` as the optional host peer.
+
 ## [0.2.1]
 
 Release Date: 2026-08-21

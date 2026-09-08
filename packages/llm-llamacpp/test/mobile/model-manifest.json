@@ -341,6 +341,16 @@
       "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
     }
   ],
+  "runQwen35MultiImageEncodeTest": [
+    {
+      "name": "Qwen3.5-0.8B-Q8_0.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
+    },
+    {
+      "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
+    }
+  ],
   "runQwen35MultimodalCacheStressTest": [
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
