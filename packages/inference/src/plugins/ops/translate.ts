@@ -163,14 +163,9 @@ export async function* translate(
       return { modelExecutionMs }
     }
 
-    // Yield each translation with a newline separator
-    for (let i = 0; i < translations.length; i++) {
+    for (const translation of translations) {
       if (ctx.signal.aborted) break
-      const translation = translations[i]!
       yield translation
-      if (i < translations.length - 1) {
-        yield '\n'
-      }
     }
 
     return { modelExecutionMs }

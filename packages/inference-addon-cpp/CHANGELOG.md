@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0] - 2026-09-07
+
+### Fixed
+- `js::Array::set` / `create` now match libjs 1.32's `js_set_array_elements` const placement (`js_value_t *const []` instead of `const js_value_t *[]`). The previous C++ span type (`std::span<const js_value_t*>`) produced `const js_value_t **`, which no longer converts. Callers that hold `js_value_t *[]` or `std::vector<js_value_t*>` keep compiling.
+
+### Breaking
+- libjs 1.32 headers (`bare-headers` >= 1.32) are required. libjs 1.30's `const js_value_t *[]` signature is no longer accepted, so consumers must raise their `bare-headers` floor to 1.32 before taking this version.
+
 ## [1.3.3] - 2026-07-31
 
 ### Fixed
