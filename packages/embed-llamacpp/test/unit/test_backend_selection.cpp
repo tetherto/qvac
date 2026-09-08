@@ -319,11 +319,16 @@ TEST_F(BackendSelectionTest, PreferredCPUAlwaysReturnsCPU) {
   expectChosen(mockBackend, BackendType::CPU, "none");
 }
 
-TEST_F(BackendSelectionTest, RPCBackendIsIgnored) {
+TEST_F(BackendSelectionTest, RpcBackendIsEligible) {
   mockBackend.addDevice(
-      MockDevice("Adreno 840", "OpenCL", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
-  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
-  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+      MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  expectChosen(mockBackend, BackendType::GPU, "rpc0");
+}
+
+TEST_F(BackendSelectionTest, CudaBackendIsEligible) {
+  mockBackend.addDevice(MockDevice(
+      "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
 }
 
 TEST_F(BackendSelectionTest, MultipleAdrenoOpenCLChoosesFirst) {
@@ -657,6 +662,25 @@ TEST_F(BackendSelectionTest, GpuCount_UnsupportedBackendsIgnored) {
   mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
+}
+
+TEST_F(BackendSelectionTest, GpuCount_CudaAndRpcAreEligible) {
+  mockBackend.addDevice(MockDevice(
+      "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));
+  mockBackend.addDevice(
+      MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 2u);
+}
+
+TEST_F(BackendSelectionTest, SplitDevicesIncludeCudaAndRpc) {
+  mockBackend.addDevice(MockDevice(
+      "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));
+  mockBackend.addDevice(
+      MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0", "RPC0"}));
 }
 
 TEST_F(BackendSelectionTest, SplitDevicesExcludeUnsupportedBackends) {

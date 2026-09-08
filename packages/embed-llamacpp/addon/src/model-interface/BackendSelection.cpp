@@ -101,11 +101,11 @@ bool isEligibleGpuDevice(
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const std::string registryName =
       lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr);
-  if (registryName == "rpc") {
-    return false;
-  }
-
   const std::string deviceName = lowerCopy(bckI.ggml_backend_dev_name(dev));
+  if (hasBackendFamily(deviceName, registryName, "cuda") ||
+      hasBackendFamily(deviceName, registryName, "rpc")) {
+    return true;
+  }
   if (hasBackendFamily(deviceName, registryName, "opencl")) {
     return lowerCopy(bckI.ggml_backend_dev_description(dev)).find("adreno") !=
            std::string::npos;
