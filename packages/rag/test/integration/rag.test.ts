@@ -13,6 +13,7 @@ import type { HyperDBInstance } from 'hyperdb'
 
 import fs from 'bare-fs'
 import path from 'bare-path'
+import url from 'bare-url'
 import tmp from 'test-tmp'
 
 import { ensureModels, RAG_MODELS } from '../../examples/utils.js'
@@ -565,7 +566,7 @@ test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }
   t.comment('Testing complete RAG workflow with sample text file, this may take a while...')
 
   // Load sample text file
-  const samplePath = new URL('sample.txt', import.meta.url).pathname
+  const samplePath = url.fileURLToPath(new URL('sample.txt', import.meta.url))
   const sampleText = fs.readFileSync(samplePath, 'utf8')
 
   // Track progress for verification
