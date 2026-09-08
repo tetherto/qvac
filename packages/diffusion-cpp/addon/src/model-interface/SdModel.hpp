@@ -141,6 +141,8 @@ public:
   };
 
 private:
+  friend struct SdModelTestAccess;
+
   sd_image_t upscaleImage(const sd_image_t& inputImage, int repeats);
 
   // Per-mode handlers split from the unified process() entry point. Both

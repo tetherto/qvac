@@ -518,7 +518,7 @@ export const models = [
     params: '5B'
   },
   {
-    name: 'ABOT_WORLD_0_5B_LF_VAE',
+    name: 'ABOT_WORLD_0_5B_LF_TAEHV_VAE',
     registryPath: 'qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf',
     registrySource: 's3',
     blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
@@ -550,7 +550,7 @@ export const models = [
     params: ''
   },
   {
-    name: 'ABOT_WORLD_0_5B_LF_VAE_F16',
+    name: 'ABOT_WORLD_0_5B_LF_WAN_VAE',
     registryPath: 'qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf',
     registrySource: 's3',
     blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
@@ -716,7 +716,7 @@ export const models = [
     params: ''
   },
   {
-    name: 'LTX_2_3_VAE',
+    name: 'LTX_2_3_AUDIO_VAE',
     registryPath:
       'unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors',
     registrySource: 'hf',
@@ -733,7 +733,7 @@ export const models = [
     params: ''
   },
   {
-    name: 'LTX_2_3_VAE_1',
+    name: 'LTX_2_3_VIDEO_VAE',
     registryPath:
       'unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors',
     registrySource: 'hf',
@@ -18973,8 +18973,8 @@ export const ABOT_WORLD_0_5B_Q8_0 = {
   params: models[24].params
 } as const
 
-export const ABOT_WORLD_0_5B_LF_VAE = {
-  name: 'ABOT_WORLD_0_5B_LF_VAE',
+export const ABOT_WORLD_0_5B_LF_TAEHV_VAE = {
+  name: 'ABOT_WORLD_0_5B_LF_TAEHV_VAE',
   src: `registry://${models[25].registrySource}/${models[25].registryPath}`,
   registryPath: models[25].registryPath,
   registrySource: models[25].registrySource,
@@ -19009,8 +19009,8 @@ export const UMT5_XXL_ENC_Q8_0 = {
   params: models[26].params
 } as const
 
-export const ABOT_WORLD_0_5B_LF_VAE_F16 = {
-  name: 'ABOT_WORLD_0_5B_LF_VAE_F16',
+export const ABOT_WORLD_0_5B_LF_WAN_VAE = {
+  name: 'ABOT_WORLD_0_5B_LF_WAN_VAE',
   src: `registry://${models[27].registrySource}/${models[27].registryPath}`,
   registryPath: models[27].registryPath,
   registrySource: models[27].registrySource,
@@ -19189,8 +19189,8 @@ export const LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS = {
   params: models[36].params
 } as const
 
-export const LTX_2_3_VAE = {
-  name: 'LTX_2_3_VAE',
+export const LTX_2_3_AUDIO_VAE = {
+  name: 'LTX_2_3_AUDIO_VAE',
   src: `registry://${models[37].registrySource}/${models[37].registryPath}`,
   registryPath: models[37].registryPath,
   registrySource: models[37].registrySource,
@@ -19207,8 +19207,8 @@ export const LTX_2_3_VAE = {
   params: models[37].params
 } as const
 
-export const LTX_2_3_VAE_1 = {
-  name: 'LTX_2_3_VAE_1',
+export const LTX_2_3_VIDEO_VAE = {
+  name: 'LTX_2_3_VIDEO_VAE',
   src: `registry://${models[38].registrySource}/${models[38].registryPath}`,
   registryPath: models[38].registryPath,
   registrySource: models[38].registrySource,
