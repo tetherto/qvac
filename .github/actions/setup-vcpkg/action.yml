@@ -63,6 +63,18 @@ runs:
       run: |
         echo "VCPKG_BUILD_TYPE=release" >> "$GITHUB_ENV"
         echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> "$GITHUB_ENV"
+        # Keep VCPKG_ROOT as the pre-installed toolchain (Linux/Windows) and
+        # keep S3 as the shared binary cache. Isolate *mutable* git state —
+        # registry clones under downloads/registries/git and vcpkg_from_git
+        # scratch under downloads/git-tmp — per job inside GITHUB_WORKSPACE.
+        # That tree is wiped by Manual Workspace Cleanup. A shared
+        # $VCPKG_ROOT/downloads races across self-hosted jobs and surfaces as
+        # "gtest does not exist" / stale shallow.lock (QVAC-20938 / #2818).
+        # Do not use /tmp (shared, leftover EACCES) or RUNNER_TEMP (persists
+        # on self-hosted runners). See #2430 for the same workspace-vs-parent
+        # lesson on macOS clones.
+        mkdir -p "$GITHUB_WORKSPACE/.vcpkg-downloads"
+        echo "VCPKG_DOWNLOADS=$GITHUB_WORKSPACE/.vcpkg-downloads" >> "$GITHUB_ENV"
 
     - name: Configure vcpkg binary sources
       shell: bash

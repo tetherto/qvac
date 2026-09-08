@@ -1,4 +1,4 @@
-import type { TestDefinition, Expectation } from '@qvac/qvac-test-suite'
+import type { TestDefinition, Expectation } from '@qvac/test-suite'
 
 const createVisionTest = (
   testId: string,
@@ -92,7 +92,8 @@ export const visionFormatWebp = createVisionTest(
   'vision-format-webp',
   'Describe this image.',
   'photo-webp.webp',
-  { validation: 'type', expectedType: 'string' }
+  { validation: 'type', expectedType: 'string' },
+  { estimatedDurationMs: 110000 }
 )
 
 export const visionLargeImage = createVisionTest(
@@ -100,7 +101,7 @@ export const visionLargeImage = createVisionTest(
   'Describe this image.',
   'large-4k.jpg',
   { validation: 'type', expectedType: 'string' },
-  { estimatedDurationMs: 30000 }
+  { estimatedDurationMs: 90000 }
 )
 
 export const visionSmallImage = createVisionTest(

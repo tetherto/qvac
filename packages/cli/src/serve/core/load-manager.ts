@@ -4,8 +4,8 @@ import {
   cancel as sdkCancel
 } from '@qvac/sdk'
 import type { ModelConstant } from '@qvac/sdk'
-import type { ModelRegistry } from './model-registry.js'
-import type { Logger } from '../../logger.js'
+import type { ModelRegistry } from '@/serve/core/model-registry'
+import type { Logger } from '@/logger'
 
 /** SDK loader, overridable in tests. `@qvac/sdk`'s `loadModel` is heavily
  * overloaded; this is the shape serve calls it with (free-form `modelType`

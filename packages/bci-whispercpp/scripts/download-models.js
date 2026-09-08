@@ -8,8 +8,11 @@
 //                     CLI, no auth: the registry client uses a baked-in
 //                     default core key over Hyperswarm.
 //   - Test fixtures -> the neural-signal samples are not published to the
-//                     registry, so they are pulled from the public release
-//                     tarball over plain HTTPS (override with
+//                     registry, so they come from the bci-test-assets
+//                     release tarball. The repository is private, so when
+//                     GITHUB_TOKEN / GH_TOKEN is set the asset is resolved
+//                     and downloaded through the GitHub API; otherwise the
+//                     plain release URL is attempted (override with
 //                     BCI_FIXTURES_URL).
 //
 // Usage:
@@ -24,6 +27,8 @@ const path = require('path')
 const https = require('https')
 const http = require('http')
 const { execFileSync } = require('child_process')
+
+const { findAssetApiUrl, resolveFixturesSource } = require('./lib/fixtures-source')
 
 const PACKAGE_DIR = path.resolve(__dirname, '..')
 const MODELS_DIR = path.join(PACKAGE_DIR, 'models')
@@ -43,9 +48,7 @@ const MODELS = [
   registrySource: REGISTRY_SOURCE
 }))
 
-// Fixtures aren't in the registry; keep pulling them from the public release.
-const FIXTURES_URL = process.env.BCI_FIXTURES_URL ||
-  'https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-test-fixtures.tar.gz'
+const USER_AGENT = 'bci-whispercpp-download'
 
 function parseArgs (argv) {
   const args = { models: false, fixtures: false, force: false, output: MODELS_DIR }
@@ -69,8 +72,9 @@ function printUsage () {
   console.log(`Usage: node scripts/download-models.js [--models] [--fixtures] [--force] [--output DIR]
 
 Download BCI model files (from the QVAC model registry) and neural-signal
-test fixtures (from the public release tarball) so the examples and
-integration tests can run.
+test fixtures (from the bci-test-assets release; set GITHUB_TOKEN or
+GH_TOKEN for the private repository) so the examples and integration tests
+can run.
 
 Flags:
   --models           models only (default: models + fixtures)
@@ -81,16 +85,25 @@ Flags:
 `)
 }
 
+// Drop credentials before following a redirect: the GitHub API answers the
+// asset request with a 302 to a pre-signed storage URL that rejects requests
+// carrying an extra Authorization header.
+function redirectHeaders (headers) {
+  const next = { ...headers }
+  delete next.Authorization
+  return next
+}
+
 // Minimal HTTPS GET with redirect support (GitHub release -> S3 redirect).
-function httpDownload (url, dest, redirects = 10) {
+function httpDownload (url, dest, headers = {}, redirects = 10) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith('http:') ? http : https
-    const req = mod.get(url, { headers: { 'User-Agent': 'bci-whispercpp-download' } }, (res) => {
+    const req = mod.get(url, { headers: { 'User-Agent': USER_AGENT, ...headers } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume()
         if (redirects <= 0) { reject(new Error('Too many redirects')); return }
         const next = new URL(res.headers.location, url).toString()
-        resolve(httpDownload(next, dest, redirects - 1))
+        resolve(httpDownload(next, dest, redirectHeaders(headers), redirects - 1))
         return
       }
       if (res.statusCode !== 200) {
@@ -105,6 +118,57 @@ function httpDownload (url, dest, redirects = 10) {
       file.on('error', (err) => { try { fs.unlinkSync(tmp) } catch (_) {} ; reject(err) })
     })
     req.on('error', reject)
+  })
+}
+
+function httpGetJson (url, headers = {}, redirects = 10) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'application/vnd.github+json',
+        ...headers
+      }
+    }
+    const req = https.get(url, options, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume()
+        if (redirects <= 0) { reject(new Error('Too many redirects')); return }
+        const next = new URL(res.headers.location, url).toString()
+        resolve(httpGetJson(next, redirectHeaders(headers), redirects - 1))
+        return
+      }
+      let body = ''
+      res.setEncoding('utf8')
+      res.on('data', (chunk) => { body += chunk })
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage || ''} for ${url}`))
+          return
+        }
+        try { resolve(JSON.parse(body)) } catch (err) { reject(err) }
+      })
+    })
+    req.on('error', reject)
+  })
+}
+
+async function fetchFixturesArchive (archivePath) {
+  const source = resolveFixturesSource(process.env)
+  if (source.kind === 'direct') {
+    console.log(`      from: ${source.url}`)
+    await httpDownload(source.url, archivePath, source.headers)
+    return
+  }
+  console.log(`      from: ${source.releaseUrl} (asset: ${source.assetName})`)
+  const release = await httpGetJson(source.releaseUrl, source.headers)
+  const assetApiUrl = findAssetApiUrl(release, source.assetName)
+  if (!assetApiUrl) {
+    throw new Error(`Release ${source.releaseUrl} has no asset named ${source.assetName}`)
+  }
+  await httpDownload(assetApiUrl, archivePath, {
+    ...source.headers,
+    Accept: 'application/octet-stream'
   })
 }
 
@@ -176,8 +240,7 @@ async function downloadFixtures (force) {
   const archivePath = path.join(FIXTURES_DIR, archiveName)
   try {
     console.log('Downloading BCI test fixtures...')
-    console.log(`      from: ${FIXTURES_URL}`)
-    await httpDownload(FIXTURES_URL, archivePath)
+    await fetchFixturesArchive(archivePath)
     execFileSync('tar', ['xzf', archiveName], { cwd: FIXTURES_DIR })
     // The archive was packed on macOS and carries AppleDouble sidecars
     // (._foo); they aren't real fixtures, so prune them after extraction.

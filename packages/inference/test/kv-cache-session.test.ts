@@ -4,10 +4,11 @@ import { PathTraversalError } from '@/errors'
 // -----------------------------------------------------------------------------
 // `KvCacheSession` — Bare runtime tests.
 //
-// The session is the single owner of the three KV-cache bookkeeping layers
-// (on-disk `.bin`, `initializedCaches` set, `cachedMessageCounts` map).
-// Without a single owner the completion handler would have to touch all
-// three on every cancel / error branch and quickly drift out of sync.
+// The session is the single owner of the KV-cache bookkeeping layers
+// (on-disk `.bin`, `initializedCaches` set, `cachedPrefixes` map, path
+// refs, auto-cache markers). Without a single owner the completion
+// handler would have to touch every layer on every cancel / error branch
+// and quickly drift out of sync.
 // The functional-equivalence assertions below pin the contract:
 //
 //   1. `beginTurn` primes the cache (calls the injected closure) the
@@ -16,7 +17,7 @@ import { PathTraversalError } from '@/errors'
 //   2. `commitTurn({ kind: "static" })` records the new saved count and
 //      flips the turn's `committed` flag so the deferred `rollback`
 //      becomes a no-op on the happy path.
-//   3. `rollback` clears all three layers, even when the on-disk file
+//   3. `rollback` clears every layer, even when the on-disk file
 //      doesn't exist (the `unlink` error is logged but not propagated;
 //      in-memory state is still cleared).
 //   4. `rollback` after `commitTurn` is a no-op (handle-internal flag
@@ -560,7 +561,7 @@ test('kv-cache-session: commitTurn records the new saved count and suppresses ro
   }
 })
 
-test('kv-cache-session: rollback wipes all three layers atomically', async (t) => {
+test('kv-cache-session: rollback wipes every bookkeeping layer atomically', async (t) => {
   const { fs, path, mod, utils, cleanup, writeFakeCache } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
@@ -589,7 +590,7 @@ test('kv-cache-session: rollback wipes all three layers atomically', async (t) =
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),
       undefined,
-      'rollback forgot the cachedMessageCounts entry'
+      'rollback forgot the cachedPrefixes entry'
     )
     t.is(
       mod.__kvCacheSessionTestHooks.hasInitializedPath(
@@ -1462,6 +1463,132 @@ test('kv-cache-session: auto-rename commit releases the target active-ref when s
     )
   } finally {
     bareFs.promises.mkdir = originalMkdir
+    cleanup()
+  }
+})
+
+// The auto path assigns the prime origin independently of the custom path,
+// so its fresh-prime release needs its own pin: file, init flag, and marker.
+test('kv-cache-session: releaseTurn rolls back an auto cache the same turn primed', async (t) => {
+  const { fs, mod, cleanup, cacheRoot, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash,
+      history: [{ role: 'user', content: 'hi' }],
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+    await session.releaseTurn(turn)
+
+    t.is(fs.existsSync(turn.cachePath), false, 'the fresh auto prime is unlinked')
+    t.absent(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(turn.cachePath),
+      'the init flag is cleared with it'
+    )
+    const rootEntries = fs.existsSync(cacheRoot) ? fs.readdirSync(cacheRoot).map(String) : []
+    t.is(
+      rootEntries.filter((f) => f.startsWith('.auto-cache-')).length,
+      0,
+      'the released fresh auto turn left no retention marker'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
+// A failed first turn must not leave its own prime behind: releaseTurn on a
+// freshly primed cache takes the destructive path instead.
+test('kv-cache-session: releaseTurn rolls back a cache the same turn primed', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
+    const turn = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'release-fresh',
+      configHash,
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+    await session.releaseTurn(turn)
+
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'release-fresh')
+    t.is(fs.existsSync(cachePath), false, 'the fresh prime is unlinked')
+    t.absent(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath),
+      'the init flag is cleared with it'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
+// `releaseTurn` is the non-destructive exit: committed file, saved prefix,
+// and init flag must all survive, and a same-key waiter must get the lock.
+test('kv-cache-session: releaseTurn preserves the committed cache and admits a waiter', async (t) => {
+  const { mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
+    let primeCallCount = 0
+    const primeIfMissing = async (cachePath: string) => {
+      primeCallCount++
+      writeFakeCache(cachePath)
+    }
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'release-a',
+      configHash,
+      primeIfMissing
+    })
+    await session.commitTurn(first, { kind: 'static', messageCount: 3, toolBlockCached: false })
+
+    const second = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'release-a',
+      configHash,
+      primeIfMissing
+    })
+    t.is(second.savedCount, 3, 'the second turn starts warm')
+    await session.releaseTurn(second)
+
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'release-a')
+    const fs = await import('bare-fs')
+    t.ok(
+      fs.existsSync(cachePath) && fs.readFileSync(cachePath, 'utf8') === 'fake-kv-cache-bytes',
+      'the committed bytes are still on disk, unmodified, after the release'
+    )
+    t.ok(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath),
+      'the init flag survives the release'
+    )
+    t.is(
+      mod.__kvCacheSessionTestHooks.getSavedCount(cachePath),
+      3,
+      'the committed saved prefix survives the release'
+    )
+    t.is(
+      mod.__kvCacheSessionTestHooks.getActivePathCountForTest(cachePath),
+      0,
+      'the active-ref is released'
+    )
+
+    const third = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'release-a',
+      configHash,
+      primeIfMissing
+    })
+    t.is(primeCallCount, 1, 'no re-prime — the disk cache is still there')
+    t.is(third.savedCount, 3, 'the waiter admits with the committed prefix intact')
+    await session.rollback(third)
+  } finally {
     cleanup()
   }
 })

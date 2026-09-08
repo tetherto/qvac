@@ -15,7 +15,7 @@
 #include <thread>
 #include <utility>
 
-#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+#if defined(__ANDROID__) || defined(__linux__)
 #include <dlfcn.h>
 #endif
 
@@ -78,7 +78,7 @@ auto WhisperModel::formatCaptionOutput(Transcript& transcript) -> void {
                     std::to_string(static_cast<int>(transcript.end)) + "|>";
 }
 
-#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+#if defined(__ANDROID__) || defined(__linux__)
 namespace {
 // Join a prebuilds root with the cmake-bare per-target module subdir
 // (BACKENDS_SUBDIR == "<bare_target>/<module_name>", set in CMakeLists) to get
@@ -127,10 +127,12 @@ void loadBackendsFromRoot(const std::filesystem::path& root) {
   ggml_backend_load_all_from_path(variantsDir.string().c_str());
 }
 
-// desktop linux-arm64 -- and Android -- ship ggml with `GGML_BACKEND_DL=ON`
-// (since ggml-speech 2026-07-14), so no backend is statically registered.
-// dlopen the per-arch CPU + GPU `.so` modules once per process before
-// whisper_init; otherwise it aborts on a NULL CPU device. Prefer the
+// Android, desktop linux-arm64, and linux-x64-with-CUDA builds ship ggml
+// with `GGML_BACKEND_DL=ON`, so no backend is statically registered. dlopen
+// the per-arch CPU + GPU `.so` modules once per process before whisper_init;
+// otherwise it aborts on a NULL CPU device. On static linux-x64 builds the
+// scan finds no modules and the statically registered backends stay in
+// charge, so calling this unconditionally on Linux is safe. Prefer the
 // runtime-supplied backendsDir; when it is omitted, self-locate the addon's
 // own prebuilds dir before falling back to ggml_backend_load_all() (whose
 // default search path scans the host executable's dir, not the addon's, so it
@@ -165,7 +167,7 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
   });
 }
 } // namespace
-#endif // __ANDROID__ || linux-arm64
+#endif // __ANDROID__ || __linux__
 
 namespace {
 std::string toLowerCopy(std::string value) {
@@ -261,7 +263,7 @@ int adrenoOpenclGpuDeviceIndex() {
 void WhisperModel::load() {
   if (!ctx_) {
 
-#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+#if defined(__ANDROID__) || defined(__linux__)
     ensureBackendsLoaded(cfg_.backendsDir);
 #endif
 

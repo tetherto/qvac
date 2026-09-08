@@ -1,5 +1,5 @@
 {
-  "version": 0,
+  "version": 1,
   "offset": 0,
   "schema": [
     {
@@ -89,6 +89,51 @@
       "derived": false,
       "key": [
         "key"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "workspaceState",
+      "namespace": "rag",
+      "id": 6,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/workspaceState",
+      "derived": false,
+      "key": [
+        "key"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "mutations",
+      "namespace": "rag",
+      "id": 7,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/mutations",
+      "derived": false,
+      "key": [
+        "revision"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "nativeIds",
+      "namespace": "rag",
+      "id": 8,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/nativeIds",
+      "derived": false,
+      "key": [
+        "nativeId"
       ],
       "trigger": null
     }

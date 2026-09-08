@@ -40,7 +40,7 @@
  *
  * For the upstream API + algorithm details, see
  * `parakeet-cpp/include/parakeet/diarization.h` and the upstream PRs
- * that introduced this feature in qvac-ext-lib-whisper.cpp (PR #22
+ * that introduced this feature in qvac-fabric-speech.cpp (PR #22
  * commit e6ba38c, PR #24 commit 08df2e7).
  *
  * Usage:

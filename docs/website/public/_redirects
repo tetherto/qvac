@@ -117,7 +117,10 @@
 
 # Section rename: /sdk/examples/p2p/* → /p2p-capabilities/*
 /sdk/examples/p2p/blind-relays/          /p2p-capabilities/blind-relays/          301
-/sdk/examples/p2p/delegated-inference/   /p2p-capabilities/delegated-inference/   301
+
+# Delegated inference removed: forward both retired paths to the docs home
+/sdk/examples/p2p/delegated-inference/   /introduction/                           301
+/p2p-capabilities/delegated-inference/   /introduction/                           301
 
 # Section rename: /sdk/examples/utilities/* → /runtime/*, /models/*, /configuration/plugins/*
 /sdk/examples/utilities/logging/              /runtime/logging/                            301

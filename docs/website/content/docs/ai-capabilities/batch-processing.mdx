@@ -20,6 +20,10 @@ To use it, load the model with `modelConfig.parallel >= 2` (this is what lets it
 Batch processing is specific to **LLM text generation**. It does not apply to other capabilities such as embeddings or transcription.
 </Callout>
 
+<Callout type="info">
+**Related:** if instead of grouping many prompts into one `batchCompletion()` call you want to fire several independent `completion()` calls in parallel on the same model — one stream per call, cancellable independently — see [Concurrent completions](/ai-capabilities/text-generation#concurrent-completions). Both features use the same `modelConfig.parallel` slots, so mixing them on one model does not add extra concurrency.
+</Callout>
+
 ## Functions
 
 Use the following sequence of function calls:

@@ -1,18 +1,8 @@
 import type { Request } from '@/schemas/index'
 import type { HandlerEntry } from '@/handlers/types'
 
-export interface HandlerSelection {
-  handler: HandlerEntry['handler']
-  isDelegated: boolean
-}
-
-export function selectHandler(entry: HandlerEntry, request: Request): HandlerSelection {
-  const isDelegated = !!(entry.delegatedHandler && entry.isDelegated?.(request))
-
-  return {
-    handler: isDelegated ? entry.delegatedHandler! : entry.handler,
-    isDelegated
-  }
+export function selectHandler(entry: HandlerEntry): HandlerEntry['handler'] {
+  return entry.handler
 }
 
 export function handlerSupportsProgress(entry: HandlerEntry, request: Request): boolean {

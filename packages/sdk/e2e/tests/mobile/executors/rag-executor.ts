@@ -1,8 +1,38 @@
 import { ragIngest } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite/mobile'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
+import {
+  describeErrorChain,
+  getRagWorkspaceName,
+  runTurboVecRag,
+  type RagParams,
+  type TurboVecCheckpointProbe
+} from '../../shared/rag-turbovec-runner.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import { ragTests } from '../../rag-tests.js'
+
+async function prepareTurboVecWorkspace(workspace: string) {
+  // @ts-ignore - expo-file-system is a peer dependency available in mobile context
+  const { Directory, File, Paths } = await import('expo-file-system')
+  const workspaceDir = new Directory(Paths.document, '.qvac', 'rag-hyperdb', workspace)
+  workspaceDir.create({ intermediates: true, idempotent: true })
+  const marker = new File(workspaceDir, '.qvac-rag-workspace.json')
+  marker.create({ intermediates: true, overwrite: true })
+  marker.write(`${JSON.stringify({ version: 1, adapterType: 'turbovec' })}\n`)
+}
+
+// Mobile sets no cacheDirectory, so the engine's RAG roots sit under
+// Paths.document/.qvac. Add one and this must follow it, as the node probe does.
+async function inspectTurboVecCheckpoint(workspace: string): Promise<TurboVecCheckpointProbe> {
+  // @ts-ignore - expo-file-system is a peer dependency available in mobile context
+  const { Directory, File, Paths } = await import('expo-file-system')
+  const checkpointDir = new Directory(Paths.document, '.qvac', 'rag-turbovec', workspace)
+  if (!checkpointDir.exists) return { state: 'no-root', root: checkpointDir.uri }
+  const hasManifest = checkpointDir.list().some((entry) => {
+    return entry instanceof Directory && new File(entry, 'manifest.json').exists
+  })
+  return hasManifest ? { state: 'present' } : { state: 'no-manifest', root: checkpointDir.uri }
+}
 
 export class MobileRagExecutor extends ModelAssetExecutor<typeof ragTests> {
   pattern = /^rag-/
@@ -28,14 +58,7 @@ export class MobileRagExecutor extends ModelAssetExecutor<typeof ragTests> {
   }
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as {
-      workspace: string
-      documentContent?: string
-      documentFile?: string
-      chunkSize: number
-      chunkOverlap: number
-      chunkStrategy?: string
-    }
+    const p = params as RagParams
     const exp = expectation as Expectation
     const embeddingModelId = await this.resources.ensureLoaded('embeddings')
 
@@ -55,7 +78,11 @@ export class MobileRagExecutor extends ModelAssetExecutor<typeof ragTests> {
         content = p.documentContent || ''
       }
 
-      const uniqueWorkspace = `${p.workspace}-${embeddingModelId.substring(0, 8)}`
+      const uniqueWorkspace = getRagWorkspaceName(p, embeddingModelId)
+
+      if (p.adapter === 'turbovec') {
+        return await this.turboVec(p, exp, content, embeddingModelId, uniqueWorkspace)
+      }
 
       const result = await ragIngest({
         modelId: embeddingModelId,
@@ -82,6 +109,28 @@ export class MobileRagExecutor extends ModelAssetExecutor<typeof ragTests> {
         return ValidationHelpers.validate(errorMsg, exp)
       }
       return { passed: false, output: `RAG failed: ${errorMsg}` }
+    }
+  }
+
+  private async turboVec(
+    params: RagParams,
+    expectation: Expectation,
+    content: string,
+    embeddingModelId: string,
+    workspace: string
+  ): Promise<TestResult> {
+    try {
+      const output = await runTurboVecRag({
+        params,
+        content,
+        embeddingModelId,
+        workspace,
+        prepareWorkspace: prepareTurboVecWorkspace,
+        inspectCheckpoint: inspectTurboVecCheckpoint
+      })
+      return ValidationHelpers.validate(output, expectation)
+    } catch (error) {
+      return { passed: false, output: `TurboVec RAG failed: ${describeErrorChain(error)}` }
     }
   }
 }

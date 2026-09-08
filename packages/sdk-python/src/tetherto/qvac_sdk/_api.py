@@ -114,7 +114,6 @@ async def load_model(
     on_progress: Callable[[ModelProgressResponse], None] | None = None,
     request_id: str | None = None,
     seed: bool | None = None,
-    delegate: dict[str, Any] | None = None,
     logger: Any = None,
 ) -> str:
     """Ergonomic loadModel mirroring JS's `client/api/load-model.ts`:
@@ -174,8 +173,6 @@ async def load_model(
             payload["modelName"] = model_name
         if seed is not None:
             payload["seed"] = seed
-        if delegate is not None:
-            payload["delegate"] = delegate
     if model_config is not None:
         payload["modelConfig"] = model_config
 

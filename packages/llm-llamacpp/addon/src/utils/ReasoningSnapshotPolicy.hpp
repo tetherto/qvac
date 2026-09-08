@@ -13,68 +13,63 @@ namespace utils {
   return isRecurrent || isHybrid || isDeepSeekV4;
 }
 
-// Recurrent / hybrid compaction restores an end-of-prefill snapshot and
-// replays the post-reasoning tail. `thinkingForcedOpen` is retained as an
-// input for call-site symmetry only. Force-open templates already have the
-// opener in the restored prefix; generated-opener templates seed every
-// sampled token up to the open-detection flip into `postReasoningTokens_`
-// alongside the close marker, so the restored prefix no longer has to
-// contain `<think>`. The one remaining hard-requirement is:
-//   * `closeMarkerSingleToken` — the reasoning close tag tokenises to a
-//     single token. The replay path seeds `postReasoningTokens_` with the
-//     single sampled token that triggers the close-detection flip in
-//     `updateReasoningBuffer`; a multi-piece close would leave the SSM
-//     with an unbalanced `<think>` opener followed by only the tail piece.
+// Compaction rewinds to a boundary anchored before the reasoning span and
+// replays the tokens that sit outside it. `thinkingForcedOpen` is retained as
+// an input for call-site symmetry only: it decides where the boundary lands
+// (see `reasoningBoundaryTokenIndex`), not whether one is taken. Marker
+// length does not decide anything either, because no structural marker is
+// replayed at all.
 //
-// When `remove_thinking_from_context` is enabled for recurrent / hybrid
-// memory and reasoning is active, unsupported templates must hard-fail
-// instead of silently preserving reasoning in cache. `Disabled` means the
-// policy is irrelevant for this request (pure attention, feature off, or no
-// active reasoning channel); the `Unsupported*` state means callers
-// should surface a StatusError after any required rollback.
+// Every memory kind anchors a boundary now; only the anchor's form differs, a
+// state payload for recurrent / hybrid and a bare position for pure
+// attention. `Disabled` means the policy is irrelevant for this request
+// (feature off, or no active reasoning channel) and `Capture` means take the
+// boundary. There is no unsupported state to surface.
 enum class RecurrentReasoningBoundaryDecision {
   Disabled,
   Capture,
-  UnsupportedMultiTokenClose,
 };
 
-[[nodiscard]] inline RecurrentReasoningBoundaryDecision
-recurrentReasoningBoundaryDecision(
-    bool needsRecurrentSnapshot, bool removeThinkingFromContext,
-    bool reasoningEnabled, bool /*thinkingForcedOpen*/,
-    bool closeMarkerSingleToken) noexcept {
-  if (!needsRecurrentSnapshot || !removeThinkingFromContext ||
-      !reasoningEnabled) {
-    return RecurrentReasoningBoundaryDecision::Disabled;
+// Where the compaction boundary belongs, given the end of prefill.
+//
+// A force-open template ends its rendered prompt with the reasoning opener
+// (`<think>\n`), so those tokens are already decoded when prefill finishes.
+// Anchoring at the end of prefill would keep them: the rewind restores a
+// prefix that still opens a reasoning block, and the next cached turn resumes
+// inside it with nothing to close it. Anchor before the opener instead, so
+// every model kind rewinds to the same pre-reasoning cache.
+//
+// `prefillEnd` is a token index for the chunked text prefill and a position
+// for the multimodal one; both measure the same distance from the start of
+// the decode, so the same subtraction applies. Clamped at 0 for the
+// degenerate template whose entire rendered prompt IS the opener.
+[[nodiscard]] inline llama_pos reasoningBoundaryTokenIndex(
+    llama_pos prefillEnd, bool thinkingForcedOpen,
+    int forcedOpenTokenCount) noexcept {
+  if (!thinkingForcedOpen || forcedOpenTokenCount <= 0) {
+    return prefillEnd;
   }
-  if (!closeMarkerSingleToken) {
-    return RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose;
-  }
-  return RecurrentReasoningBoundaryDecision::Capture;
+  const llama_pos anchored =
+      prefillEnd - static_cast<llama_pos>(forcedOpenTokenCount);
+  return anchored > 0 ? anchored : 0;
 }
 
-[[nodiscard]] inline const char* recurrentReasoningBoundaryFailureReason(
-    RecurrentReasoningBoundaryDecision decision) noexcept {
-  switch (decision) {
-  case RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose:
-    return "the reasoning close marker is not a single token";
-  case RecurrentReasoningBoundaryDecision::Disabled:
-  case RecurrentReasoningBoundaryDecision::Capture:
-    return "";
-  }
-  return "";
+// Only the feature gates decide now. Memory kind used to, back when pure
+// attention shifted instead of rewinding, and close-marker length used to,
+// back when replay had to seed the marker; neither is an input any more, so
+// neither is a parameter.
+[[nodiscard]] inline RecurrentReasoningBoundaryDecision
+recurrentReasoningBoundaryDecision(
+    bool removeThinkingFromContext, bool reasoningEnabled) noexcept {
+  return (removeThinkingFromContext && reasoningEnabled)
+             ? RecurrentReasoningBoundaryDecision::Capture
+             : RecurrentReasoningBoundaryDecision::Disabled;
 }
 
 [[nodiscard]] inline bool shouldCaptureRecurrentReasoningBoundary(
-    bool needsRecurrentSnapshot, bool removeThinkingFromContext,
-    bool reasoningEnabled, bool thinkingForcedOpen,
-    bool closeMarkerSingleToken) noexcept {
+    bool removeThinkingFromContext, bool reasoningEnabled) noexcept {
   return recurrentReasoningBoundaryDecision(
-             needsRecurrentSnapshot,
-             removeThinkingFromContext,
-             reasoningEnabled,
-             thinkingForcedOpen,
-             closeMarkerSingleToken) ==
+             removeThinkingFromContext, reasoningEnabled) ==
          RecurrentReasoningBoundaryDecision::Capture;
 }
 

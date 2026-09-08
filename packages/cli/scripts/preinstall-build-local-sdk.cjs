@@ -83,34 +83,15 @@ if (!isMonorepoSibling()) {
   process.exit(0)
 }
 
-if (alreadyBuilt()) {
+const skipCompile = alreadyBuilt()
+run('bun', ['run', './scripts/link-workspace-inference.ts'])
+
+if (skipCompile) {
   console.log('[@qvac/cli preinstall] @qvac/sdk dist is up to date, skipping rebuild')
   process.exit(0)
 }
 
 console.log('[@qvac/cli preinstall] Building local @qvac/sdk at', SDK_DIR)
-
-// Install the SDK's deps under npm. This is fine for the build step despite
-// the SDK's own scripts being bun-flavored — we drive tsc + the alias
-// resolver directly below, so we don't invoke the bun-only `build` script.
-run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=warn'])
-
-// `@qvac/infer-base` and `@qvac/response` pin `bare-events` to 2.4.2 exact,
-// and 2.4.2 ships no .d.ts files — so tsc sees `Stream extends EventEmitter`
-// resolve to an untyped EventEmitter and bails out on `.on`/`.off`/`.once`
-// calls throughout the SDK. Bun's resolver hoists a newer typed bare-events
-// (>=2.8.0) to top level alongside the nested 2.4.2 copies; npm hoists the
-// pinned 2.4.2 itself. Force-install a recent typed bare-events at top
-// level (no package.json mutation — purely a node_modules tweak) so tsc
-// sees the same shape bun does.
-run('npm', [
-  'install',
-  'bare-events@^2.8.0',
-  '--no-save',
-  '--no-audit',
-  '--no-fund',
-  '--loglevel=warn'
-])
 
 try {
   fs.rmSync(path.join(SDK_DIR, 'dist'), { recursive: true, force: true })

@@ -75,7 +75,7 @@ C++ Dependencies
 --- mit (MIT License) ---
 
   whisper-cpp
-    https://github.com/tetherto/qvac-ext-lib-whisper.cpp
+    https://github.com/tetherto/qvac-fabric-speech.cpp
     (BCI-patched fork of https://github.com/ggml-org/whisper.cpp)
 
   ggml

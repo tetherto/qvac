@@ -42,6 +42,7 @@ bool initializeReasoningState(
   state.cached_close_tag_token = LLAMA_TOKEN_NULL;
   state.cached_newline_token = LLAMA_TOKEN_NULL;
   state.close_is_single_token = false;
+  state.cached_close_tag_tokens.clear();
 
   if (lctx == nullptr || tags.open.empty() || tags.close.empty()) {
     return false;
@@ -79,11 +80,10 @@ bool initializeReasoningState(
     state.cached_close_tag_token = closeTokens[0];
   }
 
-  // The recurrent replay seeds `postReasoningTokens_` with
-  // `cached_close_tag_token` (populated just above when
-  // `closeTokens.size() == 1`) so the SSM restores with a balanced
-  // `<think>...</think>` span; a multi-piece close would leave only
-  // a tail piece to seed, which cannot re-balance the opener.
+  // `close_is_single_token` exists for EOS substitution only, which swaps a
+  // sampled EOS for one close token and so genuinely needs a single id.
+  // Compaction never consults it: it rewinds to a boundary anchored before the
+  // span and replays no structural marker, so marker length decides nothing.
   //
   // Gate on the tokenisation of the *canonical* close marker
   // (`closeTagForEosRecovery`, which strips the chat template's
@@ -97,6 +97,7 @@ bool initializeReasoningState(
   // `TextLlmContext` / `MtmdLlmContext` seed the replay buffer with
   // `cached_close_tag_token` rather than the sampled token id.
   state.close_is_single_token = (closeTokens.size() == 1);
+  state.cached_close_tag_tokens = closeTokens;
 
   std::vector<llama_token> newlineTokens =
       common_tokenize(lctx, "\n", false, true);

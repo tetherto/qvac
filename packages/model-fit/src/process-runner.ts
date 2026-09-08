@@ -1,13 +1,17 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
+import fs = require('bare-fs')
+import path = require('bare-path')
 import processModule = require('bare-process')
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 import {
   runFitProcessLine,
   type FitProcessFit,
+  type FitProcessLlamaFit,
   type FitProcessOutcome
 } from './process-internal'
 import { FIT_PROCESS_MAX_REQUEST_BYTES } from './process'
+import type { FitLlamaResult } from './process'
 
 interface RunnerInput {
   setEncoding(encoding: 'utf8'): void
@@ -30,6 +34,25 @@ interface RunnerProcess {
 }
 
 const process = processModule as unknown as RunnerProcess
+
+// Duplicate of index.ts resolveBackendsDir: this runner must not import
+// `./index` at load time because that would load the native binding. The v2
+// llamaConfigFit path also cannot go through fitParams().
+function resolveBackendsDir (): string | undefined {
+  try {
+    const fabricPkg = require.resolve('@qvac/fabric/package')
+    const fabricPrebuilds = path.join(path.dirname(fabricPkg), 'prebuilds')
+    if (fs.statSync(fabricPrebuilds).isDirectory()) return fabricPrebuilds
+  } catch {
+    // Mobile worklets cannot resolve the @qvac/fabric package tree.
+  }
+  try {
+    const packaged = path.join(__dirname, 'prebuilds')
+    return fs.statSync(packaged).isDirectory() ? packaged : undefined
+  } catch {
+    return undefined
+  }
+}
 
 function exitAfterWriteError (error: Error): void {
   process.stderr.write(`model-fit process runner failed to write its response: ${error.message}\n`, () => {
@@ -58,8 +81,33 @@ function fit (config: Parameters<FitProcessFit>[0]): ReturnType<FitProcessFit> {
   return (require('./index') as { fitParams: FitProcessFit }).fitParams(config)
 }
 
+function fitLlama (...args: Parameters<FitProcessLlamaFit>): ReturnType<FitProcessLlamaFit> {
+  const [loadKind, config] = args
+  // `./binding-internal`, not `./binding`: the raw load-config fitter is not
+  // public API, and `./binding.js` is a public export.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is disposable here.
+  const binding = require('./binding-internal') as {
+    llamaConfigFit(request: {
+      loadKind: Parameters<FitProcessLlamaFit>[0]
+      modelPath: string
+      params: Record<string, string>
+      backendsDir?: string
+      marginMiB?: number
+      nCtxMin?: number
+    }): FitLlamaResult
+  }
+  let resolved = config
+  if (config.backendsDir === undefined) {
+    const packaged = resolveBackendsDir()
+    if (packaged !== undefined) {
+      resolved = { ...config, backendsDir: packaged }
+    }
+  }
+  return binding.llamaConfigFit({ loadKind, ...resolved })
+}
+
 function finish (line: string): void {
-  writeOutcome(runFitProcessLine(line, fit))
+  writeOutcome(runFitProcessLine(line, fit, fitLlama))
 }
 
 let input = ''

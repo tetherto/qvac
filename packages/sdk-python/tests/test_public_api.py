@@ -74,8 +74,6 @@ def test_js_client_api_capabilities_have_python_equivalents():
         "loadModel": "load_model",
         "downloadAsset": "download_asset",
         "heartbeat": "heartbeat",
-        "startQVACProvider": "provide",
-        "stopQVACProvider": "stop_provide",
         "unloadModel": "unload_model",
         "transcribe": "transcribe",
         "transcribeStream": "transcribe_stream",

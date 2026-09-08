@@ -13,8 +13,8 @@ export const neuralInputSchema = z.discriminatedUnion('type', [
     value: z.string().describe('Base64-encoded contents of a BCI neural `.bin` recording.')
   }),
   z.object({
-    type: z.literal('filePath').describe('Local neural `.bin` file path.'),
-    value: z.string().describe('Path to a BCI neural `.bin` recording on the provider.')
+    type: z.literal('filePath').describe('Neural `.bin` file path.'),
+    value: z.string().describe('Path to a BCI neural `.bin` recording.')
   })
 ])
 
@@ -30,7 +30,7 @@ const bciTranscribeBaseSchema = z.object({
 
 export const bciTranscribeParamsSchema = bciTranscribeBaseSchema.extend({
   neuralData: neuralInputSchema.describe(
-    'Fixed wire shape for BCI neural input: either inline base64 neural bytes or a provider-local `.bin` file path.'
+    'Fixed wire shape for BCI neural input: either inline base64 neural bytes or a `.bin` file path.'
   )
 })
 
@@ -38,7 +38,7 @@ export const bciTranscribeClientParamsSchema = bciTranscribeBaseSchema.extend({
   neuralData: z
     .union([z.string(), z.instanceof(Uint8Array)])
     .describe(
-      'Convenience client input for BCI neural data: pass a local/provider `.bin` file path as a string, or raw neural bytes as a `Uint8Array`. The client converts this to `neuralInputSchema` before sending the request.'
+      'Convenience client input for BCI neural data: pass a `.bin` file path as a string, or raw neural bytes as a `Uint8Array`. The client converts this to `neuralInputSchema` before sending the request.'
     )
 })
 
@@ -134,7 +134,7 @@ export interface BciTranscribeClientParams {
   /** Identifier returned by `loadModel()` for a loaded BCI model. */
   modelId: string
   /**
-   * BCI neural input. A string is treated as a local/provider `.bin` file path;
+   * BCI neural input. A string is treated as a `.bin` file path;
    * a `Uint8Array` is treated as raw neural bytes and sent as base64 on the
    * wire.
    */

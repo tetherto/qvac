@@ -77,7 +77,7 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/diffusion-cpp@<ver> (published) or @tetherto/diffusion-cpp@<dev> (GPR) to force-install a specific build."
+        description: "Full NPM package spec to test. Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; set @qvac/diffusion-cpp@<ver> (published) or @tetherto/diffusion-cpp-mono@<dev> (GPR) to force-install a specific build."
         type: string
         required: false
         default: ""
@@ -99,6 +99,11 @@ concurrency:
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Manual (workflow_dispatch) runs must name a device that exists on Device
   # Farm. This gate fails fast BEFORE any build or Device Farm run, so a typo
   # or an empty selection costs nothing. Skipped for workflow_call.
@@ -156,9 +161,9 @@ jobs:
     # fast BEFORE this up-to-120-min seed runs (the ticket's whole point is not
     # to spend on a doomed run). Skipped on workflow_call — validate-devices is
     # itself skipped there, and the `skipped` branch keeps this job running.
-    needs: [validate-devices]
-    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
-    runs-on: qvac-ubuntu2204-x64
+    needs: [runner_names, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
     environment: release
     timeout-minutes: 120
     permissions:
@@ -204,12 +209,14 @@ jobs:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     # seed-models must still succeed; validate-devices is skipped on
     # workflow_call (its `skipped` result keeps this job running as before).
-    needs: [seed-models, validate-devices]
-    if: ${{ !cancelled() && needs.seed-models.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
-    runs-on: ${{ matrix.runner }}
+    needs: [runner_names, seed-models, validate-devices]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.seed-models.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2204_x64 }}
     environment: release
     timeout-minutes: 120
-    continue-on-error: true
+    # No continue-on-error: a Device Farm test failure must fail this run on
+    # every trigger (workflow_dispatch, workflow_call, schedule). Re-adding it
+    # silently turns failed runs green.
     permissions:
       contents: read
       packages: read
@@ -219,7 +226,7 @@ jobs:
       fail-fast: false
       # On workflow_dispatch, run only the chosen platform (devices come from
       # the manual inputs). workflow_call runs both platforms as before.
-      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04"},{"platform":"iOS","os":"macos-14"}]}') }}
 
     steps:
       - name: Validate Dispatch Inputs
@@ -260,9 +267,12 @@ jobs:
           addon-npm-name: '@qvac/diffusion-cpp'
           prebuild-artifact-prefix: 'sd-cpp-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          # Manual dispatch (inputs.platform set): default (empty `package`) tests
-          # this branch's native prebuild; @qvac/diffusion-cpp@<ver> = published, @tetherto/diffusion-cpp@<dev>
-          # = this branch's GPR build). workflow_call keeps its prebuild_package/artifact-first path.
+          # Manual dispatch (inputs.platform set). An empty `package` does NOT test
+          # this branch's native code: a standalone dispatch produces no prebuild
+          # artifacts, so the fallback resolves the published @qvac/diffusion-cpp@latest.
+          # @qvac/diffusion-cpp@<ver> = published; @tetherto/diffusion-cpp-mono@<dev> = a branch
+          # build from GitHub Packages, the only way to put unmerged native code on a
+          # device. See docs/ci/MOBILE-ON-DEMAND.md. workflow_call keeps its prebuild_package/artifact-first path.
           package-version: ${{ inputs.platform != '' && inputs.package || inputs.prebuild_package }}
           force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.prebuild_package != '') && 'true' || 'false' }}
 
@@ -406,3 +416,5 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
+

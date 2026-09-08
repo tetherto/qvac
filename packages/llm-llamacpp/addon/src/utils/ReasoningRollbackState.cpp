@@ -41,6 +41,14 @@ bool ReasoningRollbackState::captureReasoningBoundary(
   return true;
 }
 
+void ReasoningRollbackState::captureReasoningBoundaryPosition(llama_pos nPast) {
+  if (!reasoningBoundary_.empty()) {
+    // Already anchored this inference; match `captureReasoningBoundary`.
+    return;
+  }
+  reasoningBoundary_.adoptPositionOnly(nPast);
+}
+
 bool ReasoningRollbackState::restoreReasoningBoundary(
     ::llama_context* ctx, llama_seq_id seqId) {
   if (reasoningBoundary_.empty()) {
@@ -53,13 +61,29 @@ void ReasoningRollbackState::recordPostReasoningToken(llama_token id) {
   if (!capturingPostReasoning_ || id == LLAMA_TOKEN_NULL) {
     return;
   }
+  // Called once per generated answer token. Seed a capacity on first use so
+  // a long answer does not walk the vector up from zero one realloc at a
+  // time; geometric growth covers it from there.
+  reserveReplayCapacity();
   postReasoningTokens_.push_back(id);
+}
+
+void ReasoningRollbackState::reserveReplayCapacity() {
+  if (postReasoningTokens_.capacity() == 0) {
+    constexpr size_t kInitialReplayCapacity = 128;
+    postReasoningTokens_.reserve(kInitialReplayCapacity);
+  }
 }
 
 void ReasoningRollbackState::appendPostReasoningToken(llama_token id) {
   if (id == LLAMA_TOKEN_NULL) {
     return;
   }
+  // Runs once per generated token until the reasoning span opens, so it wants
+  // the same initial reserve as the captured-tail path. It cannot be capped:
+  // every seeded token is pre-reasoning preamble that `compact()` must replay,
+  // and dropping one would leave `newPos` short of live KV.
+  reserveReplayCapacity();
   postReasoningTokens_.push_back(id);
   ++seededPostReasoningCount_;
 }
@@ -69,6 +93,18 @@ void ReasoningRollbackState::clipPostReasoningTokens(size_t maxCapturedTail) {
   if (postReasoningTokens_.size() > maxTotal) {
     postReasoningTokens_.resize(maxTotal);
   }
+}
+
+void ReasoningRollbackState::clipSeededPrefix(size_t maxSeeded) {
+  if (seededPostReasoningCount_ <= maxSeeded) {
+    return;
+  }
+  const auto first =
+      postReasoningTokens_.begin() + static_cast<std::ptrdiff_t>(maxSeeded);
+  const auto last = postReasoningTokens_.begin() +
+                    static_cast<std::ptrdiff_t>(seededPostReasoningCount_);
+  postReasoningTokens_.erase(first, last);
+  seededPostReasoningCount_ = maxSeeded;
 }
 
 void ReasoningRollbackState::clearPostReasoning() noexcept {

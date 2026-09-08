@@ -25,20 +25,6 @@ export function createProfilingDisabledMeta(): ProfilingRequestMeta {
   return { enabled: false }
 }
 
-export function createDelegatedProfilingMeta(
-  profileId: string,
-  meta?: ProfilingRequestMeta
-): ProfilingRequestMeta {
-  return {
-    enabled: true,
-    id: profileId,
-    includeServer: meta?.includeServer ?? false,
-    includeResources: meta?.includeResources ?? false,
-    resourceOrigin: 'provider',
-    ...(meta?.mode !== undefined && { mode: meta.mode })
-  }
-}
-
 export function injectProfilingMetaIntoObject(
   obj: Record<string, unknown>,
   meta: ProfilingRequestMeta

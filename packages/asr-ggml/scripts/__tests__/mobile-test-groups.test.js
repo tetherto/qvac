@@ -13,7 +13,7 @@ const { WHISPER_TEST_MODEL_NAMES } = require('../generate-prestage-block')
 const integrationAutoPath = path.resolve(__dirname, '../../test/mobile/integration.auto.cjs')
 const EXPECTED_GROUPS = ['whisper-perf', 'parakeet-perf']
 const EXPECTED_WHISPER_RUNNER_COUNT = 13
-const EXPECTED_PARAKEET_RUNNER_COUNT = 23
+const EXPECTED_PARAKEET_RUNNER_COUNT = 25
 
 function sorted(values) {
   return [...values].sort()

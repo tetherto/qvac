@@ -1,5 +1,5 @@
 import { invokePlugin, loadModel } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { echo, echoStream } from 'custom-echo-plugin/client'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {

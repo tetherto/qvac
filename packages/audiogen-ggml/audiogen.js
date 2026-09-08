@@ -1,7 +1,4 @@
 "use strict";
-// Thin JS <-> C++ boundary for the ACE-Step music addon, mirroring
-// tts-ggml/src/tts.ts. `AudioGenInterface` owns the native handle and forwards
-// createInstance / activate / runJob / cancel / destroyInstance to the binding.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AudioGenInterface = exports.RepaintMode = exports.AudioEditOperationType = void 0;
 /** Stable string values serialized across the JS -> native addon boundary. */

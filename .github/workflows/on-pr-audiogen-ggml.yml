@@ -194,7 +194,7 @@ jobs:
   # audiogen-ggml has no addon-level C++ unit tests today (CMakeLists.txt's
   # BUILD_TESTING block is OFF and reserved for a future addon suite).  The
   # ACE-Step engine's deterministic unit tests live in and run from
-  # qvac-ext-lib-whisper.cpp's audiogen CI, not here.  So
+  # qvac-fabric-speech.cpp's audiogen CI, not here.  So
   # cpp-test-coverage-audiogen-ggml.yml is a stub "no addon C++ tests yet"
   # job; gated on the run-cpp-addon-tests label.
   cpp-tests-coverage:

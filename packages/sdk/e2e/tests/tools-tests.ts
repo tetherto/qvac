@@ -1,5 +1,5 @@
 // Tools/Function calling test definitions
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 import type { ToolDialect } from '@qvac/sdk'
 
 // Helper for creating tools tests

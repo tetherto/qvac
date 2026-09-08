@@ -5,6 +5,7 @@ import test from 'brittle'
 // the plugin wired the right file slots without loading the native addon.
 type VideoDebugModel = {
   _files?: Record<string, string | undefined>
+  _config?: Record<string, unknown>
 }
 
 test('sdcpp plugin resolveConfig: resolves LTX-2 companions to artifacts and strips *Src', async (t) => {
@@ -142,6 +143,27 @@ test('sdcpp plugin createModel: LTX-2 audio VAE is optional (silent video)', asy
   const files = (result.model as unknown as VideoDebugModel)._files ?? {}
   t.is(files['embeddingsConnectors'], '/tmp/ltx_connectors.safetensors')
   t.is(files['audioVae'], undefined, 'audio VAE omitted → no audio slot')
+})
+
+test("sdcpp plugin createModel: forwards lora_apply_mode 'at_runtime' to LTX addon config", async (t) => {
+  const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
+
+  const result = diffusionPlugin.createModel({
+    modelId: 'ltx-lora',
+    modelPath: '/tmp/ltx.gguf',
+    modelConfig: {
+      mode: 'video',
+      lora_apply_mode: 'at_runtime'
+    },
+    artifacts: {
+      llmModelPath: '/tmp/gemma.gguf',
+      vaeModelPath: '/tmp/ltx_video_vae.safetensors',
+      embeddingsConnectorsModelPath: '/tmp/ltx_connectors.safetensors'
+    }
+  })
+
+  const config = (result.model as unknown as VideoDebugModel)._config ?? {}
+  t.is(config['lora_apply_mode'], 'at_runtime')
 })
 
 test('sdcpp plugin createModel: Wan video layout unchanged (t5Xxl, no LTX slots)', async (t) => {

@@ -7,7 +7,6 @@ const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
-const groupsFile = path.join(mobileDir, 'test-groups.json')
 
 function getIntegrationFiles() {
   if (!fs.existsSync(integrationDir)) {
@@ -64,50 +63,21 @@ function buildFileContents(files) {
   return `${lines.join('\n')}\n`
 }
 
-function validateGroups(functionNames) {
-  if (!fs.existsSync(groupsFile)) {
-    console.warn('[warn] test-groups.json not found — skipping split validation')
-    return
-  }
-  const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf-8'))
-  const nameSet = new Set(functionNames)
-  for (const [platform, splits] of Object.entries(groups)) {
-    const covered = new Set(Object.values(splits).flat())
-    const missing = functionNames.filter((n) => !covered.has(n))
-    const extra = [...covered].filter((n) => !nameSet.has(n))
-    if (missing.length) {
-      throw new Error(
-        '[' +
-          platform +
-          '] Tests not assigned to any group in test-groups.json:\n  ' +
-          missing.join('\n  ') +
-          '\nAdd them to a group in test/mobile/test-groups.json.'
-      )
-    }
-    if (extra.length) {
-      throw new Error(
-        '[' +
-          platform +
-          '] test-groups.json references non-existent tests:\n  ' +
-          extra.join('\n  ') +
-          '\nRemove them or check for typos.'
-      )
-    }
-  }
-  console.log('Group coverage validated — all tests assigned for every platform.')
-}
-
+// NOTE: this generator deliberately performs no test-groups.json validation.
+// `npm run test:integration` chains it (so the committed integration.auto.cjs
+// can never go stale), which means anything that throws here takes desktop
+// integration tests down on every platform. Group coverage is a mobile
+// scheduling concern, so it lives in `npm run test:mobile:validate`
+// (scripts/validate-mobile-tests.js) and runs in the ungated ts-checks job.
 function main() {
   const files = getIntegrationFiles()
   if (files.length === 0) {
     throw new Error(`No integration test files found inside ${integrationDir}`)
   }
 
-  const functionNames = files.map(toFunctionName)
   const content = buildFileContents(files)
   fs.writeFileSync(outputFile, content, 'utf8')
   console.log(`Generated ${outputFile} with ${files.length} integration runners.`)
-  validateGroups(functionNames)
 }
 
 if (require.main === module) {

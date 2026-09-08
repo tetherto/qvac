@@ -1,11 +1,10 @@
 # @qvac/audiogen-ggml
 
-Generate **music from a text description** — fully native, on CPU or GPU. You
-give it a prompt like _"lo-fi hip hop, mellow piano, rainy night"_ (optionally
-with lyrics to sing and musical hints like BPM or key), and it returns stereo
-48 kHz audio. It's the ggml-backed qvac addon around the
-[ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) model, same shape as
-`@qvac/tts-ggml`.
+Generate **music from a text description** with
+[ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) or
+[MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3). ACE-Step
+supports CPU and GPU generation across desktop and mobile. MiniMax-Music3 runs
+on desktop CPUs and GPUs and returns stereo 44.1 kHz audio.
 
 ## How it works
 
@@ -27,8 +26,8 @@ You get the audio as **interleaved Int16 PCM** through an output callback
 (a single PCM payload once generation completes; progress ticks stream during
 the run), followed by a final stats event. The addon never
 downloads anything: you give it **local file paths** to the model GGUFs and it
-opens them. GPU (Metal / Vulkan, including Vulkan on Android Mali devices) is
-used when you ask for it, with a CPU fallback.
+opens them. GPU (Metal / CUDA / Vulkan, including Vulkan on Android Mali
+devices) is used when you ask for it, with a CPU fallback.
 
 ## Install
 
@@ -39,6 +38,25 @@ npm install @qvac/audiogen-ggml
 Published prebuilds cover Linux x64/arm64, macOS x64/arm64, Windows x64,
 Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
 [Models](#models)); point the addon at the folder that holds them.
+MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
+
+The published linux-x64 prebuild ships Vulkan. CUDA is opt-in at build time
+via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host).
+When CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend
+mode: the CPU-variant, Vulkan, and CUDA backends ship as `.so` modules beside
+the addon, and only the CUDA module depends on the CUDA runtime. Engaging
+CUDA needs the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
+cuBLAS) resolvable at load time; hosts that cannot resolve them skip the
+module and fall back to Vulkan or CPU. The engine prefers CUDA when both GPU
+backends are usable.
+
+A CUDA build's module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
+Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
+Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
+path here: the backend skips such devices at registration and the addon falls
+back to Vulkan or CPU.
 
 To build the native addon from source in a repository checkout:
 
@@ -53,6 +71,39 @@ npm run build
 > Building with `@qvac/sdk`? Use the SDK's
 > [`audioGen()` music generation guide](../../docs/website/content/docs/ai-capabilities/music-generation.mdx)
 > for registry-hosted models, progress streaming, and targeted cancellation.
+
+### MiniMax-Music3 on desktop
+
+MiniMax-Music3 needs an LM GGUF and a synthesis GGUF. Pass their directory or
+both explicit paths:
+
+```js
+const { AudioGen, ENGINE_MINIMAX } = require('@qvac/audiogen-ggml')
+
+const gen = new AudioGen({
+  engine: ENGINE_MINIMAX,
+  files: { modelDir: '/path/to/minimax-music3' },
+  config: { threads: 8 }
+})
+
+await gen.load()
+const response = await gen.run('warm cinematic piano with gentle strings', {
+  lyrics: '[Instrumental]',
+  duration: 12,
+  seed: 7,
+  inferenceSteps: 8,
+  cfgScale: 1.7
+})
+```
+
+`duration` is converted to the model's 25 semantic frames per second. Use
+`maxFrames` instead for direct control. MiniMax-Music3 rejects ACE-Step-only
+controls such as BPM, DiT shift, frozen semantic codes, cover audio, and
+`nGpuLayers`. Set `config.useGPU: true` to run the whole model pair on a GPU
+backend (CUDA, Vulkan, Metal — ~22 GB of device memory for the f16 pair); the
+engine falls back to CPU when no usable GPU exists and `stats.backendDevice`
+reports the backend actually used. See
+[`examples/generate-music-minimax.js`](examples/generate-music-minimax.js).
 
 ### 1. Simplest case — an instrumental
 
@@ -84,9 +135,13 @@ for await (const item of response.iterate()) {
   }
 }
 const stats = await response.await()
-// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId }
-// backendDevice: 0 = CPU, 1 = GPU
-// backendId:     0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId,
+//   gpuFallbackReason, qualityScore? }
+// backendDevice:     0 = CPU, 1 = GPU
+// backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+// gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
+// lyricsScore + lrc: alignment confidence and LRC text, only with generateLrc
+// qualityScore:      [0, 1], present only when the run set computeQualityScore
 
 await gen.destroy()
 ```
@@ -95,7 +150,13 @@ await gen.destroy()
 > one PCM item after generation, not incremental audio chunks. `await()` resolves
 > with terminal stats. `backendDevice` /
 > `backendId` report the backend the engine *resolved to*, not the one requested,
-> so a `useGPU: true` run that fell back to the CPU is detectable.
+> so a `useGPU: true` run that fell back to the CPU is detectable. Use
+> `audiogenBackendName(stats.backendId)` rather than copying the code table
+> above; it returns `undefined` for an id this version does not know.
+> When a `useGPU: true` run resolves to the CPU, `gpuFallbackReason` says which
+> half of the acquisition failed - no GPU device was enumerated, or one was and
+> every attempt to initialise it failed. Name it with
+> `audiogenGpuFallbackReason(stats.gpuFallbackReason)`.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
 
 ### 2. A song with lyrics + rhythm
@@ -159,9 +220,44 @@ Both PCM inputs must be `Float32Array` values containing finite, normalized
 samples in interleaved stereo order (`L, R, L, R, ...`) at 48 kHz. The addon
 does not resample, convert channels, or normalize input PCM. Keep samples in
 the conventional `[-1, 1]` range. `sourceAudio` is required for cover tasks.
-`cover-nofsq` currently requires `audioCoverStrength: 1`;
-`coverNoiseStrength` controls the source/noise blend from `0` to `1`. The
-full FSQ-based `cover` task is reserved but not implemented.
+`audioCoverStrength` sets the fraction of the run that follows the source:
+`1` (the default) keeps the source structure throughout, while lower values
+let the generation finish freely after that point — `0.5` starts as a cover
+and diverges halfway. `coverNoiseStrength` controls the source/noise blend
+from `0` to `1`. The full FSQ-based `cover` task is reserved but not
+implemented.
+
+Use `lego` to generate a new isolated instrument layer that follows the
+source (tempo, key, groove). The result is only the new stem, ready to mix
+over the source. Lego requires the base DiT variant (turbo and sft are
+rejected) and a `track` name:
+
+```js
+const response = await gen.run('clean electric guitar with syncopated fills', {
+  lyrics: '[Instrumental]',
+  taskType: 'lego',
+  track: 'guitar',
+  sourceAudio
+})
+```
+
+Valid `track` names: `vocals`, `backing_vocals`, `drums`, `bass`, `guitar`,
+`keyboard`, `percussion`, `strings`, `synth`, `fx`, `brass`, `woodwinds`.
+Output length locks to the source length. Takes vary per seed; generate a few
+and keep the best. The base DiT is not in the registry `ditVariant` set yet,
+so pass it as an explicit `files.ditModel` path next to `modelDir` (which
+still resolves the three fixed stages).
+
+See [`examples/generate-lego.js`](examples/generate-lego.js) for a runnable
+stem example using raw stereo 48 kHz float PCM input:
+
+```bash
+ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  AUDIOGEN_BASE_DIT_MODEL=/path/to/acestep-v15-base-Q8_0.gguf \
+  AUDIOGEN_SOURCE_PCM=source.f32le \
+  npm run example:lego
+```
 
 See [`examples/generate-cover.js`](examples/generate-cover.js) for a runnable
 cover example using raw stereo 48 kHz float PCM input.
@@ -171,6 +267,131 @@ ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
 AUDIOGEN_MODEL_DIR=/path/to/models \
   AUDIOGEN_SOURCE_PCM=source.f32le \
   npm run example:cover
+```
+
+### Simple Mode: one sentence in, a full song out
+
+With `simpleMode: true` the caption is a short natural-language query and the
+LM composes the complete request before synthesis — a detailed caption, full
+lyrics, and every metadata field you left unset (BPM, key/scale, time
+signature, vocal language, and duration when `duration` is `0`). Anything you
+set is kept. Leave `lyrics` unset for LM-written vocals, or pass
+`'[Instrumental]'` for an instrumental song.
+
+```js
+const response = await gen.run(
+  'a romantic modern salsa with male lead vocals for a wedding',
+  { simpleMode: true, duration: 0, seed: 4242 }
+)
+```
+
+Or end to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:simple
+```
+
+### LRC generation: karaoke-style synchronized lyrics
+
+With `generateLrc: true` the engine aligns the lyrics with the generated
+audio (a DiT cross-attention probe plus DTW over the validated lyric heads)
+and delivers standard LRC text — one `[mm:ss.xx]` timestamp per lyric line —
+in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`:
+
+```js
+const response = await gen.run(caption, {
+  generateLrc: true,
+  lyrics: '[verse]\nDancing with you under the moonlight'
+})
+// ...collect the PCM...
+const stats = await response.await()
+fs.writeFileSync('song.lrc', stats.lrc)
+```
+
+It requires lyrics to align — pass them explicitly or let Simple Mode write
+them; instrumental requests are rejected — and `taskType: 'text2music'`.
+End to end from the repo (writes `audiogen-lrc.wav` + `audiogen-lrc.lrc`):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:lrc
+```
+
+### Query Rewriting: keep your lyrics, upgrade your caption
+
+With `rewriteQuery: true` the LM FORMAT pass reworks a full request before
+synthesis: your caption is rewritten into a detailed musical description and
+the lyric content is preserved, with any unset metadata filled the same way
+Simple Mode does. Unlike Simple Mode — which expands a bare query and writes
+lyrics from scratch — Query Rewriting takes caption AND lyrics as input, so
+real `lyrics` are required (`'[Instrumental]'` belongs to Simple Mode) and the
+two options are mutually exclusive:
+
+```js
+const response = await gen.run('a short salsa idea', {
+  rewriteQuery: true,
+  lyrics: '[verse]\nsuena el tambor y el barrio se enciende',
+  seed: 4242
+})
+```
+
+Faithful rewriting (lyrics back verbatim, caption on-genre) needs the 1.7B LM
+(`acestep-5Hz-lm-1.7B`); the 0.6B drifts genre, voice, and language. End to
+end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:rewrite
+```
+
+### Quality scoring: rank a batch of takes
+
+With `computeQualityScore: true` the engine teacher-forces the generated audio
+codes back through the LM and `stats.qualityScore` reports how well the take
+matches the request as a weighted `[0, 1]` score — caption and lyrics as
+normalized PMI, set metadata fields as top-k recall. Generation varies a lot
+by seed, so generate several takes and keep the best:
+
+```js
+const response = await gen.run(caption, { computeQualityScore: true, seed })
+// ...collect the PCM...
+const stats = await response.await()
+console.log(stats.qualityScore) // e.g. 0.6661
+```
+
+Scoring costs extra LM forwards after code generation and requires the LM
+code path (`taskType: 'text2music'`). End to end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:best-of
+```
+
+### Audio understanding: the pipeline in reverse
+
+`understand()` describes an audio clip instead of generating one: the engine
+encodes the PCM, recovers the FSQ semantic codes, and the LM reports metadata
+and a caption. The input is interleaved stereo float PCM at 48 kHz — the same
+layout `sourceAudio` uses:
+
+```js
+const response = await gen.understand(pcm, { seed: 42 })
+const stats = await response.await()
+const heard = stats.understand
+// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes }
+```
+
+The description streams as an `understand` output item (progress ticks report
+the `source`, `tok`, and `understand` stages) and is repeated on the terminal
+stats. `audioCodes` are the recovered semantic codes — pass them back as a
+generation's `audioCodes` to re-synthesize or remix the clip. A
+`vocalLanguage` hint forces the language field instead of the LM's guess.
+End to end from the repo (generates a clip, then describes it):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:understand
 ```
 
 ### Ordered audio editing
@@ -292,7 +513,10 @@ runnable end-to-end script (`npm run example`).
 
 ## Options
 
-**Constructor** (`new AudioGen({ files, config, logger })`):
+**Constructor** (`new AudioGen({ engine, files, config, logger })`):
+
+`engine` is `acestep` by default. It is inferred as `minimax` when
+`files.synthModel` is present.
 
 `files` — model paths:
 
@@ -301,13 +525,15 @@ runnable end-to-end script (`npm run example`).
 | `modelDir` | Folder holding the GGUFs (stages auto-classified by name). |
 | `ditVariant` | Which DiT to load from `modelDir`: `turbo-q4` \| `turbo-q8` \| `sft`. |
 | `textEncModel` / `lmModel` / `ditModel` / `vaeModel` | Explicit per-stage paths (override `modelDir`). |
+| `lmModel` / `synthModel` | Explicit MiniMax-Music3 pair (override `modelDir`). |
 
 `config` — runtime knobs:
 
 | Option | Meaning |
 |--------|---------|
-| `useGPU` | Run on GPU (Metal / Vulkan, including Android Mali); falls back to CPU. |
+| `useGPU` | Run on GPU (Metal / CUDA / Vulkan, including Android Mali); falls back to CPU. |
 | `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
+| `cfgScale` | Default MiniMax flow guidance scale; `0` uses the model default. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |
 | `backendsDir` | Advanced; override the prebuilds root scanned for dlopen'd ggml backend modules. Defaults to `<addon>/prebuilds` (correct for the shipped package). Needed on arm64, where the CPU backend is a set of per-microarch module `.so`s. |
@@ -326,18 +552,37 @@ wrapped by a level-gated `QvacLogger`.
 | `timesignature` | Time signature, such as `4/4`. |
 | `augmentCaptionWithMetadata` | Append BPM/tempo, time signature, and key guidance to the internal conditioning caption; defaults to `false`. |
 | `duration` | Target length in seconds; omit to let the LM decide. |
+| `maxFrames` | MiniMax semantic-frame cap; cannot be combined with `duration`. |
+| `inferenceSteps` / `cfgScale` | Per-run MiniMax flow controls. |
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
+| `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
+| `rewriteQuery` | LM FORMAT pass: rewrite the caption into a detailed description, preserving the lyric content. Requires real `lyrics` and `taskType: 'text2music'`; mutually exclusive with `simpleMode`. |
+| `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
+| `generateLrc` | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`. |
+| `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
 | `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |
-| `sourceAudio` | Source PCM in the same format; required by cover tasks. |
-| `taskType` | `text2music` (default), `cover-nofsq`, or reserved `cover`. |
-| `audioCoverStrength` | Source-context strength from `0` to `1`; currently must be `1` for `cover-nofsq`. |
+| `sourceAudio` | Source PCM in the same format; required by cover and lego tasks. |
+| `taskType` | `text2music` (default), `cover-nofsq`, `lego`, or reserved `cover`. |
+| `track` | Lego target layer; required when `taskType` is `lego`. |
+| `guidanceScale` | DiT classifier-free guidance; `0` (default) auto-resolves to `1.0` on turbo and `7.0` on base/sft. |
+| `audioCoverStrength` | Fraction of the run that follows the source, from `0` to `1` (default `1`). |
 | `coverNoiseStrength` | Initial source/noise blend from `0` to `1`. |
 
 ## Models
+
+### MiniMax-Music3
+
+MiniMax-Music3 uses two GGUF files: `mm3-lm-<quant>.gguf` and
+`mm3-synth-<quant>.gguf`. This package does not publish or download those
+weights yet. Supply local converted files through `modelDir` or explicit
+`lmModel` and `synthModel` paths. The model weights are governed by the
+MiniMax-Music3 Community License.
+
+### ACE-Step
 
 Four stages. Three are fixed; only the DiT changes, so you pick it with
 `ditVariant`.
@@ -401,17 +646,15 @@ model-directory, and DiT-variant variables.
 
 ## Internals
 
-```
-index.js ─► binding (BARE_MODULE) ─► AcestepModel ─► tts_cpp::acestep::Engine
-                                                          │
-                          text-enc ─► LM ─► DiT ─► VAE   (ggml graphs)
-```
+`index.js` selects `AcestepModel` or `MinimaxModel`, then the native binding
+dispatches to the corresponding `audiogen-cpp` engine.
 
 - `addon/src/js-interface/binding.cpp` — `BARE_MODULE` exports.
 - `addon/src/addon/AddonJs.hpp` — `createInstance` / `activate` / `runJob`.
 - `addon/src/model-interface/acestep/` — `AcestepModel`, wrapping the engine.
-- Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on `audiogen-cpp`
-  (the C++ engine, on our ggml-speech fork).
+- `addon/src/model-interface/minimax/` — desktop-only `MinimaxModel`.
+- Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on the
+  `speech-cpp[audiogen]` port.
 
 ## Benchmarking
 
@@ -455,4 +698,5 @@ version bump.
 
 ## License
 
-Apache-2.0. Model weights belong to ACE Studio and StepFun.
+Apache-2.0. ACE-Step model weights belong to ACE Studio and StepFun.
+MiniMax-Music3 weights are governed by the MiniMax-Music3 Community License.

@@ -6,7 +6,7 @@ schemaType: HowTo
 
 ## Overview
 
-Transcription uses your choice of either [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/main/parakeet-cpp) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-ext-lib-whisper.cpp`, or `modelType: "parakeet"` for Parakeet. Parakeet supports multilingual transcription (TDT), english-only transcription (CTC), speaker diarization (Sortformer), and end-of-utterance detection (EOU) for duplex streaming.
+Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-fabric-speech.cpp`, or `modelType: "parakeet-transcription"` for Parakeet. Parakeet supports multilingual transcription (TDT), English-only transcription (CTC), English transcription with a single model that supports both batch and duplex streaming (Unified), Indic-language transcription (Indic Conformer CTC), speaker diarization (Sortformer), and end-of-utterance detection (EOU) for duplex streaming.
 
 Provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
 
@@ -23,7 +23,7 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 ## Models
 
-### `qvac-ext-lib-whisper.cpp`
+### `qvac-fabric-speech.cpp`
 
 You should load two models:
 - a [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp)-compatible model for transcription. Model file format: `*.bin`; and
@@ -31,27 +31,38 @@ You should load two models:
 
 ### Parakeet
 
-As of `@qvac/transcription-parakeet` 0.6.0, Parakeet ships as a **single GGUF** per variant — the addon auto-detects TDT / CTC / Sortformer / EOU from `parakeet.model.type` GGUF metadata. There is no `modelConfig.modelType` discriminator, no per-variant `parakeet*Src` artifact fields, and no `ParakeetArtifactsRequiredError`. Just supply the GGUF via the top-level `modelSrc`:
+As of `@qvac/transcription-parakeet` 0.6.0, Parakeet ships as a **single GGUF** per variant — the addon auto-detects TDT / CTC / Unified / Sortformer / EOU from `parakeet.model.type` GGUF metadata. There is no `modelConfig.modelType` discriminator, no per-variant `parakeet*Src` artifact fields, and no `ParakeetArtifactsRequiredError`. Just supply the GGUF via the top-level `modelSrc`:
 
 ```ts
 await loadModel({
   modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,    // multilingual, ~750MB
-  modelType: "parakeet",
+  modelType: "parakeet-transcription",
 });
 
 await loadModel({
   modelSrc: PARAKEET_CTC_0_6B_Q8_0,       // english-only, streaming-capable
-  modelType: "parakeet",
+  modelType: "parakeet-transcription",
+});
+
+await loadModel({
+  modelSrc: PARAKEET_UNIFIED_0_6B_Q8_0,   // english; batch + streaming, ~740MB
+  modelType: "parakeet-transcription",
 });
 
 await loadModel({
   modelSrc: PARAKEET_SORTFORMER_4SPK_V1_Q8_0,  // 4-speaker diarization
-  modelType: "parakeet",
+  modelType: "parakeet-transcription",
 });
 
 await loadModel({
   modelSrc: PARAKEET_EOU_120M_V1_Q8_0,    // end-of-utterance detection
+  modelType: "parakeet-transcription",
+});
+
+await loadModel({
+  modelSrc: PARAKEET_INDIC_CONFORMER_CTC_Q8_0,  // Indic languages
   modelType: "parakeet",
+  modelConfig: { language: "hi" },              // required; e.g. "hi", "ta"
 });
 ```
 
@@ -62,7 +73,7 @@ For model artifacts available as constants, see [SDK — Models](/introduction#m
 </Callout>
 
 <Callout type="info">
-**On VAD:** when using `qvac-ext-lib-whisper.cpp`, you can optionally provide a separate model for voice activity detection (VAD); this is recommended. In turn, Parakeet handles VAD internally, so no additional model or configuration is required.
+**On VAD:** when using `qvac-fabric-speech.cpp`, you can optionally provide a separate model for voice activity detection (VAD); this is recommended. In turn, Parakeet handles VAD internally, so no additional model or configuration is required.
 </Callout>
 
 ## Streaming with `transcribeStream()`
@@ -126,9 +137,9 @@ The synthetic `{ type: "endOfTurn", source: "parakeet" }` event surfaces wheneve
 
 ## Examples
 
-### `qvac-ext-lib-whisper.cpp`
+### `qvac-fabric-speech.cpp`
 
-The following script shows an example of `qvac-ext-lib-whisper.cpp` transcription with prompt-guided decoding, VAD, and GPU acceleration:
+The following script shows an example of `qvac-fabric-speech.cpp` transcription with prompt-guided decoding, VAD, and GPU acceleration:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -195,6 +206,50 @@ The following script shows an example of English-only transcription using the Pa
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-ctc-filesystem.ts title="parakeet-ctc-filesystem.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Parakeet Unified
+
+The following script shows an example of English transcription using the Parakeet Unified model from a WAV file. Load it once and use it with either `transcribe()` for batch or `transcribeStream()` for low-latency streaming.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/parakeet-unified-filesystem.js title="parakeet-unified-filesystem.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-unified-filesystem.ts title="parakeet-unified-filesystem.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Parakeet Indic Conformer
+
+The following script shows an example of Indic-language transcription using the Parakeet Indic Conformer CTC model from a WAV file:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/parakeet-indic-conformer-filesystem.js title="parakeet-indic-conformer-filesystem.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-indic-conformer-filesystem.ts title="parakeet-indic-conformer-filesystem.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

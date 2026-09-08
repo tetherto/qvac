@@ -14,9 +14,7 @@ import { completion, loadModel, unloadModel, QWEN3_1_7B_INST_Q4 } from '@/index'
 
 // MCP SDK is a user-installed optional dependency
 // Install with: bun add @modelcontextprotocol/sdk
-// eslint-disable-next-line import/no-unresolved
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-// eslint-disable-next-line import/no-unresolved
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 // ============================================================

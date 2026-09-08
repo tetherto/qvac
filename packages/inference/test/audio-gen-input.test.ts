@@ -273,6 +273,53 @@ test('audioGen plugin operation forwards 0.2.1 controls and decoded audio to the
   t.is(getRequestRegistry().get(requestId), null)
 })
 
+test('audioGen plugin operation forwards MiniMax frame and flow controls to the addon', async (t) => {
+  const modelId = 'audio-gen-operation-minimax-controls'
+  const requestId = 'audio-gen-request-minimax-controls'
+  let capturedOptions: GenerateOptions | undefined
+  const model = new AudioGen({
+    engine: 'minimax',
+    files: {
+      lmModel: 'minimax-lm.gguf',
+      synthModel: 'minimax-synth.gguf'
+    }
+  })
+  model.run = async function (_caption: string, opts?: GenerateOptions) {
+    capturedOptions = opts
+    return createResponse(
+      [{ outputArray: new Int16Array([1, -1]), sampleRate: 48000, channels: 2 }],
+      {}
+    )
+  }
+  registerModel(modelId, {
+    model: model as unknown as AnyModel,
+    path: '',
+    config: {},
+    modelType: ModelType.audiogenGgml
+  })
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  for await (const _frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId,
+    modelId,
+    caption: 'warm cinematic piano',
+    maxFrames: 250,
+    inferenceSteps: 12,
+    cfgScale: 1.8
+  })) {
+    // drain
+  }
+
+  t.alike(capturedOptions, {
+    maxFrames: 250,
+    inferenceSteps: 12,
+    cfgScale: 1.8
+  })
+})
+
 test('audioGen plugin operation omits unset controls and audio from the addon call', async (t) => {
   const modelId = 'audio-gen-operation-default-controls'
   const requestId = 'audio-gen-request-default-controls'

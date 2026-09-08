@@ -1,0 +1,11 @@
+node_modules
+dist
+bun.lock
+.npmrc
+
+# Local run artifacts produced by `qvac-test run:local:*`
+reports
+build
+.tmp
+*.tgz
+*.apk

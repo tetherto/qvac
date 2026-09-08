@@ -1,81 +1,95 @@
-// Consumer-side type test for the process boundary, the counterpart to
-// narrowing.test-d.ts. Compiling `process.d.ts` on its own only proves the
-// declaration parses; this proves the response union narrows the way a
-// supervisor would rely on. Type-checked by `npm run test:dts`, never executed.
-
 import {
+  encodeFitLlamaProcessRequest,
   encodeFitProcessRequest,
   parseFitProcessResponse,
   resolveFitProcessRunnerPath,
+  FIT_PROCESS_PROTOCOL_VERSION,
+  FIT_PROCESS_PROTOCOL_VERSION_V2,
   FIT_PROCESS_MAX_REQUEST_BYTES,
   FIT_PROCESS_MAX_RESPONSE_BYTES
 } from '../../process'
-import type { FitProcessRequest, FitProcessResponse } from '../../process'
-import { FIT_STATUS } from '../../index'
+import type {
+  FitLlamaProcessConfig,
+  FitProcessRequest,
+  FitProcessResponse
+} from '../../process'
 import type { FitConfig, FitResult } from '../../index'
+import type { FitLlamaResult } from '../../process'
 
 declare function assertNever (value: never): never
 
-// A supervisor holds the two ends of the pipe: a `FitConfig` in, an opaque
-// parsed JSON value back out.
-const config: FitConfig = { modelPath: '/model.gguf', nCtx: 4096 }
-const requestLine: string = encodeFitProcessRequest(config)
+const v1Config: FitConfig = { modelPath: '/model.gguf', nCtx: 4096, swaFull: true }
+const v2Config: FitLlamaProcessConfig = {
+  modelPath: '/model.gguf',
+  params: { device: 'gpu', 'ctx-size': '4096' }
+}
+const v1Line: string = encodeFitProcessRequest(v1Config)
+const v2Line: string = encodeFitLlamaProcessRequest('completion', v2Config)
 const runnerPath: string = resolveFitProcessRunnerPath()
-void requestLine
+void v1Line
+void v2Line
 void runnerPath
 
-// @ts-expect-error the codec takes a config, not an already-wrapped envelope
-encodeFitProcessRequest({ version: 1, config })
-
-// @ts-expect-error modelPath is required
-encodeFitProcessRequest({ nCtx: 4096 })
+const v1Request: FitProcessRequest = {
+  version: FIT_PROCESS_PROTOCOL_VERSION,
+  config: v1Config
+}
+const v2Request: FitProcessRequest = {
+  version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+  loadKind: 'completion',
+  config: v2Config
+}
+void v1Request
+void v2Request
 
 const response: FitProcessResponse = parseFitProcessResponse(null as unknown)
-
 if (response.status === 'completed') {
-  // A completed response carries a full FitResult, which then narrows on its
-  // own status exactly as an in-process `fitParams` call would.
-  const result: FitResult = response.result
-  if (result.status === FIT_STATUS.SUCCESS) {
-    const ctx: number = result.nCtx
-    void ctx
-  }
-  void result
+  // Correlated on version: the v1 envelope carries the low-level contract
+  // unchanged, and only the v2 one can report `unsupported-config`.
+  if (response.version === FIT_PROCESS_PROTOCOL_VERSION) {
+    const v1Result: FitResult = response.result
+    void v1Result
 
-  // @ts-expect-error `error` belongs to the other branch
-  const error = response.error
-  void error
+    // @ts-expect-error a v1 response cannot report the raw llama-load outcome
+    const leaked: 'unsupported-config' = response.result.reason
+    void leaked
+  } else {
+    const v2Result: FitLlamaResult = response.result
+    void v2Result
+  }
 } else {
   const name: string = response.error.name
-  const message: string = response.error.message
   void name
-  void message
-
-  // @ts-expect-error `result` belongs to the other branch
-  const result = response.result
-  void result
 }
 
-// Exhaustiveness: adding a status without handling it must fail to compile.
-function describe (r: FitProcessResponse): string {
-  switch (r.status) {
-    case 'completed': return r.result.reason
-    case 'invocation-error': return r.error.message
-    default: return assertNever(r)
+function describe (value: FitProcessResponse): string {
+  switch (value.status) {
+    case 'completed': return value.result.reason
+    case 'invocation-error': return value.error.message
+    default: return assertNever(value)
   }
 }
 void describe
 
-// The protocol version is a literal, so a request cannot be built against a
-// version this package does not speak.
-const request: FitProcessRequest = { version: 1, config }
-void request
+if (response.version === FIT_PROCESS_PROTOCOL_VERSION_V2) {
+  const version: 2 = response.version
+  void version
+} else {
+  const version: 1 = response.version
+  void version
+}
 
-// @ts-expect-error the version is pinned to the one this package implements
-const stale: FitProcessRequest = { version: 2, config }
+// @ts-expect-error v2 accepts raw llama config only
+const invalidV2: FitProcessRequest = {
+  version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+  config: v1Config
+}
+void invalidV2
+
+// @ts-expect-error version 3 is unsupported
+const stale: FitProcessRequest = { version: 3, config: v1Config }
 void stale
 
-// Size bounds are readable so a caller can pre-check before spawning.
 const maxRequest: number = FIT_PROCESS_MAX_REQUEST_BYTES
 const maxResponse: number = FIT_PROCESS_MAX_RESPONSE_BYTES
 void maxRequest

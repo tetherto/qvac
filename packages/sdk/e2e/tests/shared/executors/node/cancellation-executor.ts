@@ -1,5 +1,5 @@
 import * as path from 'node:path'
-import { type Expectation, type TestResult } from '@qvac/qvac-test-suite'
+import { type Expectation, type TestResult } from '@qvac/test-suite'
 import { CancellationExecutor, type TranscribeCancelParams } from '../cancellation-executor.js'
 import { cancelByRequestIdTranscribe } from '../../../cancellation-tests.js'
 

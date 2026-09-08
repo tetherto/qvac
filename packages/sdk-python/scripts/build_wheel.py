@@ -123,7 +123,7 @@ def stage_bundle(sdk_dir: Path) -> None:
     tree. The bundle is build-time-only staging: it's gitignored, and the
     thin (unbundled) wheel simply builds without it present."""
     worker = sdk_dir / "dist"
-    if not (worker / "server" / "worker.js").exists():
+    if not (worker / "src" / "worker" / "index.js").exists():
         raise SystemExit(
             f"no built worker at {worker} -- run `bun run build` in {sdk_dir}"
         )

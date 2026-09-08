@@ -1,9 +1,0 @@
-{
-  global:
-    bare_*;
-    napi_*;
-    OrtGetApiBase;
-    OrtSessionOptionsAppendExecutionProvider_*;
-  local:
-    *;
-};

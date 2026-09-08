@@ -17,9 +17,8 @@
  *  - `requestId`  — cancel just this call with `cancel({ requestId })`; peers
  *                   keep decoding.
  *
- * Non-cached completions and batches share the model's `parallel` admission
- * cap: with `parallel` in flight, admitting one more waits FIFO until a slot
- * frees.
+ * Completions and batches share the model's `parallel` admission cap: with
+ * `parallel` in flight, admitting one more waits FIFO until a slot frees.
  *
  * Run from packages/sdk:
  *   bun run examples/multi-job-completion.ts

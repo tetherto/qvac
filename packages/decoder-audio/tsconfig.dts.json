@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "skipLibCheck": false
+  },
+  "include": ["index.d.ts", "constants.d.ts", "utils/**/*.d.ts", "test/types/**/*.ts"]
+}

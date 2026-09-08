@@ -88,6 +88,19 @@ jobs:
           node --test
           .github/scripts/test/ci-trust-policy.test.mjs
           .github/scripts/test/prebuild-status.test.mjs
+          .github/scripts/test/publish-gate-policy.test.mjs
+          .github/scripts/test/publish-gpr-skip-policy.test.mjs
+          .github/scripts/test/runner-names.test.mjs
+
+      # Pins which registry the mobile prebuild fallback resolves. The
+      # @tetherto/<addon>-mono path is how an unmerged NATIVE change reaches a
+      # device; when it regresses, mobile runs quietly test the published
+      # release instead and go green for the wrong reason. npm is mocked, so
+      # this needs no network or credentials.
+      - name: Run mobile prebuild registry tests
+        run: >-
+          node --test
+          .github/scripts/test/mobile-prebuild-registry.test.mjs
 
       # The co-load inventory drifts when the SDK swaps an addon, not when the
       # co-load package changes, so this has to run on every PR rather than

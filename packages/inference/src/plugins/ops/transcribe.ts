@@ -66,7 +66,7 @@ const SILENCE_MARKERS: Record<string, string> = {
 
 function getEngineModelType(modelId: string): string {
   const entry = getModelEntry(modelId)
-  if (!entry || entry.isDelegated) return ''
+  if (!entry) return ''
   return entry.local.modelType
 }
 

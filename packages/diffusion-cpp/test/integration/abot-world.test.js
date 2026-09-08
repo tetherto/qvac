@@ -27,8 +27,10 @@
 //   - ABOT_MODELS_DIR overrides provisioning entirely (local runs, see
 //     scripts/download-model-abot.sh).
 //   - The fixed-scene walk lane additionally needs a scene pack
-//     (scene.safetensors); it is not part of the published set, so that lane
-//     passes as a no-op with an explanatory message when absent.
+//     (scene.safetensors); it is not part of the published set and is never
+//     requested from the registry (a probe would only log a MODEL_NOT_FOUND
+//     false alarm). Place the file next to the GGUFs (or via ABOT_MODELS_DIR)
+//     to exercise that lane; otherwise it passes as an explanatory no-op.
 //
 // Gate: the lanes run on the Linux x64 GPU legs in CI (NO_GPU excludes the
 // arm64 legs) and anywhere ABOT_MODELS_DIR points at a provisioned set.
@@ -48,6 +50,7 @@ const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
 const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
 const { readImageDimensions } = require('@qvac/diffusion-cpp/addon.js')
 const { ensureModelPath, setupJsLogger } = require('./utils.js')
+const { pngLuminanceStddev, readScenePackPromptRows } = require('./abot-guards.js')
 
 // The registry client is a devDependency used only by the desktop provisioning
 // path (the lanes skip on mobile). The indirect specifier keeps the literal out
@@ -103,8 +106,7 @@ async function provisionFromRegistry(dir) {
   const missing = Object.keys(SET_BYTES).filter(
     (name) => !isComplete(path.join(dir, name), SET_BYTES[name])
   )
-  const sceneMissing = !fs.existsSync(path.join(dir, SCENE_NAME))
-  if (missing.length === 0 && !sceneMissing) return
+  if (missing.length === 0) return
 
   // Lazy require: only lanes that actually provision touch the swarm stack.
   const { QVACRegistryClient } = require(REGISTRY_CLIENT_PKG)
@@ -132,15 +134,6 @@ async function provisionFromRegistry(dir) {
         } catch (_) {}
         throw new Error(`${name}: downloaded ${got} bytes, expected ${SET_BYTES[name]}`)
       }
-    }
-    if (sceneMissing) {
-      // Optional set member (fixed-scene walk lane no-ops without it).
-      await client
-        .downloadModel(`${REGISTRY_PATH}/${SCENE_NAME}`, REGISTRY_SOURCE, {
-          outputFile: path.join(dir, SCENE_NAME),
-          timeout: 300_000
-        })
-        .catch(() => {})
     }
   } finally {
     await client.close().catch(() => {})
@@ -272,6 +265,15 @@ test(
       'walking forward produces different frames than idling'
     )
 
+    // Numerical quality gate (see pngLuminanceStddev): garbage frames pass
+    // every structural assert above; require real image content.
+    const walkSharpness = pngLuminanceStddev(b)
+    t.ok(
+      walkSharpness > 20,
+      `walk frames keep structural detail (luminance stddev ` +
+        `${walkSharpness.toFixed(1)} > 20; blur/garbage collapse lands at 8-12)`
+    )
+
     await world.unload().catch(() => {})
   }
 )
@@ -391,6 +393,54 @@ test(
     t.ok(fs.existsSync(scenePath), 'scene pack written by native scene creation')
     t.ok(/"scene"/.test(sceneMsg), 'scene-creation completion JSON received')
 
+    // Conditioning invariants, straight off the pack - no DiT, no GPU, no
+    // frames. `live` is a COUNT of non-zero rows, so the bound carries a real
+    // margin: a healthy prompt sits far below rows/2 (26/512 measured), the
+    // 2026-08-11 regression left all 512 live, and a *partial* zeroing
+    // regression (tail zeroed, middle live) still lands near `rows` and trips
+    // the bound instead of hiding behind a mere "< rows". The contiguity check
+    // catches interior holes, which a count alone would not.
+    const census = readScenePackPromptRows(fs.readFileSync(scenePath))
+    t.ok(census.live > 0, `prompt encoded into the pack (${census.live} live rows)`)
+    t.ok(
+      census.live < census.rows / 2,
+      `prompt padding is zeroed (${census.live}/${census.rows} rows live; ` +
+        'a healthy prompt is far below half - pad embeddings drive it toward all)'
+    )
+    t.ok(
+      census.live === census.lastNonZero + 1,
+      `live rows form one leading block with no interior holes ` +
+        `(count ${census.live}, last live row ${census.lastNonZero})`
+    )
+
+    // ...and the embeddings must actually depend on the prompt. One extra
+    // umT5 encode (seconds, no DiT) guards the "prompt is ignored" class.
+    const otherScenePath = path.join(dir, 'scene-native-e2e-prompt-b.safetensors')
+    if (fs.existsSync(otherScenePath)) fs.unlinkSync(otherScenePath)
+    const otherCreation = await world.createScene({
+      prompt: '| unknown | A snowy mountain village at night under heavy snowfall.',
+      image,
+      t5: t5Xxl,
+      vae: vaePath,
+      output: otherScenePath,
+      width: 832,
+      height: 480
+    })
+    await otherCreation.onUpdate(() => {}).await()
+    const otherCensus = readScenePackPromptRows(fs.readFileSync(otherScenePath))
+    // Compare only the overlapping (equal-length) region. The two prompts have
+    // different token counts, so their live prefixes differ in length, and
+    // Buffer.equals() returns false for different-sized buffers regardless of
+    // content - a raw prefix compare would pass on the length difference alone.
+    // umT5 is contextual, so two different prompts differ even on shared leading
+    // rows, so a difference over the shared region proves content-sensitivity.
+    const shared = Math.min(census.prefix.length, otherCensus.prefix.length)
+    t.ok(shared > 0, 'both prompts encoded live rows into their packs')
+    t.ok(
+      !census.prefix.subarray(0, shared).equals(otherCensus.prefix.subarray(0, shared)),
+      'a different prompt changes the embeddings over the shared rows (prompt is not ignored)'
+    )
+
     // 2. Walk the newly created world with the KV cache on, covering the
     //    demo's input space: idle, move, move+camera chord, and the array
     //    form (bit 0..7 = W,A,S,D,I,J,K,L; see the unit matrix for the full
@@ -426,6 +476,18 @@ test(
     t.ok(
       idleLast.length !== chordLast.length || !idleLast.every((v, i) => v === chordLast[i]),
       'chord block produces different frames than idling'
+    )
+
+    // Numerical quality gate over the NATIVELY created scene: a conditioning
+    // or scene-pack regression collapses generated frames into low-contrast
+    // mush (stddev 8-12) that still passes every structural assert above.
+    // Real walk frames from a photo scene hold 30+; 20 is a safe floor.
+    const chordSharpness = pngLuminanceStddev(chordLast)
+    t.ok(
+      chordSharpness > 20,
+      `walk frames from the native scene keep structural detail ` +
+        `(luminance stddev ${chordSharpness.toFixed(1)} > 20; ` +
+        `blur/garbage collapse lands at 8-12)`
     )
 
     // 3. unload() with a block still streaming: the in-flight response must

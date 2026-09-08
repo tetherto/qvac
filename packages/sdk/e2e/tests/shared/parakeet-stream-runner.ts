@@ -11,7 +11,7 @@ import {
   type TranscribeStreamSession,
   type TranscribeStats
 } from '@qvac/sdk'
-import type { TestResult } from '@qvac/qvac-test-suite'
+import type { TestResult } from '@qvac/test-suite'
 import { decodeWavToMonoF32 } from './wav-pcm.js'
 
 export interface ParakeetStreamParams {

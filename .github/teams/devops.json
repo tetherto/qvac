@@ -23,7 +23,7 @@
     "tetherto/qvac-internal",
     "tetherto/qvac-test-suite",
     "tetherto/qvac-registry-vcpkg",
-    "tetherto/qvac-ext-lib-whisper.cpp",
+    "tetherto/qvac-fabric-speech.cpp",
     "tetherto/qvac-ext-stable-diffusion.cpp",
     "tetherto/qvac-fabric-llm.cpp",
     "tetherto/qvac-ext-ggml",

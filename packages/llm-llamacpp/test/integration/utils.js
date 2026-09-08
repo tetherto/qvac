@@ -486,8 +486,8 @@ async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, do
   // Pre-staged path: copy the host-staged model from the read-only staging dir
   // into the normal (app-private, WRITABLE) modelDir, then return modelDir. The
   // copy is a fast local operation (no network). Returning a writable dir is
-  // essential — tests write sibling files next to the model (sliding-context
-  // caches, finetuning checkpoints via path.join(modelDir, ...)), which would
+  // essential: tests write sibling files next to the model (session caches,
+  // finetuning checkpoints via path.join(modelDir, ...)), which would
   // fail if we returned the read-only /data/local/tmp staging dir directly.
   const staged = prestagedModelDir(modelName)
   if (staged) {

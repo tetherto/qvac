@@ -37,9 +37,10 @@ export interface ParakeetConfigurationParams {
   captionEnabled?: boolean;
   timestampsEnabled?: boolean;
   seed?: number;
-  /** Multilingual CTC language id; required for Indic Conformer GGUFs. */
+  /** Indic CTC language id or Nemotron locale alias; empty selects auto. */
   language?: string;
   streaming?: boolean;
+  /** Model-specific when omitted: Nemotron 320 ms, existing models 2000 ms. */
   streamingChunkMs?: number;
   streamingHistoryMs?: number;
   streamingEmitPartials?: boolean;
@@ -110,6 +111,7 @@ type NativeOutputCallback = (
 ) => void;
 
 interface StreamingTeardown {
+  cleaned?: unknown;
   audioDurationMs?: unknown;
   totalSamples?: unknown;
 }
@@ -181,6 +183,8 @@ export class ParakeetInterface {
   private _nextJobId: number;
   private _activeJobId: number | null;
   private _onCancelComplete: (() => void) | null;
+  private _onStreamEndComplete: (() => void) | null;
+  private _endStreamingInFlight: Promise<void> | null;
   private _bufferedAudio: Float32Array[];
   private _bufferedBytes: number;
   private _config: ParakeetConfigurationParams;
@@ -199,6 +203,8 @@ export class ParakeetInterface {
     this._nextJobId = 1;
     this._activeJobId = null;
     this._onCancelComplete = null;
+    this._onStreamEndComplete = null;
+    this._endStreamingInFlight = null;
     this._bufferedAudio = [];
     this._bufferedBytes = 0;
 
@@ -231,6 +237,7 @@ export class ParakeetInterface {
     this._config = configurationParams;
     this._activeJobId = null;
     this._onCancelComplete = null;
+    this._resolveStreamEndWaiter();
     this._bufferedAudio = [];
     this._bufferedBytes = 0;
     this._handle = this._binding.createInstance(
@@ -290,6 +297,14 @@ export class ParakeetInterface {
     return true;
   }
 
+  private _resolveStreamEndWaiter(): void {
+    this._endStreamingInFlight = null;
+    if (!this._onStreamEndComplete) return;
+    const resolve = this._onStreamEndComplete;
+    this._onStreamEndComplete = null;
+    resolve();
+  }
+
   private _addonOutputCallback(
     addon: unknown,
     event: unknown,
@@ -303,10 +318,16 @@ export class ParakeetInterface {
     const jobId = this._activeJobId;
 
     if (jobId === null) {
-      if (isTerminal) this._resolvePendingCancel();
+      if (isTerminal) {
+        this._resolvePendingCancel();
+        this._resolveStreamEndWaiter();
+      }
       return;
     }
-    if (isTerminal && this._resolvePendingCancel()) return;
+    if (isTerminal && this._resolvePendingCancel()) {
+      this._resolveStreamEndWaiter();
+      return;
+    }
     if (mappedEvent === "Output") this._setState(state.PROCESSING);
 
     this._outputCallback(
@@ -320,6 +341,7 @@ export class ParakeetInterface {
     if (isTerminal) {
       this._activeJobId = null;
       this._setState(state.LISTENING);
+      this._resolveStreamEndWaiter();
     }
   }
 
@@ -576,6 +598,7 @@ export class ParakeetInterface {
       this._binding.destroyInstance(this._handle);
       this._handle = null;
       this._activeJobId = null;
+      this._resolveStreamEndWaiter();
       this._bufferedAudio = [];
       this._bufferedBytes = 0;
       this._setState(state.IDLE);
@@ -676,9 +699,25 @@ export class ParakeetInterface {
 
   endStreaming(): Promise<void> {
     try {
+      // A second endStreaming() while the first is still waiting for the
+      // queued terminal event must join it, not fall through to the
+      // synthetic path — that would clear the job before the drained
+      // outputs are delivered and discard them.
+      if (this._endStreamingInFlight) return this._endStreamingInFlight;
       if (this._activeJobId === null) return Promise.resolve();
       const jobId = this._activeJobId;
+      // The native endStreaming drains the backlog and queues a terminal
+      // RuntimeStats behind it; delivery is asynchronous, so the job must
+      // stay active until that terminal event arrives.
       const teardown = this._binding.endStreaming(this._handle) || {};
+      if (teardown.cleaned) {
+        this._endStreamingInFlight = new Promise((resolve) => {
+          this._onStreamEndComplete = resolve;
+        });
+        return this._endStreamingInFlight;
+      }
+      // No native session existed: the queue carries no terminal event,
+      // so synthesise the JobEnded to resolve the response chain.
       this._activeJobId = null;
       this._setState(state.LISTENING);
       this._outputCallback(
@@ -700,6 +739,8 @@ export class ParakeetInterface {
       );
       return Promise.resolve();
     } catch (error) {
+      this._onStreamEndComplete = null;
+      this._endStreamingInFlight = null;
       const normalized = normalizeError(error);
       return Promise.reject(
         createParakeetError(

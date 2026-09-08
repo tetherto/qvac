@@ -1,6 +1,6 @@
 ---
 title: Profiler
-description: Measure and export timing metrics across model loading, inference, and P2P delegation.
+description: Measure and export timing metrics across model loading and inference.
 schemaType: HowTo
 ---
 
@@ -95,8 +95,7 @@ The gauges reuse the `ResourceMetric<T>` status, source, and scope semantics
 from `getSystemResources`. Unsupported metrics stay explicit rather than
 becoming zero. `resources.sampledAt` uses the same monotonic clock as the
 profiling event's `ts`, so the timestamps can be compared directly.
-`resources.origin` distinguishes the current `local` worker from a delegated
-`provider` worker. Samples are emitted through `profiler.onRecord`; they appear
+Samples are emitted through `profiler.onRecord`; they appear
 in `exportJSON().recentEvents` only in `verbose` mode. Enabling gauges in
 `summary` mode still pays the sampling cost without retaining the samples.
 Profiling-disabled operations and calls that do not opt in perform no resource

@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 export const audioGenHappy: TestDefinition = {
   testId: 'audio-gen-happy',
@@ -15,7 +15,7 @@ export const audioGenHappy: TestDefinition = {
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
-    estimatedDurationMs: 300000
+    estimatedDurationMs: 360000
   }
 }
 
@@ -34,7 +34,7 @@ export const audioGenShortDuration: TestDefinition = {
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
-    estimatedDurationMs: 300000
+    estimatedDurationMs: 360000
   }
 }
 
@@ -59,7 +59,7 @@ export const audioGenReferenceAudio: TestDefinition = {
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
-    estimatedDurationMs: 300000
+    estimatedDurationMs: 360000
   }
 }
 

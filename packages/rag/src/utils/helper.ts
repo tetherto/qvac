@@ -1,5 +1,5 @@
 import { QvacErrorRAG, ERR_CODES } from '../errors.js'
-import type { Doc, PartialDoc } from '../types.js'
+import type { Doc, PartialDoc, SearchResult } from '../types.js'
 import qvacCrypto from '#crypto'
 
 const UUID_BYTES = 16
@@ -22,7 +22,11 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 
 // Calculate the lexical score between a query and a content string.
 export function calculateTextScore(query: string, content: string): number {
-  const queryTerms = query.toLowerCase().split(/\s+/)
+  return scoreContentAgainstTerms(query.toLowerCase().split(/\s+/), content)
+}
+
+// Score content against query terms that were already split.
+function scoreContentAgainstTerms(queryTerms: string[], content: string): number {
   const contentLower = content.toLowerCase()
   const exactMatches = queryTerms.filter((term) => contentLower.includes(term)).length
   const contentTerms = contentLower.split(/\s+/)
@@ -38,6 +42,30 @@ export function calculateTextScore(query: string, content: string): number {
     proximityScore = 1 / (1 + spread / 10)
   }
   return (exactMatches / queryTerms.length) * 0.7 + proximityScore * 0.3
+}
+
+// Rank documents by vector and text scores. Skip incomplete documents.
+export function scoreDocuments(
+  query: string,
+  queryVector: number[],
+  ids: string[],
+  vectorMap: Map<string, number[]>,
+  contentMap: Map<string, string>,
+  topK: number
+): SearchResult[] {
+  const results: SearchResult[] = []
+  // Split the query once and reuse the terms for every document.
+  const queryTerms = query.toLowerCase().split(/\s+/)
+  for (const id of ids) {
+    const vector = vectorMap.get(id)
+    const content = contentMap.get(id)
+    if (!vector || !content) continue
+    const vectorScore = cosineSimilarity(queryVector, vector)
+    const textScore = scoreContentAgainstTerms(queryTerms, content)
+    // TODO: Make the score weights configurable.
+    results.push({ id, content, score: vectorScore * 0.7 + textScore * 0.3 })
+  }
+  return results.sort((a, b) => b.score - a.score).slice(0, topK)
 }
 
 // Normalizes the documents input to an array of documents, wrapping bare

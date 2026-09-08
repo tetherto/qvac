@@ -1,7 +1,7 @@
 import fs from 'bare-fs'
 import path from 'bare-path'
 import os from 'bare-os'
-import { generateModelsFileContent } from './codegen'
+import { generateModelsFileContent, generateResourceProfilesFileContent } from './codegen'
 import {
   assignNames,
   compareModels,
@@ -17,6 +17,7 @@ import { formatSize } from './utils'
 // against the package root (cwd for `npm run`/`bun run`) so the location the
 // build ran from does not matter.
 const OUTPUT_FILE = path.join(os.cwd(), 'src', 'models', 'registry', 'models.ts')
+const PROFILES_FILE = path.join(os.cwd(), 'src', 'models', 'registry', 'resource-profiles.ts')
 const HISTORY_DIR = path.join(os.cwd(), 'src', 'models', 'history')
 
 async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<void> {
@@ -126,6 +127,12 @@ async function updateModels(showDuplicates = false, noDedup = false): Promise<vo
   fs.writeFileSync(OUTPUT_FILE, generateModelsFileContent(models))
 
   console.log(`✅ Generated ${models.length} models → ${OUTPUT_FILE}`)
+
+  const profilesContent = generateResourceProfilesFileContent(models)
+  fs.writeFileSync(PROFILES_FILE, profilesContent)
+
+  const withFacts = models.filter((m) => m.ggufFacts).length
+  console.log(`✅ Generated resource profiles (${withFacts} with GGUF facts) → ${PROFILES_FILE}`)
 
   const addedWithNames = assignNames(added)
 

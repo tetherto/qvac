@@ -11,19 +11,24 @@
 #include "../utils/ReasoningUtils.hpp"
 #include "../utils/RecurrentStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
-#include "ContextShifter.hpp"
-#include "ContextSlider.hpp"
 #include "LlmContext.hpp"
 #include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
+/// Positional span paired with the KV-cell count it occupies. The two diverge
+/// for M-RoPE media, where image embeddings take more cells than positions.
+struct ContextUsage {
+  llama_pos pos = 0;
+  llama_pos cacheTokens = 0;
+};
+
 /// A multimodal session cache is only safe to restore when its header carries
 /// the full four-field metadata contract (`SessionMetadataField`). The GGSQ
 /// loader restores the sequence KV before this check, so any other count — a
 /// truncated/legacy header (`< 4`) or an unexpected layout (`> 4`) — must be
-/// rejected and the restored KV cleared, never accepted with defaulted
-/// `cacheTokens`/`firstMsgCacheTokens`. See `MtmdLlmContext::loadCache`.
+/// rejected and the restored KV cleared, never accepted with a defaulted
+/// `cacheTokens`. See `MtmdLlmContext::loadCache`.
 [[nodiscard]] inline bool mtmdSessionMetadataIsComplete(size_t tokenCount) {
   return tokenCount == SESSION_METADATA_FIELD_COUNT;
 }
@@ -150,33 +155,6 @@ public:
   [[nodiscard]] llama_pos getCacheTokens() const override;
   void setCacheTokens(llama_pos cacheTokens) override;
 
-  /**
-   * The get first msg tokens method. It returns the first msg tokens.
-   *
-   * @return - the first msg tokens.
-   */
-  [[nodiscard]] llama_pos getFirstMsgTokens() const override;
-
-  /**
-   * The set first msg tokens method. It sets the first msg tokens.
-   *
-   * @param first_msg_tokens - the first msg tokens.
-   */
-  void setFirstMsgTokens(llama_pos firstMsgTokens) override;
-
-  [[nodiscard]] llama_pos getFirstMsgCacheTokens() const override;
-  void setFirstMsgCacheTokens(llama_pos firstMsgCacheTokens) override;
-
-  /**
-   * The set n_discarded method. It sets the n_discarded.
-   *
-   * @param nDiscarded - the number of tokens to discard.
-   */
-  void setNDiscarded(llama_pos nDiscarded) override;
-
-  [[nodiscard]] int32_t getNSlides() const override;
-  void resetNSlides() override;
-
   [[nodiscard]] double getVisionEncodeMs() const override;
   [[nodiscard]] int32_t getVisionEncodeTiles() const override;
   void resetVisionEncodeMs() override;
@@ -189,8 +167,6 @@ public:
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
   }
-
-  [[nodiscard]] bool supportsSliding() const override { return false; }
 
   [[nodiscard]] std::optional<llama_perf_context_data>
   takeUserVisiblePerfSnapshot() override;
@@ -269,11 +245,10 @@ public:
       const std::function<void(const std::string&)>& outputCallback) override;
 
   /// Disk prompt-cache for a multimodal batch slot, round-tripping the full
-  /// four-field session metadata (see MtmdLlmContext.cpp). `loadCache` records
-  /// the discard budget and returns false (cache miss) on an empty key, a
-  /// missing file, or a header that fails the four-field metadata check.
-  [[nodiscard]] bool loadCache(
-      const std::string& cacheKey, llama_pos configuredNDiscarded) override;
+  /// four-field session metadata (see MtmdLlmContext.cpp). Returns false
+  /// (cache miss) on an empty key, a missing file, or a header that fails the
+  /// four-field metadata check.
+  [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;
@@ -317,7 +292,6 @@ private:
   /// evalMediaSegment(). Single source of truth tying cacheTokens to pos for
   /// text spans, so every position advance keeps the KV-cell count honest.
   void advanceTextSpan(llama_pos newPos);
-  void applyContextDiscard();
   void initializeCommonState();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
@@ -333,21 +307,24 @@ private:
       const std::string& forcedOpenText);
 
   // Delegates to `rollbackState_.recordPostReasoningToken` while the
-  // post-reasoning capture phase is active (close marker committed AND
-  // a recurrent boundary snapshot exists). No-op for pure-attention
-  // models.
+  // post-reasoning capture phase is active, which starts once the close
+  // marker is committed. Every model kind anchors a boundary, so this runs
+  // on pure attention too; it is a no-op only when the feature is off.
   void recordPostReasoningTokenIfActive(llama_token tokenId);
 
-  // Snapshot the full sequence state at end-of-prefill on memory
-  // modules that don't support partial-tail erasure. No-op unless
-  // recurrent snapshot compaction is relevant for this request. When
-  // `remove_thinking_from_context` is enabled on a recurrent / hybrid
-  // model, unsupported template shapes throw instead of silently
-  // preserving reasoning in cache.
+  // Anchor the compaction boundary at `anchorPos`, unwinding to the pre-prompt
+  // checkpoint and rethrowing when the capture fails.
+  void captureReasoningBoundaryAt(llama_pos anchorPos);
+
+  // Anchor the compaction boundary for this request: a full-state snapshot
+  // on memory that cannot erase a partial tail, a bare position on pure
+  // attention. No-op unless compaction is relevant for this request. A
+  // capture failure throws rather than silently preserving reasoning in
+  // cache.
   void snapshotForRecurrentRollback();
 
   // Cancel-during-generation cleanup. On recurrent / hybrid memory,
-  // restores the end-of-prefill snapshot to drop any partially decoded
+  // restores the reasoning-boundary snapshot to drop any partially decoded
   // generation (including an in-flight reasoning span) from both
   // attention KV and recurrent state. On pure-attention models or when
   // no snapshot is available, only flushes the UTF-8 buffer. Used by
@@ -355,8 +332,8 @@ private:
   // Returns `true` when the rollback (metadata + live memory) is
   // coherent with the pre-request cursor and any downstream cache save
   // is safe. Returns `false` when the recurrent full-state restore was
-  // refused: metadata is still forced back to `preRequestUsage_` /
-  // `preRequestProtectedPrefix_` so callers see a sane cursor, but live
+  // refused: metadata is still forced back to `preRequestUsage_` so
+  // callers see a sane cursor, but live
   // recurrent state may not match, so callers must skip `saveCache`
   // for this request. The continuous-batch path consumes this directly
   // from `onCancel`; the single-prompt path propagates it through
@@ -382,17 +359,13 @@ private:
   /// index into this container until the scheduler evaluates them.
   mtmd::input_chunks stagedChunks_;
   ContextUsage current_;
-  ContextUsage protectedPrefix_;
   llama_pos perSeqCtxCeiling_ = -1;
   double visionEncodeMs_ = 0.0;
   int32_t visionEncodeTiles_ = 0;
-  bool pendingBatchFirstMsg_ = false;
   GenerationStopReason generationStopReason_ = GenerationStopReason::None;
-  // Snapshot of `current_` / `protectedPrefix_` at `evalMessageWithTools`
-  // entry. Restored by `cancelGenerationCleanup` to roll back to the
-  // pre-request cursor.
+  // Snapshot of `current_` at `evalMessageWithTools` entry. Restored by
+  // `cancelGenerationCleanup` to roll back to the pre-request cursor.
   ContextUsage preRequestUsage_;
-  ContextUsage preRequestProtectedPrefix_;
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
@@ -432,8 +405,7 @@ private:
   // batch path and `evalMessageWithTools` on the single-prompt path,
   // then consulted by `snapshotForRecurrentRollback`: prefill-only
   // requests never enter generation and cannot emit reasoning tokens,
-  // so the hard-fail contract for unsupported multi-token recurrent
-  // close markers does not apply. See
+  // so there is no reasoning boundary to anchor. See
   // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
   bool isPrefillOnlyRequest_ = false;
 
@@ -443,7 +415,7 @@ private:
   bool removeThinkingFromContext_ = false;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
-  // prefill-entry snapshot (cancel during prefill), the end-of-prefill
+  // prefill-entry snapshot (cancel during prefill), the reasoning-boundary
   // snapshot (compaction + cancel during generation), and the
   // post-reasoning token replay buffer. Inactive on pure-attention
   // models.
@@ -452,13 +424,10 @@ private:
   // span, close-capture flag, and the pure-attention + recurrent
   // compaction paths plus their stats counters.
   qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
-  // Context-window slider: owns `nDiscarded`, `nSlides`, and clears
-  // post-slide-invalidated state on the compactor and rollback owners.
-  qvac_lib_inference_addon_llama::ContextShifter shifter_;
 
   // Snapshot of `llama_perf_context()` taken at the start of
   // `compactThinkSpan` — i.e. right after user-visible generation
-  // completes and before any recurrent replay decode runs. Consumed by
+  // completes and before any replay decode runs. Consumed by
   // `runtimeStats()` via `takeUserVisiblePerfSnapshot()` so the replay's
   // `llama_decode` calls (which accumulate into `n_p_eval` /
   // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.

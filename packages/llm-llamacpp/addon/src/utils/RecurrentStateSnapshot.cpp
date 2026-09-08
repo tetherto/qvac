@@ -78,7 +78,9 @@ bool replayTokensThroughDecoderImpl(
 
   const int32_t total = static_cast<int32_t>(tokens.size());
 
-  llama_batch batch = llama_batch_init(chunkSize, 0, 1);
+  // A replay is usually a short answer tail, so allocate for the work rather
+  // than for the context's full logical batch capacity.
+  llama_batch batch = llama_batch_init(std::min(chunkSize, total), 0, 1);
   bool ok = true;
   for (int32_t offset = 0; offset < total && ok; offset += chunkSize) {
     const int32_t end = std::min(offset + chunkSize, total);
@@ -112,10 +114,11 @@ RecurrentStateSnapshot::~RecurrentStateSnapshot() {
 RecurrentStateSnapshot::RecurrentStateSnapshot(
     RecurrentStateSnapshot&& other) noexcept
     : nPast(other.nPast), filePath_(std::move(other.filePath_)),
-      captured_(other.captured_) {
+      captured_(other.captured_), positionOnly_(other.positionOnly_) {
   other.filePath_.clear();
   other.nPast = 0;
   other.captured_ = false;
+  other.positionOnly_ = false;
 }
 
 RecurrentStateSnapshot&
@@ -125,9 +128,11 @@ RecurrentStateSnapshot::operator=(RecurrentStateSnapshot&& other) noexcept {
     filePath_ = std::move(other.filePath_);
     nPast = other.nPast;
     captured_ = other.captured_;
+    positionOnly_ = other.positionOnly_;
     other.filePath_.clear();
     other.nPast = 0;
     other.captured_ = false;
+    other.positionOnly_ = false;
   }
   return *this;
 }
@@ -137,6 +142,7 @@ void RecurrentStateSnapshot::clear() noexcept {
   filePath_.clear();
   nPast = 0;
   captured_ = false;
+  positionOnly_ = false;
 }
 
 void RecurrentStateSnapshot::seedForTesting(
@@ -145,6 +151,7 @@ void RecurrentStateSnapshot::seedForTesting(
   filePath_ = std::move(filePath);
   nPast = nPastAt;
   captured_ = true;
+  positionOnly_ = false;
 }
 
 void RecurrentStateSnapshot::seedEmptyForTesting(llama_pos nPastAt) noexcept {
@@ -152,6 +159,7 @@ void RecurrentStateSnapshot::seedEmptyForTesting(llama_pos nPastAt) noexcept {
   filePath_.clear();
   nPast = nPastAt;
   captured_ = true;
+  positionOnly_ = false;
 }
 
 void RecurrentStateSnapshot::adoptFile(
@@ -160,6 +168,7 @@ void RecurrentStateSnapshot::adoptFile(
   filePath_ = std::move(filePath);
   nPast = nPastAt;
   captured_ = true;
+  positionOnly_ = false;
 }
 
 void RecurrentStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
@@ -167,6 +176,20 @@ void RecurrentStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
   filePath_.clear();
   nPast = nPastAt;
   captured_ = true;
+  positionOnly_ = false;
+}
+
+void RecurrentStateSnapshot::adoptPositionOnly(llama_pos nPastAt) noexcept {
+  removeFileQuiet(filePath_);
+  filePath_.clear();
+  nPast = nPastAt;
+  captured_ = true;
+  positionOnly_ = true;
+}
+
+void RecurrentStateSnapshot::seedPositionOnlyForTesting(
+    llama_pos nPastAt) noexcept {
+  adoptPositionOnly(nPastAt);
 }
 
 // ---- Free functions ----
@@ -224,6 +247,17 @@ bool restoreRecurrentState(
     // callers can chain restore + replay without special-casing the
     // "no snapshot taken" path.
     return true;
+  }
+  if (snapshot.isPositionOnly()) {
+    // Pure-attention boundary: the cells are positionally indexed, so
+    // rewinding is a tail trim and the caller's replay re-decodes the kept
+    // tokens into the same positions. No state payload is needed, and no
+    // `seq_add` either, which is the whole point of taking this path.
+    auto* mem = llama_get_memory(lctx);
+    if (mem == nullptr) {
+      return false;
+    }
+    return llama_memory_seq_rm(mem, seqId, snapshot.nPast, -1);
   }
   if (!snapshot.hasFile()) {
     // Captured-but-empty: rewind the sequence to a clean state. We

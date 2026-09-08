@@ -40,6 +40,7 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 * Raw output: with `emitRawDeltas: true`, every raw model token is also emitted as a `rawDelta` event in parallel to the structured events — useful for debugging or full-fidelity logging.
 * KV cache: cache and reuse the model's key/value attention state to speed up follow-up turns in long conversations. The `kvCache` parameter sets the cache key — pass a string to manage a session manually, or `true` to let the SDK auto-generate one.
 * Multimodal: attach images (and other media) to prompts so the model reasons over text and images together in the same conversation — see [Multimodal](/ai-capabilities/multimodal).
+* Multi-job continuous batching: load with `modelConfig.parallel >= 2` (default `1`) to run several `completion()` calls in parallel on one loaded model. Up to `parallel` prompts finish in roughly the time of the slowest one (extras queue), and each call has its own `requestId` so you can cancel one without touching the others — see [Concurrent completions](#concurrent-completions).
 * Batch processing: run multiple prompts through a single loaded model in one call with `batchCompletion()` — optimizes resources and reduces total run time. See [Batch processing](/ai-capabilities/batch-processing).
 
 ## Examples
@@ -77,6 +78,36 @@ The canonical way to consume `completion()` is the `events` async iterable plus 
 <Callout type="info">
 The examples below (`Tool call`, `MCP`, `KV cache`) still consume `result.tokenStream` and `result.toolCallStream`, which are convenience wrappers around the canonical `events` / `final` stream shown above. Both APIs are supported; new code should prefer `events` / `final`.
 </Callout>
+
+### Concurrent completions
+
+Use this when you have more than one prompt in flight against the same loaded model at the same time — for example, serving several users, or fanning out related sub-tasks — and want them to finish together instead of one after another.
+
+Load the model with `modelConfig.parallel >= 2`, then call `completion()` several times without awaiting between calls. The SDK runs up to `parallel` of them together on the model, so **up to `parallel` prompts finish in roughly the time of the slowest one** instead of the sum of all of them; beyond that they queue. Each call has its own `requestId`; `cancel({ requestId })` stops just that call and its peers keep going — useful for a per-request stop button, rather than killing the whole model.
+
+The default is `1` (one request at a time), so you have to set `parallel` explicitly to enable batching. Also raise `ctx_size` with it: the model's context window is split evenly across the `parallel` slots, so `parallel: 4` on a `ctx_size: 4096` model gives each request only ~1024 tokens. Size `ctx_size` for `parallel × per-request context`.
+
+`completion()` and `batchCompletion()` share the model's `parallel` slots. Each call is one request — a big `batchCompletion({ prompts: N })` never blocks more than one concurrent `completion()` from starting — but every prompt in the batch takes one decode slot, so a large batch fills all `parallel` slots itself and any concurrent `completion()` you launch will only start decoding once the batch has room. If you already have every prompt ready up front, [`batchCompletion()`](/ai-capabilities/batch-processing) is often simpler; use concurrent `completion()` when prompts arrive over time or you want independent streams and cancellation per call.
+
+The following script loads a `parallel: 4` model, fires four completions at once, and then cancels one of two long runs to show its peer keeps decoding:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/multi-job-completion.js title="multi-job-completion.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/multi-job-completion.ts title="multi-job-completion.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 ### Tool call
 

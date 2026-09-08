@@ -6,7 +6,10 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "10069.1.1"
+      "version>=": "10297.1.1",
+      "features": [
+        "hip-backend"
+      ]
     },
     {
       "name": "qvac-lint-cpp",

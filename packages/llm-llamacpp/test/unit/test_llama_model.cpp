@@ -749,23 +749,20 @@ TEST_F(LlamaModelTest, OmittedContextSnapshotMatchesAllocatedContext) {
       snapshot->nCtx, static_cast<uint32_t>(llama_n_ctx(model.getContext())));
 }
 
-TEST_F(LlamaModelTest, OrdinaryLoadPreservesDiscardAndBackendSideEffects) {
+TEST_F(LlamaModelTest, OrdinaryLoadPreservesBackendSideEffects) {
   auto config = config_files;
   config["device"] = "cpu";
   config["gpu_layers"] = "0";
-  config["n_discarded"] = "64";
   LlamaModel model = createModelWithConfig(std::move(config));
   model.waitForLoadInitialization();
   ASSERT_TRUE(model.isLoaded());
 
-  EXPECT_EQ(LlamaModelTestPeer::configuredNDiscarded(model), 64);
   EXPECT_EQ(LlamaModelTestPeer::runtimeBackendDevice(model), 0);
   LlamaModelTestPeer::setRuntimeBackendDevice(model, 1);
   ASSERT_EQ(LlamaModelTestPeer::runtimeBackendDevice(model), 1);
 
   model.reload();
 
-  EXPECT_EQ(LlamaModelTestPeer::configuredNDiscarded(model), 64);
   EXPECT_EQ(LlamaModelTestPeer::runtimeBackendDevice(model), 0);
 }
 
@@ -819,7 +816,7 @@ TEST_F(LlamaModelTest, CommonParamsParseMissingDevice) {
       qvac_errors::StatusError);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseInvalidNDiscarded) {
+TEST_F(LlamaModelTest, CommonParamsParseRejectsRetiredNDiscarded) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -829,7 +826,7 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidNDiscarded) {
   config["ctx_size"] = "2048";
   config["gpu_layers"] = test_common::getTestGpuLayers();
   config["n_predict"] = "10";
-  config["n_discarded"] = "not_a_number";
+  config["n_discarded"] = "64";
 
   fs::path backendDir;
 #ifdef TEST_BINARY_DIR
@@ -881,34 +878,64 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
       qvac_errors::StatusError);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringTrue) {
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeNone) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   auto config = config_files;
-  config["no_mmap"] = "true";
+  config["load_mode"] = "none";
 
   LlamaModel model = createModelWithConfig(std::move(config));
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
-  EXPECT_FALSE(model.getCommonParams().use_mmap);
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringFalse) {
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeDefaultsToMmap) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   auto config = config_files;
-  config["no_mmap"] = "false";
 
   LlamaModel model = createModelWithConfig(std::move(config));
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
-  EXPECT_TRUE(model.getCommonParams().use_mmap);
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_MMAP);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeHyphenVariant) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["load-mode"] = "mmap";
+
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_MMAP);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeInvalid) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["load_mode"] = "invalid_value";
+
+  EXPECT_THROW(
+      {
+        LlamaModel model = createModelWithConfig(std::move(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
@@ -1029,7 +1056,7 @@ TEST_F(LlamaModelTest, ProcessContextOverflow) {
   EXPECT_THROW({ model.process(input); }, qvac_errors::StatusError);
 }
 
-TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
+TEST_F(LlamaModelTest, ProcessContextOverflowFails) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -1039,7 +1066,6 @@ TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
   small_ctx_config["ctx_size"] = "256";
   small_ctx_config["gpu_layers"] = test_common::getTestGpuLayers();
   small_ctx_config["n_predict"] = "10";
-  small_ctx_config["n_discarded"] = "0";
 
   fs::path backendDir;
 #ifdef TEST_BINARY_DIR
@@ -1334,6 +1360,47 @@ TEST_F(LlamaModelTest, CommonParamsParseSplitModeRow) {
     // If a split-buffer-capable backend is ever shipped, that failure is the
     // intended signal to revisit this expectation.
     EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
+  }
+}
+
+// QVAC-24253: unlike 'row', a requested 'tensor' is never degraded — it goes
+// through qvac-fabric's meta device and needs no split buffers. It also
+// disables auto-fit, which fabric does not implement for this mode.
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeTensor) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "tensor";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    // CPU fallback clears every multi-GPU parameter, and auto-fit stays on.
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+    EXPECT_TRUE(model.getCommonParams().fit_params);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_TENSOR);
+    EXPECT_FALSE(model.getCommonParams().fit_params);
   }
 }
 

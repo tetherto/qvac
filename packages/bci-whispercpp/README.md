@@ -1,6 +1,6 @@
 # @qvac/bci-whispercpp
 
-Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by the [tetherto/qvac-ext-lib-whisper.cpp](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) fork of whisper.cpp.
+Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by the [tetherto/qvac-fabric-speech.cpp](https://github.com/tetherto/qvac-fabric-speech.cpp) fork of whisper.cpp.
 
 Transcribes multi-channel neural signals (e.g., 512-channel microelectrode array recordings) into text using a BCI-trained whisper model running natively via GGML. Output matches the Python BrainWhisperer reference model exactly.
 
@@ -81,15 +81,38 @@ npm install
 VCPKG_ROOT=/path/to/vcpkg npm run build
 ```
 
+**CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
+gated behind the `ENABLE_CUDA` CMake option. The published linux-x64 prebuild
+does not enable it; build it yourself with `npm run build:cuda` (or
+`bare-make generate -D ENABLE_CUDA=ON`), which adds the `cuda` feature to
+the `speech-cpp` dependency. On linux-x64 that
+flips ggml into hybrid dynamically-loaded backend mode: the CPU-variant,
+Vulkan, and CUDA backends ship as `.so` modules next to the addon, only the
+CUDA module depends on the CUDA runtime, and hosts that cannot resolve it
+skip the module and fall back to Vulkan or CPU. The NVIDIA driver plus the
+CUDA 13 runtime libraries (cudart, cuBLAS — from a CUDA toolkit install) are
+needed at runtime; ggml registers CUDA ahead of Vulkan, so `use_gpu: true`
+prefers CUDA when a supported device is present.
+
+A CUDA build's module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
+Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
+Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
+path here: the backend skips such devices at registration and the addon falls
+back to Vulkan or CPU.
+
 ### Prerequisites
 
 - **Bare runtime** >= 1.24.0
 - **CMake** >= 3.25
 - **vcpkg** with `VCPKG_ROOT` environment variable set
+- Optional: the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
+  (`nvcc`) for the opt-in `build:cuda` build on Linux/Windows
 
 ## Quickstart
 
-To run an example you need the BCI model files and (for batch mode) the test fixtures. The download script fetches the **model files from the QVAC model registry** (no GitHub CLI, no auth) and the **neural-signal fixtures from the public release tarball** (the fixtures aren't in the registry yet).
+To run an example you need the BCI model files and (for batch mode) the test fixtures. The download script fetches the **model files from the QVAC model registry** (no GitHub CLI, no auth) and the **neural-signal fixtures from the `bci-test-assets-v0.1.0` release tarball** (the fixtures aren't in the registry yet). The repository is private, so set `GITHUB_TOKEN` (or `GH_TOKEN`) for the fixtures download; `BCI_FIXTURES_URL` overrides the source entirely.
 
 ```bash
 cd packages/bci-whispercpp
@@ -337,7 +360,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `model` | string | Optional override; usually set via `args.files.model`. |
-| `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows, OpenCL/Vulkan on Android. |
+| `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows (plus CUDA on `build:cuda` builds, preferred when an NVIDIA device and the CUDA runtime are present), OpenCL/Vulkan on Android. |
 | `flash_attn` | boolean | Enable flash attention. |
 | `gpu_device` | number | Select a non-default GPU device. |
 
@@ -351,7 +374,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `backendsDir` | string | `<addon>/prebuilds` | **Android only.** Overrides the folder used to locate dynamically-loaded ggml backend `.so` modules; ignored on other platforms. Defaults to the in-package `prebuilds/` directory so mobile builds work out of the box (parity with `transcription-whispercpp 0.9.0`). |
+| `backendsDir` | string | `<addon>/prebuilds` | **Android and Linux.** Overrides the folder used to locate dynamically-loaded ggml backend `.so` modules; a no-op on static builds and other platforms. Defaults to the in-package `prebuilds/` directory so mobile builds work out of the box (parity with `transcription-whispercpp 0.9.0`). |
 
 ### streamOpts (passed to `transcribeStream()`)
 
@@ -372,7 +395,7 @@ The encoder accepts up to ~3000 timesteps per forward pass; `MAX_WINDOW_TIMESTEP
 
 ## whisper.cpp Patches
 
-The BCI patches live in the `tetherto/qvac-ext-lib-whisper.cpp` fork and are consumed via the `qvac-registry-vcpkg` port (see `vcpkg.json` for the pinned version):
+The BCI patches live in the `tetherto/qvac-fabric-speech.cpp` fork and are consumed via the `qvac-registry-vcpkg` port (see `vcpkg.json` for the pinned version):
 
 | Feature | Description |
 |---------|-------------|
@@ -409,7 +432,7 @@ Every thrown `QvacErrorAddonBCI` extends `QvacErrorBase` and carries the numeric
 
 ## Resources
 
-- whisper.cpp fork (Tether): [`tetherto/qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp)
+- whisper.cpp fork (Tether): [`tetherto/qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp)
 - Sibling package — audio transcription: [`@qvac/transcription-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/transcription-whispercpp)
 - vcpkg registry: [`qvac-registry-vcpkg`](https://github.com/tetherto/qvac-registry-vcpkg)
 - BrainWhisperer reference (Python): the model checkpoints converted by `scripts/convert-model.py`

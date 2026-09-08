@@ -58,7 +58,13 @@ on:
         type: string
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-integration-tests:
+    needs: runner_names
     timeout-minutes: 60
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
@@ -87,41 +93,45 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x64 on a GPU runner: exercises the Vulkan desktop build
-          # (no_gpu unset -> NO_GPU=false -> gpu-smoke runs + asserts GPU).
-          # BCI ships a single registry model, so the benchmark sweeps
-          # platform × CPU/GPU backend (no quant dimension).
+          # Linux x64 on the GPU runners (no_gpu unset -> NO_GPU=false ->
+          # gpu-smoke runs + asserts GPU). The published linux-x64 prebuild
+          # ships Vulkan; both GPU rows exercise that backend. BCI ships a
+          # single registry model, so the benchmark sweeps platform ×
+          # CPU/GPU backend (no quant dimension).
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
             benchmark_matrix_json: >-
               [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
             benchmark_matrix_json: >-
               [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
           - os: ubuntu-26.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2604 }}
             platform: linux
             arch: x64
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"useGPU":false,"backendHint":"cpu"}]
           - os: ubuntu-24.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404_arm }}
             platform: linux
             arch: arm64
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"useGPU":false,"backendHint":"cpu"}]
           - os: macos-26
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
             platform: darwin
             arch: arm64
             benchmark_matrix_json: >-
               [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"metal"}]
           - os: macos-15-large
+            runner: ${{ needs.runner_names.outputs.macos_15_large }}
             platform: darwin
             arch: x64
             no_gpu: 'true'
@@ -135,7 +145,7 @@ jobs:
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
             no_gpu: 'false'
             benchmark_matrix_json: >-
               [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
@@ -371,3 +381,4 @@ jobs:
           Get-ChildItem prebuilds -ErrorAction SilentlyContinue
           tree prebuilds /F 2>$null
         continue-on-error: true
+

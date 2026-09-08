@@ -18,9 +18,10 @@ export interface FitConfig {
    */
   modelPath: string
   /**
-   * Directory holding the packaged ggml backends. Required wherever backends
-   * ship as separate shared libraries — without it the fitter sees no devices
-   * and reports ERROR. Omit for a statically linked build.
+   * Directory holding ggml backend shared libraries. `@qvac/fabric`'s
+   * `prebuilds/` is used when omitted (desktop); on mobile the packed worklet
+   * falls back to this package's `prebuilds/`. Native code appends
+   * `BACKENDS_SUBDIR` (`<host>/qvac__fabric`).
    *
    * Must be an absolute path that resolves to an existing directory; anything
    * else throws.
@@ -77,7 +78,7 @@ export interface FitConfig {
    * `enum llama_split_mode`: how the model splits across multiple GPUs.
    */
   splitMode?: number
-  /** Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
   mainGpu?: number
   /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
   typeK?: number
@@ -85,6 +86,8 @@ export interface FitConfig {
   typeV?: number
   /** `enum llama_flash_attn_type`. Changes KV/compute memory. */
   flashAttnType?: number
+  /** Whether the intended load uses the full-size SWA cache. */
+  swaFull?: boolean
 }
 
 /** A tensor buffer-type override the fitter selected. */
@@ -141,7 +144,7 @@ export interface FitPlan {
    * projected to fit.
    */
   splitMode: number
-  /** GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
   mainGpu: number
   /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
   typeK: number
@@ -158,33 +161,43 @@ export interface FitPlan {
  * meaning: the plan is only valid on SUCCESS, and every non-success branch
  * carries a stable `reason` so an SDK can tell "won't fit on this hardware"
  * apart from "could not read the model" or "no backend registered".
+ *
+ * This is the contract of `fitParams()` and nothing else. The raw llama-load
+ * path adds one further outcome, `unsupported-config`, which this API cannot
+ * produce — it has no normalization step to fail — so that reason lives on
+ * `FitLlamaResult` in `./process` rather than widening the union every existing
+ * consumer has to narrow.
  */
 export type FitResult =
   | ({ status: 0, fits: true, reason: 'fits' } & FitPlan & FitDeviceInventory)
   | ({ status: 1, fits: false, reason: 'does-not-fit' } & Partial<FitPlan> & FitDeviceInventory)
   | ({ status: 2, fits: false, reason: 'model-unreadable' | 'no-backend-device' } & Partial<FitPlan> & FitDeviceInventory)
 
-/** Stable, machine-readable explanation of a fit outcome. */
+/** Stable, machine-readable explanation of a `fitParams()` outcome. */
 export type FitReason = FitResult['reason']
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
 const binding = require('./binding') as FitBinding
 
-// Where this package's own ggml backends are installed, mirroring
-// @qvac/llm-llamacpp's addon.js. `BACKENDS_SUBDIR` (<target>/<module>) is
-// appended natively, so this is the `prebuilds` root rather than the leaf.
-//
-// Since qvac-fabric 9840 the ggml backends ship as separate shared libraries
-// rather than static archives, and ggml's default search path (executable
-// directory, cwd) does not cover an npm package's prebuilds. Without this the
-// CPU backend never loads and every fit fails with "no CPU backend found".
-// Resolved once, and only when it exists, so a statically linked build still
-// falls back to ggml's own search.
-const PACKAGED_BACKENDS_DIR = path.join(__dirname, 'prebuilds')
-
-function defaultBackendsDir (): string | undefined {
+// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, in the
+// @qvac/fabric dependency (prebuilds/<host>/qvac__fabric). We deliberately do
+// not copy them into this addon. On desktop, resolve the single @qvac/fabric
+// install. On mobile the package tree isn't resolvable at runtime (the worklet
+// runs from a packed bundle), so fall back to this addon's own prebuilds.
+// Native code appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to the root.
+// Return undefined only when neither directory exists, so a statically linked
+// build still skips backendsDir.
+function resolveBackendsDir (): string | undefined {
   try {
-    return fs.statSync(PACKAGED_BACKENDS_DIR).isDirectory() ? PACKAGED_BACKENDS_DIR : undefined
+    const fabricPkg = require.resolve('@qvac/fabric/package')
+    const fabricPrebuilds = path.join(path.dirname(fabricPkg), 'prebuilds')
+    if (fs.statSync(fabricPrebuilds).isDirectory()) return fabricPrebuilds
+  } catch {
+    // Mobile worklets cannot resolve the @qvac/fabric package tree.
+  }
+  try {
+    const packaged = path.join(__dirname, 'prebuilds')
+    return fs.statSync(packaged).isDirectory() ? packaged : undefined
   } catch {
     return undefined
   }
@@ -221,7 +234,7 @@ const NUMERIC_FIELDS = Object.freeze({
   // so the shape check lives here and the exact bound stays in the binding,
   // which is compiled against the same ggml.h.
   splitMode: { min: 0, max: 3 },
-  mainGpu: { min: 0, max: INT32_MAX },
+  mainGpu: { min: -1, max: INT32_MAX },
   typeK: { min: 0, max: INT32_MAX },
   typeV: { min: 0, max: INT32_MAX },
   flashAttnType: { min: -1, max: 1 }
@@ -257,6 +270,14 @@ function validateRelationships (config: FitConfig): void {
   if (nCtx > 0 && nCtxMin > 0 && nCtxMin > nCtx) {
     throw new RangeError('model-fit: config.nCtxMin must not exceed config.nCtx')
   }
+  if (
+    config.mainGpu === -1 &&
+    (config.nGpuLayers !== 0 || config.splitMode !== 0)
+  ) {
+    throw new RangeError(
+      'model-fit: config.mainGpu -1 requires config.nGpuLayers 0 and config.splitMode NONE'
+    )
+  }
 }
 
 /**
@@ -272,9 +293,10 @@ function validateRelationships (config: FitConfig): void {
  * logger state and is not thread safe, so concurrent callers block instead of
  * running together.
  *
- * Backends must be registered before the fitter can see any device, so pass
- * `backendsDir` wherever the packaged ggml backends ship as separate shared
- * libraries; omit it for a statically linked build, which self-registers.
+ * Backends must be registered before the fitter can see any device. When
+ * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
+ * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
+ * statically linked build, which self-registers.
  * Every backend library in that directory is `dlopen`ed into this process, so
  * it must be an application-controlled location — never remote or user input.
  */
@@ -297,6 +319,9 @@ export function fitParams (config: FitConfig): FitResult {
     const { min, max } = NUMERIC_FIELDS[key]
     validateNumber(config, key, min, max)
   }
+  if (config.swaFull !== undefined && typeof config.swaFull !== 'boolean') {
+    throw new TypeError('model-fit: config.swaFull must be a boolean when provided')
+  }
   validateRelationships(config)
 
   // An explicit backendsDir always wins, including a bad one — it is the
@@ -304,7 +329,7 @@ export function fitParams (config: FitConfig): FitResult {
   // silently replaced by ours.
   let resolved = config
   if (config.backendsDir === undefined) {
-    const packaged = defaultBackendsDir()
+    const packaged = resolveBackendsDir()
     if (packaged !== undefined) {
       resolved = { ...config, backendsDir: packaged }
     }

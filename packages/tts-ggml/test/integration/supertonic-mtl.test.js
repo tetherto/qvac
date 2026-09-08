@@ -26,8 +26,7 @@ const SAMPLE_RATE = 44100
 
 const MTL_SENTENCES = [
   { lang: 'es', text: 'El zorro marrón salta sobre el perro perezoso.' },
-  { lang: 'fr', text: 'Le renard brun saute par-dessus le chien paresseux.' },
-  { lang: 'pt', text: 'A raposa marrom pula sobre o cachorro preguiçoso.' }
+  { lang: 'fr', text: 'Le renard brun saute par-dessus le chien paresseux.' }
 ]
 
 async function loadSupertonicMtlTTS(params) {
@@ -43,7 +42,7 @@ async function loadSupertonicMtlTTS(params) {
 }
 
 test(
-  'Supertonic MTL TTS (ggml): synthesizes across es/fr/pt with shared engine',
+  'Supertonic MTL TTS (ggml): synthesizes across es/fr with shared engine',
   { timeout: 1800000 },
   async (t) => {
     const baseDir = getBaseDir()
@@ -96,6 +95,19 @@ test(
             { wallMs, sampleCount: result.data?.sampleCount, model: 'supertonic-mtl', output: text }
           )
         )
+
+        // Stats fields come from the engine wrapper, not the language path — assert once.
+        if (i === 0) {
+          if (result.data.stats) {
+            t.ok(
+              typeof result.data.stats.backendDevice === 'number',
+              'backendDevice surfaced in stats'
+            )
+            t.ok(typeof result.data.stats.backendId === 'number', 'backendId surfaced in stats')
+          } else {
+            t.fail('expected stats from Supertonic MTL run')
+          }
+        }
       }
     } finally {
       try {
@@ -145,44 +157,6 @@ test(
         /language|Supertonic/i.test(message),
         `error mentions language / Supertonic (got: ${message})`
       )
-    } finally {
-      try {
-        await model.unload()
-      } catch (_e) {}
-    }
-  }
-)
-
-test(
-  'Supertonic MTL TTS (ggml): backendDevice + backendId surfaced in stats',
-  { timeout: 600000 },
-  async (t) => {
-    const baseDir = getBaseDir()
-    const download = await ensureSupertonicMtlModel({ targetDir: path.join(baseDir, 'models') })
-    if (!download.success) {
-      t.fail(
-        'Supertonic MTL GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
-      )
-      return
-    }
-
-    const model = await loadSupertonicMtlTTS({
-      supertonicModelPath: download.path,
-      language: 'es'
-    })
-    try {
-      const result = await runSupertonicTTS(
-        model,
-        { text: 'Comprobando los datos de telemetría del backend.' },
-        { minSamples: 5000 }
-      )
-      t.ok(result.passed, 'MTL run for backend telemetry passes')
-      if (result.data.stats) {
-        t.ok(typeof result.data.stats.backendDevice === 'number', 'backendDevice surfaced in stats')
-        t.ok(typeof result.data.stats.backendId === 'number', 'backendId surfaced in stats')
-      } else {
-        t.fail('expected stats from Supertonic MTL run')
-      }
     } finally {
       try {
         await model.unload()

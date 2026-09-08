@@ -454,12 +454,11 @@ graph TB
 
 - Saves/loads llama.cpp KV cache to disk for conversation continuity
 - Handles cache invalidation on context changes
-- Configurable discard policy via `n_discarded` parameter
 - Connected to JS `runOptions.cacheKey` and `runOptions.saveCacheToDisk`, which select and persist per-request inference context.
 
 #### **Notable C++ modules**
 
-The diagram above lists the primary types, not every source file. Current LLM behavior also depends on `GenerationParamsApply`, `ContextSlider`, Qwen template/reasoning/tool helpers, and finetuning helpers under `addon/src/model-interface/` and `addon/src/utils/`.
+The diagram above lists the primary types, not every source file. Current LLM behavior also depends on `GenerationParamsApply`, `ReasoningBlockCompactor`, Qwen template/reasoning/tool helpers, and finetuning helpers under `addon/src/model-interface/` and `addon/src/utils/`.
 
 #### **BackendSelection (utils/BackendSelection.cpp)**
 

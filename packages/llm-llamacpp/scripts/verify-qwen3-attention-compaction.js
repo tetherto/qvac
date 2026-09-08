@@ -2,8 +2,10 @@
 
 // Pure-attention path regression check: runs Qwen3-0.6B (pure attention,
 // no recurrent memory) through the same two-turn flow as the Qwen3.5
-// verifier and asserts compaction still works via the existing
-// seq_rm + seq_add path — our changes must not have broken it.
+// verifier and asserts compaction still works. Pure attention rewinds to
+// the reasoning boundary and replays the answer, same as every other model
+// kind; only the anchor differs, a bare position rather than a state
+// payload.
 
 const path = require('bare-path')
 const fs = require('bare-fs')
@@ -72,8 +74,8 @@ async function main() {
 
   let exitCode = 0
   // Under the uniform hard-fail contract (PR #2813), any compaction
-  // failure — including a pure-attention `seq_rm + seq_add` rejection
-  // — throws `StatusError` from `run()`. Reaching this point means
+  // failure throws `StatusError` from `run()`, including a rewind or a
+  // replay that the memory rejects. Reaching this point means
   // both turns' compaction succeeded (or was a no-op because the
   // model never emitted a reasoning block).
   //

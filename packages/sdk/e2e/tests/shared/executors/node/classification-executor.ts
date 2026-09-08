@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { classify } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { classificationTests } from '../../../classification-tests.js'
 

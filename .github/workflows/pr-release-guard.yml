@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           base_ref="${{ github.base_ref }}"
-          pods=" sdk cli rag logging error ai-sdk-provider "
+          pods=" sdk cli rag logging error ai-sdk-provider test-suite "
           if [[ ! "$base_ref" =~ ^release-(.+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
             echo "::notice::Base '$base_ref' is not release-<slug>-x.y.z — skipping SDK-pod release guard"
             echo "is_sdk_pod_package=false" >> "$GITHUB_OUTPUT"

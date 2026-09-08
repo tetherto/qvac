@@ -44,4 +44,9 @@ jobs:
       repository: ${{ inputs.repository }}
       artifact-name-prefix: fabric-
       include-vulkan-sdk: true
+      # Land ROCm on the base-branch workflow before a follow-up PR requests
+      # qvac-fabric[hip-backend]. pull_request_target loads this YAML from
+      # main, so linux-x64 would otherwise hard-fail the hip port. setup-rocm
+      # prefers /opt/rocm when the host stamp matches; otherwise downloads.
+      include-rocm: true
     secrets: inherit

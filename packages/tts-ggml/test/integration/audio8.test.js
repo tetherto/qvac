@@ -18,6 +18,7 @@ const CPU_TEST_TIMEOUT_MS = 900000
 const GPU_TEST_TIMEOUT_MS = 600000
 const GPU_DEVICE = 1
 const CPU_DEVICE = 0
+const CUDA_BACKEND = 2
 const VULKAN_BACKEND = 3
 const CPU_BACKEND = 0
 const REFERENCE_TEXT =
@@ -25,8 +26,13 @@ const REFERENCE_TEXT =
 const SYNTHESIS_TEXT = 'The Audio eight integration test checks this generated voice.'
 const platform = os.platform()
 const arch = os.arch()
-const isDesktopVulkan = (platform === 'linux' || platform === 'win32') && arch === 'x64'
+const isDesktopGpu = (platform === 'linux' || platform === 'win32') && arch === 'x64'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
+// CI rows that pin the engine's GPU cascade export TTS_CPP_GPU_BACKEND; the
+// desktop assertion expects the pinned backend and defaults to Vulkan when unset.
+const pinnedGpuBackend = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
+const expectedDesktopBackend = pinnedGpuBackend === 'cuda' ? CUDA_BACKEND : VULKAN_BACKEND
+const expectedDesktopBackendName = pinnedGpuBackend === 'cuda' ? 'CUDA' : 'Vulkan'
 
 function resolveAudio8Files(models, useModelDir) {
   if (useModelDir) return { modelDir: models.targetDir }
@@ -121,7 +127,7 @@ async function loadAudio8Model(t, includeEncoder, useGPU, useModelDir = false) {
 
 test(
   'Audio8 TTS: text-only and per-call voice cloning synthesize through the public JS API',
-  { timeout: CPU_TEST_TIMEOUT_MS, skip: !isDesktopVulkan },
+  { timeout: CPU_TEST_TIMEOUT_MS, skip: !isDesktopGpu },
   async (t) => {
     const referenceAudio = resolveRefWavPath({})
     if (!fs.existsSync(referenceAudio)) {
@@ -166,20 +172,24 @@ test(
 )
 
 test(
-  'Audio8 TTS: useGPU=true performs synthesis on Vulkan',
-  { timeout: GPU_TEST_TIMEOUT_MS, skip: !isDesktopVulkan || noGpu },
+  'Audio8 TTS: useGPU=true performs synthesis on the desktop GPU backend',
+  { timeout: GPU_TEST_TIMEOUT_MS, skip: !isDesktopGpu || noGpu },
   async (t) => {
     const model = await loadAudio8Model(t, false, true)
     if (!model) return
 
     try {
       const started = Date.now()
-      const result = await synthesize(model, 'Audio eight uses Vulkan on this desktop.')
-      assertAudio(t, 'Audio8 Vulkan', result)
-      t.is(result.stats.backendDevice, GPU_DEVICE, 'Audio8 Vulkan reports a GPU device')
-      t.is(result.stats.backendId, VULKAN_BACKEND, 'Audio8 Vulkan reports the Vulkan backend')
-      t.is(result.stats.gpuUnsupported, 0, 'Audio8 Vulkan does not report a GPU fallback')
-      recordAudio8(t, 'audio8 Vulkan', result, Date.now() - started)
+      const result = await synthesize(model, 'Audio eight uses the GPU on this desktop.')
+      assertAudio(t, 'Audio8 GPU', result)
+      t.is(result.stats.backendDevice, GPU_DEVICE, 'Audio8 GPU reports a GPU device')
+      t.is(
+        result.stats.backendId,
+        expectedDesktopBackend,
+        `Audio8 GPU reports the ${expectedDesktopBackendName} backend`
+      )
+      t.is(result.stats.gpuUnsupported, 0, 'Audio8 GPU does not report a GPU fallback')
+      recordAudio8(t, 'audio8 gpu', result, Date.now() - started)
     } finally {
       await model.unload()
     }

@@ -1,4 +1,5 @@
 import test from 'brittle'
+import { AttachmentNotFoundError } from '@/errors/index'
 import { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 import {
   clearRegistry,
@@ -107,7 +108,8 @@ async function writeCacheFile(cachePath: string): Promise<void> {
 function registerRecordingModel(
   modelId: string,
   calls: RecordedCall[],
-  config: Record<string, unknown> = { tools: true }
+  config: Record<string, unknown> = { tools: true },
+  cachePaths?: string[]
 ): void {
   registerModel(modelId, {
     model: {
@@ -119,6 +121,7 @@ function registerRecordingModel(
           messages: prompt as RecordedCall['messages'],
           prefill: opts?.prefill === true
         })
+        if (cachePaths && opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         const written =
           opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
             ? writeCacheFile(opts.cacheKey)
@@ -328,19 +331,17 @@ test('completion: kv-cache resends the tool block after a turn that could not re
   clearRegistry()
 })
 
-// With `n_discarded > 0` the addon may slide its context window, and the
-// discard region opens exactly where a static tool block sits — the protected
-// prefix ends at the primed system prompt. While the block can be evicted it
-// has to travel with every turn.
-test('completion: kv-cache resends the tool block when the context window can slide', async (t) => {
+// `n_discarded` is retired, so a config that still carries it must not change
+// caching: the warm turn skips the tool block like any other.
+test('completion: kv-cache still skips the tool block when a retired slide key is present', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
-  const modelId = `kvcache-tools-sliding-${Date.now()}`
+  const modelId = `kvcache-tools-retired-slide-key-${Date.now()}`
   const calls: RecordedCall[] = []
   registerRecordingModel(modelId, calls, { tools: true, n_discarded: 64 })
 
-  const complete = completer(modelId, 'tools-sliding-key')
+  const complete = completer(modelId, 'tools-retired-slide-key')
   const first = user('Area of a triangle, base 10 height 5?')
   await complete([first], [areaTool])
   await complete([first, assistant('25.'), user('And base 4 height 3?')], [areaTool])
@@ -355,10 +356,377 @@ test('completion: kv-cache resends the tool block when the context window can sl
   )
   t.alike(
     toolNames(turnCalls[1]!),
-    ['calculate_triangle_area'],
-    'the warm turn carries it again because a slide may have evicted it'
+    [],
+    'the warm turn does not resend it, the retired key no longer forces a resend'
   )
 
   unregisterModel(modelId)
   clearRegistry()
+})
+
+// The fake throws on the second non-prefill run, so a refusal between two
+// committed turns can be pinned against the cache bookkeeping.
+function registerSecondTurnThrowingModel(
+  modelId: string,
+  calls: RecordedCall[],
+  cachePaths: string[],
+  thrown: Error,
+  throwOnRun = 2
+): void {
+  let runCount = 0
+  registerModel(modelId, {
+    model: {
+      run(
+        prompt: unknown,
+        opts?: { prefill?: boolean; cacheKey?: string; saveCacheToDisk?: boolean }
+      ) {
+        calls.push({
+          messages: prompt as RecordedCall['messages'],
+          prefill: opts?.prefill === true
+        })
+        if (opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
+        if (!opts?.prefill) {
+          runCount += 1
+          if (runCount === throwOnRun) throw thrown
+        }
+        const written =
+          opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
+            ? writeCacheFile(opts.cacheKey)
+            : Promise.resolve()
+        return {
+          iterate: async function* () {
+            await written
+            yield 'The area is 25 square units.'
+          },
+          await: () => written,
+          stats: {}
+        }
+      }
+    } as unknown as AnyModel,
+    path: `/tmp/${modelId}.gguf`,
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+}
+
+// Turn one commits, turn two is refused by the fake, turn three retries the
+// same history. Returns the refusal and the non-prefill calls for assertion.
+async function runRefusalScenario(
+  modelId: string,
+  calls: RecordedCall[],
+  cachePaths: string[],
+  kvCacheKey: string
+) {
+  const complete = completer(modelId, kvCacheKey)
+  const first = user('Area of a triangle, base 10 height 5?')
+  await complete([first])
+  const grown = [first, assistant('25.'), user('And base 4 height 3?')]
+  let refusal: unknown
+  try {
+    await complete(grown)
+  } catch (error) {
+    refusal = error
+  }
+  // Bookkeeping surviving is not enough — the committed bytes must still be
+  // on disk, unmodified, between the refusal and the retry.
+  const fs = await import('bare-fs')
+  const committedPath = cachePaths[cachePaths.length - 1]
+  const fileSurvivedRefusal =
+    committedPath !== undefined &&
+    fs.existsSync(committedPath) &&
+    fs.readFileSync(committedPath, 'utf8') === 'primed'
+  await complete(grown)
+  return { refusal, fileSurvivedRefusal, turnCalls: calls.filter((call) => !call.prefill) }
+}
+
+// A prefill-guard overflow rejects before any decode or save, so it must not
+// destroy the last committed cache — the next turn stays warm.
+test('completion: kv-cache survives an overflow rejection between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-overflow-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    // Production shape: the async transport delivers the message alone.
+    new Error(
+      '[TextLlm] context overflow at batch prefill step: cached tokens 400 plus prompt tokens 200 exceed the max context tokens 512'
+    )
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'overflow-preserves-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
+  t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The generationParams apply step rejects before touching live state
+// (reachable at parallel = 1) and must not destroy the committed cache.
+test('completion: kv-cache survives a generationParams rejection between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-genparams-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    new Error('invalid generationParams.json_schema: [json.exception.parse_error.101] parse error')
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'genparams-preserves-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
+  t.ok(refusal instanceof Error && /json_schema/.test(refusal.message), 'turn two is refused')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The scheduler's per-sequence-cap admission refusals (parallel >= 2) are
+// equally pre-mutation and must not destroy the committed cache either.
+test('completion: kv-cache survives a scheduler admission rejection between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-admission-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    new Error(
+      'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)'
+    )
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'admission-preserves-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
+  // Scheduler capacity refusals are the batch-mode overflow: the consumer
+  // gets the typed error with the reservation-plus-prompt total.
+  t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused typed')
+  const typed = refusal as { requiredTokens?: number; ctxSize?: number }
+  t.is(typed.requiredTokens, 780, 'the total is the reservation plus the prompt')
+  t.is(typed.ctxSize, 512, 'the cap is the effective per-request ceiling')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The addon's media-load failures reject before any decode or save — like the
+// SDK-side missing attachment, they must not destroy the committed cache.
+test('completion: kv-cache survives an addon media-load failure between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-media-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    new Error('[MtmdLlm] Failed to load media from file: /tmp/attachment.png\n')
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'media-preserves-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
+  t.ok(
+    refusal instanceof Error && /Failed to load media/.test(refusal.message),
+    'turn two fails with the media error'
+  )
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A recognised refusal on the FIRST turn has no committed cache to keep —
+// the fresh prime is rolled back and the retry re-primes from scratch.
+test('completion: kv-cache drops the fresh prime when the first turn is refused', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-cold-refusal-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    new Error(
+      '[TextLlm] context overflow at batch prefill step: cached tokens 0 plus prompt tokens 600 exceed the max context tokens 512'
+    ),
+    1
+  )
+  const complete = completer(modelId, 'cold-refusal-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  let refusal: unknown
+  try {
+    await complete([first])
+  } catch (error) {
+    refusal = error
+  }
+  const fs = await import('bare-fs')
+  t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'the first turn is refused')
+  t.ok(
+    cachePaths.length > 0 && !fs.existsSync(cachePaths[cachePaths.length - 1]!),
+    'the fresh prime is not left behind'
+  )
+
+  await complete([first])
+  t.is(calls.filter((call) => call.prefill).length, 2, 'the retry re-primes from scratch')
+  t.is(calls.filter((call) => !call.prefill).length, 2, 'the retry turn reaches the model')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// An unrecognised failure may have dirtied KV state, so the destructive
+// default must hold: the cache file is unlinked and the retry starts cold.
+test('completion: kv-cache rolls back on an unrecognised addon failure between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-unknown-rolls-back-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerSecondTurnThrowingModel(
+    modelId,
+    calls,
+    cachePaths,
+    new Error('addon exploded mid-decode')
+  )
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'unknown-rolls-back-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the cache file is unlinked after an unrecognised failure')
+  t.ok(refusal instanceof Error && /exploded mid-decode/.test(refusal.message), 'turn two fails')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A missing attachment is caller input the SDK rejects before the addon
+// runs, so the committed warm cache must survive and the retry stays warm.
+test('completion: kv-cache survives a missing-attachment rejection between turns', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-attachment-preserves-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerRecordingModel(modelId, calls, { tools: true }, cachePaths)
+  const complete = completer(modelId, 'attachment-preserves-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  await complete([first])
+
+  const badTurn = [
+    first,
+    assistant('25.'),
+    {
+      role: 'user',
+      content: 'see attachment',
+      attachments: [{ path: '/nonexistent/attachment.png' }]
+    }
+  ]
+  let refusal: unknown
+  try {
+    await complete(badTurn as HistoryEntry[])
+  } catch (error) {
+    refusal = error
+  }
+  const fs = await import('bare-fs')
+  const committedPath = cachePaths[cachePaths.length - 1]!
+  t.ok(
+    fs.existsSync(committedPath) && fs.readFileSync(committedPath, 'utf8') === 'primed',
+    'the committed cache bytes survive the rejection'
+  )
+  t.ok(refusal instanceof AttachmentNotFoundError, 'the caller gets the typed attachment error')
+
+  await complete([first, assistant('25.'), user('And base 4 height 3?')])
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 2, 'the rejected turn never reached the model')
+  t.is(turnCalls[1]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// An attachment already inside the committed prefix is never re-read from
+// disk — the warm delta skips it, so its later deletion must not fail the turn.
+test('completion: kv-cache tolerates a cached attachment vanishing from disk', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const fs = await import('bare-fs')
+  const os = await import('bare-os')
+  const path = await import('bare-path')
+  const attachmentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-attachment-'))
+  const attachmentPath = path.join(attachmentDir, 'diagram.png')
+  fs.writeFileSync(attachmentPath, 'image-bytes')
+
+  const modelId = `kvcache-attachment-vanishes-${Date.now()}`
+  try {
+    const calls: RecordedCall[] = []
+    registerRecordingModel(modelId, calls)
+    const complete = completer(modelId, 'attachment-vanishes-key')
+    const first = {
+      role: 'user',
+      content: 'Area of the triangle in the attachment?',
+      attachments: [{ path: attachmentPath }]
+    }
+    await complete([first] as HistoryEntry[])
+
+    fs.unlinkSync(attachmentPath)
+    await complete([first, assistant('25.'), user('And base 4 height 3?')] as HistoryEntry[])
+
+    const turnCalls = calls.filter((call) => !call.prefill)
+    t.is(turnCalls.length, 2, 'both turns reached the model')
+    t.is(
+      turnCalls[1]!.messages.length,
+      1,
+      'the second turn is warm — the cached attachment is skipped'
+    )
+  } finally {
+    fs.rmSync(attachmentDir, { recursive: true, force: true })
+    unregisterModel(modelId)
+    clearRegistry()
+  }
 })

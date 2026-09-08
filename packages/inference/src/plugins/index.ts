@@ -7,6 +7,7 @@ export {
   registerPlugins,
   getPlugin,
   getPluginHandler,
+  getTurboVecIndexProvider,
   hasPlugin,
   getAllPlugins,
   clearPlugins,

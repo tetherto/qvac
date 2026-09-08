@@ -1,0 +1,55 @@
+---
+description: Public API export structure for @qvac/test-suite
+globs:
+  - packages/test-suite/src/index.ts
+  - packages/test-suite/src/mobile-runtime.ts
+  - packages/test-suite/src/types/*.ts
+  - packages/test-suite/src/schemas/*.ts
+---
+
+# Public API Export Rules
+
+## Structure
+
+- `types/` — TypeScript types + Zod schemas for config/test definitions
+- `schemas/` — Zod schemas for MQTT messages and expectations
+- `core/` — Runtime classes and helpers
+- `utils/` — Utilities (config loader, validation helpers, MQTT connection)
+- `mobile/` — React Native-only executors
+
+## Entry points
+
+- `.` → `src/index.ts` (Node/desktop). Under the `react-native` condition this resolves to
+  `src/mobile-runtime.ts` instead.
+- `./mobile` → `src/mobile-runtime.ts`, a **reduced** surface: no CLI, no config loader, no esbuild. It adds
+  `AssetExecutor`, `buildMqttSessionOptions`, and `buildMqttSessionEndOptions`.
+- `bin: qvac-test` → `src/cli/index.ts`.
+
+## Index Exports
+
+`src/index.ts` re-exports the public API:
+
+- **Types**: `QvacTestConfig`, `Expectation`, `TestDefinition`, `TestExecutor`, `TestResult`,
+  `TestHandler`, `TestExecutorConfig`, `TestDefinitions`, `ExtractTest`, `HandlerFn`, `QueueEmpty`,
+  `RegisterAck`, `TestPrepare`, `TestQueueItem`, `MqttConnectionConfig`, `CreateMqttClientOptions`,
+  `NodeMemoryPollerHandle`, `NodeMemoryPollerOptions`, `DesktopMemoryPollerHandle`,
+  `DesktopMemoryPollerOptions`
+- **Schemas**: `expectationSchema`, `mqttConnectionSchema`, `testDefinitionSchema`,
+  `qvacTestConfigSchema`, `consumerRegistrationSchema`, `testRequestSchema`, `testPrepareSchema`,
+  `testStartSchema`, `testReloadSchema`, `testResultSchema`, `heartbeatSchema`, `queueEmptySchema`,
+  `batchCompleteSchema`, `testQueueItemSchema`, `registerAckSchema`, `testAssignmentSchema`
+- **Core**: `BatchOrchestrator`, `ConsumerBase`, `BaseExecutor`, `SkipExecutor`, `defineTests`,
+  `createExecutor`, `startNodeMemoryPoller`, `startDesktopMemoryPoller`
+- **Helpers**: `defineConfig`
+- **Utils**: `ValidationHelpers`, `chainExpectation`, `findConfig`, `loadConfig`, `loadTests`,
+  `createMqttClient`, `buildMqttOptions`, `buildMqttConnectionConfig`, `logMqttConnectionSecurity`
+
+Adding or removing anything here is an `[api]` (or `[bc]`) change — see `commit-and-pr-format.mdc`.
+
+## Adding Expectation Types
+
+1. Add schema in `src/schemas/expectations.ts`
+2. Add to the `expectationSchema` union
+3. Update `ValidationHelpers` in `utils/validation-helpers.ts`
+
+Current types: `contains-all`, `contains-any`, `regex`, `numeric-range`, `type`, `throws-error`, `function`

@@ -1,6 +1,8 @@
 #include <chrono>
 #include <map>
 #include <set>
+#include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <llama.h>
@@ -845,6 +847,161 @@ TEST_F(MultiRequestBatcherTest, NoSampleWhenChunkDoesNotFinishPrefill) {
   EXPECT_EQ(sampleCount, 1);
 }
 
+/// A driver that stops without producing a token returns
+/// `LLAMA_TOKEN_NULL` (the MTMD context-overflow return does exactly that).
+/// `generatedTokens` doubles as the feed queue and as the runtime-stats
+/// count, so recording that null would both queue an invalid id and report
+/// one generated token more than reached the cache.
+TEST_F(MultiRequestBatcherTest, NullSampleIsNotRecorded) {
+  const unsigned kMaxChunkSize = 2;
+  const unsigned kMaxTokensPerSeq = 100;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 2);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+
+  batcher.sampleAndAppendIdle([](uint32_t, int) { return LLAMA_TOKEN_NULL; });
+
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  EXPECT_TRUE(req->generatedTokens.empty());
+}
+
+/// A sample that ends the sequence never reaches the cache: the slot is
+/// marked finished and `fillBatch` filters it out before the token is fed.
+/// `generatedTokens` is both the feed queue and the runtime-stats count, so
+/// recording it would report one token more than the cache grew. The
+/// single-prompt path has always counted this way, incrementing
+/// `lastGeneratedTokenCount_` only after a successful decode.
+TEST_F(MultiRequestBatcherTest, FinishingSampleIsNotRecorded) {
+  const unsigned kMaxChunkSize = 2;
+  const unsigned kMaxTokensPerSeq = 100;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 2);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+
+  // First sample continues the sequence and is recorded.
+  batcher.sampleAndAppendIdle([](uint32_t, int) { return 40; });
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  ASSERT_EQ(req->generatedTokens.size(), 1u);
+
+  auto genResult = batcher.fillBatch(batch);
+  ASSERT_EQ(genResult.chunkSize, 1);
+  mocked_llama_decode(*batch);
+  batcher.advance(genResult.chunkSize);
+
+  const auto rateWindowEnd = req->lastTokenAt;
+
+  // Second sample is terminal: the driver marks the slot finished from inside
+  // the sampler, exactly as the scheduler's lambda does on an EOG.
+  batcher.sampleAndAppendIdle([&batcher](uint32_t sid, int) {
+    batcher.markFinished(sid);
+    return 41;
+  });
+  req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  EXPECT_EQ(req->generatedTokens.size(), 1u)
+      << "the terminal sample never reached the cache but was still counted";
+  EXPECT_EQ(req->lastTokenAt, rateWindowEnd)
+      << "the rate window must not stretch over a token the count excludes";
+}
+
+/// `predict: 1` makes the first sample the terminal one. `onLogitsReady`
+/// streams it before the slot is marked finished, so the caller does get
+/// output and TTFT has to be stamped from the same token. Only the count
+/// leaves it out, which is why the two stamps part ways here.
+TEST_F(MultiRequestBatcherTest, TerminalFirstSampleStillStampsTtft) {
+  const unsigned kMaxChunkSize = 2;
+  const unsigned kMaxTokensPerSeq = 100;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 2);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+
+  batcher.sampleAndAppendIdle([&batcher](uint32_t sid, int) {
+    batcher.markFinished(sid);
+    return 41;
+  });
+
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  EXPECT_TRUE(req->generatedTokens.empty())
+      << "the terminal sample is still not queued or counted";
+  EXPECT_TRUE(req->firstTokenAt.has_value())
+      << "a streamed terminal token must still fix TTFT";
+  EXPECT_FALSE(req->lastTokenAt.has_value())
+      << "one uncounted token gives no honest rate window";
+}
+
+/// The prediction limit is the one terminal stop whose sample IS content the
+/// caller received. The single-prompt path decodes and counts it before its
+/// own `n_predict` cap fires, so dropping it here reported N-1 against that
+/// path's N, and 0 for `predict: 1` alongside non-empty streamed output.
+TEST_F(MultiRequestBatcherTest, PredictionLimitSampleIsCounted) {
+  const unsigned kMaxChunkSize = 2;
+  const unsigned kMaxTokensPerSeq = 100;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 2);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+
+  batcher.sampleAndAppendIdle([&batcher](uint32_t sid, int) {
+    batcher.markFinished(sid, StopReason::PredictionLimit);
+    return 41;
+  });
+
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  ASSERT_EQ(req->generatedTokens.size(), 1u)
+      << "a `predict: 1` request produced exactly one token and must say so";
+  EXPECT_EQ(req->generatedTokens.back(), 41);
+  EXPECT_TRUE(req->lastTokenAt.has_value())
+      << "a counted token closes the rate window";
+
+  // Counted but never fed: the slot is finished, so nothing may queue behind
+  // it and `fillBatch` has no work left.
+  EXPECT_EQ(req->remainingToFeed(), 0u);
+  EXPECT_EQ(batcher.fillBatch(batch).chunkSize, 0u);
+}
+
 TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {
   const unsigned kMaxChunkSize = 8;
   const unsigned kMaxTokensPerSeq = 3;
@@ -863,11 +1020,45 @@ TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {
   EXPECT_EQ(result.chunkSize, 3);
   batcher.advance(result.chunkSize);
 
-  // Should be finished immediately after prefill due to limit
+  // Should be finished immediately after prefill: the prompt filled the
+  // slot's whole share of the context window, so there is no room to
+  // generate into. That is the window being full, not a caller-set cap.
   auto finished = batcher.extractFinished();
   ASSERT_EQ(finished.size(), 1);
-  EXPECT_EQ(finished[0].stopReason, StopReason::LimitReached);
+  EXPECT_EQ(finished[0].stopReason, StopReason::ContextOverflow);
   EXPECT_TRUE(finished[0].generatedTokens.empty());
+}
+
+// The generating counterpart, which is what a caller actually observes.
+// `advance` marks the slot before `sampleAndAppendIdle` can reach the
+// driver's own overflow check, so if this reported a per-sequence cap the
+// driver's ContextOverflow answer would be unreachable for ordinary text
+// slots and runtime stats would say `sequenceLimit` for a full window.
+TEST_F(MultiRequestBatcherTest, GeneratingSlotThatFillsWindowReportsOverflow) {
+  const unsigned kMaxChunkSize = 8;
+  const unsigned kMaxTokensPerSeq = 4;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  // Leaves exactly one slot of room, so one sampled token fills the window.
+  ASSERT_EQ(
+      batcher.addRequest({10, 20, 30}, seqId),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  auto prefill = batcher.fillBatch(batch);
+  batcher.advance(prefill.chunkSize);
+  ASSERT_TRUE(batcher.extractFinished().empty());
+
+  batcher.sampleAndAppendIdle([](uint32_t, int) { return 40; });
+  auto step = batcher.fillBatch(batch);
+  batcher.advance(step.chunkSize);
+
+  auto finished = batcher.extractFinished();
+  ASSERT_EQ(finished.size(), 1);
+  EXPECT_EQ(finished[0].stopReason, StopReason::ContextOverflow);
 }
 
 TEST_F(MultiRequestBatcherTest, MarkAllFinishedWithDecodeError) {
@@ -1000,7 +1191,6 @@ TEST(MediaBarrierRequestTest, AddRequestAtUsesKvCellsNotPositionsForCap) {
           0,
           std::move(plan),
           /*initialPos=*/2,
-          /*slideCapable=*/false,
           /*initialKvCells=*/8),
       MultiRequestBatcher::AddStatus::ErrTokensTooLarge)
       << "KV-CELL CAP HOLE: 8 loaded KV cells + 3 prompt tokens = 11 > "

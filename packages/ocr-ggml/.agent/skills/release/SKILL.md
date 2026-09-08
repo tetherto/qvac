@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 Release a package to NPM. Ensures version bump, changelog, release branch, CI pipeline, and npm publish.
 
-The package is identified by the `<package-name>` argument, which is the directory name under `packages/` (e.g., `ocr-ggml`, `qvac-sdk`, `tts-onnx`). The skill reads `packages/<package-name>/package.json` to determine the package type and npm scope.
+The package is identified by the `<package-name>` argument, which is the directory name under `packages/` (e.g., `ocr-ggml`, `sdk`, `tts-ggml`). The skill reads `packages/<package-name>/package.json` to determine the package type and npm scope.
 
 ## Usage
 

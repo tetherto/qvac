@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -46,9 +47,9 @@ struct GenerationParams {
   // compaction. Contexts default off except the Qwen3 family, which defaults
   // on. `false` keeps the reasoning block in cache; `true` enables
   // compaction. Supported on both pure-attention and recurrent / hybrid-SSM
-  // models — recurrent / hybrid takes the snapshot + restore + replay path
-  // documented on `TextLlmContext::needsRecurrentSnapshot_`; pure-attention
-  // takes the `seq_rm + seq_add` path. Restored at end-of-request.
+  // models. Every model rewinds to the reasoning boundary and replays;
+  // `TextLlmContext::needsRecurrentSnapshot_` documents what differs between
+  // them. Restored at end-of-request.
   std::optional<bool> remove_thinking_from_context;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /
@@ -166,21 +167,70 @@ struct LlmModelContext {
 /// (de)serializer must persist and restore. Any driver implementing
 /// `loadCache`/`saveCache` MUST round-trip all four fields in this order.
 ///
-/// `cacheTokens`/`firstMsgCacheTokens` (physical KV-cell usage) are owned
-/// separately from `nPast`/`firstMsgTokens` (logical positional span) because
-/// multimodal M-RoPE media can occupy more KV cells than its positional span.
-/// Persisting only the two positional fields would lose the media KV-cell
-/// counts and break context shifting after restore. See `getCacheTokens` /
-/// `getFirstMsgCacheTokens` below for the divergence these fields capture.
+/// `cacheTokens` (physical KV-cell usage) is owned separately from `nPast`
+/// (logical positional span) because multimodal M-RoPE media can occupy more
+/// KV cells than its positional span. See `getCacheTokens` below.
+///
+/// Slots 1 and 3 are retired: they carried the first-message counters the
+/// removed sliding-context feature protected. The four-field width stays so a
+/// file written by either build still loads, and this build's readers ignore
+/// them.
+///
+/// They are not written as 0. A build that still slides reads slot 1 as its
+/// protected-prefix boundary and would evict from position 0, silently
+/// dropping the system prompt and tool definitions. Mirroring the live cursor
+/// instead drives its `leftTokens` negative, so it refuses the slide and
+/// reports a context overflow with the cache intact.
+///
+/// That refusal covers the prefill slide only, the generation slide carried no
+/// such guard, so mirroring is the better of the two values we can write, not
+/// a guarantee at every slide site.
 enum class SessionMetadataField : uint8_t {
   NPast = 0,
-  FirstMsgTokens = 1,
+  RetiredFirstMsgTokens = 1,
   CacheTokens = 2,
-  FirstMsgCacheTokens = 3,
+  RetiredFirstMsgCacheTokens = 3,
 };
 
 /// Number of `llama_token` fields in the session metadata contract above.
 inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
+
+/// The wire form of the contract above. Every `saveCache` / `loadCache` goes
+/// through this so the `{nPast, nPast, cacheTokens, cacheTokens}` layout has
+/// one home: a writer that left a retired slot at 0 makes an older,
+/// still-sliding build evict from position 0 instead of protecting the first
+/// message, and that is silent.
+struct SessionMetadata {
+  std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
+
+  /// Reads the two live fields off a context, then mirrors them into the
+  /// retired slots so a downgraded build refuses to slide rather than
+  /// evicting from position 0. See the contract above.
+  static SessionMetadata capture(const class LlmContext& context);
+
+  /// Writes the two live fields back onto a context.
+  void applyTo(class LlmContext& context) const;
+
+  [[nodiscard]] llama_token field(SessionMetadataField which) const {
+    return tokens[static_cast<size_t>(which)];
+  }
+  [[nodiscard]] llama_token nPast() const {
+    return field(SessionMetadataField::NPast);
+  }
+  [[nodiscard]] llama_token cacheTokens() const {
+    return field(SessionMetadataField::CacheTokens);
+  }
+
+  [[nodiscard]] llama_token* data() { return tokens.data(); }
+  [[nodiscard]] const llama_token* data() const { return tokens.data(); }
+  [[nodiscard]] size_t size() const { return tokens.size(); }
+
+  /// A partial header leaves `cacheTokens` at zero, which diverges from
+  /// `nPast` under M-RoPE and breaks later cap checks.
+  [[nodiscard]] static bool isComplete(size_t tokenCount) {
+    return tokenCount >= SESSION_METADATA_FIELD_COUNT;
+  }
+};
 
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
@@ -316,45 +366,6 @@ public:
   virtual void setCacheTokens(llama_pos cacheTokens) { setNPast(cacheTokens); }
 
   /**
-   * Get the number of tokens belonging to the first user message.
-   */
-  [[nodiscard]] virtual llama_pos getFirstMsgTokens() const = 0;
-
-  /**
-   * Set the number of tokens belonging to the first user message.
-   */
-  virtual void setFirstMsgTokens(llama_pos firstMsgTokens) = 0;
-
-  /**
-   * Get physical KV-cache token usage for the protected first message.
-   */
-  [[nodiscard]] virtual llama_pos getFirstMsgCacheTokens() const {
-    return getFirstMsgTokens();
-  }
-
-  /**
-   * Set physical KV-cache token usage for the protected first message.
-   */
-  virtual void setFirstMsgCacheTokens(llama_pos firstMsgCacheTokens) {
-    setFirstMsgTokens(firstMsgCacheTokens);
-  }
-
-  /**
-   * Set the number of tokens to discard when overflowing context.
-   */
-  virtual void setNDiscarded(llama_pos nDiscarded) = 0;
-
-  /**
-   * Get the number of context slides (discards) that have occurred.
-   */
-  [[nodiscard]] virtual int32_t getNSlides() const = 0;
-
-  /**
-   * Reset the slide counter to zero. Called at the start of each inference.
-   */
-  virtual void resetNSlides() = 0;
-
-  /**
    * Number of `<think>` reasoning blocks compacted out of the KV
    * cache during the most recent generation. 0 for contexts without
    * reasoning channel support.
@@ -374,8 +385,8 @@ public:
 
   /**
    * Consume the per-inference user-visible `llama_perf_context` snapshot
-   * if one was captured (currently only by contexts that may run a
-   * recurrent replay decode during thinking-block compaction). Returns
+   * if one was captured (by any context that may run a replay decode
+   * during thinking-block compaction). Returns
    * `std::nullopt` when no snapshot was taken, in which case the caller
    * should fall back to a live `llama_perf_context()` read.
    *
@@ -396,6 +407,25 @@ public:
     return std::nullopt;
   }
 
+  /**
+   * Tokens the most recent single-prompt inference actually generated.
+   *
+   * llama's `n_eval` cannot answer this. It counts decodes whose batch held
+   * exactly one token (`llama-context.cpp`: `n_queued_tokens == 1`), so it
+   * measures batch shape, not meaning. Generation happens to decode one at a
+   * time, which is why the two used to agree, but reasoning compaction now
+   * replays the kept tokens as a batch and those land in `n_p_eval` instead.
+   * Counting where the tokens are produced keeps the stat honest regardless
+   * of how any later cache work is batched.
+   */
+  [[nodiscard]] virtual int32_t lastGeneratedTokenCount() const {
+    return lastGeneratedTokenCount_;
+  }
+
+protected:
+  int32_t lastGeneratedTokenCount_ = 0;
+
+public:
   /**
    * Wall-clock milliseconds spent in the vision encoder (mtmd/CLIP ViT
    * forward + projection) during the most recent inference. 0 for
@@ -505,3 +535,24 @@ protected:
   /// scheduler-assigned slot id at construction.
   llama_seq_id seqId_ = 0;
 };
+
+inline SessionMetadata SessionMetadata::capture(const LlmContext& context) {
+  SessionMetadata metadata;
+  using Field = SessionMetadataField;
+  metadata.tokens[static_cast<size_t>(Field::NPast)] =
+      static_cast<llama_token>(context.getNPast());
+  metadata.tokens[static_cast<size_t>(Field::CacheTokens)] =
+      static_cast<llama_token>(context.getCacheTokens());
+  // Retired here, read as the protected prefix by any build still sliding.
+  // Mirroring the live cursors makes that build's slide guard fail closed.
+  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgTokens)] =
+      metadata.tokens[static_cast<size_t>(Field::NPast)];
+  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgCacheTokens)] =
+      metadata.tokens[static_cast<size_t>(Field::CacheTokens)];
+  return metadata;
+}
+
+inline void SessionMetadata::applyTo(LlmContext& context) const {
+  context.setNPast(nPast());
+  context.setCacheTokens(cacheTokens());
+}

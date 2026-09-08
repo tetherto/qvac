@@ -555,6 +555,35 @@ def format_with_black(paths: list[Path]) -> None:
     )
 
 
+def suppress_ambiguous_enum_names(models_dir: Path) -> None:
+    """Append `# noqa: E741` to generated enum members named `l`, `I` or `O`.
+
+    These names mirror wire values verbatim -- the walk-key enum has a member
+    `l` because the keyboard key is "L" -- so they are fixed by the RPC contract
+    and cannot be renamed here. E741 is a readability rule aimed at hand-written
+    identifiers.
+
+    Suppressed at the line rather than via a `per-file-ignores` entry in
+    pyproject, matching how this generator already handles E402 in the modules
+    it renders: the exemption stays next to the thing it describes, and it keeps
+    applying E741 to every other line of generated output instead of switching
+    the rule off for the whole tree.
+    """
+    ambiguous = ("l", "I", "O")
+    for path in models_dir.rglob("*.py"):
+        lines = path.read_text(encoding="utf-8").split("\n")
+        changed = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            for name in ambiguous:
+                if stripped.startswith(f"{name} = ") and "noqa" not in line:
+                    lines[i] = f"{line}  # noqa: E741"
+                    changed = True
+                    break
+        if changed:
+            path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def sort_imports_with_ruff(path: Path) -> None:
     # datamodel-code-generator appends the --base-class import as a plain
     # trailing line rather than running it through isort, so the header
@@ -590,6 +619,7 @@ def build(output_root: Path) -> None:
     GENERATED_DIR."""
     models_dir = output_root / "models"
     run_datamodel_codegen(models_dir)
+    suppress_ambiguous_enum_names(models_dir)
     sort_imports_with_ruff(models_dir)
     manifest_methods = load_manifest_methods()
     resolved = resolve_titles(models_dir, manifest_methods)

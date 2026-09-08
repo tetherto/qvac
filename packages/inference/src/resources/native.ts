@@ -1,3 +1,4 @@
+import os from 'bare-os'
 import { randomUUID } from 'bare-crypto'
 import type { ResourceCollectorDependencies } from '@/resources/types'
 
@@ -30,6 +31,7 @@ const gpuTypes =
 export const nativeResourceCollectorDependencies: ResourceCollectorDependencies = {
   cpuArchitectures,
   gpuTypes,
+  platform: os.platform(),
   createCPUInfo() {
     if (cpuModule.status !== 'fulfilled') return undefined
     return new cpuModule.value.default()
@@ -43,5 +45,17 @@ export const nativeResourceCollectorDependencies: ResourceCollectorDependencies 
   },
   now() {
     return Date.now()
+  },
+  sampleProcessMemory() {
+    // A throw here is a sampling failure, not a platform gap: let it reach the
+    // collector so the metric reports `failed` rather than `unavailable`.
+    const usage = os.memoryUsage()
+    // No platform exposes the per-process allowance yet. On iOS this is
+    // `os_proc_available_memory()` — the limit jetsam actually enforces — and
+    // it needs a native source before the metric can report a value.
+    return {
+      usedBytes: usage && usage.rss > 0 ? usage.rss : undefined,
+      availableBytes: undefined
+    }
   }
 }

@@ -77,7 +77,7 @@ const MULTIMODAL_MODEL_CONFIGS = {
   // VisionPsy Nano, base checkpoint. Needs no image-no-upscale key: base
   // preprocessing is what its GGUF already declares. Only loadable against a
   // fabric carrying the VisionPsy projector alias (qvac-fabric-llm.cpp#205),
-  // which on this branch comes from the vcpkg-overlays/ports/qvac-fabric pin.
+  // which is covered by this package's qvac-fabric dependency floor.
   visionpsy: {
     llmModel: { modelName: 'visionpsy-nano-460m-q8_0.gguf' },
     projModel: { modelName: 'mmproj-visionpsy-nano-460m-q8.gguf' },

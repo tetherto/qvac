@@ -1,6 +1,7 @@
 import type { QVACModelEntry } from '@qvac/registry-client'
 import { getAddonFromEngine, resolveCanonicalEngine } from '../../surface'
 import { detectShardedModel } from './shards'
+import { extractGgufFacts, parseGgufMetadata } from './gguf-facts'
 import type { ProcessedModel } from './types'
 
 export function toHexString(value: Buffer | string | { data: number[] } | undefined): string {
@@ -71,6 +72,17 @@ export function processRegistryModel(model: QVACModelEntry): ProcessedModel | nu
     result.isShardPart = true
     result.shardInfo = shardDetection
   }
+
+  // The registry only extracts GGUF metadata for the first shard, so the facts
+  // ride along on that entry and survive `groupShardedModels`, which keeps the
+  // first shard as the grouped model.
+  //
+  // Read through a cast: the field is in the hyperschema and reaches clients
+  // untouched, but `QVACModelEntry` only declares it from
+  // @qvac/registry-client 0.7.0 on. Drop the cast once the dep is bumped.
+  const ggufMetadata = (model as unknown as Record<string, string | undefined>)['ggufMetadata']
+  const ggufFacts = extractGgufFacts(parseGgufMetadata(ggufMetadata))
+  if (ggufFacts) result.ggufFacts = ggufFacts
 
   return result
 }

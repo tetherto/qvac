@@ -228,8 +228,6 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
   const double avgConcurrentSeq =
       test_common::getStatValue(stats, "avgConcurrentSeq");
   const double cacheTokens = test_common::getStatValue(stats, "CacheTokens");
-  const double contextSlides =
-      test_common::getStatValue(stats, "contextSlides");
 
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_FALSE(outputs[0].empty());
@@ -237,7 +235,6 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
   EXPECT_GT(avgConcurrentSeq, 1.0);
   EXPECT_LE(avgConcurrentSeq, 2.0);
   EXPECT_GT(cacheTokens, 0.0);
-  EXPECT_GE(contextSlides, 0.0);
 }
 
 /// A real batched run must report both phase-separated throughput rates:
@@ -764,7 +761,7 @@ TEST_F(
 }
 
 /// Regression: Qwen3.5 is a hybrid SSM family; on the continuous-batching
-/// path the end-of-prefill recurrent snapshot must be taken inside
+/// path the recurrent boundary snapshot must be taken inside
 /// `TextLlmContext::onPrefillComplete` (not only inside the single-prompt
 /// `evalMessageWithTools` prefill loop). Without the snapshot,
 /// `compactThinkSpan` aborts early for hybrid models and
@@ -826,7 +823,7 @@ TEST_F(
       test_common::getStatValue(stats, "thinkingBlockDiscards");
 
   EXPECT_GE(thinkingDiscards, 1.0)
-      << "scheduler path must take the end-of-prefill recurrent snapshot "
+      << "scheduler path must take the recurrent boundary snapshot "
          "so `compactThinkSpan` can fire on the hybrid; got "
       << thinkingDiscards << " discards. outputs[0]=" << outputs[0]
       << " outputs[1]=" << outputs[1];
@@ -844,7 +841,6 @@ TEST_F(
   config_["ctx_size"] = "512";
   config_["parallel"] = "2";
   config_["n_predict"] = "-1";
-  config_["n_discarded"] = "0";
   config_["temp"] = "0";
   auto model = loadModel(qwen35HybridModel_);
 
@@ -1601,6 +1597,39 @@ TEST_F(
   }
 }
 
+/// The finalize window in `drainFinishedLocked` also drops the mutex, because
+/// `onGenerationFinished` runs reasoning compaction, which now rewinds and
+/// REPLAYS the kept tokens through `llama_decode`. Unlike the decode window it
+/// holds a reference into `slots_` across the unlock, so the usual
+/// reconcile-on-every-reacquisition would run `onCancel` on a driver
+/// mid-finalize and free the slot the drain loop is still using: the slot
+/// keeps its `admissionId` until `freeSlot`, and `extractFinished` only
+/// removed it from the batcher, so it still passes `slotOwnedByLocked`.
+///
+/// Suspension must therefore be lossless. A record made during the window
+/// survives it, and the very next reconcile outside the window consumes it.
+TEST_F(ContinuousBatchingIntegrationTest, TeardownDeferralKeepsPendingCancels) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  // No request is in flight, so the record names a free slot and the apply
+  // outside the window drops it on the ownership re-check rather than
+  // tearing anything down.
+  const auto [survivedDeferred, survivedAfter] =
+      ContinuousBatchSchedulerTestPeer::pendingCancelSurvivesTeardown(
+          *scheduler);
+  EXPECT_TRUE(survivedDeferred)
+      << "a cancel recorded inside the finalize unlock window was consumed "
+         "while the drain loop still held the slot";
+  EXPECT_FALSE(survivedAfter)
+      << "the suspended record was never applied once the window closed";
+}
+
 /// Reproduce bug: A per-slot cancel that lands while `stepLocked()` has
 /// released the scheduler mutex (around media eval / llama_decode) is recorded
 /// in `pendingSlotCancels_` and only applied at the *next* worker-loop top.
@@ -1860,35 +1889,21 @@ TEST_F(
          "(seqId 0) tore down job B, which merely reuses the recycled seqId";
 }
 
-/// A batched sequence that outgrows its per-slot window (ctx / n_parallel)
-/// must slide (`contextSlides > 0`) and keep generating, like the
-/// single-prompt path does, instead of being hard-truncated at the window.
+/// A batched sequence that fills its per-slot window (ctx / n_parallel) stops
+/// there and returns the tokens it already produced. Nothing is evicted to make
+/// room, so the run must end cleanly at the window rather than throwing or
+/// looping.
 ///
-/// The slide machinery reads the driver's `nPast_`, but during batched
-/// generation only the batcher's `Request::currentPos` advances; `nPast_`
-/// stays frozen at the prompt length, so the slide condition never fires
-/// and `Request::exceededLimit()` truncates the sequence first.
-///
-/// Setup: ctx 256 with parallel 2 targets a small per-slot window;
-/// n_predict -1 (unbounded) so admission does not cap the request, and
-/// n_discarded 32 enables sliding. llama.cpp's memory-fit step may
-/// adjust the requested ctx, so the effective window is read back via
-/// the decode stub (`llama_n_ctx / parallel`). The prompt elicits an
-/// output long enough to cross the window; once enough pieces stream
-/// out to prove generation survived past it, the test cancels to bound
-/// the run. The cancel rolls the driver's cache back to the pre-request
-/// cursor (this PR's cancel contract), so post-cancel `CacheTokens` is
-/// not a witness of "generation happened" any more; `contextSlides > 0`
-/// carries that invariant on its own — slides only fire when the
-/// sequence has advanced past the per-slot window.
-TEST_F(
-    ContinuousBatchingIntegrationTest, BatchGenerationSlidesPastPerSlotWindow) {
+/// Setup: ctx 256 with parallel 2 targets a small per-slot window and
+/// n_predict -1 (unbounded) so nothing but the window bounds the request.
+/// llama.cpp's memory-fit step may adjust the requested ctx, so the
+/// effective window is read back through the decode stub.
+TEST_F(ContinuousBatchingIntegrationTest, BatchGenerationStopsAtPerSlotWindow) {
   REQUIRE_MODEL(model_);
   constexpr size_t kParallel = 2;
   config_["ctx_size"] = "256";
   config_["parallel"] = std::to_string(kParallel);
   config_["n_predict"] = "-1";
-  config_["n_discarded"] = "32";
   auto model = loadModel();
 
   auto* scheduler = LlamaModelTestPeer::scheduler(*model);
@@ -1900,37 +1915,20 @@ TEST_F(
         return llama_decode(ctx, batch);
       });
 
-  std::atomic<size_t> pieces = 0;
-  std::atomic<bool> cancelOnce = false;
   auto prompt = makePrompt(
       "Count upward from 1, one number per line, and do not stop counting.");
-  prompt.outputCallback = [&model, &pieces, &perSlotWindow, &cancelOnce](
-                              const std::string&) {
-    // Pieces under-count tokens (UTF-8 buffering), so once the piece
-    // count alone exceeds the whole per-slot window, prompt + generated
-    // tokens crossed it for sure.
-    constexpr size_t kPastWindowMargin = 32;
-    const size_t window = perSlotWindow.load();
-    if (window > 0 && pieces.fetch_add(1) + 1 >= window + kPastWindowMargin) {
-      bool expected = false;
-      if (cancelOnce.compare_exchange_strong(expected, true)) {
-        model->cancel();
-      }
-    }
-  };
-
   std::vector<LlamaModel::Prompt> prompts{std::move(prompt)};
-  auto outputs = model->processPromptBatch(prompts);
+  std::vector<std::string> outputs;
+  ASSERT_NO_THROW({ outputs = model->processPromptBatch(prompts); });
   const auto stats = model->runtimeStats();
-  const double contextSlides =
-      test_common::getStatValue(stats, "contextSlides");
+  const double cacheTokens = test_common::getStatValue(stats, "CacheTokens");
 
   ASSERT_EQ(outputs.size(), 1u);
-  EXPECT_FALSE(outputs[0].empty());
-  EXPECT_GT(contextSlides, 0.0)
-      << "SLIDE NEVER FIRED: the sequence was truncated at the per-slot "
-         "window instead of sliding; pieces emitted: "
-      << pieces.load() << ", per-slot window: " << perSlotWindow.load();
+  EXPECT_FALSE(outputs[0].empty())
+      << "a slot that fills its window must still return what it generated";
+  ASSERT_GT(perSlotWindow.load(), 0u);
+  EXPECT_LE(cacheTokens, static_cast<double>(perSlotWindow.load()))
+      << "the slot must stop at its per-slot window, not grow past it";
 }
 
 /// Cancel = "request never happened": `onCancel` rolls the driver's

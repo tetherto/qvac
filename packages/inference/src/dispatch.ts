@@ -42,21 +42,10 @@ import {
 const logger = getAppLogger()
 
 type Handler =
-  | ((
-      req: Request,
-      arg?: ((update: Response) => void) | DelegatedOptions
-    ) => Promise<Response> | Response)
-  | ((
-      req: Request,
-      arg?: ((update: Response) => void) | DelegatedOptions
-    ) => AsyncGenerator<Response>)
+  | ((req: Request, progressCallback?: (update: Response) => void) => Promise<Response> | Response)
+  | ((req: Request, progressCallback?: (update: Response) => void) => AsyncGenerator<Response>)
 
 type HandlerResult = Promise<Response> | Response | AsyncGenerator<Response>
-
-interface DelegatedOptions {
-  progressCallback?: (update: Response) => void
-  profilingMeta?: ProfilingRequestMeta
-}
 
 let ready = false
 let readyPromise: Promise<void> | null = null
@@ -180,25 +169,8 @@ function prepareRequest<T extends Request>(request: T): Request {
   return validated
 }
 
-function delegatedOptions(
-  request: Request,
-  progressCallback?: (update: Response) => void
-): DelegatedOptions | undefined {
-  const profilingMeta = getProfilingMeta(request)
-  if (!profilingMeta && !progressCallback) return undefined
-  const options: DelegatedOptions = {}
-  if (progressCallback) options.progressCallback = progressCallback
-  if (profilingMeta) options.profilingMeta = profilingMeta
-  return options
-}
-
-function invokeHandler(
-  request: Request,
-  handler: HandlerEntry['handler'],
-  isDelegated: boolean
-): HandlerResult {
+function invokeHandler(request: Request, handler: HandlerEntry['handler']): HandlerResult {
   const directHandler = handler as Handler
-  if (isDelegated) return directHandler(request, delegatedOptions(request))
   return directHandler(request)
 }
 
@@ -212,8 +184,7 @@ function isAsyncGenerator(result: HandlerResult): result is AsyncGenerator<Respo
  */
 async function* streamWithProgress(
   request: Request,
-  handler: HandlerEntry['handler'],
-  isDelegated: boolean
+  handler: HandlerEntry['handler']
 ): AsyncGenerator<Response> {
   const queue: Response[] = []
   const errors: Error[] = []
@@ -224,12 +195,7 @@ async function* streamWithProgress(
   }
 
   const directHandler = handler as Handler
-  Promise.resolve(
-    directHandler(
-      request,
-      isDelegated ? delegatedOptions(request, progressCallback) : progressCallback
-    ) as Promise<Response> | Response
-  )
+  Promise.resolve(directHandler(request, progressCallback) as Promise<Response> | Response)
     .then((final) => {
       queue.push(final)
       done = true
@@ -260,17 +226,17 @@ export async function send<T extends Request>(
 
   const processed = prepareRequest(request)
   const entry = getHandlerEntry(processed.type)
-  const { handler, isDelegated } = selectHandler(entry, processed)
+  const handler = selectHandler(entry)
 
-  // Plugin capabilities profile themselves inside plugin dispatch; delegated
-  // requests are timed on the provider. Everything else is timed here so the
-  // `profiler` covers every operation. Profiling is a no-op unless enabled.
-  if (entry.pluginOp || isDelegated) {
-    return (await invokeHandler(processed, handler, isDelegated)) as Response
+  // Plugin capabilities profile themselves inside plugin dispatch. Everything
+  // else is timed here so the `profiler` covers every operation. Profiling is a
+  // no-op unless enabled.
+  if (entry.pluginOp) {
+    return (await invokeHandler(processed, handler)) as Response
   }
   return profileReplyHandler(
     { op: processed.type, request: processed },
-    () => invokeHandler(processed, handler, isDelegated) as Promise<Response>
+    () => invokeHandler(processed, handler) as Promise<Response>
   )
 }
 
@@ -283,14 +249,14 @@ export async function* stream<T extends Request>(
 
   const processed = prepareRequest(request)
   const entry = getHandlerEntry(processed.type)
-  const { handler, isDelegated } = selectHandler(entry, processed)
+  const handler = selectHandler(entry)
 
   async function* run(): AsyncGenerator<Response> {
     if (handlerSupportsProgress(entry, processed)) {
-      yield* streamWithProgress(processed, handler, isDelegated)
+      yield* streamWithProgress(processed, handler)
       return
     }
-    const result = invokeHandler(processed, handler, isDelegated)
+    const result = invokeHandler(processed, handler)
     if (isAsyncGenerator(result)) {
       yield* result
     } else {
@@ -298,8 +264,8 @@ export async function* stream<T extends Request>(
     }
   }
 
-  // See `send`: plugin capabilities and delegated requests are timed elsewhere.
-  if (entry.pluginOp || isDelegated) {
+  // See `send`: plugin capabilities are timed elsewhere.
+  if (entry.pluginOp) {
     yield* run()
   } else {
     yield* profileStreamHandler({ op: processed.type, request: processed }, run)

@@ -3,8 +3,7 @@
  *
  * Mirrors `preprocessImage` / `padState` / `DEFAULT_IMAGE_SIZE` from
  * `@qvac/vla-ggml/addon.js`. Kept inlined (not re-exported from the addon)
- * so preparing inputs never loads the addon's native binding — a caller
- * without VLA prebuilds can still drive a remote VLA provider over delegation.
+ * so preparing inputs never loads the addon's native binding.
  *
  * This file is a verbatim port of the addon's JS implementation; keep them
  * in sync so the produced tensors stay byte-identical regardless of where

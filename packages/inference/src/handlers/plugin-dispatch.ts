@@ -5,7 +5,6 @@ import type { PluginHandlerDefinition } from '@/schemas/plugin'
 import { profileReplyHandler, profileStreamHandler } from '@/profiling/index'
 import {
   ModelNotFoundError,
-  ModelIsDelegatedError,
   ModelOperationNotSupportedError,
   PluginNotFoundError,
   PluginHandlerTypeMismatchError
@@ -20,10 +19,6 @@ function resolvePluginHandlerDef(modelId: string, handlerName: string): PluginHa
   const entry = getModelEntry(modelId)
   if (!entry) {
     throw new ModelNotFoundError(modelId)
-  }
-
-  if (entry.isDelegated) {
-    throw new ModelIsDelegatedError(modelId)
   }
 
   const plugin = getPlugin(entry.local.modelType)

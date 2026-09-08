@@ -38,7 +38,13 @@ env:
   PKG_DIR: packages/classification-ggml
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-integration-tests:
+    needs: runner_names
     timeout-minutes: 30
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -52,24 +58,27 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204 }}
             platform: linux
             arch: x64
           - os: ubuntu-24.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404 }}
             platform: linux
             arch: x64
           - os: ubuntu-22.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
             platform: linux
             arch: arm64
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
           # @qvac/fabric hard-imports vulkan-1.dll on Windows; qvac-win25-x64-gpu has
           # the Vulkan loader installed (same env as llm-llamacpp and other fabric
           # consumers being migrated).
           - platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
 
     steps:
       - name: Manual Workspace Cleanup
@@ -243,3 +252,4 @@ jobs:
           path: ${{ env.PKG_DIR }}/test/results/performance-report.json
           if-no-files-found: ignore
           retention-days: 30
+

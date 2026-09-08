@@ -19,7 +19,7 @@ function asUpscalerModel(model: unknown, modelId: string): EsrganUpscaler {
   }
 
   const entry = getModelEntry(modelId)
-  const modelType = entry && !entry.isDelegated ? entry.local.modelType : ModelType.sdcppGeneration
+  const modelType = entry ? entry.local.modelType : ModelType.sdcppGeneration
   throw new ModelOperationNotSupportedError(modelId, modelType, 'upscale', ['diffusion'], [])
 }
 

@@ -7,7 +7,7 @@ schemaType: TechArticle
 
 ## Overview
 
-Install the JS/TS or Python clients in your project. Then, load models and use them to perform AI inference locally, or delegate inference to peers using the built-in P2P capability.
+Install the JS/TS or Python clients in your project. Then, load models and use them to perform AI inference locally.
 
 The SDK has two layers:
 
@@ -58,7 +58,7 @@ The SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabilit
 * [**Batch processing:**](/ai-capabilities/batch-processing) run multiple LLM prompts concurrently through a single loaded model in one call.
 * [**Image generation:**](/ai-capabilities/image-generation) text-to-image and image-to-image generation via a customized Diffusion engine.
 * [**Video generation:**](/ai-capabilities/video-generation) text-to-video and image-to-video generation via a customized Diffusion engine.
-* [**Music generation:**](/ai-capabilities/music-generation) generate music from text, lyrics, and musical controls via [ACE-Step](https://github.com/ace-step/ACE-Step-1.5).
+* [**Music generation:**](/ai-capabilities/music-generation) generate music from text prompts and lyrics via [ACE-Step](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3).
 * [**Transcription:**](/ai-capabilities/transcription) automatic speech recognition (ASR) for speech-to-text via a customized Whisper engine or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
 * [**Text-to-Speech:**](/ai-capabilities/text-to-speech) speech synthesis for text-to-speech (TTS) via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml).
 * [**Voice assistant:**](/ai-capabilities/voice-assistant) real-time voice conversation pipeline chaining transcription, text generation, and text-to-speech.
@@ -70,14 +70,13 @@ The SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabilit
 
 ### P2P capabilities
 
-* [**Delegated inference:**](/p2p-capabilities/delegated-inference) delegate inference to peers via the [Holepunch stack](https://holepunch.to), enabling resource sharing.
 * **Fetch models:** download AI models from peers via the distributed model registry.
 * [**Blind relays:**](/p2p-capabilities/blind-relays) connect peers across NATs/firewalls by routing traffic through relay nodes.
 
 ### Utilities
 
 * [**Logging:**](/runtime/logging) visibility into what's happening  during loading, inference, and other operations.
-* [**Profiler:**](/runtime/profiler) measure and export timing metrics across model loading, inference, and P2P delegation.
+* [**Profiler:**](/runtime/profiler) measure and export timing metrics across model loading and inference.
 * [**Download Lifecycle:**](/models/download-lifecycle) pause and resume model downloads.
 * [**Runtime lifecycle:**](/runtime/lifecycle) suspend and resume the SDK runtime (e.g., on app background/foreground) and query lifecycle state.
 * [**Cancellation:**](/runtime/cancellation) cancel any in-flight inference, model load, or download by `requestId`, or broad-cancel by `modelId` for unload/shutdown.

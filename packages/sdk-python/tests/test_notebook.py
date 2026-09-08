@@ -168,7 +168,7 @@ def test_sync_client_notebook_flow_against_real_worker():
 
     with SyncClient(worker_path=WORKER_PATH, bare_path=BARE_BIN) as client:
         model_id = client.load_model(
-            model_src=QWEN3_600M_INST_Q4, model_config={"n_ctx": 2048}
+            model_src=QWEN3_600M_INST_Q4, model_config={"ctx_size": 2048}
         )
         text = client.completion(
             model_id,

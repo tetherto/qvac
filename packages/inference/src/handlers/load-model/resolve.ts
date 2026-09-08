@@ -24,7 +24,12 @@ import {
   downloadModelFromHyperdriveWithStats,
   downloadModelFromRegistryWithStats
 } from '@/handlers/load-model/download-stats'
-import type { ResolveResult, DownloadResult, DownloadHooks } from '@/handlers/load-model/types'
+import type {
+  ResolveResult,
+  DownloadResult,
+  DownloadHooks,
+  DownloadSecurityOptions
+} from '@/handlers/load-model/types'
 import type { AbortSignal } from 'bare-abort-controller'
 import {
   ChecksumValidationFailedError,
@@ -127,7 +132,8 @@ export async function resolveFallbackModel(
   progressCallback: ((progress: ModelProgressUpdate) => void) | undefined,
   mode: ResolveMode,
   signal: AbortSignal | undefined,
-  hooks: DownloadHooks | undefined
+  hooks: DownloadHooks | undefined,
+  security?: DownloadSecurityOptions
 ): Promise<ResolveResult> {
   if (fallbackSrc.startsWith('registry://') || fallbackSrc.startsWith('pear://')) {
     throw new ModelLoadFailedError('fallbackSrc must be an HTTP URL or a local file path.')
@@ -140,7 +146,9 @@ export async function resolveFallbackModel(
     false,
     mode,
     signal,
-    hooks
+    hooks,
+    undefined,
+    security
   )
 
   // Report a missing fallback file as a not-found error before checksumming.
@@ -201,7 +209,8 @@ async function resolveModelPathInner(
   mode: ResolveMode,
   signal: AbortSignal | undefined,
   hooks?: DownloadHooks,
-  fallbackSrc?: string
+  fallbackSrc?: string,
+  security?: DownloadSecurityOptions
 ): Promise<ResolveResult> {
   if (signal?.aborted) {
     throw new InferenceCancelledError(hooks?.requestBinding?.requestId ?? 'unknown')
@@ -298,7 +307,8 @@ async function resolveModelPathInner(
           progressCallback,
           mode,
           signal,
-          hooks
+          hooks,
+          security
         )
       },
       buildUnreachableError: (cause) =>
@@ -317,14 +327,16 @@ async function resolveModelPathInner(
     throw new SeedingNotSupportedError()
   }
 
-  // HTTP source
+  // HTTP source. Bring-your-own HTTP (any domain, plaintext included) is left
+  // as-is and unverified; Hugging Face downloads are verified against the Hub
+  // SHA-256 and their transport is hardened inside the download path.
   if (actualModelSrc.startsWith('http://') || actualModelSrc.startsWith('https://')) {
     logger.info(`Loading from HTTP URL: ${actualModelSrc}`)
 
     const result =
       mode === 'stats'
-        ? await downloadModelFromHttpWithStats(actualModelSrc, progressCallback, hooks)
-        : await downloadModelFromHttp(actualModelSrc, progressCallback, hooks)
+        ? await downloadModelFromHttpWithStats(actualModelSrc, progressCallback, hooks, security)
+        : await downloadModelFromHttp(actualModelSrc, progressCallback, hooks, security)
     logger.info(`Loaded Model to ${isDownloadResult(result) ? result.path : result}`)
     return buildResult(result, 'http')
   }
@@ -376,7 +388,8 @@ export async function resolveModelPath(
   seed?: boolean,
   signal?: AbortSignal,
   hooks?: DownloadHooks,
-  fallbackSrc?: string
+  fallbackSrc?: string,
+  security?: DownloadSecurityOptions
 ): Promise<string> {
   const result = await resolveModelPathInner(
     modelSrc,
@@ -385,7 +398,8 @@ export async function resolveModelPath(
     'base',
     signal,
     hooks,
-    fallbackSrc
+    fallbackSrc,
+    security
   )
   return result.path
 }
@@ -396,7 +410,8 @@ export async function resolveModelPathWithStats(
   seed?: boolean,
   signal?: AbortSignal,
   hooks?: DownloadHooks,
-  fallbackSrc?: string
+  fallbackSrc?: string,
+  security?: DownloadSecurityOptions
 ): Promise<ResolveResult> {
   return resolveModelPathInner(
     modelSrc,
@@ -405,6 +420,7 @@ export async function resolveModelPathWithStats(
     'stats',
     signal,
     hooks,
-    fallbackSrc
+    fallbackSrc,
+    security
   )
 }

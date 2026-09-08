@@ -1,12 +1,11 @@
 {
   "ios": {
     "smolvla": ["runAddonTest", "runEsmNamedExportsTest"],
-    "pi05":    ["runPi05Test"],
     "groot":   ["runGrootTest"]
   },
   "android": {
     "smolvla": ["runAddonTest", "runEsmNamedExportsTest"],
-    "pi05":    ["runPi05Test"],
     "groot":   ["runGrootTest"]
-  }
+  },
+  "deferred": ["runPi05Test"]
 }

@@ -13,7 +13,6 @@ import {
   PluginHandlerTypeMismatchError,
   PluginRequestValidationFailedError,
   PluginResponseValidationFailedError,
-  ModelIsDelegatedError,
   ModelNotFoundError
 } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
@@ -25,9 +24,6 @@ function resolvePluginHandler(modelId: string, handlerName: string) {
   const modelEntry = getModelEntry(modelId)
   if (!modelEntry) {
     throw new ModelNotFoundError(modelId)
-  }
-  if (modelEntry.isDelegated) {
-    throw new ModelIsDelegatedError(modelId)
   }
 
   const modelType = modelEntry.local.modelType

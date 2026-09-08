@@ -172,7 +172,7 @@ test('evaluatePackage: a status without a parseable producing run stays pending'
 })
 
 test('PREBUILD_KEYS covers the merge-guard allowlist', () => {
-  assert.equal(PREBUILD_KEYS.length, 13)
+  assert.equal(PREBUILD_KEYS.length, 12)
   assert.ok(PREBUILD_KEYS.includes('tts-ggml'))
   assert.ok(PREBUILD_KEYS.includes('vla'))
 })

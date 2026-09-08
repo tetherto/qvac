@@ -2,6 +2,16 @@ import type { SourceType } from '@/schemas/index'
 import type { AbortSignal } from 'bare-abort-controller'
 import type { DisposableScope } from '@/runtime/disposable-scope'
 
+/**
+ * Per-call overrides for HTTP download security. Each field, when set, takes
+ * precedence over the engine config; when unset it falls back to the config
+ * value (default false).
+ */
+export interface DownloadSecurityOptions {
+  requireHttpChecksum?: boolean | undefined
+  requireSecureTransport?: boolean | undefined
+}
+
 export interface DownloadStats {
   downloadTimeMs?: number
   totalBytesDownloaded?: number

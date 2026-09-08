@@ -33,6 +33,7 @@ const { recordPerformance } = require('./_perf-helper')
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const isDarwin = os.platform() === 'darwin'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const wanDebug = proc.env && proc.env.WAN_DEBUG === '1'
 // Skip Wan tests on mobile, on any CPU-only runner (NO_GPU), and on macOS.
 // The Wan 14B I2V model OOMs the Mac mini M4 Metal GPU during diffusion compute
 // (kIOGPUCommandBufferCallbackErrorOutOfMemory), even at 256x256, so darwin is
@@ -163,7 +164,11 @@ function sniffAvi(buf) {
 // on GPU runners; we only assert structural validity of the AVI output, not
 // visual quality.
 const SMOKE_FRAMES = 5
-const SMOKE_STEPS = 1
+// 2, not 1: with a single step the sampler assertions degenerate to "some
+// tick reported (1, 1)", which any single-tile VAE pass would also satisfy.
+// Two steps keep the run cheap while making the sampler sequence's own
+// start (step 0) and completion (step === total) distinguishable.
+const SMOKE_STEPS = 2
 const SMOKE_WIDTH = 416
 const SMOKE_HEIGHT = 240
 const SMOKE_FPS = 16
@@ -214,7 +219,7 @@ test(
         diffusion_fa: true,
         offload_to_cpu: true,
         vae_tiling: true,
-        verbosity: 2
+        verbosity: Number((proc.env && proc.env.WAN_VERBOSITY) || 2)
       },
       logger: console,
       opts: { stats: true }
@@ -260,6 +265,8 @@ test(
             try {
               const tick = JSON.parse(data)
               if (typeof tick === 'object' && tick && 'step' in tick && 'total' in tick) {
+                if (wanDebug)
+                  console.log(`[Wan T2V progress] step=${tick.step} total=${tick.total}`)
                 progressTicks.push(tick)
               }
             } catch (_) {
@@ -295,19 +302,25 @@ test(
         ),
         'every progress tick carries finite step + total >= 1'
       )
-      // The pinned stable-diffusion.cpp fork emits progress only from sampler
-      // and tiling code. On the supported single-expert Wan path, the first
-      // sequence is therefore the sampler, not text encoding.
-      if (progressTicks.length > 0) {
-        t.is(progressTicks[0].step, 0, 'first progress tick starts the sampler sequence')
+      // Other phases may tick around the sampler (VAE tiling passes; the
+      // model loader ticks only during load() since the addon loads
+      // eagerly), so constrain the sampler's own sequence rather than the
+      // global first tick: the first tick whose total is the configured step
+      // count must be the sequence start (step 0), and the sequence must run
+      // to completion (step === total).
+      const samplerTicks = progressTicks.filter((p) => p.total === SMOKE_STEPS)
+      t.ok(samplerTicks.length > 0, `sampler ticks present (total=${SMOKE_STEPS})`)
+      if (samplerTicks.length > 0) {
         t.is(
-          progressTicks[0].total,
-          SMOKE_STEPS,
-          `first progress sequence reports the configured ${SMOKE_STEPS} sampler step(s)`
+          samplerTicks[0].step,
+          0,
+          'sampler sequence starts at step 0 (no earlier phase claimed it)'
         )
       }
-      const phaseTotals = new Set(progressTicks.map((p) => p.total))
-      t.ok(phaseTotals.size >= 1, `progress ticks span ${phaseTotals.size} distinct phase total(s)`)
+      t.ok(
+        samplerTicks.some((p) => p.step === SMOKE_STEPS),
+        `sampler sequence completed (step=${SMOKE_STEPS}/total=${SMOKE_STEPS})`
+      )
       console.log(
         'First/last progress tick:',
         JSON.stringify(progressTicks[0]),
@@ -464,7 +477,7 @@ test(
       vae_tiling: true,
       // Keep diffusion on GPU, but route only oversized VAE graphs to CPU.
       vae_auto_cpu_fallback: true,
-      verbosity: 2
+      verbosity: Number((proc.env && proc.env.WAN_VERBOSITY) || 2)
     }
     t.is(i2vConfig.vae_auto_cpu_fallback, true, 'Wan I2V enables automatic VAE CPU fallback')
 
@@ -499,6 +512,7 @@ test(
       console.log('\n=== Generating I2V video ===')
       const tGen = Date.now()
 
+      if (wanDebug) console.log('[Wan I2V debug] calling model.run')
       const response = await model.run({
         mode: 'img2vid',
         prompt: I2V_SMOKE_PROMPT,
@@ -511,6 +525,7 @@ test(
         seed: I2V_SMOKE_SEED
       })
 
+      if (wanDebug) console.log('[Wan I2V debug] model.run returned response')
       await response
         .onUpdate((data) => {
           if (ttfbMs === null) ttfbMs = Date.now() - tGen
@@ -520,6 +535,8 @@ test(
             try {
               const tick = JSON.parse(data)
               if (typeof tick === 'object' && tick && 'step' in tick && 'total' in tick) {
+                if (wanDebug)
+                  console.log(`[Wan I2V progress] step=${tick.step} total=${tick.total}`)
                 progressTicks.push(tick)
               }
             } catch (_) {

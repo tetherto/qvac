@@ -1,5 +1,6 @@
-import EmbedLlamacpp, { type GGMLConfig } from '@qvac/embed-llamacpp'
+import EmbedLlamacpp, { IdMapIndex, type GGMLConfig } from '@qvac/embed-llamacpp'
 import embedAddonLogging from '@qvac/embed-llamacpp/addonLogging'
+import type { TurboVecIndexProvider } from '@qvac/rag'
 import {
   definePlugin,
   defineHandler,
@@ -18,6 +19,15 @@ import { embed } from '@/plugins/ops/embed'
 import { forwardModelExecution } from '@/profiling/model-execution'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
+
+const turbovecIndexProvider: TurboVecIndexProvider = {
+  create(options) {
+    return new IdMapIndex(options)
+  },
+  load(snapshotPath) {
+    return IdMapIndex.load(snapshotPath)
+  }
+}
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {
@@ -134,6 +144,10 @@ export const embeddingsPlugin = definePlugin({
         )
       }
     })
+  },
+
+  capabilities: {
+    turbovecIndexProvider
   },
 
   logging: {

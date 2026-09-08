@@ -9,6 +9,7 @@ export const SDK_POD_PACKAGE_PATHS = new Set([
   "packages/rag",
   "packages/logging",
   "packages/error",
+  "packages/test-suite",
 ]);
 
 const TOKEN_STOP_WORDS = new Set([

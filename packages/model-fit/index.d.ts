@@ -8,9 +8,10 @@ export interface FitConfig {
      */
     modelPath: string;
     /**
-     * Directory holding the packaged ggml backends. Required wherever backends
-     * ship as separate shared libraries — without it the fitter sees no devices
-     * and reports ERROR. Omit for a statically linked build.
+     * Directory holding ggml backend shared libraries. `@qvac/fabric`'s
+     * `prebuilds/` is used when omitted (desktop); on mobile the packed worklet
+     * falls back to this package's `prebuilds/`. Native code appends
+     * `BACKENDS_SUBDIR` (`<host>/qvac__fabric`).
      *
      * Must be an absolute path that resolves to an existing directory; anything
      * else throws.
@@ -67,7 +68,7 @@ export interface FitConfig {
      * `enum llama_split_mode`: how the model splits across multiple GPUs.
      */
     splitMode?: number;
-    /** Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+    /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
     mainGpu?: number;
     /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
     typeK?: number;
@@ -75,6 +76,8 @@ export interface FitConfig {
     typeV?: number;
     /** `enum llama_flash_attn_type`. Changes KV/compute memory. */
     flashAttnType?: number;
+    /** Whether the intended load uses the full-size SWA cache. */
+    swaFull?: boolean;
 }
 /** A tensor buffer-type override the fitter selected. */
 export interface FitBuftOverride {
@@ -128,7 +131,7 @@ export interface FitPlan {
      * projected to fit.
      */
     splitMode: number;
-    /** GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+    /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
     mainGpu: number;
     /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
     typeK: number;
@@ -144,6 +147,12 @@ export interface FitPlan {
  * meaning: the plan is only valid on SUCCESS, and every non-success branch
  * carries a stable `reason` so an SDK can tell "won't fit on this hardware"
  * apart from "could not read the model" or "no backend registered".
+ *
+ * This is the contract of `fitParams()` and nothing else. The raw llama-load
+ * path adds one further outcome, `unsupported-config`, which this API cannot
+ * produce — it has no normalization step to fail — so that reason lives on
+ * `FitLlamaResult` in `./process` rather than widening the union every existing
+ * consumer has to narrow.
  */
 export type FitResult = ({
     status: 0;
@@ -158,7 +167,7 @@ export type FitResult = ({
     fits: false;
     reason: 'model-unreadable' | 'no-backend-device';
 } & Partial<FitPlan> & FitDeviceInventory);
-/** Stable, machine-readable explanation of a fit outcome. */
+/** Stable, machine-readable explanation of a `fitParams()` outcome. */
 export type FitReason = FitResult['reason'];
 /** Mirrors `enum common_params_fit_status` in llama.cpp's common/fit.h. */
 export declare const FIT_STATUS: Readonly<{
@@ -179,9 +188,10 @@ export declare const FIT_STATUS: Readonly<{
  * logger state and is not thread safe, so concurrent callers block instead of
  * running together.
  *
- * Backends must be registered before the fitter can see any device, so pass
- * `backendsDir` wherever the packaged ggml backends ship as separate shared
- * libraries; omit it for a statically linked build, which self-registers.
+ * Backends must be registered before the fitter can see any device. When
+ * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
+ * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
+ * statically linked build, which self-registers.
  * Every backend library in that directory is `dlopen`ed into this process, so
  * it must be an application-controlled location — never remote or user input.
  */

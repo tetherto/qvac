@@ -1,5 +1,5 @@
 import type { FastifyRequest, preValidationAsyncHookHandler } from 'fastify'
-import { HttpError } from './http-error.js'
+import { HttpError } from '@/serve/lib/http-error'
 
 export interface ParsedFile {
   fieldname: string

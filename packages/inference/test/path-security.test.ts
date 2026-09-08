@@ -2,12 +2,8 @@ import test from 'brittle'
 import { resolve, sep, join } from 'bare-path'
 import fs from 'bare-fs'
 import os from 'bare-os'
-import {
-  sanitizePathComponent,
-  checkPathWithinBase,
-  validateAndJoinPath,
-  isPathWithinBase
-} from '@/utils/path-security'
+import { sanitizePathComponent } from '@/utils/path-sanitize'
+import { checkPathWithinBase, validateAndJoinPath, isPathWithinBase } from '@/utils/path-security'
 import { extractTarStream } from '@/utils/archive'
 
 // ============== sanitizePathComponent ==============

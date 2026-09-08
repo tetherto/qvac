@@ -61,7 +61,7 @@ constexpr int DEFAULT_N_CTX = 4096;
 // f32 and decodes 20-30% faster on Metal — but it only works where the
 // backend implements the q8_0 CONT (CPU, CUDA), so it is now opt-in via
 // kvCacheType:"q8_0".  Upstream validation on real GGUFs
-// (qvac-ext-lib-whisper.cpp#43): Turbo greedy token sequences are
+// (qvac-fabric-speech.cpp#43): Turbo greedy token sequences are
 // byte-identical across f32/f16/q8_0 on CPU and Metal.  Pass
 // kvCacheType:"f32" for bit-exact parity with the pre-quantisation
 // behaviour.

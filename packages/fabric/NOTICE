@@ -23,5 +23,7 @@ C++ Dependencies
 
 --- mit (MIT License) ---
 
+  hip (system ROCm/HIP SDK shim, linux-x64 only)
+    https://rocm.docs.amd.com
   qvac-fabric (forked llama.cpp + ggml)
     https://github.com/tetherto/qvac-fabric-llm.cpp

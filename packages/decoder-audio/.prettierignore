@@ -8,3 +8,9 @@ package-lock.json
 test/unit/all.js
 test/integration/all.js
 test/results
+*.d.ts
+
+# Generated from src/ by `npm run build:ts`
+index.js
+constants.js
+utils

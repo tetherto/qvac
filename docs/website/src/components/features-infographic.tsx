@@ -142,9 +142,9 @@ export const DEFAULT_FEATURES: Feature[] = [
     id: 'p2p',
     name: 'Peer-to-peer',
     description:
-      'Delegate inference to peers and build AI systems that work across P2P networks.',
+      'Fetch models from peers and connect across NATs with blind relays over P2P networks.',
     angle: 45,
-    href: '/p2p-capabilities/delegated-inference',
+    href: '/p2p-capabilities/blind-relays',
   },
   {
     id: 'cross-platform',

@@ -254,10 +254,6 @@ export const completionOrchestrateRequestSchema = completionClientParamsBaseSche
  *   this run (not the socket) until the matching `callId` arrives.
  * - `done` — terminal frame; the loop ended (final answer produced, error,
  *   cancellation, or the `maxToolTurns` cap).
- *
- * Only a LOCAL worker may emit `toolCallback`: tool handlers execute code on
- * the client machine, so a remote delegate streaming through this shape must
- * never trigger them.
  */
 export const completionOrchestrateResponseSchema = z
   .object({

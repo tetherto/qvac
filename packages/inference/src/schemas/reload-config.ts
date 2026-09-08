@@ -33,7 +33,6 @@ const reloadConfigRequestBaseSchema = z.object({
   // Explicitly exclude load-specific fields for type narrowing
   modelSrc: z.never().optional(),
   withProgress: z.never().optional(),
-  delegate: z.never().optional(),
   seed: z.never().optional()
 })
 

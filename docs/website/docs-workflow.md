@@ -24,6 +24,7 @@ For general contribution guidelines (PR labels, changelog format), see the [root
   - [PR Checks](#1-docs-website-pr-checks)
   - [Promote docs to production (manual)](#2-promote-docs-to-production-manual)
   - [SDK release docs (local, skill-driven)](#3-sdk-release-docs-local-skill-driven)
+  - [Production health check (scheduled)](#4-production-health-check-scheduled)
 - [Script Reference](#script-reference)
 - [Release-Notes Overrides](#release-notes-overrides)
 - [Troubleshooting](#troubleshooting)
@@ -397,7 +398,7 @@ Head of QVAC to publish the SDK package) is a human decision.
 
 ## CI Workflows
 
-Two GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes `main` to `docs-production`. SDK release docs are generated locally by a Cursor skill (no release workflow). Neither workflow builds or deploys the site — the hosting provider does that on branch pushes.
+Three GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes `main` to `docs-production`, and one probes the deployed production site on a daily schedule. SDK release docs are generated locally by a Cursor skill (no release workflow). None of these workflows build or deploy the site — the hosting provider does that on branch pushes.
 
 ### 1. Docs Website PR Checks
 
@@ -457,6 +458,22 @@ The dual-checkout race window the old CI workflow guarded against does not apply
 Once the SDK release PR (and its backmerge) lands on `main`, the hosting provider's `main` build picks it up and deploys to staging.
 
 Patches never re-run TypeDoc — they touch only the frontmatter title of the API summary and append a section to the release notes — so `api-data.json` only changes on minor releases.
+
+### 4. Production health check (scheduled)
+
+**File:** `.github/workflows/docs-website-health-check.yml`
+
+**Triggers:** Daily `schedule` (`30 2 * * *`, i.e. 02:30 UTC / 08:00 IST), manual `workflow_dispatch`, and `pull_request` (only when the workflow, script, or its test change — runs the unit tests, never the production probe).
+
+**What it does:**
+- **`probe-production`** runs `.github/scripts/docs-website-health-check.mjs` against `https://docs.qvac.tether.io`. The script assembles the set of URLs a reader or crawler should reach — every `<loc>` in the live `sitemap.xml`, each page's `.md` sibling, every literal `301` source in `public/_redirects` (pulled from the `docs-production` branch so it matches what the CDN serves), and `llms.txt` / `llms-full.txt` — then GETs each one (following redirects) with bounded concurrency. Any `404`, other `>= 400`, or network error fails the job.
+- **`notify-on-failure`** runs only on the scheduled trigger and, on failure, opens (or comments on) a tracking issue labelled `docs-health`.
+
+**What it deliberately does NOT do:** the list of broken URLs is written to the run's step summary and job log only — never to the issue body and never to Slack. A Slack webhook stored in this public repo is a credential-leak risk (a leaked webhook lets anyone post malicious links into the workspace), so the notification carries only a link back to the run. Consult the failed run to see which URLs broke.
+
+**Purpose:** Catch broken pages on the deployed production site (e.g. a page removed or renamed without a matching redirect) shortly after they appear, rather than waiting for a user report.
+
+> The collector/probe logic is pure and unit-tested (`.github/scripts/test/docs-website-health-check.test.mjs`); run `node --test .github/scripts/test/docs-website-health-check.test.mjs` locally. To probe manually, run `node .github/scripts/docs-website-health-check.mjs --redirects-file docs/website/public/_redirects` from the repo root.
 
 ---
 

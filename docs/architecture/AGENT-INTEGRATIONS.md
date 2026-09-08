@@ -1,6 +1,6 @@
 # Agent Integrations
 
-This document is the monorepo reference for QVAC's coding-agent integration stack: `@qvac/ai-sdk-provider`, `@qvac/opencode-plugin`, `@qvac/openclaw-plugin`, `qvac serve openai`, QVAC docs, and the external `models.dev` provider metadata.
+This document is the monorepo reference for QVAC's coding-agent integration stack: `@qvac/ai-sdk-provider`, `@qvac/opencode-plugin`, `@qvac/openclaw-plugin`, `qvac serve --openai`, QVAC docs, and the external `models.dev` provider metadata.
 
 Use it when implementing, reviewing, or releasing work related to OpenCode, OpenClaw, Cline/Roo/Aider/Continue, Vercel AI SDK consumers, managed `qvac serve`, OpenAI-compatible HTTP behavior, model discovery, or package release choreography.
 
@@ -22,7 +22,7 @@ The integration stack bridges those two worlds without putting agent-specific as
 OpenCode / coding agent
   -> @qvac/opencode-plugin                 (OpenCode-specific turnkey UX)
     -> @qvac/ai-sdk-provider managed mode  (spawn/reuse local qvac serve)
-      -> @qvac/cli qvac serve openai       (OpenAI-compatible HTTP adapter)
+      -> @qvac/cli qvac serve --openai       (OpenAI-compatible HTTP adapter)
         -> @qvac/sdk                       (client RPC, Bare worker, native addons)
           -> registry + model constants    (P2P model metadata/files)
 ```
@@ -32,7 +32,7 @@ Manual/custom-provider integrations skip the OpenCode plugin:
 ```text
 OpenCode / Cline / Aider / Continue / Roo / Open WebUI
   -> custom OpenAI-compatible provider config
-    -> qvac serve openai
+    -> qvac serve --openai
       -> @qvac/sdk
 ```
 
@@ -43,7 +43,7 @@ The design rule is: keep general OpenAI-compatible behavior in `@qvac/cli`, gene
 | Package / area | Path | Public package | Primary role |
 | --- | --- | --- | --- |
 | SDK | `packages/sdk` | `@qvac/sdk` | Canonical QVAC API: model loading, completion, tool-call parsing, registry integration, cancellation primitives, native addon RPC. |
-| CLI OpenAI server | `packages/cli/src/serve` | `@qvac/cli` | Runs `qvac serve openai`, exposes OpenAI-compatible HTTP routes, owns request/response translation, model alias routing, auth/CORS, cancellation, queueing, and lifecycle for loaded models. |
+| CLI OpenAI server | `packages/cli/src/serve` | `@qvac/cli` | Runs `qvac serve --openai`. `serve/core` owns model alias routing, auth/CORS, cancellation, queueing, and lifecycle for loaded models; `serve/extensions/openai` owns the OpenAI-compatible routes and request/response translation. |
 | AI SDK provider | `packages/ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider wrapper. Owns `createQvac`, external/managed modes, typed model metadata exports, friendly catalog ids, and managed serve reuse/lifecycle. |
 | OpenCode plugin | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode-specific turnkey setup. Starts a host process, injects a `qvac` provider into OpenCode config, selects project model defaults, applies temporary OpenAI-compat shims, and tears down on exit. |
 | OpenClaw plugin | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw provider plugin: managed local `qvac serve` via OpenClaw `localService`, static catalog from `@qvac/ai-sdk-provider/models`. |
@@ -97,7 +97,7 @@ Implement here when the change is about QVAC's core inference semantics:
 
 Do not implement OpenCode-specific request-shape hacks here unless the behavior is actually required by the OpenAI-compatible API generally. The SDK should not know about OpenCode, Cline, Aider, or any other agent.
 
-### `@qvac/cli` / `qvac serve openai`
+### `@qvac/cli` / `qvac serve --openai`
 
 Implement here when the behavior belongs to the OpenAI-compatible HTTP API:
 
@@ -153,7 +153,7 @@ Do not encode QVAC runtime behavior in models.dev. It is discovery metadata, not
 
 ### Public docs
 
-For OpenCode docs, lead with `@qvac/opencode-plugin`. Manual `qvac serve openai` and custom provider JSON are advanced paths.
+For OpenCode docs, lead with `@qvac/opencode-plugin`. Manual `qvac serve --openai` and custom provider JSON are advanced paths.
 
 Docs should answer:
 
@@ -161,7 +161,7 @@ Docs should answer:
 - which model to choose,
 - what hardware/performance trade-off to expect,
 - what the plugin manages,
-- when manual `qvac serve openai` is needed,
+- when manual `qvac serve --openai` is needed,
 - which features are temporary shims or known limitations.
 
 Avoid framing docs around internal state users should not need to think about, such as "no provider block", "no second terminal", or "no `QVAC_MODEL` prefix". State the positive behavior instead: the plugin starts managed QVAC serve, registers `qvac`, and selects a project model.
@@ -274,7 +274,7 @@ Common examples:
 ### CLI serve
 
 - Route/unit tests for validation, translation, error envelopes, streaming, cancellation, and model routing.
-- Node-based e2e tests for `qvac serve openai` when changing public HTTP behavior.
+- Node-based e2e tests for `qvac serve --openai` when changing public HTTP behavior.
 - Update OpenAPI/docs if route behavior changes.
 
 ### AI SDK provider
@@ -298,7 +298,7 @@ Common examples:
 
 Release lower layers before upper layers when a feature spans packages:
 
-1. `@qvac/sdk` — model constants, inference semantics, parser fixes (`@qvac/bare-sdk` + `tetherto-qvac-sdk` lockstep via `qv-sdk-lockstep-sync`).
+1. `@qvac/sdk` — model constants, inference semantics, parser fixes (`tetherto-qvac-sdk` lockstep via `qv-sdk-lockstep-sync`).
 2. `@qvac/cli` — server routes or serve behavior that depends on SDK changes.
 3. `@qvac/ai-sdk-provider` — managed mode/provider changes that depend on CLI behavior.
 4. `@qvac/opencode-plugin` / `@qvac/openclaw-plugin` — plugin changes that depend on provider/CLI.
@@ -355,7 +355,7 @@ Before opening or updating PRs for this stack:
 
 ## Related references
 
-- `packages/cli/docs/serve-openai.md` — `qvac serve openai` route/config reference.
+- `packages/cli/docs/serve/` — `qvac serve` reference: shared config in `README.md`, per-extension routes in `default.md` and `openai.md`.
 - `docs/architecture/ARCHITECTURE.md` — SDK architecture.
 - `.cursor/rules/agent-integrations.mdc` — Cursor-local quick reference for this stack.
 - `.cursor/rules/sdk/main.mdc` — SDK coding conventions.

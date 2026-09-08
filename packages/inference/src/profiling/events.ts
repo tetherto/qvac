@@ -1,7 +1,7 @@
 import { nowMs } from '@/profiling/clock'
 import { record } from '@/profiling/controller'
 import type { ProfilingEventKind } from '@/profiling/types'
-import type { ServerBreakdown, DelegationBreakdown } from '@/schemas/index'
+import type { ServerBreakdown } from '@/schemas/index'
 
 export interface BaseTimings {
   profileId: string
@@ -51,16 +51,4 @@ export function recordServerBreakdownPhases(
   recordPhase(base, `${prefix}.response.zodValidation`, server.responseZodValidationMs)
   recordPhase(base, `${prefix}.response.stringify`, server.responseStringifyMs)
   recordPhase(base, `${prefix}.totalServerTime`, server.totalServerMs)
-}
-
-export function recordDelegationBreakdownPhases(
-  base: BaseEvent,
-  delegation: DelegationBreakdown,
-  prefix: string = 'delegation'
-): void {
-  recordPhase(base, `${prefix}.connection`, delegation.connectionMs)
-  recordPhase(base, `${prefix}.request.stringify`, delegation.requestStringifyMs)
-  recordPhase(base, `${prefix}.serverWait`, delegation.serverWaitMs)
-  recordPhase(base, `${prefix}.response.jsonParse`, delegation.responseJsonParseMs)
-  recordPhase(base, `${prefix}.totalDelegationTime`, delegation.totalDelegationMs)
 }

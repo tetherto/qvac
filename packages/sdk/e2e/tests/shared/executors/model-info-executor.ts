@@ -1,5 +1,5 @@
 import { getLoadedModelInfo, getModelInfo, ModelType } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   modelInfoTests,
@@ -51,13 +51,6 @@ export class ModelInfoExecutor extends AbstractModelExecutor<typeof modelInfoTes
 
     try {
       const info = await getLoadedModelInfo({ modelId: llmModelId })
-
-      if (info.isDelegated) {
-        return {
-          passed: false,
-          output: `Expected isDelegated=false for local model, got isDelegated=true`
-        }
-      }
 
       const checks = {
         modelIdMatches: info.modelId === llmModelId,

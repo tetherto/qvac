@@ -1,9 +1,14 @@
 import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { type Addon, type GGMLConfig } from "./addon";
-export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon } from "./addon";
+import type ActualIdMapIndex from "./idMapIndex";
+import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
+export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon, } from "./addon";
+export type { IdMapIndexBitWidth, IdMapIndexOptions, IdMapIndexSearchResult, IdMapIndexStorage, } from "./idMapIndex";
 export { BertInterface } from "./addon";
 export type { QvacResponse };
+export declare const IdMapIndex: typeof ActualIdMapIndex;
+export declare const IdMapIndexFilter: typeof ActualIdMapIndexFilter;
 export interface GGMLBertArgs {
     files: {
         model: string[];

@@ -107,7 +107,7 @@ try {
   // (numCameras, actionDim, ...) — rebuild them after every embodiment switch.
   async function runInference(hp: typeof hparams) {
     const patchElems = hp.imagePatchElems
-    if (hp.imageInputMode !== 'patches' || patchElems == null) {
+    if (hp.imageInputMode !== 'patches' || patchElems === undefined) {
       throw new Error(
         `expected a patch-input model (imageInputMode 'patches' + imagePatchElems); ` +
           `got imageInputMode=${hp.imageInputMode}`

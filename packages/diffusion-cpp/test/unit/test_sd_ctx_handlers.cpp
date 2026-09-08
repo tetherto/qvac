@@ -27,7 +27,11 @@ TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
   EXPECT_EQ(applyOne("prediction", "v").prediction, V_PRED);
   EXPECT_EQ(applyOne("prediction", "edm_v").prediction, EDM_V_PRED);
   EXPECT_EQ(applyOne("prediction", "flow").prediction, FLOW_PRED);
-  EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, FLUX2_FLOW_PRED);
+  // flux2_flow: no engine prediction override exists; the value maps to auto
+  // and raises the addon's FLUX.2 flag instead.
+  EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, PREDICTION_COUNT);
+  EXPECT_TRUE(applyOne("prediction", "flux2_flow").flux2Requested);
+  EXPECT_FALSE(applyOne("prediction", "auto").flux2Requested);
 
   SdCtxConfig cfg;
   EXPECT_THROW(
@@ -135,6 +139,16 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
   EXPECT_FALSE(SdCtxConfig{}.vaeDecodeOnly);
   EXPECT_TRUE(applyOne("mmap", "true").mmap);
   EXPECT_TRUE(applyOne("offload_to_cpu", "1").offloadToCpu);
+  EXPECT_EQ(
+      applyOne("backend", "diffusion=vulkan0").backendSpec,
+      "diffusion=vulkan0");
+  EXPECT_EQ(
+      applyOne("params_backend", "diffusion=cpu").paramsBackendSpec,
+      "diffusion=cpu");
+  EXPECT_EQ(applyOne("max_vram", "vulkan0=8").maxVramSpec, "vulkan0=8");
+  EXPECT_TRUE(applyOne("stream_layers", "true").streamLayers);
+  EXPECT_FALSE(SdCtxConfig{}.streamLayers);
+  EXPECT_THROW(applyOne("stream_layers", "maybe"), StatusError);
   EXPECT_FALSE(applyOne("clip_on_cpu", "false").keepClipOnCpu);
   EXPECT_TRUE(applyOne("vae_on_cpu", "true").keepVaeOnCpu);
   EXPECT_TRUE(applyOne("vae_auto_cpu_fallback", "true").vaeAutoCpuFallback);

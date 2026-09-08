@@ -27,7 +27,6 @@ add_executable(
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
-  test_context_slider.cpp
   test_model_metadata.cpp
   test_model_full_loading.cpp
   # Utility tests
@@ -42,7 +41,6 @@ add_executable(
   test_continuous_batching_default.cpp
   test_continuous_batch_finalize.cpp
   test_batch_entry_guard.cpp
-  test_slide_capable_capability.cpp
   test_media_load_order.cpp
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
@@ -69,7 +67,6 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
@@ -80,7 +77,6 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextShifter.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp

@@ -2,6 +2,21 @@
   "cacheEpoch": 3,
   "source": "s3",
   "models": {
+    "parakeet-unified-en-0.6b.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
+      "sha256": "a9b228101e8c3eeabeb5a38f1948f2a0a1ced9262e3261fcb301a935e38c4f28",
+      "bytes": 1390644608
+    },
+    "parakeet-unified-en-0.6b.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
+      "sha256": "48102e55d61aaa827b89af03d772106e37de6ee12e8746f278f6315e71d980ad",
+      "bytes": 741330176
+    },
+    "parakeet-unified-en-0.6b.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
+      "sha256": "98651c49ef4e3dbc2606f91bbc870431b84fdad739e9ff491e958d0f61c89a97",
+      "bytes": 395029120
+    },
     "parakeet-tdt-0.6b-v3.f16.gguf": {
       "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
       "sha256": "896463ab74886d027538709f3a21d141b7a99061d4b337a2777c142926f91416",

@@ -957,8 +957,8 @@ async function ensureChatterboxModels(options = {}) {
     console.log('registry path or generate them locally from the upstream tts-cpp')
     console.log('conversion scripts:')
     console.log('')
-    console.log('  git clone git@github.com:tetherto/qvac-ext-lib-whisper.cpp.git')
-    console.log('  cd qvac-ext-lib-whisper.cpp/tts-cpp')
+    console.log('  git clone git@github.com:tetherto/qvac-fabric-speech.cpp.git')
+    console.log('  cd qvac-fabric-speech.cpp/engines/tts')
     console.log('  python -m venv .venv && . .venv/bin/activate')
     console.log('  pip install torch numpy gguf safetensors scipy librosa resampy')
     console.log('  python scripts/convert-t3-turbo-to-gguf.py --out chatterbox-t3-turbo.gguf')
@@ -1396,7 +1396,7 @@ async function ensureCosyvoiceModel(options = {}) {
   for (const f of COSYVOICE_FILES) console.log(`   ${f.name}  (${f.registryPath})`)
   console.log(
     ' Assemble one offline with ' +
-      'qvac-ext-lib-whisper.cpp/tts-cpp/scripts/assemble-cosyvoice3-model.py.'
+      'qvac-fabric-speech.cpp/engines/tts/scripts/assemble-cosyvoice3-model.py.'
   )
   return { success: false, modelDir: requestedDir, targetDir: requestedDir }
 }
@@ -1471,7 +1471,7 @@ async function ensureCosyvoiceCloneModels(options = {}) {
   console.log(` Expected these files under ${requestedDir}:`)
   for (const f of COSYVOICE_CLONE_FILES) console.log(`   ${f.name}  (${f.registryPath})`)
   console.log(
-    ' Convert offline with qvac-ext-lib-whisper.cpp/engines/tts/scripts/' +
+    ' Convert offline with qvac-fabric-speech.cpp/engines/tts/scripts/' +
       'convert-s3tokenizer-v3-to-gguf.py and convert-campplus-to-gguf.py.'
   )
   return { success: false, modelDir: requestedDir, targetDir: requestedDir }

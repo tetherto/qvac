@@ -3,6 +3,7 @@ import type {
   DownloadStats,
   DownloadResult,
   DownloadHooks,
+  DownloadSecurityOptions,
   ResolveResult
 } from '@/handlers/load-model/types'
 import type { ExplicitRegistryMetadata } from '@/handlers/load-model/registry-metadata'
@@ -113,12 +114,13 @@ function computeStats(collector: StatsCollector): DownloadStats | undefined {
 export async function downloadModelFromHttpWithStats(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
-  downloadHooks?: DownloadHooks
+  downloadHooks?: DownloadHooks,
+  security?: DownloadSecurityOptions
 ): Promise<DownloadResult> {
   const collector = createStatsCollector()
   const hooks: DownloadHooks = { ...downloadHooks, ...createStatsHooks(collector) }
   const wrappedCallback = wrapProgressCallback(collector, progressCallback)
-  const path = await downloadModelFromHttp(url, wrappedCallback, hooks)
+  const path = await downloadModelFromHttp(url, wrappedCallback, hooks, security)
   const stats = computeStats(collector)
   return stats ? { path, stats } : { path }
 }

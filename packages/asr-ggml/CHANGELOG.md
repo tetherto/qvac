@@ -12,6 +12,192 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [Unreleased]
+
+### Added
+
+- Add NVIDIA Nemotron 3.5 ASR Streaming 0.6B support to the Parakeet engine,
+  including locale prompting, cache-aware streaming operating points,
+  conversion tooling, and a model-specific 320 ms streaming default.
+
+- Add Core ML (Apple Neural Engine) RTF benchmark lanes for the Parakeet TDT
+  models on the darwin-arm64 desktop runner, covering f16/q8_0/q4_0. A matrix
+  entry opts in with `"coreml": true`; the encoder then runs on the ANE via an
+  exported `<stem>-encoder.mlmodelc` sidecar while the TDT decoder stays on
+  Metal. Because the sidecar is picked up by presence alone — and one sidecar
+  serves every quantisation of its stem — Core ML entries run against an
+  isolated `models/coreml/` copy so the existing CPU and Metal lanes cannot
+  silently start measuring the Neural Engine. `activeBackend` is now derived
+  from the observed per-run `encoderOnCoreml` stat rather than the requested
+  backend, and the benchmark refuses to write an artifact whose label would not
+  match what actually ran, in either direction. Sidecars are pinned in
+  `test/integration/parakeet-coreml.manifest.json` and staged by
+  `scripts/stage-integration-models.mjs`; lanes skip themselves loudly where no
+  sidecar is staged, so the matrix is unaffected until one is published. Core ML
+  covers the offline TDT encoder only, and the aggregate report expects it for
+  the parakeet engine alone. Measured on an Apple M1 Pro: 1.20-1.27x faster than
+  the Metal lane (mean RTF, five runs per lane) — see the package README.
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-03. Silero VAD now honors
+  `use_gpu`: the compute backends match the weight placement, fixing the
+  ggml_backend_sched abort ("pre-allocated tensor in a buffer that cannot
+  run the operation") that killed every `use_gpu=true` VAD context init on
+  GPU builds (Metal, Vulkan, CUDA, HIP), and the VAD LSTM input is made
+  contiguous to satisfy the CUDA mul-mat-vec kernel's stride requirement.
+  The addon creates its VAD context with the default (CPU) parameters, so
+  runtime behavior is unchanged; the fix matters for anything that opts
+  VAD into the GPU.
+
+## [0.4.2] - 2026-09-01
+
+### Changed
+
+- Drop CUDA from the published linux-x64 prebuild so the npm tarball stays
+  under the registry size limit. `use_gpu` / `useGPU: true` uses Vulkan on
+  Linux. CUDA remains opt-in at build time via `ASR_CUDA=ON`.
+
+- Raise the `speech-cpp` floor to 2026-09-01#2, which brings in ggml-speech
+  2026-09-02. The CUDA backend now skips, at registration, GPUs whose
+  compute capability has no compiled code in the fatbin, so a
+  `use_gpu` / `useGPU: true` run on such a card (Turing and older) falls
+  back to Vulkan or CPU instead of failing at the first kernel launch. The
+  CUDA fatbin now carries native code for every architecture the prebuilds
+  target — Turing (7.5), Ampere (8.0, 8.6), Ada (8.9), Hopper (9.0) and
+  Blackwell (12.0, 12.1) — with 8.0 PTX for anything newer, so Turing is
+  supported again and Blackwell no longer pays a first-use JIT. The roll
+  also brings the compute-buffer OOM handling and k-quant GET_ROWS fixes, and
+  fixes two multi-GPU faults on a host that mixes supported and unsupported
+  NVIDIA cards: backend initialisation no longer aborts when the unsupported
+  card enumerates first, and a row-split buffer no longer allocates on the
+  skipped card.
+
+## [0.4.1] - 2026-08-28
+
+### Added
+
+- CUDA GPU acceleration on linux x64: the prebuild now builds with
+  `ASR_CUDA=ON` and bundles the CUDA backend alongside Vulkan and the
+  per-arch CPU variants as runtime-loaded modules, and `use_gpu` /
+  `useGPU: true` prefers CUDA on NVIDIA hosts (whisper and parakeet). CUDA
+  engages where the NVIDIA driver and CUDA 13 runtime libraries (cudart,
+  cuBLAS) are present; on every other host the CUDA module is skipped and
+  the addon behaves as before (Vulkan or CPU). The whisper backend loader
+  now also runs
+  on desktop linux-x64 (previously Android and linux-arm64 only) so the
+  modules register before `whisper_init`.
+
+### Changed
+
+- CUDA builds no longer link the CUDA runtime into the addon and no longer
+  export `CUDAHOSTCXX`: on linux-x64 the CUDA backend is a runtime-loaded
+  module carrying its own runtime dependencies, and nvcc's clang host
+  compiler comes from the shared linux toolchain. A CUDA build now loads on
+  hosts without the CUDA runtime instead of failing with unresolved cudart
+  symbols.
+
+- Raise the `speech-cpp` floor to 2026-08-28, which brings in ggml-speech
+  2026-08-28. Unused IQ / Q1_0 / MXFP4 / NVFP4 and training Vulkan shader
+  payloads are replaced with tiny no-ops so the published natives stay
+  under the npm tarball size limit. CUDA fatbins keep Ampere and Ada
+  (`80-virtual;86-real;89-real`) and drop Turing sm75 and Blackwell
+  sm120/121.
+
+### Fixed
+
+- Vulkan device-loss and fence failures now return a graph-compute error
+  instead of aborting the process or continuing with an unusable device.
+  Transcription surfaces the error rather than empty output, and pending
+  compute state is unwound after the failure.
+
+## [0.4.0] - 2026-08-27
+
+### Added
+
+- **CUDA GPU backend for both engines on Linux / Windows (NVIDIA).** The
+  addon already resolved and reported CUDA at runtime (`BackendId.CUDA`, `2`),
+  but no build ever compiled the backend in. `asr-ggml[cuda]` now forwards to
+  `speech-cpp[cuda]` → `ggml-speech[cuda]` (`GGML_CUDA=ON`), gated behind the
+  new `ASR_CUDA` CMake option and the `npm run build:cuda` /
+  `build:native:cuda` scripts. It is opt-in rather than default because it
+  needs `nvcc` on the build host, which the published prebuilds do not carry;
+  only the NVIDIA driver is needed at runtime. CUDA is compiled alongside
+  Vulkan, and ggml registers CUDA first, so a `use_gpu` / `useGPU` request
+  prefers CUDA and falls back to Vulkan when no supported device is present.
+  Apple and Android are excluded (`supports: !(osx | ios | android)`).
+
+  Enabling it also required two build fixes, both of which made the CUDA path
+  unbuildable before now:
+
+  - On Linux the `ASR_CUDA` block exports `CUDAHOSTCXX=clang++` for the vcpkg
+    child process. `nvcc` otherwise defaults to `g++`, which rejects the
+    `-stdlib=libc++` the Linux triplets put in `VCPKG_CXX_FLAGS` /
+    `VCPKG_LINKER_FLAGS`, so `enable_language(CUDA)` failed its ABI check.
+    Deliberately not set in `vcpkg-overlays/toolchains/linux-clang.cmake`: that
+    file's contents feed the vcpkg ABI hash of every package on the Linux
+    triplets, so editing it invalidates the binary cache for non-CUDA builds
+    too and forces every port to rebuild from source.
+  - The addon links `CUDA::cudart` / `cublas` / `cublasLt` itself.
+    `ggml-config.cmake` only adds a CUDA runtime to `ggml::ggml-cuda`'s
+    interface under `if (GGML_STATIC)`, but `GGML_STATIC` also means
+    `add_link_options(-static)` in ggml's own build and so cannot be enabled
+    for a shared bare module. Without this the module linked `libcuda.so.1`
+    and then aborted at load with
+    `undefined symbol: __cudaRegisterFatBinary`. The dynamic runtime matches
+    `diffusion-cpp`, so loading both addons into one process
+    (`packages/ggml-coload-smoke`) cannot produce two CUDA runtime instances.
+
+### Changed
+
+- Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
+  `qvac-fabric-speech.cpp` in the package documentation, following the
+  upstream repository rename. Old GitHub links keep working via redirect.
+
+- **The GPU integration tests accept CUDA as a desktop backend.**
+  `gpu.test.js` and `parakeet-gpu-smoke.test.js` asserted
+  `backendId === 3` (Vulkan) on Linux / Windows, which was written when Vulkan
+  was the only GPU backend wired there. Both now accept CUDA (`2`) or Vulkan
+  (`3`), because a CUDA-enabled build compiles both in and ggml registers CUDA
+  first.
+- Raise the `speech-cpp` floor to 2026-08-26#1, aligning all speech addons
+  (`asr-ggml`, `tts-ggml`, `audiogen-ggml`, `bci-whispercpp`) on the same
+  port and ggml-speech cut. Relative to 2026-08-26 the bundled ggml computes
+  explicit-f32-precision matmuls in true f32 on CUDA and adds CONCAT support
+  for all scalar and quantized types; the engine sources for whisper and
+  parakeet are unchanged.
+- Raise the `speech-cpp` floor to 2026-08-26, including the new opt-in `cuda`
+  feature's own floor, which brings in ggml-speech
+  2026-08-26. Sortformer finalization is now deterministic: every non-cancelled
+  finalize ends with exactly one synthetic terminator, where before a real
+  trailing segment could carry the final flag instead. The speaker spans this
+  package emits are unchanged, because it keys off the terminator's negative
+  speaker id rather than the flag. Indic Conformer multilingual CTC also runs on
+  Vulkan now. The Whisper engine sources are unchanged. On the ggml side the
+  update adds Vulkan `im2col`/`col2im` tiling, CUDA kernels and launch guards for
+  the `conv_transpose_1d`, `im2col` and `pad` paths, and Adreno OpenCL launch
+  validation with GEMV work-group limits.
+
+### Fixed
+
+- **Parakeet duplex streaming no longer drops the tail of the transcript when
+  the audio stream ends while the engine still has a buffered backlog.** 
+  `endStreaming()` joins the native worker only after it has drained all buffered
+  audio, but the drained segments are delivered to JS asynchronously (uv_async);
+  the parakeet driver then cleared the active job and emitted a synthetic `JobEnded`
+  *before* those queued `Output` events arrived, so `_addonOutputCallback`
+  discarded every one of them (`jobId === null`). Apps feeding audio faster
+  than realtime (e.g. the SDK's `transcribeStream` fed from a file, then `end()`)
+  lost most of the un-processed tail. `ParakeetStreamingProcessor` now queues a terminal
+  `RuntimeStats` object (real `audioDurationMs` / `totalSamples`) through the
+  **same FIFO output queue** as the drained segments after `finalize()` — exactly
+  how the whisper engine's `StreamingProcessor` already signals completion — and
+  the JS wrapper waits for that terminal event to flow through the normal
+  output-callback path, so every drained segment is delivered, in order, before
+  the job resolves. The synthetic `JobEnded` remains only as a fallback when no
+  native session existed (`cleaned: false`), and concurrent `endStreaming()`
+  calls join the in-flight teardown instead of falling through to it.
+
 ## [0.3.3] - 2026-08-20
 
 ### Changed

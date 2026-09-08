@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/**/*", "test/chat-agent-shapes.test.ts"],
+  "include": ["src/**/*", "test/**/*"],
   "compilerOptions": {
     "rootDir": ".",
     "noEmit": true

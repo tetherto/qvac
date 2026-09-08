@@ -15,7 +15,7 @@ Orchestrate the published dependency cascade:
       -> @qvac/openclaw-plugin
 ```
 
-Goal: know which packages need a release, prepare draft release + backmerge PRs when asked, never auto-publish. SDK releases still run `qv-sdk-lockstep-sync` for bare-sdk + sdk-python.
+Goal: know which packages need a release, prepare draft release + backmerge PRs when asked, never auto-publish. SDK releases still run `qv-sdk-lockstep-sync` for sdk-python.
 
 ## Modes
 

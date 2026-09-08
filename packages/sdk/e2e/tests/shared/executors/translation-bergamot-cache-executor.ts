@@ -1,5 +1,5 @@
 import { loadModel, unloadModel, BERGAMOT_FR_EN, BERGAMOT_EN_FR } from '@qvac/sdk'
-import { BaseExecutor, type TestResult } from '@qvac/qvac-test-suite'
+import { BaseExecutor, type TestResult } from '@qvac/test-suite'
 import { translationBergamotCacheTests } from '../../translation-bergamot-cache-tests.js'
 
 interface BergamotCacheParams {

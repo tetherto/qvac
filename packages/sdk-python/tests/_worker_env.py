@@ -43,7 +43,7 @@ def _bundled_worker_and_bare() -> tuple[str, str] | None:
     if not getattr(pkg, "__file__", None):
         return None
     bundle = Path(pkg.__file__).resolve().parent / "_bundle"
-    worker = bundle / "worker" / "dist" / "server" / "worker.js"
+    worker = bundle / "worker" / "dist" / "src" / "worker" / "index.js"
     bare = bundle / "runtime" / ("bare.exe" if os.name == "nt" else "bare")
     if worker.exists() and bare.exists():
         return str(bare), str(worker)
@@ -74,7 +74,7 @@ if _bundled is not None:
     BARE_BIN, WORKER_PATH = _bundled
 else:
     BARE_BIN = _sibling_bare_bin()
-    WORKER_PATH = os.path.join(SDK_DIR, "dist", "server", "worker.js")
+    WORKER_PATH = os.path.join(SDK_DIR, "dist", "src", "worker", "index.js")
 
 # Real-worker tests need both a built worker and a Bare runtime to spawn it.
 WORKER_AVAILABLE = os.path.exists(WORKER_PATH) and os.path.exists(BARE_BIN)

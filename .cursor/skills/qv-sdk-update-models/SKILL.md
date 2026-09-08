@@ -298,8 +298,6 @@ Before reporting done:
 
 - Does not upload models to the registry (that is registry/CI writer flow).
 - Does not bump package versions or cut releases.
-- Does not sync `bare-sdk` deps (only relevant if `package.json` deps change —
-  not part of a pure model regen).
 - Does not modify naming / companion / shard codegen.
 - Does not approve the `fork-ci` environment on fork PRs.
 

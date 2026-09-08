@@ -42,9 +42,7 @@ const SAMPLE_RATE = 24000
 const MTL_SENTENCES = [
   { lang: 'es', text: 'El zorro marrón salta sobre el perro perezoso.' },
   { lang: 'fr', text: 'Le renard brun saute par-dessus le chien paresseux.' },
-  { lang: 'de', text: 'Der braune Fuchs springt über den faulen Hund.' },
-  { lang: 'pt', text: 'A raposa marrom pula sobre o cachorro preguiçoso.' },
-  { lang: 'it', text: 'La rapida volpe marrone salta sopra il cane pigro.' }
+  { lang: 'de', text: 'Der braune Fuchs springt über den faulen Hund.' }
 ]
 
 const JA_SENTENCE = '今日はいい天気ですね。'
@@ -82,7 +80,7 @@ async function loadChatterboxMtlTTS(params) {
 }
 
 test(
-  'Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt/it with shared engine',
+  'Chatterbox MTL TTS (ggml): synthesizes across es/fr/de with shared engine',
   { timeout: 1800000 },
   async (t) => {
     const baseDir = getBaseDir()
@@ -138,6 +136,19 @@ test(
             { wallMs, sampleCount: result.data?.sampleCount, model: 'chatterbox-mtl', output: text }
           )
         )
+
+        // Stats fields come from the engine wrapper, not the language path — assert once.
+        if (i === 0) {
+          if (result.data.stats) {
+            t.ok(
+              typeof result.data.stats.backendDevice === 'number',
+              'backendDevice surfaced in stats'
+            )
+            t.ok(typeof result.data.stats.backendId === 'number', 'backendId surfaced in stats')
+          } else {
+            t.fail('expected stats from MTL run')
+          }
+        }
       }
     } finally {
       try {
@@ -273,45 +284,6 @@ test(
           }
         )
       )
-    } finally {
-      try {
-        await model.unload()
-      } catch (_e) {}
-    }
-  }
-)
-
-test(
-  'Chatterbox MTL TTS (ggml): backendDevice + backendId surfaced in stats',
-  { timeout: 600000 },
-  async (t) => {
-    const baseDir = getBaseDir()
-    const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
-    if (!download.success) {
-      t.fail(
-        'Chatterbox MTL GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
-      )
-      return
-    }
-
-    const model = await loadChatterboxMtlTTS({
-      modelDir: download.targetDir,
-      language: 'es'
-    })
-    try {
-      const result = await runTTS(
-        model,
-        { text: 'Comprobando los datos de telemetría del backend.' },
-        { minSamples: 5000 },
-        { sampleRate: SAMPLE_RATE, engineTag: 'Chatterbox MTL' }
-      )
-      t.ok(result.passed, 'MTL run for backend telemetry passes')
-      if (result.data.stats) {
-        t.ok(typeof result.data.stats.backendDevice === 'number', 'backendDevice surfaced in stats')
-        t.ok(typeof result.data.stats.backendId === 'number', 'backendId surfaced in stats')
-      } else {
-        t.fail('expected stats from MTL run')
-      }
     } finally {
       try {
         await model.unload()

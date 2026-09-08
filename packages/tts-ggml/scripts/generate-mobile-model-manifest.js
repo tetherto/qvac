@@ -184,6 +184,22 @@ const QUALITY_MODELS = [
   )
 ]
 
+// Parler stages the mini q8_0 GGUF the functional runner synthesizes with
+// (ensureParlerModel's default variant + quant). The target keeps the flat
+// registry filename: the on-device resolver scans <modelsDir> for exactly
+// `parler-mini-v1-q8_0.gguf`, so no subdir is involved. Staging it removes the
+// last on-device registry download in the functional lane — the ~1.1 GB fetch
+// over Device Farm Wi-Fi is exactly the REQUEST_TIMEOUT flake that failed CI.
+// The date below must match REGISTRY_DATE_PARLER in test/utils/downloadModel.js
+// (the on-device resolver); generate-mobile-model-manifest.test.js pins it so a
+// drift fails there, since this Node script can't require that Bare-only module.
+const PARLER_MODELS = [
+  model(
+    'parler-mini-v1-q8_0.gguf',
+    'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-q8_0.gguf'
+  )
+]
+
 function presignModel(bucket, entry, expiresIn) {
   const url = execFileSync(
     'aws',
@@ -212,6 +228,7 @@ function buildManifest(presign) {
     functional: FUNCTIONAL_MODELS.map(signOnce),
     lavasr: LAVASR_MODELS.map(signOnce),
     cosyvoice: COSYVOICE_MODELS.map(signOnce),
+    parler: PARLER_MODELS.map(signOnce),
     quality: QUALITY_MODELS
   }
   return { manifest, signedCount: signed.size }
@@ -242,5 +259,6 @@ module.exports = {
   FUNCTIONAL_MODELS,
   LAVASR_MODELS,
   COSYVOICE_MODELS,
+  PARLER_MODELS,
   QUALITY_MODELS
 }

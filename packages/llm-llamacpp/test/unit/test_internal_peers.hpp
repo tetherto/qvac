@@ -57,11 +57,6 @@ public:
     }
   }
 
-  static llama_pos configuredNDiscarded(const LlamaModel& model) {
-    std::shared_lock lock(model.stateMtx_);
-    return model.state_ ? model.state_->configuredNDiscarded_ : 0;
-  }
-
   static int64_t runtimeBackendDevice(const LlamaModel& model) {
     std::shared_lock lock(model.stateMtx_);
     return model.runtimeBackendDevice_;
@@ -155,6 +150,28 @@ public:
     }
     return scheduler.slots_[seqId]->admissionId;
   }
+
+  /// Records a deferred slot cancel, then applies teardown once inside a
+  /// `TeardownDeferGuard` window and once outside it, reporting whether the
+  /// record survived each time. Drives the suspension in isolation: the
+  /// finalize unlock window holds a reference into `slots_`, so a reconcile
+  /// inside it would free the slot out from under the drain loop.
+  static std::pair<bool, bool>
+  pendingCancelSurvivesTeardown(Scheduler& scheduler) {
+    scheduler.recordPendingSlotCancel(/*seqId=*/0, /*admissionId=*/1);
+    bool survivedDeferred = false;
+    {
+      typename Scheduler::TeardownDeferGuard defer(scheduler);
+      std::scoped_lock lock(scheduler.mutex_);
+      scheduler.applyDeferredTeardownLocked();
+    }
+    survivedDeferred = scheduler.hasPendingCancels();
+    {
+      std::scoped_lock lock(scheduler.mutex_);
+      scheduler.applyDeferredTeardownLocked();
+    }
+    return {survivedDeferred, scheduler.hasPendingCancels()};
+  }
 };
 
 class MtmdLlmContextTestPeer {
@@ -165,5 +182,13 @@ public:
 
   static bool compactorRemovesThinking(const MtmdLlmContext& context) {
     return context.compactor_.removeThinkingFromContext();
+  }
+
+  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
+    return context.rollbackState_.hasReasoningBoundary();
+  }
+
+  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
+    return context.rollbackState_.reasoningBoundaryNPast();
   }
 };

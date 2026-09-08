@@ -90,6 +90,10 @@ async function runModelLoadingTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/model-loading.test.js', options)
 }
 
+async function runPrebuildDynamicLinkingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/prebuild-dynamic-linking.test.js', options)
+}
+
 module.exports = {
   runAbotWorldTest,
   runApiBehaviorTest,
@@ -111,5 +115,6 @@ module.exports = {
   runInputValidationTest,
   runLoraBridgeTest,
   runMainGpuBackendTest,
-  runModelLoadingTest
+  runModelLoadingTest,
+  runPrebuildDynamicLinkingTest
 }

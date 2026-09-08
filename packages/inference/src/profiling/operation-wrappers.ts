@@ -16,7 +16,10 @@ import { nowMs, generateProfileId } from '@/profiling/clock'
 import { record, shouldIncludeResourceGauges, shouldProfile } from '@/profiling/controller'
 import { getResourceCollector } from '@/resources/instance'
 import { buildOperationEvent } from '@/profiling/operation-metrics'
-import { isTerminalChunk } from '@/p2p/rpc-utils'
+
+function isTerminalChunk(value: unknown): value is { done: true } {
+  return typeof value === 'object' && value !== null && 'done' in value && value.done === true
+}
 
 type ResponseWithOperationEvent<T> = T & { [OPERATION_EVENT_KEY]?: OperationEvent }
 
@@ -46,7 +49,6 @@ interface RecordOperationEventParams<TRequest, TResponse> {
 
 interface ResolvedOperationProfiling {
   perCall: PerCallProfiling | undefined
-  resourceOrigin: ProfilerResourceGauge['origin']
 }
 
 function getRequestProfilingMeta(request: unknown): ProfilingRequestMeta | undefined {
@@ -66,19 +68,16 @@ function resolveOperationProfiling<TRequest>(
   options: ProfiledReplyOptions<TRequest> | ProfiledStreamOptions<TRequest>
 ): ResolvedOperationProfiling {
   if (options.perCall) {
-    return { perCall: options.perCall, resourceOrigin: 'local' }
+    return { perCall: options.perCall }
   }
 
   const meta = getRequestProfilingMeta(options.request)
   if (!meta) {
-    return { perCall: undefined, resourceOrigin: 'local' }
+    return { perCall: undefined }
   }
 
   if (meta.enabled === false) {
-    return {
-      perCall: { enabled: false },
-      resourceOrigin: meta.resourceOrigin ?? 'local'
-    }
+    return { perCall: { enabled: false } }
   }
 
   return {
@@ -87,15 +86,13 @@ function resolveOperationProfiling<TRequest>(
       includeServerBreakdown: meta.includeServer,
       includeResourceGauges: meta.includeResources,
       mode: meta.mode
-    },
-    resourceOrigin: meta.resourceOrigin ?? 'local'
+    }
   }
 }
 
 function toProfilerResourceGauge(
   sample: SystemResourceSample,
-  sampledAt: number,
-  origin: ProfilerResourceGauge['origin']
+  sampledAt: number
 ): ProfilerResourceGauge {
   const gpus =
     sample.gpus.status === 'supported'
@@ -109,7 +106,6 @@ function toProfilerResourceGauge(
         }
       : sample.gpus
   return {
-    origin,
     sampledAt,
     cpu: sample.cpu,
     memory: sample.memory,
@@ -143,7 +139,7 @@ function buildAndRecordOperationEvent<TRequest, TResponse>(
   if (shouldIncludeResourceGauges(params.profiling.perCall)) {
     const resources = getResourceCollector()?.sample()
     if (resources) {
-      event.resources = toProfilerResourceGauge(resources, nowMs(), params.profiling.resourceOrigin)
+      event.resources = toProfilerResourceGauge(resources, nowMs())
     }
   }
 

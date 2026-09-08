@@ -17,7 +17,12 @@ const TRAVERSAL_VECTORS = [
   'foo/../../../bar',
   'foo%00/../bar',
   '%2e%2e%2f%2e%2e%2f',
-  '..\\../mixed'
+  '..\\../mixed',
+  '',
+  '.',
+  './',
+  '/',
+  'C:/'
 ] as const
 
 // ============== Category B schemas (absolute user paths) ==============

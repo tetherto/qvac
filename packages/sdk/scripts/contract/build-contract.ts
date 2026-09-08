@@ -1,9 +1,9 @@
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import prettier from 'prettier'
-import { requestSchema, responseSchema } from '@/schemas/common'
-import { methodShapes, type MethodName } from '@/server/rpc/method-shapes'
-import { constantsRegistry } from '@/schemas/constants-registry'
+import { requestSchema, responseSchema } from '@qvac/inference/surface'
+import { methodShapes, type MethodName } from './method-shapes'
+import { constantsRegistry } from './constants-registry'
 import { buildModelsRegistry } from './build-models-registry'
 import { buildModelTypeMaps } from './build-model-type-maps'
 import { buildErrorCodes } from './build-error-codes'
@@ -459,7 +459,7 @@ export function toWireJsonSchema(
   io: 'input' | 'output',
   defName: string
 ): JsonSchema {
-  const json = z.toJSONSchema(schema, {
+  const json = schema.toJSONSchema({
     target: 'draft-2020-12',
     io,
     unrepresentable: 'any'
@@ -596,7 +596,7 @@ export function buildContract() {
   }
 
   // Public constants (@/schemas/constants-registry), merged into the same
-  // $defs as every request/response type via the same z.toJSONSchema call —
+  // $defs as every request/response type via the same toJSONSchema call —
   // not a separate artifact. `x-enum-varnames` preserves each entry's
   // original key names (`ModelType.llamacppCompletion`, `PluginId.LLM`, ...)
   // through codegen; plain JSON Schema `enum:` only carries values.

@@ -1,5 +1,5 @@
 // Diffusion test definitions
-import type { TestDefinition, TestResult } from '@qvac/qvac-test-suite'
+import type { TestDefinition, TestResult } from '@qvac/test-suite'
 
 type ExpectationLike =
   | { validation: 'type'; expectedType: 'string' | 'number' | 'array' }

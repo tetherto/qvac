@@ -34,6 +34,10 @@ static_assert(static_cast<uint8_t>(GenerationStopReason::PredictionLimit) == 3);
 static_assert(static_cast<uint8_t>(GenerationStopReason::SequenceLimit) == 4);
 static_assert(static_cast<uint8_t>(GenerationStopReason::ContextOverflow) == 5);
 
+// `SequenceLimit` has no producer left: a batched slot that fills its window
+// now reports `ContextOverflow`. The enumerator stays for ordinal stability
+// (see the static_asserts above) and the branch below stays as defence in
+// depth, so a future producer classifies rather than silently falls through.
 [[nodiscard]] constexpr bool
 isKnownReasoningTruncation(GenerationStopReason reason) {
   return reason == GenerationStopReason::PredictionLimit ||
@@ -57,10 +61,6 @@ struct SequenceStepResult {
   bool decodedInline = false;
   bool contextOverflow = false;
   GenerationStopReason stopReason = GenerationStopReason::None;
-  /// Tokens dropped from this sequence's KV-cache by an in-step context
-  /// slide. The scheduler must subtract it from the request's position
-  /// before feeding the next token.
-  llama_pos discarded = 0;
 };
 
 /// A non-token unit of prefill work (image/audio embedding chunk) staged
@@ -122,6 +122,14 @@ struct PrefillPlan {
   return isPrefillOnlyRequest ? count > ceiling : count >= ceiling;
 }
 
+/// Whether a slot at `pos` has no room for another token. The generation-time
+/// half of the rule above, named so the four guards testing it cannot drift
+/// apart again: a slot that will generate needs one free cell, so
+/// `pos == ceiling` is already full.
+[[nodiscard]] inline bool contextWindowFull(llama_pos pos, llama_pos ceiling) {
+  return exceedsContextWindow(pos, ceiling, /*isPrefillOnlyRequest=*/false);
+}
+
 /// Standalone per-sequence driver interface exercised by the
 /// `ContinuousBatchScheduler`. One instance owns the state of a single
 /// in-flight sequence (KV-cache offset, sampler, antiprompt buffer, ...)
@@ -155,8 +163,6 @@ public:
   /// from this value rather than `getNPast()`.
   [[nodiscard]] virtual llama_pos getKvCellsUsed() const { return getNPast(); }
 
-  [[nodiscard]] virtual int32_t getNSlides() const = 0;
-
   [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
 
   /// Why this sequence's generation stopped, once the scheduler has finalized
@@ -165,8 +171,7 @@ public:
   /// sequence, so unlike the shared per-context vision counters it can be
   /// reported for one request without misattribution. Declared on both bases
   /// with the same signature as `LlmContext::getGenerationStopReason`, like
-  /// `getNPast`/`getNSlides` — the concrete contexts' single `override`
-  /// satisfies both.
+  /// `getNPast` — the concrete contexts' single `override` satisfies both.
   [[nodiscard]] virtual GenerationStopReason getGenerationStopReason() const {
     return GenerationStopReason::None;
   }
@@ -179,12 +184,6 @@ public:
   // support.
 
   virtual void setRemoveThinkingFromContext(bool value) { (void)value; }
-  /// Whether this driver slides its KV-cache window during generation when
-  /// the per-slot context fills. Text drivers slide; multimodal drivers hold
-  /// media KV cells fixed and never slide. The scheduler keeps the per-slot
-  /// token cap enforced for drivers that cannot slide, since they never
-  /// recover a slot that reaches its ceiling.
-  [[nodiscard]] virtual bool supportsSliding() const = 0;
 
   /// Tokenize the prompt and stage it for prefill (without running
   /// generation). Returns the text tokens still pending decode by the
@@ -224,7 +223,7 @@ public:
 
   /// Reconcile the driver's KV position with the batcher's authoritative
   /// per-request position. Called by the scheduler before every
-  /// `onLogitsReady` so context-window decisions (sliding, overflow) see
+  /// `onLogitsReady` so context-window overflow decisions see
   /// the live value rather than one frozen at prefill time.
   virtual void syncPosition(llama_pos currentPos) = 0;
 
@@ -273,15 +272,14 @@ public:
   /// persisted cache. Returns true when the cache was loaded
   /// successfully; the scheduler then skips the corresponding prefix
   /// tokens at admit time.
-  [[nodiscard]] virtual bool
-  loadCache(const std::string& cacheKey, llama_pos configuredNDiscarded) = 0;
+  [[nodiscard]] virtual bool loadCache(const std::string& cacheKey) = 0;
 
   virtual void saveCache(const std::string& cacheKey) const = 0;
 
   /// Capture the post-`preparePrefill` cursor for `onCancel` rollback. The
   /// scheduler calls this after `preparePrefill` because prefill preparation
-  /// may slide or otherwise mutate existing KV state; anchoring earlier would
-  /// roll cancellation back to a stale cursor. Cheap: bookkeeping only, no I/O.
+  /// may mutate existing KV state; anchoring earlier would roll cancellation
+  /// back to a stale cursor. Cheap: bookkeeping only, no I/O.
   /// Default no-op for drivers whose cancel does not need it.
   virtual void snapshotPreRequestCursor() {}
 

@@ -5,6 +5,7 @@ globs:
   - packages/rag/**
   - packages/logging/**
   - packages/error/**
+  - packages/test-suite/**
 alwaysApply: false
 ---
 

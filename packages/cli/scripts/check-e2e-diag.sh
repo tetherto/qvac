@@ -142,7 +142,7 @@ kill "${SRV_PID}" 2>/dev/null
 wait "${SRV_PID}" 2>/dev/null
 rm -rf "${TMP}"
 
-# ── Scenario 4: real `qvac serve openai` + diag block ────────────────
+# ── Scenario 4: real `qvac serve --openai` + diag block ────────────────
 # Mirrors the real-model e2e config and spawned serve command. We deliberately
 # fire the diag while the server is still warming so the block runs against a
 # realistic partial state.
@@ -184,7 +184,7 @@ else
   }
 }
 CONF
-  (cd "${TMP}/project" && node "${QVAC_BIN}" serve openai -p "${REAL_PORT}" --cors >"${TMP}/serve.log" 2>&1) &
+  (cd "${TMP}/project" && node "${QVAC_BIN}" serve --openai --no-default -p "${REAL_PORT}" --cors >"${TMP}/serve.log" 2>&1) &
   SP=$!
   echo "${SP}" > "${TMP}/server_pid"
 

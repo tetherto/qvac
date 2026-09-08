@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { heartbeat } from '@qvac/sdk'
-import { BaseExecutor, type TestResult } from '@qvac/qvac-test-suite'
+import { BaseExecutor, type TestResult } from '@qvac/test-suite'
 import { snapStorageTests } from '../../../snap-storage-tests.js'
 
 export class SnapStorageExecutor extends BaseExecutor<typeof snapStorageTests> {

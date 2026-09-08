@@ -81,6 +81,7 @@ on:
         default: tdt
         options:
           - tdt
+          - unified
           - ctc
           - eou
           - sortformer
@@ -239,13 +240,14 @@ jobs:
               # model types.
               gguf_by_type = {
                   "tdt": "parakeet-tdt-0.6b-v3.{quant}.gguf",
+                  "unified": "parakeet-unified-en-0.6b.{quant}.gguf",
                   "ctc": "parakeet-ctc-0.6b.{quant}.gguf",
                   "eou": "parakeet-eou-120m-v1.{quant}.gguf",
                   "sortformer": "sortformer-4spk-v1.{quant}.gguf",
                   "indic-conformer": "indic-conformer-ctc.{quant}.gguf",
               }
 
-              model_types = [model_type] if model_type != "all" else ["tdt", "ctc", "eou", "sortformer", "indic-conformer"]
+              model_types = [model_type] if model_type != "all" else ["tdt", "unified", "ctc", "eou", "sortformer", "indic-conformer"]
 
               def get_configs_for_type(mt):
                   if mt == "indic-conformer":
@@ -270,7 +272,7 @@ jobs:
                           {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": True},
                           {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
                       ]
-                  elif mt == "ctc":
+                  elif mt in ("ctc", "unified"):
                       return [
                           {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
                           {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
@@ -701,6 +703,7 @@ jobs:
 
           # Select the appropriate config file for this model type
           case "$MODEL_TYPE" in
+            unified) CONFIG_FILE="config-parakeet-unified.yaml" ;;
             ctc) CONFIG_FILE="config-parakeet-ctc.yaml" ;;
             eou) CONFIG_FILE="config-parakeet-eou.yaml" ;;
             sortformer) CONFIG_FILE="config-parakeet-sortformer.yaml" ;;
@@ -714,6 +717,7 @@ jobs:
           # Set timeout based on model type
           case "$MODEL_TYPE" in
             tdt) TIMEOUT=120 ;;
+            unified) TIMEOUT=120 ;;
             ctc) TIMEOUT=60 ;;
             eou) TIMEOUT=120 ;;
             sortformer) TIMEOUT=180 ;;

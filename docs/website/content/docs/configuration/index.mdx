@@ -24,8 +24,11 @@ Values marked with `<placeholders>` should be replaced with your actual values.
   "cacheDirectory": "</absolute/path/to/.qvac/models>",
   "httpDownloadConcurrency": 3,
   "httpConnectionTimeoutMs": 10000,
+  "requireHttpChecksum": false,
+  "requireSecureTransport": false,
   "registryDownloadMaxRetries": 3,
   "registryStreamTimeoutMs": 60000,
+  "rpcInitTimeoutMs": 30000,
   "deviceDefaults": [
     {
       "name": "Samsung Galaxy force CPU",
@@ -64,9 +67,13 @@ The following table lists all supported configuration options for `qvac.config.*
 | `cacheDirectory` | Absolute path to the directory where models and other cached assets are stored. | `string` | No | `~/.qvac/models` |
 | `httpDownloadConcurrency` | Maximum number of concurrent HTTP downloads for sharded models. | `number` | No | `3` |
 | `httpConnectionTimeoutMs` | Timeout in milliseconds for HTTP connection establishment (applies to HEAD and GET requests). | `number` | No | `10000` |
+| `requireHttpChecksum` | Reject a Hugging Face download that exposes no usable SHA-256 (instead of downloading it unverified). Hugging Face downloads are always verified when a hash is available regardless of this flag. | `boolean` | No | `false` |
+| `requireSecureTransport` | Reject plaintext `http://` and HTTPS→HTTP downgrade redirects for **every** HTTP source (loopback exempt). When off, this is enforced only for Hugging Face sources; bring-your-own HTTP is left as-is. | `boolean` | No | `false` |
 | `registryDownloadMaxRetries` | Maximum retry attempts for registry (P2P) downloads on timeout. | `number` | No | `3` |
 | `registryStreamTimeoutMs` | Timeout in milliseconds for stalled registry (P2P) download streams. Raise on slow or high-latency connections where the default triggers spurious retries. | `number` | No | `60000` |
+| `rpcInitTimeoutMs` | Timeout in milliseconds for the worker RPC handshake performed when the SDK initializes. Raise on slow storage or embedded hardware where the first worker start legitimately exceeds the default. Overridden by the `QVAC_RPC_INIT_TIMEOUT_MS` environment variable. | `number` | No | `30000` |
 | `deviceDefaults` | Override loaded model config for specific devices. First matching pattern wins. Use it to optimize for different hardware. | [`DevicePattern[]`](#devicepattern) | No | — |
+| `ragTurbovec` | Store built-in [RAG](/ai-capabilities/rag) workspace vectors in a TurboVec index instead of the default HyperDB. Applies only to workspaces created after the flag is set, and the choice is one-way per workspace (existing workspaces keep their adapter). Requires embedding dimension divisible by 8 and ≤ 1024 (fits the default `GTE_LARGE_FP16` at 1024). | `boolean` | No | `false` |
 | `bareRuntimeVersion` | Bare runtime version used for native addon ABI verification during bundling (`qvac bundle sdk` / `qvac verify bundle`). When omitted, the bundler auto-detects it from `node_modules` (`bare-runtime`, then `bare`). | `string` | No | Auto-detected |
 | `serve` | Configuration for the [HTTP server](/cli/http-server). | [`ServeConfig`](#serveconfig) | No | — |
 
@@ -111,7 +118,7 @@ Model types (allowed keys): `llm` | `embeddings` | `whisper` | `parakeet` | `bci
 | `models` | Map of model aliases to model entries (see [`ModelEntry`](#modelentry) below). Required when running the server. | `Record<string, string \| ModelEntry>` | Yes | — |
 | `publicBaseUrl` | Externally reachable origin (e.g., `"https://api.example.com"`). Required for image `response_format=url`. Must start with `http://` or `https://`. The CLI flag `--public-base-url` overrides this value. | `string` | No | — |
 | `cors` | Browser origins trusted to make cross-origin requests. See [`CorsOptions`](#corsoptions). | `CorsOptions` | No | — |
-| `openai` | OpenAI-adapter–specific options. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
+| `openai` | Options for the `openai` extension, mounted with `qvac serve --openai`. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
 
 #### `CorsOptions`
 
@@ -139,6 +146,10 @@ Configuring one or more origins enables CORS. `--docs` also enables CORS for sam
 #### `ModelEntry`
 
 The `serve.models` field is a map of model aliases to model entries. Keys are the **model aliases** — the names that HTTP clients use in the `model` field of their requests. Values can be either a **string** (SDK model constant name, e.g., `"QWEN3_600M_INST_Q4"`) or a `ModelEntry` object:
+
+<Callout type="success">
+**Tip:** you can generate or extend `serve.models` interactively with [`qvac configure`](/cli#qvac-configure) instead of writing entries by hand.
+</Callout>
 
 | Field | Description | Type | Required |
 | --- | --- | --- | --- |
@@ -169,7 +180,7 @@ Example:
 
 #### `LoadOptions` (`serve.load`)
 
-Controls how models are loaded on demand. Each field has a matching CLI flag on `qvac serve openai`.
+Controls how models are loaded on demand. Each field has a matching CLI flag on `qvac serve`.
 
 | Field | Description | Type | Required | Default |
 | --- | --- | --- | --- | --- |

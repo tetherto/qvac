@@ -122,45 +122,77 @@ export const NMT_LANGUAGES = [...BERGAMOT_LANGUAGES, ...INDICTRANS_LANGUAGES] as
 export const NMT_ENGINES = ['Bergamot', 'IndicTrans'] as const
 export type NmtEngine = (typeof NMT_ENGINES)[number]
 
-// Common generation parameters (without language fields)
+// Common generation parameters (without language fields). Full effect on
+// IndicTrans2; Bergamot has limited generation-parameter support.
 const nmtGenerationParamsSchema = z.object({
-  mode: z.enum(['full']).optional(),
-  beamsize: z.number().optional(),
-  lengthpenalty: z.number().optional(),
-  maxlength: z.number().optional(),
-  repetitionpenalty: z.number().optional(),
-  norepeatngramsize: z.number().optional(),
-  temperature: z.number().optional(),
-  topk: z.number().optional(),
-  topp: z.number().optional()
+  mode: z
+    .enum(['full'])
+    .optional()
+    .describe("Generation mode; currently only `'full'` is supported. Default `'full'`."),
+  beamsize: z
+    .number()
+    .optional()
+    .describe('Beam search width (≥1); 1 disables beam search. Default 4.'),
+  lengthpenalty: z.number().optional().describe('Length-normalization strength (≥0). Default 1.0.'),
+  maxlength: z.number().optional().describe('Maximum generated tokens (>0). Default 512.'),
+  repetitionpenalty: z
+    .number()
+    .optional()
+    .describe('Penalty on previously generated tokens (0–2). Default 1.0.'),
+  norepeatngramsize: z
+    .number()
+    .optional()
+    .describe('Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.'),
+  temperature: z.number().optional().describe('Sampling temperature (0–2). Default 0.3.'),
+  topk: z.number().optional().describe('Keep top-K logits (0–vocab_size); 0 disables. Default 0.'),
+  topp: z.number().optional().describe('Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.')
 })
 
 // Pivot model configuration for Bergamot (for translation via intermediate language)
 const bergamotPivotModelSchema = nmtGenerationParamsSchema
   .extend({
-    modelSrc: modelSrcInputSchema,
-    srcVocabSrc: modelSrcInputSchema.optional(),
-    dstVocabSrc: modelSrcInputSchema.optional(),
-    normalize: z.number().optional()
+    modelSrc: modelSrcInputSchema.describe('Second-stage (pivot) translation model source.'),
+    srcVocabSrc: modelSrcInputSchema
+      .optional()
+      .describe('Pivot model source-language vocabulary file source.'),
+    dstVocabSrc: modelSrcInputSchema
+      .optional()
+      .describe('Pivot model target-language vocabulary file source.'),
+    normalize: z
+      .number()
+      .optional()
+      .describe('Pivot model input normalization: 1 = on (default), 0 = off.')
   })
   .optional()
 
 // Bergamot engine config - supports BERGAMOT_LANGUAGES
 const bergamotConfigSchema = nmtGenerationParamsSchema.extend({
-  engine: z.literal('Bergamot'),
-  from: z.enum(BERGAMOT_LANGUAGES),
-  to: z.enum(BERGAMOT_LANGUAGES),
-  srcVocabSrc: modelSrcInputSchema.optional(),
-  dstVocabSrc: modelSrcInputSchema.optional(),
-  normalize: z.number().optional(),
-  pivotModel: bergamotPivotModelSchema
+  engine: z
+    .literal('Bergamot')
+    .describe('Translation backend: Bergamot — fast bilingual models keyed by ISO 639-1 codes.'),
+  from: z.enum(BERGAMOT_LANGUAGES).describe('Source language (ISO 639-1, e.g. `en`).'),
+  to: z.enum(BERGAMOT_LANGUAGES).describe('Target language (ISO 639-1, e.g. `de`).'),
+  srcVocabSrc: modelSrcInputSchema
+    .optional()
+    .describe('Source-language vocabulary file source (required for Bergamot).'),
+  dstVocabSrc: modelSrcInputSchema
+    .optional()
+    .describe('Target-language vocabulary file source (required for Bergamot).'),
+  normalize: z.number().optional().describe('Input normalization: 1 = on (default), 0 = off.'),
+  pivotModel: bergamotPivotModelSchema.describe(
+    'Optional second-stage model for pivot translation (translate via an intermediate language).'
+  )
 })
 
 // IndicTrans engine config - supports INDICTRANS_LANGUAGES
 const indicTransConfigSchema = nmtGenerationParamsSchema.extend({
-  engine: z.literal('IndicTrans'),
-  from: z.enum(INDICTRANS_LANGUAGES),
-  to: z.enum(INDICTRANS_LANGUAGES)
+  engine: z
+    .literal('IndicTrans')
+    .describe(
+      'Translation backend: IndicTrans2 — keyed by ISO 15924 codes; full generation-parameter support.'
+    ),
+  from: z.enum(INDICTRANS_LANGUAGES).describe('Source language (ISO 15924, e.g. `hin_Deva`).'),
+  to: z.enum(INDICTRANS_LANGUAGES).describe('Target language (ISO 15924, e.g. `eng_Latn`).')
 })
 
 // Discriminated union of all engine configs

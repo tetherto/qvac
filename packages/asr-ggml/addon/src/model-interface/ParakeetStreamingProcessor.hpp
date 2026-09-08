@@ -111,6 +111,9 @@ private:
   void onAsrSegment(const pkt::StreamingSegment& seg);
   void onDiarSegment(const pkt::StreamingDiarizationSegment& seg);
   void emitPending();
+  // Terminal RuntimeStats queued FIFO behind the drained segments; the JS
+  // driver waits for it before marking the streaming job finished.
+  void queueTerminalStats();
   void joinWorkerOnce();
 
   ParakeetModel& model_;

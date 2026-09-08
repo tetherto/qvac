@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
+option(ENABLE_CUDA "Enable CUDA GPU acceleration (needs nvcc on the build host)" OFF)
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -9,6 +10,10 @@ endif()
 
 if(ENABLE_VULKAN)
   list(APPEND VCPKG_MANIFEST_FEATURES "vulkan")
+endif()
+
+if(ENABLE_CUDA)
+  list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
@@ -86,6 +91,15 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/acestep/AcestepModel.cpp
 )
+
+if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  target_sources(
+    ${audiogen-ggml}
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon/src/model-interface/minimax/MinimaxModel.cpp
+  )
+  target_compile_definitions(${audiogen-ggml} PRIVATE AUDIOGEN_HAS_MINIMAX=1)
+endif()
 
 target_include_directories(
   ${audiogen-ggml}

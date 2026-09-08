@@ -1,11 +1,34 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
+const fs = require("bare-fs");
+const path = require("bare-path");
 const processModule = require("bare-process");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const process_internal_1 = require("./process-internal");
 const process_1 = require("./process");
 const process = processModule;
+// Duplicate of index.ts resolveBackendsDir: this runner must not import
+// `./index` at load time because that would load the native binding. The v2
+// llamaConfigFit path also cannot go through fitParams().
+function resolveBackendsDir() {
+    try {
+        const fabricPkg = require.resolve('@qvac/fabric/package');
+        const fabricPrebuilds = path.join(path.dirname(fabricPkg), 'prebuilds');
+        if (fs.statSync(fabricPrebuilds).isDirectory())
+            return fabricPrebuilds;
+    }
+    catch {
+        // Mobile worklets cannot resolve the @qvac/fabric package tree.
+    }
+    try {
+        const packaged = path.join(__dirname, 'prebuilds');
+        return fs.statSync(packaged).isDirectory() ? packaged : undefined;
+    }
+    catch {
+        return undefined;
+    }
+}
 function exitAfterWriteError(error) {
     process.stderr.write(`model-fit process runner failed to write its response: ${error.message}\n`, () => {
         process.exit(2);
@@ -30,8 +53,23 @@ function fit(config) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
     return require('./index').fitParams(config);
 }
+function fitLlama(...args) {
+    const [loadKind, config] = args;
+    // `./binding-internal`, not `./binding`: the raw load-config fitter is not
+    // public API, and `./binding.js` is a public export.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is disposable here.
+    const binding = require('./binding-internal');
+    let resolved = config;
+    if (config.backendsDir === undefined) {
+        const packaged = resolveBackendsDir();
+        if (packaged !== undefined) {
+            resolved = { ...config, backendsDir: packaged };
+        }
+    }
+    return binding.llamaConfigFit({ loadKind, ...resolved });
+}
 function finish(line) {
-    writeOutcome((0, process_internal_1.runFitProcessLine)(line, fit));
+    writeOutcome((0, process_internal_1.runFitProcessLine)(line, fit, fitLlama));
 }
 let input = '';
 let finished = false;

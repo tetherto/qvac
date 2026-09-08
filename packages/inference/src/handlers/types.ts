@@ -10,8 +10,6 @@ export type DuplexStreamHandler = (request: any, inputStream: any) => AsyncGener
 export type HandlerEntry = {
   type: 'reply' | 'stream' | 'duplex'
   handler: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler
-  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler
-  isDelegated?: (request: Request) => boolean
   supportsProgress?: boolean | ((request: Request) => boolean)
   // A capability that runs on the loaded model's plugin. Such handlers already
   // record their own profiling inside plugin dispatch, so local dispatch does

@@ -1,58 +1,28 @@
 @startuml
 !include <C4/C4_Deployment>
+HIDE_STEREOTYPE()
 
 title QVAC SDK Family - Deployment Diagram
 
-Deployment_Node(desktop, "Desktop", "Node.js / Bun / Electron") {
-    Deployment_Node(app_proc, "Application Process") {
-        Container(sdk_desktop, "@qvac/sdk Host Client", "TypeScript")
+Deployment_Node(host_worker, "Host + Bare worker") {
+    Deployment_Node(host_proc, "Host process") {
+        Container(client, "Host Client", "TypeScript / Python")
     }
-    Deployment_Node(subprocess_proc, "Bare Subprocess", "bare-runtime/spawn on first API call") {
-        Container(subprocess_desktop, "Default or Generated Worker", "TypeScript/C++", "Default worker registers all built-ins; generated worker registers selected plugins")
+    Deployment_Node(worker_proc, "Bare worker") {
+        Container(worker, "Worker + @qvac/inference", "TypeScript/C++")
     }
-    ContainerDb(desktop_store, "Local Storage", "Models cache + RAG DB")
+    ContainerDb(store_hw, "Local Storage", "Models cache + RAG DB")
 }
 
-Deployment_Node(python, "Python Host", "CPython 3.10+") {
-    Deployment_Node(py_proc, "Python Process") {
-        Container(py_client, "tetherto-qvac-sdk Client", "Python")
-    }
-    Deployment_Node(py_worker_proc, "Bare Subprocess", "Bundled wheel or resolved @qvac/sdk worker") {
-        Container(py_worker, "SDK Worker", "TypeScript/C++ on Bare")
-    }
-    ContainerDb(py_store, "Local Storage", "Models cache + RAG DB")
-}
-
-Deployment_Node(pear, "Pear Desktop", "Bare Runtime") {
-    Deployment_Node(pear_app, "Pear Application", "Pre-hook generates worker entry; Pear manages lifecycle") {
-        Container(sdk_pear, "@qvac/sdk Client", "TypeScript")
-        Container(pear_worker, "Generated Worker", "TypeScript/C++")
-    }
-    ContainerDb(pear_store, "Local Storage", "Models cache + RAG DB")
-}
-
-Deployment_Node(mobile, "Mobile", "React Native / Expo") {
-    Deployment_Node(rn_app, "React Native App", "BareKit worklet embedded at app start") {
-        Container(sdk_mobile, "@qvac/sdk Client", "TypeScript")
-        Container(barekit, "BareKit Worklet", "Native + Bare", "Runs worker.mobile.bundle.js")
-    }
-    ContainerDb(mobile_store, "Local Storage", "Models cache + RAG DB")
-}
-
-Deployment_Node(bare_direct, "Bare Runtime", "Direct execution, in-process") {
+Deployment_Node(inproc, "In-process Bare") {
     Deployment_Node(bare_app, "Bare Application") {
-        Container(sdk_bare, "@qvac/sdk / @qvac/bare-sdk / @qvac/inference + Plugins", "TypeScript/C++", "In-process dispatch; bare-sdk and inference have no default addons")
+        Container(engine, "@qvac/inference", "TypeScript/C++")
     }
-    ContainerDb(bare_store, "Local Storage", "Models cache + RAG DB")
+    ContainerDb(store_ip, "Local Storage", "Models cache + RAG DB")
 }
 
-Rel(sdk_desktop, subprocess_desktop, "IPC Socket", "Unix/Named Pipe")
-Rel(py_client, py_worker, "Loopback TCP", "bare-rpc-python")
-Rel(sdk_mobile, barekit, "Native Bridge", "in-process")
-Rel(subprocess_desktop, desktop_store, "Reads/Writes")
-Rel(py_worker, py_store, "Reads/Writes")
-Rel(barekit, mobile_store, "Reads/Writes")
-Rel(sdk_bare, bare_store, "Reads/Writes")
-Rel(pear_worker, pear_store, "Reads/Writes")
+Rel(client, worker, "RPC", "bare-rpc")
+Rel(worker, store_hw, "Reads/writes", "filesystem / HyperDB")
+Rel(engine, store_ip, "Reads/writes", "filesystem / HyperDB")
 
 @enduml

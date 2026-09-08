@@ -25,41 +25,6 @@ const MODEL_MISSING =
   'cosy_voice/2026-07-23 files locally or run with registry access.'
 
 test(
-  'CosyVoice3 TTS (ggml): short synthesis returns 24 kHz audio + duration',
-  { timeout: 600000 },
-  async (t) => {
-    const baseDir = getBaseDir()
-    const download = await ensureCosyvoiceModel({
-      targetDir: path.join(baseDir, 'models', 'cosyvoice3')
-    })
-    if (!download.success) {
-      t.fail(MODEL_MISSING)
-      return
-    }
-
-    const model = await loadCosyvoiceTTS({ cosyvoiceModelDir: download.modelDir })
-    try {
-      const text = 'Hello from CosyVoice.'
-      const result = await runCosyvoiceTTS(
-        model,
-        { text },
-        { minSamples: 1, minDurationMs: 1, maxDurationMs: 300000 }
-      )
-      console.log(result.output)
-
-      t.ok(result.passed, 'cosyvoice synth passes expectations')
-      t.ok(result.data.sampleCount > 0, 'cosyvoice produced audio (outputArray length > 0)')
-      t.is(result.data.reportedSampleRate, 24000, 'cosyvoice reports 24 kHz native sample rate')
-      t.ok(result.data.durationMs > 0, 'cosyvoice audio duration is > 0 ms')
-    } finally {
-      try {
-        await model.unload()
-      } catch (_e) {}
-    }
-  }
-)
-
-test(
   'CosyVoice3 TTS (ggml): outputSampleRate=16000 resamples and reports 16 kHz',
   { timeout: 600000 },
   async (t) => {
@@ -138,7 +103,22 @@ test(
       // Every cosyvoice emotion engages the instruct path, neutral included: it
       // carries its own "normal, flat tone" instruction rather than meaning
       // "unconditioned". Only pace moderate resolves to no instruction.
-      const plain = await runCosyvoiceTTS(model, { text }, { minSamples: 1 })
+      const plain = await runCosyvoiceTTS(
+        model,
+        { text },
+        { minSamples: 1, minDurationMs: 1, maxDurationMs: 300000 }
+      )
+      // Baseline synth assertions folded in from the standalone smoke test: the
+      // plain (no per-call knobs) path is what that test exercised, so its
+      // sample-rate / duration / passed checks live here now.
+      t.ok(plain.passed, 'plain cosyvoice synth passes expectations')
+      t.ok(plain.data.sampleCount > 0, 'plain cosyvoice produced audio')
+      t.is(
+        plain.data.reportedSampleRate,
+        24000,
+        'plain cosyvoice reports 24 kHz native sample rate'
+      )
+      t.ok(plain.data.durationMs > 0, 'plain cosyvoice audio duration is > 0 ms')
       const neutral = await runCosyvoiceTTS(
         model,
         { text, perCallEmotion: 'neutral' },

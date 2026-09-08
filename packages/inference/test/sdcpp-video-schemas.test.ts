@@ -1,6 +1,8 @@
 import test from 'brittle'
 import {
+  diffusionRequestSchema,
   ltxVideoRequestSchema,
+  nonLtxVideoRequestSchema,
   sdcppConfigSchema,
   singleExpertVideoRequestSchema,
   videoRequestSchema,
@@ -47,6 +49,20 @@ test('sdcppConfigSchema: accepts LTX-2 video layout sources', (t: BrittleT) => {
     embeddingsConnectorsModelSrc: 'ltx-2.3-22b_embeddings_connectors.safetensors'
   })
   t.is(result.success, true)
+})
+
+test('sdcppConfigSchema: preserves automatic VAE CPU fallback settings', (t: BrittleT) => {
+  const result = sdcppConfigSchema.safeParse({
+    mode: 'video',
+    vae_auto_cpu_fallback: true,
+    vae_auto_cpu_fallback_memory_ratio: 0.9
+  })
+
+  t.is(result.success, true)
+  t.is(result.success && result.data.vae_auto_cpu_fallback, true)
+  t.is(result.success && result.data.vae_auto_cpu_fallback_memory_ratio, 0.9)
+  t.is(sdcppConfigSchema.safeParse({ vae_auto_cpu_fallback_memory_ratio: 0 }).success, false)
+  t.is(sdcppConfigSchema.safeParse({ vae_auto_cpu_fallback_memory_ratio: 1.1 }).success, false)
 })
 
 test('videoStatsSchema: accepts video runtime stats fields', (t: BrittleT) => {
@@ -133,6 +149,175 @@ test('ltxVideoRequestSchema: enforces LTX-2 dimensions and frame counts', (t: Br
   t.is(ltxVideoRequestSchema.safeParse({ ...base, height: 496 }).success, false)
   t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 13 }).success, false)
   t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 265 }).success, false)
+})
+
+test('ltxVideoRequestSchema: accepts the full Ingredients request', (t: BrittleT) => {
+  const result = ltxVideoRequestSchema.safeParse({
+    modelId: 'model-1',
+    mode: 'txt2vid',
+    prompt: 'Reference sheet: an explorer. Generated video: the explorer walks through snow.',
+    lora: '/models/ltx-2-ingredients.safetensors',
+    lora_strength: 1.37,
+    stg_scale: 1,
+    stg_block: 29,
+    reference_images: [PNG_B64],
+    reference_attention_strength: 1,
+    reference_downscale_factor: 1,
+    width: 768,
+    height: 448,
+    video_frames: 121,
+    scheduler: 'ltx2'
+  })
+
+  t.is(result.success, true)
+})
+
+test('ltxVideoRequestSchema: validates LoRA and STG fields', (t: BrittleT) => {
+  const base = {
+    modelId: 'model-1',
+    mode: 'txt2vid' as const,
+    prompt: 'an explorer',
+    video_frames: 121
+  }
+
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, lora: 'relative.safetensors' }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, lora_strength: 1 }).success, false)
+  t.is(
+    ltxVideoRequestSchema.safeParse({
+      ...base,
+      lora: '/models/adapter.safetensors',
+      lora_strength: -0.1
+    }).success,
+    false
+  )
+  t.is(
+    ltxVideoRequestSchema.safeParse({
+      ...base,
+      lora: '/models/adapter.safetensors',
+      lora_strength: 10
+    }).success,
+    true
+  )
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, stg_scale: 10.1 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, stg_block: -1 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, stg_block: 1.5 }).success, false)
+})
+
+test('ltxVideoRequestSchema: validates reference conditioning dependencies', (t: BrittleT) => {
+  const base = {
+    modelId: 'model-1',
+    mode: 'txt2vid' as const,
+    prompt: 'an explorer',
+    lora: '/models/adapter.safetensors',
+    video_frames: 121
+  }
+
+  t.is(
+    ltxVideoRequestSchema.safeParse({
+      ...base,
+      lora: undefined,
+      reference_images: [PNG_B64]
+    }).success,
+    false
+  )
+  t.is(
+    ltxVideoRequestSchema.safeParse({
+      ...base,
+      reference_images: [PNG_B64, PNG_B64]
+    }).success,
+    false
+  )
+  t.is(
+    ltxVideoRequestSchema.safeParse({
+      ...base,
+      reference_attention_strength: 0.5
+    }).success,
+    false
+  )
+  t.is(
+    ltxVideoRequestSchema.safeParse({
+      ...base,
+      reference_downscale_factor: 1
+    }).success,
+    false
+  )
+  t.is(
+    ltxVideoRequestSchema.safeParse({
+      ...base,
+      reference_images: [PNG_B64],
+      reference_attention_strength: 1.1
+    }).success,
+    false
+  )
+  t.is(
+    ltxVideoRequestSchema.safeParse({
+      ...base,
+      reference_images: [PNG_B64],
+      reference_downscale_factor: 2
+    }).success,
+    false
+  )
+})
+
+test('ltxVideoRequestSchema: reference conditioning requires at least 121 frames', (t: BrittleT) => {
+  const base = {
+    modelId: 'model-1',
+    mode: 'txt2vid' as const,
+    prompt: 'an explorer',
+    lora: '/models/adapter.safetensors',
+    reference_images: [PNG_B64]
+  }
+
+  t.is(ltxVideoRequestSchema.safeParse(base).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 97 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 121 }).success, true)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 257 }).success, true)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 265 }).success, false)
+})
+
+test('videoRequestSchema: rejects reference conditioning on img2vid', (t: BrittleT) => {
+  const base = {
+    modelId: 'model-1',
+    mode: 'img2vid' as const,
+    prompt: 'animate this frame',
+    init_image: PNG_B64
+  }
+
+  t.is(videoRequestSchema.safeParse({ ...base, reference_images: [PNG_B64] }).success, false)
+  t.is(videoRequestSchema.safeParse({ ...base, reference_attention_strength: 1 }).success, false)
+  t.is(videoRequestSchema.safeParse({ ...base, reference_downscale_factor: 1 }).success, false)
+})
+
+test('nonLtxVideoRequestSchema: rejects every LTX-only field', (t: BrittleT) => {
+  const fields = [
+    ['lora', '/models/adapter.safetensors'],
+    ['lora_strength', 1],
+    ['stg_scale', 1],
+    ['stg_block', 29],
+    ['reference_images', [PNG_B64]],
+    ['reference_attention_strength', 1],
+    ['reference_downscale_factor', 1]
+  ] as const
+
+  for (const [field, value] of fields) {
+    t.is(
+      nonLtxVideoRequestSchema.safeParse({ [field]: value }).success,
+      false,
+      `${field} is rejected`
+    )
+  }
+  t.is(nonLtxVideoRequestSchema.safeParse({ scheduler: 'ltx2' }).success, false)
+  t.is(nonLtxVideoRequestSchema.safeParse({ scheduler: 'simple' }).success, true)
+})
+
+test("diffusionRequestSchema: does not widen image scheduler to 'ltx2'", (t: BrittleT) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: 'model-1',
+    prompt: 'an explorer',
+    scheduler: 'ltx2'
+  })
+
+  t.is(result.success, false)
 })
 
 test('sdcppConfigSchema: accepts the Wan 2.2 TI2V-5B three-file layout', (t: BrittleT) => {

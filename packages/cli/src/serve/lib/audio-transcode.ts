@@ -3,7 +3,7 @@ import {
   FfmpegFailedError,
   FfmpegTimeoutError,
   type FfmpegRunOptions
-} from './ffmpeg.js'
+} from '@/serve/lib/ffmpeg'
 
 export type AudioEncodeOptions = FfmpegRunOptions
 export {
@@ -53,4 +53,4 @@ export async function transcodeWav(
   return await runFfmpeg(speechEncodeArgs(format), input, opts)
 }
 
-export { probeFfmpegAvailable } from './ffmpeg.js'
+export { probeFfmpegAvailable } from '@/serve/lib/ffmpeg'

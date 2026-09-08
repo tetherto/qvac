@@ -278,7 +278,7 @@ SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
 
   // LavaSR neural denoiser (opt-in). Runs BEFORE the enhancer and preserves the
   // sample rate (cleans the signal, no rate change). The UL-UNAS forward is
-  // implemented in qvac-ext-lib-whisper.cpp PR #78; this runs whenever a
+  // implemented in qvac-fabric-speech.cpp PR #78; this runs whenever a
   // denoiser was loaded (i.e. the pinned tts-cpp includes #78).
   if (denoiser) {
     try {

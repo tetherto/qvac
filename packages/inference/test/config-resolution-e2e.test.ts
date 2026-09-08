@@ -106,6 +106,21 @@ test('no patterns match = schema defaults only', (t) => {
   t.is(result.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
 })
 
+// Resolution parses through the permissive base schema, so the retired key
+// is dropped here too rather than failing the load.
+test('config resolution strips retired n_discarded instead of rejecting it', (t) => {
+  const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
+  const resolved = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    { ctx_size: 2048, n_discarded: 256 },
+    ctx,
+    [],
+    []
+  )
+  t.absent('n_discarded' in resolved, 'the retired key is dropped')
+  t.is(resolved['ctx_size'], 2048, 'the rest of the config survives')
+})
+
 test('multiple patterns merge (general → specific)', (t) => {
   const ctx: RuntimeContext = { platform: 'android', deviceBrand: 'google' }
   const builtinPatterns: DevicePattern[] = [

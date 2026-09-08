@@ -121,6 +121,15 @@ export const qvacConfigSchema = z.object({
   loggerConsoleOutput: z.boolean().optional(),
 
   /**
+   * Timeout in milliseconds for the worker RPC handshake performed when the SDK
+   * initializes. Raise this on slow storage or embedded hardware where the first
+   * worker start (native addon load) legitimately exceeds the default.
+   * The `QVAC_RPC_INIT_TIMEOUT_MS` environment variable takes precedence.
+   * Defaults to 30000 (30 seconds).
+   */
+  rpcInitTimeoutMs: z.number().int().positive().optional(),
+
+  /**
    * Maximum number of concurrent HTTP downloads for sharded models.
    * Higher values may improve download speed but increase memory usage.
    * Defaults to 3.
@@ -134,6 +143,33 @@ export const qvacConfigSchema = z.object({
    * Defaults to 10000 (10 seconds).
    */
   httpConnectionTimeoutMs: z.number().int().positive().optional(),
+
+  /**
+   * Require HTTP model downloads to be verified against a trusted checksum.
+   * Sources that expose one (currently Hugging Face, via the Hub's SHA-256)
+   * are always verified regardless of this flag, and a mismatch always fails.
+   * This flag only governs the unverifiable cases:
+   * - false (default): a source with no available checksum downloads with a
+   *   warning (Hugging Face URLs that expose no SHA-256, and non-Hugging-Face
+   *   URLs which have no checksum source).
+   * - true: a source that should be verifiable but exposes no usable checksum
+   *   (e.g. a Hugging Face URL without a SHA-256) is rejected; a source with no
+   *   checksum source at all still downloads, with a warning that no checksum
+   *   source was available.
+   * Defaults to false.
+   */
+  requireHttpChecksum: z.boolean().optional(),
+
+  /**
+   * Enforce secure transport for HTTP model downloads: reject plaintext http://
+   * and HTTPS->HTTP downgrade redirects (loopback exempt).
+   * - false (default): enforced only for Hugging Face sources, whose Hub SHA-256
+   *   attestation a downgrade could sidestep. Bring-your-own HTTP on any host,
+   *   plaintext included, is left as-is.
+   * - true: enforced for every HTTP source, so all downloads must use HTTPS.
+   * Defaults to false.
+   */
+  requireSecureTransport: z.boolean().optional(),
 
   /**
    * Maximum number of retry attempts for registry (P2P) downloads on timeout.
@@ -173,6 +209,16 @@ export const qvacConfigSchema = z.object({
    * ```
    */
   deviceDefaults: z.array(devicePatternSchema).optional(),
+
+  /**
+   * Create new RAG workspaces on the TurboVec index instead of HyperDB.
+   * The choice is per workspace and one-way: a workspace records its adapter
+   * on first open and keeps it regardless of later config changes. The only
+   * way to move an existing workspace back is `deleteWorkspace`, which
+   * deletes its data.
+   * Defaults to false.
+   */
+  ragTurbovec: z.boolean().optional(),
 
   /**
    * Inert: we do not read this field. Plugins are registered

@@ -1,4 +1,8 @@
 import { z } from 'zod'
+// Import from the dependency-free module: this schema is re-exported through
+// the Node-safe `@qvac/inference/surface`, and `@/utils/path-security` pulls in
+// `bare-path` at runtime.
+import { sanitizePathComponent } from '@/utils/path-sanitize'
 
 /**
  * Zod refinement for path components that get joined to a base directory.
@@ -15,10 +19,12 @@ export const safePathComponent = z.string().refine(
     if (s.includes('\0') || s.toLowerCase().includes('%00')) return false
     // Reject URL-encoded traversal (%2e = ".", %2f = "/", %5c = "\")
     if (/%2e/i.test(s)) return false
-    return true
+    // Reject components that resolve to the directory they are joined against.
+    const sanitized = sanitizePathComponent(s)
+    return sanitized.split('/').some((segment) => segment !== '' && segment !== '.')
   },
   {
     message:
-      "Path component must not contain traversal sequences ('..', '%2e'), null bytes, or '%00'"
+      "Path component must name a child path and not contain traversal sequences ('..', '%2e'), null bytes, or '%00'"
   }
 )

@@ -1573,6 +1573,32 @@ test('parakeet: Indic Conformer CTC GGUF includes INDIC_CONFORMER in the name', 
   t.is(exportName, 'PARAKEET_INDIC_CONFORMER_CTC_F16')
 })
 
+test('parakeet: Unified RNN-T GGUF keeps PARAKEET_UNIFIED_<params>_<quant>', (t) => {
+  const coreKey = Buffer.from('cc'.repeat(32), 'hex')
+
+  const { exportName } = processAndName({
+    path: 'qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf',
+    source: 's3',
+    engine: 'parakeet-transcription',
+    license: 'nvidia-open-model-license',
+    name: '',
+    sizeBytes: 749625216,
+    sha256: 'cc'.repeat(32),
+    quantization: 'q8_0',
+    params: '0.6B',
+    tags: ['transcription', 'parakeet', 'unified', 'ggml', 'en'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 1,
+      blockLength: 1,
+      byteOffset: 1,
+      byteLength: 749625216
+    }
+  })
+
+  t.is(exportName, 'PARAKEET_UNIFIED_0_6B_Q8_0')
+})
+
 // ---------------------------------------------------------------------------
 // loadCurrentModels: quote styles
 // ---------------------------------------------------------------------------

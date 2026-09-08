@@ -109,7 +109,6 @@ Load a model into memory. Will download if not cached.
   modelType: string; // "llm", "whisper", "parakeet", "embeddings", "nmt", "tts", "ocr", or custom plugin type
   modelConfig?: { ... }; // model-type-specific config
   seed?: boolean;
-  delegate?: DelegateConfig;
   onProgress?: (progress: ModelProgressUpdate) => void;
 }
 ```

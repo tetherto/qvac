@@ -6,7 +6,7 @@ const path = require('node:path')
 const test = require('node:test')
 const { ALL_TYPES, MODELS, selectVariants } = require('../download-parakeet-models.js')
 const { MODELS: MOBILE_MODELS, TEST_MODELS } = require('../generate-mobile-model-manifest.js')
-const { parseMatrixConfig } = require('../run-rtf-benchmark-matrix.js')
+const { addUnifiedCoverage } = require('../run-rtf-benchmark-matrix.js')
 
 const SCRIPTS_DIR = path.resolve(__dirname, '..')
 const UNIFIED_PREFIX = 'qvac_models_compiled/ggml/parakeet/2026-08-13'
@@ -41,16 +41,83 @@ test('conversion and Hugging Face download CLIs accept unified', () => {
   }
 })
 
-test('duplex streaming stages only the TDT model', () => {
+test('mobile model mappings stage unified CPU and GPU quant sweeps', () => {
+  assert.deepEqual(
+    [MOBILE_MODELS.unifiedF16, MOBILE_MODELS.unifiedQ8, MOBILE_MODELS.unifiedQ4].map(
+      (entry) => entry.name
+    ),
+    UNIFIED_FILES
+  )
+  for (const runner of [
+    'runParakeetMobilePerfUnifiedCpuTest',
+    'runParakeetMobilePerfUnifiedGpuTest'
+  ]) {
+    assert.deepEqual(
+      TEST_MODELS[runner].map((entry) => entry.name).sort(),
+      UNIFIED_FILES.slice().sort()
+    )
+  }
+})
+
+test('duplex streaming stages TDT and Unified models', () => {
   assert.deepEqual(
     TEST_MODELS.runParakeetDuplexStreamingTest.map((entry) => entry.name),
-    [MOBILE_MODELS.tdtQ4.name]
+    [MOBILE_MODELS.tdtQ4.name, MOBILE_MODELS.unifiedQ4.name]
   )
 })
 
-test('default desktop benchmark matrix excludes unified', () => {
-  assert.equal(
-    parseMatrixConfig().some((entry) => entry.modelType === 'unified'),
-    false
+test('desktop benchmark coverage mirrors every TDT quant and GPU policy', () => {
+  const entries = [
+    { engine: 'parakeet', modelType: 'tdt', quant: 'f16', useGPU: false },
+    { engine: 'parakeet', modelType: 'tdt', quant: 'q8_0', useGPU: true },
+    { engine: 'whisper', modelFile: 'ggml-base.bin', useGPU: false }
+  ]
+  const expanded = addUnifiedCoverage(entries)
+  assert.deepEqual(
+    expanded.filter((entry) => entry.modelType === 'unified'),
+    [
+      { engine: 'parakeet', modelType: 'unified', quant: 'f16', useGPU: false },
+      { engine: 'parakeet', modelType: 'unified', quant: 'q8_0', useGPU: true }
+    ]
+  )
+})
+
+test('desktop benchmark coverage preserves distinct TDT configurations', () => {
+  const entries = [
+    {
+      engine: 'parakeet',
+      modelType: 'tdt',
+      quant: 'q8_0',
+      useGPU: false,
+      maxThreads: 2
+    },
+    {
+      engine: 'parakeet',
+      modelType: 'tdt',
+      quant: 'q8_0',
+      useGPU: false,
+      maxThreads: 4
+    },
+    {
+      engine: 'parakeet',
+      modelType: 'unified',
+      quant: 'q8_0',
+      useGPU: false,
+      maxThreads: 2
+    }
+  ]
+
+  assert.deepEqual(
+    addUnifiedCoverage(entries).filter((entry) => entry.modelType === 'unified'),
+    [
+      entries[2],
+      {
+        engine: 'parakeet',
+        modelType: 'unified',
+        quant: 'q8_0',
+        useGPU: false,
+        maxThreads: 4
+      }
+    ]
   )
 })

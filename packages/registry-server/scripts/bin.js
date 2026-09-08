@@ -106,6 +106,7 @@ const runCmd = command(
       ackThreshold: toInt(flags.ackThreshold),
       autobaseBootstrap,
       blindPeerKeys,
+      storagePath,
       clearAfterReseed: flags.clearAfterReseed,
       compactionIntervalMs,
       skipStorageCheck: flags.skipStorageCheck

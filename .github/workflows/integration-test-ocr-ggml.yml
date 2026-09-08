@@ -29,6 +29,13 @@ on:
         type: string
         required: false
         default: "packages/ocr-ggml"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -37,7 +44,13 @@ env:
   PKG_DIR: packages/ocr-ggml
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-integration-tests:
+    needs: runner_names
     timeout-minutes: 30
     runs-on: ${{ matrix.runner }}
     environment: release
@@ -55,19 +68,19 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404_arm }}
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-            runner: ubuntu-22.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
           # Self-hosted Apple-silicon runner with a real Metal GPU. The
           # GitHub-hosted macos-15-xlarge runner's virtualized Metal is
           # unreliable for sustained GPU compute (the DocTR pipeline runs
@@ -78,11 +91,11 @@ jobs:
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
 
     steps:
       - name: Setup Node.js
@@ -132,12 +145,68 @@ jobs:
           # self-hosted runner where these may already be present.
           npm install -g --force bare bare-make
 
-      - name: Download prebuilds from artifact
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ inputs.workdir || env.PKG_DIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      # Prebuilds live in the merged `prebuilds` bundle. Extract to runner.temp,
+      # not the package tree: unscoped merge-multiple into $GITHUB_WORKSPACE is
+      # CodeQL actions/artifact-poisoning/critical when this reusable workflow
+      # is reachable from workflow_dispatch callers (on-pr / on-merge /
+      # benchmark). Same staging pattern as integration-test-classification-ggml.yml.
+      - name: Download prebuilds bundle
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
-          merge-multiple: true
+          name: prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
+        shell: bash
+        run: |
+          SRC="${{ runner.temp }}/prebuilds-staging/${{ matrix.platform }}-${{ matrix.arch }}"
+          if [ ! -d "$SRC" ]; then
+            echo "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
+            ls -la "${{ runner.temp }}/prebuilds-staging" 2>/dev/null || true
+            exit 1
+          fi
+          mkdir -p ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          cp -r "$SRC" ${{ inputs.workdir || env.PKG_DIR }}/prebuilds/
+          echo "Prebuilds moved from staging area"
+          ls -la ${{ inputs.workdir || env.PKG_DIR }}/prebuilds/
+
+      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
+      # because Git Bash interprets `\a`/`\_` as escape sequences, so the
+      # source path becomes invalid and the copy silently no-ops. Use
+      # PowerShell Copy-Item with native Windows paths.
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $src = "${{ runner.temp }}\prebuilds-staging\${{ matrix.platform }}-${{ matrix.arch }}"
+          if (-not (Test-Path $src)) {
+            Write-Output "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
+            if (Test-Path "${{ runner.temp }}\prebuilds-staging") { Get-ChildItem -Force "${{ runner.temp }}\prebuilds-staging" | Format-Table -AutoSize }
+            exit 1
+          }
+          $dst = "${{ inputs.workdir || env.PKG_DIR }}/prebuilds"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Recurse -Force $src $dst
+          Write-Host "Prebuilds moved from staging area"
+          Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
@@ -236,3 +305,4 @@ jobs:
           path: ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
           retention-days: 90
           if-no-files-found: ignore
+

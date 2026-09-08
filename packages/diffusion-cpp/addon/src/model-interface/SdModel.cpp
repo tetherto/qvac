@@ -1,5 +1,10 @@
 #include "SdModel.hpp"
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdlib>
@@ -42,21 +47,43 @@ struct ProgressCtx {
 
   // Phase-boundary capture for conditioner / denoise / vae timing.
   //
-  // sd.cpp emits a separate progress sequence for each sampler invocation and
-  // tiled VAE pass. Each sequence restarts at step==0 (sampling:
-  // stable-diffusion.cpp pretty_progress(0, steps); tiling:
-  // ggml_extend.hpp sd_tiling pretty_progress(0, num_tiles)). Image generation
-  // invokes the sampler once per batch item; video generation invokes it once
-  // for the full video-latent tensor. We capture exactly the known number of
-  // leading sampler sequences, leaving later VAE-tiling sequences out of the
-  // denoise window. ESRGAN upscaling runs after generate_*() returns.
+  // The pinned engine's progress emitters are: the sampler (one sequence per
+  // image batch item / video expert, total = its step count) and sd_tiling
+  // (VAE encode/decode tile passes, total = tile count, only when vae_tiling
+  // is enabled). Text encoders do NOT tick, and with eager_load = true (set
+  // at ctx creation) the model loader ticks during load(), not inside
+  // generate_*(). Ticks are attributed to the denoise window by their
+  // reported total:
+  //   - exact mode (denoiseTotals non-empty): a tick is denoise iff its total
+  //     is one of the known sampler step counts (image: steps; video: the
+  //     explicit high/low expert totals).
+  //   - bounded mode (denoiseTotals empty, denoiseTotalBound > 0): a tick is
+  //     denoise iff 0 < total <= bound, capped at maxDenoiseSequences
+  //     sequence starts (video MoE with the moe_boundary sentinel, where the
+  //     per-expert step split is engine-derived and unknown here).
+  // ESRGAN upscaling runs after generate_*() returns and never ticks here.
+  // Both modes additionally gate on sequence starts: a sequence opens only
+  // on a step==0 tick while fewer than maxDenoiseSequences starts have been
+  // accepted, and closes on its step==total tick — so a later phase whose
+  // total collides with a sampler total is not counted once the expected
+  // sampler sequences are done. A repeated start for the SAME total while
+  // that sequence is still open is treated as idempotent: second-order
+  // samplers (heun, dpm2, ...) call the denoise model twice at i==0 and the
+  // engine emits the (0, total) start tick for both, which must claim one
+  // slot, not two. KNOWN LIMIT: a pre-sampler VAE-ENCODE tiling pass (init
+  // image + vae_tiling) whose tile count equals a sampler total would claim
+  // a slot ahead of the sampler; phase stats then mis-attribute and the
+  // denoiseTicks==0 warning at job end is the tell.
+  std::vector<int> denoiseTotals; // exact sampler totals to match
+  int denoiseTotalBound = 0;      // bounded-mode fallback (0 = off)
+  int maxDenoiseSequences = 1;    // cap on accepted sequence starts
+  int openDenoiseSequences = 0;   // accepted starts not yet completed
+  int openSequenceTotal = -1;     // total of the open sequence (-1 = none)
   std::chrono::steady_clock::time_point denoiseFirstTime;
   std::chrono::steady_clock::time_point denoiseLastTime;
-  int expectedDenoiseSequences = 1;
   int denoiseSequences = 0;
   int denoiseTicks = 0;
   int denoiseSteps = 0;  // sum of sampler "total" values across sequences
-  int segmentCount = 0;  // number of step==0 sequence-starts seen this job
   int observedTicks = 0; // total progress ticks seen this job (all phases)
 };
 
@@ -84,22 +111,54 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   // conditioner/denoise/vae timings remain available for runtimeStats().
   const auto now = std::chrono::steady_clock::now();
   auto& ctx = g_progressCtx;
-
-  // A step==0 tick marks the start of a new progress sequence. The very first
-  // tick opens the first sequence as a defensive fallback for engines that
-  // omit the start tick.
-  const bool startsSequence = step == 0 || ctx.observedTicks == 0;
-  if (startsSequence)
-    ++ctx.segmentCount;
   ++ctx.observedTicks;
 
-  // The leading sequences are the known sampler invocations: one for video and
-  // one per image batch item. Subsequent sequences are VAE tiling and must not
-  // inflate denoiseMs.
-  if (ctx.segmentCount <= ctx.expectedDenoiseSequences) {
+  // Attribute the tick to the denoise window (see the ProgressCtx comment).
+  // Three gates: the total must look like a sampler total (exact match, or
+  // within the bounded-mode bound); a sequence may only open on a step==0
+  // start while fewer than maxDenoiseSequences starts have been accepted;
+  // and non-start ticks count only while an accepted sequence is still open
+  // (a step==total tick completes it). Together these keep a later encoder /
+  // VAE sequence whose total collides with a sampler total from opening —
+  // or extending — the denoise window once the expected sampler sequences
+  // have started and completed.
+  bool totalMatches = false;
+  if (!ctx.denoiseTotals.empty()) {
+    totalMatches =
+        std::find(ctx.denoiseTotals.begin(), ctx.denoiseTotals.end(), steps) !=
+        ctx.denoiseTotals.end();
+  } else if (ctx.denoiseTotalBound > 0) {
+    totalMatches = steps > 0 && steps <= ctx.denoiseTotalBound;
+  }
+  bool isDenoise = false;
+  bool isNewSequence = false;
+  if (totalMatches) {
+    if (step == 0) {
+      if (ctx.openDenoiseSequences > 0 && steps == ctx.openSequenceTotal) {
+        // Second-order samplers emit the (0, total) start tick twice for one
+        // invocation (the engine fires it on step == 1 and step == -1);
+        // a repeated start for the open sequence is the same sequence.
+        isDenoise = true;
+      } else if (ctx.denoiseSequences < ctx.maxDenoiseSequences) {
+        ++ctx.openDenoiseSequences;
+        ctx.openSequenceTotal = steps;
+        isDenoise = true;
+        isNewSequence = true;
+      }
+    } else if (ctx.openDenoiseSequences > 0) {
+      isDenoise = true;
+      if (step == steps) {
+        --ctx.openDenoiseSequences; // completed: later same-total sequences
+                                    // must not reopen the denoise window
+        if (ctx.openDenoiseSequences == 0)
+          ctx.openSequenceTotal = -1;
+      }
+    }
+  }
+  if (isDenoise) {
     if (ctx.denoiseTicks == 0)
       ctx.denoiseFirstTime = now;
-    if (startsSequence) {
+    if (isNewSequence) {
       ++ctx.denoiseSequences;
       ctx.denoiseSteps += steps;
     }
@@ -166,6 +225,16 @@ PhaseStats computePhaseStats(
     // gives no interval to measure, so denoise/rate stay 0.
     ps.conditionerMs = toMs(ctx.denoiseFirstTime - t0);
     ps.vaeMs = toMs(tGen - ctx.denoiseLastTime);
+  } else if (ctx.observedTicks > 0) {
+    // Progress arrived but nothing matched the expected sampler totals —
+    // either the matcher is wrong for this engine/job shape or another
+    // phase's sequence consumed the start cap. Say so instead of silently
+    // reporting zeroed phase stats.
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "no progress tick matched the sampler totals (" +
+            std::to_string(ctx.observedTicks) +
+            " ticks observed); phase timings unavailable for this job");
   }
   if (ps.conditionerMs < 0.0)
     ps.conditionerMs = 0.0; // clamp tiny negative jitter
@@ -183,21 +252,17 @@ bool sdAbortCallback(void* /*data*/) {
 }
 
 // RAII wrapper for the sd_image_t* array returned by generate_image().
-// Frees each image's pixel buffer and the array itself on destruction,
-// even if an exception is thrown mid-iteration (e.g. in PNG encoding or
-// outputCallback).  Call release(i) after processing image i to free
-// its pixel buffer immediately rather than waiting until destruction.
+// The engine owns the array and every pixel buffer in it; the matching
+// deallocator is free_sd_images(), called once on destruction — even if an
+// exception is thrown mid-iteration (e.g. in PNG encoding or
+// outputCallback). No engine allocation is ever passed to the addon's
+// free() (allocator/CRT boundaries differ on Windows prebuilds and mixing
+// them corrupts the heap), so the whole batch stays resident until the
+// wrapper goes out of scope.
 class SdImageBatch {
 public:
   SdImageBatch(sd_image_t* data, int count) : data_(data), count_(count) {}
-  ~SdImageBatch() {
-    if (!data_)
-      return;
-    for (int i = 0; i < count_; ++i) {
-      free(data_[i].data);
-    }
-    free(data_);
-  }
+  ~SdImageBatch() { free_sd_images(data_, count_); }
 
   SdImageBatch(const SdImageBatch&) = delete;
   SdImageBatch& operator=(const SdImageBatch&) = delete;
@@ -209,14 +274,6 @@ public:
     if (!data_)
       throw std::runtime_error("SdImageBatch: null data");
     return data_[i];
-  }
-
-  // Release pixel buffer for image i immediately after it has been consumed.
-  void release(int i) {
-    if (!data_)
-      return;
-    free(data_[i].data);
-    data_[i].data = nullptr;
   }
 
 private:
@@ -310,6 +367,28 @@ void SdModel::load() {
   params.n_threads = config_.nThreads;
   params.flash_attn = config_.flashAttn;
   params.diffusion_flash_attn = config_.diffusionFlashAttn;
+  // The engine defaults to lazy weight loading (eager_load = false), which
+  // moves per-module weight loads INSIDE generate_*(): the model loader then
+  // emits progress ticks (total = tensor count) that reach JS consumers
+  // indistinguishably from sampler ticks, and the first job's conditionerMs
+  // absorbs weight-load time. On desktop, load eagerly at new_sd_ctx()
+  // instead — the cost lands in modelLoadMs where this addon already
+  // accounts for it, and generate_*() emits only sampler and VAE-tiling
+  // sequences. (The engine auto-downgrades eager_load when graph-cut layer
+  // splitting is active; this addon does not enable that mode.)
+  //
+  // Mobile stays lazy: eager loading front-loads every module's full weight
+  // prep into load(), which pushed the Device Farm API-behavior and
+  // model-loading suites past their 20-minute timeouts on a Pixel 9 (those
+  // suites never generate, so under lazy loading they never pay weight
+  // prep). Loader ticks inside generate_*() are still excluded from the
+  // denoise stats by the total matcher — tensor counts do not collide with
+  // step totals in practice — at the cost of first-job conditionerMs skew.
+#if defined(__ANDROID__) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
+  params.eager_load = false;
+#else
+  params.eager_load = true;
+#endif
 
   // Load DL GPU backend modules before probing devices / creating the SD
   // context. In GGML_BACKEND_DL mode, device enumeration is empty until these
@@ -318,28 +397,59 @@ void SdModel::load() {
 
   // -- Memory management -----------------------------------------------------
   params.enable_mmap = config_.mmap;
-  params.vae_decode_only = config_.vaeDecodeOnly;
-
-  // Keep reusable ctx semantics explicit. sd.cpp defaults may free parameter
-  // buffers after a generation, but this addon runs many jobs through one
-  // sd_ctx_t.
-  params.free_params_immediately = config_.freeParamsImmediately;
-  params.offload_params_to_cpu = config_.offloadToCpu;
-  params.keep_clip_on_cpu = config_.keepClipOnCpu;
-  params.keep_vae_on_cpu = config_.keepVaeOnCpu;
   params.vae_auto_cpu_fallback = config_.vaeAutoCpuFallback;
   params.vae_auto_cpu_fallback_memory_ratio =
       config_.vaeAutoCpuFallbackMemoryRatio;
 
-  // Also set the newer backend spec so offload intent survives sd.cpp builds
-  // that route parameter placement through params_backend.
-  params.params_backend = config_.offloadToCpu ? "cpu" : nullptr;
+  params.max_vram =
+      config_.maxVramSpec.empty() ? nullptr : config_.maxVramSpec.c_str();
+  params.stream_layers = config_.streamLayers;
+
+  // An explicit assignment takes priority; otherwise retain the supported
+  // compatibility mappings for the legacy CPU-placement flags.
+  std::string paramsBackend = config_.paramsBackendSpec;
+  if (paramsBackend.empty()) {
+    if (config_.offloadToCpu) {
+      paramsBackend = "cpu";
+    } else {
+      if (config_.keepClipOnCpu)
+        paramsBackend = "clip=cpu";
+      if (config_.keepVaeOnCpu)
+        paramsBackend += paramsBackend.empty() ? "vae=cpu" : ",vae=cpu";
+    }
+  } else if (
+      config_.offloadToCpu || config_.keepClipOnCpu || config_.keepVaeOnCpu) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "params_backend overrides legacy CPU placement flags");
+  }
+  params.params_backend =
+      paramsBackend.empty() ? nullptr : paramsBackend.c_str();
+
+  // August always loads the VAE capabilities needed by the selected model and
+  // keeps model-manager residency across jobs. These legacy controls therefore
+  // have no direct C API equivalent.
+  if (config_.vaeDecodeOnly)
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "vae_decode_only is ignored by the 2026-08-11 engine");
+  if (config_.freeParamsImmediately)
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "free_params_immediately is ignored by the 2026-08-11 engine");
 
   params.preferred_gpu_backend =
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
 
   std::string mainGpuBackend;
-  if (!config_.mainGpu.empty() &&
+  if (!config_.backendSpec.empty()) {
+    params.backend = config_.backendSpec.c_str();
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "Explicit stable-diffusion backend assignment '" + config_.backendSpec +
+            "'");
+  } else if (
+      !config_.mainGpu.empty() &&
       sd_backend_selection::parseConfigDeviceString(config_.device) ==
           sd_backend_selection::ConfigDevice::Gpu) {
     auto mainGpuSpec = sd_backend_selection::parseMainGpu(config_.mainGpu);
@@ -442,12 +552,16 @@ std::any SdModel::process(const std::any& input) {
   cancelRequested_.store(false);
   g_progressCtx.job = &job;
   g_progressCtx.startTime = std::chrono::steady_clock::now();
-  // Reset phase-boundary capture for this job.
-  g_progressCtx.expectedDenoiseSequences = 1;
+  // Reset phase-boundary capture for this job. The image/video paths below
+  // fill in the denoise-total matchers once the step counts are known.
+  g_progressCtx.denoiseTotals.clear();
+  g_progressCtx.denoiseTotalBound = 0;
+  g_progressCtx.maxDenoiseSequences = 1;
+  g_progressCtx.openDenoiseSequences = 0;
+  g_progressCtx.openSequenceTotal = -1;
   g_progressCtx.denoiseSequences = 0;
   g_progressCtx.denoiseTicks = 0;
   g_progressCtx.denoiseSteps = 0;
-  g_progressCtx.segmentCount = 0;
   g_progressCtx.observedTicks = 0;
   sd_set_progress_callback(sdProgressCallback, nullptr);
   g_abortModel = this;
@@ -568,7 +682,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   //
   // Three code paths depending on model architecture and input shape:
   //
-  //   FLUX2 (FLUX2_FLOW_PRED) with N reference images (N>=1):
+  //   FLUX2 (prediction='flux2_flow', engine-side auto-detected) with N
+  //   reference images (N>=1):
   //     Uses ref_images -- in-context conditioning. Each reference image is
   //     VAE-encoded into separate latent tokens that the FLUX transformer
   //     attends to via joint attention with distinct RoPE positions. The
@@ -589,6 +704,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   //
   sd_image_t initImg{}; // single-image (SDEdit or 1x FLUX)
   std::vector<uint8_t> initPng;
+  // Owned storage for genParams.ref_image_args; must outlive
+  // generate_image(). Replaces the removed auto_resize_ref_image /
+  // increase_ref_index fields with the engine's key=value spec.
+  std::string refImageArgs;
 
   // RAII wrapper for multi-image FLUX fusion reference images. Automatically
   // frees pixel buffers on scope exit (normal or exceptional) using a custom
@@ -608,9 +727,9 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       new std::vector<sd_image_t>(), refImgsDeleter);
 
   if (gen.mode == "img2img") {
-    const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED ||
-                              config_.prediction == FLUX_FLOW_PRED;
-    const bool isFlux2 = config_.prediction == FLUX2_FLOW_PRED;
+    const bool isFluxFamily =
+        config_.flux2Requested || config_.prediction == FLUX_FLOW_PRED;
+    const bool isFlux2 = config_.flux2Requested;
     const size_t nMulti = job.initImagesBytes.size();
 
     // -- Input validation: mutual exclusion + FLUX-only for multi -----------
@@ -656,8 +775,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       // Output dimensions come from the JS shim (addon.js::_fillDimsFromImage,
       // which falls back to the first reference's size when the caller omits
       // width/height). C++ callers using the binding directly must supply
-      // both dimensions explicitly. auto_resize_ref_image handles the
-      // remaining refs.
+      // both dimensions explicitly. ref_image_args' resize_before_vae
+      // handles the remaining refs.
 
       // clang-format off
       // NOTE: Homebrew and apt.llvm.org builds of clang-format-19 disagree on
@@ -679,12 +798,15 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
       genParams.ref_images = refImgs->data();
       genParams.ref_images_count = static_cast<int>(nMulti);
-      genParams.auto_resize_ref_image = gen.autoResizeRefImage;
       // See SdGenConfig::increaseRefIndex for semantics. For FLUX2-klein the
-      // CLI default (false) is what produces visible fusion: both refs share
-      // a RoPE slot and their features blend in attention. Setting true
-      // tends to make one ref dominate.
-      genParams.increase_ref_index = gen.increaseRefIndex;
+      // CLI default (false -> ref_index_mode=fixed) is what produces visible
+      // fusion: both refs share a RoPE slot and their features blend in
+      // attention. Setting true tends to make one ref dominate.
+      refImageArgs =
+          std::string("ref_index_mode=") +
+          (gen.increaseRefIndex ? "increase" : "fixed") +
+          ",resize_before_vae=" + (gen.autoResizeRefImage ? "true" : "false");
+      genParams.ref_image_args = refImageArgs.c_str();
       // Fall through to the generate_image() call below.
     } else {
       // -- Single-image path (existing behaviour) --------------------------
@@ -718,8 +840,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
       if (isFluxFamily) {
         // FLUX in-context conditioning: ref_images handles its own resizing
-        // via auto_resize_ref_image, so only override genParams dimensions
-        // when they are still at the 512x512 default.
+        // via ref_image_args' resize_before_vae, so only override genParams
+        // dimensions when they are still at the 512x512 default.
         if (gen.width == 512 && gen.height == 512) {
           genParams.width = imgW;
           genParams.height = imgH;
@@ -734,7 +856,11 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
         genParams.ref_images = &initImg;
         genParams.ref_images_count = 1;
-        genParams.auto_resize_ref_image = gen.autoResizeRefImage;
+        refImageArgs =
+            std::string("ref_index_mode=") +
+            (gen.increaseRefIndex ? "increase" : "fixed") +
+            ",resize_before_vae=" + (gen.autoResizeRefImage ? "true" : "false");
+        genParams.ref_image_args = refImageArgs.c_str();
       } else {
         // SDEdit path -- the vcpkg version of generate_image() rounds
         // width/height UP to a spatial multiple (typically 8) before
@@ -805,12 +931,33 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
   // -- Generate --------------------------------------------------------------
   // stable-diffusion.cpp invokes sample() once per image batch item before
-  // decoding all final latents. Capture every leading sampler sequence.
-  g_progressCtx.expectedDenoiseSequences = gen.batchCount;
+  // decoding all final latents; each sampler sequence reports total ==
+  // gen.steps.
+  g_progressCtx.denoiseTotals = {gen.steps};
+  // One sampler sequence per batch item; the sequence-start gate must admit
+  // all of them.
+  g_progressCtx.maxDenoiseSequences = std::max(1, gen.batchCount);
+  // The SDEdit path (init_image set) slices the sigma schedule by strength,
+  // so its sampler sequence reports t_enc + 1 steps (t_enc = steps *
+  // strength, clamped to steps - 1 — mirrors the engine, which gates the
+  // slice on strength < 1 for init-image jobs). Match that total ONLY when
+  // that path is actually taken: the FLUX ref-image branch never sets
+  // init_image and keeps the full count, and a blanket tEnc+1 entry at low
+  // strength (e.g. 1 at strength 0) would let an unrelated single-tile /
+  // single-step sequence claim a denoise slot.
+  if (gen.mode == "img2img" && genParams.init_image.data != nullptr) {
+    int tEnc = static_cast<int>(static_cast<float>(gen.steps) * gen.strength);
+    if (tEnc >= gen.steps)
+      tEnc = gen.steps - 1;
+    g_progressCtx.denoiseTotals.push_back(tEnc + 1);
+  }
   const auto t0 = std::chrono::steady_clock::now();
 
-  SdImageBatch results(
-      generate_image(sdCtx_.get(), &genParams), gen.batchCount);
+  sd_image_t* genImages = nullptr;
+  int genImageCount = 0;
+  const bool genOk =
+      generate_image(sdCtx_.get(), &genParams, &genImages, &genImageCount);
+  SdImageBatch results(genImages, genImageCount);
 
   // VAE-decode boundary: captured before PNG encode / upscale / output so
   // vaeMs reflects only the in-library decode, not post-processing.
@@ -823,6 +970,16 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
     free(genParams.mask_image.data);
   }
 
+  if (!genOk) {
+    if (cancelRequested_.load()) {
+      throw sd_errors::makeCancelledError();
+    }
+    throw StatusError(general_error::InternalError, "generate_image() failed");
+  }
+  if (genImages == nullptr || genImageCount <= 0) {
+    throw StatusError(
+        general_error::InternalError, "generate_image() returned no images");
+  }
   int outputCount = 0;
   // RuntimeStats describe emitted PNGs. Keep generation dimensions as the
   // fallback so a failed encode/callback does not report an upscaled size.
@@ -861,8 +1018,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
         }
       }
     }
-    results.release(
-        i); // free pixel buffer immediately; destructor handles the rest
     if (cancelRequested_.load()) {
       wasCancelled = true;
     }
@@ -953,6 +1108,10 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   qvac_lib_inference_addon_sd::applySdVidGenHandlers(
       vid, parsed.get<picojson::object>());
   const auto& paramsObject = parsed.get<picojson::object>();
+  const bool isMiniMaxH3 = videoModelCapabilities_.isMiniMaxH3;
+  const bool hasReferenceOptions =
+      paramsObject.find("reference_attention_strength") != paramsObject.end() ||
+      paramsObject.find("reference_downscale_factor") != paramsObject.end();
 
   if (vid.mode != "txt2vid" && vid.mode != "img2vid")
     throw StatusError(
@@ -960,9 +1119,85 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
         "processVideo: unsupported mode '" + vid.mode +
             "' (expected txt2vid or img2vid)");
 
-  const bool hasReferenceOptions =
-      paramsObject.find("reference_attention_strength") != paramsObject.end() ||
-      paramsObject.find("reference_downscale_factor") != paramsObject.end();
+  if (isMiniMaxH3) {
+    // H3 currently supports text-to-audio-video only. Keep this native check
+    // authoritative so renamed GGUFs and bindings that bypass video.ts cannot
+    // enter unsupported image/reference/control paths.
+    if (vid.mode != "txt2vid" || !job.initImageBytes.empty() ||
+        !job.initImagesBytes.empty())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 supports text-to-audio-video only; image conditioning "
+          "(img2vid/init_image) is not supported");
+    if (!config_.highNoiseDiffusionModelPath.empty())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 does not support a Wan 2.2 high-noise diffusion model");
+    if (!job.controlFramesBytes.empty() ||
+        paramsObject.find("vace_strength") != paramsObject.end())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 does not support control_frames or vace_strength");
+    if (paramsObject.find("strength") != paramsObject.end() ||
+        paramsObject.find("img_cfg_scale") != paramsObject.end())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 does not support image-conditioning strength or "
+          "img_cfg_scale");
+    if (!job.referenceImagesBytes.empty() || hasReferenceOptions ||
+        !vid.loraPath.empty() ||
+        paramsObject.find("lora_strength") != paramsObject.end() ||
+        paramsObject.find("stg_scale") != paramsObject.end() ||
+        paramsObject.find("stg_block") != paramsObject.end())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 does not support reference_images, reference options, "
+          "or video LoRAs");
+    static constexpr std::array<const char*, 6> kWan22MoeParams = {
+        "high_noise_steps",
+        "high_noise_sampler",
+        "high_noise_scheduler",
+        "high_noise_cfg_scale",
+        "high_noise_flow_shift",
+        "moe_boundary"};
+    for (const char* key : kWan22MoeParams) {
+      if (paramsObject.find(key) != paramsObject.end())
+        throw StatusError(
+            general_error::InvalidArgument,
+            std::string("MiniMax-H3 does not support ") + key +
+                " (Wan 2.2 high-noise expert control)");
+    }
+
+    if (!vid.widthExplicit)
+      vid.width = 960;
+    if (!vid.heightExplicit)
+      vid.height = 544;
+    if (!vid.videoFramesExplicit)
+      vid.videoFrames = 124;
+    if (!vid.fpsExplicit)
+      vid.fps = 24;
+    if (!vid.sampleStepsExplicit)
+      vid.sampleSteps = 8;
+    if (!vid.schedulerExplicit)
+      vid.scheduler = DISCRETE_SCHEDULER;
+    if (!vid.cfgScaleExplicit)
+      vid.cfgScale = 1.0f;
+    if (vid.cfgScale != 1.0f)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 requires cfg_scale to be exactly 1.0; got: " +
+              std::to_string(vid.cfgScale));
+    if (vid.scheduler != DISCRETE_SCHEDULER)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 requires scheduler='discrete'");
+    if (vid.fps != 24)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 output is always 24 FPS; got: " +
+              std::to_string(vid.fps));
+  }
+
   const bool hasReferenceImages = !job.referenceImagesBytes.empty();
   if (hasReferenceImages && vid.loraPath.empty())
     throw StatusError(
@@ -1038,12 +1273,22 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
         "txt2vid does not accept init_image; use img2vid instead");
 
   // -- Model-aware frame/dimension validation -------------------------------
-  // The generic handler enforces Wan's 4*k+1 frame rule and 16-pixel spatial
-  // grid. Spatial alignment is derived from the model's GGUF tensor
+  // The generic handler only validates scalar types and positivity. Frame
+  // packing and spatial alignment are derived from the model's GGUF tensor
   // descriptors at load time, rather than the caller-controlled model path.
   // This keeps renamed TI2V checkpoints and direct native callers on the
   // correct 32-pixel grid.
-  if (isLtxModel_) {
+  if (isMiniMaxH3) {
+    if (vid.videoFrames < videoModelCapabilities_.minimumVideoFrames ||
+        (vid.videoFrames - videoModelCapabilities_.frameCountOffset) %
+                videoModelCapabilities_.frameCountStride !=
+            0)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 video_frames must be of the form (17*k + 5) with k >= "
+          "0. Got: " +
+              std::to_string(vid.videoFrames));
+  } else if (isLtxModel_) {
     if (vid.videoFrames < 9 || (vid.videoFrames - 1) % 8 != 0 ||
         vid.videoFrames > 257)
       throw StatusError(
@@ -1051,6 +1296,15 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
           "LTX-2 video_frames must be of the form (8*k + 1) in [9, 257] "
           "(9, 17, 25, 33, ..., 257). Got: " +
               std::to_string(vid.videoFrames));
+  } else if (
+      vid.videoFrames < videoModelCapabilities_.minimumVideoFrames ||
+      (vid.videoFrames - videoModelCapabilities_.frameCountOffset) %
+              videoModelCapabilities_.frameCountStride !=
+          0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "video_frames must be an integer >= 5 of the form (4*k + 1). Got: " +
+            std::to_string(vid.videoFrames));
   }
   const int spatialAlignment = videoModelCapabilities_.spatialAlignment;
   if (vid.width % spatialAlignment != 0 || vid.height % spatialAlignment != 0)
@@ -1241,22 +1495,43 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   if (vid.cacheThreshold > 0.0f)
     vidParams.cache.reuse_threshold = vid.cacheThreshold;
 
+  const int effectiveVideoFps =
+      sd_get_effective_video_fps(sdCtx_.get(), &vidParams);
+  if (effectiveVideoFps <= 0)
+    throw StatusError(
+        general_error::InternalError,
+        "processVideo: sd_get_effective_video_fps() returned an invalid rate");
+
   // -- Generate -------------------------------------------------------------
-  // Wan 2.1 / TI2V-5B invoke one sampler. Wan 2.2 A14B normally invokes the
-  // high-noise expert first and the low-noise expert second, so include both
-  // leading sequences in the denoise timing window. The -1 sentinel derives
-  // the switch point from moe_boundary; a zero boundary never selects the
-  // high-noise sampler. Later VAE tiling sequences remain excluded by
-  // sdProgressCallback().
+  // Wan 2.1 / TI2V-5B invoke one sampler (total == vid.sampleSteps). Wan 2.2
+  // A14B invokes the high-noise expert first and the low-noise expert
+  // second. With explicit highNoiseSteps the engine's schedule spans
+  // sampleSteps + highNoiseSteps sigmas and is split at the expert boundary:
+  // the high-noise sampler reports total == highNoiseSteps and the low-noise
+  // sampler total == sampleSteps (sample_params.sample_steps IS the
+  // low-noise count; the high-noise schedule rides on top — the two are also
+  // counted separately in the cumulative stats below). The -1 sentinel
+  // instead derives the switch point from moe_boundary inside the engine —
+  // there total_steps == sampleSteps and each expert reports a slice of it,
+  // so the split is unknown here: fall back to bounded matching (any total
+  // <= vid.sampleSteps, capped at the expected sequence count).
+  // Encoder/VAE sequences remain excluded by sdProgressCallback().
   const bool hasHighNoiseExpert = !config_.highNoiseDiffusionModelPath.empty();
-  g_progressCtx.expectedDenoiseSequences =
-      qvac_lib_inference_addon_sd::expectedVideoDenoiseSequences(
-          hasHighNoiseExpert, vid.highNoiseSteps, vid.moeBoundary);
+  if (hasHighNoiseExpert && vid.highNoiseSteps > 0) {
+    g_progressCtx.denoiseTotals = {vid.highNoiseSteps, vid.sampleSteps};
+    g_progressCtx.maxDenoiseSequences = 2; // one sequence per expert
+  } else if (hasHighNoiseExpert) {
+    g_progressCtx.denoiseTotalBound = vid.sampleSteps;
+    g_progressCtx.maxDenoiseSequences =
+        qvac_lib_inference_addon_sd::expectedVideoDenoiseSequences(
+            hasHighNoiseExpert, vid.highNoiseSteps, vid.moeBoundary);
+  } else {
+    g_progressCtx.denoiseTotals = {vid.sampleSteps};
+  }
   const auto t0 = std::chrono::steady_clock::now();
 
-  // Upstream's master API returns success as a bool and hands back frames /
-  // audio via out-params. This addon delivers video-only (MJPG AVI), so we
-  // release any audio track the model produced to avoid leaking it.
+  // Upstream's API returns success as a bool and hands back frames / audio via
+  // out-params. Preserve a generated audio track in the emitted AVI.
   int numFramesOut = 0;
   sd_image_t* rawFrames = nullptr;
   sd_audio_t* rawAudio = nullptr;
@@ -1305,9 +1580,13 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   }
 
   // -- Encode AVI and deliver ----------------------------------------------
-  // audio.get() is null for Wan / silent LTX runs, yielding a video-only AVI.
+  // audio.get() is null for Wan / silent runs, yielding a video-only AVI.
   auto avi = qvac_lib_inference_addon_sd::encodeFramesToAvi(
-      frames.data(), frames.count(), vid.fps, /*jpegQuality=*/90, audio.get());
+      frames.data(),
+      frames.count(),
+      effectiveVideoFps,
+      /*jpegQuality=*/90,
+      audio.get());
 
   if (!avi.empty() && job.outputCallback) {
     job.outputCallback(avi);
@@ -1349,7 +1628,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   lastStats_.emplace_back("height", static_cast<int64_t>(vid.height));
   lastStats_.emplace_back("seed", vid.seed);
   lastStats_.emplace_back("videoFrames", static_cast<int64_t>(frames.count()));
-  lastStats_.emplace_back("fps", static_cast<int64_t>(vid.fps));
+  lastStats_.emplace_back("fps", static_cast<int64_t>(effectiveVideoFps));
   // LTX-2 audio: 0/1 flag + sample rate (0 when no audio track was produced).
   lastStats_.emplace_back("hasAudio", audio ? 1 : 0);
   lastStats_.emplace_back(

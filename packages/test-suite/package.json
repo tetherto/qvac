@@ -1,0 +1,86 @@
+{
+  "name": "@qvac/test-suite",
+  "version": "0.11.1",
+  "description": "Generic distributed testing framework for multi-platform execution",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "qvac-test": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "react-native": "./dist/mobile-runtime.js",
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./mobile": {
+      "types": "./dist/mobile-runtime.d.ts",
+      "require": "./dist/mobile-runtime.js",
+      "import": "./dist/mobile-runtime.js",
+      "default": "./dist/mobile-runtime.js"
+    }
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "lunte && eslint src/",
+    "lint:fix": "lunte --fix && eslint --fix src/",
+    "format": "prettier --check 'src/**/*.{ts,tsx,js,json}' 'templates/**/*.{ts,tsx,js,json}'",
+    "format:fix": "prettier --write 'src/**/*.{ts,tsx,js,json}' 'templates/**/*.{ts,tsx,js,json}'",
+    "check": "npm run lint && npm run format"
+  },
+  "keywords": [
+    "testing",
+    "distributed",
+    "mqtt",
+    "multi-platform",
+    "qvac",
+    "sdk"
+  ],
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/test-suite"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://qvac.tether.io",
+  "dependencies": {
+    "aedes": "^0.51.3",
+    "commander": "^14.0.2",
+    "dotenv": "^16.4.5",
+    "esbuild": "^0.27.0",
+    "mqtt": "^5.14.1",
+    "websocket-stream": "^5.5.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "lunte": "^1.8.3",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^5.3.3"
+  }
+}

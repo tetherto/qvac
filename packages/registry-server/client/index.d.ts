@@ -26,6 +26,16 @@ export interface QVACModelEntry {
   notes?: string
   tags?: string[]
   blobBinding: QVACBlobBinding
+  /**
+   * Raw GGUF key-value metadata extracted at ingest, serialised as a JSON string.
+   *
+   * - Only present for GGUF artifacts; absent for other formats and when
+   *   extraction failed (e.g. some GGUF v3 files).
+   * - Tensor infos are discarded and every `tokenizer.*` key is stripped.
+   * - For sharded models only the first shard (`-00001-of-`) is described.
+   * - Numeric values that exceeded the safe integer range are stringified.
+   */
+  ggufMetadata?: string
 }
 
 export interface QVACDownloadedArtifactStream {

@@ -175,22 +175,10 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
   Request reqB = makeStubRequest();
   Request reqC = makeStubRequest();
 
-  // (nPast, nSlides, thinkingDiscards, req)
-  stats.accumulateSlot(
-      /*nPast=*/0,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/1,
-      reqA);
-  stats.accumulateSlot(
-      /*nPast=*/0,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/0,
-      reqB);
-  stats.accumulateSlot(
-      /*nPast=*/0,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/2,
-      reqC);
+  // (nPast, thinkingDiscards, req)
+  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/1, reqA);
+  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/0, reqB);
+  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/2, reqC);
 
   EXPECT_EQ(stats.thinkingBlockDiscards, 3);
 }
@@ -198,7 +186,7 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
 TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsThinkingDiscards) {
   RuntimeStatsSnapshot stats;
   Request req = makeStubRequest();
-  stats.accumulateSlot(0, 0, 5, req);
+  stats.accumulateSlot(0, 5, req);
   EXPECT_EQ(stats.thinkingBlockDiscards, 5);
 
   stats.reset();
@@ -224,11 +212,7 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
   RuntimeStatsSnapshot stats;
   // Same call the cancel path makes via accumulateSlotRuntimeStats: nothing
   // was processed, so nPast and the generated vector are empty.
-  stats.accumulateSlot(
-      /*nPast=*/0,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/0,
-      req);
+  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 0);
 }
@@ -248,11 +232,7 @@ TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
   ASSERT_TRUE(req.isPrefillComplete());
 
   RuntimeStatsSnapshot stats;
-  stats.accumulateSlot(
-      /*nPast=*/42,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/0,
-      req);
+  stats.accumulateSlot(/*nPast=*/42, /*thinkingDiscards=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 42);
 }

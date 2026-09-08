@@ -107,10 +107,58 @@ test('cancel settles the active response', async (t) => {
   const { gen, cancelCalls } = createHarness(() => Promise.resolve(true))
   const response = await gen.run('cancel me')
 
-  await gen.cancel()
+  const cancellation = gen.cancel()
+  emitEnd(gen)
+  await cancellation
 
   t.is(cancelCalls(), 1)
   t.is(await errorCode(response.await()), ERR_CODES.CANCELLED)
+})
+
+test('cancel consumes the native cancellation error before settling', async (t) => {
+  const { gen } = createHarness(() => Promise.resolve(true))
+  const response = await gen.run('cancel with native error')
+
+  const cancellation = gen.cancel()
+  gen._addonOutputCallback(null, null, null, 'MiniMax generation cancelled')
+  await cancellation
+
+  t.is(await errorCode(response.await()), ERR_CODES.CANCELLED)
+})
+
+test('cancel does not wedge when the pending job fails to start', async (t) => {
+  const admission = deferred()
+  const { gen, cancelCalls } = createHarness(() => admission.promise)
+
+  const run = gen.run('cancel during admission')
+  for (let tick = 0; tick < 100 && !gen._job.active; tick++) await Promise.resolve()
+  t.ok(gen._job.active, 'job is admitted and awaiting runJob')
+
+  const cancellation = gen.cancel()
+  admission.reject(new Error('native admission failed'))
+
+  t.is(await errorCode(run), ERR_CODES.FAILED_TO_START_JOB)
+  await cancellation
+  t.is(cancelCalls(), 1)
+
+  await gen.cancel()
+  t.is(cancelCalls(), 1, 'a later cancel is not stuck on a cached promise')
+})
+
+test('cancel does not wedge when the pending job is refused', async (t) => {
+  const admission = deferred()
+  const { gen } = createHarness(() => admission.promise)
+
+  const run = gen.run('cancel during refused admission')
+  for (let tick = 0; tick < 100 && !gen._job.active; tick++) await Promise.resolve()
+  t.ok(gen._job.active, 'job is admitted and awaiting runJob')
+
+  const cancellation = gen.cancel()
+  admission.resolve(false)
+
+  t.is(await errorCode(run), ERR_CODES.JOB_ALREADY_RUNNING)
+  await cancellation
+  t.pass('cancel settled without a native terminal event')
 })
 
 test('cancel on an idle instance does not invoke native cancellation', async (t) => {
@@ -137,6 +185,9 @@ test('cancel holds the next admission until native cancellation finishes', async
   t.is(admissions, 1)
 
   cancellation.resolve()
+  await Promise.resolve()
+  t.is(admissions, 1, 'second run waits for the cancelled native terminal event')
+  emitEnd(gen)
   await cancelPromise
   t.is(await errorCode(first.await()), ERR_CODES.CANCELLED)
   const second = await secondPromise
@@ -174,6 +225,7 @@ test('concurrent cancellation requests share one native cancellation', async (t)
   const first = gen.cancel()
   const second = gen.cancel()
   cancellation.resolve()
+  emitEnd(gen)
   await Promise.all([first, second])
 
   t.is(nativeCancelCalls, 1)

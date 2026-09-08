@@ -7,7 +7,6 @@
     "finetuningArchs": ["runFinetuningArchsTest"],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
-    "slidingContext": ["runSlidingContextTest"],
     "imageFruitPlate": ["runImageFruitPlateTest"],
     "imageMmprojGpu": ["runImageMmprojGpuTest"],
     "imageTileMode": ["runQwen35ImageTileModeTokensTest"],
@@ -28,7 +27,6 @@
       "runModelLoadingTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
-      "runMropeSlidingContextTest",
       "runQwen35Test",
       "runTurboquantTest",
       "runUtf8OutputTest"
@@ -47,14 +45,12 @@
       "runFinetuningArchsTest"
     ],
     "funcShardB": [
-      "runSlidingContextTest",
       "runKvCacheTypeDefaultsTest",
       "runCacheStateMachineTest",
       "runUnloadThrowingListenerTest"
     ],
     "funcShardC": [
       "runToolCallingTest",
-      "runMropeSlidingContextTest",
       "runReasoningTest",
       "runGenerationParamsTest"
     ],

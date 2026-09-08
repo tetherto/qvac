@@ -430,6 +430,44 @@ backend runs one process on one device with optional CPU offload. Use dimensions
 that are multiples of 32 for this TI2V model so the emitted AVI dimensions match
 the requested dimensions.
 
+## MiniMax-H3 Text-to-Audio-Video
+
+MiniMax-H3 is supported for prompt-only video generation. Download the matching
+FL2VA denoiser, Qwen3-VL text encoder, video VAE, and audio VAE:
+
+```sh
+./scripts/download-model-minimax-h3.sh --q4
+```
+
+The initial integration intentionally rejects init images, control frames, and
+reference images. Use a 32-pixel spatial grid and a `17*k + 5` frame count.
+H3 is distilled: `cfg_scale` must be `1.0`, and the output stream is always
+24 FPS with its native stereo audio.
+
+```js
+const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
+const model = new VideoStableDiffusion({
+  files: {
+    model: '/models/minimax-h3/minimax_h3_fl2va_pruned-Q4_K.gguf',
+    llm: '/models/minimax-h3/qwen3vl_32b_minimax_h3-Q4_K_M.gguf',
+    vae: '/models/minimax-h3/vae/minimax_h3_video_vae_fp16.safetensors',
+    audioVae: '/models/minimax-h3/vae/minimax_h3_audio_vae_fp32.safetensors'
+  },
+  config: { device: 'gpu', diffusion_fa: true, offload_to_cpu: true }
+})
+await model.load()
+const response = await model.run({
+  mode: 'txt2vid',
+  prompt: 'A cinematic close-up of a person enjoying coffee in warm morning light.',
+  width: 960,
+  height: 544,
+  video_frames: 124,
+  fps: 24,
+  steps: 8,
+  cfg_scale: 1.0
+})
+```
+
 ## LTX-2 Text-to-Video With Audio
 
 ```js
@@ -573,6 +611,12 @@ by 4x; two passes scale by 16x.
 All three wrappers return a `QvacResponse`.
 
 - Progress updates are JSON strings like `{"step":1,"total":20,"elapsed_ms":...}`.
+  The stream is multi-phase: sampler sequences (one per image batch item /
+  video expert, `total` = its step count) and, when `vae_tiling` is enabled,
+  VAE tile passes (`total` = tile count). Each sequence restarts at
+  `step: 0`, so a bar renderer should key on `total` changes rather than
+  assume a single monotonic sequence. Model weights load eagerly at
+  `load()`, not inside generation.
 - Image generation and ESRGAN emit PNG `Uint8Array` values.
 - Video generation emits one MJPG AVI `Uint8Array`.
 - If `opts.stats` is enabled, a `stats` event is emitted before completion.
@@ -609,6 +653,10 @@ During ESRGAN upscale, cancellation is honored between repeat passes.
 - Wan dimensions must be multiples of 16; LTX dimensions must be multiples of 32.
 - Wan frame counts use `(4*k + 1)`; LTX frame counts use `(8*k + 1)`.
 - LTX audio is muxed into AVI as IEEE-float PCM at 48 kHz.
+- On Linux the shipped prebuild must not hard-link any GPU loader
+  (`libvulkan`/`libOpenCL`/`libcuda`) — an integration test asserts this. For
+  local custom builds that legitimately do (e.g. `SD_CUDA=ON`), skip it with
+  `QVAC_SKIP_PREBUILD_LINK_CHECK=true`.
 
 ## Credits
 

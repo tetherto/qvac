@@ -55,6 +55,28 @@ test('loadModelOptionsToRequestSchema: omits fallbackSrc when not provided', (t)
   t.absent('fallbackSrc' in request)
 })
 
+test('loadModelOptionsToRequestSchema: carries the per-call security flags into the request', (t) => {
+  const request = loadModelOptionsToRequestSchema.parse({
+    modelSrc: 'https://huggingface.co/org/repo/resolve/main/model.gguf',
+    modelType: 'llm',
+    requireHttpChecksum: true,
+    requireSecureTransport: true
+  })
+
+  t.is(request.requireHttpChecksum, true)
+  t.is(request.requireSecureTransport, true)
+})
+
+test('loadModelOptionsToRequestSchema: omits the security flags when not provided', (t) => {
+  const request = loadModelOptionsToRequestSchema.parse({
+    modelSrc: 'registry://hf/known/model.gguf',
+    modelType: 'llm'
+  })
+
+  t.absent('requireHttpChecksum' in request)
+  t.absent('requireSecureTransport' in request)
+})
+
 test('loadModelOptionsToRequestSchema: points misplaced LLM config fields to modelConfig', (t) => {
   try {
     loadModelOptionsToRequestSchema.parse({

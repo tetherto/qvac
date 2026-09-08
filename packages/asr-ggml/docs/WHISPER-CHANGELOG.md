@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
-- Consume whisper-cpp 1.9.1#5 — the repo-reorg pin (sources move to the third_party/whisper.cpp git subtree in qvac-ext-lib-whisper.cpp; the registry-side GNUInstallDirs patch is absorbed into the subtree's declared delta). No API or behavior change.
+- Consume whisper-cpp 1.9.1#5 — the repo-reorg pin (sources move to the third_party/whisper.cpp git subtree in qvac-fabric-speech.cpp; the registry-side GNUInstallDirs patch is absorbed into the subtree's declared delta). No API or behavior change.
 
 ### Fixed
 
@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   smaller named helpers per the team coding standards. These are internal
   refactors with no public API change.
 - Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`whisper-cpp` override 1.9.1#3, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16 kernels (base f16 mean RTF 0.332 -> 0.097, base q8_0 0.127 -> 0.063, small f16 1.345 -> 0.343 on ubuntu-24.04-arm). The addon now loads the dynamically-loadable ggml backends on linux-arm64 (previously Android-only).
-- Bumped the `whisper-cpp` override from `1.9.1#3` to `1.9.1#4` (registry PR [tetherto/qvac-registry-vcpkg#253](https://github.com/tetherto/qvac-registry-vcpkg/pull/253)), consuming the QVAC-21623 Adreno OpenCL whisper base/small q8_0 decode optimization: `1.9.1#4` pins `tetherto/qvac-ext-lib-whisper.cpp` master `d95e742b` ([#91](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/91), fused-QKV decoder repack + vocab-logits slice) and floors `ggml-speech` to `2026-07-15`, which pins `tetherto/qvac-ext-ggml` speech `d7e27ac7` ([#42](https://github.com/tetherto/qvac-ext-ggml/pull/42), ggml-opencl Adreno FLASH_ATTN partial-KV NaN fix + q8_0 SOA `get_rows` + faster f16 GEMV/GEMM; FA-on-GPU decode routing opt-in via `GGML_OPENCL_FA_ADRENO`). Registry baseline unchanged; the delta is OpenCL-only (non-Adreno / Vulkan / Metal / CPU byte-identical).
+- Bumped the `whisper-cpp` override from `1.9.1#3` to `1.9.1#4` (registry PR [tetherto/qvac-registry-vcpkg#253](https://github.com/tetherto/qvac-registry-vcpkg/pull/253)), consuming the QVAC-21623 Adreno OpenCL whisper base/small q8_0 decode optimization: `1.9.1#4` pins `tetherto/qvac-fabric-speech.cpp` master `d95e742b` ([#91](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/91), fused-QKV decoder repack + vocab-logits slice) and floors `ggml-speech` to `2026-07-15`, which pins `tetherto/qvac-ext-ggml` speech `d7e27ac7` ([#42](https://github.com/tetherto/qvac-ext-ggml/pull/42), ggml-opencl Adreno FLASH_ATTN partial-KV NaN fix + q8_0 SOA `get_rows` + faster f16 GEMV/GEMM; FA-on-GPU decode routing opt-in via `GGML_OPENCL_FA_ADRENO`). Registry baseline unchanged; the delta is OpenCL-only (non-Adreno / Vulkan / Metal / CPU byte-identical).
 
 ## [0.12.0] - 2026-07-14
 
@@ -82,8 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
 - Bumped the `whisper-cpp` vcpkg override from `1.8.5#5` to `1.9.1`, which pulls
   the latest from upstream `ggml-org/whisper.cpp` v1.9.1 into our fork
-  `tetherto/qvac-ext-lib-whisper.cpp` (master `cb91a378`,
-  [#73](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/73)). The
+  `tetherto/qvac-fabric-speech.cpp` (master `cb91a378`,
+  [#73](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/73)). The
   registry baseline is left unchanged; the override resolves the new version
   forward of the pinned baseline against
   [tetherto/qvac-registry-vcpkg#219](https://github.com/tetherto/qvac-registry-vcpkg/pull/219)
@@ -191,7 +191,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `WHISPER_USE_SYSTEM_GGML=ON`, so `whisper-cpp`, `parakeet-cpp` and
     `tts-cpp` all link the **same** `ggml-speech` instance instead of
     bringing three separate ggml builds (QVAC-18992). The bundled
-    `qvac-ext-lib-whisper.cpp/ggml/` directory is no longer walked at
+    `qvac-fabric-speech.cpp/ggml/` directory is no longer walked at
     configure time.
   - GPU backend selection, dynamic-backend `.so` packaging on Android,
     per-arch CPU MODULE variants, Vulkan-Headers download and the

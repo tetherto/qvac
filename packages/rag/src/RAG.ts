@@ -125,6 +125,13 @@ export class RAG extends ReadyResource {
       throw new QvacErrorRAG({ code: ERR_CODES.LLM_REQUIRED })
     }
 
+    if (typeof query !== 'string' || query.trim() === '') {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'query must be a non-empty string'
+      })
+    }
+
     this.logger.debug(`Infer started: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`)
     const startTime = Date.now()
 
