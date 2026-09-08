@@ -37,6 +37,7 @@ import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { diffusion } from '@/plugins/builtin/sdcpp-generation/ops/diffusion'
 import {
   markLtxVideoModel,
+  markH3VideoModel,
   markMoeCapableVideoModel,
   video
 } from '@/plugins/builtin/sdcpp-generation/ops/video'
@@ -240,24 +241,32 @@ export const diffusionPlugin = definePlugin({
       ...rest
     } = cfg
 
-    // audioVae / embeddingsConnectors are LTX-2 video companions. Reject them
-    // up front — before any companion download — when the selected layout
-    // can't consume them, instead of silently resolving the file and then
-    // dropping it in createModel. Both fields are new, so this cannot break
-    // existing callers.
     if (embeddingsConnectorsModelSrc && cfg.mode !== 'video') {
       throw new ModelLoadFailedError(
         'modelConfig.embeddingsConnectorsModelSrc selects the LTX-2 video ' +
           "layout and is only valid with mode: 'video'."
       )
     }
-    if (audioVaeModelSrc && !(cfg.mode === 'video' && embeddingsConnectorsModelSrc)) {
+    if (audioVaeModelSrc && cfg.mode !== 'video') {
       throw new ModelLoadFailedError(
-        'modelConfig.audioVaeModelSrc is LTX-2 video only. It requires ' +
-          "mode: 'video' together with modelConfig.embeddingsConnectorsModelSrc " +
-          '(which selects the LTX-2 layout). Add embeddingsConnectorsModelSrc ' +
-          'or remove audioVaeModelSrc.'
+        "modelConfig.audioVaeModelSrc requires mode: 'video' (LTX-2 or MiniMax-H3)."
       )
+    }
+    if (
+      cfg.mode === 'video' &&
+      !embeddingsConnectorsModelSrc &&
+      (audioVaeModelSrc || llmModelSrc)
+    ) {
+      if (!audioVaeModelSrc || !llmModelSrc || !vaeModelSrc) {
+        throw new ModelLoadFailedError(
+          'MiniMax-H3 requires llmModelSrc, vaeModelSrc and audioVaeModelSrc.'
+        )
+      }
+      if (t5XxlModelSrc || highNoiseDiffusionModelSrc || clipVisionModelSrc) {
+        throw new ModelLoadFailedError(
+          'MiniMax-H3 cannot use Wan T5, high-noise or CLIP-vision companions.'
+        )
+      }
     }
 
     // Video does not apply ESRGAN, so the whole `upscaler` object is dropped.
@@ -421,17 +430,13 @@ export const diffusionPlugin = definePlugin({
     }
 
     if (config.mode === 'video') {
-      // Layout is selected the same way the addon self-detects it: the
-      // presence of the LTX-2 text-embedding connectors switches from the
-      // Wan layout (UMT5 via t5Xxl) to the LTX-2 layout (Gemma via llm +
-      // video VAE + connectors, optional audio VAE). Mirrors
-      // `SdModel::isLtxModel_ = !embeddingsConnectorsPath.empty()`.
+      // Select the companion layout; native code verifies the model's tensors.
       const embeddingsConnectorsModelPath = artifacts?.['embeddingsConnectorsModelPath']
 
       if (!artifacts?.['vaeModelPath']) {
         throw new ModelLoadFailedError(
           'modelConfig.vaeModelSrc is required in video mode. ' +
-            'Provide the Wan or LTX-2 video VAE model before loading the video pipeline.'
+            'Provide the Wan, LTX-2 or MiniMax-H3 video VAE before loading the video pipeline.'
         )
       }
       const vaeModelPath = artifacts['vaeModelPath']
@@ -453,6 +458,25 @@ export const diffusionPlugin = definePlugin({
             audioVae: artifacts['audioVaeModelPath']
           }),
           ...(artifacts['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
+        }
+      } else if (artifacts['audioVaeModelPath'] || artifacts['llmModelPath']) {
+        if (!artifacts['audioVaeModelPath'] || !artifacts['llmModelPath']) {
+          throw new ModelLoadFailedError('MiniMax-H3 requires llmModelSrc and audioVaeModelSrc.')
+        }
+        if (
+          artifacts['t5XxlModelPath'] ||
+          artifacts['highNoiseDiffusionModelPath'] ||
+          artifacts['clipVisionModelPath']
+        ) {
+          throw new ModelLoadFailedError(
+            'MiniMax-H3 cannot use Wan T5, high-noise or CLIP-vision companions.'
+          )
+        }
+        files = {
+          model: modelPath,
+          vae: vaeModelPath,
+          llm: artifacts['llmModelPath'],
+          audioVae: artifacts['audioVaeModelPath']
         }
       } else {
         if (!artifacts['t5XxlModelPath']) {
@@ -500,6 +524,7 @@ export const diffusionPlugin = definePlugin({
         opts: { stats: true }
       })
       if (embeddingsConnectorsModelPath) markLtxVideoModel(model)
+      else if (files.audioVae) markH3VideoModel(model)
       if (files.highNoiseDiffusionModel) markMoeCapableVideoModel(model)
       return { model }
     }

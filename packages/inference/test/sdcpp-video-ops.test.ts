@@ -17,12 +17,13 @@ async function withRegisteredVideoModel<T>(
   cancelImpl: () => Promise<void> = async function () {},
   isLtx = false,
   isMoeCapable = false,
-  modelConfig: Record<string, unknown> = {}
+  modelConfig: Record<string, unknown> = {},
+  isH3 = false
 ) {
   const [
     { registerModel, unregisterModel },
     { ModelType },
-    { markLtxVideoModel, markMoeCapableVideoModel }
+    { markLtxVideoModel, markMoeCapableVideoModel, markH3VideoModel }
   ] = await Promise.all([
     import('@/runtime/model-registry'),
     import('@/schemas'),
@@ -34,6 +35,7 @@ async function withRegisteredVideoModel<T>(
   fakeModel['run'] = runImpl
   fakeModel['cancel'] = cancelImpl
   if (isLtx) markLtxVideoModel(fakeModel as unknown as VideoStableDiffusion)
+  if (isH3) markH3VideoModel(fakeModel as unknown as VideoStableDiffusion)
   if (isMoeCapable) markMoeCapableVideoModel(fakeModel as unknown as VideoStableDiffusion)
 
   try {
@@ -48,6 +50,95 @@ async function withRegisteredVideoModel<T>(
     unregisterModel(modelId)
   }
 }
+
+test('video op: H3 validates before native execution and preserves audio results', async (t) => {
+  const { video: videoOp } = await import('@/plugins/builtin/sdcpp-generation/ops/video')
+  const { PluginRequestValidationFailedError } = await import('@/errors')
+  const observed: Record<string, unknown>[] = []
+  await withRegisteredVideoModel(
+    async (params) => {
+      observed.push(params as Record<string, unknown>)
+      return {
+        stats: { videoFrames: 124, fps: 24, hasAudio: 1, audioSampleRate: 32000 },
+        iterate: async function* () {
+          yield new Uint8Array([82, 73, 70, 70])
+        }
+      }
+    },
+    async (modelId) => {
+      const base = { modelId, mode: 'txt2vid' as const, prompt: 'Steam rises from coffee.' }
+      for (const params of [
+        { video_frames: 121 },
+        { width: 944 },
+        { height: 528 },
+        { fps: 16 },
+        { cfg_scale: 0 },
+        { scheduler: 'simple' as const },
+        { vace_strength: 0 },
+        { strength: 0 },
+        { stg_scale: 0 },
+        { stg_block: 0 },
+        { lora_strength: 0 },
+        { reference_attention_strength: 0 },
+        { high_noise_cfg_scale: 0 },
+        { moe_boundary: 0 },
+        { mode: 'img2vid' as const, init_image: PNG_B64 }
+      ]) {
+        await t.exception(
+          async () => videoOp({ ...base, ...params }).next(),
+          PluginRequestValidationFailedError as unknown as new () => Error
+        )
+      }
+      t.is(observed.length, 0, 'invalid H3 requests never reach native execution')
+      for (const params of [{ video_frames: 124 }, { video_frames: 22 }, {}]) {
+        const chunks = []
+        for await (const chunk of videoOp({ ...base, ...params })) chunks.push(chunk)
+        t.is(chunks[0]?.data, 'UklGRg==')
+        t.is(chunks[1]?.stats?.hasAudio, true)
+        t.is(chunks[1]?.stats?.audioSampleRate, 32000)
+      }
+      t.is(observed[0]?.['video_frames'], 124)
+      t.is(observed[1]?.['video_frames'], 22)
+      for (const field of [
+        'video_frames',
+        'width',
+        'height',
+        'fps',
+        'steps',
+        'cfg_scale',
+        'scheduler'
+      ]) {
+        t.is(observed[2]?.[field], undefined, `${field} remains omitted`)
+      }
+    },
+    async () => {},
+    false,
+    false,
+    {},
+    true
+  )
+})
+
+test('video op: Wan still rejects invalid frames at the loaded-model boundary', async (t) => {
+  const { video: videoOp } = await import('@/plugins/builtin/sdcpp-generation/ops/video')
+  const { PluginRequestValidationFailedError } = await import('@/errors')
+  let calls = 0
+  await withRegisteredVideoModel(
+    async () => {
+      calls++
+      return {}
+    },
+    async (modelId) => {
+      for (const video_frames of [1, 6, 22, 124]) {
+        await t.exception(
+          async () => videoOp({ modelId, mode: 'txt2vid', prompt: 'Coffee', video_frames }).next(),
+          PluginRequestValidationFailedError as unknown as new () => Error
+        )
+      }
+      t.is(calls, 0)
+    }
+  )
+})
 
 test('video op: decodes base64 inputs, forwards mode, and emits stream responses', async function (t) {
   const { video: videoOp } = await import('@/plugins/builtin/sdcpp-generation/ops/video')
