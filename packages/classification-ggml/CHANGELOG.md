@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-09-07
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.3.3` -> `1.4.0`, which requires libjs 1.32 headers (`bare-headers` >= 1.32). Compile-time only; no API or runtime behaviour change for this package. Released as a minor bump so dependents on `^0.23.x` adopt the new build floor deliberately rather than automatically.
+
 ## [0.23.0] - 2026-09-01
 
 ### Changed
