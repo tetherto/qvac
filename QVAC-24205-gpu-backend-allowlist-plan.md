@@ -4,7 +4,7 @@
 
 - Task: [QVAC-24205](https://app.asana.com/1/45238840754660/project/1214153063536860/task/1217874135127096)
 - Prepared: 2026-09-07
-- Status: investigation complete; ready to implement with the explicit policy choices below recorded during review
+- Status: implemented in PRs #4327-#4330; eligibility policy updated from maintainer review on 2026-09-08
 - Intended audience: task owner, inference-addon maintainers, QVAC-23763 owners, and reviewers
 - Scope: planning only; this document does not change runtime behavior or Asana state
 
@@ -21,7 +21,7 @@ The investigation found that the affected surface is broader than the two select
 - `ocr-ggml` is already allowlisted and should remain untouched.
 - `vla-ggml` deliberately supports HIP/ROCm and should retain that behavior.
 
-The active QVAC-23763 CUDA/capability stack recognizes HIP/ROCm as selectable LLM and embed backend families, while QVAC-24205 explicitly requires mock ROCm devices not to be selected. That overlap requires coordination, but QVAC-23763 is not a dependency of this task. The allowlist should be implemented from current main now and must land before either addon migrates to shared Fabric. Whichever overlapping selector change lands second must rebase and preserve both tasks' accepted behavior.
+The active QVAC-23763 CUDA/capability stack recognizes HIP/ROCm as selectable LLM and embed backend families, while QVAC-24205 explicitly requires mock ROCm devices not to be selected. That overlap requires coordination, but QVAC-23763 is not a dependency of this task. The allowlist must land before either addon migrates to shared Fabric. Maintainer review on 2026-09-08 resolved that CUDA and RPC should be admitted now because Fabric does not yet build them, avoiding another selector change when those builds arrive. HIP/ROCm remains excluded.
 
 ## Task state and intended acceptance
 
@@ -82,15 +82,15 @@ Recommended initial policy:
 
 | Consumer                        | Eligible families                                                                                                                    |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| LLM                             | Vulkan, verified MTL (`metal` as OCR's defensive alias), the supported OpenCL/Adreno path, and CUDA only after QVAC-23763 validation |
-| Embed                           | Vulkan, verified MTL (`metal` as OCR's defensive alias), the supported OpenCL/Adreno path, and CUDA only after QVAC-23763 validation |
-| Translation                     | Vulkan, verified MTL (`metal` as a defensive alias), and its existing build-guarded OpenCL path                                      |
+| LLM                             | Vulkan, verified MTL (`metal` as OCR's defensive alias), the supported OpenCL/Adreno path, CUDA, and RPC |
+| Embed                           | Vulkan, verified MTL (`metal` as OCR's defensive alias), the supported OpenCL/Adreno path, CUDA, and RPC |
+| Translation                     | Vulkan, verified MTL (`metal` as a defensive alias), its existing build-guarded OpenCL path, CUDA, and RPC |
 | Model-fit normalized completion | Exactly the families eligible for the LLM load path represented by that fit request                                                  |
 | Model-fit normalized embedding  | Exactly the families eligible for the embed load path represented by that fit request                                                |
 | Model-fit generic fit execution | Use the LLM eligibility policy for devices supplied to `common_fit_params`; continue reporting raw inventory separately              |
 | VLA                             | Preserve its existing HIP/ROCm policy                                                                                                |
 
-HIP/ROCm and SYCL remain ineligible for LLM, embed, translation, and model-fit execution until package-specific validation exists. Model-fit may continue exposing raw registry inventory as diagnostics, but raw counts must not determine the devices used for fit estimates.
+HIP/ROCm, SYCL, MUSA, and unknown families remain ineligible for LLM, embed, translation, and model-fit execution until package-specific validation exists. CUDA and RPC are eligible by maintainer decision even though current Fabric builds do not register them. Model-fit may continue exposing raw registry inventory as diagnostics, but raw counts must not determine the devices used for fit estimates.
 
 ### Explicit unsupported override decision
 
@@ -112,7 +112,7 @@ Automatic selection must skip the backend either way. Current-main numeric `main
 - LLM deliberately detects Adreno with the broader lowercase token `"dreno"`; embed currently uses `"adreno"`. Preserve these package-specific matches unless normalization is separately justified and regression-tested.
 - Shared LLM/embed behavior—Mali/Vulkan, discrete-versus-integrated, numeric/symbolic `main-gpu`, and CPU fallback—must remain unchanged for eligible devices.
 - LLM-only finetuning and BitNet branches must remain unchanged; they are not embed behavior.
-- CUDA behavior is added by QVAC-23763 and must be reconciled during rebase; it is not part of QVAC-24205's pre-CUDA baseline.
+- CUDA and RPC eligibility has no effect with current Fabric builds, which do not register those families; it prepares the selectors for the planned builds.
 
 ## Decisions to record during implementation
 
@@ -120,12 +120,12 @@ These decisions must be recorded before the affected PR is finalized, but the QV
 
 | Gate                    | Required answer                                                                                                                                                                                                 | Blocking scope                                              | Evidence to record                                               |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- |
-| Backend eligibility     | Start with current-main Vulkan, verified MTL, and supported Adreno/OpenCL eligibility. Decide whether CUDA joins during the QVAC-23763 rebase; HIP/ROCm remains excluded unless QVAC-24205 is formally revised. | LLM, embed, and model-fit                                   | Recorded eligibility matrix plus combined tests                  |
+| Backend eligibility     | Resolved: Vulkan, verified MTL, supported Adreno/OpenCL, CUDA, and RPC are eligible. HIP/ROCm, SYCL, MUSA, and unknown families remain excluded unless explicitly approved. | All four affected packages | Recorded eligibility matrix plus mock tests |
 | Explicit override       | Does an explicitly requested unsupported family error or fall back? Apply now to translation and only at #4126 rebase time to LLM/embed.                                                                        | Translation now; LLM/embed during QVAC-23763 reconciliation | One documented rule plus matching negative tests                 |
 | Numeric device identity | Does `main-gpu` retain global GGML index semantics when excluded devices are present?                                                                                                                           | LLM and normalized model-fit                                | Documented index rule plus excluded-index tests                  |
-| CUDA overlap            | Which task lands first, and which owner rebases the second selector change while retaining both test matrices?                                                                                                  | LLM and embed                                               | Agreed rebase direction; this does not block starting QVAC-24205 |
+| CUDA overlap            | Resolved for eligibility: admit CUDA now. The second selector change to land must still retain QVAC-24205's ROCm rejection tests. | LLM and embed | Maintainer decision plus combined tests |
 | Generic `mainGpu`       | How is a caller's GPU ordinal mapped after unsupported devices are removed from fit execution?                                                                                                                  | Generic model-fit                                           | Documented mapping plus mixed-backend tests                      |
-| Translation families    | Are CUDA and explicit guard-bypassing OpenCL considered validated for translation?                                                                                                                              | Translation                                                 | Translation-specific allowlist and fallback rule                 |
+| Translation families    | Resolved: CUDA and RPC are eligible; explicit OpenCL remains an informed opt-in that bypasses only the automatic-selection guard. | Translation | Translation-specific allowlist and fallback tests |
 
 ## Technical investigation
 
@@ -139,7 +139,7 @@ Primary implementation:
 
 Current behavior:
 
-- RPC is excluded by registry name.
+- RPC was excluded by registry name on main; the accepted policy now admits RPC and CUDA ahead of their planned Fabric builds.
 - OpenCL/Adreno is handled specially.
 - All other discrete GPUs enter a generic GPU bucket.
 - All other integrated GPUs enter a generic iGPU bucket.
@@ -220,8 +220,8 @@ The helper must:
 4. Recognize Vulkan by its family substring.
 5. Recognize the pinned Fabric Metal identity through the verified `MTL` prefix: the registry is `MTL` and devices are `MTL0`, `MTL1`, and so on. Retain OCR's additional `metal` prefix only as an intentional defensive alias for a future rename, not as the current registry identity.
 6. Recognize OpenCL by family identity while retaining existing device restrictions.
-7. Recognize CUDA only where the QVAC-23763 capability and load path has been accepted.
-8. Reject RPC, HIP/ROCm, SYCL, and unknown families unless explicitly validated for that package.
+7. Recognize CUDA and RPC as eligible families per the 2026-09-08 maintainer decision.
+8. Reject HIP/ROCm, SYCL, MUSA, and unknown families unless explicitly validated for that package.
 
 ### 2. Filter once, consume consistently
 
@@ -242,7 +242,7 @@ Every selection-affecting downstream operation must consume this same inventory:
 
 1. Implement the OCR-style allowlist from current main in a separate LLM-only PR now; do not wait for QVAC-23763.
 2. Separate known override names from eligible candidate families.
-3. Filter candidates before the current OpenCL, generic GPU, iGPU, and CPU prioritization. When rebasing with QVAC-23763, apply the same filter before its CUDA bucket as well.
+3. Filter candidates before the current OpenCL, generic GPU, iGPU, and CPU prioritization, admitting CUDA and RPC into the generic eligible inventory.
 4. Preserve the current-main baseline: Adreno/OpenCL automatic selection, non-Adreno OpenCL omission, Mali/Vulkan behavior, the LLM-specific `"dreno"` match, Metal, discrete-over-integrated, and CPU fallback.
 5. Reuse the filtered inventory for tensor split and row-split checks.
 6. Ensure excluded device handles never reach llama.cpp model parameters.
@@ -296,18 +296,18 @@ Both LLM and embed unit suites must cover:
 5. Unknown discrete and integrated GPU families are rejected.
 6. Mixed-case backend names are normalized.
 7. Metal is recognized through the verified `MTL`/`MTL0` identity; OCR's defensive `metal` prefix alias is covered separately.
-8. RPC remains excluded.
+8. CUDA and RPC fixtures are eligible while HIP/ROCm remains excluded.
 9. Existing Adreno/OpenCL, Mali/Vulkan, Metal, discrete/iGPU, and CPU tests remain unchanged.
 10. Explicit numeric selection targeting an excluded device does not accidentally select another device.
 11. Translation's current string override behavior matches the recorded decision. Add equivalent LLM/embed coverage only when rebasing with #4126, where that API is introduced.
 
 ### LLM-specific tests
 
-1. Tensor-split device lists exclude ROCm, SYCL, RPC, and unknown devices.
+1. Tensor-split device lists exclude ROCm, SYCL, MUSA, and unknown devices while retaining eligible CUDA and RPC devices.
 2. Duplicate physical devices exposed through multiple registries remain correctly deduplicated after filtering.
 3. Row-split support inspects exactly the devices eligible for loading.
 4. The actual model device parameter contains no excluded handles.
-5. CUDA cases introduced by QVAC-23763 remain valid under the approved policy.
+5. CUDA and RPC selection, counting, and split-list cases remain valid under the approved policy.
 6. Non-Adreno OpenCL remains excluded from automatic current-main selection.
 7. Existing LLM Adreno detection through the lowercase `"dreno"` token retains its current behavior.
 
@@ -315,7 +315,7 @@ Both LLM and embed unit suites must cover:
 
 1. Effective count includes only eligible devices if the helper is retained.
 2. Row-split support inspects only eligible devices.
-3. CUDA cases introduced by QVAC-23763 remain valid under the approved policy.
+3. CUDA and RPC selection, counting, and split-list cases remain valid under the approved policy.
 4. Non-Adreno OpenCL remains excluded from automatic current-main selection.
 5. Existing embed Adreno detection through the exact lowercase `"adreno"` token retains its current behavior.
 
@@ -339,7 +339,7 @@ Both LLM and embed unit suites must cover:
 5. Captured fitter parameters contain no excluded handles for `NONE`, `LAYER`, or `ROW` split modes.
 6. Mixed Vulkan/ROCm and Metal/ROCm inventories produce stable results.
 7. Completion and embedding modes match the corresponding addon policies.
-8. CUDA parity is verified in the combined test matrix when QVAC-23763 is rebased with this work.
+8. CUDA and RPC eligibility is verified in the mock matrix and retained when QVAC-23763 is reconciled with this work.
 9. Row-split capability ignores excluded devices but still checks every eligible device.
 10. Through the new generic-fit injection seam, the null-terminated device list handed to `common_fit_params` excludes ROCm and unknown devices while retaining every eligible device in stable order.
 
@@ -449,7 +449,7 @@ QVAC-24205 is complete when:
 1. The HIP/ROCm conflict with QVAC-23763 is resolved and recorded.
 2. Each affected package has an explicit eligibility policy.
 3. Selection, internal eligible counts, validation, split decisions, initialization, and load inputs use the same eligible inventory; public raw diagnostics remain explicitly separate.
-4. ROCm, SYCL, RPC, and unknown backends cannot influence LLM, embed, translation, or model-fit execution unless explicitly validated for that consumer.
+4. ROCm, SYCL, MUSA, and unknown backends cannot influence LLM, embed, translation, or model-fit execution unless explicitly validated for that consumer; CUDA and RPC remain eligible by maintainer decision.
 5. Required mock ordering and CPU-fallback tests pass.
 6. Existing validated backend tests pass unchanged.
 7. Translation and model-fit verdicts are recorded on the Asana task.
