@@ -81,7 +81,8 @@ test('local service launcher creates QVAC serve config and command args from Ope
 
   assert.deepEqual(buildQvacLaunch(options, '/tmp/qvac-openclaw/qvac.config.json').args, [
     'serve',
-    'openai',
+    '--openai',
+    '--no-default',
     '--config',
     '/tmp/qvac-openclaw/qvac.config.json',
     '--host',
@@ -105,13 +106,13 @@ test('local service launcher tells pre-upgrade installs to re-onboard', () => {
     (error: unknown) => {
       assert.ok(error instanceof TypeError)
       assert.match(error.message, /--api-key-file/)
-      assert.match(error.message, /openclaw onboard --auth-choice qvac/)
+      assert.match(error.message, /openclaw onboard --auth-choice provider-plugin:qvac/)
       return true
     }
   )
   assert.match(
     formatLauncherError(new TypeError(parseFailureMessage())),
-    /openclaw onboard --auth-choice qvac/
+    /openclaw onboard --auth-choice provider-plugin:qvac/
   )
 })
 
@@ -232,7 +233,13 @@ test('spawn errors are formatted without args or secret-bearing properties', () 
   const error = Object.assign(new Error('spawn qvac ENOENT'), {
     code: 'ENOENT',
     syscall: 'spawn qvac',
-    spawnargs: ['serve', 'openai', '--api-key', 'abcdefghijklmnopqrstuvwxyzABCDE_']
+    spawnargs: [
+      'serve',
+      '--openai',
+      '--no-default',
+      '--api-key',
+      'abcdefghijklmnopqrstuvwxyzABCDE_'
+    ]
   })
 
   const formatted = formatSpawnError(error, '/usr/local/bin/qvac')

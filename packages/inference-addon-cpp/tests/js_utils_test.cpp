@@ -2,6 +2,7 @@
 #include "helpers_header/js.h"
 #include <gtest/gtest.h>
 #include <cmath>
+#include <span>
 #include <utility>
 #include <thread>
 #include <chrono>
@@ -28,6 +29,21 @@ TEST(JsUtilsTest, ArrayCreate) {
     js_env_t env;
     auto jsArray = js::Array::create(&env);
     // Test passes if no exception is thrown
+}
+
+// Pins the libjs 1.32 const placement: a C array of js_value_t* must bind to
+// js::Array::set/create (span<js_value_t* const> → js_value_t *const []).
+// The mock js_set_array_elements reports failure, so both calls throw.
+TEST(JsUtilsTest, ArraySetElementsFromMutableHandleList) {
+    js_env_t env;
+    auto jsArray = js::Array::create(&env);
+    js_value_t first;
+    js_value_t second;
+    js_value_t* elements[] = {&first, &second};
+    EXPECT_THROW(jsArray.set(&env, elements), qvac_errors::StatusError);
+    EXPECT_THROW(
+        js::Array::create(&env, std::span<js_value_t* const>{elements}),
+        qvac_errors::StatusError);
 }
 
 TEST(JsUtilsTest, BooleanCreate) {
