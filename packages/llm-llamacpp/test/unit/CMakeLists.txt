@@ -160,7 +160,7 @@ if(NOT WIN32)
   )
 endif()
 # Copy ggml backend libraries next to the test executable
-if((ANDROID OR UNIX) AND NOT APPLE)
+if(WIN32 OR ((ANDROID OR UNIX) AND NOT APPLE))
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     add_custom_command(TARGET addon-test POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
