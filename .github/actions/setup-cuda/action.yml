@@ -236,7 +236,13 @@ runs:
                 extract_windows=$(cygpath -w "$extract_dir")
                 powershell.exe -NoProfile -NonInteractive -Command \
                   "Expand-Archive -LiteralPath '$archive_windows' -DestinationPath '$extract_windows' -Force"
-                archive_root=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d -print -quit)
+                archive_root=""
+                for candidate in "$extract_dir"/*; do
+                  if [ -d "$candidate" ]; then
+                    archive_root="$candidate"
+                    break
+                  fi
+                done
                 if [ -z "$archive_root" ]; then
                   echo "::error::setup-cuda: no root directory in $out"
                   exit 1
