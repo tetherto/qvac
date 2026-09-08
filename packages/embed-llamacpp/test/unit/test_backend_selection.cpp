@@ -389,6 +389,13 @@ TEST_F(BackendSelectionTest, RegistryFamilyNamesRequireExactIdentity) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
+TEST_F(BackendSelectionTest, DeviceFamilyNamesRequireKnownPrefixes) {
+  mockBackend.addDevice(MockDevice(
+      "Future GPU", "NotVulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Future"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+}
+
 TEST_F(BackendSelectionTest, TryMainGpuFromMapWithInteger) {
   std::unordered_map<std::string, std::string> configFilemap;
   configFilemap["main-gpu"] = "0";

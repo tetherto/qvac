@@ -437,8 +437,16 @@ BertModelSetup setupParams(
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
     const std::pair<BackendType, std::string> chosenBackend =
         chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
+    std::vector<std::string> splitDeviceArgument;
+    const bool hasSplitDevices =
+        splitMode == LLAMA_SPLIT_MODE_NONE ||
+        appendSplitDeviceArgument(splitDeviceArgument, [] {
+          return backend_selection::getSplitDeviceNames();
+        });
+    const bool useGpu =
+        chosenBackend.first == BackendType::GPU && hasSplitDevices;
 
-    if (chosenBackend.first == BackendType::GPU) {
+    if (useGpu) {
       result.resolvedBackendDevice = 1;
 
       // Row-split needs a backend that provides split buffers, llama.cpp now
@@ -469,7 +477,9 @@ BertModelSetup setupParams(
               nullptr);
         }
       }
-    } else if (chosenBackend.first == BackendType::CPU) {
+    } else if (
+        chosenBackend.first == BackendType::CPU ||
+        chosenBackend.first == BackendType::GPU) {
       result.resolvedBackendDevice = 0;
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
       params.main_gpu = -1;
@@ -490,22 +500,12 @@ BertModelSetup setupParams(
     }
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
-      configVector.emplace_back(chosenBackend.second);
-    } else if (!appendSplitDeviceArgument(configVector, [] {
-                 return backend_selection::getSplitDeviceNames();
-               })) {
-      params.split_mode = LLAMA_SPLIT_MODE_NONE;
-      params.main_gpu = -1;
-      params.n_gpu_layers = 0;
-      result.resolvedBackendDevice = 0;
-      configFilemap.erase("tensor-split");
-      configVector.emplace_back("--device");
-      configVector.emplace_back("none");
-      qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
-          GGML_LOG_LEVEL_WARN,
-          "[BertModel] split mode: no eligible GPU device could be "
-          "enumerated; falling back to CPU\n",
-          nullptr);
+      configVector.emplace_back(useGpu ? chosenBackend.second : "none");
+    } else {
+      configVector.insert(
+          configVector.end(),
+          splitDeviceArgument.begin(),
+          splitDeviceArgument.end());
     }
     configFilemap.erase(deviceIt);
 
@@ -513,8 +513,7 @@ BertModelSetup setupParams(
     // OpenCL: it is not reliably supported there. Users who pass an
     // explicit "flash-attn"/"flash_attn" override are respected.
     const bool isOpenCl =
-        chosenBackend.first == BackendType::GPU &&
-        chosenBackend.second.find("opencl") != std::string::npos;
+        useGpu && chosenBackend.second.find("opencl") != std::string::npos;
     const bool userSetFlashAttn = configFilemap.contains("flash-attn") ||
                                   configFilemap.contains("flash_attn");
     if (isOpenCl && !userSetFlashAttn) {

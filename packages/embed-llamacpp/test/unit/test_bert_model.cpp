@@ -1007,6 +1007,15 @@ TEST_F(BertModelTest, SplitDeviceProviderPinsEligibleConsumerList) {
   EXPECT_EQ(arguments[1], "Vulkan0,Vulkan1");
 }
 
+TEST_F(BertModelTest, EmptySplitDeviceProviderAddsNoArgument) {
+  std::vector<std::string> arguments;
+  const bool appended = appendSplitDeviceArgument(
+      arguments, [] { return std::vector<std::string>{}; });
+
+  EXPECT_FALSE(appended);
+  EXPECT_TRUE(arguments.empty());
+}
+
 TEST_F(BertModelTest, CommonParamsParseSplitModeCaseInsensitive) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

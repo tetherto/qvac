@@ -70,8 +70,13 @@ std::string lowerCopy(const char* value) {
 bool hasBackendFamily(
     std::string_view deviceName, std::string_view registryName,
     std::string_view family) {
-  return deviceName.find(family) != std::string_view::npos ||
-         registryName == family;
+  if (registryName == family) {
+    return true;
+  }
+  if (family == "opencl") {
+    return deviceName == "gpuopencl" || deviceName.starts_with("opencl");
+  }
+  return deviceName.starts_with(family);
 }
 
 bool hasMetalFamily(
