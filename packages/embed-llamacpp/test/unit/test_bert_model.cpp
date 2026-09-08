@@ -981,8 +981,7 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
     EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
   } else {
     // Row-split requires split buffers from every GPU device the model is
-    // distributed over, and as of qvac-fabric v10069 only the SYCL backend
-    // provides them (CUDA moved tensor parallelism to LLAMA_SPLIT_MODE_TENSOR).
+    // distributed over.
     // None of the backends this addon ships qualify, so a requested 'row' is
     // always degraded to 'layer'. Asserted unconditionally on purpose: this is
     // the pin on the degrade itself, so it fails if the degrade stops working.

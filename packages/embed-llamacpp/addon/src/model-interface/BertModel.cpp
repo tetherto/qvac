@@ -487,7 +487,7 @@ BertModelSetup setupParams(
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_WARN,
             "[BertModel] split-mode, tensor-split and main-gpu ignored: "
-            "no GPU backend available, falling back to CPU\n",
+            "no eligible named GPU device available, falling back to CPU\n",
             nullptr);
         splitMode = LLAMA_SPLIT_MODE_NONE;
         configFilemap.erase("tensor-split");
