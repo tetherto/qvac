@@ -67,6 +67,49 @@ std::optional<ReasoningTags> selectReasoningTagSource(
     const std::string& templateThinkingEndTag,
     const std::optional<ReasoningTags>& fallbackTags);
 
+/// The reasoning markers the reasoning-budget sampler is built from.
+struct ReasoningBudgetTags {
+  std::string startTag;
+  std::vector<std::string> endTags;
+};
+
+/**
+ * @brief Picks the markers `applyReasoningBudget` tokenizes, mirroring
+ * `selectReasoningTagSource`'s decision exactly.
+ *
+ * The two must agree. The reasoning *detector* has always been
+ * template-first with a model-family fallback, while the reasoning *budget*
+ * read the template's markers alone — so on a model whose family is in the
+ * table but whose active chat template exposes no thinking tags, the detector
+ * armed EOS-inside-reasoning substitution while the budget tokenized nothing.
+ * qvac-fabric then builds no reasoning-budget sampler at all
+ * (`common/sampling.cpp`, which requires both marker lists non-empty), and
+ * `grammar_should_apply` returns true unconditionally — so a lazy tool grammar
+ * is armed *inside* the reasoning block, which is precisely what the budget
+ * sampler exists to prevent, and the substituted close tag is fed to the
+ * grammar sampler rather than skipped.
+ *
+ * The template branch keeps the full `templateEndTags` list, which the
+ * single-marker fallback cannot express.
+ */
+[[nodiscard]] ReasoningBudgetTags selectReasoningBudgetTags(
+    const std::string& templateThinkingStartTag,
+    const std::string& templateThinkingEndTag,
+    const std::vector<std::string>& templateThinkingEndTags,
+    const std::optional<ReasoningTags>& fallbackTags);
+
+/**
+ * @brief True when `common_sampler_init` will build a reasoning-budget
+ * sampler for these params.
+ *
+ * Mirrors qvac-fabric's own condition in `common/sampling.cpp`; there is no
+ * public accessor for it, and callers that hand a token to the sampler on a
+ * substitution path need to know, because `grammar_should_apply` returns true
+ * when the budget sampler is absent.
+ */
+[[nodiscard]] bool
+reasoningBudgetSamplerBuilt(const common_params_sampling& sampling);
+
 /**
  * @brief Returns true when `architecture` is in the Qwen3 reasoning
  * family (`qwen3`, `qwen3moe`, `qwen35`, `qwen35moe`).
@@ -211,10 +254,18 @@ using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
  *
  * Returns true when `params.sampling` changed and the caller must rebuild
  * the common_sampler.
+ *
+ * @p fallbackReasoningTags is the model-family reasoning channel
+ * (`selectReasoningTagsForModel`), or `std::nullopt` when the family has
+ * none. Required rather than defaulted: it is what keeps the reasoning-budget
+ * markers on the same source as the reasoning detector, and a caller that
+ * silently omitted it would reintroduce exactly the divergence
+ * `selectReasoningBudgetTags` documents.
  */
 bool configureTemplateDerivedSampling(
     common_params& params, const Tokenizer& tokenize,
-    const PromptRenderResult& rendered, bool toolsRequested);
+    const PromptRenderResult& rendered, bool toolsRequested,
+    const std::optional<ReasoningTags>& fallbackReasoningTags);
 
 /**
  * @brief The template-side view of a request's `tool_choice`.

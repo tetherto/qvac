@@ -1,4 +1,5 @@
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -10,6 +11,8 @@
 
 using qvac_lib_inference_addon_llama::utils::configureTemplateDerivedSampling;
 using qvac_lib_inference_addon_llama::utils::PromptRenderResult;
+using qvac_lib_inference_addon_llama::utils::ReasoningTags;
+using qvac_lib_inference_addon_llama::utils::reasoningBudgetSamplerBuilt;
 using qvac_lib_inference_addon_llama::utils::Tokenizer;
 
 namespace {
@@ -57,7 +60,11 @@ common_params paramsWithoutReasoningBudget() {
 TEST(TemplateDerivedSamplingTest, ToolGrammarTaggedAsToolCalls) {
   common_params params = paramsWithoutReasoningBudget();
   EXPECT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), /* toolsRequested = */ true));
+      params,
+      stubTokenizer(),
+      toolRender(),
+      /* toolsRequested = */ true,
+      std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
   EXPECT_EQ(params.sampling.grammar.grammar, toolRender().grammar);
   EXPECT_TRUE(params.sampling.grammar_lazy);
@@ -75,7 +82,11 @@ TEST(TemplateDerivedSamplingTest, EagerToolGrammarCarriesGenerationPrompt) {
   rendered.grammarTriggers.clear();
 
   EXPECT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, /* toolsRequested = */ true));
+      params,
+      stubTokenizer(),
+      rendered,
+      /* toolsRequested = */ true,
+      std::nullopt));
   EXPECT_FALSE(params.sampling.grammar_lazy);
   ASSERT_TRUE(common_grammar_needs_prefill(params.sampling.grammar));
   EXPECT_EQ(params.sampling.generation_prompt, "<|im_start|>assistant\n");
@@ -86,7 +97,11 @@ TEST(TemplateDerivedSamplingTest, LegacyRenderedGrammarNeverTaggedToolCalls) {
   PromptRenderResult rendered = toolRender();
   rendered.renderedByJinja = false; // legacy renderer echoed a user GBNF
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, /* toolsRequested = */ true));
+      params,
+      stubTokenizer(),
+      rendered,
+      /* toolsRequested = */ true,
+      std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
   EXPECT_TRUE(params.sampling.grammar.empty());
 }
@@ -103,7 +118,11 @@ TEST(TemplateDerivedSamplingTest, ToolsAbsentClearsToolGrammar) {
   PromptRenderResult rendered;
   rendered.generationPrompt = "<|im_start|>assistant\n";
   EXPECT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, /* toolsRequested = */ false));
+      params,
+      stubTokenizer(),
+      rendered,
+      /* toolsRequested = */ false,
+      std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
   EXPECT_TRUE(params.sampling.grammar.empty());
   EXPECT_FALSE(params.sampling.grammar_lazy);
@@ -116,7 +135,11 @@ TEST(TemplateDerivedSamplingTest, UserGrammarSurvivesToolRender) {
   params.sampling.grammar =
       common_grammar(COMMON_GRAMMAR_TYPE_USER, "root ::= \"yes\" | \"no\"");
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), /* toolsRequested = */ true));
+      params,
+      stubTokenizer(),
+      toolRender(),
+      /* toolsRequested = */ true,
+      std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_USER);
   EXPECT_EQ(params.sampling.grammar.grammar, "root ::= \"yes\" | \"no\"");
   EXPECT_FALSE(params.sampling.grammar_lazy);
@@ -133,7 +156,11 @@ TEST(TemplateDerivedSamplingTest, UserGrammarSurvivesToolRender) {
 TEST(TemplateDerivedSamplingTest, CompanionFieldsClearedBeforeUserGrammar) {
   common_params params = paramsWithoutReasoningBudget();
   ASSERT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), /* toolsRequested = */ true));
+      params,
+      stubTokenizer(),
+      toolRender(),
+      /* toolsRequested = */ true,
+      std::nullopt));
   ASSERT_TRUE(params.sampling.grammar_lazy);
   ASSERT_FALSE(params.sampling.grammar_triggers.empty());
 
@@ -142,7 +169,11 @@ TEST(TemplateDerivedSamplingTest, CompanionFieldsClearedBeforeUserGrammar) {
       common_grammar(COMMON_GRAMMAR_TYPE_USER, "root ::= \"yes\" | \"no\"");
   PromptRenderResult rendered;
   EXPECT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, /* toolsRequested = */ false));
+      params,
+      stubTokenizer(),
+      rendered,
+      /* toolsRequested = */ false,
+      std::nullopt));
 
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_USER);
   EXPECT_FALSE(params.sampling.grammar_lazy)
@@ -157,7 +188,11 @@ TEST(TemplateDerivedSamplingTest, LoadTimeUserGrammarSurvivesToolsAbsentClear) {
       common_grammar(COMMON_GRAMMAR_TYPE_USER, "root ::= \"loaded\"");
   PromptRenderResult rendered;
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, /* toolsRequested = */ false));
+      params,
+      stubTokenizer(),
+      rendered,
+      /* toolsRequested = */ false,
+      std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_USER);
   EXPECT_EQ(params.sampling.grammar.grammar, "root ::= \"loaded\"");
 }
@@ -171,7 +206,11 @@ TEST(TemplateDerivedSamplingTest, JsonSchemaGrammarSuppressesToolGrammar) {
   params.sampling.grammar =
       common_grammar(COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, "root ::= \"{}\"");
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), /* toolsRequested = */ true));
+      params,
+      stubTokenizer(),
+      toolRender(),
+      /* toolsRequested = */ true,
+      std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT);
   EXPECT_EQ(params.sampling.grammar.grammar, "root ::= \"{}\"");
 }
@@ -189,18 +228,22 @@ TEST(TemplateDerivedSamplingTest, OutputFormatGrammarSuppressesToolGrammar) {
   params.sampling.grammar =
       common_grammar(COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, "root ::= \"{}\"");
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), /* toolsRequested = */ true));
+      params,
+      stubTokenizer(),
+      toolRender(),
+      /* toolsRequested = */ true,
+      std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT);
 }
 
 TEST(TemplateDerivedSamplingTest, ChangeDetectionFiresOnGrammarOnlyDelta) {
   common_params params = paramsWithoutReasoningBudget();
   ASSERT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), true));
+      params, stubTokenizer(), toolRender(), true, std::nullopt));
   PromptRenderResult rendered = toolRender();
   rendered.grammar += " | \"extra\"";
   EXPECT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, true));
+      params, stubTokenizer(), rendered, true, std::nullopt));
   EXPECT_EQ(params.sampling.grammar.grammar, rendered.grammar);
 }
 
@@ -211,9 +254,9 @@ TEST(TemplateDerivedSamplingTest, ChangeDetectionFiresOnGrammarOnlyDelta) {
 TEST(TemplateDerivedSamplingTest, ReappliedToolGrammarAlwaysRequestsRebuild) {
   common_params params = paramsWithoutReasoningBudget();
   ASSERT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), true));
+      params, stubTokenizer(), toolRender(), true, std::nullopt));
   EXPECT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), true));
+      params, stubTokenizer(), toolRender(), true, std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
 }
 
@@ -222,9 +265,9 @@ TEST(TemplateDerivedSamplingTest, NoGrammarAndNothingMovedStaysFalse) {
   PromptRenderResult rendered;
   rendered.generationPrompt = "<|im_start|>assistant\n";
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, false));
+      params, stubTokenizer(), rendered, false, std::nullopt));
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, false));
+      params, stubTokenizer(), rendered, false, std::nullopt));
 }
 
 TEST(
@@ -232,7 +275,7 @@ TEST(
     GenerationPromptSetForToolGrammarWithoutReasoningBudget) {
   common_params params = paramsWithoutReasoningBudget();
   ASSERT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), true));
+      params, stubTokenizer(), toolRender(), true, std::nullopt));
   EXPECT_EQ(params.sampling.generation_prompt, toolRender().generationPrompt);
 }
 
@@ -244,7 +287,7 @@ TEST(TemplateDerivedSamplingTest, GenerationPromptClearedForUserGrammar) {
   PromptRenderResult rendered;
   rendered.generationPrompt = "<|im_start|>assistant\n";
   EXPECT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, false));
+      params, stubTokenizer(), rendered, false, std::nullopt));
   EXPECT_TRUE(params.sampling.generation_prompt.empty());
 }
 
@@ -255,7 +298,7 @@ TEST(
   PromptRenderResult rendered = toolRender();
   rendered.grammarTriggers.clear();
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, true));
+      params, stubTokenizer(), rendered, true, std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
 }
 
@@ -264,7 +307,7 @@ TEST(TemplateDerivedSamplingTest, TriggerWordNotPreservedIsRejected) {
   PromptRenderResult rendered = toolRender();
   rendered.preservedTokens = {"</tool_call>"}; // trigger word missing
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, true));
+      params, stubTokenizer(), rendered, true, std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
 }
 
@@ -273,7 +316,7 @@ TEST(
     PreservedTokenConversionKeepsOnlySingleIdTokens) {
   common_params params = paramsWithoutReasoningBudget();
   ASSERT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), toolRender(), true));
+      params, stubTokenizer(), toolRender(), true, std::nullopt));
   EXPECT_EQ(params.sampling.preserved_tokens, (std::set<llama_token>{101, 102}))
       << "\"multi\" tokenizes to two ids and must be dropped";
 }
@@ -284,7 +327,7 @@ TEST(TemplateDerivedSamplingTest, WordTriggerPromotedToTokenWhenSingleId) {
   rendered.grammarTriggers.push_back(
       common_grammar_trigger{COMMON_GRAMMAR_TRIGGER_TYPE_WORD, "multi"});
   ASSERT_TRUE(configureTemplateDerivedSampling(
-      params, stubTokenizer(), rendered, true));
+      params, stubTokenizer(), rendered, true, std::nullopt));
   ASSERT_EQ(params.sampling.grammar_triggers.size(), 2u);
   EXPECT_EQ(
       params.sampling.grammar_triggers[0].type,
@@ -299,7 +342,7 @@ TEST(TemplateDerivedSamplingTest, WordTriggerPromotedToTokenWhenSingleId) {
 TEST(TemplateDerivedSamplingTest, ToolGrammarNotAppliedWithoutTokenizer) {
   common_params params = paramsWithoutReasoningBudget();
   EXPECT_FALSE(configureTemplateDerivedSampling(
-      params, Tokenizer{}, toolRender(), true));
+      params, Tokenizer{}, toolRender(), true, std::nullopt));
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
 }
 
@@ -379,6 +422,23 @@ TEST(
   EXPECT_TRUE(sampling.reasoning_budget_forced.empty());
 }
 
+// `stubTokenizer` plus the model-family thinking markers, so a render that
+// exposes no template thinking tags can still exercise the family fallback.
+static Tokenizer thinkingTokenizer() {
+  return [](const std::string& text) -> std::vector<llama_token> {
+    static const std::map<std::string, std::vector<llama_token>> table{
+        {"<tool_call>", {101}},
+        {"</tool_call>", {102}},
+        {"multi", {7, 8}},
+        {"<|im_start|>assistant\n", {5, 6}},
+        {"<think>", {201}},
+        {"</think>", {202}},
+    };
+    const auto it = table.find(text);
+    return it == table.end() ? std::vector<llama_token>{} : it->second;
+  };
+}
+
 // Builds the render a reasoning-budget test needs: thinking tags present, no
 // tool grammar, so only the budget half of the pass is exercised.
 static PromptRenderResult reasoningRender() {
@@ -386,6 +446,10 @@ static PromptRenderResult reasoningRender() {
   rendered.renderedByJinja = true;
   rendered.thinkingStartTag = "<think>";
   rendered.thinkingEndTags = {"</think>", "<tool_call>"};
+  // `getPrompt` always exports the scalar as `thinkingEndTags.front()`; the
+  // two are the template-tags-present test in `selectReasoningBudgetTags`, so
+  // a fixture that set only the vector would model a render that cannot occur.
+  rendered.thinkingEndTag = rendered.thinkingEndTags.front();
   rendered.generationPrompt = "<assistant><think>";
   return rendered;
 }
@@ -402,7 +466,11 @@ TEST(TemplateDerivedSamplingTest, ReasoningBudgetClearsStaleStateWhenDisabled) {
   // No tokenizer: the tag vectors cannot be built, so they must end up empty
   // rather than keeping the previous request's ids.
   EXPECT_TRUE(configureTemplateDerivedSampling(
-      params, Tokenizer{}, reasoningRender(), /* toolsRequested = */ false));
+      params,
+      Tokenizer{},
+      reasoningRender(),
+      /* toolsRequested = */ false,
+      std::nullopt));
   EXPECT_EQ(params.sampling.reasoning_budget_tokens, -1);
   EXPECT_TRUE(params.sampling.reasoning_budget_start.empty());
   EXPECT_TRUE(params.sampling.reasoning_budget_end.empty());
@@ -422,12 +490,113 @@ TEST(
   params.sampling.generation_prompt = "<assistant><think>";
 
   EXPECT_TRUE(configureTemplateDerivedSampling(
-      params, Tokenizer{}, reasoningRender(), /* toolsRequested = */ false));
+      params,
+      Tokenizer{},
+      reasoningRender(),
+      /* toolsRequested = */ false,
+      std::nullopt));
   EXPECT_EQ(params.sampling.reasoning_budget_tokens, 8);
   EXPECT_TRUE(params.sampling.reasoning_budget_start.empty());
   EXPECT_TRUE(params.sampling.reasoning_budget_end.empty());
   EXPECT_TRUE(params.sampling.reasoning_budget_forced.empty());
   EXPECT_TRUE(params.sampling.generation_prompt.empty());
+}
+
+// Regression: the reasoning-budget markers and the reasoning *detector* must
+// be built from the same source. `selectReasoningTagSource`, which drives
+// detection and so EOS-inside-reasoning substitution, has always fallen back
+// to the model-family table when the template exposes no thinking tags. The
+// budget used to read the template alone and therefore tokenised nothing, so
+// fabric built no reasoning-budget sampler (`common/sampling.cpp` needs both
+// marker lists non-empty). `grammar_should_apply` then returns true for the
+// whole request, which arms the lazy tool grammar *inside* `<think>` — the one
+// thing the budget sampler is there to prevent — and makes the substitution
+// accept in both contexts feed the grammar the close tag instead of skipping
+// it, where a triggered grammar throws.
+TEST(TemplateDerivedSamplingTest, ReasoningBudgetFallsBackToModelFamilyTags) {
+  common_params params = paramsWithoutReasoningBudget();
+  // toolRender() carries no thinking tags at all: this is the tagless
+  // template against a model whose family has a known reasoning channel.
+  EXPECT_TRUE(configureTemplateDerivedSampling(
+      params,
+      thinkingTokenizer(),
+      toolRender(),
+      /* toolsRequested = */ true,
+      ReasoningTags{.open = "<think>", .close = "</think>"}));
+
+  ASSERT_TRUE(params.sampling.grammar_lazy);
+  EXPECT_EQ(params.sampling.reasoning_budget_start, tokens({201}));
+  ASSERT_EQ(params.sampling.reasoning_budget_end.size(), 1u);
+  EXPECT_EQ(params.sampling.reasoning_budget_end.front(), tokens({202}));
+  EXPECT_TRUE(reasoningBudgetSamplerBuilt(params.sampling))
+      << "a lazy tool grammar with no budget sampler arms inside <think>";
+}
+
+// The template stays authoritative when it exposes both markers, and keeps
+// its full end-tag list — which the single-marker family fallback cannot
+// express, so preferring the fallback would silently drop the extra markers.
+TEST(TemplateDerivedSamplingTest, ReasoningBudgetPrefersTemplateOverFamily) {
+  common_params params = paramsWithoutReasoningBudget();
+
+  EXPECT_TRUE(configureTemplateDerivedSampling(
+      params,
+      thinkingTokenizer(),
+      reasoningRender(),
+      /* toolsRequested = */ false,
+      ReasoningTags{.open = "<other>", .close = "</other>"}));
+
+  EXPECT_EQ(params.sampling.reasoning_budget_start, tokens({201}));
+  ASSERT_EQ(params.sampling.reasoning_budget_end.size(), 2u)
+      << "both template end tags must survive";
+  EXPECT_EQ(params.sampling.reasoning_budget_end.front(), tokens({202}));
+  EXPECT_EQ(params.sampling.reasoning_budget_end.back(), tokens({101}));
+}
+
+// No template tags and no family entry: nothing to build the budget from, and
+// the accept in the two contexts must stay closed.
+TEST(TemplateDerivedSamplingTest, NoReasoningTagsLeavesNoBudgetSampler) {
+  common_params params = paramsWithoutReasoningBudget();
+  EXPECT_TRUE(configureTemplateDerivedSampling(
+      params,
+      thinkingTokenizer(),
+      toolRender(),
+      /* toolsRequested = */ true,
+      std::nullopt));
+
+  ASSERT_TRUE(params.sampling.grammar_lazy);
+  EXPECT_TRUE(params.sampling.reasoning_budget_start.empty());
+  EXPECT_TRUE(params.sampling.reasoning_budget_end.empty());
+  EXPECT_FALSE(reasoningBudgetSamplerBuilt(params.sampling));
+}
+
+// Mirrors qvac-fabric's own construction condition, which has no public
+// accessor: both marker lists non-empty, and a reason to want the sampler.
+TEST(ReasoningBudgetSamplerBuiltTest, MirrorsFabricConstructionCondition) {
+  common_params_sampling sampling;
+  sampling.reasoning_budget_tokens = -1;
+  EXPECT_FALSE(reasoningBudgetSamplerBuilt(sampling)) << "no markers";
+
+  sampling.reasoning_budget_start = tokens({201});
+  EXPECT_FALSE(reasoningBudgetSamplerBuilt(sampling)) << "no end markers";
+
+  sampling.reasoning_budget_end = {tokens({202})};
+  EXPECT_FALSE(reasoningBudgetSamplerBuilt(sampling))
+      << "unlimited cap, no lazy grammar, no reasoning_control";
+
+  sampling.grammar_lazy = true;
+  EXPECT_TRUE(reasoningBudgetSamplerBuilt(sampling));
+
+  sampling.grammar_lazy = false;
+  sampling.reasoning_budget_tokens = 0;
+  EXPECT_TRUE(reasoningBudgetSamplerBuilt(sampling)) << "a zero cap is finite";
+
+  sampling.reasoning_budget_tokens = -1;
+  sampling.reasoning_control = true;
+  EXPECT_TRUE(reasoningBudgetSamplerBuilt(sampling));
+
+  sampling.reasoning_budget_start.clear();
+  EXPECT_FALSE(reasoningBudgetSamplerBuilt(sampling))
+      << "markers are required whatever else is set";
 }
 
 // Regression: a tools request leaves `generation_prompt` (and the rest of the

@@ -312,9 +312,14 @@ private:
   void capturePendingThinkClose();
   void compactThinkSpan();
   [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
+  // See TextLlmContext::configureReasoningTags: `fallbackTags` is the
+  // model-family reasoning channel, resolved by the caller so the
+  // reasoning-budget markers come from the same value.
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-      const std::string& forcedOpenText);
+      const std::string& forcedOpenText,
+      const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
+          fallbackTags);
 
   // Delegates to `rollbackState_.recordPostReasoningToken` while the
   // post-reasoning capture phase is active, which starts once the close

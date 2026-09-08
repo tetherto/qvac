@@ -404,10 +404,15 @@ void MtmdLlmContext::tokenizeChat(
                                                       rendered.generationPrompt,
                                                       rendered.thinkingStartTag)
                                                 : std::string{};
+  // See TextLlmContext::tokenizeChat: resolved once and shared with the
+  // reasoning-budget markers below, or the two disagree about the tag source.
+  const std::optional<ReasoningTags> fallbackReasoningTags =
+      selectReasoningTagsForModel(modelCtx_.model);
   configureReasoningTags(
       rendered.thinkingStartTag,
       rendered.thinkingEndTag,
-      thinkingForcedOpenText_);
+      thinkingForcedOpenText_,
+      fallbackReasoningTags);
 
   if (formattedChat.empty()) {
     std::string errorMsg = string_format(
@@ -439,7 +444,7 @@ void MtmdLlmContext::tokenizeChat(
   // stay poisoned for the life of the loaded model.
   common_params_sampling savedSampling = params_.sampling;
   if (configureTemplateDerivedSampling(
-          params_, tokenize, rendered, !tools.empty())) {
+          params_, tokenize, rendered, !tools.empty(), fallbackReasoningTags)) {
     try {
       CommonSamplerPtr nextSmpl(
           common_sampler_init(modelCtx_.model, params_.sampling));
@@ -950,9 +955,10 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       // See TextLlmContext::onLogitsReady: the substituted close tag has to
       // reach fabric's reasoning-budget matcher, or it stays in COUNTING and
       // a lazy tool grammar is disarmed for the rest of the request. Lazy
-      // only, which is what makes feeding the grammar sampler impossible
-      // here.
-      if (params_.sampling.grammar_lazy) {
+      // *and* budget-sampler-built, which together are what make feeding the
+      // grammar sampler impossible here.
+      if (params_.sampling.grammar_lazy &&
+          reasoningBudgetSamplerBuilt(params_.sampling)) {
         common_sampler_accept(smpl_.get(), tokenId, true);
       }
       reasoningState_.inside_reasoning = false;
@@ -1160,15 +1166,14 @@ MtmdLlmContext::takeUserVisiblePerfSnapshot() {
 
 void MtmdLlmContext::configureReasoningTags(
     const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-    const std::string& forcedOpenText) {
+    const std::string& forcedOpenText,
+    const std::optional<ReasoningTags>& fallbackTags) {
   // Family-default tags act as both the fallback when the active chat
   // template does not expose reasoning tags, and as the source for the
   // Qwen-family single-token close marker used by EOS-inside-reasoning
-  // recovery. Resolved once so the lookup runs at most once per
-  // prompt render.
-  const std::optional<ReasoningTags> fallbackTags =
-      selectReasoningTagsForModel(modelCtx_.model);
-
+  // recovery. Resolved by the caller so the lookup runs at most once per
+  // prompt render and the reasoning-budget markers can be derived from the
+  // same value.
   const std::optional<ReasoningTags> reasoningTags =
       selectReasoningTagSource(thinkingStartTag, thinkingEndTag, fallbackTags);
 
@@ -1764,8 +1769,10 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     tokenId = reasoningState_.cached_close_tag_token;
     tokenStr = common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
     // See TextLlmContext::onLogitsReady for why the substituted close tag
-    // must reach the reasoning-budget matcher, and why lazy-only is safe.
-    if (params_.sampling.grammar_lazy) {
+    // must reach the reasoning-budget matcher, and why the lazy flag has to
+    // be paired with the budget sampler actually being built.
+    if (params_.sampling.grammar_lazy &&
+        reasoningBudgetSamplerBuilt(params_.sampling)) {
       common_sampler_accept(smpl_.get(), tokenId, true);
     }
     reasoningState_.inside_reasoning = false;

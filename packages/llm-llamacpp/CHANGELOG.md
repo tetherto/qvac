@@ -36,6 +36,16 @@
 - A chat-template grammar the sampler rejects no longer stays resident in the
   loaded model's sampling parameters, and a failing per-request restore can no
   longer terminate the process.
+- `reasoning_budget` now takes effect on a model whose family has a known
+  reasoning channel but whose active chat template does not expose thinking
+  tags — a manual `chat_template` override, or a GGUF whose embedded template
+  omits them. Reasoning *detection* has always fallen back to the model-family
+  table in that case while the reasoning-budget sampler read the template's
+  tags alone, so the cap was silently inert. Both now come from one source.
+  With tools this also restores the guarantee the tool grammar depends on: the
+  budget sampler is what keeps a lazy tool grammar from arming inside the
+  reasoning block, so without it a `<tool_call>` written inside `<think>`
+  constrained the rest of the reasoning to tool-call syntax.
 
 ## [0.51.0] - 2026-09-08
 

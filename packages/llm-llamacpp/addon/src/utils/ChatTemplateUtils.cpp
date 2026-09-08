@@ -203,6 +203,38 @@ std::optional<ReasoningTags> selectReasoningTagSource(
   return fallbackTags;
 }
 
+ReasoningBudgetTags selectReasoningBudgetTags(
+    const std::string& templateThinkingStartTag,
+    const std::string& templateThinkingEndTag,
+    const std::vector<std::string>& templateThinkingEndTags,
+    const std::optional<ReasoningTags>& fallbackTags) {
+  // Same both-or-neither test as `selectReasoningTagSource`, so the budget and
+  // the detector cannot disagree about which source is in play. Written out
+  // rather than derived from that function's return because the template
+  // branch keeps the full end-tag list, which `ReasoningTags` cannot hold.
+  if (!templateThinkingStartTag.empty() && !templateThinkingEndTag.empty()) {
+    return ReasoningBudgetTags{
+        .startTag = templateThinkingStartTag,
+        .endTags = templateThinkingEndTags};
+  }
+  if (!fallbackTags.has_value()) {
+    return ReasoningBudgetTags{};
+  }
+  return ReasoningBudgetTags{
+      .startTag = fallbackTags->open, .endTags = {fallbackTags->close}};
+}
+
+bool reasoningBudgetSamplerBuilt(const common_params_sampling& sampling) {
+  // Mirrors qvac-fabric `common/sampling.cpp`: both marker lists must be
+  // non-empty, and something must actually want the sampler — a lazy grammar
+  // (which needs it for thinking-block suppression), a finite cap, or
+  // `reasoning_control`.
+  return !sampling.reasoning_budget_start.empty() &&
+         !sampling.reasoning_budget_end.empty() &&
+         (sampling.grammar_lazy || sampling.reasoning_budget_tokens >= 0 ||
+          sampling.reasoning_control);
+}
+
 std::optional<ReasoningTags>
 selectReasoningTagsForModel(const ::llama_model* model) {
   if (model == nullptr) {
@@ -366,15 +398,17 @@ void applyReasoningBudget(
   next.reasoning_budget_forced.clear();
   next.generation_prompt.clear();
 
-  // The tag vectors are populated whenever the template exposes thinking
-  // tags, *regardless* of the cap — llama-server does the same
-  // (tools/server/server-common.cpp). fabric only builds the reasoning-budget
-  // sampler when these are non-empty, and that sampler is also what keeps a
-  // lazy tool grammar from arming inside the reasoning block: without it,
-  // `grammar_should_apply` returns true unconditionally and a `<tool_call>`
-  // written inside `<think>` would trigger tool-call syntax mid-reasoning.
-  // With an unlimited cap and no lazy grammar fabric still builds nothing, so
-  // this costs only the tokenization.
+  // The tag vectors are populated whenever reasoning markers are known at
+  // all, *regardless* of the cap — llama-server does the same
+  // (tools/server/server-common.cpp). "Known at all" is the caller's
+  // `selectReasoningBudgetTags` result, which is template-first with a
+  // model-family fallback, not the template alone: fabric only builds the
+  // reasoning-budget sampler when these are non-empty, and that sampler is
+  // also what keeps a lazy tool grammar from arming inside the reasoning
+  // block: without it, `grammar_should_apply` returns true unconditionally
+  // and a `<tool_call>` written inside `<think>` would trigger tool-call
+  // syntax mid-reasoning. With an unlimited cap and no lazy grammar fabric
+  // still builds nothing, so this costs only the tokenization.
   //
   // `generation_prompt` doubles as the grammar-prefill input, and fabric feeds
   // it to any eager prefill-needing grammar (common/sampling.cpp). An
@@ -691,14 +725,23 @@ void requireToolChoiceHonoured(
 
 bool configureTemplateDerivedSampling(
     common_params& params, const Tokenizer& tokenize,
-    const PromptRenderResult& rendered, bool toolsRequested) {
+    const PromptRenderResult& rendered, bool toolsRequested,
+    const std::optional<ReasoningTags>& fallbackReasoningTags) {
   common_params_sampling next = params.sampling;
+  // Not `rendered.thinkingStartTag` / `rendered.thinkingEndTags` directly:
+  // those are the template's markers alone, while the reasoning detector
+  // falls back to the model-family table. See `selectReasoningBudgetTags`.
+  const ReasoningBudgetTags budgetTags = selectReasoningBudgetTags(
+      rendered.thinkingStartTag,
+      rendered.thinkingEndTag,
+      rendered.thinkingEndTags,
+      fallbackReasoningTags);
   applyReasoningBudget(
       next,
       params,
       tokenize,
-      rendered.thinkingStartTag,
-      rendered.thinkingEndTags,
+      budgetTags.startTag,
+      budgetTags.endTags,
       rendered.generationPrompt);
 
   // Only a TOOL_CALLS grammar is ours to clear. A USER or OUTPUT_FORMAT

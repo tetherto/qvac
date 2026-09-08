@@ -414,10 +414,17 @@ void TextLlmContext::tokenizeChat(
                                                       rendered.generationPrompt,
                                                       rendered.thinkingStartTag)
                                                 : std::string{};
+  // Resolved once and shared by the reasoning detector below and the
+  // reasoning-budget markers in `configureTemplateDerivedSampling`. Those two
+  // must agree on the tag source or fabric builds no reasoning-budget sampler
+  // for a family-fallback model — see `selectReasoningBudgetTags`.
+  const std::optional<ReasoningTags> fallbackReasoningTags =
+      selectReasoningTagsForModel(modelCtx_.model);
   configureReasoningTags(
       rendered.thinkingStartTag,
       rendered.thinkingEndTag,
-      thinkingForcedOpenText_);
+      thinkingForcedOpenText_,
+      fallbackReasoningTags);
   const Tokenizer tokenize = [this](const std::string& text) {
     return ::common_tokenize(modelCtx_.lctx, text, false, true);
   };
@@ -446,7 +453,7 @@ void TextLlmContext::tokenizeChat(
   // every later request rebuilding the sampler fails too.
   common_params_sampling savedSampling = params_.sampling;
   if (configureTemplateDerivedSampling(
-          params_, tokenize, rendered, !tools.empty())) {
+          params_, tokenize, rendered, !tools.empty(), fallbackReasoningTags)) {
     try {
       CommonSamplerPtr nextSmpl(
           common_sampler_init(modelCtx_.model, params_.sampling));
@@ -1071,13 +1078,18 @@ SequenceStepResult TextLlmContext::onLogitsReady(
       // `tool_choice: "auto"` — the PR's whole constraint switching itself
       // off with no error.
       //
-      // Restricted to the lazy case, and that restriction is what makes it
-      // safe: with `grammar_lazy` set and the budget in COUNTING, fabric
-      // computes `accept_grammar == false`, so the grammar sampler is not
-      // fed this token and cannot throw on it. An eager grammar cannot
-      // reach this branch at all — EOG is masked to -INFINITY unless a
-      // grammar stack is empty (llama-grammar.cpp:1360-1381).
-      if (params_.sampling.grammar_lazy) {
+      // Restricted to a lazy grammar *with a reasoning-budget sampler
+      // actually built*, and that pair is what makes it safe: only then does
+      // fabric compute `accept_grammar == false` and skip the grammar
+      // sampler, which cannot therefore throw on this token. `grammar_lazy`
+      // alone is not enough — `grammar_should_apply` returns true when there
+      // is no budget sampler at all (sampling.cpp:456-457), and the token
+      // would reach `llama_grammar_accept_token`, which throws on a piece the
+      // grammar does not admit. An eager grammar cannot reach this branch at
+      // all — EOG is masked to -INFINITY unless a grammar stack is empty
+      // (llama-grammar.cpp:1360-1381).
+      if (params_.sampling.grammar_lazy &&
+          reasoningBudgetSamplerBuilt(params_.sampling)) {
         common_sampler_accept(smpl_.get(), tokenId, true);
       }
       reasoningState_.inside_reasoning = false;
@@ -1225,15 +1237,14 @@ bool TextLlmContext::rollbackCurrentRequest(
 
 void TextLlmContext::configureReasoningTags(
     const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-    const std::string& forcedOpenText) {
+    const std::string& forcedOpenText,
+    const std::optional<ReasoningTags>& fallbackTags) {
   // Family-default tags act as both the fallback when the active chat
   // template does not expose reasoning tags, and as the source for the
   // Qwen-family single-token close marker used by EOS-inside-reasoning
-  // recovery. Resolved once so the lookup runs at most once per
-  // prompt render.
-  const std::optional<ReasoningTags> fallbackTags =
-      selectReasoningTagsForModel(modelCtx_.model);
-
+  // recovery. Resolved by the caller so the lookup runs at most once per
+  // prompt render and the reasoning-budget markers can be derived from the
+  // same value.
   const std::optional<ReasoningTags> reasoningTags =
       selectReasoningTagSource(thinkingStartTag, thinkingEndTag, fallbackTags);
 
@@ -1797,9 +1808,11 @@ bool TextLlmContext::handleReasoningEOS(
   // Same reason as the batch path in `onLogitsReady`: the substituted close
   // tag has to reach fabric's reasoning-budget matcher, or it stays in
   // COUNTING and `grammar_should_apply` keeps a lazy tool grammar disarmed
-  // for the rest of the request. Lazy only, so the grammar sampler is
-  // provably not fed this token.
-  if (params_.sampling.grammar_lazy) {
+  // for the rest of the request. Lazy *and* budget-sampler-built, which is
+  // what makes the grammar sampler provably not fed this token; see the
+  // batch path for why the lazy flag alone is not enough.
+  if (params_.sampling.grammar_lazy &&
+      reasoningBudgetSamplerBuilt(params_.sampling)) {
     common_sampler_accept(smpl_.get(), tokenId, true);
   }
 

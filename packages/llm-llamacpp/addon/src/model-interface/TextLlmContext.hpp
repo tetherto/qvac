@@ -256,9 +256,14 @@ private:
   [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
   [[nodiscard]] bool rollbackCurrentRequest(
       const std::function<void(const std::string&)>& outputCallback);
+  // `fallbackTags` is the model-family reasoning channel, resolved by the
+  // caller so `configureTemplateDerivedSampling` can build the
+  // reasoning-budget markers from the same value.
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-      const std::string& forcedOpenText);
+      const std::string& forcedOpenText,
+      const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
+          fallbackTags);
 
   // Delegates to `rollbackState_.recordPostReasoningToken` while the
   // post-reasoning capture phase is active, which starts once the close

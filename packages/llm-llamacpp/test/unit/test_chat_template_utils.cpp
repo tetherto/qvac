@@ -1,4 +1,5 @@
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -227,6 +228,80 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourceTemplateMatchesFallback) {
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->open, "<think>");
   EXPECT_EQ(result->close, "</think>");
+}
+
+// `selectReasoningBudgetTags` decides which markers the reasoning-budget
+// sampler is built from, and has to agree with `selectReasoningTagSource`
+// above on every input — a disagreement means the reasoning detector arms
+// while fabric builds no budget sampler.
+TEST_F(ChatTemplateUtilsTest, SelectReasoningBudgetTagsPrefersTemplate) {
+  const ReasoningTags fallback{.open = "<other>", .close = "</other>"};
+  const ReasoningBudgetTags result = selectReasoningBudgetTags(
+      "<think>", "</think>", {"</think>", "<tool_call>"}, fallback);
+  EXPECT_EQ(result.startTag, "<think>");
+  ASSERT_EQ(result.endTags.size(), 2u)
+      << "the template's extra end markers must survive";
+  EXPECT_EQ(result.endTags.front(), "</think>");
+  EXPECT_EQ(result.endTags.back(), "<tool_call>");
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningBudgetTagsFallsBackOnEmptyStart) {
+  const ReasoningTags fallback{.open = "<think>", .close = "</think>"};
+  const ReasoningBudgetTags result =
+      selectReasoningBudgetTags("", "</think>", {"</think>"}, fallback);
+  EXPECT_EQ(result.startTag, "<think>");
+  ASSERT_EQ(result.endTags.size(), 1u);
+  EXPECT_EQ(result.endTags.front(), "</think>");
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningBudgetTagsFallsBackOnEmptyEnd) {
+  const ReasoningTags fallback{.open = "<think>", .close = "</think>"};
+  const ReasoningBudgetTags result =
+      selectReasoningBudgetTags("<start>", "", {}, fallback);
+  EXPECT_EQ(result.startTag, "<think>");
+  ASSERT_EQ(result.endTags.size(), 1u);
+  EXPECT_EQ(result.endTags.front(), "</think>");
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningBudgetTagsEmptyWithoutAnySource) {
+  const ReasoningBudgetTags result =
+      selectReasoningBudgetTags("", "", {}, std::nullopt);
+  EXPECT_TRUE(result.startTag.empty());
+  EXPECT_TRUE(result.endTags.empty());
+}
+
+// The two selectors must never disagree about which source is in play: the
+// budget having markers while the detector has none, or the reverse, is the
+// state that silently disarms the tool grammar's reasoning-block guard.
+TEST_F(ChatTemplateUtilsTest, ReasoningBudgetAndDetectorAgreeOnSource) {
+  const ReasoningTags fallback{.open = "<think>", .close = "</think>"};
+  struct Case {
+    std::string startTag;
+    std::string endTag;
+    std::optional<ReasoningTags> fallback;
+  };
+  const std::vector<Case> cases{
+      {"<t>", "</t>", fallback},
+      {"<t>", "</t>", std::nullopt},
+      {"", "</t>", fallback},
+      {"<t>", "", fallback},
+      {"", "", fallback},
+      {"", "", std::nullopt},
+      {"", "</t>", std::nullopt},
+  };
+  for (const Case& c : cases) {
+    const std::optional<ReasoningTags> detector =
+        selectReasoningTagSource(c.startTag, c.endTag, c.fallback);
+    const ReasoningBudgetTags budget = selectReasoningBudgetTags(
+        c.startTag, c.endTag, {c.endTag}, c.fallback);
+    EXPECT_EQ(detector.has_value(), !budget.startTag.empty())
+        << "start='" << c.startTag << "' end='" << c.endTag << "'";
+    if (detector.has_value()) {
+      EXPECT_EQ(budget.startTag, detector->open);
+      ASSERT_FALSE(budget.endTags.empty());
+      EXPECT_EQ(budget.endTags.front(), detector->close);
+    }
+  }
 }
 
 TEST_F(ChatTemplateUtilsTest, GetChatTemplateForModelWithManualOverride) {
