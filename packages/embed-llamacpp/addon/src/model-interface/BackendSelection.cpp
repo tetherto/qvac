@@ -89,7 +89,7 @@ bool hasMetalFamily(
          registryName == "metal";
 }
 
-// Mirror ocr-ggml's validated families; registry identities match exactly.
+// Follow ocr-ggml's matcher shape with embed-specific eligible families.
 bool isEligibleGpuDevice(
     const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const enum ggml_backend_dev_type type = bckI.ggml_backend_dev_type(dev);
@@ -422,8 +422,9 @@ bool backend_selection::gpuBackendSupportsRowSplit(
   // does not support split buffers" on the first one whose backend registry
   // lacks `ggml_backend_split_buffer_type`. Split mode now pins `--device` to
   // the eligible list, so that set is every eligible GPU device — a single
-  // unsupported backend in the process is enough to fail the load. So require
-  // all of them, not any one, and treat "no GPU devices at all" as unsupported.
+  // eligible backend without split buffers is enough to fail the load. So
+  // require all of them, not any one, and treat an empty eligible list as
+  // unsupported.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
