@@ -112,7 +112,8 @@ The helper emits a JSON manifest with:
 - `touchedPackages[].relatedExampleCommands`
 - `touchedPackages[].addedOrModifiedTests`
 - `touchedPackages[].relatedTests`
-- SDK-only `sdkE2eSetup`
+- `touchedPackages[].sdkE2eSetup` — on the SDK package, and also on `packages/inference` if it's touched (a
+  local inference build only reaches e2e through the SDK's setup, not a standalone inference build)
 
 Discovery is based on committed PR state only. Do not run `git diff`, `git status`, or `git ls-files --modified` inside the worktree for classification.
 
@@ -172,19 +173,15 @@ Do not execute those agentically. `e2e` setup needs npm/GitHub Packages auth tha
 
 ## SDK e2e setup
 
-For any SDK e2e command, run setup from `packages/sdk/e2e` first.
-
-- SDK source outside `packages/sdk/e2e/` changed:
-
-  ```bash
-  npm run install:build:full
-  ```
-
-- Only `packages/sdk/e2e/` changed:
-
-  ```bash
-  npm run install:build
-  ```
+For any SDK e2e command, run setup from `packages/sdk/e2e` first, using the exact command from
+`touchedPackages[].sdkE2eSetup.command` in the discovery manifest — do not re-derive it from which files
+changed. It resolves to `install:build:full` whenever the PR touches `packages/sdk` outside `e2e/` or
+`packages/inference` at all, even if `packages/inference` itself has no diff lines: CI always builds
+`packages/inference` from the branch for SDK e2e (`inference-source: branch` is unconditional in
+`on-pr-test-sdk.yml`), because the checked-out `packages/inference` can already be ahead of the last npm
+publish from unrelated merged PRs — testing the branch's SDK against the *published* range (what
+`install:build` alone would do) can silently diverge from what CI tests. Only a PR limited to
+`packages/sdk/e2e/` resolves to the lighter `install:build`.
 
 Do not skip setup based on assumed previous state. The PR worktree is treated as clean/synchronized, and SDK e2e validation must prepare the test package explicitly.
 
