@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <deque>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -71,7 +72,7 @@ class MockBackendInterface {
 public:
   std::vector<MockDevice> devices;
   // Store string results to ensure they persist during function calls
-  mutable std::vector<std::string> string_storage;
+  mutable std::deque<std::string> string_storage;
 
   // Static pointer for function pointer callbacks (thread-safe for tests)
   static thread_local MockBackendInterface* currentInstance;
@@ -261,6 +262,15 @@ void expectChosen(
   expectChosen(result, expectedBackend, expectedBackendName);
 }
 
+void expectChosenForPreference(
+    MockBackendInterface& mockBackend, BackendType preferredBackend,
+    BackendType expectedBackend, const std::string& expectedBackendName,
+    const std::optional<MainGpu>& mainGpu = std::nullopt) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(preferredBackend, bckI, nullptr, mainGpu);
+  expectChosen(result, expectedBackend, expectedBackendName);
+}
+
 void expectChosenWithMetadata(
     MockBackendInterface& mockBackend, BackendType preferredBackend,
     BackendType expectedBackend, const std::string& expectedBackendName,
@@ -414,12 +424,14 @@ TEST_F(BackendSelectionTest, RocmAfterVulkanChoosesVulkan) {
 
 TEST_F(BackendSelectionTest, RocmOnlyFallsBackToCpu) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
-  expectChosen(mockBackend, BackendType::CPU, "none");
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
 TEST_F(BackendSelectionTest, UnknownGpuFallsBackToCpu) {
   mockBackend.addDevice(createIGPUDevice("Future GPU", "FutureBackend0"));
-  expectChosen(mockBackend, BackendType::CPU, "none");
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
 TEST_F(BackendSelectionTest, MtlDeviceIsEligibleCaseInsensitively) {
@@ -431,7 +443,15 @@ TEST_F(BackendSelectionTest, MainGpuIndexTargetingRocmFallsBackToCpu) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
   mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
   MainGpu mainGpu = 0;
-  expectChosen(mockBackend, BackendType::CPU, "none", mainGpu);
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+}
+
+TEST_F(BackendSelectionTest, RegistryFamilyNamesRequireExactIdentity) {
+  mockBackend.addDevice(MockDevice(
+      "Future GPU", "Future0", GGML_BACKEND_DEVICE_TYPE_GPU, "NotVulkan"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
 // Test tryMainGpuFromMap with integer device index
@@ -1243,6 +1263,15 @@ TEST_F(BackendSelectionTest, SplitDevices_OnlyCpuAndAccel_ReturnsEmpty) {
   EXPECT_TRUE(getSplitDeviceNames(bckI).empty());
 }
 
+TEST_F(BackendSelectionTest, SplitDevices_ExcludeRocmAndSycl) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  mockBackend.addDevice(createGPUDevice("Intel Arc", "SYCL0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA GPU", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI), (std::vector<std::string>{VULKAN0_BACK}));
+}
+
 // The headline case: a discrete + integrated host must not put weights or KV
 // on the iGPU, because tensor parallelism paces the model by its slowest
 // participant.
@@ -1263,14 +1292,14 @@ TEST_F(BackendSelectionTest, SplitDevices_FallsBackToIgpuWhenNoDiscrete) {
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
 }
 
-// One physical GPU registered by both Vulkan and HIP under GGML_BACKEND_DL
-// must be listed once, or it receives two shards. Same device_id, same
-// description — this is what a dual-registered card actually looks like.
+// Two eligible registry entries for one physical GPU must be listed once, or
+// the device receives two shards. Unsupported families are filtered before
+// deduplication and therefore cannot prove this branch.
 TEST_F(BackendSelectionTest, SplitDevices_DedupesDualRegisteredGpu) {
   mockBackend.addDevice(withDeviceId(
       createGPUDevice("AMD Radeon 8060S", "vulkan0"), "0000:03:00.0"));
   mockBackend.addDevice(withDeviceId(
-      createGPUDevice("AMD Radeon 8060S", "rocm0"), "0000:03:00.0"));
+      createGPUDevice("AMD Radeon 8060S", "vulkan1"), "0000:03:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
 }

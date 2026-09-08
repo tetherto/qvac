@@ -967,13 +967,18 @@ NormalizedLoad normalizeLoadForFit(
       const std::vector<std::string> splitDevices =
           dependencies.splitDeviceNames();
       if (splitDevices.empty()) {
-        // No enumerable GPU device: leave --device alone rather than emitting
-        // an empty list, and let fabric's own selection and checks decide.
+        splitMode = LLAMA_SPLIT_MODE_NONE;
+        params.split_mode = LLAMA_SPLIT_MODE_NONE;
+        params.main_gpu = -1;
+        params.n_gpu_layers = 0;
+        result.runtimeBackendDevice = 0;
+        configFilemap.erase("tensor-split");
+        configVector.emplace_back("--device");
+        configVector.emplace_back("none");
         QLOG_IF(
             Priority::WARNING,
             "[LlamaModel] split mode: no eligible GPU device could be "
-            "enumerated for an explicit device list; falling back to "
-            "qvac-fabric's own device selection\n");
+            "enumerated; falling back to CPU\n");
       } else {
         std::string deviceList;
         for (const std::string& device : splitDevices) {

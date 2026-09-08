@@ -551,9 +551,7 @@ TEST_F(LoadFitNormalizationTest, SplitModesForwardEligibleDeviceList) {
   }
 }
 
-// No enumerable GPU: fall back to fabric's own selection rather than emitting
-// an empty --device, which the parser would reject.
-TEST_F(LoadFitNormalizationTest, SplitModeWithNoEnumerableDevicesDoesNotThrow) {
+TEST_F(LoadFitNormalizationTest, SplitModeWithNoEnumerableDevicesUsesCpu) {
   auto config = baseConfig();
   config["split-mode"] = "tensor";
   const auto result = lfn::normalizeLoadForFit(
@@ -562,7 +560,9 @@ TEST_F(LoadFitNormalizationTest, SplitModeWithNoEnumerableDevicesDoesNotThrow) {
       metadata_,
       {},
       backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {}));
-  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.params.main_gpu, -1);
+  EXPECT_EQ(result.params.n_gpu_layers, 0);
 }
 
 // A caller-supplied fit=on must still be honoured outside tensor mode.
