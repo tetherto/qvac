@@ -26,7 +26,8 @@ const UNREACHABLE_MODEL = path.join(
 const UNREACHABLE_BACKENDS_DIR = path.join(process.cwd(), 'model-fit-no-such-backends-dir')
 
 function hasSupportedGpu(modelPath) {
-  return fitParams({ modelPath, marginMiB: 0 }).mainGpu >= 0
+  const result = fitParams({ modelPath, marginMiB: 0 })
+  return result.status === FIT_STATUS.SUCCESS && result.mainGpu >= 0
 }
 
 test('fitParams rejects invalid config', async function (t) {

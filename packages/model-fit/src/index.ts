@@ -143,7 +143,7 @@ export interface FitPlan {
    * projected to fit.
    */
   splitMode: number
-  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
+  /** Supported-GPU ordinal for GPU placement, or -1 for any CPU-only plan. */
   mainGpu: number
   /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
   typeK: number

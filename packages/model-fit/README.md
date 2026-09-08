@@ -42,7 +42,7 @@ const plan = fitParams({
 //   nCtx,         // fitted context size
 //   nBatch, nUbatch,
 //   splitMode,    // llama_split_mode — how the model splits across GPUs
-//   mainGpu,      // supported-device ordinal used when splitMode is NONE
+//   mainGpu,      // supported-GPU ordinal, or -1 for a CPU-only plan
 //   typeK, typeV, // ggml_type of the K/V cache — changes KV memory
 //   flashAttnType,// llama_flash_attn_type — changes KV/compute memory
 //   maxDevices,   // llama_max_devices() — a build-time bound, NOT a detection
