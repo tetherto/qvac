@@ -331,6 +331,25 @@ std::size_t BertEmbeddings::size() const { return embeddingCount_; }
 
 std::size_t BertEmbeddings::embeddingSize() const { return embeddingSize_; }
 
+bool appendSplitDeviceArgument(
+    std::vector<std::string>& configVector,
+    const std::function<std::vector<std::string>()>& splitDeviceNames) {
+  const std::vector<std::string> devices = splitDeviceNames();
+  if (devices.empty()) {
+    return false;
+  }
+  std::string deviceList;
+  for (const std::string& device : devices) {
+    if (!deviceList.empty()) {
+      deviceList += ",";
+    }
+    deviceList += device;
+  }
+  configVector.emplace_back("--device");
+  configVector.emplace_back(std::move(deviceList));
+  return true;
+}
+
 namespace {
 llama_split_mode
 parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
@@ -472,26 +491,21 @@ BertModelSetup setupParams(
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(chosenBackend.second);
-    } else {
-      const std::vector<std::string> splitDevices =
-          backend_selection::getSplitDeviceNames();
-      if (splitDevices.empty()) {
-        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
-            GGML_LOG_LEVEL_WARN,
-            "[BertModel] split mode: no eligible GPU device could be "
-            "enumerated; falling back to qvac-fabric device selection\n",
-            nullptr);
-      } else {
-        std::string deviceList;
-        for (const std::string& device : splitDevices) {
-          if (!deviceList.empty()) {
-            deviceList += ",";
-          }
-          deviceList += device;
-        }
-        configVector.emplace_back("--device");
-        configVector.emplace_back(deviceList);
-      }
+    } else if (!appendSplitDeviceArgument(configVector, [] {
+                 return backend_selection::getSplitDeviceNames();
+               })) {
+      params.split_mode = LLAMA_SPLIT_MODE_NONE;
+      params.main_gpu = -1;
+      params.n_gpu_layers = 0;
+      result.resolvedBackendDevice = 0;
+      configFilemap.erase("tensor-split");
+      configVector.emplace_back("--device");
+      configVector.emplace_back("none");
+      qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+          GGML_LOG_LEVEL_WARN,
+          "[BertModel] split mode: no eligible GPU device could be "
+          "enumerated; falling back to CPU\n",
+          nullptr);
     }
     configFilemap.erase(deviceIt);
 

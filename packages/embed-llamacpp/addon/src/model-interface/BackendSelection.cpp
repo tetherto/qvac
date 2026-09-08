@@ -71,7 +71,7 @@ bool hasBackendFamily(
     std::string_view deviceName, std::string_view registryName,
     std::string_view family) {
   return deviceName.find(family) != std::string_view::npos ||
-         registryName.find(family) != std::string_view::npos;
+         registryName == family;
 }
 
 bool hasMetalFamily(
@@ -79,9 +79,13 @@ bool hasMetalFamily(
   const auto hasMetalPrefix = [](std::string_view name) {
     return name.starts_with("mtl") || name.starts_with("metal");
   };
-  return hasMetalPrefix(deviceName) || hasMetalPrefix(registryName);
+  return hasMetalPrefix(deviceName) || registryName == "mtl" ||
+         registryName == "metal";
 }
 
+// Policy copied from ocr-ggml: admit only backend families this addon has
+// validated. Device names may carry an adapter suffix; registry names are
+// canonical ggml identities and therefore require an exact match.
 bool isEligibleGpuDevice(
     const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const enum ggml_backend_dev_type type = bckI.ggml_backend_dev_type(dev);

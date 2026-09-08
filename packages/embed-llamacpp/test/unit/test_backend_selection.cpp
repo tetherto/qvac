@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <deque>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -60,7 +61,7 @@ static MockDevice createCPUDevice(std::string&& desc, std::string&& backend) {
 class MockBackendInterface {
 public:
   std::vector<MockDevice> devices;
-  mutable std::vector<std::string> string_storage;
+  mutable std::deque<std::string> string_storage;
 
   static thread_local MockBackendInterface* currentInstance;
 
@@ -245,6 +246,15 @@ void expectChosen(
   expectChosen(result, expectedBackend, expectedBackendName);
 }
 
+void expectChosenForPreference(
+    MockBackendInterface& mockBackend, BackendType preferredBackend,
+    BackendType expectedBackend, const std::string& expectedBackendName,
+    const std::optional<MainGpu>& mainGpu = std::nullopt) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(preferredBackend, bckI, mainGpu);
+  expectChosen(result, expectedBackend, expectedBackendName);
+}
+
 TEST_F(BackendSelectionTest, AdrenoOpenCLAndVulkanChoosesOpenCL) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
@@ -341,14 +351,22 @@ TEST_F(BackendSelectionTest, RocmAfterVulkanChoosesVulkan) {
   expectChosen(mockBackend, BackendType::GPU, "vulkan0");
 }
 
+TEST_F(BackendSelectionTest, IntegratedRocmIsExcluded) {
+  mockBackend.addDevice(createIGPUDevice("AMD Radeon", "ROCm0"));
+  mockBackend.addDevice(createIGPUDevice("Android GPU", VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
 TEST_F(BackendSelectionTest, RocmOnlyFallsBackToCpu) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
-  expectChosen(mockBackend, BackendType::CPU, "none");
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
 TEST_F(BackendSelectionTest, UnknownGpuFallsBackToCpu) {
   mockBackend.addDevice(createIGPUDevice("Future GPU", "FutureBackend0"));
-  expectChosen(mockBackend, BackendType::CPU, "none");
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
 TEST_F(BackendSelectionTest, MtlDeviceIsEligibleCaseInsensitively) {
@@ -360,7 +378,15 @@ TEST_F(BackendSelectionTest, MainGpuIndexTargetingRocmFallsBackToCpu) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
   mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
   MainGpu mainGpu = 0;
-  expectChosen(mockBackend, BackendType::CPU, "none", mainGpu);
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+}
+
+TEST_F(BackendSelectionTest, RegistryFamilyNamesRequireExactIdentity) {
+  mockBackend.addDevice(MockDevice(
+      "Future GPU", "Future0", GGML_BACKEND_DEVICE_TYPE_GPU, "NotVulkan"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
 TEST_F(BackendSelectionTest, TryMainGpuFromMapWithInteger) {
@@ -626,6 +652,7 @@ TEST_F(BackendSelectionTest, GpuCount_UnsupportedBackendsIgnored) {
 
 TEST_F(BackendSelectionTest, SplitDevicesExcludeUnsupportedBackends) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  mockBackend.addDevice(createGPUDevice("Intel Arc", "SYCL0"));
   mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));

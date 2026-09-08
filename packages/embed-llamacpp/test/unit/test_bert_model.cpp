@@ -40,13 +40,11 @@ double getStatValue(
     if (stat.first == key) {
       return std::visit(
           [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
+            if constexpr (
+                std::is_same_v<std::decay_t<decltype(value)>, double>) {
               return value;
-            } else if constexpr (std::is_same_v<
-                                     std::decay_t<decltype(value)>,
-                                     int64_t>) {
+            } else if constexpr (
+                std::is_same_v<std::decay_t<decltype(value)>, int64_t>) {
               return static_cast<double>(value);
             } else {
               return 0.0;
@@ -990,6 +988,21 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
     // intended signal to revisit this expectation.
     EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
   }
+}
+
+TEST_F(BertModelTest, SplitDeviceProviderPinsEligibleConsumerList) {
+  std::vector<std::string> arguments;
+  size_t providerCalls = 0;
+  const bool appended = appendSplitDeviceArgument(arguments, [&providerCalls] {
+    ++providerCalls;
+    return std::vector<std::string>{"Vulkan0", "Vulkan1"};
+  });
+
+  EXPECT_TRUE(appended);
+  EXPECT_EQ(providerCalls, 1U);
+  ASSERT_EQ(arguments.size(), 2U);
+  EXPECT_EQ(arguments[0], "--device");
+  EXPECT_EQ(arguments[1], "Vulkan0,Vulkan1");
 }
 
 TEST_F(BertModelTest, CommonParamsParseSplitModeCaseInsensitive) {

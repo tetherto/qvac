@@ -70,6 +70,13 @@ struct BertModelSetup {
   int64_t resolvedBackendDevice = 0;
 };
 
+/// Append the comma-separated --device argument used by multi-GPU split
+/// modes. The provider seam keeps the BertModel consumer path testable without
+/// reading ggml's process-global registry.
+bool appendSplitDeviceArgument(
+    std::vector<std::string>& configVector,
+    const std::function<std::vector<std::string>()>& splitDeviceNames);
+
 /// @brief Instantiates a BERT language model. An open source architecture
 /// designed to help machines understand context in sentences and used for
 /// natural language processing (NLP) and understanding (NLU).
