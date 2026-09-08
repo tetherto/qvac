@@ -14,10 +14,10 @@
 #include <ggml-backend.h>
 #include <ggml.h>
 
+#include "inference-addon-cpp/Logger.hpp"
 #include "nmt.hpp"
 #include "nmt_graph_decoder.hpp"
 #include "nmt_graph_encoder.hpp"
-#include "inference-addon-cpp/Logger.hpp"
 #include "nmt_utils.hpp"
 
 void nmtBatchPrepLegacy(
@@ -360,10 +360,9 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
 
   // Compute-device selection when use_gpu=true.
   //
-  // Matching compute devices by `!= CPU` (rather than a named GPU/ACCEL
-  // allow-list) is resilient to ggml inserting new enum values between
-  // builds; Android's qvac-fabric ggml reports some devices with an enum
-  // value between GPU and ACCEL.
+  // Primary compute selection admits only GPU/IGPU devices from the Vulkan,
+  // Metal/MTL, and guarded OpenCL families. Android Vulkan is IGPU in the
+  // pinned fabric; ACCEL and META are rejected as primary devices.
   //
   // Two selection modes:
   //   1. params.gpu_backend non-empty → explicit single-pass filter:
@@ -459,9 +458,8 @@ nmt_backend_init(const nmt_context_params& params) {
 
   ggml_backend_t backend_gpu = nmt_backend_init_gpu(params);
 
-  // Primary backend may also be an ACCEL device (see nmt_backend_init_gpu —
-  // Android Vulkan registers as ACCEL). Track the device pointer we already
-  // picked so the secondary ACCEL loop below doesn't re-init the same device.
+  // Track the primary pointer for symmetry with the legacy secondary ACCEL
+  // walk below. The allowlist guarantees the primary itself is GPU or IGPU.
   ggml_backend_dev_t primary_dev =
       backend_gpu ? ggml_backend_get_device(backend_gpu) : nullptr;
 
@@ -469,12 +467,13 @@ nmt_backend_init(const nmt_context_params& params) {
     result.push_back(backend_gpu);
   }
 
-  // ACCEL backends (in addition to the primary if it was an ACCEL device).
+  // Legacy secondary ACCEL backends. This cannot admit HIP/ROCm, which the
+  // pinned fabric registers as GPU. Unknown ACCEL entries remain auxiliary
+  // scheduler backends and are outside primary placement eligibility.
   //
-  // On Android (and other mobile SoCs with a single physical GPU), multiple
-  // GGML backends (Vulkan, OpenCL) may register as separate ACCEL devices
-  // for the same hardware.  Initialising all of them adds synchronisation
-  // overhead in ggml_backend_sched without any parallel-compute benefit
+  // Multiple ACCEL entries may represent the same auxiliary hardware.
+  // Initialising all of them adds synchronisation overhead in
+  // ggml_backend_sched without any parallel-compute benefit
   // because the scheduler executes splits sequentially.
   //
   // Filter strategy:

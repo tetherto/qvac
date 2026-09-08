@@ -16,9 +16,9 @@
 #include <windows.h>
 #endif
 
+#include "inference-addon-cpp/Logger.hpp"
 #include "nmt.hpp"
 #include "nmt_utils.hpp"
-#include "inference-addon-cpp/Logger.hpp"
 
 std::string sanitizePrintableAscii(const std::string& input) {
   std::string out;
@@ -151,8 +151,8 @@ bool nameEqualsCi(const char* name, std::string_view expectedLower) {
   return lower == expectedLower;
 }
 
-NmtGpuFamily deviceFamily(
-    const NmtBackendInterface& backend, ggml_backend_dev_t device) {
+NmtGpuFamily
+deviceFamily(const NmtBackendInterface& backend, ggml_backend_dev_t device) {
   const enum ggml_backend_dev_type type = backend.deviceType(device);
   if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
       type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
@@ -166,14 +166,15 @@ NmtGpuFamily deviceFamily(
     return NmtGpuFamily::None;
   }
   if (nmtNameContainsCi(deviceName, "opencl") ||
-      nmtNameContainsCi(registryName, "opencl")) {
+      nameEqualsCi(registryName, "opencl")) {
     return NmtGpuFamily::OpenCl;
   }
   if (nmtNameContainsCi(deviceName, "vulkan") ||
-      nmtNameContainsCi(registryName, "vulkan")) {
+      nameEqualsCi(registryName, "vulkan")) {
     return NmtGpuFamily::Vulkan;
   }
-  if (nameHasMetalPrefix(deviceName) || nameHasMetalPrefix(registryName)) {
+  if (nameHasMetalPrefix(deviceName) || nameEqualsCi(registryName, "mtl") ||
+      nameEqualsCi(registryName, "metal")) {
     return NmtGpuFamily::Metal;
   }
   return NmtGpuFamily::None;
@@ -189,7 +190,7 @@ bool matchesExplicitSelector(
   const ggml_backend_reg_t registry = backend.deviceRegistry(device);
   return nmtNameContainsCi(backend.deviceName(device), selectorLower) ||
          (registry != nullptr &&
-          nmtNameContainsCi(backend.registryName(registry), selectorLower));
+          nameEqualsCi(backend.registryName(registry), selectorLower));
 }
 } // namespace
 
@@ -205,14 +206,20 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       .deviceRegistry = ggml_backend_dev_backend_reg,
       .registryName = ggml_backend_reg_name,
       .deviceBufferType = ggml_backend_dev_buffer_type};
+#ifdef QVAC_NMTCPP_USE_OPENCL
+  constexpr bool allowDefaultOpenCl = true;
+#else
+  constexpr bool allowDefaultOpenCl = false;
+#endif
   return nmtSelectGpuDevice(
-      backend, useGpu, gpuBackend, gpuDevice, logPrefix);
+      backend, useGpu, gpuBackend, gpuDevice, logPrefix, allowDefaultOpenCl);
 }
 
 ggml_backend_dev_t
 nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
     const NmtBackendInterface& backend, bool useGpu,
-    const std::string& gpuBackend, int gpuDevice, const char* logPrefix) {
+    const std::string& gpuBackend, int gpuDevice, const char* logPrefix,
+    bool allowDefaultOpenCl) {
   if (!useGpu) {
     return nullptr;
   }
@@ -305,10 +312,9 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   }
 
   // Mode 2: gated default.
-#ifdef QVAC_NMTCPP_USE_OPENCL
   // Mode 2a: prefer OpenCL.
   bool oclDeviceFoundButBuftNull = false;
-  {
+  if (allowDefaultOpenCl) {
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
       ggml_backend_dev_t devCur = backend.deviceGet(i);
@@ -344,23 +350,19 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       }
     }
   }
-#endif
 
-  // Mode 2b: fallback to any non-CPU, non-OpenCL compute device.
+  // Mode 2b: resolve gpuDevice within the eligible Vulkan/Metal inventory.
   // OpenCL is always skipped here because Mode 2a already handles it when
   // QVAC_NMTCPP_USE_OPENCL is defined, and it's unwanted when the guard is
-  // off. This ensures gpuDevice ordinals map to distinct physical GPUs
-  // (Vulkan/Metal) without OpenCL duplicates occupying slots.
+  // off. Unsupported families do not occupy an execution ordinal.
   if (dev == nullptr) {
-#ifdef QVAC_NMTCPP_USE_OPENCL
-    if (oclDeviceFoundButBuftNull) {
+    if (allowDefaultOpenCl && oclDeviceFoundButBuftNull) {
       std::ostringstream oss;
       oss << "[" << logPrefix
           << "] Mode 2a OpenCL device found but buffer type was null — "
              "falling through to Mode 2b";
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
-#endif
     const int fallbackOrdinal = gpuDevice;
     int cnt2 = 0;
     for (size_t i = 0; i < devCount; ++i) {
@@ -374,8 +376,8 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
         continue;
       }
       if (cnt2 == fallbackOrdinal) {
-        ggml_backend_buffer_type_t buft = backend.deviceBufferType(devCur);
-        if (buft != nullptr) {
+        if (ggml_backend_buffer_type_t buft = backend.deviceBufferType(devCur);
+            buft != nullptr) {
           dev = devCur;
           std::ostringstream oss;
           oss << "[" << logPrefix << "] SELECTED compute backend: "
