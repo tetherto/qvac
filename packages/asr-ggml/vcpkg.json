@@ -12,7 +12,7 @@
     },
     {
       "name": "ggml-speech",
-      "version>=": "2026-09-04#2",
+      "version>=": "2026-09-08",
       "default-features": false
     },
     {
