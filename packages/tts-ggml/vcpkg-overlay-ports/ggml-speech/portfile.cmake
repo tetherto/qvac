@@ -121,20 +121,6 @@ if(VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" AND "cuda"
     )
 endif()
 
-# The v0.10.2 ggml sync introduces an unconditional
-# `#include <spirv/unified1/spirv.hpp>` in src/ggml-vulkan/ggml-vulkan.cpp,
-# but the upstream ggml-vulkan CMakeLists.txt never finds spirv-headers nor
-# wires its include dir into the ggml-vulkan target. Apply a small patch
-# so it does (and depend on spirv-headers in vcpkg.json's vulkan feature).
-# TODO: push the equivalent fix upstream and drop this patch.
-if("vulkan" IN_LIST FEATURES)
-    vcpkg_apply_patches(
-        SOURCE_PATH "${SOURCE_PATH}"
-        PATCHES
-            "${CMAKE_CURRENT_LIST_DIR}/patches/0001-ggml-vulkan-find-spirv-headers.patch"
-    )
-endif()
-
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
