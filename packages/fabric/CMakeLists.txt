@@ -57,6 +57,28 @@ find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
 find_package(ggml CONFIG REQUIRED)
 
+# --- ggml vector-index ---------------------------------------------------------
+# The qvac-fabric[vector-index] feature exports the ANN index API
+# (ggml_vec_index_*) as a library separate from the ggml core, under a target
+# name that has moved between port revisions. Resolve it here so the
+# whole-archive and Windows .def blocks below can both refer to one variable.
+# Requested unconditionally by our manifest, so a miss is a port contract
+# break, not a configuration the runtime can ship without: @qvac/embed-llamacpp
+# resolves ggml_vec_index_* from this runtime and would fail to link.
+set(QVAC_FABRIC_VECTOR_INDEX_TARGET "")
+foreach(_vec_index_candidate ggml::ggml-vector-index ggml::vector-index ggml-vector-index)
+  if(TARGET ${_vec_index_candidate})
+    set(QVAC_FABRIC_VECTOR_INDEX_TARGET ${_vec_index_candidate})
+    break()
+  endif()
+endforeach()
+if(NOT QVAC_FABRIC_VECTOR_INDEX_TARGET)
+  message(FATAL_ERROR
+    "qvac-fabric did not export a ggml vector-index target despite the "
+    "vector-index feature being requested in vcpkg.json")
+endif()
+message(STATUS "qvac-fabric: vector-index target '${QVAC_FABRIC_VECTOR_INDEX_TARGET}'")
+
 # --- ggml backends -----------------------------------------------------------
 # When ggml backends are built as separate shared libraries (e.g. Android, or a
 # GGML_BACKEND_DL build) they are loaded at runtime via
@@ -125,13 +147,17 @@ endif()
 # are separate MODULE .so targets (staged via BACKEND_DL_LIBS) and must not be
 # whole-archived here; the type guard also skips ggml core if a build exposes it
 # as a shared/interface target.
+#
+# The vector-index library is whole-archived for a stronger version of the same
+# reason: no llama or ggml code calls ggml_vec_index_*, so nothing references
+# those members and a plain link would pull in none of them at all.
 if(UNIX)
-  foreach(_ggml_core ggml::ggml ggml::ggml-base)
-    if(TARGET ${_ggml_core})
-      get_target_property(_ggml_core_type ${_ggml_core} TYPE)
-      if(_ggml_core_type STREQUAL "STATIC_LIBRARY")
+  foreach(_ggml_static ggml::ggml ggml::ggml-base ${QVAC_FABRIC_VECTOR_INDEX_TARGET})
+    if(TARGET ${_ggml_static})
+      get_target_property(_ggml_static_type ${_ggml_static} TYPE)
+      if(_ggml_static_type STREQUAL "STATIC_LIBRARY")
         target_link_libraries(${qvac-fabric}
-          PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${_ggml_core}>")
+          PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${_ggml_static}>")
       endif()
     endif()
   endforeach()
@@ -182,6 +208,14 @@ elseif(WIN32)
     "$<TARGET_FILE:llama::mtmd>"
     "$<TARGET_FILE:ggml::ggml>"
     "$<TARGET_FILE:ggml::ggml-base>")
+  # Scanning the vector-index archive is what exports ggml_vec_index_*: the
+  # generated EXPORTS entries double as references that pull those members in,
+  # so unlike the ELF/Mach-O builds this needs no whole-archive.
+  get_target_property(_fabric_vec_index_type ${QVAC_FABRIC_VECTOR_INDEX_TARGET} TYPE)
+  if(NOT _fabric_vec_index_type STREQUAL "OBJECT_LIBRARY"
+     AND NOT _fabric_vec_index_type STREQUAL "INTERFACE_LIBRARY")
+    list(APPEND _fabric_export_libs "$<TARGET_FILE:${QVAC_FABRIC_VECTOR_INDEX_TARGET}>")
+  endif()
   # llama-common-base (formerly build_info) carries the LLAMA_BUILD_NUMBER /
   # LLAMA_COMMIT data globals. Scan it only when it is a real archive; if the
   # vcpkg export ships it as an INTERFACE (or OBJECT) target with no TARGET_FILE,
