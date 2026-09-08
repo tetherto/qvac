@@ -107,10 +107,7 @@ export interface FitDeviceInventory {
   maxDevices: number
   /** Devices actually registered (ggml_backend_dev_count()). 0 yields ERROR. */
   nDevices: number
-  /**
-   * Raw registered GPU/iGPU count, including families this addon cannot use.
-   * This is diagnostic inventory, not the size of the execution allowlist.
-   */
+  /** Raw GPU/iGPU count; may include families outside the execution allowlist. */
   nGpuDevices: number
 }
 

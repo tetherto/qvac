@@ -608,10 +608,6 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
   )
 })
 
-// Filtering unsupported backends compacts the device list passed to llama. An
-// invalid raw registry index must therefore be rejected for every split mode;
-// otherwise layer/row fits could report a different GPU identity even though
-// llama only reads main_gpu while loading in NONE mode.
 test('an invalid raw mainGpu identity is rejected for every split mode', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const invalidMainGpu = fitParams({ modelPath }).nDevices

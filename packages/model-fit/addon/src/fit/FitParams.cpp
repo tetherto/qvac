@@ -273,13 +273,7 @@ FitResult runFit(const FitRequest& req) {
   // binding.cpp cannot do it, since the valid range is unknown until the
   // backends are registered.
   //
-  // Every explicit non-negative mainGpu is resolved above so its raw registry
-  // identity cannot silently change when the eligible list is compacted. The
-  // extra placement check below is scoped to SPLIT_MODE_NONE because it is the
-  // only mode under which llama reads main_gpu while loading. An unpinned split
-  // mode is left alone: it goes in at llama's default, which is precisely the
-  // condition under which the fitter is free to rewrite it, and a fitter that
-  // chooses NONE picks a placement to match.
+  // Only NONE needs the extra no-GPU placement check after identity validation.
   if (req.hasSplitMode && req.splitMode == LLAMA_SPLIT_MODE_NONE) {
     const bool explicitCpuPlacement = req.hasNGpuLayers &&
                                       req.nGpuLayers == 0 && req.hasMainGpu &&
