@@ -47,7 +47,7 @@ jobs:
       include-cuda-arm64-jetson: true
       cuda-arm64-jetson-cmake-option: SD_CUDA_JETSON
       cuda-arm64-jetson-primary-cmake-option: SD_CUDA
-      include-cuda-windows: true
+      include-cuda-win32: true
       platform-cmake-defines: |
         linux: -D SD_CUDA=ON
         win32-x64: -D SD_CUDA=ON

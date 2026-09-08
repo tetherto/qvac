@@ -12,6 +12,12 @@
   device is missing from that list at all. Rejected with `backend: 'auto'` or
   `'cpu'`, where there is no preference to make binding.
 
+## [0.25.0] - 2026-09-07
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.3.3` -> `1.4.0`, which requires libjs 1.32 headers (`bare-headers` >= 1.32). Compile-time only; no API or runtime behaviour change for this package. Released as a minor bump so dependents on `^0.24.x` adopt the new build floor deliberately rather than automatically.
+
 ## [0.24.0] - 2026-09-01
 
 ### Changed
