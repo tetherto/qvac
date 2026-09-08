@@ -111,6 +111,13 @@ test('createLlamaFitRequest: refuses a LoRA load', (t) => {
   })
 })
 
+test('createLlamaFitRequest: refuses an unresolved multimodal projection source', (t) => {
+  t.alike(completionRequest({ projectionModelSrc: '/models/mmproj.gguf' }), {
+    supported: false,
+    detail: 'unsupported load setting: projection_model_src'
+  })
+})
+
 test('createLlamaFitRequest: refuses a multimodal load', (t) => {
   t.alike(
     createLlamaFitRequest({

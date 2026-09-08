@@ -137,8 +137,7 @@ function optionsFor(
   }
 }
 
-// bun:test's toMatchObject asserted a subset of keys; brittle's alike is an
-// exact deep-compare. This keeps the original partial-match semantics.
+// Partial deep-compare: `alike` on only the keys `expected` names.
 function matchObject(
   t: { alike: (a: unknown, b: unknown, msg?: string) => void },
   actual: unknown,

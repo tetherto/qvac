@@ -76,8 +76,12 @@ const NON_FIT_KEYS: Record<LlamaLoadKind, readonly string[]> = {
   embedding: ['pooling', 'attention', 'embd_normalize', 'verbosity', 'openclCacheDir']
 }
 
-/** Load-config keys that describe a shape the fitter cannot answer for. */
-const UNSUPPORTED_KEYS: readonly string[] = ['lora']
+/**
+ * Load-config keys that describe a shape the fitter cannot answer for.
+ * `projection_model_src` reaches here when the config still carries the
+ * unresolved source, ahead of the resolved-artifact refusal below.
+ */
+const UNSUPPORTED_KEYS: readonly string[] = ['lora', 'projection_model_src']
 
 /**
  * A CPU load's weights stay file-backed and evictable, so the fitter projects
