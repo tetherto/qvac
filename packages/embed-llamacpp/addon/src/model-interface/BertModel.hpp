@@ -70,9 +70,7 @@ struct BertModelSetup {
   int64_t resolvedBackendDevice = 0;
 };
 
-/// Append the comma-separated --device argument used by multi-GPU split
-/// modes. The provider seam keeps the BertModel consumer path testable without
-/// reading ggml's process-global registry.
+/// Append the eligible `--device` list supplied by the provider.
 bool appendSplitDeviceArgument(
     std::vector<std::string>& configVector,
     const std::function<std::vector<std::string>()>& splitDeviceNames);

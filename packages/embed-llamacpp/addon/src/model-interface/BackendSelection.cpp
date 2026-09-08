@@ -83,9 +83,7 @@ bool hasMetalFamily(
          registryName == "metal";
 }
 
-// Policy copied from ocr-ggml: admit only backend families this addon has
-// validated. Device names may carry an adapter suffix; registry names are
-// canonical ggml identities and therefore require an exact match.
+// Mirror ocr-ggml's validated families; registry identities match exactly.
 bool isEligibleGpuDevice(
     const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const enum ggml_backend_dev_type type = bckI.ggml_backend_dev_type(dev);
@@ -406,10 +404,7 @@ std::vector<std::string> backend_selection::getSplitDeviceNames() {
 bool backend_selection::gpuBackendSupportsRowSplit(
     const BackendInterface& bckI) {
   // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
-  // make_gpu_buft_list() for every eligible device it was given and throws
-  // "device %s does not support split buffers" on the first registry without
-  // `ggml_backend_split_buffer_type`. Require all eligible devices, not any
-  // one, and treat an empty eligible inventory as unsupported.
+  // Row split requires split buffers on every eligible device.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {

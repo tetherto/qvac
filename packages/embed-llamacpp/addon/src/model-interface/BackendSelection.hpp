@@ -64,9 +64,7 @@ std::pair<BackendType, std::string> chooseBackend(
 /// exclude iGPUs by default when discrete GPUs exist.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-/// @brief Ordered eligible device names for multi-GPU split modes.
-/// Discrete GPUs are preferred over integrated GPUs and duplicate physical
-/// devices are removed using ggml's device id.
+/// @brief Eligible split devices, preferring discrete and deduplicating by id.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 
 /// @brief `getSplitDeviceNames()` against the real ggml backend registry.
