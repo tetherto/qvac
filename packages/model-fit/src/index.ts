@@ -78,7 +78,7 @@ export interface FitConfig {
    * `enum llama_split_mode`: how the model splits across multiple GPUs.
    */
   splitMode?: number
-  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
+  /** Ordinal in the supported GPU list, or -1 for CPU-only NONE placement. */
   mainGpu?: number
   /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
   typeK?: number
@@ -115,9 +115,8 @@ export interface FitDeviceInventory {
 export interface FitPlan {
   /**
    * Fitted number of layers to offload to GPU. Negative means "all layers"
-   * (the llama default), which is what comes back when the fitter had no
-   * offload decision to make — e.g. on a host with no accelerator. Check
-   * `nGpuDevices` before reading this as a plan.
+   * (the llama default). Zero means the successful plan uses no GPU offload;
+   * `nGpuDevices` is raw diagnostic inventory and must not determine this.
    */
   nGpuLayers: number
   /** Fitted context size. Always concrete, never 0. */

@@ -231,23 +231,6 @@ FitResult runFit(const FitRequest& req) {
   // registry down afterwards — see registerBackends.
   registerBackends(req.backendsDir);
   countDevices(out.nDevices, out.nGpuDevices);
-  const std::vector<BackendDevice> discoveredDevices = discoverBackendDevices();
-  std::vector<ggml_backend_dev_t> eligibleDevices =
-      eligibleBackendDeviceHandles(
-          discoveredDevices, LlamaLoadKind::Completion);
-  const size_t eligibleGpuDevices = eligibleDevices.size() - 1;
-  std::optional<size_t> mappedMainGpu;
-  if (req.hasMainGpu && req.mainGpu >= 0) {
-    mappedMainGpu = eligibleBackendDeviceOrdinal(
-        discoveredDevices,
-        LlamaLoadKind::Completion,
-        static_cast<size_t>(req.mainGpu));
-    if (!mappedMainGpu.has_value()) {
-      throw std::invalid_argument(
-          "model-fit: mainGpu " + std::to_string(req.mainGpu) +
-          " does not identify a supported GPU device");
-    }
-  }
 
   // No registered device means backend loading failed outright. The fitter
   // would still return a verdict, computed against a machine it cannot see, so
@@ -258,6 +241,24 @@ FitResult runFit(const FitRequest& req) {
     out.reason = FitReason::NoBackendDevice;
     out.tensorSplit.assign(maxDevices, 0.0F);
     return out;
+  }
+
+  const std::vector<BackendDevice> discoveredDevices = discoverBackendDevices();
+  std::vector<ggml_backend_dev_t> eligibleDevices =
+      eligibleBackendDeviceHandles(
+          discoveredDevices, LlamaLoadKind::Completion);
+  const size_t eligibleGpuDevices = eligibleDevices.size() - 1;
+  const bool mainGpuIsUsed =
+      req.hasMainGpu && req.mainGpu >= 0 &&
+      (!req.hasSplitMode || req.splitMode == LLAMA_SPLIT_MODE_NONE);
+  if (mainGpuIsUsed && !eligibleBackendDeviceOrdinal(
+                            discoveredDevices,
+                            LlamaLoadKind::Completion,
+                            static_cast<size_t>(req.mainGpu))
+                            .has_value()) {
+    throw std::invalid_argument(
+        "model-fit: mainGpu " + std::to_string(req.mainGpu) +
+        " is outside the supported GPU device list");
   }
 
   // Validate the placement now that there is a machine to validate it against.
@@ -375,9 +376,8 @@ FitResult runFit(const FitRequest& req) {
         eligibleDevices,
         discoveredDevices,
         LlamaLoadKind::Completion,
-        req.hasMainGpu && req.mainGpu >= 0
-            ? std::optional<size_t>(static_cast<size_t>(req.mainGpu))
-            : std::nullopt);
+        mainGpuIsUsed ? std::optional<size_t>(static_cast<size_t>(req.mainGpu))
+                      : std::nullopt);
     if (!applied) {
       throw std::invalid_argument(
           "model-fit: mainGpu identity changed while preparing fit inputs");
@@ -430,6 +430,11 @@ FitResult runFit(const FitRequest& req) {
   out.typeK = static_cast<int32_t>(cparams.type_k);
   out.typeV = static_cast<int32_t>(cparams.type_v);
   out.flashAttnType = static_cast<int32_t>(cparams.flash_attn_type);
+  if (eligibleGpuDevices == 0 && (!req.hasNGpuLayers || req.nGpuLayers == -1)) {
+    out.nGpuLayers = 0;
+    out.splitMode = static_cast<int32_t>(LLAMA_SPLIT_MODE_NONE);
+    out.mainGpu = -1;
+  }
 
   // Surface the placement the projection depended on. The array is terminated
   // by a null pattern; anything before that is an override the real load has to
@@ -496,6 +501,8 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
       req.params,
       readModelTraits(req.modelPath),
       discoverBackendDevices());
+  const bool cpuPlacement = normalized.params.devices.size() == 1 &&
+                            normalized.params.devices.front() == nullptr;
   LlamaFitExecution execution;
   const bool supported =
       withSupportedLlamaLoad(normalized, [&](common_params& params) {
@@ -566,6 +573,11 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
   out.typeK = static_cast<int32_t>(contextParams.type_k);
   out.typeV = static_cast<int32_t>(contextParams.type_v);
   out.flashAttnType = static_cast<int32_t>(contextParams.flash_attn_type);
+  if (cpuPlacement) {
+    out.nGpuLayers = 0;
+    out.splitMode = static_cast<int32_t>(LLAMA_SPLIT_MODE_NONE);
+    out.mainGpu = -1;
+  }
 
   for (const auto& override : execution.buftOverrides) {
     if (override.pattern == nullptr) {

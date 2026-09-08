@@ -42,12 +42,12 @@ const plan = fitParams({
 //   nCtx,         // fitted context size
 //   nBatch, nUbatch,
 //   splitMode,    // llama_split_mode — how the model splits across GPUs
-//   mainGpu,      // device holding the model when splitMode is NONE
+//   mainGpu,      // supported-device ordinal used when splitMode is NONE
 //   typeK, typeV, // ggml_type of the K/V cache — changes KV memory
 //   flashAttnType,// llama_flash_attn_type — changes KV/compute memory
 //   maxDevices,   // llama_max_devices() — a build-time bound, NOT a detection
 //   nDevices,     // devices actually registered; 0 => ERROR
-//   nGpuDevices,  // of those, GPU/iGPU; 0 => host-only projection
+//   nGpuDevices,  // raw GPU/iGPU count; may include unsupported families
 //   tensorSplit   // number[] offload proportion per device
 // }
 ```
@@ -138,9 +138,9 @@ type, with `nUbatch <= nBatch` and `nCtxMin <= nCtx`.
 `nGpuLayers` is the one **signed** field. `llama.h` defines it as "number of
 layers to store in VRAM, a negative value means all layers", so negatives are
 valid input — `-1` is the llama default and what upstream's `llama-fit-params`
-prints back. Read the same care into the *result*: a negative `nGpuLayers`
-means the fitter never rewrote the field, which is what happens on a host with
-no accelerator. Check `nGpuDevices` before treating it as an offload plan.
+prints back. In a successful result, `nGpuLayers: 0` means the plan uses no GPU
+offload. `nGpuDevices` is raw diagnostic inventory and may include unsupported
+backend families, so it must not be used to interpret the plan.
 
 These checks are enforced **in the native binding as well as the JS wrapper**,
 because `./binding.js` is a public export and can be called without passing
@@ -154,11 +154,10 @@ every layer to the host, so with default arguments it answers almost anything
 with `SUCCESS` — an unsatisfiable multi-TiB margin still returns `SUCCESS` with
 `nGpuLayers: 0`.
 
-(On a **host-only** machine that fallback does not exist: the host is the only
-device, the margin applies to it, and there is nowhere to move anything, so the
-same call returns `FAILURE`. Do not read a host-only `FAILURE` as "this hardware
-is too small" without checking `nGpuDevices` — it may just be an unmeetable
-margin.)
+(When no supported GPU is available that fallback does not exist: the host is
+the only execution device, the margin applies to it, and there is nowhere to
+move anything, so the same call returns `FAILURE`. Do not read that as "this
+hardware is too small"; it may just be an unmeetable margin on the host.)
 
 **`fits` alone is therefore close to useless as an admission signal.** It means
 "this could run somehow", which wherever a CPU fallback exists is nearly always

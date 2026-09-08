@@ -192,8 +192,7 @@ struct FitResult {
 ///  - a `modelPath` that is empty or relative;
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
 ///  - a pinned `splitMode` of NONE on a host with no supported GPU, unless the
-///    request is CPU-only, or a `mainGpu` outside the default llama device
-///    list;
+///    request is CPU-only, or a `mainGpu` outside the supported device list;
 ///  - an `nCtx`, or an explicitly requested `nCtxMin`, above the context
 ///    length the model declares.
 FitResult runFit(const FitRequest& req);

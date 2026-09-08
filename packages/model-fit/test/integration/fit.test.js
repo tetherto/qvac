@@ -25,6 +25,10 @@ const UNREACHABLE_MODEL = path.join(
 // existence check the test is aiming at.
 const UNREACHABLE_BACKENDS_DIR = path.join(process.cwd(), 'model-fit-no-such-backends-dir')
 
+function hasSupportedGpu(modelPath) {
+  return fitParams({ modelPath, marginMiB: 0 }).mainGpu >= 0
+}
+
 test('fitParams rejects invalid config', async function (t) {
   await t.exception.all(() => fitParams(), /config object is required/)
   await t.exception.all(() => fitParams(null), /config object is required/)
@@ -175,8 +179,8 @@ test('a pinned intended-load field is returned unchanged', async function (t) {
   // rejects every device index — including the default 0 — so the placement is
   // unsatisfiable and is reported as such rather than being run and returned as
   // an opaque ERROR the caller cannot distinguish from a real fit failure.
-  if (fitParams({ modelPath }).nGpuDevices === 0) {
-    await t.exception.all(() => fitParams(config), /does not identify a supported GPU device/)
+  if (!hasSupportedGpu(modelPath)) {
+    await t.exception.all(() => fitParams(config), /outside the supported GPU device list/)
     return
   }
 
@@ -305,17 +309,16 @@ test('the plan carries every parameter the fitter is free to rewrite', async fun
   // Domains from llama.h, so a garbage readback (uninitialised memory, wrong
   // cast width) is caught rather than passing as "a number".
   t.ok(res.splitMode >= 0 && res.splitMode <= 3, 'splitMode is a known llama_split_mode')
-  t.ok(res.mainGpu >= 0, 'mainGpu is a device index')
-  t.ok(res.mainGpu < Math.max(res.nDevices, 1), 'mainGpu points at a device that exists')
+  t.ok(res.mainGpu >= -1, 'mainGpu is a supported-device index or the CPU sentinel')
+  if (res.mainGpu >= 0) {
+    t.ok(res.mainGpu < Math.max(res.nDevices, 1), 'mainGpu points at a device that exists')
+  }
   t.ok(res.typeK >= 0, 'typeK is a ggml_type')
   t.ok(res.typeV >= 0, 'typeV is a ggml_type')
   t.ok([-1, 0, 1].includes(res.flashAttnType), 'flashAttnType is a known llama_flash_attn_type')
 
-  // On a host-only projection there is nothing to split across, so the fitter
-  // has no reason to move off the single-GPU/first-device placement. This is
-  // what makes the plan reproducible on the machine it was measured on.
-  if (res.nGpuDevices === 0) {
-    t.is(res.mainGpu, 0, 'host-only projection stays on the first device')
+  if (!hasSupportedGpu(modelPath)) {
+    t.is(res.mainGpu, -1, 'CPU-only projection uses the CPU sentinel')
   }
 })
 
@@ -462,7 +465,7 @@ test('memory pressure moves the plan off the GPU rather than reporting FAILURE',
   // margin applies to it, and nothing can be moved anywhere — so FAILURE is the
   // correct verdict rather than a fit nobody could honour. qvac-fabric 9840
   // reports it that way; 8828 returned SUCCESS here.
-  if (res.nGpuDevices === 0) {
+  if (!hasSupportedGpu(modelPath)) {
     t.is(res.status, FIT_STATUS.FAILURE, 'host-only: an unmeetable margin has no fallback')
     t.is(res.fits, false)
     t.is(res.reason, 'does-not-fit', 'and it is a fit verdict, not an error')
@@ -491,7 +494,7 @@ test('pinned offload under pressure is the only way to get FAILURE', async funct
 
   t.is(res.nGpuLayers, 5, 'the pinned layer count is preserved, not reduced')
 
-  if (res.nGpuDevices > 0) {
+  if (hasSupportedGpu(modelPath)) {
     t.is(res.status, FIT_STATUS.FAILURE, 'a pinned plan that cannot be honoured fails')
     t.is(res.fits, false)
     t.is(res.reason, 'does-not-fit', 'a real failure is distinguishable from an error')
@@ -512,7 +515,7 @@ test('a failed fit preserves the caller hard constraints', async function (t) {
   t.is(res.nCtx, 1024, 'an explicit context survives the fit')
   t.ok(res.nDevices >= 1, 'the inventory it measured against is always reported')
 
-  if (res.nGpuDevices > 0) {
+  if (hasSupportedGpu(modelPath)) {
     t.is(res.status, FIT_STATUS.FAILURE, 'unmeetable pinned plan fails on a GPU host')
   } else {
     t.pass(`no accelerator present; got status ${res.status}`)
@@ -528,7 +531,7 @@ test('an explicit context is not reduced even under memory pressure', async func
 
   if (res.fits) {
     t.is(res.nCtx, 2048, 'explicit context is a hard constraint under pressure')
-    if (res.nGpuDevices > 0) {
+    if (hasSupportedGpu(modelPath)) {
       t.is(res.nGpuLayers, 0, 'pressure is absorbed by offload, not by context')
     } else {
       t.pass('no accelerator present; nothing to absorb the pressure with')
@@ -550,11 +553,8 @@ test('fitParams reports the device inventory it fitted against', async function 
     'zero devices can only ever report ERROR'
   )
 
-  // With no accelerator the fitter has nothing to decide, so n_gpu_layers stays
-  // at the llama default rather than being rewritten to 0. Assert only that a
-  // host-only projection never claims a positive offload.
-  if (res.nGpuDevices === 0) {
-    t.ok(res.nGpuLayers <= 0, 'a host-only projection never claims layers on a GPU')
+  if (!hasSupportedGpu(modelPath)) {
+    t.is(res.nGpuLayers, 0, 'a CPU-only projection never claims GPU offload')
   }
 })
 
@@ -608,14 +608,21 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
   )
 })
 
-test('an invalid mainGpu identity is rejected for every split mode', async function (t) {
+test('mainGpu is validated only when llama uses it', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const invalidMainGpu = fitParams({ modelPath }).nDevices
 
-  for (const splitMode of [0, 1, 2]) {
-    await t.exception.all(
-      () => fitParams({ modelPath: UNREACHABLE_MODEL, splitMode, mainGpu: invalidMainGpu }),
-      /does not identify a supported GPU device/
+  await t.exception.all(
+    () => fitParams({ modelPath: UNREACHABLE_MODEL, splitMode: 0, mainGpu: invalidMainGpu }),
+    /outside the supported GPU device list/
+  )
+
+  for (const splitMode of [1, 2]) {
+    const res = fitParams({ modelPath: UNREACHABLE_MODEL, splitMode, mainGpu: invalidMainGpu })
+    t.is(
+      res.status,
+      FIT_STATUS.ERROR,
+      'the unreadable model, not inert mainGpu, determines the result'
     )
   }
 })

@@ -673,26 +673,27 @@ int main() {
 
     const BackendDevice vulkan1 =
         device("Vulkan1", "NVIDIA GPU 1", BackendDeviceType::Gpu, 46, "Vulkan");
-    const auto excludedMainGpu = model_fit::normalizeLlamaLoadConfig(
+    const auto layerMainGpu = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
             {"device", "gpu"}, {"split-mode", "layer"}, {"main-gpu", "0"}},
         ModelTraits{},
         {rocm, vulkan, vulkan1, cpu()});
     expect(
-        isCpuPlacement(excludedMainGpu.params),
-        "main-gpu targeting excluded ROCm must fall back to CPU");
+        layerMainGpu.params.main_gpu == 0 &&
+            layerMainGpu.params.devices.front() == vulkan.handle,
+        "layer split must keep its inert main-gpu and eligible devices");
 
     const auto mappedMainGpu = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
-            {"device", "gpu"}, {"split-mode", "layer"}, {"main-gpu", "1"}},
+            {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "1"}},
         ModelTraits{},
         {rocm, vulkan, vulkan1, cpu()});
     expect(
         mappedMainGpu.params.main_gpu == 0 &&
-            mappedMainGpu.params.devices.front() == vulkan.handle,
-        "main-gpu device identity must map to its filtered-list ordinal");
+            mappedMainGpu.params.devices.front() == vulkan1.handle,
+        "main-gpu must index the supported-device inventory");
 
     const auto cpuFirstMainGpu = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
@@ -730,8 +731,8 @@ int main() {
         model_fit::eligibleBackendDeviceOrdinal(
             {rocm, vulkan, vulkan1, cpu()},
             model_fit::LlamaLoadKind::Completion,
-            1) == 0,
-        "generic fit must preserve device identity when mapping main-gpu");
+            1) == 1,
+        "unsupported devices must not renumber supported main-gpu ordinals");
     expect(
         model_fit::eligibleBackendDeviceOrdinal(
             {cpu(), vulkan, vulkan1},
@@ -739,12 +740,12 @@ int main() {
             0) == 0,
         "main-gpu must index llama's GPU list rather than the raw registry");
     expect(
-        !model_fit::eligibleBackendDeviceOrdinal(
-             {rocm, vulkan, vulkan1, cpu()},
-             model_fit::LlamaLoadKind::Completion,
-             0)
-             .has_value(),
-        "generic fit must reject a main-gpu index targeting ROCm");
+        model_fit::eligibleBackendDeviceOrdinal(
+            {rocm, vulkan, vulkan1, cpu()},
+            model_fit::LlamaLoadKind::Completion,
+            0)
+            .has_value(),
+        "main-gpu zero must select the first supported GPU after ROCm");
     llama_model_params fitParams = llama_model_default_params();
     std::vector<ggml_backend_dev_t> fitDeviceStorage;
     const bool applied = model_fit::applyBackendDeviceAllowlist(
@@ -752,13 +753,14 @@ int main() {
         fitDeviceStorage,
         {rocm, vulkan, vulkan1, cpu()},
         model_fit::LlamaLoadKind::Completion,
-        1);
+        0);
     expect(
         applied && fitParams.devices == fitDeviceStorage.data() &&
             fitParams.devices[0] == vulkan.handle &&
             fitParams.devices[1] == vulkan1.handle &&
             fitParams.devices[2] == nullptr && fitParams.main_gpu == 0,
-        "generic common_fit_params seam must filter devices and map main-gpu");
+        "generic common_fit_params seam must filter devices without "
+        "renumbering");
     llama_model_params excludedFitParams = llama_model_default_params();
     std::vector<ggml_backend_dev_t> excludedFitStorage;
     expect(
@@ -767,8 +769,8 @@ int main() {
             excludedFitStorage,
             {rocm, vulkan, vulkan1, cpu()},
             model_fit::LlamaLoadKind::Completion,
-            0),
-        "generic common_fit_params seam must reject an excluded main-gpu");
+            2),
+        "generic common_fit_params seam must reject an out-of-range main-gpu");
 
     const BackendDevice mtlRegistry = device(
         "Apple GPU", "Apple M3", BackendDeviceType::IntegratedGpu, 48, "MTL");
@@ -791,6 +793,42 @@ int main() {
     expect(
         isCpuPlacement(falseVulkanConfig.params),
         "registry family matching must use exact identities");
+
+    const BackendDevice falseVulkanName = device(
+        "NotVulkan0", "Future GPU", BackendDeviceType::Gpu, 51, "Future");
+    const auto falseVulkanNameConfig = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {falseVulkanName, cpu()});
+    expect(
+        isCpuPlacement(falseVulkanNameConfig.params),
+        "device family matching must use known prefixes");
+
+    BackendDevice cuda =
+        device("CUDA0", "NVIDIA GPU", BackendDeviceType::Gpu, 52, "CUDA");
+    BackendDevice sameGpuVulkan =
+        device("Vulkan0", "NVIDIA GPU", BackendDeviceType::Gpu, 53, "Vulkan");
+    cuda.deviceId = "pci-0";
+    sameGpuVulkan.deviceId = "pci-0";
+    expect(
+        model_fit::eligibleBackendDeviceHandles(
+            {cuda, sameGpuVulkan, cpu()}, model_fit::LlamaLoadKind::Completion)
+                .front() == sameGpuVulkan.handle,
+        "an unsupported alias must not hide an eligible device with the same "
+        "id");
+
+    BackendDevice rocmDiscrete = rocm;
+    BackendDevice adrenoIntegrated = adreno();
+    rocmDiscrete.deviceId = "pci-amd";
+    adrenoIntegrated.type = BackendDeviceType::IntegratedGpu;
+    adrenoIntegrated.handle = reinterpret_cast<ggml_backend_dev_t>(54);
+    expect(
+        model_fit::eligibleBackendDeviceHandles(
+            {rocmDiscrete, adrenoIntegrated, cpu()},
+            model_fit::LlamaLoadKind::Completion)
+                .front() == adrenoIntegrated.handle,
+        "unsupported discrete GPUs must not hide an eligible integrated GPU");
 
     const BackendDevice legacyDreno = device(
         "OpenCL0",
