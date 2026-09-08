@@ -11,7 +11,7 @@ const {
   chunkBytesForMs,
   sliceBuffer,
   containsTranscript,
-  collectFinalSegments,
+  collectAppendSegments,
   joinSegments
 } = require('./parakeetStreaming')
 
@@ -116,13 +116,16 @@ const transcribeBatch = async (modelInstance, audioBuffer) => {
 
 // Streaming mode: a duplex runStreaming() session driven by the addon's
 // ms-based controls. firstPartialMs counts from just before the session
-// opens to the first update carrying a transcript (partial or final); the
-// audio is fed as fast as the session accepts it, without real-time pacing.
+// opens to the first update carrying a transcript segment — the engine
+// streams finalized per-chunk increments (a separate partial-hypothesis
+// channel is not implemented), so this is the first transcript output a
+// streaming consumer would see. The audio is fed as fast as the session
+// accepts it, without real-time pacing.
 const transcribeStreaming = async (modelInstance, audioBuffer, sampleRate, streamingOptions) => {
   const chunkBytes = chunkBytesForMs(sampleRate, streamingOptions.chunkMs)
   const audioStream = Readable.from(sliceBuffer(audioBuffer, chunkBytes))
 
-  const finalSegments = []
+  const transcriptSegments = []
   let firstPartialMs = null
   const streamStart = process.hrtime()
 
@@ -134,11 +137,11 @@ const transcribeStreaming = async (modelInstance, audioBuffer, sampleRate, strea
       if (firstPartialMs === null && containsTranscript(items)) {
         firstPartialMs = elapsedMs(streamStart)
       }
-      collectFinalSegments(finalSegments, items)
+      collectAppendSegments(transcriptSegments, items)
     })
     .await()
 
-  return { text: joinSegments(finalSegments), firstPartialMs }
+  return { text: joinSegments(transcriptSegments), firstPartialMs }
 }
 
 const transcribeInputs = async (modelInstance, inputs, config) => {

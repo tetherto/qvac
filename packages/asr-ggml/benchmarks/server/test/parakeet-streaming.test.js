@@ -9,7 +9,7 @@ const {
   sliceBuffer,
   isTranscriptSegment,
   containsTranscript,
-  collectFinalSegments,
+  collectAppendSegments,
   joinSegments
 } = require('../src/services/parakeetStreaming')
 
@@ -72,19 +72,19 @@ test('containsTranscript spots the first partial in a mixed update', () => {
   )
 })
 
-test('collectFinalSegments keeps finals and drops partial hypotheses', () => {
+test('collectAppendSegments keeps append segments and drops replacement hypotheses', () => {
   const segments = []
 
-  collectFinalSegments(segments, [{ text: 'partial hypothesis' }])
-  collectFinalSegments(segments, [
-    { text: 'final', toAppend: true },
+  collectAppendSegments(segments, [{ text: 'replacement hypothesis' }])
+  collectAppendSegments(segments, [
+    { text: 'increment', toAppend: true },
     { type: 'endOfTurn', source: 'model-eou' }
   ])
-  collectFinalSegments(segments, [{ text: '[Audio too short]', toAppend: true }])
+  collectAppendSegments(segments, [{ text: '[Audio too short]', toAppend: true }])
 
   assert.deepEqual(
     segments.map((s) => s.text),
-    ['final']
+    ['increment']
   )
 })
 

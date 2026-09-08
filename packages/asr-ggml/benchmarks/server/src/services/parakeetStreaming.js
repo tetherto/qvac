@@ -9,7 +9,7 @@ const BYTES_PER_S16LE_SAMPLE = 2
 const MS_PER_SECOND = 1000
 
 // Placeholder texts parakeet-cpp emits instead of a transcript; they must not
-// reach WER scoring or count as a first partial.
+// reach WER scoring or trip the first-partial timestamp.
 const SILENCE_SENTINELS = new Set([
   '[No speech detected]',
   '[Audio too short]',
@@ -48,10 +48,15 @@ const isTranscriptSegment = (item) =>
 
 const containsTranscript = (items) => items.some(isTranscriptSegment)
 
-// Partial hypotheses arrive with toAppend unset and are superseded by the
-// finalized segments that follow, so only toAppend segments join the
-// transcript (same rule as the package's live-mic example).
-const collectFinalSegments = (segments, items) => {
+// The addon sets toAppend=true on every streaming ASR segment it emits
+// (ParakeetStreamingProcessor.cpp onAsrSegment), and the engine streams
+// disjoint finalized per-chunk text increments — its emit_partials knob is
+// plumbed through but not implemented, and is_final is not forwarded. So
+// today every transcript segment passes this gate. The gate enforces the
+// declared TranscriptionSegment contract anyway: a segment without toAppend
+// replaces the previous hypothesis instead of continuing it, and blindly
+// appending one would duplicate text (same rule as the live-mic example).
+const collectAppendSegments = (segments, items) => {
   for (const item of items) {
     if (isTranscriptSegment(item) && item.toAppend) {
       segments.push(item)
@@ -78,6 +83,6 @@ module.exports = {
   sliceBuffer,
   isTranscriptSegment,
   containsTranscript,
-  collectFinalSegments,
+  collectAppendSegments,
   joinSegments
 }

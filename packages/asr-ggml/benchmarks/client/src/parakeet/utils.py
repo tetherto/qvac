@@ -210,7 +210,7 @@ def generate_summary():
         "",
         "### TTFP (Time To First Partial)",
         "",
-        "Streaming runs only. Average milliseconds from opening the duplex streaming session to the first partial hypothesis, measured on the benchmark server. Audio is fed as fast as the session accepts it (no real-time pacing), so this captures session-open plus first-chunk decode latency. **Lower = better**",
+        "Streaming runs only. Average milliseconds from opening the duplex streaming session to the first emitted transcript segment, measured on the benchmark server. The engine streams finalized per-chunk increments, so this is the first output a streaming consumer would see. Audio is fed as fast as the session accepts it (no real-time pacing), so this captures session-open plus first-chunk decode latency. **Lower = better**",
         "",
         "### Speaker Group",
         "",

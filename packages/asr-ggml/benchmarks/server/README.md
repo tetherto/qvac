@@ -123,8 +123,11 @@ Sortformer-only `streamingHistoryMs`) instead of batching the audio:
 Sample response body (`whisperVersion` / `parakeetVersion` mirrors the
 engine that ran; `time.firstPartialMs` is present on parakeet streaming runs
 only and carries one entry per input — milliseconds from opening the
-streaming session to the first partial hypothesis, `null` when the input
-produced none):
+streaming session to the first emitted transcript segment, `null` when the
+input produced none. The engine streams finalized per-chunk increments;
+`streamingEmitPartials` is forwarded, but a separate partial-hypothesis
+channel is not implemented in the engine yet, so this measures the first
+transcript output a streaming consumer would see):
 
 ```json
 {
