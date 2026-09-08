@@ -79,6 +79,7 @@ bool hasBackendFamily(
   return deviceName.starts_with(family);
 }
 
+// Accept Metal device prefixes alongside ggml's MTL registry identity.
 bool hasMetalFamily(
     std::string_view deviceName, std::string_view registryName) {
   const auto hasMetalPrefix = [](std::string_view name) {
@@ -373,12 +374,20 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
     }
     const bool isDiscrete =
         bckI.ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU;
+    // Materialise each string before the next interface call. The returned
+    // pointers are not guaranteed to outlive a subsequent call on the same
+    // interface, and holding one across another call is a use-after-free
+    // against any implementation that stores results in a reallocating
+    // container. DeviceDescription above is safe for the same reason: its
+    // std::string members copy in declaration order.
     ggml_backend_dev_props props{};
     bckI.ggml_backend_dev_get_props(dev, &props);
     const std::string deviceId = props.device_id != nullptr
                                      ? std::string(props.device_id)
                                      : std::string();
     const char* name = bckI.ggml_backend_dev_name(dev);
+    // An empty name would join into a leading or trailing comma and make the
+    // whole --device list unparseable, so it is skipped like a null one.
     if (name == nullptr || *name == '\0') {
       continue;
     }
@@ -408,7 +417,13 @@ std::vector<std::string> backend_selection::getSplitDeviceNames() {
 
 bool backend_selection::gpuBackendSupportsRowSplit(
     const BackendInterface& bckI) {
-  // Row split requires split buffers on every eligible device.
+  // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
+  // make_gpu_buft_list() for EVERY device it was given and throws "device %s
+  // does not support split buffers" on the first one whose backend registry
+  // lacks `ggml_backend_split_buffer_type`. Split mode now pins `--device` to
+  // the eligible list, so that set is every eligible GPU device — a single
+  // unsupported backend in the process is enough to fail the load. So require
+  // all of them, not any one, and treat "no GPU devices at all" as unsupported.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {

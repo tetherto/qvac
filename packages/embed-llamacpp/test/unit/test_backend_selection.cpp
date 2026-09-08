@@ -21,7 +21,9 @@ struct MockDevice {
   enum ggml_backend_dev_type type;
   /// Whether this device's backend registry exposes
   /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
-  /// Tests opt devices into split-buffer support explicitly.
+  /// SYCL does as of qvac-fabric v10069, so this defaults to false. SYCL is now
+  /// outside this addon's allowlist, so fixtures that set it model a
+  /// hypothetical eligible backend.
   bool hasSplitBuffers = false;
   std::string deviceId;
 

@@ -12,8 +12,6 @@
 
 namespace backend_selection {
 
-// Accept Metal device prefixes alongside ggml's MTL registry identity.
-
 enum BackendType : std::uint8_t { CPU, GPU };
 
 enum class MainGpuType : std::uint8_t { Integrated, Dedicated };
