@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.0] - 2026-09-07
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.3.3` -> `1.4.0`, which requires libjs 1.32 headers (`bare-headers` >= 1.32). Compile-time only; no API or runtime behaviour change for this package. Released as a minor bump so dependents on `^0.8.x` adopt the new build floor deliberately rather than automatically.
+
 ## [0.8.0] - 2026-08-29
 
 ### Fixed

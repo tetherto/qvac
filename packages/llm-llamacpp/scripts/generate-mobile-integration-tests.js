@@ -8,7 +8,6 @@ const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
-const groupsFile = path.join(mobileDir, 'test-groups.json')
 
 // The benchmark-perf-*.test.js shards are generated, not committed (see
 // .gitignore), but the committed integration.auto.cjs references them. Enumerating
@@ -85,63 +84,10 @@ function buildFileContents(files) {
   return `${lines.join('\n')}\n`
 }
 
-// A platform's OS family is its name without the optional `Weekly` suffix, so
-// `iosWeekly` belongs to the `ios` family. Coverage is validated per family
-// (the union of its regular + weekly splits), letting the weekend-only suite
-// hold a disjoint subset of tests rather than duplicating the daily ones.
-function platformFamily(platform) {
-  return platform.replace(/Weekly$/, '')
-}
-
-function validateGroups(functionNames) {
-  if (!fs.existsSync(groupsFile)) {
-    console.warn('[warn] test-groups.json not found — skipping split validation')
-    return
-  }
-  const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf-8'))
-  const nameSet = new Set(functionNames)
-
-  // Benchmark shards (benchmark-perf-*.test.js -> runBenchmarkPerf*) are
-  // scheduled only by the Benchmark Performance workflow via an explicit
-  // test_groups override, and are deliberately absent from test-groups.json
-  // so normal mobile integration runs never trigger the heavy benchmark.
-  // Exclude them from the group-coverage requirement.
-  const isOverrideOnly = (n) => n.startsWith('runBenchmarkPerf') || n === 'runFinetuningMoeTest'
-
-  const coveredByFamily = new Map()
-  for (const [platform, splits] of Object.entries(groups)) {
-    const family = platformFamily(platform)
-    const covered = coveredByFamily.get(family) ?? new Set()
-    for (const name of Object.values(splits).flat()) {
-      covered.add(name)
-    }
-    coveredByFamily.set(family, covered)
-  }
-
-  for (const [family, covered] of coveredByFamily) {
-    const missing = functionNames.filter((n) => !covered.has(n) && !isOverrideOnly(n))
-    const extra = [...covered].filter((n) => !nameSet.has(n))
-    if (missing.length) {
-      throw new Error(
-        '[' +
-          family +
-          '] Tests not assigned to any group in test-groups.json:\n  ' +
-          missing.join('\n  ') +
-          `\nAdd them to a ${family} or ${family}Weekly group in test/mobile/test-groups.json.`
-      )
-    }
-    if (extra.length) {
-      throw new Error(
-        '[' +
-          family +
-          '] test-groups.json references non-existent tests:\n  ' +
-          extra.join('\n  ') +
-          '\nRemove them or check for typos.'
-      )
-    }
-  }
-  console.log('Group coverage validated — all tests assigned for every OS family.')
-}
+// NOTE: test-group coverage is validated by scripts/validate-mobile-tests.js.
+// Keep scheduling policy out of this generator because it also runs inside
+// `npm run test:integration`; a test-groups.json edit must not abort desktop
+// integration tests after this file has already been generated successfully.
 
 function main() {
   assertBenchmarkShardsPresent()
@@ -150,11 +96,9 @@ function main() {
     throw new Error(`No integration test files found inside ${integrationDir}`)
   }
 
-  const functionNames = files.map(toFunctionName)
   const content = buildFileContents(files)
   fs.writeFileSync(outputFile, content, 'utf8')
   console.log(`Generated ${outputFile} with ${files.length} integration runners.`)
-  validateGroups(functionNames)
 }
 
 if (require.main === module) {
