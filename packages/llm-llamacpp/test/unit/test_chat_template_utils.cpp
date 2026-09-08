@@ -292,8 +292,8 @@ TEST_F(ChatTemplateUtilsTest, ReasoningBudgetAndDetectorAgreeOnSource) {
   for (const Case& c : cases) {
     const std::optional<ReasoningTags> detector =
         selectReasoningTagSource(c.startTag, c.endTag, c.fallback);
-    const ReasoningBudgetTags budget = selectReasoningBudgetTags(
-        c.startTag, c.endTag, {c.endTag}, c.fallback);
+    const ReasoningBudgetTags budget =
+        selectReasoningBudgetTags(c.startTag, c.endTag, {c.endTag}, c.fallback);
     EXPECT_EQ(detector.has_value(), !budget.startTag.empty())
         << "start='" << c.startTag << "' end='" << c.endTag << "'";
     if (detector.has_value()) {
