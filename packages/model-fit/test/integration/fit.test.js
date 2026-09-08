@@ -609,6 +609,10 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
   )
 })
 
+// The fitter ignores main_gpu entirely, so a bad placement used to surface only
+// as llama failing the internal load — a bare ERROR indistinguishable from a
+// genuine "does not fit". Rejection applies to SPLIT_MODE_NONE and to an
+// unpinned split mode; LAYER and ROW are exempt.
 test('mainGpu is validated only when llama uses it', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const invalidMainGpu = fitParams({ modelPath }).nDevices
@@ -618,6 +622,8 @@ test('mainGpu is validated only when llama uses it', async function (t) {
     /outside the supported GPU device list/
   )
 
+  // Outside NONE the field is inert, so the same index must not be rejected —
+  // the guard has to stay scoped rather than becoming a blanket bound.
   for (const splitMode of [1, 2]) {
     const res = fitParams({ modelPath: UNREACHABLE_MODEL, splitMode, mainGpu: invalidMainGpu })
     t.is(

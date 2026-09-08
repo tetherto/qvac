@@ -500,6 +500,10 @@ std::vector<BackendDevice> discoverBackendDevices() {
   return devices;
 }
 
+// Mirrors llama's own default device ordering — discrete GPUs first,
+// integrated ones only when no discrete GPU exists, deduplicated by
+// device_id — restricted to the supported families. Terminated by nullptr
+// because llama walks `devices` to the terminator.
 std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind) {
   const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;

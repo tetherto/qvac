@@ -248,9 +248,21 @@ FitResult runFit(const FitRequest& req) {
       eligibleBackendDeviceHandles(
           discoveredDevices, LlamaLoadKind::Completion);
   const size_t eligibleGpuDevices = eligibleDevices.size() - 1;
+
+  // llama reads main_gpu only under LLAMA_SPLIT_MODE_NONE. LAYER and ROW leave
+  // it inert, so it is not validated there. An unpinned split mode is
+  // validated: it goes in at llama's default, which is precisely the condition
+  // under which the fitter is free to rewrite it, and a fitter that lands on
+  // NONE indexes main_gpu against the compacted supported-device list handed
+  // to it below — so the ordinal has to be valid up front. The extra no-GPU
+  // placement check further down still applies only to an explicit NONE.
   const bool mainGpuIsUsed =
       req.hasMainGpu && req.mainGpu >= 0 &&
       (!req.hasSplitMode || req.splitMode == LLAMA_SPLIT_MODE_NONE);
+
+  // mainGpu is an ordinal into the supported-device list this fit hands llama
+  // as `devices`, so it is validated against that list here rather than left
+  // to llama, whose default inventory is no longer what it sees.
   if (mainGpuIsUsed && !eligibleBackendDeviceOrdinal(
                             discoveredDevices,
                             LlamaLoadKind::Completion,
@@ -261,18 +273,19 @@ FitResult runFit(const FitRequest& req) {
         " is outside the supported GPU device list");
   }
 
-  // Validate the placement now that there is a machine to validate it against.
+  // Validate the NONE placement now that there is a machine to validate it
+  // against.
   //
   // Neither field is read by the fitter itself, so a bad placement costs
   // nothing here — it costs the caller later. llama consults them only at load,
   // and only under LLAMA_SPLIT_MODE_NONE, where it requires main_gpu to index
-  // its own device list and returns no model otherwise ("invalid value for
-  // main_gpu"). common_fit_params performs that load internally, so the whole
-  // fit comes back as a bare ERROR/"failed to load model" — a verdict the
-  // caller cannot act on and cannot distinguish from a real fit failure.
-  // Rejecting here turns it back into what it is: a statement about arguments.
-  // binding.cpp cannot do it, since the valid range is unknown until the
-  // backends are registered.
+  // the supported-device list this fit hands it and returns no model otherwise
+  // ("invalid value for main_gpu"). common_fit_params performs that load
+  // internally, so the whole fit comes back as a bare ERROR/"failed to load
+  // model" — a verdict the caller cannot act on and cannot distinguish from a
+  // real fit failure. Rejecting here turns it back into what it is: a statement
+  // about arguments. binding.cpp cannot do it, since the valid range is unknown
+  // until the backends are registered.
   //
   // Only NONE needs the extra no-GPU placement check after identity validation.
   if (req.hasSplitMode && req.splitMode == LLAMA_SPLIT_MODE_NONE) {
@@ -280,9 +293,10 @@ FitResult runFit(const FitRequest& req) {
                                       req.nGpuLayers == 0 && req.hasMainGpu &&
                                       req.mainGpu == -1;
 
-    // NONE means "put the whole model on one GPU". With no GPU registered
-    // there is no such device, and llama rejects every index including the
-    // default 0, except for the exact CPU-only sentinel configuration.
+    // NONE means "put the whole model on one GPU". With no supported GPU
+    // registered there is no such device, and llama rejects every index
+    // including the default 0, except for the exact CPU-only sentinel
+    // configuration.
     if (!explicitCpuPlacement && eligibleGpuDevices == 0) {
       throw std::invalid_argument(
           "model-fit: splitMode NONE places the whole model on one GPU, but no "
@@ -430,6 +444,11 @@ FitResult runFit(const FitRequest& req) {
   out.typeK = static_cast<int32_t>(cparams.type_k);
   out.typeV = static_cast<int32_t>(cparams.type_v);
   out.flashAttnType = static_cast<int32_t>(cparams.flash_attn_type);
+
+  // With no supported GPU the projection is host-only: unless the caller pinned
+  // a layer count, the plan reports the CPU sentinels (0 layers, NONE, -1)
+  // whatever split mode or mainGpu was pinned. The raw device counts above
+  // stay untouched.
   if (eligibleGpuDevices == 0 && (!req.hasNGpuLayers || req.nGpuLayers == -1)) {
     out.nGpuLayers = 0;
     out.splitMode = static_cast<int32_t>(LLAMA_SPLIT_MODE_NONE);
