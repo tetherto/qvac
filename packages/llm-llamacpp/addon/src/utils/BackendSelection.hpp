@@ -104,8 +104,7 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 ///     identical cards, so a 2x RTX 4090 host would silently collapse to one.
 ///     A device whose `device_id` is null is kept rather than dropped.
 ///
-/// Returns an empty vector when no eligible GPU device is present; callers
-/// must then leave `--device` alone rather than emitting an empty list.
+/// Returns an empty vector when callers must fall back to CPU.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 
 /// @brief `getSplitDeviceNames()` against the real ggml backend registry.

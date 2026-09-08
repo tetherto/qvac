@@ -523,9 +523,6 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFitOverrideBeatsExplicitFitOn) {
   }
 }
 
-// Every multi-GPU mode must pin the eligible device list so a backend that the
-// addon cannot execute on is never recruited by fabric. A nonexistent name
-// makes fabric's parser throw naming --device, proving the list was forwarded.
 TEST_F(LoadFitNormalizationTest, SplitModesForwardEligibleDeviceList) {
   for (const char* mode : {"layer", "row", "tensor"}) {
     auto config = baseConfig();

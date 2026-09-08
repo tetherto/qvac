@@ -1292,9 +1292,6 @@ TEST_F(BackendSelectionTest, SplitDevices_FallsBackToIgpuWhenNoDiscrete) {
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
 }
 
-// Two eligible registry entries for one physical GPU must be listed once, or
-// the device receives two shards. Unsupported families are filtered before
-// deduplication and therefore cannot prove this branch.
 TEST_F(BackendSelectionTest, SplitDevices_DedupesDualRegisteredGpu) {
   mockBackend.addDevice(withDeviceId(
       createGPUDevice("AMD Radeon 8060S", "vulkan0"), "0000:03:00.0"));
