@@ -365,10 +365,11 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   // Two selection modes:
   //   1. params.gpu_backend non-empty → explicit single-pass filter:
   //      pick the first eligible device whose name contains gpu_backend
-  //      (case-insensitive substring). `gpu_device` is the ordinal
-  //      within matches, so {gpu_backend="vulkan", gpu_device=1} picks
-  //      the second Vulkan adapter. Any explicit selector resolving to an
-  //      OpenCL device bypasses the guard as an informed opt-in.
+  //      (case-insensitive substring) or whose registry name equals it.
+  //      `gpu_device` is the ordinal within matches, so
+  //      {gpu_backend="vulkan", gpu_device=1} picks the second Vulkan
+  //      adapter. Any explicit selector resolving to an OpenCL device
+  //      bypasses the guard as an informed opt-in.
   //   2. params.gpu_backend empty → gated default: when
   //      QVAC_NMTCPP_USE_OPENCL is defined, prefer an OpenCL-named
   //      device first; otherwise (and always as a fallback) pick any
@@ -456,7 +457,9 @@ nmt_backend_init(const nmt_context_params& params) {
 
   ggml_backend_t backend_gpu = nmt_backend_init_gpu(params);
 
-  // Track the primary so the secondary ACCEL walk cannot reinitialize it.
+  // Track the primary so the secondary ACCEL walk cannot reinitialize it:
+  // remember the device pointer we already picked so the loop below does not
+  // re-init the same device.
   ggml_backend_dev_t primary_dev =
       backend_gpu ? ggml_backend_get_device(backend_gpu) : nullptr;
 
@@ -464,11 +467,15 @@ nmt_backend_init(const nmt_context_params& params) {
     result.push_back(backend_gpu);
   }
 
-  // HIP/ROCm is GPU-typed and cannot enter this legacy ACCEL walk.
+  // Initialise the remaining ACCEL backends. Only ACCEL-typed devices enter
+  // this walk; GPU-typed families (including HIP/ROCm) never do.
   //
-  // Multiple ACCEL entries may represent the same auxiliary hardware.
-  // Initialising all of them adds synchronisation overhead in
-  // ggml_backend_sched without any parallel-compute benefit
+  // On Android (and other mobile SoCs with a single physical GPU), multiple
+  // GGML backends (Vulkan, OpenCL) may register as separate ACCEL devices
+  // for the same hardware (historically observed; on the pinned fabric
+  // Vulkan is GPU/IGPU-typed, so today this walk only sees CPU-companion
+  // accelerators).  Initialising all of them adds synchronisation
+  // overhead in ggml_backend_sched without any parallel-compute benefit
   // because the scheduler executes splits sequentially.
   //
   // Filter strategy:

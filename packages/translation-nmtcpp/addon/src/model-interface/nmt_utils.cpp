@@ -228,8 +228,10 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   const size_t devCount = backend.deviceCount();
 
   if (!gpuBackendLower.empty()) {
-    // Mode 1: explicit gpu_backend filter — pick the gpuDevice-th matching
-    // non-CPU device whose name contains the substring.
+    // Mode 1: explicit gpu_backend filter — pick the gpuDevice-th eligible
+    // device (GPU/IGPU, Vulkan/Metal/OpenCL family) whose name contains the
+    // selector or whose registry name equals it; 'metal'/'mtl' also match
+    // any Metal-family device.
     bool deviceFoundButBuftNull = false;
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
@@ -269,6 +271,10 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       }
     }
 #ifndef QVAC_NMTCPP_USE_OPENCL
+    // OpenCL is opt-in via any explicit selector that resolves to an OpenCL
+    // device even when the build-time guard is off. Warn loudly because the
+    // guard exists specifically to mitigate the Adreno 830 q4_0 transpose
+    // abort (QVAC-17790); callers bypassing it must accept the risk.
     if (dev != nullptr && deviceFamily(backend, dev) == NmtGpuFamily::OpenCl) {
       std::ostringstream oss;
       oss << "[" << logPrefix << "] Explicit gpu_backend='" << gpuBackend
@@ -337,7 +343,9 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   // Mode 2b: resolve gpuDevice within the eligible Vulkan/Metal inventory.
   // OpenCL is always skipped here because Mode 2a already handles it when
   // QVAC_NMTCPP_USE_OPENCL is defined, and it's unwanted when the guard is
-  // off. Unsupported families do not occupy an execution ordinal.
+  // off. This ensures gpuDevice ordinals map to distinct physical GPUs
+  // (Vulkan/Metal) without OpenCL duplicates or unsupported families
+  // occupying slots.
   if (dev == nullptr) {
     if (allowDefaultOpenCl && oclDeviceFoundButBuftNull) {
       std::ostringstream oss;

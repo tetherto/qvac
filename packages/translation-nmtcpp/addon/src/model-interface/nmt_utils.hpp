@@ -36,8 +36,12 @@ struct NmtBackendInterface {
   ggml_backend_buffer_type_t (*deviceBufferType)(ggml_backend_dev_t device);
 };
 
-// Shared selection keeps backend init and buffer assignment on the same device.
-// gpuDevice is an ordinal within the eligible family inventory.
+// Shared GPU device selection used by both nmt_backend_init_gpu (for backend
+// init) and make_buft_list (for buffer-type assignment). Returning the same
+// dev pointer from one helper guarantees compute and tensor-buffer placement
+// agree — repeated drift between the two functions has been a maintenance
+// hazard across multiple review rounds. gpuDevice is an ordinal within the
+// eligible family inventory.
 //
 // `logPrefix` is used only for diagnostic WARN/DEBUG messages so each caller
 // can be identified in logcat (e.g. "[nmt_backend_init_gpu]" vs
