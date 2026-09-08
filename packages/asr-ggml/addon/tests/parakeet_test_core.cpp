@@ -173,6 +173,15 @@ TEST_F(ParakeetModelTest, RnntMetadataSelectsNormalAsrModel) {
   EXPECT_NE(detected, ModelType::SORTFORMER);
 }
 
+TEST_F(ParakeetModelTest, NemotronMetadataSelectsNormalAsrModel) {
+  const ModelType detected =
+      ParakeetModel::modelTypeFromMetadata("nemotron", ModelType::TDT);
+  EXPECT_EQ(detected, ModelType::NEMOTRON);
+  EXPECT_NE(detected, ModelType::TDT);
+  EXPECT_NE(detected, ModelType::EOU);
+  EXPECT_NE(detected, ModelType::SORTFORMER);
+}
+
 TEST_F(ParakeetModelTest, UnknownMetadataPreservesModelTypeFallback) {
   EXPECT_EQ(
       ParakeetModel::modelTypeFromMetadata("unknown", ModelType::EOU),

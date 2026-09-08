@@ -16,6 +16,7 @@ const FAKE_VAE = '/tmp/wan_2.1_vae.safetensors'
 const FAKE_HIGH_NOISE = '/tmp/wan2.2_t2v_high_noise.safetensors'
 const FAKE_CLIP_VISION = '/tmp/clip_vision_h.safetensors'
 const FAKE_LTX_CONNECTORS = '/tmp/ltx-2-embeddings-connectors.safetensors'
+const RENAMED_VIDEO_MODEL = '/tmp/renamed-video-model.gguf'
 
 // Minimal valid PNG header (24 bytes — magic + IHDR width/height).
 const FAKE_PNG = new Uint8Array([
@@ -299,6 +300,19 @@ test('run | LTX IC-LoRA inputs are rejected for Wan models', async (t) => {
   )
 })
 
+test('run | dispatches a renamed video model with a model-specific frame count', async (t) => {
+  const m = makeWanModel({
+    files: { model: RENAMED_VIDEO_MODEL, vae: FAKE_VAE, audioVae: '/tmp/audio-vae.gguf' }
+  })
+  const dispatches = recordNativeDispatch(m)
+
+  await t.exception.all(
+    m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: 124 }),
+    /native dispatch reached/
+  )
+  t.is(dispatches(), 1)
+})
+
 test('run | accepts validated LTX IC-LoRA inputs before dispatch', async (t) => {
   const m = makeLtxModel()
   const dispatches = recordNativeDispatch(m)
@@ -570,35 +584,26 @@ test('run | accepts off-grid init_image when caller passes explicit aligned widt
 })
 
 // ─────────────────────────────────────────────────────────────────────
-//  run(): video_frames (4*k + 1 rule)
+//  run(): video_frames (model-specific packing is validated natively)
 // ─────────────────────────────────────────────────────────────────────
 
-test('run | rejects video_frames < 5', async (t) => {
+test('run | rejects non-positive video_frames', async (t) => {
   const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: 1 }),
-    /video_frames.*\(4\*k \+ 1\)/
-  )
-})
-
-test('run | rejects video_frames not of the form 4k+1', async (t) => {
-  const m = makeWanModel()
-  for (const bad of [4, 6, 8, 10, 16, 32, 34, 36]) {
+  for (const bad of [0, -1]) {
     await t.exception.all(
       m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: bad }),
-      /4\*k \+ 1/,
-      `video_frames=${bad} is rejected`
+      /video_frames must be a positive integer/
     )
   }
 })
 
-test('run | accepts video_frames of the form 4k+1', async (t) => {
+test('run | dispatches positive video_frames for native model-aware validation', async (t) => {
   const m = makeWanModel()
-  for (const ok of [5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 81]) {
+  for (const frameCount of [1, 4, 6, 8, 10, 16, 32, 34, 36, 124]) {
     await t.exception.all(
-      m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: ok }),
+      m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: frameCount }),
       /Addon not initialized/,
-      `video_frames=${ok} passes validation`
+      `video_frames=${frameCount} reaches native validation`
     )
   }
 })
@@ -607,7 +612,7 @@ test('run | rejects non-numeric video_frames', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: 'thirty-three' }),
-    /video_frames must be an integer/
+    /video_frames must be a positive integer/
   )
 })
 
@@ -615,7 +620,7 @@ test('run | rejects Infinity for video_frames', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: Infinity }),
-    /video_frames must be an integer/
+    /video_frames must be a positive integer/
   )
 })
 
