@@ -203,6 +203,25 @@ function getAutoCacheMaxBytes(): number {
   return isMobile() ? MOBILE_AUTO_CACHE_MAX_BYTES : DESKTOP_AUTO_CACHE_MAX_BYTES
 }
 
+/**
+ * Deletes planned auto-cache keys and reports how many went.
+ *
+ * Planning and eviction are separate steps, so a turn can take a key in
+ * between: each one is re-checked against the active paths under the
+ * cache-state lock rather than trusted from the plan.
+ */
+async function evictPlannedAutoCaches(cacheKeys: readonly string[]): Promise<number> {
+  let evicted = 0
+  await withCacheStateLock(async () => {
+    for (const cacheKey of cacheKeys) {
+      if (isCacheKeyActive(cacheKey)) continue
+      await deleteKvCacheState({ kvCacheKey: cacheKey })
+      evicted++
+    }
+  })
+  return evicted
+}
+
 async function withCacheStateLock<T>(operation: () => Promise<T>): Promise<T> {
   const previous = cacheStateLockTail
   let releaseLock = () => {}
@@ -239,19 +258,12 @@ async function maybeSweepAutoCaches(
   const sweep = async () => {
     try {
       const cacheKeys = await planAutoCacheEvictions({
-        activeCachePaths: Array.from(activeCachePaths.keys()),
+        activeCachePaths: snapshotActivePaths(),
         maxBytes: overrides?.maxBytes ?? getAutoCacheMaxBytes(),
         maxIdleMs: overrides?.maxIdleMs ?? AUTO_CACHE_MAX_IDLE_MS,
         nowMs
       })
-      let evictionCount = 0
-      await withCacheStateLock(async () => {
-        for (const cacheKey of cacheKeys) {
-          if (isCacheKeyActive(cacheKey)) continue
-          await deleteKvCacheState({ kvCacheKey: cacheKey })
-          evictionCount++
-        }
-      })
+      const evictionCount = await evictPlannedAutoCaches(cacheKeys)
       if (evictionCount > 0) {
         logger.debug(`[kv-cache] Evicted ${evictionCount} inactive auto-cache entries`)
       }
@@ -299,14 +311,7 @@ async function deleteInactiveAutoCaches(): Promise<void> {
     nowMs: Date.now()
   })
 
-  let evicted = 0
-  await withCacheStateLock(async () => {
-    for (const cacheKey of cacheKeys) {
-      if (isCacheKeyActive(cacheKey)) continue
-      await deleteKvCacheState({ kvCacheKey: cacheKey })
-      evicted++
-    }
-  })
+  const evicted = await evictPlannedAutoCaches(cacheKeys)
   if (evicted > 0) {
     moduleLogger.debug(`[kv-cache] Reclaimed ${evicted} inactive auto-cache entries`)
   }
