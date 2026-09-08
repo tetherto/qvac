@@ -2153,3 +2153,54 @@ test('TurboVecAdapter recovers after the competing writer releases the lock', as
   await adapter.close()
   await store.close()
 })
+
+test('TurboVecAdapter prunes the mutations a checkpoint covers', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const dbName = 'turbovec-prune'
+  const adapter = new TurboVecAdapter({
+    store,
+    dbName,
+    indexProvider,
+    checkpointDir: path.join(tmpDir, 'index')
+  })
+
+  await adapter.ready()
+  await adapter.saveEmbeddings([
+    {
+      id: 'alpha',
+      content: 'alpha document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+
+  const reader = new HyperDBAdapter({ store, dbName })
+  await reader.ready()
+
+  async function mutationRevisions() {
+    const snapshot = reader.db!.snapshot()
+    const mutations = await snapshot.find<{ revision: number }>('@rag/mutations').toArray()
+    await snapshot.close()
+    return mutations.map((mutation) => mutation.revision)
+  }
+
+  t.alike(await mutationRevisions(), [1], 'the save leaves a mutation record behind')
+
+  t.is(await adapter.checkpoint(), true)
+  t.alike(await mutationRevisions(), [], 'the checkpoint drops the records it covers')
+
+  await adapter.saveEmbeddings([
+    {
+      id: 'beta',
+      content: 'beta document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 1)
+    }
+  ])
+  t.alike(await mutationRevisions(), [2], 'a later save journals again')
+
+  await reader.close()
+  await adapter.close()
+  await store.close()
+})
