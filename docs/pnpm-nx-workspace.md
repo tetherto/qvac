@@ -30,7 +30,11 @@ allowBuilds:                     # only these packages may run install/postinsta
 
 Design choices worth knowing:
 
-- **`linkWorkspacePackages: true` with plain semver (no `workspace:*`)** — a package builds, publishes, and is consumed identically in or out of the monorepo; a local sibling is linked only when its version satisfies the consumer's range, otherwise it resolves from the registry. Note the 0.x caret rule: `^0.43.0` means `>=0.43.0 <0.44.0`, so a sibling already bumped to `0.45.0` resolves from the registry, not the local source (applies to most internal `@qvac/*` ranges today, including the `@qvac/infer-base` consumers pinned to `0.4.x`).
+- **`linkWorkspacePackages: true` with plain semver (no `workspace:*`)** — a package builds, publishes, and is consumed identically in or out of the monorepo; a local sibling is linked only when its version satisfies the consumer's range, otherwise it resolves from the registry. Note the 0.x caret rule: `^0.43.0` means `>=0.43.0 <0.44.0`, so a sibling already bumped to `0.45.0` resolves from the registry, not the local source.
+
+  Most internal deps do link: 75 of the 164 `@qvac/*` importer entries in `pnpm-lock.yaml` resolve to `link:`. **`@qvac/infer-base` is the exception, and no consumer links it.** Local is `0.7.0`; twelve addons declare `^0.6.2`, `decoder-audio` `^0.6.0`, `dl-hyperdrive` `^0.1.0`, and `sdk` pins `0.4.2` as a devDependency, so every one resolves from the registry (`0.6.2` ×11, `0.6.1`, `0.4.2`, `0.1.1`). Do not read `nx run-many -t build` as having exercised local `0.7.0`.
+
+  Those ranges predate the `0.5.0` break that removed `BaseInference`, `WeightsProvider` and the deprecated `pause`/`continue`/`getStatus`, and moving them is owned by the consuming packages, not by workspace plumbing. Forcing it here (an `@qvac/infer-base: workspace:*` override) would link `0.7.0` for everyone at once and is deliberately not done.
 - **`blockExoticSubdeps` + minimal `allowBuilds`** — supply-chain guardrails. Add to `overrides` / `allowBuilds` only with a one-line why (as above). Don't loosen either to make an install pass.
 
 Dev flow: `pnpm install` at the root once, then work in a package dir with its own scripts:
