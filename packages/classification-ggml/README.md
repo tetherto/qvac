@@ -223,7 +223,7 @@ If you fine-tune or swap the underlying MobileNetV3 model, follow `[docs/onnx-to
 - **All predictions look wrong**: verify the BN epsilon is still `0.001` (see the guarded unit test) — the architecture is unusually sensitive to this constant.
 - **Build fails looking for `stb_image.h`**: make sure the `stb` vcpkg port is installed. The `vcpkg-configuration.json` pins it.
 - **Build fails resolving `qvac__fabric@0.bare`**: the shared ggml runtime ships in the `@qvac/fabric` platform package (`@qvac/fabric-linux-x64`, …) selected by optionalDependencies. Run `npm install` without `--omit=optional` before `bare-make generate`/`build`.
-- **Runtime error “no backends are loaded” on desktop Linux**: the ggml backend `.so` files are loaded from the host fabric platform package (`node_modules/@qvac/fabric-<platform>/prebuilds/<host>/qvac__fabric/`), not from this addon. Ensure `@qvac/fabric` and its platform package are installed and not pruned.
+- **Runtime error “no backends are loaded” on desktop Linux**: the ggml backend `.so` files are loaded from the host fabric platform package (`node_modules/@qvac/fabric-<platform>/addon/prebuilds/<host>/qvac__fabric/`), not from this addon. Ensure `@qvac/fabric` and its platform package are installed and not pruned.
 
 ## License
 

@@ -20,14 +20,22 @@ dependency such as `@qvac/fabric-linux-x64`. Install with a supported installer
   `find_package(qvac-fabric)` exposes `qvac-fabric::headers` for compile-time
   includes (`include/` and `include/llama/`)
 - **Prebuilt `.bare` shared library**
-  (`@qvac/fabric-<platform>/prebuilds/<platform>/qvac__fabric.bare`)
+  (`@qvac/fabric-<platform>/addon/prebuilds/<platform>/qvac__fabric.bare`)
   — exports the `llama_* / LLAMA_* / ggml_* / gguf_* / mtmd_*` C API plus their
   C++-linkage variants (the qvac-fabric fork adds C++ extensions such as
   `llama_model_meta_from_file`), and the `common_*` / `string_*` /
   `json_schema_to_grammar` / cpu-params libcommon helpers; desktop consumers
   dynamically link against this
 - **ggml compute backends** — on **Linux and Android**, shipped as shared libraries
-  under `@qvac/fabric-<platform>/prebuilds/<platform>/qvac__fabric/`
+  under `@qvac/fabric-<platform>/addon/prebuilds/<platform>/qvac__fabric/`
+
+The runtime nests under `addon/` because both `require.addon()` and cmake-bare's
+`include_bare_module()` take the artifact basename from the nearest
+`package.json`, and that inner manifest is named `@qvac/fabric` — which is what
+keeps the file `qvac__fabric.bare` in a package called
+`@qvac/fabric-<platform>`. Resolve the directory with
+`require('@qvac/fabric/platform').resolvePlatformPrebuilds()` rather than
+hardcoding it.
 
 ### Desktop and mobile
 
@@ -38,7 +46,7 @@ addons link `qvac-fabric::headers` for compile-time includes and
 shared `.bare`, so the runtime is loaded once per process.
 
 On **Linux**, ggml compute backends are separate `.so` files under
-`@qvac/fabric-linux-*/prebuilds/<platform>/qvac__fabric/` and load via
+`@qvac/fabric-linux-*/addon/prebuilds/<platform>/qvac__fabric/` and load via
 `ggml_backend_load_all_from_path()`. On **macOS, Windows, and iOS** the backends
 are static inside `qvac__fabric.bare` and self-register on load. On **Android**
 the backends ship as shared libraries next to the companion runtime, same as
@@ -66,7 +74,7 @@ Add `@qvac/fabric` to the consumer's `package.json`:
 }
 ```
 
-After `npm install`, headers and CMake config are under `node_modules/@qvac/fabric/prebuilds/`; the host runtime and ggml backends are under the matching `node_modules/@qvac/fabric-<platform>-<arch>/prebuilds/` package. Do not use `--omit=optional`.
+After `npm install`, headers and CMake config are under `node_modules/@qvac/fabric/prebuilds/`; the host runtime and ggml backends are under the matching `node_modules/@qvac/fabric-<platform>/addon/prebuilds/` package. Do not use `--omit=optional`.
 
 ---
 
@@ -112,8 +120,20 @@ elseif(host MATCHES "^android-")
 else()
   set(fabric_platform_package "@qvac/fabric-${host}")
 endif()
-include_bare_module("${fabric_platform_package}" qvac_fabric_target PREBUILD)
+
+# The platform package nests the runtime under addon/. Fall back to the 0.10
+# fat tarball, which keeps it at the package root.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/${fabric_platform_package}/addon")
+  set(fabric_prebuilds "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/${fabric_platform_package}/addon/prebuilds")
+  include_bare_module("${fabric_platform_package}/addon" qvac_fabric_target PREBUILD)
+else()
+  set(fabric_prebuilds "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds")
+  include_bare_module("@qvac/fabric" qvac_fabric_target PREBUILD)
+endif()
 ```
+
+Addons on the shared `cmake/qvac-addon` template get all of the above from
+`qvac_addon_use_fabric()` and do not need to repeat it.
 
 Remove the old `find_package(llama)` / `find_package(ggml)` /
 `find_package(OpenSSL)` calls and the `GGML_AVAILABLE_BACKENDS` staging loop.
@@ -146,7 +166,7 @@ install(FILES $<TARGET_FILE:${qvac_fabric_target}_module>
   RENAME qvac__fabric@0.bare)
 
 file(GLOB _fabric_backends
-  "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/${fabric_platform_package}/prebuilds/${host}/qvac__fabric/*.so")
+  "${fabric_prebuilds}/${host}/qvac__fabric/*.so")
 if(_fabric_backends)
   install(FILES ${_fabric_backends} DESTINATION ${host}/${addon_name})
 endif()

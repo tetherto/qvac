@@ -265,7 +265,8 @@ jobs:
           persist-credentials: false
 
       - name: Run slicer unit tests
-        run: node --test packages/fabric/scripts/prepare-platform-packages.test.js
+        working-directory: packages/fabric
+        run: npm run test:unit
 
   overlay-local-fabric:
     name: Overlay local fabric prebuilds
@@ -324,11 +325,19 @@ jobs:
               path.join(planted, "share/qvac-fabricTargets.cmake"),
             )
 
-            // A pre-split fat install: no imports map, so the overlay has to
-            // bring the PR's own map along with the PR's binding.js.
+            // A released 0.10.0 fat install, verbatim: no imports map at all and
+            // an exports map that predates "./platform". Both have to be replaced
+            // wholesale — an exports map without "./platform" makes the subpath
+            // ERR_PACKAGE_PATH_NOT_EXPORTED, which sends every consumer
+            // resolveBackendsDir() to the meta tree the overlay just emptied.
             fs.writeFileSync(
               path.join(root, "consumer/node_modules/@qvac/fabric/package.json"),
-              JSON.stringify({ name: "@qvac/fabric", version: "0.10.0" }, null, 2) + "\n",
+              JSON.stringify({
+                name: "@qvac/fabric",
+                version: "0.10.0",
+                addon: true,
+                exports: { ".": "./binding.js", "./package": "./package.json" },
+              }, null, 2) + "\n",
             )
 
             fs.writeFileSync(path.join(source, "include/fabric.h"), "header")
@@ -386,6 +395,20 @@ jobs:
             )
             if (!metaManifest.imports || !metaManifest.imports["#binding"]) {
               throw new Error("Overlay did not bring the #binding imports map")
+            }
+            // Resolve "@qvac/fabric/platform" for real rather than eyeballing the
+            // manifest: a 0.10.0 exports map that predates the subpath throws
+            // ERR_PACKAGE_PATH_NOT_EXPORTED with platform.js sitting right there,
+            // and consumers swallow that and fall back to the emptied meta tree.
+            const consumer = path.join(platformPkg, "../../..")
+            const helper = require(
+              require.resolve("@qvac/fabric/platform", { paths: [consumer] }),
+            )
+            const resolved = helper.resolvePlatformPrebuilds()
+            if (!resolved || fs.realpathSync(resolved) !== fs.realpathSync(platform)) {
+              throw new Error(
+                `resolvePlatformPrebuilds() returned ${resolved}, expected ${platform}`,
+              )
             }
             for (const file of [
               "linux-x64/qvac_fabric.so",

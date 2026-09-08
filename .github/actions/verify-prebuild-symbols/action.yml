@@ -43,8 +43,10 @@ runs:
         # When @qvac/fabric is installed, index its prebuilds as an external provider.
         # The script matches provider exports to each binary's DT_NEEDED by soname, so
         # mere presence of the package in node_modules cannot mask a genuine UND.
+        # Platform packages nest the runtime under addon/; the 0.10 fat meta keeps
+        # it at the package root.
         shopt -s nullglob
-        for dir in node_modules/@qvac/fabric-*/prebuilds node_modules/@qvac/fabric/prebuilds; do
+        for dir in node_modules/@qvac/fabric-*/addon/prebuilds node_modules/@qvac/fabric/prebuilds; do
           if [ -d "$dir" ]; then EXTRA="$EXTRA --provider-dir $dir"; fi
         done
         node "$GITHUB_ACTION_PATH/verify-prebuild-symbols.mjs" --dir prebuilds --platform android $EXTRA
@@ -63,8 +65,10 @@ runs:
         # When @qvac/fabric is installed, index its prebuilds as an external provider.
         # The script matches provider exports to each binary's DT_NEEDED by soname, so
         # mere presence of the package in node_modules cannot mask a genuine UND.
+        # Platform packages nest the runtime under addon/; the 0.10 fat meta keeps
+        # it at the package root.
         shopt -s nullglob
-        for dir in node_modules/@qvac/fabric-*/prebuilds node_modules/@qvac/fabric/prebuilds; do
+        for dir in node_modules/@qvac/fabric-*/addon/prebuilds node_modules/@qvac/fabric/prebuilds; do
           if [ -d "$dir" ]; then EXTRA="$EXTRA --provider-dir $dir"; fi
         done
         node "$GITHUB_ACTION_PATH/verify-prebuild-symbols.mjs" --dir prebuilds --platform "$PLATFORM" $EXTRA

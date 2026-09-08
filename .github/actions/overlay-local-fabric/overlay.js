@@ -83,26 +83,42 @@ function overlayHost (src, metaPrebuilds, scopeDir, platKey) {
   return packageDir
 }
 
+const META_JS_FILES = ['addon-unavailable.js', 'binding.js', 'platform.js', 'platform.d.ts']
+
 function overlayMetaJs (metaPkg, workspace) {
   const source = path.join(workspace, 'packages', 'fabric')
-  for (const file of ['addon-unavailable.js', 'binding.js', 'platform.js', 'platform.d.ts']) {
+  for (const file of META_JS_FILES) {
     const from = path.join(source, file)
-    if (fs.existsSync(from)) fs.copyFileSync(from, path.join(metaPkg, file))
+    if (!fs.existsSync(from)) {
+      throw new Error(`No ${file} under ${source}: cannot overlay the split-layout loader`)
+    }
+    fs.copyFileSync(from, path.join(metaPkg, file))
   }
-  overlayMetaImports(metaPkg, path.join(source, 'package.json'))
+  overlayMetaResolution(metaPkg, path.join(source, 'package.json'))
 }
 
-// The overlaid binding.js resolves the host through "#binding", so the installed
-// manifest needs the PR's imports map — an older fat install has none, and a
-// stale one can name packages this overlay no longer plants.
-function overlayMetaImports (metaPkg, sourceManifestPath) {
-  if (!fs.existsSync(sourceManifestPath)) return
-  const imports = JSON.parse(fs.readFileSync(sourceManifestPath, 'utf8')).imports
-  if (!imports) return
+// The overlaid binding.js reaches the host through "#binding" and consumers reach
+// the backends through "@qvac/fabric/platform", so the installed manifest needs
+// both of the PR's resolution maps. A released 0.10.0 install ships an "exports"
+// map that predates "./platform": keeping it makes the subpath
+// ERR_PACKAGE_PATH_NOT_EXPORTED even though platform.js now sits next to it, and
+// every consumer silently falls back to the meta prebuilds tree this overlay has
+// just emptied of host binaries.
+function overlayMetaResolution (metaPkg, sourceManifestPath) {
   const manifestPath = path.join(metaPkg, 'package.json')
-  if (!fs.existsSync(manifestPath)) return
+  if (!fs.existsSync(sourceManifestPath)) {
+    throw new Error(`No fabric manifest at ${sourceManifestPath}`)
+  }
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error(`Installed @qvac/fabric has no package.json: ${manifestPath}`)
+  }
+  const source = JSON.parse(fs.readFileSync(sourceManifestPath, 'utf8'))
+  for (const field of ['imports', 'exports']) {
+    if (!source[field]) throw new Error(`${sourceManifestPath} has no "${field}" map`)
+  }
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-  manifest.imports = imports
+  manifest.imports = source.imports
+  manifest.exports = source.exports
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
 }
 
@@ -178,21 +194,20 @@ function main () {
   }
 
   for (const pkg of packages) {
-    let planted
     try {
-      planted = overlayTree(
+      const planted = overlayTree(
         src,
         pkg,
         process.env.PLATFORM,
         process.env.ARCH,
         process.env.TAGS
       )
+      console.log(`Overlaid PR fabric headers into ${path.join(pkg, 'prebuilds')}`)
+      overlayMetaJs(pkg, workspace)
+      for (const dest of planted) console.log(`Overlaid PR fabric runtime into ${dest}`)
     } catch (error) {
       fail(error.message)
     }
-    console.log(`Overlaid PR fabric headers into ${path.join(pkg, 'prebuilds')}`)
-    overlayMetaJs(pkg, workspace)
-    for (const dest of planted) console.log(`Overlaid PR fabric runtime into ${dest}`)
   }
 }
 

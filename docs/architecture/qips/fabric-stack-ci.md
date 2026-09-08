@@ -130,7 +130,7 @@ overlay-local-fabric
   2. download fabric-prebuilds artifact
   3. copy headers into every node_modules/@qvac/fabric/prebuilds match
        (include/, share/) and the host runtime into
-       node_modules/@qvac/fabric-<platform>/prebuilds/<platform>-<arch>/
+       node_modules/@qvac/fabric-<platform>/addon/prebuilds/<platform>-<arch>/
   4. consumer bare-make generate && build
   5. consumer cpp-tests + integration-tests
 ```

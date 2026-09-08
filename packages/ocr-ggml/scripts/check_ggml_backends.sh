@@ -4,7 +4,7 @@
 # Unlike upstream EasyOcr-ggml (which builds ggml as a submodule and inspects
 # build/third_party/ggml/...), this package consumes ggml from the
 # `@qvac/fabric` npm runtime. The runtime artefacts live under
-# `node_modules/@qvac/fabric-<platform>/prebuilds/<host>/qvac__fabric/`
+# `node_modules/@qvac/fabric-<platform>/addon/prebuilds/<host>/qvac__fabric/`
 # (0.11+ platform packages) or the fat 0.10 meta tree
 # `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`.
 #
@@ -35,7 +35,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Fabric backend path: node_modules/@qvac/fabric-<platform>/prebuilds/<host>/qvac__fabric/
+# Fabric backend path: node_modules/@qvac/fabric-<platform>/addon/prebuilds/<host>/qvac__fabric/
 # `host` is set by cmake-bare based on the runtime platform; on x64 Linux it
 # is `linux-x64`, on Apple Silicon `darwin-arm64`, etc.
 HOST_GUESS="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed -E 's/^x86_64$/x64/;s/^aarch64$/arm64/')"
@@ -60,7 +60,7 @@ if [[ ! -d "${BACKENDS_DIR}" ]]; then
     echo "error: backends directory not found: ${BACKENDS_DIR}" >&2
     echo "" >&2
     echo "Run 'npm install' to install @qvac/fabric," >&2
-    echo "or override BACKENDS_DIR=/abs/path/to/@qvac/fabric-<platform>/prebuilds/<host>/qvac__fabric" >&2
+    echo "or override BACKENDS_DIR=/abs/path/to/@qvac/fabric-<platform>/addon/prebuilds/<host>/qvac__fabric" >&2
     exit 1
 fi
 
