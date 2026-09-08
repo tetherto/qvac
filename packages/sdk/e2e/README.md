@@ -58,23 +58,16 @@ Which rebuild command you run depends on what changed.
   the one to run when in doubt. `packages/sdk` pins `@qvac/inference` to a published range, so the script
   packs the local inference to a tarball, swaps the spec in for the install, and restores the manifest
   afterwards (the working tree stays clean even on failure or Ctrl-C).
-- **The mobile consumer needs the same inference pinned separately.** It installs its own npm tree at
-  `run:local:<ios|android>` time, long after that manifest swap is undone, so `install:build:full` also
-  writes an `@qvac/inference` npm `override` into `@qvac/test-suite`'s consumer template
-  (`scripts/pin-consumer-inference.mjs`). Without it npm nests the _published_ inference under the SDK
-  snapshot, bare-pack bundles that copy, and the app dies at bootstrap with
-  `SyntaxError: ... does not provide an export named ...` while desktop passes. Re-apply or drop the pin
-  with `npm run pin:consumer-inference` / `npm run unpin:consumer-inference` — the pin lives in
-  `node_modules`, so a bare `npm install` here can wipe it.
-- **A second `install:build:full`/`install:build:sdk` run can silently serve stale inference.** npm caches
-  `file:` dependency resolutions in `package-lock.json`; once e2e's own lockfile has resolved
-  `@qvac/inference` once, a plain reinstall does not re-derive it even though `packages/sdk/package.json`'s
-  spec just changed — and a re-packed local tarball with the _same_ filename (the common case: local edits
-  rarely bump `packages/inference`'s version) is served with its old content. Both scripts call
-  `scripts/reconcile-e2e-inference.mjs` before installing e2e — unconditionally in `install:build:full`,
-  and only when e2e is currently pinned to a local build in `install:build:sdk` (so the common SDK-only
-  case stays fast) — which deletes `package-lock.json` and `node_modules` to force a correct re-resolve.
-  Deleting less (just `node_modules/@qvac/inference`, or the lockfile alone) was tried and does not work.
+- **Mobile needs the same inference pinned separately.** It installs its own npm tree later, after
+  `install:build:full` has already restored `packages/sdk/package.json` — so it also writes an
+  `@qvac/inference` npm `override` into `@qvac/test-suite`'s consumer template
+  (`scripts/pin-consumer-inference.mjs`). Without it, mobile silently gets the published inference and
+  crashes at bootstrap (`SyntaxError: ... does not provide an export named ...`) while desktop passes.
+  Re-apply or drop with `npm run pin:consumer-inference` / `unpin:consumer-inference`.
+- **A second `install:build:full`/`install:build:sdk` run can serve stale inference.** npm doesn't
+  re-resolve a cached `file:` dependency just because its spec or tarball content changed.
+  `scripts/reconcile-e2e-inference.mjs` forces a fresh resolve before each install — unconditionally in
+  `install:build:full`, only when needed in `install:build:sdk`.
 - **Mobile requires a fresh APK/IPA** to pick up either SDK or test-code changes — the baked app bundle
   contains the compiled test executors and the SDK. Omit `--skip-build` to rebuild.
 - **Electron requires a fresh Forge package** to pick up SDK, test-code, or `fixtures/qvac.config.electron.json`
@@ -83,6 +76,24 @@ Which rebuild command you run depends on what changed.
 - **`--skip-build` is for fast iteration that doesn't touch compiled code**: re-running the same build with
   a different `--filter` or `--suite`, or just re-running to debug flakiness. The producer reads
   definitions fresh each run, so filter / suite changes are picked up without rebuilding.
+
+### Resetting the local tree
+
+`clean:*` scripts are split by what they throw away, so a routine reset doesn't cost you more than it needs
+to:
+
+| Script               | Removes                                                                                 |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `clean:build`        | `dist`, `build`, `out`, `qvac`, `.sdk-e2e`, the generated `snap/*` build dirs           |
+| `clean:config`       | Generated `qvac.config*.json`                                                           |
+| `clean:cache`        | `.qvac-cache` (downloaded models), `.qvac-worker-backup`, `rag-hyperdb`, `rag-turbovec` |
+| `clean:dependencies` | `node_modules` / lockfiles here, in `packages/sdk`, and in `packages/inference`         |
+| `clean:all`          | All of the above                                                                        |
+
+**`clean:cache` and `clean:all` discard downloaded models.** If `cacheDirectory` is configured to a local
+path (CI always does this; see `.github/workflows/test-node-sdk.yml`), that's where `run:bootstrap:*`
+pre-downloads them — running a bootstrap step and then `clean:cache`/`clean:all`, or the reverse, throws
+that work away. Reach for `clean:build` alone for a routine "rebuild my scripts" reset.
 
 ### Electron local smoke
 
