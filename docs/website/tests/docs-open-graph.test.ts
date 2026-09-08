@@ -50,8 +50,8 @@ describe('isArchivedPage', () => {
     // crawlers consolidate on the bare canonical URL. This applies to both
     // API and release-notes sections while a given series is latest —
     // regardless of whether the section's archives are otherwise hidden.
-    expect(isArchivedPage(page('/reference/api/v0.18.x'))).toBe(true);
-    expect(isArchivedPage(page('/reference/release-notes/v0.18.x'))).toBe(true);
+    expect(isArchivedPage(page('/reference/api/v0.19.x'))).toBe(true);
+    expect(isArchivedPage(page('/reference/release-notes/v0.19.x'))).toBe(true);
   });
 
   it('returns false for archived release-notes series (kept indexable)', () => {
@@ -190,10 +190,10 @@ describe('buildPageCanonicalUrl', () => {
     // latest series file; the versioned URL is a 301 alias of the shim.
     // Both API and release-notes must consolidate their `<link rel=canonical>`
     // on the bare basePath while their series is latest.
-    expect(buildPageCanonicalUrl(['reference', 'api', 'v0.18.x'])).toBe(
+    expect(buildPageCanonicalUrl(['reference', 'api', 'v0.19.x'])).toBe(
       `${DOCS_SITE_ORIGIN}/reference/api/`,
     );
-    expect(buildPageCanonicalUrl(['reference', 'release-notes', 'v0.18.x'])).toBe(
+    expect(buildPageCanonicalUrl(['reference', 'release-notes', 'v0.19.x'])).toBe(
       `${DOCS_SITE_ORIGIN}/reference/release-notes/`,
     );
   });

@@ -55,19 +55,26 @@ reserve anything on the strength of it.
 
 ### `policy: 'interactive-v1'`
 
-Headroom withheld from the budget: the larger of 2 GiB or 15% of `total` on
-desktop, the larger of 1 GiB or 20% on mobile — the percentage applies to
-whatever `total` means under the result's `basis`. Under `system-memory` that
-headroom is left for the rest of the system; under `process-memory` it is left
-inside the app's own ceiling, since jetsam acts on this app's footprint.
+Headroom withheld from the budget: 20% of the memory available right now,
+capped at 2 GiB on desktop and 1 GiB on mobile. It is a share of what is free,
+not of `total`, so it can never exceed the headroom it is carved from — a busy
+host with 3 GiB free keeps a 2.4 GiB budget rather than none. Under
+`system-memory` that headroom is left for the rest of the system; under
+`process-memory` it is left inside the app's own ceiling, since jetsam acts on
+this app's footprint.
 
 ```text
-budget = total − in use now − policy reserve
+available = total − in use now
+budget    = available − min(cap, 20% × available)
 
 lower bound  > budget  → likely-too-large
 upper bound <= budget  → likely-fits
 otherwise              → unknown
 ```
+
+The result's `budget` carries every term — `totalBytes`, `usedBytes`,
+`availableBytes`, `reservedBytes`, `availableAfterReserveBytes` — so a verdict
+can be read back to the numbers it came from.
 
 What "total" and "in use" mean depends on the result's `basis`:
 
@@ -84,7 +91,7 @@ What "total" and "in use" mean depends on the result's `basis`:
 - **`device-memory`** — a discrete GPU's own memory, used when the model will
   execute there. Only for a GPU whose readings the collector established are
   device-scoped; everything else keeps the system basis or returns `unknown`.
-  See [discrete-GPU desktops](#supported-surface) below and the
+  See [desktops with a GPU](#supported-surface) below and the
   [system resources support matrix](./system-resources-support-matrix.md).
 
 ## Why the estimate is a range
@@ -110,11 +117,11 @@ reported in `assumptions`.
 
 ## Supported surface
 
-|           | Phase 1                                                                     |
-| --------- | --------------------------------------------------------------------------- |
-| Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription`     |
-| Workloads | `llm`, `audio`                                                              |
-| Platforms | `darwin-arm64`, `linux-x64`, `win32-x64` — see the calibration status below |
+|           | Phase 1                                                                 |
+| --------- | ----------------------------------------------------------------------- |
+| Engines   | `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription` |
+| Workloads | `llm`, `audio`                                                          |
+| Platforms | every desktop except `win32-arm64` — see the calibration status below   |
 
 Everything outside this table assesses as `unknown`. Parakeet, translation, TTS,
 OCR, diffusion, and the vision projector (`mmproj-*`) half of a multimodal load
@@ -122,24 +129,38 @@ are phase 2.
 
 **Calibration status.** A platform only reports estimates once its coefficients
 have been measured on real hardware and a held-out model has validated inside
-the bounds. `darwin-arm64` (Apple M4 Pro, Metal), `linux-x64` and `win32-x64`
-have all cleared that for CPU-resident execution, and `linux-x64` on Vulkan has
-cleared it for GPU-resident execution too, so LLM workloads return real
-verdicts on those. Audio
-workloads still return `unknown` on every platform: their coefficients await
-the harness's whisper pass, and the estimator refuses the unmeasured
-placeholders rather than consuming them. Every other platform returns `unknown`
-until its own run lands. See
-`@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
+the bounds. `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64` and
+`win32-x64` have all cleared that, and `linux-x64` and `win32-x64` have cleared
+it for their GPUs as well, so LLM workloads return real verdicts there.
+`win32-arm64` cannot: no engine addon is built for it. Audio workloads still
+return `unknown` on every platform — their coefficients await the harness's
+whisper pass, and the estimator refuses the unmeasured placeholders rather than
+consuming them. See `@qvac/inference`'s
+`src/resources/model-fit/calibration/METHODOLOGY.md` for the per-platform
+numbers and for the GPU shapes that are still uncovered.
 
-**Discrete-GPU desktops.** The engine executes the model in the GPU's own
-memory there, which system RAM cannot bound, so those platforms' `platforms`
-fixtures describe CPU-only machines. When a GPU is present the assessment
-switches to a `device-memory` basis and the backend's own coefficients — today
-`linux-x64` on Vulkan — and reports the GPU's total, used and reserve in
-`budget` as usual.
+**Desktops with a GPU.** On linux, Windows and Intel macOS the platform's own
+coefficients describe CPU-resident execution, so when a GPU is present the
+assessment first works out where the model would actually go. Devices the
+engine cannot use are discounted: a VM's paravirtual display adapter, and any
+device with no graphics API the build talks to. What remains decides the basis.
 
-On Windows the readings are per-process rather than device-wide (DXGI
+- **A card with its own memory** → `device-memory`, the backend's own
+  coefficients, and the GPU's total, used and reserve in `budget` as usual.
+  Where several cards qualify, they are alternatives rather than one pool: the
+  engine pins the model to one and which one is not observable, so a
+  `likely-fits` has to hold on the smallest and a `likely-too-large` on the
+  largest. In between the answer is `unknown`. Adapters too small to hold any
+  model are not counted as rivals — Windows classifies an Intel iGPU as
+  dedicated because it declares 128 MiB of its own.
+- **Only integrated GPUs** → the model runs on the GPU, but an integrated
+  device allocates out of system RAM, so the basis stays `system-memory`. The
+  coefficients are still the backend's, measured on an integrated device;
+  without such a fixture for that platform and backend the result is `unknown`
+  rather than the platform's CPU-forced numbers, which do not describe a GPU
+  load.
+
+On Windows a card's readings are per-process rather than device-wide (DXGI
 `CurrentUsage` and `Budget`), so the basis is `device-budget` instead: the GPU
 memory the OS grants _this process_. It answers the same admission question.
 
@@ -148,13 +169,9 @@ every verdict — a GPU load is paid for in system RAM too (a 2382 MiB model
 raised RSS by 2918 MiB on Windows, 868 MiB on linux), so a machine with the
 card for it but not the RAM does not read as a fit.
 
-It returns `unknown` instead whenever the evidence is not defensible:
-
-- **More than one usable GPU.** The engine takes the first eligible ggml
-  device, an order the SDK cannot observe, so the card cannot be identified.
-  Adapters too small to hold any model are not counted as rivals — Windows
-  classifies an Intel iGPU as dedicated because it declares 128 MiB of its own.
-- **An uncalibrated backend**, or a GPU whose readings carry no usable scope.
+It returns `unknown` whenever the evidence is not defensible: **an uncalibrated
+backend** for the placement in play, a GPU whose readings carry no usable
+scope, or cards that disagree on the backend or on the scope of their readings.
 
 Apple silicon is unaffected: its memory is unified, so a GPU allocation is
 system RAM and the system basis already covers it.

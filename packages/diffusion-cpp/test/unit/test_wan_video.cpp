@@ -84,6 +84,29 @@ inline bool isAvi(const std::vector<uint8_t>& buf) {
 
 } // namespace wan_helpers
 
+struct SdModelTestAccess {
+  static void setWan(SdModel& model) {
+    model.isLtxModel_ = false;
+    model.videoModelCapabilities_ = {};
+  }
+
+  static void setLtx(SdModel& model) {
+    model.isLtxModel_ = true;
+    model.videoModelCapabilities_ = {};
+    model.videoModelCapabilities_.spatialAlignment = 32;
+  }
+
+  static void setMiniMaxH3(SdModel& model) {
+    model.isLtxModel_ = false;
+    model.videoModelCapabilities_ = {};
+    model.videoModelCapabilities_.spatialAlignment = 32;
+    model.videoModelCapabilities_.frameCountStride = 17;
+    model.videoModelCapabilities_.frameCountOffset = 5;
+    model.videoModelCapabilities_.minimumVideoFrames = 5;
+    model.videoModelCapabilities_.isMiniMaxH3 = true;
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Validation-only fixture
 //
@@ -128,7 +151,12 @@ protected:
       GTEST_SKIP() << "SD2.1 model not available -- set SD_TEST_MODEL_PATH or "
                       "download to test/model/ (validation tests reuse it to "
                       "satisfy isLoaded()).";
+    configureWan();
   }
+
+  void configureWan() { SdModelTestAccess::setWan(*model); }
+  void configureLtx() { SdModelTestAccess::setLtx(*model); }
+  void configureMiniMaxH3() { SdModelTestAccess::setMiniMaxH3(*model); }
 
   // Build and run a job, expecting a StatusError-derived throw whose message
   // contains `needle`. Using substring matching keeps the tests resilient to
@@ -258,6 +286,120 @@ TEST_F(SdWanValidationTest, DirectCallerRejectsActiveStgForNonLtxModel) {
     "stg_block": 29
   })";
   expectThrowContains(std::move(job), "active stg_scale is only supported");
+}
+
+// ---------------------------------------------------------------------------
+// Model-aware frame validation
+// ---------------------------------------------------------------------------
+
+TEST_F(SdWanValidationTest, WanRejectsOffGridAndBelowMinimumFrameCounts) {
+  configureWan();
+
+  SdModel::GenerationJob belowMinimum;
+  belowMinimum.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 4
+  })";
+  expectThrowContains(std::move(belowMinimum), "form (4*k + 1)");
+
+  SdModel::GenerationJob offGrid;
+  offGrid.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 6
+  })";
+  expectThrowContains(std::move(offGrid), "form (4*k + 1)");
+}
+
+TEST_F(SdWanValidationTest, LtxRejectsOffGridAndOutOfRangeFrameCounts) {
+  configureLtx();
+
+  SdModel::GenerationJob belowMinimum;
+  belowMinimum.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 8
+  })";
+  expectThrowContains(std::move(belowMinimum), "LTX-2 video_frames");
+
+  SdModel::GenerationJob aboveMaximum;
+  aboveMaximum.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 258
+  })";
+  expectThrowContains(std::move(aboveMaximum), "LTX-2 video_frames");
+}
+
+TEST_F(SdWanValidationTest, MiniMaxH3RejectsOffGridFrameCounts) {
+  configureMiniMaxH3();
+
+  SdModel::GenerationJob belowMinimum;
+  belowMinimum.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 4
+  })";
+  expectThrowContains(std::move(belowMinimum), "MiniMax-H3 video_frames");
+
+  SdModel::GenerationJob offGrid;
+  offGrid.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 123
+  })";
+  expectThrowContains(std::move(offGrid), "MiniMax-H3 video_frames");
+}
+
+TEST_F(
+    SdWanValidationTest, MiniMaxH3RejectsUnsupportedControlsAndPinnedSettings) {
+  configureMiniMaxH3();
+
+  SdModel::GenerationJob imageConditioning;
+  imageConditioning.paramsJson = R"({
+    "mode": "img2vid", "prompt": "test", "video_frames": 124
+  })";
+  expectThrowContains(std::move(imageConditioning), "text-to-audio-video only");
+
+  SdModel::GenerationJob wanMoe;
+  wanMoe.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 124,
+    "high_noise_steps": 8
+  })";
+  expectThrowContains(std::move(wanMoe), "does not support high_noise_steps");
+
+  SdModel::GenerationJob controls;
+  controls.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 124
+  })";
+  controls.controlFramesBytes = {{0x01}};
+  expectThrowContains(std::move(controls), "does not support control_frames");
+
+  SdModel::GenerationJob imageStrength;
+  imageStrength.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 124,
+    "strength": 0.5
+  })";
+  expectThrowContains(
+      std::move(imageStrength), "does not support image-conditioning strength");
+
+  SdModel::GenerationJob reference;
+  reference.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 124
+  })";
+  reference.referenceImagesBytes = {{0x01}};
+  expectThrowContains(
+      std::move(reference), "does not support reference_images");
+
+  SdModel::GenerationJob cfg;
+  cfg.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 124,
+    "cfg_scale": 2.0
+  })";
+  expectThrowContains(std::move(cfg), "cfg_scale to be exactly 1.0");
+
+  SdModel::GenerationJob scheduler;
+  scheduler.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 124,
+    "scheduler": "simple"
+  })";
+  expectThrowContains(std::move(scheduler), "scheduler='discrete'");
+
+  SdModel::GenerationJob fps;
+  fps.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "video_frames": 124,
+    "fps": 16
+  })";
+  expectThrowContains(std::move(fps), "output is always 24 FPS");
 }
 
 // ---------------------------------------------------------------------------

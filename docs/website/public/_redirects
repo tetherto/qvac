@@ -57,10 +57,10 @@
 # Updated by `scripts/release-version-minor.ts` on every minor release
 # (remove the outgoing latest's rules, add the incoming latest's rules).
 # ==== BEGIN latest-series alias (managed) ====
-/reference/api/v0.18.x/             /reference/api/               301
-/reference/api/v0.18.x              /reference/api/               301
-/reference/release-notes/v0.18.x/   /reference/release-notes/     301
-/reference/release-notes/v0.18.x    /reference/release-notes/     301
+/reference/api/v0.19.x/             /reference/api/               301
+/reference/api/v0.19.x              /reference/api/               301
+/reference/release-notes/v0.19.x/   /reference/release-notes/     301
+/reference/release-notes/v0.19.x    /reference/release-notes/     301
 # ==== END latest-series alias (managed) ====
 
 # Sevalla CDN does not resolve directory-to-index.html for path segments
