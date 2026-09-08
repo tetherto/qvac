@@ -13,6 +13,7 @@
 #include <common/arg.h>
 #include <common/chat.h>
 #include <common/log.h>
+#include <common/speculative.h>
 #include <inference-addon-cpp/Errors.hpp>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -1125,6 +1126,30 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
+  for (const std::string& key : {"spec-type", "spec_type"}) {
+    if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
+      auto types =
+          common_speculative_types_from_names(split(iter->second, ','));
+      // Only `draft-mtp` self-speculation is wired in this addon. `spec-type`
+      // accepts a comma list, so warn (don't fail) on any other parsed type so
+      // a silently-inert drafter is visible in the logs.
+      for (const auto specType : types) {
+        if (specType != COMMON_SPECULATIVE_TYPE_DRAFT_MTP &&
+            specType != COMMON_SPECULATIVE_TYPE_NONE) {
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[LlamaModel] spec-type '%s' is not supported (only "
+                  "'draft-mtp' is wired); it will be ignored\n",
+                  common_speculative_type_to_str(specType).c_str()));
+        }
+      }
+      params.speculative.types.insert(
+          params.speculative.types.end(), types.begin(), types.end());
+      configFilemap.erase(iter);
+    }
+  }
+
   // transform json config into the format required by llama.cpp
   for (auto& keyValuePair : configFilemap) {
     configVector.push_back(std::string("--") + keyValuePair.first);
@@ -1133,8 +1158,12 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
+  // Use the CLI parser profile so common llama.cpp options plus speculative
+  // tuning flags (for example --spec-draft-n-max) are accepted. The COMMON
+  // profile filters those spec options out entirely, while SERVER changes
+  // defaults such as n_parallel.
   auto ctxArg = common_params_parser_init(
-      params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
+      params, LLAMA_EXAMPLE_CLI, [](int, char**) {});
 
   // disable warmup run
   params.warmup = false;
@@ -1145,9 +1174,19 @@ NormalizedLoad normalizeLoadForFit(
   int size = static_cast<int>(configVector.size());
 
   std::unordered_map<std::string, common_arg*> argToOptions;
+  std::unordered_map<std::string, bool> argBoolValues;
   for (auto& opt : ctxArg.options) {
     for (const auto& arg : opt.args) {
       argToOptions[arg] = &opt;
+      if (opt.handler_bool != nullptr) {
+        argBoolValues[arg] = true;
+      }
+    }
+    for (const auto& arg : opt.args_neg) {
+      argToOptions[arg] = &opt;
+      if (opt.handler_bool != nullptr) {
+        argBoolValues[arg] = false;
+      }
     }
   }
 
@@ -1194,6 +1233,25 @@ NormalizedLoad normalizeLoadForFit(
     try {
       if (opt.handler_void != nullptr) {
         opt.handler_void(params);
+        continue;
+      }
+      if (opt.handler_bool != nullptr) {
+        bool value = argBoolValues.at(arg);
+        if (argIndex + 1 < size) {
+          const std::string& next = configVector.at(argIndex + 1);
+          if (!next.starts_with(argPrefix)) {
+            if (common_arg_utils::is_truthy(next)) {
+              argIndex++;
+            } else if (common_arg_utils::is_falsey(next)) {
+              value = !value;
+              argIndex++;
+            } else {
+              throw std::invalid_argument(
+                  "expected boolean value: true/false, on/off, or 1/0");
+            }
+          }
+        }
+        opt.handler_bool(params, value);
         continue;
       }
 
