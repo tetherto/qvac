@@ -16,10 +16,11 @@ described in [README.md](README.md) and applies here. Its own configuration live
 
 ## KV-cache retention
 
-`/v1/chat/completions` and `/v1/responses` cache each conversation's prefix under
-`~/.qvac/kv-cache`, so a follow-up turn only prefills the new tail. That directory grows on
-the order of hundreds of megabytes per conversation, **but it is bounded** — you do not need
-a sweeper of your own:
+`/v1/chat/completions` caches each conversation's prefix under `~/.qvac/kv-cache`, so a
+follow-up turn only prefills the new tail. It is the only endpoint that does: `/v1/responses`
+and `/v1/completions` run uncached, so they leave nothing here to reclaim. That directory
+grows on the order of hundreds of megabytes per conversation, **but it is bounded** — you do
+not need a sweeper of your own:
 
 | Bound           | Value                                             |
 | --------------- | ------------------------------------------------- |

@@ -11,7 +11,7 @@ describe('qvac kv_cache: surface', () => {
     assert.equal(res.statusCode, 200)
     const doc = res.json() as { paths: Record<string, { delete?: unknown }> }
     assert.ok('/qvac/v1/kv_cache' in doc.paths, 'kv_cache path missing from openapi.json')
-    assert.ok(doc.paths['/qvac/v1/kv_cache']?.delete, 'kv_cache is mounted as DELETE')
+    assert.ok(doc.paths['/qvac/v1/kv_cache']?.delete, 'kv_cache has no DELETE in openapi.json')
   })
 })
 
