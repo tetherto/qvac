@@ -326,14 +326,10 @@ class LoadFitNormalizationTest : public ::testing::Test {
 protected:
   test_common::MockModelMetaData metadata_{false, "llama"};
 
-  // splitDevices defaults to empty on purpose: a non-empty list is forwarded
-  // as `--device a,b`, and qvac-fabric's parser rejects names that do not
-  // exist on the host running the test. Tests that care about the list either
-  // supply one deliberately (see TensorSplitForwardsExplicitDeviceList) or
-  // exercise the selection logic in test_backend_selection.cpp.
+  // "none" keeps split parsing host-independent; pass {} to test fallback.
   static lfn::NormalizationDependencies backend(
       lfn::SelectedBackend selected, bool supportsRowSplit = false,
-      std::vector<std::string> splitDevices = {}) {
+      std::vector<std::string> splitDevices = {"none"}) {
     return {
         .resolveBackend = [selected](
                               backend_selection::BackendType,
@@ -559,7 +555,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeWithNoEnumerableDevicesUsesCpu) {
       backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {}));
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.params.main_gpu, -1);
-  EXPECT_EQ(result.params.n_gpu_layers, 0);
+  EXPECT_EQ(result.params.n_gpu_layers, 23);
+  EXPECT_FALSE(result.params.mmproj_use_gpu);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_NE(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_NE(result.params.cache_type_v, GGML_TYPE_Q8_0);
 }
 
 // A caller-supplied fit=on must still be honoured outside tensor mode.

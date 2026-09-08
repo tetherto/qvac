@@ -861,7 +861,16 @@ NormalizedLoad normalizeLoadForFit(
       }
     }
 
-    if (selected.type == BackendType::GPU) {
+    std::vector<std::string> splitDevices;
+    if (selected.type == BackendType::GPU &&
+        splitMode != LLAMA_SPLIT_MODE_NONE) {
+      splitDevices = dependencies.splitDeviceNames();
+    }
+    const bool useGpu =
+        selected.type == BackendType::GPU &&
+        (splitMode == LLAMA_SPLIT_MODE_NONE || !splitDevices.empty());
+
+    if (useGpu) {
       params.mmproj_backend = selected.name;
 #ifdef __ANDROID__
       // QVAC-21867: auto-default the projector backend by GPU class.
@@ -935,7 +944,9 @@ NormalizedLoad normalizeLoadForFit(
               "multi-GPU split-mode; use an integer device index instead\n");
         }
       }
-    } else if (selected.type == BackendType::CPU) {
+    } else if (
+        selected.type == BackendType::CPU ||
+        selected.type == BackendType::GPU) {
       params.mmproj_use_gpu = false;
       if (mmprojUseGpuOverride.value_or(false)) {
         QLOG_IF(
@@ -962,45 +973,28 @@ NormalizedLoad normalizeLoadForFit(
     }
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
-      configVector.emplace_back(selected.name);
+      configVector.emplace_back(useGpu ? selected.name : "none");
     } else {
-      const std::vector<std::string> splitDevices =
-          dependencies.splitDeviceNames();
-      if (splitDevices.empty()) {
-        splitMode = LLAMA_SPLIT_MODE_NONE;
-        params.split_mode = LLAMA_SPLIT_MODE_NONE;
-        params.main_gpu = -1;
-        params.n_gpu_layers = 0;
-        result.runtimeBackendDevice = 0;
-        configFilemap.erase("tensor-split");
-        configVector.emplace_back("--device");
-        configVector.emplace_back("none");
-        QLOG_IF(
-            Priority::WARNING,
-            "[LlamaModel] split mode: no eligible GPU device could be "
-            "enumerated; falling back to CPU\n");
-      } else {
-        std::string deviceList;
-        for (const std::string& device : splitDevices) {
-          if (!deviceList.empty()) {
-            deviceList += ",";
-          }
-          deviceList += device;
+      std::string deviceList;
+      for (const std::string& device : splitDevices) {
+        if (!deviceList.empty()) {
+          deviceList += ",";
         }
-        configVector.emplace_back("--device");
-        configVector.emplace_back(deviceList);
-        QLOG_IF(
-            Priority::INFO,
-            string_format(
-                "[LlamaModel] split mode: pinning to %zu eligible device(s): "
-                "%s\n",
-                splitDevices.size(),
-                deviceList.c_str()));
+        deviceList += device;
       }
+      configVector.emplace_back("--device");
+      configVector.emplace_back(deviceList);
+      QLOG_IF(
+          Priority::INFO,
+          string_format(
+              "[LlamaModel] split mode: pinning to %zu eligible device(s): "
+              "%s\n",
+              splitDevices.size(),
+              deviceList.c_str()));
     }
     configFilemap.erase("device");
 
-    isGpu = selected.type == BackendType::GPU;
+    isGpu = useGpu;
     isOpenCl = isGpu && selected.name.find("opencl") != std::string::npos;
     isMetal = isGpu && (selected.name.find("metal") != std::string::npos ||
                         selected.name.rfind("mtl", 0) == 0);
