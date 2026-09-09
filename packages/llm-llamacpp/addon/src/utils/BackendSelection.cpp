@@ -612,7 +612,6 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
             bckI.ggml_backend_reg_get_proc_address(
                 reg, "ggml_backend_split_buffer_type") != nullptr};
     if (isRpcDevice(bckI, dev)) {
-      selected.isRpc = true;
       rpc.emplace_back(std::move(selected));
       continue;
     }

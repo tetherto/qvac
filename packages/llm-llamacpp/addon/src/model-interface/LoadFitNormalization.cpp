@@ -56,7 +56,9 @@ std::vector<std::string> split(const std::string& str, char delimiter) {
 
   while (std::getline(stream, token, delimiter)) {
     auto trimmed = trim(token);
+    if (!trimmed.empty()) {
       tokens.push_back(std::move(trimmed));
+    }
   }
   return tokens;
 }
@@ -681,19 +683,23 @@ void remapTensorSplit(
   if (value == config.end()) {
     return;
   }
+  bool mappingChanged = selection.devices.size() != selection.sourceGpuCount;
+  for (size_t index = 0; !mappingChanged && index < selection.devices.size();
+       ++index) {
+    mappingChanged = selection.devices[index].sourceGpuIndex != index;
+  }
+  if (!mappingChanged) {
+    return;
+  }
   std::string normalized = value->second;
   std::ranges::replace(normalized, '/', ',');
   const std::vector<std::string> proportions = split(normalized, ',');
-  if (proportions.size() == selection.devices.size()) {
-    value->second = std::move(normalized);
-    return;
-  }
   if (proportions.size() != selection.sourceGpuCount) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         string_format(
             "%s: tensor-split has %zu values for %zu registered GPU devices; "
-            "cannot reconcile it with the %zu final devices.\n",
+            "cannot reconcile it with the %zu eligible devices.\n",
             K_LEGACY_PARSER_NAME.data(),
             proportions.size(),
             selection.sourceGpuCount,
@@ -871,31 +877,13 @@ NormalizedLoad normalizeLoadForFit(
       if (!splitSelection.devices.empty()) {
         const backend_selection::SplitDevice& primary =
             splitSelection.devices.front();
-        const auto projector = std::find_if(
-            splitSelection.devices.begin(), splitSelection.devices.end(),
-            [](const backend_selection::SplitDevice& device) {
-              return !device.isRpc;
-            });
-        const auto& projectorDevice = projector == splitSelection.devices.end()
-                                          ? primary
-                                          : *projector;
-        const bool anyOpenCl = std::any_of(
-            splitSelection.devices.begin(), splitSelection.devices.end(),
-            [](const backend_selection::SplitDevice& device) {
-              return device.isOpenCl;
-            });
-        const bool anyMetal = std::any_of(
-            splitSelection.devices.begin(), splitSelection.devices.end(),
-            [](const backend_selection::SplitDevice& device) {
-              return device.isMetal;
-            });
         selected = {
             .type = BackendType::GPU,
-            .name = projectorDevice.name,
-            .adrenoVersion = projectorDevice.adrenoVersion,
-            .isMaliGpu = projectorDevice.isMaliGpu,
-            .isOpenCl = anyOpenCl,
-            .isMetal = anyMetal};
+            .name = primary.name,
+            .adrenoVersion = primary.adrenoVersion,
+            .isMaliGpu = primary.isMaliGpu,
+            .isOpenCl = primary.isOpenCl,
+            .isMetal = primary.isMetal};
       } else if (!splitSelection.rejectedDevices.empty()) {
         std::string rejected;
         for (const std::string& device : splitSelection.rejectedDevices) {
