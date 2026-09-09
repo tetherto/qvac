@@ -19,6 +19,7 @@ import {
   assertParlerJobOptionsSupported,
   getParlerJobOptions
 } from '@/plugins/builtin/tts-ggml/ops/parler-options'
+import { bindTtsCancel } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
 
 type RunStreamingModel = {
   runStreaming: (
@@ -111,6 +112,10 @@ export async function* textToSpeechStream(
   const model = getModel(request.modelId)
   const parlerJobOptions = getParlerJobOptions(request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
+
+  await using ctx = await bindTtsCancel(model, request.modelId, request.requestId)
+  if (ctx.signal.aborted) return buildStreamResult(0)
+
   const modelStart = nowMs()
 
   if (!hasRunStreaming(model)) {

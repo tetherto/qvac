@@ -16,6 +16,7 @@ import Buffer from 'bare-buffer'
 import { stream as streamRpc, duplex, type DuplexReadable } from '@/dispatch'
 import { getAppLogger } from '@/logging/index'
 import { TextToSpeechStreamFailedError } from '@/errors/index'
+import { generateRequestId } from '@/runtime/request-id'
 
 const logger = getAppLogger()
 
@@ -142,10 +143,11 @@ export class TtsMulticast {
   }
 }
 
-function buildTtsRequest(params: TtsClientParamsInput): TtsRequest {
+function buildTtsRequest(params: TtsClientParamsInput, requestId: string): TtsRequest {
   return {
     type: 'textToSpeech',
     modelId: params.modelId,
+    requestId,
     inputType: params.inputType ?? 'text',
     text: params.text,
     stream: params.stream ?? true,
@@ -170,11 +172,13 @@ function buildTtsRequest(params: TtsClientParamsInput): TtsRequest {
 }
 
 function buildTextToSpeechStreamRequest(
-  params: TextToSpeechStreamClientParams
+  params: TextToSpeechStreamClientParams,
+  requestId: string
 ): TextToSpeechStreamRequest {
   return {
     type: 'textToSpeechStream',
     modelId: params.modelId,
+    requestId,
     inputType: params.inputType ?? 'text',
     ...(params.accumulateSentences !== undefined && {
       accumulateSentences: params.accumulateSentences
@@ -247,7 +251,10 @@ export function textToSpeech(
     )
   }
 
-  const request = buildTtsRequest(params)
+  // Minted here and surfaced synchronously on the result so a caller can
+  // cancel a run it has only just started.
+  const requestId = params.requestId ?? generateRequestId()
+  const request = buildTtsRequest(params, requestId)
 
   if (stream && sentenceStream) {
     return sentenceStreamTts(request, options)
@@ -344,6 +351,7 @@ function sentenceStreamTts(
     chunkUpdates: sentenceChunkUpdates(chunkSubscription),
     buffer: Promise.resolve([]),
     done: multicast.done,
+    requestId: request.requestId as string,
     sampleRate: side.sampleRate,
     stats: side.stats
   }
@@ -398,6 +406,7 @@ function plainStreamTts(
     bufferStream: plainTtsBufferStream(request, options, resolveDone, rejectDone, side),
     buffer: Promise.resolve([]),
     done,
+    requestId: request.requestId as string,
     sampleRate: side.sampleRate,
     stats: side.stats
   }
@@ -457,6 +466,7 @@ function collectTts(
     bufferStream: emptyBufferStream(),
     buffer: collectTtsBuffer(request, options, resolveDone, rejectDone, side),
     done,
+    requestId: request.requestId as string,
     sampleRate: side.sampleRate,
     stats: side.stats
   }
@@ -502,7 +512,8 @@ export async function textToSpeechStream(
   params: TextToSpeechStreamClientParams,
   options?: RPCOptions
 ): Promise<TextToSpeechStreamSession> {
-  const request = buildTextToSpeechStreamRequest(params)
+  const requestId = params.requestId ?? generateRequestId()
+  const request = buildTextToSpeechStreamRequest(params, requestId)
 
   const { requestStream, responseStream } = await duplex(request, options)
 
@@ -515,6 +526,7 @@ export async function textToSpeechStream(
   let closed = false
 
   return {
+    requestId,
     write(textFragment: string | Buffer) {
       if (closed) {
         throw new TextToSpeechStreamFailedError(

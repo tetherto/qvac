@@ -19,6 +19,7 @@ import { stream as streamRpc, duplex, type DuplexReadable } from '@/client/rpc/r
 import { getClientLogger } from '@/logging'
 import { TextToSpeechStreamFailedError } from '@/utils/errors-client'
 import { parseClientInput } from '@/client/parse-input'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 
 const logger = getClientLogger()
 
@@ -145,10 +146,11 @@ export class TtsMulticast {
   }
 }
 
-function buildTtsRequest(params: TtsClientParams): TtsRequest {
+function buildTtsRequest(params: TtsClientParams, requestId: string): TtsRequest {
   return {
     type: 'textToSpeech',
     modelId: params.modelId,
+    requestId,
     inputType: params.inputType,
     text: params.text,
     stream: params.stream,
@@ -173,11 +175,13 @@ function buildTtsRequest(params: TtsClientParams): TtsRequest {
 }
 
 function buildTextToSpeechStreamRequest(
-  params: TextToSpeechStreamClientParams
+  params: TextToSpeechStreamClientParams,
+  requestId: string
 ): TextToSpeechStreamRequest {
   return {
     type: 'textToSpeechStream',
     modelId: params.modelId,
+    requestId,
     inputType: params.inputType ?? 'text',
     ...(params.accumulateSentences !== undefined && {
       accumulateSentences: params.accumulateSentences
@@ -249,7 +253,11 @@ export function textToSpeech(
     )
   }
 
-  const request = buildTtsRequest(parsed)
+  // Minted client-side and surfaced synchronously on the result, the same way
+  // `transcribe()` / `completion()` do, so a caller can cancel a run it has
+  // only just started.
+  const requestId = parsed.requestId ?? generateClientRequestId()
+  const request = buildTtsRequest(parsed, requestId)
 
   if (parsed.stream && parsed.sentenceStream) {
     return sentenceStreamTts(request, options)
@@ -346,6 +354,7 @@ function sentenceStreamTts(
     chunkUpdates: sentenceChunkUpdates(chunkSubscription),
     buffer: Promise.resolve([]),
     done: multicast.done,
+    requestId: request.requestId as string,
     sampleRate: side.sampleRate,
     stats: side.stats
   }
@@ -400,6 +409,7 @@ function plainStreamTts(
     bufferStream: plainTtsBufferStream(request, options, resolveDone, rejectDone, side),
     buffer: Promise.resolve([]),
     done,
+    requestId: request.requestId as string,
     sampleRate: side.sampleRate,
     stats: side.stats
   }
@@ -459,6 +469,7 @@ function collectTts(
     bufferStream: emptyBufferStream(),
     buffer: collectTtsBuffer(request, options, resolveDone, rejectDone, side),
     done,
+    requestId: request.requestId as string,
     sampleRate: side.sampleRate,
     stats: side.stats
   }
@@ -516,9 +527,10 @@ export async function textToSpeechStream(
   params: TextToSpeechStreamClientParams,
   options?: RPCOptions
 ): Promise<TextToSpeechStreamSession> {
+  const requestId = params.requestId ?? generateClientRequestId()
   const request = parseClientInput(
     textToSpeechStreamRequestSchema,
-    buildTextToSpeechStreamRequest(params)
+    buildTextToSpeechStreamRequest(params, requestId)
   )
 
   const { requestStream, responseStream } = await duplex(request, options)
@@ -532,6 +544,7 @@ export async function textToSpeechStream(
   let closed = false
 
   return {
+    requestId,
     write(textFragment: string | Uint8Array) {
       if (closed) {
         throw new TextToSpeechStreamFailedError(

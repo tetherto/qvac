@@ -46,6 +46,28 @@ For reference, the rate each configuration produces:
 | Audio8                  | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | LavaSR enhancer enabled | 48,000 Hz by default, or `modelConfig.outputSampleRate` when set                                                    |
 
+## Cancelling a run
+
+`textToSpeech()` surfaces a `requestId` synchronously on its result, and
+`textToSpeechStream()` on its session. Pass it to
+[`cancel()`](/reference/api#cancel) to stop synthesis:
+
+```ts
+const result = textToSpeech({ modelId, text: longArticle });
+// …later, e.g. the user navigated away
+await cancel({ requestId: result.requestId });
+```
+
+<Callout type="warn">
+  Abandoning `bufferStream` (or calling `destroy()` on a duplex session) stops
+  delivery but leaves the native job running to completion. Only `cancel()`
+  stops the engine.
+</Callout>
+
+`cancel({ modelId, kind: "tts" })` cancels whatever run currently owns the
+model. Synthesis is serialised per model, so a run still waiting its turn is
+cancelled before it starts rather than interrupting the one in flight.
+
 ## Runtime statistics
 
 `textToSpeech()` returns a `stats` promise carrying the engine's own runtime

@@ -139,6 +139,18 @@ function installDefaultPolicies(r: RequestRegistry): void {
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64
   })
+  // @qvac/tts-ggml is constructed with `exclusiveRun: true`, so it already
+  // serialises synthesis per model — but it queues internally, where the
+  // registry cannot see it. Mirroring the limit here keeps the registry
+  // authoritative, which is what model-scoped cancel needs: exactly one
+  // registered request owns the addon at a time, so cancelling a queued run
+  // aborts it before it starts instead of interrupting the run in flight.
+  r.policy({
+    kind: 'tts',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
   // An ABot-World session runs one job at a time: the addon rejects a second
   // step while a block is still streaming, and scene creation shares the same
   // lane. Reject rather than queue, unlike every other policy here, because a

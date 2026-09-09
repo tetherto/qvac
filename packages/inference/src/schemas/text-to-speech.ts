@@ -984,8 +984,18 @@ export const ttsConfigSchema = z
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
+// Cancel targeting. Both TTS handlers declare `cancel: { scope: 'model', hard:
+// true }`, which the runtime only honours for requests registered in the
+// request registry — so the id has to reach the engine on the request.
+const ttsRequestIdSchema = z
+  .string()
+  .min(1)
+  .optional()
+  .describe('Client-generated id for targeting this run with `cancel({ requestId })`.')
+
 const ttsClientParamsShape = {
   modelId: z.string(),
+  requestId: ttsRequestIdSchema,
   inputType: z.string().default('text'),
   text: z.string().trim().min(1, 'text must not be empty or whitespace-only'),
   stream: z.boolean().default(true),
@@ -1065,6 +1075,7 @@ export const ttsResponseSchema = z.object({
 // this shape via `typeof`, no runtime export needed.
 const textToSpeechStreamRequestBaseShape = {
   modelId: z.string(),
+  requestId: ttsRequestIdSchema,
   inputType: z.string().default('text'),
   accumulateSentences: z.boolean().optional(),
   sentenceDelimiterPreset: z.enum(TTS_SENTENCE_DELIMITER_PRESETS).optional(),
@@ -1149,6 +1160,12 @@ export interface TextToSpeechStreamResult {
   buffer: Promise<number[]>
   done: Promise<boolean>
   /**
+   * Id of this run, available synchronously. Pass it to
+   * `cancel({ requestId })` to stop synthesis — abandoning `bufferStream`
+   * stops delivery but leaves the native job running to completion.
+   */
+  requestId: string
+  /**
    * Sample rate of the PCM in `bufferStream` / `buffer`, resolved from the
    * first audio frame. `undefined` when the run produced no audio. Read it
    * rather than assuming the engine default: `outputSampleRate` and the LavaSR
@@ -1166,5 +1183,10 @@ export interface TextToSpeechStreamSession {
   write(textFragment: string | Uint8Array): void
   end(): void
   destroy(): void
+  /**
+   * Id of this session, for `cancel({ requestId })`. `destroy()` tears down
+   * the streams but leaves the native job running; cancelling stops it.
+   */
+  requestId: string
   [Symbol.asyncIterator](): AsyncIterator<TextToSpeechStreamResponse>
 }
