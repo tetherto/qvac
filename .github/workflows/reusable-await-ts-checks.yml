@@ -1,0 +1,63 @@
+name: Reusable Await PR-head TypeScript Checks
+
+on:
+  workflow_call:
+    inputs:
+      check_name:
+        description: The producer check-run name to wait for on the PR head SHA.
+        required: true
+        type: string
+
+permissions:
+  checks: read
+  contents: read
+
+jobs:
+  await-ts-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 27
+    steps:
+      - name: Wait for ts-checks result
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHECK_NAME: ${{ inputs.check_name }}
+        with:
+          script: |
+            const timeoutAt = Date.now() + 25 * 60 * 1000
+            const checkName = process.env.CHECK_NAME
+
+            while (Date.now() < timeoutAt) {
+              let checkRuns
+              try {
+                const response = await github.rest.checks.listForRef({
+                  ...context.repo,
+                  ref: process.env.PR_HEAD_SHA,
+                  check_name: checkName,
+                  filter: 'latest',
+                  per_page: 100
+                })
+                checkRuns = response.data.check_runs
+              } catch (error) {
+                // Transient API error (rate limit / 5xx): keep polling, don't red the gate.
+                core.warning(`checks.listForRef failed (${error.status ?? error.message}); retrying`)
+                await new Promise((resolve) => setTimeout(resolve, 15_000))
+                continue
+              }
+
+              const check = checkRuns.find(({ name }) => name === checkName)
+
+              if (check?.status === 'completed') {
+                if (check.conclusion === 'success') return
+                if (['failure', 'timed_out', 'action_required'].includes(check.conclusion)) {
+                  core.setFailed(`${checkName} completed with conclusion: ${check.conclusion}`)
+                  return
+                }
+                // cancelled / skipped / neutral / stale: a superseding producer run is expected
+                // (the producer uses cancel-in-progress), so keep polling for the fresh one.
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, 15_000))
+            }
+
+            core.setFailed(`Timed out waiting for the PR-head TypeScript checks (${checkName})`)

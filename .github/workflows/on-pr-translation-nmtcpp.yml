@@ -21,13 +21,11 @@ on:
   workflow_dispatch:
 
 permissions:
+  checks: read
   contents: read
   pull-requests: read
   packages: read
   id-token: write
-
-env:
-  PKG_DIR: packages/translation-nmtcpp
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -202,47 +200,11 @@ jobs:
 
   await-ts-checks:
     name: Await PR-head TypeScript checks
-    if: github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request_target' && needs.authorize.outputs.allowed == 'true'
     needs: authorize
-    runs-on: ubuntu-latest
-    timeout-minutes: 27
-    permissions:
-      checks: read
-      contents: read
-    steps:
-      - name: Wait for ts-checks result
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
-        env:
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        with:
-          script: |
-            const timeoutAt = Date.now() + 25 * 60 * 1000
-
-            while (Date.now() < timeoutAt) {
-              const response = await github.rest.checks.listForRef({
-                ...context.repo,
-                ref: process.env.PR_HEAD_SHA,
-                check_name: 'translation-nmtcpp-pr-head-ts-checks / ts-checks',
-                filter: 'latest',
-                per_page: 100
-              })
-              const check = response.data.check_runs.find(
-                ({ name }) => name === 'translation-nmtcpp-pr-head-ts-checks / ts-checks'
-              )
-
-              if (check?.status === 'completed') {
-                if (check.conclusion !== 'success') {
-                  core.setFailed(
-                    `translation-nmtcpp-pr-head-ts-checks / ts-checks completed with conclusion: ${check.conclusion}`
-                  )
-                }
-                return
-              }
-
-              await new Promise((resolve) => setTimeout(resolve, 15_000))
-            }
-
-            core.setFailed('Timed out waiting for the PR-head Translation TypeScript checks')
+    uses: ./.github/workflows/reusable-await-ts-checks.yml
+    with:
+      check_name: 'translation-nmtcpp-pr-head-ts-checks / ts-checks'
 
   cpp-lint:
     needs:
@@ -477,6 +439,6 @@ jobs:
       # it is trustworthy. If detection failed, or the prebuild hand-off failed
       # on a stack PR, the skips are consequences of that failure and must not
       # read as passes.
-      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success') }}
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' || needs.await-ts-checks.result == 'skipped') }}
       build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') }}
       integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}
