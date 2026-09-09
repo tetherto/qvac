@@ -2687,6 +2687,11 @@ class DeleteCacheAllRequest(GeneratedBaseModel):
     all: Literal[True] = True
 
 
+class DeleteCacheAutoRequest(GeneratedBaseModel):
+    type: Literal["deleteCache"] = "deleteCache"
+    auto: Literal[True] = True
+
+
 class DeleteCacheKvEntryRequest(GeneratedBaseModel):
     type: Literal["deleteCache"] = "deleteCache"
     kv_cache_key: Annotated[str, Field(alias="kvCacheKey")]
@@ -18399,9 +18404,13 @@ class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
     ]
 
 
-class Request_2(RootModel[DeleteCacheAllRequest | DeleteCacheKvEntryRequest]):
+class Request_2(
+    RootModel[
+        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest
+    ]
+):
     root: Annotated[
-        DeleteCacheAllRequest | DeleteCacheKvEntryRequest,
+        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest,
         Field(title="DeleteCacheRequest"),
     ]
 
