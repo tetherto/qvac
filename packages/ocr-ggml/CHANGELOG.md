@@ -6,6 +6,16 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-09-09
+
+### Changed
+
+- `@qvac/fabric` dependency floor raised `^0.10.0` -> `^0.12.0`. Nothing this package calls changed: 0.11.0 bumped the `qvac-fabric` port to `10297.1.2` (mtmd temporal merge became opt-in per bitmap) and 0.12.0 added the ggml vector-index API, which only `@qvac/embed-llamacpp` uses.
+
+  The bump exists to keep every npm-runtime consumer on a single resolvable `@qvac/fabric`. Caret on a `0.x` version pins the minor, so `^0.10.0` (`>=0.10.0 <0.11.0`) and the `^0.12.0` that `@qvac/embed-llamacpp` now requires are disjoint ranges — an application depending on both would install two copies of the shared runtime and load two llama.cpp/ggml instances, which is the exact duplication `@qvac/fabric` exists to remove.
+
+  Released as a minor bump so dependents on `^0.22.x` adopt the new floor deliberately rather than automatically.
+
 ## [0.22.0] - 2026-09-07
 
 ### Fixed
