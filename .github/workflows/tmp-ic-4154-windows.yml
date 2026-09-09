@@ -31,11 +31,12 @@ jobs:
         shell: bash
         working-directory: .
 
-      - name: Setup build host
-        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
-        with:
-          platform: win32
-          arch: x64
+      - name: Configure Windows build host
+        shell: powershell
+        run: |
+          git config --global core.longpaths true
+          "CMAKE_GENERATOR=Visual Studio 17 2022" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CMAKE_GENERATOR_PLATFORM=x64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
