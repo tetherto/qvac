@@ -98,8 +98,8 @@ export async function loadModel(
   // to the ordinary load below. Runs after config resolution and path
   // validation so it sees the same state the real load uses, and before
   // `createModel()` so it never competes with the native load for device
-  // memory. The outcome is kept and stored on the registry entry, so
-  // `getLoadedModelInfo` can return it instead of callers scraping the log.
+  // memory. The outcome is stored on the registry entry for internal use;
+  // it is deliberately not exposed on any public API yet.
   const fitProbe = await runAdvisoryFitCheck({
     modelId,
     modelType: modelType as CanonicalModelType,

@@ -4514,65 +4514,6 @@
               "type": "string",
               "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
               "title": "LoadedModelInfoToolDialect"
-            },
-            "fitProbe": {
-              "description": "Verdict of the advisory native fit probe run just before this load. Absent on models registered before the field existed, and on any load that never reached registration — a projected insufficiency that then failed to load leaves its verdict only in the engine log.",
-              "type": "object",
-              "properties": {
-                "verdict": {
-                  "type": "string",
-                  "enum": ["fit", "does-not-fit", "unknown"],
-                  "description": "Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
-                  "title": "NativeProbeFitVerdict"
-                },
-                "basis": {
-                  "type": "string",
-                  "const": "native-probe",
-                  "description": "Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
-                },
-                "estimatorVersion": {
-                  "type": "string",
-                  "description": "Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy — `native-probe-v1` withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker."
-                },
-                "reason": {
-                  "type": "string",
-                  "description": "Machine-readable reason for the verdict. Never parsed out of log text."
-                },
-                "message": {
-                  "description": "Human-readable detail, when the reason has any.",
-                  "type": "string"
-                },
-                "plan": {
-                  "description": "Placement the probe projected. Present only on a `fit` verdict.",
-                  "type": "object",
-                  "properties": {
-                    "nCtx": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "description": "Context the probe resolved for this load, in tokens."
-                    },
-                    "nGpuLayers": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "description": "Layers the probe would offload."
-                    },
-                    "nGpuDevices": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "description": "GPU devices the offload would span."
-                    }
-                  },
-                  "required": ["nCtx", "nGpuLayers", "nGpuDevices"],
-                  "additionalProperties": false,
-                  "title": "NativeProbeFitPlan"
-                }
-              },
-              "required": ["verdict", "basis", "estimatorVersion", "reason"],
-              "additionalProperties": false,
-              "title": "NativeProbeFit"
             }
           },
           "required": ["modelId", "modelType", "handlers", "loadedAt"],

@@ -39,7 +39,6 @@ export function handleGetLoadedModelInfo(
     ...(plugin && { addonPackage: plugin.addonPackage }),
     ...(entry.local.name && { name: entry.local.name }),
     ...(entry.local.path && { path: entry.local.path }),
-    ...(entry.local.fitProbe && { fitProbe: entry.local.fitProbe }),
     // Same detection the completion normalizer uses, so callers see the dialect it parses.
     ...(handlers.includes('completionStream') && {
       toolDialect: detectToolDialectFromName(entry.local.name, entry.local.path)

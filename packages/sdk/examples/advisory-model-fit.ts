@@ -5,14 +5,15 @@
  * disposable Bare child and projects whether the exact configuration it is
  * about to load will fit in device memory.
  *
- * The result is ADVISORY. It never blocks a load. `does-not-fit` is reported and
+ * The result is ADVISORY. It never blocks a load. `does-not-fit` is logged and
  * the ordinary load path runs unchanged. Crashes, timeouts, malformed
  * responses, unsupported configurations, and internal errors all resolve to
- * "no evidence" and are equally non-blocking.
+ * "no evidence" and are equally non-blocking. Nothing consumes the verdict
+ * yet — this PR only produces it.
  *
- * The verdict is returned, not scraped: it is stored on the loaded model and
- * read back with `getLoadedModelInfo({ modelId }).fitProbe`. It is also logged,
- * but no caller has to parse a log line to get it.
+ * The verdict is emitted on the SDK server log stream, not to stdout, so this
+ * example subscribes to `loggingStream({ id: SDK_LOG_ID })` and reprints the
+ * `[advisory-fit:…]` lines.
  *
  * ---------------------------------------------------------------------------
  * What fits on this machine (Apple M4 Pro, 24 GiB unified memory)
@@ -57,9 +58,10 @@
 
 import {
   completion,
-  getLoadedModelInfo,
   loadModel,
   unloadModel,
+  loggingStream,
+  SDK_LOG_ID,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GPT_OSS_20B_INST_Q4_K_M
 } from '@qvac/sdk'
@@ -69,21 +71,25 @@ import {
 // allocate ~11 GiB, so it stays opt-in.
 const ATTEMPT_OVERSIZED = process.env['QVAC_FIT_DEMO_ATTEMPT_OVERSIZED'] === '1'
 
-async function printVerdict(modelId: string): Promise<void> {
-  const { fitProbe } = await getLoadedModelInfo({ modelId })
-  if (fitProbe === undefined) {
-    console.log('▸ No fit verdict recorded for this load')
-    return
-  }
-  const plan =
-    fitProbe.plan === undefined
-      ? ''
-      : ` — nCtx ${fitProbe.plan.nCtx}, nGpuLayers ${fitProbe.plan.nGpuLayers} across ` +
-        `${fitProbe.plan.nGpuDevices} GPU device(s)`
-  console.log(
-    `▸ Verdict: ${fitProbe.verdict} (${fitProbe.reason}, ${fitProbe.basis}/${fitProbe.estimatorVersion})${plan}`
-  )
+// Reprint the worker's advisory verdicts. They arrive on the SDK server log
+// stream; everything else on that stream is filtered out to keep this readable.
+//
+// Called once per phase rather than once for the process: a subscription
+// currently stops delivering after any `unloadModel`, so a single one would go
+// silent before the second verdict. Resubscribing after the unload works.
+function watchVerdicts(): void {
+  void (async () => {
+    for await (const log of loggingStream({ id: SDK_LOG_ID })) {
+      if (log.message.includes('[advisory-fit:')) {
+        console.log(`▸ [${log.level.toUpperCase()}] ${log.message}`)
+      }
+    }
+  })().catch(() => {
+    // Stream terminated — normal on shutdown.
+  })
 }
+
+watchVerdicts()
 
 try {
   // 1. A load the fitter projects to fit. The verdict carries the plan it
@@ -93,9 +99,7 @@ try {
     modelSrc: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
     modelConfig: { ctx_size: 4096 }
   })
-  console.log(`▸ Loaded ${smallModelId}`)
-  await printVerdict(smallModelId)
-  console.log()
+  console.log(`▸ Loaded ${smallModelId}\n`)
 
   const result = completion({
     modelId: smallModelId,
@@ -112,6 +116,7 @@ try {
   // through the fit margin, and since model-fit 0.8.0 the fit child also sees
   // system-wide wired memory.
   await unloadModel({ modelId: smallModelId, clearStorage: false })
+  watchVerdicts()
 
   // 2. A load the fitter projects NOT to fit. The point of this example is that
   //    the SDK reports the verdict and then loads anyway — the check is
@@ -134,7 +139,6 @@ try {
       }
     })
     console.log(`▸ Load returned ${bigModelId} — the advisory verdict did not block it`)
-    await printVerdict(bigModelId)
 
     // Loading is not the same as being usable: a model can load and then fail
     // at decode time. Gemma 4 31B does exactly that on this machine. So run a
@@ -169,4 +173,6 @@ try {
   process.exitCode = 1
 }
 
+// The log subscription is an open stream and would otherwise keep the process
+// alive after the work is done.
 process.exit(process.exitCode ?? 0)

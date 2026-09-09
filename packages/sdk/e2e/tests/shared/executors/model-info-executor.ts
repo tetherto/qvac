@@ -4,8 +4,7 @@ import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   modelInfoTests,
   modelInfoLoadedGet,
-  modelInfoLoadedNotFound,
-  modelInfoFitProbe
+  modelInfoLoadedNotFound
 } from '../../model-info-tests.js'
 
 export class ModelInfoExecutor extends AbstractModelExecutor<typeof modelInfoTests> {
@@ -16,15 +15,12 @@ export class ModelInfoExecutor extends AbstractModelExecutor<typeof modelInfoTes
       modelInfoTests
         .filter(
           (t) =>
-            t.testId !== modelInfoLoadedGet.testId &&
-            t.testId !== modelInfoLoadedNotFound.testId &&
-            t.testId !== modelInfoFitProbe.testId
+            t.testId !== modelInfoLoadedGet.testId && t.testId !== modelInfoLoadedNotFound.testId
         )
         .map((t) => [t.testId, this.generic.bind(this)])
     ),
     [modelInfoLoadedGet.testId]: this.loadedGet.bind(this),
-    [modelInfoLoadedNotFound.testId]: this.loadedNotFound.bind(this),
-    [modelInfoFitProbe.testId]: this.fitProbe.bind(this)
+    [modelInfoLoadedNotFound.testId]: this.loadedNotFound.bind(this)
   } as never
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
@@ -74,45 +70,6 @@ export class ModelInfoExecutor extends AbstractModelExecutor<typeof modelInfoTes
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `getLoadedModelInfo failed: ${errorMsg}` }
-    }
-  }
-
-  async fitProbe(_params: unknown, expectation: unknown): Promise<TestResult> {
-    // The load itself is the other half of the assertion: a `does-not-fit`
-    // verdict must not stop `ensureLoaded` from returning a usable model.
-    const llmModelId = await this.resources.ensureLoaded('llm')
-
-    try {
-      const info = await getLoadedModelInfo({ modelId: llmModelId })
-      const probe = info.fitProbe
-
-      if (!probe) {
-        return {
-          passed: false,
-          output: `No fitProbe recorded for a llama.cpp completion load (modelId=${llmModelId})`
-        }
-      }
-
-      const checks = {
-        verdictKnown: ['fit', 'does-not-fit', 'unknown'].includes(probe.verdict),
-        basisIsNativeProbe: probe.basis === 'native-probe',
-        estimatorVersionSet: probe.estimatorVersion.length > 0,
-        reasonSet: probe.reason.length > 0,
-        // A plan is the projected placement, so it belongs to `fit` and nothing else.
-        planOnlyWhenFit:
-          probe.verdict === 'fit' ? probe.plan !== undefined : probe.plan === undefined
-      }
-
-      const summary = `verdict=${probe.verdict}, basis=${probe.basis}, estimator=${probe.estimatorVersion}, reason=${probe.reason}, checks=${JSON.stringify(checks)}`
-
-      if (!Object.values(checks).every(Boolean)) {
-        return { passed: false, output: `fitProbe mismatch: ${summary}` }
-      }
-
-      return ValidationHelpers.validate(summary, expectation as Expectation)
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      return { passed: false, output: `fitProbe check failed: ${errorMsg}` }
     }
   }
 

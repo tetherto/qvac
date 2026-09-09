@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { toolDialectSchema } from '@/schemas/completion-stream'
-import { nativeProbeFitSchema } from '@/schemas/assess-model-fit'
 
 // ============== Model info (catalog) ==============
 
@@ -136,12 +135,7 @@ export const loadedModelInfoSchema = z
     loadedAt: z.coerce.date(),
     name: z.string().optional(),
     path: z.string().optional(),
-    toolDialect: toolDialectSchema.optional(),
-    fitProbe: nativeProbeFitSchema
-      .optional()
-      .describe(
-        'Verdict of the advisory native fit probe run just before this load. Absent on models registered before the field existed, and on any load that never reached registration — a projected insufficiency that then failed to load leaves its verdict only in the engine log.'
-      )
+    toolDialect: toolDialectSchema.optional()
   })
   .meta({ title: 'LoadedModelInfo' })
 
