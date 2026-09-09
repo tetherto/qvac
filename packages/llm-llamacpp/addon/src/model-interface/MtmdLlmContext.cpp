@@ -1519,12 +1519,13 @@ PrefillPlan MtmdLlmContext::preparePrefill(
           mtmd_input_chunk_get_tokens_text(chunk, &nTokens);
       plan.tokens.insert(plan.tokens.end(), tokens, tokens + nTokens);
     } else {
-      plan.mediaBarriers.push_back(MediaBarrier{
-          .afterTextTokens = plan.tokens.size(),
-          .mediaIndex = i,
-          .nPos = mtmd_input_chunk_get_n_pos(chunk),
-          .nKvTokens =
-              static_cast<llama_pos>(mtmd_input_chunk_get_n_tokens(chunk))});
+      plan.mediaBarriers.push_back(
+          MediaBarrier{
+              .afterTextTokens = plan.tokens.size(),
+              .mediaIndex = i,
+              .nPos = mtmd_input_chunk_get_n_pos(chunk),
+              .nKvTokens = static_cast<llama_pos>(
+                  mtmd_input_chunk_get_n_tokens(chunk))});
     }
   }
 
