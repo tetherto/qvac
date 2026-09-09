@@ -111,9 +111,31 @@ test_shared_skills_link_requires_manual_choice() {
     fail "setup did not print the safe symlink-removal command"
 }
 
+test_windows_copy_is_marked_and_repeatable() {
+  local root
+  root="$(make_fixture windows-copy)"
+  mkdir -p "$root/test-bin"
+  printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" MINGW64_NT' \
+    > "$root/test-bin/uname"
+  chmod +x "$root/test-bin/uname"
+
+  PATH="$root/test-bin:$PATH" run_setup "$root" > "$root/setup.log" 2>&1
+  [ -d "$root/.claude/skills/example" ] ||
+    fail "Windows setup did not create a skill copy"
+  [ ! -L "$root/.claude/skills/example" ] ||
+    fail "Windows setup created a symlink instead of a copy"
+  [ "$(cat "$root/.claude/skills/example/.qvac-repository-skill")" = 'example' ] ||
+    fail "Windows setup did not mark the generated copy"
+
+  PATH="$root/test-bin:$PATH" run_setup "$root" > "$root/setup-second.log" 2>&1
+  [ -f "$root/.claude/skills/example/SKILL.md" ] ||
+    fail "repeated Windows setup did not recreate the skill copy"
+}
+
 test_unmanaged_directory_is_preserved
 test_untrusted_manifest_does_not_grant_ownership
 test_individual_legacy_link_is_migrated
 test_shared_skills_link_requires_manual_choice
+test_windows_copy_is_marked_and_repeatable
 
 echo "Agent setup regression tests passed."
