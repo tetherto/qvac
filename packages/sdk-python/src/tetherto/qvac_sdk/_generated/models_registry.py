@@ -29,8 +29,8 @@ class ModelConstant:
     params: str
 
 
-ABOT_WORLD_0_5B_LF_VAE = ModelConstant(
-    name="ABOT_WORLD_0_5B_LF_VAE",
+ABOT_WORLD_0_5B_LF_TAEHV_VAE = ModelConstant(
+    name="ABOT_WORLD_0_5B_LF_TAEHV_VAE",
     src="registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf",
     registry_path="qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf",
     registry_source="s3",
@@ -47,8 +47,8 @@ ABOT_WORLD_0_5B_LF_VAE = ModelConstant(
     params="",
 )
 
-ABOT_WORLD_0_5B_LF_VAE_F16 = ModelConstant(
-    name="ABOT_WORLD_0_5B_LF_VAE_F16",
+ABOT_WORLD_0_5B_LF_WAN_VAE = ModelConstant(
+    name="ABOT_WORLD_0_5B_LF_WAN_VAE",
     src="registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf",
     registry_path="qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf",
     registry_source="s3",
@@ -3125,8 +3125,8 @@ LTX_2_3_22B_Q5_K_M = ModelConstant(
     params="22B",
 )
 
-LTX_2_3_VAE = ModelConstant(
-    name="LTX_2_3_VAE",
+LTX_2_3_AUDIO_VAE = ModelConstant(
+    name="LTX_2_3_AUDIO_VAE",
     src="registry://hf/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors",
     registry_path="unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors",
     registry_source="hf",
@@ -3143,8 +3143,8 @@ LTX_2_3_VAE = ModelConstant(
     params="",
 )
 
-LTX_2_3_VAE_1 = ModelConstant(
-    name="LTX_2_3_VAE_1",
+LTX_2_3_VIDEO_VAE = ModelConstant(
+    name="LTX_2_3_VIDEO_VAE",
     src="registry://hf/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors",
     registry_path="unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors",
     registry_source="hf",
@@ -7429,8 +7429,8 @@ WHISPER_TINY_Q8_0 = ModelConstant(
 
 __all__ = [
     "ModelConstant",
-    "ABOT_WORLD_0_5B_LF_VAE",
-    "ABOT_WORLD_0_5B_LF_VAE_F16",
+    "ABOT_WORLD_0_5B_LF_TAEHV_VAE",
+    "ABOT_WORLD_0_5B_LF_WAN_VAE",
     "ABOT_WORLD_0_5B_Q8_0",
     "AFRICAN_4B_TRANSLATION_Q4_K_M",
     "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0",
@@ -7601,8 +7601,8 @@ __all__ = [
     "LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS",
     "LTX_2_3_22B_Q2_K",
     "LTX_2_3_22B_Q5_K_M",
-    "LTX_2_3_VAE",
-    "LTX_2_3_VAE_1",
+    "LTX_2_3_AUDIO_VAE",
+    "LTX_2_3_VIDEO_VAE",
     "MARIAN_EN_HI_INDIC_1B_F16",
     "MARIAN_EN_HI_INDIC_1B_Q4_0",
     "MARIAN_EN_HI_INDIC_200M_F16",
