@@ -694,6 +694,15 @@ void remapTensorSplit(
   std::string normalized = value->second;
   std::ranges::replace(normalized, '/', ',');
   const std::vector<std::string> proportions = split(normalized, ',');
+  const bool finalOrderIsStable = std::ranges::is_sorted(
+      selection.devices, {},
+      [](const backend_selection::SplitDevice& device) {
+        return device.sourceGpuIndex;
+      });
+  if (proportions.size() == selection.devices.size() && finalOrderIsStable) {
+    value->second = std::move(normalized);
+    return;
+  }
   if (proportions.size() != selection.sourceGpuCount) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
