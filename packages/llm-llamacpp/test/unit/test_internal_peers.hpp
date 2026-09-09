@@ -149,6 +149,22 @@ public:
   static float* logits(MtmdLlmContext& ctx, int logitIdx) {
     return llama_get_logits_ith(ctx.modelCtx_.lctx, logitIdx);
   }
+
+  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
+    return context.removeThinkingFromContext_;
+  }
+
+  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
+    return context.compactor_.removeThinkingFromContext();
+  }
+
+  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
+    return context.rollbackState_.hasReasoningBoundary();
+  }
+
+  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
+    return context.rollbackState_.reasoningBoundaryNPast();
+  }
 };
 
 class ContinuousBatchSchedulerTestPeer {
@@ -203,24 +219,5 @@ public:
       scheduler.applyDeferredTeardownLocked();
     }
     return {survivedDeferred, scheduler.hasPendingCancels()};
-  }
-};
-
-class MtmdLlmContextTestPeer {
-public:
-  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
-    return context.removeThinkingFromContext_;
-  }
-
-  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
-    return context.compactor_.removeThinkingFromContext();
-  }
-
-  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
-    return context.rollbackState_.hasReasoningBoundary();
-  }
-
-  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
-    return context.rollbackState_.reasoningBoundaryNPast();
   }
 };

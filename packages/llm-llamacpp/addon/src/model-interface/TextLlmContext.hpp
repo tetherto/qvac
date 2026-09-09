@@ -289,7 +289,7 @@ private:
   [[nodiscard]] llama_pos specCtxCeiling() const override {
     return ctxCeiling();
   }
-  void specApplyContextDiscard() override { applyContextDiscard(); }
+  void specApplyContextDiscard() override {}
   llama_token specSampleFirstToken(bool& sampled) override {
     return sampleToken(-1, sampled);
   }
@@ -310,7 +310,6 @@ private:
       llama_token tokenId, bool sampled, unsigned generated,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch) override {
-    generationStarted_ = true;
     return processToken(
         tokenId, sampled, generated, outputCallback, inlineDecodeBatch);
   }

@@ -896,8 +896,6 @@ void TextLlmContext::specBeginGeneration(
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
   forcedTokens_.clear();
-  assistantOutput_.clear();
-  generationStarted_ = false;
   // Match the non-speculative generateResponse reset: never carry a reasoning-
   // recovery EOG ban across generations (it is armed + consumed within a single
   // generation; a stale `true` would mask EOG on the next generation's first
@@ -954,7 +952,6 @@ SequenceStepResult TextLlmContext::onLogitsReady(
       generatedAfterAccept,
       outputCallback,
       inlineDecodeBatch);
-  result.discarded = discarded;
   return result;
 }
 
