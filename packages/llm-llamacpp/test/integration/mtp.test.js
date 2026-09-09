@@ -58,6 +58,7 @@ const MODEL = {
 // memory`), which reddens whichever suite happens to load it. The head-less
 // fallback contract is architecture-level, not device-specific, so desktop
 // coverage is sufficient. Re-enable on mobile once a smaller quant is staged.
+// prestage-ignore: google_gemma-4-E2B-it-Q4_K_M.gguf - desktop-only fallback coverage, too large for mobile staging.
 const GEMMA_MODEL = {
   name: 'google_gemma-4-E2B-it-Q4_K_M.gguf'
 }
@@ -261,7 +262,7 @@ safeTest(
   { timeout: 600_000 },
   async (t) => {
     // Tiny ctx_size + a prompt that greedily generates far more tokens than fit
-    // (counting won't EOS early) + a slide budget (n_discarded > 0) forces the
+    // (counting won't EOS early) + context shifting enabled forces the
     // generation to repeatedly SLIDE at the context ceiling. This is the exact
     // scenario the feedback doc flagged: the spec path "hard-errors at the
     // boundary instead of gracefully sliding". A boundary round where headroom <
@@ -270,11 +271,11 @@ safeTest(
     // the per-round dp.n_max hint, so only the explicit draft-truncation-to-
     // headroom prevents it. With the fix the run slides and completes (safeTest
     // turns any throw into a t.fail). Without a slide budget the ceiling is a
-    // designed ContextOverflow throw, so n_discarded is required to hit the
+    // designed ContextOverflow throw, so ctx_shift is required to hit the
     // slide path rather than the overflow path.
     const addon = await loadAddon(t, {
       withSpec: true,
-      overrides: { ctx_size: '128', n_predict: '400', n_discarded: '48' }
+      overrides: { ctx_size: '512', n_predict: '400', ctx_shift: 'true' }
     })
     const longPrompt = [
       { role: 'system', content: 'You are a helpful assistant.' },
@@ -289,15 +290,16 @@ safeTest(
     t.ok(output.length > 0, `slide run completed with output (${output.length} chars)`)
     console.log(
       `  near-ceiling slide: ${output.length} chars, generatedTokens=${stats.generatedTokens}, ` +
-        `contextSlides=${stats.contextSlides}, draftTotal=${stats.draftTotal}, ` +
+        `cacheTokens=${stats.CacheTokens}, draftTotal=${stats.draftTotal}, ` +
         `stopReason=${stats.stopReason}`
     )
     t.ok(stats.draftTotal > 0, 'MTP still drafted while sliding at the ceiling')
     // The real regression signal: the generation crossed the ceiling and slid
     // (>=1 slide) instead of throwing FailedToDecode at a boundary round.
     t.ok(
-      stats.contextSlides > 0,
-      `generation slid past the context ceiling (contextSlides=${stats.contextSlides})`
+      stats.generatedTokens >= 400 && stats.CacheTokens <= 512,
+      'generation slid past the context ceiling and stayed within the cache window ' +
+        `(generatedTokens=${stats.generatedTokens}, CacheTokens=${stats.CacheTokens})`
     )
   }
 )

@@ -1374,8 +1374,10 @@ LlamaModel::singleRuntimeStatsLocked() const {
   // See `LlmContext::lastGeneratedTokenCount`.
   const int64_t generatedTokens =
       wasPrefill ? 0
-                 : static_cast<int64_t>(
-                       state_->llmContext_->lastGeneratedTokenCount());
+                 : (state_->llmContext_->wasLastGenerationSpeculative()
+                        ? state_->llmContext_->getSpecGeneratedTokens()
+                        : static_cast<int64_t>(
+                              state_->llmContext_->lastGeneratedTokenCount()));
   const int64_t promptTokens =
       static_cast<int64_t>(wasPrefill ? 0 : perfData.n_p_eval);
   const double tokensPerSecond = (!wasPrefill && perfData.t_eval_ms > 0)

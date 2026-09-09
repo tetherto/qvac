@@ -486,11 +486,6 @@ async function runModelLoadingTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/model-loading.test.js', options)
 }
 
-async function runMropeSlidingContextTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMropeSlidingContextTest')) return __FILTERED
-  return runIntegrationModule('../integration/mrope-sliding-context.test.js', options)
-}
-
 async function runMtpMtmdTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMtpMtmdTest')) return __FILTERED
   return runIntegrationModule('../integration/mtp-mtmd.test.js', options)

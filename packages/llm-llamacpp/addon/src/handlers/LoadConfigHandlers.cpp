@@ -89,9 +89,29 @@ handleImageMinTokens(common_params& params, const std::string& raw) {
   }
 }
 
+static void handleContextShift(common_params& params, const std::string& raw) {
+  std::string val = raw;
+  std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+  if (val == "1" || val == "on" || val == "true") {
+    params.ctx_shift = true;
+  } else if (val == "0" || val == "off" || val == "false") {
+    params.ctx_shift = false;
+  } else {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "ctx-shift must be 0/off/false or 1/on/true, got: %s",
+            raw.c_str()));
+  }
+}
+
 const LoadConfigHandlerList LOAD_CONFIG_HANDLERS = {
     {"reasoning-budget", handleReasoningBudget},
     {"reasoning_budget", handleReasoningBudget},
+    {"ctx-shift", handleContextShift},
+    {"ctx_shift", handleContextShift},
     {"image-tile-mode", handleImageTileMode},
     {"image_tile_mode", handleImageTileMode},
     {"image-max-tokens", handleImageMaxTokens},
