@@ -17,8 +17,10 @@
   The library is whole-archived into `qvac__fabric.bare` on ELF/Mach-O targets.
   This is required rather than incidental: no llama or ggml code calls
   `ggml_vec_index_*`, so a plain link pulls in none of those archive members and
-  the version script would filter an empty set. Windows needs no equivalent —
-  entries in the generated `.def` act as references that pull the members in.
+  the version script would filter an empty set. Windows needs no whole-archive
+  equivalent — entries in the generated `.def` act as references that pull the
+  members in — but the archive must still be on the link line, because unlike
+  `ggml-base` it is not a dependency of llama.
 
   Released as a **minor** for the same reason 0.9.0 was: this widens the
   runtime's exported API surface. Consumers pinned to `^0.10.0` or `^0.11.0` do

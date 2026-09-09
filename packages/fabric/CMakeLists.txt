@@ -143,6 +143,12 @@ endif()
 # The vector-index library is whole-archived for a stronger version of the same
 # reason: no llama or ggml code calls ggml_vec_index_*, so nothing references
 # those members and a plain link would pull in none of them at all.
+#
+# Windows has no whole-archive equivalent here: the generated .def EXPORTS
+# entries are the references that pull members in, the same way ggml-base is
+# handled. ggml-base is already on the link line via llama; vector-index is
+# not (it is a standalone archive), so it must still be linked or those
+# EXPORTS have nowhere to resolve from (LNK2001).
 if(UNIX)
   foreach(_ggml_static ggml::ggml ggml::ggml-base ggml::ggml-vector-index)
     if(TARGET ${_ggml_static})
@@ -153,6 +159,8 @@ if(UNIX)
       endif()
     endif()
   endforeach()
+elseif(WIN32)
+  target_link_libraries(${qvac-fabric} PRIVATE ggml::ggml-vector-index)
 endif()
 
 # Override install_name so that consumers using @loader_path rpath can resolve
@@ -202,7 +210,9 @@ elseif(WIN32)
     "$<TARGET_FILE:ggml::ggml-base>"
     # Scanning the vector-index archive is what exports ggml_vec_index_*: the
     # generated EXPORTS entries double as references that pull those members in,
-    # so unlike the ELF/Mach-O builds this needs no whole-archive.
+    # so unlike the ELF/Mach-O builds this needs no whole-archive. The archive
+    # itself is linked above; without that, EXPORTS would be unresolved
+    # (LNK2001) because llama/ggml do not depend on this target.
     "$<TARGET_FILE:ggml::ggml-vector-index>")
   # llama-common-base (formerly build_info) carries the LLAMA_BUILD_NUMBER /
   # LLAMA_COMMIT data globals. Scan it only when it is a real archive; if the
