@@ -113,9 +113,11 @@ jobs:
       addon_npm_version: "@tetherto/llm-llamacpp-mono@0.51.0-tmp.runid-34220546522"
       qvac_perf_runs: "1"
       qvac_perf_warmup_runs: "1"
-      per_test_timeout_minutes: "20"
+      # The shared rewrite rejects a no-op (20 -> 20). Give its outer test
+      # wrapper one minute of margin; video-e2e.test.js retains its 20-min cap.
+      per_test_timeout_minutes: "21"
       device_farm_job_timeout_minutes: "30"
-      mocha_timeout_ms: "1200000"
+      mocha_timeout_ms: "1260000"
       artifact_suffix: video-e2e
     secrets: inherit
 

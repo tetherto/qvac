@@ -71,7 +71,10 @@ research branch with `video_e2e=true`. The ordinary image benchmark is not run.
 The wrapper selects exactly one Samsung Galaxy S25 Ultra and one Apple iPhone
 16 Pro, with exact model matching and `maxDevices: 1` in the shared scheduler.
 It submits one filtered test per platform, sequentially, with no automatic retry.
-Each paid device run has a 30-minute hard ceiling; the test has a 20-minute ceiling.
+Each paid device run has a 30-minute hard ceiling; the test has a 20-minute ceiling
+and its external Mocha wrapper has a 21-minute margin. The wrapper's timeout
+rewriter rejects a no-op 20-to-20 override, so setting that override to 20 fails
+before Device Farm is scheduled.
 Model pre-staging reuses the existing pinned US object-store cache. Videos download
 directly to the phone from their original public URLs, once per phone; the app
 does not bundle or repeatedly transfer the video corpus.
