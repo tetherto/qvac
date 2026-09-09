@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { isProcessAlive, readAllRecords, removeRecord } from '../../src/managed/registry.js'
 
-// A stand-in for `qvac serve openai`: parses its managed launch options, then behaves
+// A stand-in for `qvac serve --openai`: parses its managed launch options, then behaves
 // per FAKE_SERVE_BEHAVIOR. Lets the managed-mode tests drive every supervisor
 // path (healthy, timeout, crash, SIGKILL escalation) without @qvac/cli or real
 // models. Spawned verbatim through `serveBinPath`, so it relies on a POSIX
@@ -17,6 +17,10 @@ const port = Number(arg('--port'))
 const host = arg('--host') || '127.0.0.1'
 const apiKey = arg('--api-key')
 const behavior = process.env.FAKE_SERVE_BEHAVIOR || 'healthy'
+
+if (process.env.FAKE_SERVE_ARGV_FILE) {
+  require('node:fs').writeFileSync(process.env.FAKE_SERVE_ARGV_FILE, JSON.stringify(args))
+}
 
 if (behavior === 'exit-immediately') { console.error('fake serve boom'); process.exit(3) }
 
@@ -87,6 +91,12 @@ const BEHAVIOR_KEY = 'FAKE_SERVE_BEHAVIOR'
 export function setBehavior(value: string | undefined): void {
   if (value === undefined) delete process.env[BEHAVIOR_KEY]
   else process.env[BEHAVIOR_KEY] = value
+}
+
+const ARGV_FILE_KEY = 'FAKE_SERVE_ARGV_FILE'
+export function setArgvFile(path: string | undefined): void {
+  if (path === undefined) delete process.env[ARGV_FILE_KEY]
+  else process.env[ARGV_FILE_KEY] = path
 }
 
 // Managed mode now spawns a *detached* runner that owns the serve and only

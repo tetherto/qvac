@@ -24,6 +24,18 @@ const path = require('path')
 // S25). CUDA is not supported on any platform.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
+// Core ML (Apple Neural Engine) is not a ggml backend and not a peer of the
+// cascade above: it accelerates only the parakeet FastConformer *encoder*, via
+// an exported `<stem>-encoder.mlmodelc` sidecar, while the decoder stays on the
+// ggml backend. So it is expected coverage for parakeet alone -- listing it
+// globally would mark it permanently missing for whisper, whose port is built
+// without WHISPER_COREML.
+const ENGINE_EXTRA_GPU_BACKENDS = { parakeet: ['coreml'] }
+
+function expectedGpuBackends (engine) {
+  return SUPPORTED_GPU_BACKENDS.concat(ENGINE_EXTRA_GPU_BACKENDS[engine] || [])
+}
+
 // ggml active-backend ids reported by the addon (post-merge this is the unified
 // BackendId enum — one map serves both engines), mapped to the backend label.
 // Used to recover the REAL backend a mobile device selected at runtime rather
@@ -49,7 +61,8 @@ function parseArgs (argv) {
     output: '',
     jsonOutput: '',
     htmlOutput: '',
-    manualDir: path.resolve('packages/asr-ggml/benchmarks/manual-results')
+    manualDir: path.resolve('packages/asr-ggml/benchmarks/manual-results'),
+    expectDevices: []
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -69,6 +82,9 @@ function parseArgs (argv) {
       i++
     } else if (arg === '--manual-dir' && next) {
       args.manualDir = next
+      i++
+    } else if (arg === '--expect-devices' && next) {
+      args.expectDevices = next.split(',').map(device => device.trim()).filter(Boolean)
       i++
     }
   }
@@ -603,21 +619,41 @@ function sortRecords (records) {
   return records.sort((left, right) => sortKey(left).localeCompare(sortKey(right)))
 }
 
-function coverageFor (records) {
+function coverageFor (records, engine = null) {
   const gpuCoverage = new Set(
     records
       .filter(record => record.gpu === 'gpu')
       .map(record => record.backend)
       .filter(Boolean)
   )
+  // Overall coverage stays the shared ggml cascade; a per-engine call also
+  // expects that engine's accelerator backends (Core ML for parakeet).
+  const expected = engine ? expectedGpuBackends(engine) : SUPPORTED_GPU_BACKENDS
   return {
     rowCount: records.length,
     gpuBackendsCovered: Array.from(gpuCoverage).sort(),
-    missingBackends: SUPPORTED_GPU_BACKENDS.filter(backend => !gpuCoverage.has(backend))
+    missingBackends: expected.filter(backend => !gpuCoverage.has(backend))
   }
 }
 
-function buildCoverage (records) {
+// The benchmark matrix jobs run with job-level continue-on-error, so a lane
+// can lose its rtf-results artifact (upload timeout, dead runner, renamed
+// runner label) without failing the run — run 34062003154 shipped a report
+// with all 48 darwin-arm64 rows silently absent. The summarize workflow passes
+// the matrix's device list via --expect-devices; an expected device with zero
+// desktop rows must surface as an incomplete report, not as a smaller one.
+// Mobile and manual rows never satisfy the expectation — it describes the
+// desktop matrix only.
+function missingExpectedDevices (records, expectedDevices) {
+  const reporting = new Set(
+    records
+      .filter(record => record.source === 'desktop-ci')
+      .map(record => record.device)
+  )
+  return expectedDevices.filter(device => !reporting.has(device))
+}
+
+function buildCoverage (records, expectedDevices = []) {
   const versions = Array.from(new Set(
     records.map(record => record.version).filter(Boolean)
   )).sort()
@@ -627,13 +663,23 @@ function buildCoverage (records) {
   // engine as well as overall.
   const byEngine = {}
   for (const engine of ENGINES) {
-    byEngine[engine] = coverageFor(records.filter(record => record.engine === engine))
+    byEngine[engine] = coverageFor(
+      records.filter(record => record.engine === engine),
+      engine
+    )
   }
 
-  return Object.assign(coverageFor(records), {
+  const coverage = Object.assign(coverageFor(records), {
     addonVersions: versions,
     byEngine
   })
+
+  if (expectedDevices.length > 0) {
+    coverage.expectedDesktopDevices = expectedDevices
+    coverage.missingDesktopDevices = missingExpectedDevices(records, expectedDevices)
+  }
+
+  return coverage
 }
 
 // Fastest config per device (lowest mean RTF). Mirrors the LLM suite's
@@ -654,9 +700,9 @@ function buildBestPerDevice (records) {
   })
 }
 
-function renderMarkdown (records) {
+function renderMarkdown (records, expectedDevices = []) {
   const lines = []
-  const coverage = buildCoverage(records)
+  const coverage = buildCoverage(records, expectedDevices)
 
   lines.push('## ASR GGML Performance Findings')
   lines.push('')
@@ -686,6 +732,13 @@ function renderMarkdown (records) {
   lines.push('### Coverage')
   lines.push('')
   lines.push(`- Rows aggregated: ${coverage.rowCount}`)
+  if (coverage.expectedDesktopDevices) {
+    const reporting = coverage.expectedDesktopDevices.length - coverage.missingDesktopDevices.length
+    lines.push(`- Expected desktop devices reporting: ${reporting}/${coverage.expectedDesktopDevices.length}`)
+    if (coverage.missingDesktopDevices.length > 0) {
+      lines.push(`- MISSING desktop devices (lane ran without an rtf-results artifact, or never ran): ${coverage.missingDesktopDevices.join(', ')} — this report is INCOMPLETE`)
+    }
+  }
   lines.push(`- Addon version(s): ${coverage.addonVersions.join(', ') || 'unknown'}`)
   lines.push(`- GPU backends covered: ${coverage.gpuBackendsCovered.join(', ') || 'none'}`)
   lines.push(`- GPU backends still missing: ${coverage.missingBackends.join(', ') || 'none'}`)
@@ -697,8 +750,8 @@ function renderMarkdown (records) {
   return lines.join('\n') + '\n'
 }
 
-function renderHtml (records) {
-  const coverage = buildCoverage(records)
+function renderHtml (records, expectedDevices = []) {
+  const coverage = buildCoverage(records, expectedDevices)
   const rows = records.map(record => {
     return [
       record.source,
@@ -741,6 +794,15 @@ function renderHtml (records) {
     const engineCoverage = coverage.byEngine[engine]
     return `    <li>${escapeHtml(engine)}: <code>${escapeHtml(String(engineCoverage.rowCount))}</code> row(s), covered: <code>${escapeHtml(engineCoverage.gpuBackendsCovered.join(', ') || 'none')}</code>, still missing: <code>${escapeHtml(engineCoverage.missingBackends.join(', ') || 'none')}</code></li>`
   }).join('\n')
+
+  const expectedDeviceItems = []
+  if (coverage.expectedDesktopDevices) {
+    const reporting = coverage.expectedDesktopDevices.length - coverage.missingDesktopDevices.length
+    expectedDeviceItems.push(`    <li>Expected desktop devices reporting: <code>${escapeHtml(`${reporting}/${coverage.expectedDesktopDevices.length}`)}</code></li>`)
+    if (coverage.missingDesktopDevices.length > 0) {
+      expectedDeviceItems.push(`    <li><strong>MISSING desktop devices (lane ran without an rtf-results artifact, or never ran): <code>${escapeHtml(coverage.missingDesktopDevices.join(', '))}</code> — this report is INCOMPLETE</strong></li>`)
+    }
+  }
 
   return [
     '<!doctype html>',
@@ -813,6 +875,7 @@ function renderHtml (records) {
     '  <h2>Coverage</h2>',
     '  <ul>',
     `    <li>Rows aggregated: <code>${escapeHtml(String(coverage.rowCount))}</code></li>`,
+    ...expectedDeviceItems,
     `    <li>Addon version(s): <code>${escapeHtml(coverage.addonVersions.join(', ') || 'unknown')}</code></li>`,
     `    <li>GPU backends covered: <code>${escapeHtml(coverage.gpuBackendsCovered.join(', ') || 'none')}</code></li>`,
     `    <li>GPU backends still missing: <code>${escapeHtml(coverage.missingBackends.join(', ') || 'none')}</code></li>`,
@@ -833,8 +896,8 @@ function main () {
   const mobileRecords = loadMobilePerformanceRecords(inputDir)
   const manualRecords = loadManualRecords(manualDir)
   const records = sortRecords(dedupeRecords(desktopRecords.concat(mobileRecords, manualRecords)))
-  const markdown = renderMarkdown(records)
-  const html = renderHtml(records)
+  const markdown = renderMarkdown(records, args.expectDevices)
+  const html = renderHtml(records, args.expectDevices)
 
   if (args.output) {
     const outputPath = path.resolve(args.output)
@@ -845,7 +908,7 @@ function main () {
   if (args.jsonOutput) {
     const jsonOutputPath = path.resolve(args.jsonOutput)
     ensureParentDir(jsonOutputPath)
-    fs.writeFileSync(jsonOutputPath, JSON.stringify({ records, coverage: buildCoverage(records) }, null, 2) + '\n', 'utf8')
+    fs.writeFileSync(jsonOutputPath, JSON.stringify({ records, coverage: buildCoverage(records, args.expectDevices) }, null, 2) + '\n', 'utf8')
   }
 
   if (args.htmlOutput) {
@@ -855,6 +918,14 @@ function main () {
   }
 
   process.stdout.write(markdown)
+
+  // Fail only after every output is written: the incomplete report must stay
+  // inspectable (later workflow steps upload it with `if: !cancelled()`).
+  const missing = missingExpectedDevices(records, args.expectDevices)
+  if (missing.length > 0) {
+    console.error(`::error title=RTF report is missing benchmark device(s)::No desktop rows from: ${missing.join(', ')}. The lane lost its rtf-results artifact, its runner label changed, or it never ran — the consolidated report is incomplete.`)
+    process.exitCode = 1
+  }
 }
 
 if (require.main === module) {
@@ -870,5 +941,6 @@ module.exports = {
   dedupeRecords,
   renderMarkdown,
   renderHtml,
-  buildCoverage
+  buildCoverage,
+  missingExpectedDevices
 }
