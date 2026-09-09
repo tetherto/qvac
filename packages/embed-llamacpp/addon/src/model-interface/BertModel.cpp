@@ -89,7 +89,7 @@ void batchDecode(
             toString(FailedToGetTokenEmbeddings),
             "Failed to get token embeddings");
       }
-    } else {
+    else {
       // try to get sequence embeddings - supported only when pooling_type is
       // not NONE
       embd = llama_get_embeddings_seq(
@@ -361,24 +361,34 @@ bool applySplitDeviceSelection(
     for (std::string value; std::getline(values, value, ',');) {
       proportions.emplace_back(std::move(value));
     }
-    if (proportions.size() != selection.sourceGpuCount) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "tensor-split has %zu values for %zu registered GPU devices; "
-              "cannot reconcile it with the %zu eligible devices.",
-              proportions.size(),
-              selection.sourceGpuCount,
-              selection.devices.size()));
-    }
-    std::string remapped;
-    for (const backend_selection::SplitDevice& device : selection.devices) {
-      if (!remapped.empty()) {
-        remapped += ',';
+    const bool finalOrderIsStable = std::ranges::is_sorted(
+        selection.devices, {},
+        [](const backend_selection::SplitDevice& device) {
+          return device.sourceGpuIndex;
+        });
+    if (proportions.size() == selection.devices.size() &&
+        finalOrderIsStable) {
+      tensorSplit->second = std::move(normalized);
+    } else {
+      if (proportions.size() != selection.sourceGpuCount) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "tensor-split has %zu values for %zu registered GPU devices; "
+                "cannot reconcile it with the %zu eligible devices.",
+                proportions.size(),
+                selection.sourceGpuCount,
+                selection.devices.size()));
       }
-      remapped += proportions[device.sourceGpuIndex];
+      std::string remapped;
+      for (const backend_selection::SplitDevice& device : selection.devices) {
+        if (!remapped.empty()) {
+          remapped += ',';
+        }
+        remapped += proportions[device.sourceGpuIndex];
+      }
+      tensorSplit->second = std::move(remapped);
     }
-    tensorSplit->second = std::move(remapped);
   }
 
   params.devices.clear();
