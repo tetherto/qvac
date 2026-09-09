@@ -1,0 +1,5 @@
+{
+  "name": "lint-cpp",
+  "root": "packages/lint-cpp",
+  "targets": {}
+}

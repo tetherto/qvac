@@ -11,8 +11,13 @@
       "version>=": "1.4.4#3"
     },
     {
+      "name": "ggml-speech",
+      "version>=": "2026-09-09#1",
+      "default-features": false
+    },
+    {
       "name": "speech-cpp",
-      "version>=": "2026-09-03#2",
+      "version>=": "2026-09-09",
       "default-features": false,
       "features": [
         "whisper",
@@ -24,7 +29,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-03#2",
+      "version>=": "2026-09-09",
       "default-features": false,
       "features": [
         "whisper",
@@ -36,7 +41,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-03#2",
+      "version>=": "2026-09-09",
       "default-features": false,
       "features": [
         "whisper",
@@ -61,7 +66,7 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-09-03#2",
+          "version>=": "2026-09-09",
           "default-features": false,
           "features": [
             "cuda"

@@ -280,6 +280,7 @@ const ACESTEP_GENERATE_KEYS = [
     'guidanceScale',
     'audioCoverStrength',
     'coverNoiseStrength',
+    'generateLrc',
     'computeQualityScore',
     'rewriteQuery'
 ];
@@ -493,6 +494,7 @@ class AudioGen {
     _destroyed;
     _cancelPromise;
     _cancellingResponse;
+    _lastLrc;
     _cancelTerminalResolve;
     _lastUnderstand;
     constructor(options = {}) {
@@ -555,6 +557,7 @@ class AudioGen {
         this._cancelPromise = null;
         this._cancellingResponse = null;
         this._cancelTerminalResolve = null;
+        this._lastLrc = undefined;
     }
     /** Create the native engine and load its GGUF files. Idempotent. */
     async load() {
@@ -677,6 +680,7 @@ class AudioGen {
             throw this._lifecycleError();
         }
         const addon = this._requireAddon();
+        this._lastLrc = undefined;
         this._lastUnderstand = undefined;
         const response = this._job.start();
         let accepted;
@@ -757,6 +761,20 @@ class AudioGen {
         if (opts.normalizeLoudness !== undefined && typeof opts.normalizeLoudness !== 'boolean') {
             throw invalidInput('normalizeLoudness must be a boolean');
         }
+        if (opts.generateLrc !== undefined && typeof opts.generateLrc !== 'boolean') {
+            throw invalidInput('generateLrc must be a boolean');
+        }
+        if (opts.generateLrc === true) {
+            if (taskType !== undefined && taskType !== 'text2music') {
+                throw invalidInput("generateLrc requires taskType 'text2music'");
+            }
+            if (opts.lyrics === '[Instrumental]') {
+                throw invalidInput('generateLrc requires lyrics to align');
+            }
+            if (opts.simpleMode !== true && (opts.lyrics === undefined || opts.lyrics === '')) {
+                throw invalidInput('generateLrc requires lyrics to align');
+            }
+        }
         if (opts.computeQualityScore !== undefined && typeof opts.computeQualityScore !== 'boolean') {
             throw invalidInput('computeQualityScore must be a boolean');
         }
@@ -814,6 +832,7 @@ class AudioGen {
             simpleMode: opts.simpleMode,
             rewriteQuery: opts.rewriteQuery,
             normalizeLoudness: opts.normalizeLoudness,
+            generateLrc: opts.generateLrc,
             computeQualityScore: opts.computeQualityScore,
             seed: optionalFiniteNumber(opts.seed, 'seed', true),
             vocalLanguage: opts.vocalLanguage,
@@ -981,10 +1000,12 @@ class AudioGen {
             return;
         }
         if (d.outputArray) {
+            this._lastLrc = typeof d.lrc === 'string' ? d.lrc : undefined;
             this._job.output({
                 outputArray: d.outputArray,
                 sampleRate: d.sampleRate ?? 0,
-                channels: d.channels ?? 0
+                channels: d.channels ?? 0,
+                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
             });
             return;
         }
@@ -1012,6 +1033,8 @@ class AudioGen {
                 ...(typeof d.gpuFallbackReason === 'number'
                     ? { gpuFallbackReason: d.gpuFallbackReason }
                     : {}),
+                ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
+                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
                 ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
                 ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
             };

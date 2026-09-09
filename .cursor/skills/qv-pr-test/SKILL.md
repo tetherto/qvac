@@ -112,7 +112,8 @@ The helper emits a JSON manifest with:
 - `touchedPackages[].relatedExampleCommands`
 - `touchedPackages[].addedOrModifiedTests`
 - `touchedPackages[].relatedTests`
-- SDK-only `sdkE2eSetup`
+- `touchedPackages[].sdkE2eSetup` — on the SDK package, and also on `packages/inference` if it's touched (a
+  local inference build only reaches e2e through the SDK's setup, not a standalone inference build)
 
 Discovery is based on committed PR state only. Do not run `git diff`, `git status`, or `git ls-files --modified` inside the worktree for classification.
 
@@ -148,6 +149,7 @@ Always show the recommendation before the tier prompt. The user can override it.
 
 - **SDK (`packages/sdk`) default**: recommend **T2**. This covers install/build, changed examples if present, and changed e2e on desktop. Mobile is opt-in because it is slower and usually covered by CI.
 - **Non-SDK default**: recommend the smallest tier that includes at least unit-level validation. Usually T2.
+- **`packages/inference` touched**: discovery attaches `sdkE2eSetup` / `sdkE2eCwd` to it, but inference has no e2e or examples of its own, so the non-SDK default above would leave the setup command with nothing to run after it. Pair it with an SDK e2e run in `sdkE2eCwd` and recommend **T4** (`--suite smoke` on desktop) — that is what CI runs for an inference change, and with no changed e2e files T2 has no filter to work from. If the PR also touches `packages/sdk/e2e`, use that package's changed tests / `relatedTests` filter instead.
 - **No examples**: if no changed or related examples are discovered, mark examples `not applicable`.
 - **No tests discovered**: recommend install/build only and ask the user to confirm build-only validation.
 - **Mixed PRs**: recommend the highest minimum required by any touched package. Example: SDK + addon changes means SDK T3 plus addon unit scripts.
@@ -172,19 +174,15 @@ Do not execute those agentically. `e2e` setup needs npm/GitHub Packages auth tha
 
 ## SDK e2e setup
 
-For any SDK e2e command, run setup from `packages/sdk/e2e` first.
-
-- SDK source outside `packages/sdk/e2e/` changed:
-
-  ```bash
-  npm run install:build:full
-  ```
-
-- Only `packages/sdk/e2e/` changed:
-
-  ```bash
-  npm run install:build
-  ```
+For any SDK e2e command, run setup from `packages/sdk/e2e` first, using the exact command from
+`touchedPackages[].sdkE2eSetup.command` in the discovery manifest — do not re-derive it from which files
+changed. It resolves to `install:build:full` whenever the PR touches `packages/sdk` outside `e2e/` or
+`packages/inference` at all, even if `packages/inference` itself has no diff lines: CI always builds
+`packages/inference` from the branch for SDK e2e (`inference-source: branch` is unconditional in
+`on-pr-test-sdk.yml`), because the checked-out `packages/inference` can already be ahead of the last npm
+publish from unrelated merged PRs — testing the branch's SDK against the *published* range (what
+`install:build` alone would do) can silently diverge from what CI tests. Only a PR limited to
+`packages/sdk/e2e/` resolves to the lighter `install:build`.
 
 Do not skip setup based on assumed previous state. The PR worktree is treated as clean/synchronized, and SDK e2e validation must prepare the test package explicitly.
 
