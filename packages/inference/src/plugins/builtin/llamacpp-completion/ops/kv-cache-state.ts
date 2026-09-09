@@ -60,9 +60,14 @@ export function shouldCommitCachedTurn(context: CacheCommitContext): boolean {
  * attachment probing). Kept here so the decision can be unit-tested in
  * isolation.
  *
- * The key regression guard: when a non-zero `savedCount` would slice
- * the history down to an empty array, it is treated as stale — the
- * caller falls back to sending the system-stripped full history rather
+ * A committed `savedCount` means the cache holds the rendered prefix for that
+ * many messages, so slicing from it drops exactly what the cache supplies —
+ * the system message among them. Without a usable boundary the cache supplies
+ * nothing, so the whole history goes to the addon, system message included:
+ * anything held back would simply be missing from the prompt.
+ *
+ * The regression guard: a non-zero `savedCount` that slices the history down
+ * to an empty array is stale, and the caller resends the full history rather
  * than handing the model an empty payload.
  */
 export function decideCachedHistorySlice(
@@ -70,26 +75,23 @@ export function decideCachedHistorySlice(
   cacheExists: boolean,
   history: HistoryMessage[]
 ): HistorySliceDecision {
-  if (!cacheExists || history.length === 0) {
-    return {
-      messages: history.filter((msg) => msg.role !== 'system'),
-      clearStaleCount: false
-    }
-  }
-
-  const canSlice = savedCount > 0 && savedCount <= history.length
-  const sliced = canSlice ? history.slice(savedCount) : null
+  const hasCachedPrefix = cacheExists && history.length > 0
+  const sliced =
+    hasCachedPrefix && savedCount > 0 && savedCount <= history.length
+      ? history.slice(savedCount)
+      : null
 
   // A non-null slice that is empty means the saved count is stale: the
   // cached turn boundary is claiming the entire current history is
   // already cached, which happens when a previous turn was cancelled
   // mid-decode and still recorded `history.length + 1`. Treat it as a
-  // bad state and resend the full (system-stripped) history.
+  // bad state and resend the full history.
   const useSlice = sliced !== null && sliced.length > 0
-  const messages = useSlice ? sliced : history.filter((msg) => msg.role !== 'system')
 
   return {
-    messages,
-    clearStaleCount: !useSlice && savedCount > 0
+    messages: useSlice ? sliced : history,
+    // Only a boundary that was actually consulted can be stale. Absent a cache
+    // or a history to slice, the count is simply unused and left alone.
+    clearStaleCount: hasCachedPrefix && !useSlice && savedCount > 0
   }
 }

@@ -92,8 +92,8 @@ async function setIsolatedHome(): Promise<void> {
   env['HOME'] = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-kvcache-tools-'))
 }
 
-// The session refuses to continue unless the prime left a non-empty cache
-// file behind, so the stand-in addon has to produce one.
+// `commitTurn` records a boundary only against a cache file that exists, so the
+// stand-in addon has to produce one wherever it is told to save.
 async function writeCacheFile(cachePath: string): Promise<void> {
   const fs = await import('bare-fs')
   const path = await import('bare-path')
@@ -159,7 +159,7 @@ function completer(modelId: string, kvCacheKey: string) {
   }
 }
 
-test('completion: kv-cache keeps tools out of the prefix and sends them with the turn', async (t) => {
+test('completion: kv-cache sends the tool block with the turn', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
@@ -176,17 +176,7 @@ test('completion: kv-cache keeps tools out of the prefix and sends them with the
   const primeCalls = calls.filter((call) => call.prefill)
   const turnCalls = calls.filter((call) => !call.prefill)
 
-  t.is(primeCalls.length, 1, 'the prefix was primed once')
-  t.absent(
-    primeCalls[0]!.messages.some(isToolEntry),
-    'the primed prefix carries no tool definitions'
-  )
-  t.alike(
-    primeCalls[0]!.messages.map((msg) => msg.role),
-    ['system'],
-    'the primed prefix is the system prompt alone'
-  )
-
+  t.is(primeCalls.length, 0, 'a cold turn makes no prefill-only call of its own')
   t.is(turnCalls.length, 1, 'the turn reached the model once')
   t.alike(
     toolNames(turnCalls[0]!),
@@ -224,7 +214,7 @@ test('completion: kv-cache sends the tool block once, not on every warm turn', a
   const primeCalls = calls.filter((call) => call.prefill)
   const turnCalls = calls.filter((call) => !call.prefill)
 
-  t.is(primeCalls.length, 1, 'the prefix was primed once across both turns')
+  t.is(primeCalls.length, 0, 'neither turn makes a prefill-only call')
   t.is(turnCalls.length, 2, 'both turns reached the model')
 
   t.alike(
@@ -572,9 +562,9 @@ test('completion: kv-cache survives an addon media-load failure between turns', 
   clearRegistry()
 })
 
-// A recognised refusal on the FIRST turn has no committed cache to keep —
-// the fresh prime is rolled back and the retry re-primes from scratch.
-test('completion: kv-cache drops the fresh prime when the first turn is refused', async (t) => {
+// A recognised refusal on the FIRST turn has no committed cache to keep — the
+// file this turn created is rolled back and the retry starts cold again.
+test('completion: kv-cache drops the cache it created when the first turn is refused', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
@@ -602,11 +592,11 @@ test('completion: kv-cache drops the fresh prime when the first turn is refused'
   t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'the first turn is refused')
   t.ok(
     cachePaths.length > 0 && !fs.existsSync(cachePaths[cachePaths.length - 1]!),
-    'the fresh prime is not left behind'
+    'the cache the refused turn created is not left behind'
   )
 
   await complete([first])
-  t.is(calls.filter((call) => call.prefill).length, 2, 'the retry re-primes from scratch')
+  t.is(calls.filter((call) => call.prefill).length, 0, 'no prefill-only call on either attempt')
   t.is(calls.filter((call) => !call.prefill).length, 2, 'the retry turn reaches the model')
 
   unregisterModel(modelId)
