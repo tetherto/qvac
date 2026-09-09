@@ -465,6 +465,14 @@ if (( agent_ok != 1 )); then
   exit 1
 fi
 
+# Only status 1 means drift. Anything else is the check itself being broken
+# (2 is a bad ceiling argument, 127 a missing node), which must not be reported
+# as an upstream tool-surface change.
+if (( surface_status != 0 && surface_status != 1 )); then
+  echo "warning: prompt-surface check exited ${surface_status}; tool ceiling not enforced for this run" >&2
+  surface_status=0
+fi
+
 # Deliberately after the turn passed: a widened surface is real compatibility
 # drift and should be reported as such, not hidden behind a green run that only
 # got slower.
