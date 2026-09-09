@@ -586,10 +586,33 @@ function buildApiFunction(
     // see it, leaving the description as the only signal. Fall back to
     // the parsed-from-typedoc form when the source reader can't find the
     // overload (e.g. cross-file re-exports).
+    //
+    // Overload-inheritance rule: when overloads 2+ have no docstring of
+    // their own, TypeDoc still surfaces the first overload's `@throws` on
+    // their `sigBlockTags` (block tags inherit from the primary signature —
+    // this is why `worldCreateScene`'s three signatures each render a
+    // throws section). Our source reader is stricter: it only picks up
+    // tags written literally above overload `idx`, so `perOverloadThrows`
+    // is empty for the inheriting overloads. Falling straight to
+    // `sigBlockTags` in that case strips every `{ClassName}` (already gone
+    // by parse time) and renders inherited throws as classless bullets
+    // even though overload 0 has the class names on disk. Mirror TypeDoc's
+    // inherit-from-first behaviour by reusing `perOverloadThrows[0]` before
+    // dropping to the class-name-losing path.
     const sourceThrows = perOverloadThrows?.[idx];
+    const inheritedSourceThrows =
+      idx > 0 &&
+      (!sourceThrows || sourceThrows.length === 0) &&
+      perOverloadThrows &&
+      perOverloadThrows[0] &&
+      perOverloadThrows[0].length > 0
+        ? perOverloadThrows[0]
+        : null;
+    const effectiveSourceThrows =
+      sourceThrows && sourceThrows.length > 0 ? sourceThrows : inheritedSourceThrows;
     const throws =
-      sourceThrows && sourceThrows.length > 0
-        ? sourceThrows
+      effectiveSourceThrows && effectiveSourceThrows.length > 0
+        ? effectiveSourceThrows
         : sigBlockTags
             .filter((t: any) => t.tag === "@throws")
             .map((t: any) => {
@@ -1205,18 +1228,40 @@ function mergeSampleProseIntoFunction(
   // with the rest of this function: "SDK JSDoc always wins"). Previously we
   // replaced `fn.throws` wholesale when the sample had any row, which could
   // silently discard errors the JSDoc declared but the sample didn't.
+  //
+  // The dedup Map is keyed on `error` (class name) — that only works for
+  // classed entries, which have identity. Classless entries (`error === ""`,
+  // legitimate under the classless-@throws support in `parseThrowsBlockTags`)
+  // all share the same map key and would collapse to one via `Map.set("", ...)`,
+  // silently dropping throws. Handle them positionally instead: preserve JSDoc
+  // classless entries in place; append sample classless only when the JSDoc
+  // declared none of its own (mirroring the field-level fill-empty-only rule).
   if (prose.throws.length > 0) {
-    const existing = new Map<string, { error: string; description: string }>();
-    for (const t of fn.throws ?? []) existing.set(t.error, t);
+    const classedByName = new Map<string, { error: string; description: string }>();
+    const result: { error: string; description: string }[] = [];
+    let jsdocHasClassless = false;
+    for (const t of fn.throws ?? []) {
+      if (t.error) classedByName.set(t.error, t);
+      else jsdocHasClassless = true;
+      result.push(t);
+    }
     for (const s of prose.throws) {
-      const current = existing.get(s.error);
-      if (!current) {
-        existing.set(s.error, { error: s.error, description: s.description });
-      } else if (!current.description || current.description.trim() === "") {
-        current.description = s.description;
+      if (s.error) {
+        const current = classedByName.get(s.error);
+        if (!current) {
+          const entry = { error: s.error, description: s.description };
+          classedByName.set(s.error, entry);
+          result.push(entry);
+        } else if (!current.description || current.description.trim() === "") {
+          current.description = s.description;
+        }
+      } else if (!jsdocHasClassless) {
+        // Sample-only classless: append in sample order, once we know the
+        // JSDoc declared no classless entries of its own.
+        result.push({ error: s.error, description: s.description });
       }
     }
-    fn.throws = [...existing.values()];
+    fn.throws = result;
   }
 }
 

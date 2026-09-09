@@ -251,11 +251,12 @@ function shellQuote(s: string): string {
  * Used by:
  *   - the patch flow, to bump a patch version in-place without re-running
  *     TypeDoc / re-rendering release notes (must not introduce new public
- *     API surface by definition);
- *   - the minor flow, to relabel a freshly-frozen `vX.Y.Z.mdx` snapshot
- *     so the herdaded `title:` from the outgoing `index.mdx` (which still
- *     advertised `(latest)` and possibly a different version number) is
- *     replaced with the canonical archived label.
+ *     API surface by definition).
+ *   - Manual escape-hatch invocations of `generate-{api-docs,release-notes}.ts
+ *     --target=<file> --title-only`. Under the shim-based layout no
+ *     orchestrator calls this path — `release-version-minor.ts` never
+ *     rewrites the outgoing series' file, and the shim's title is set
+ *     by `writeShim`, not by title-only relabeling.
  *
  * Failure modes are surfaced as exceptions so the orchestrator fails fast
  * instead of silently producing a stale title:

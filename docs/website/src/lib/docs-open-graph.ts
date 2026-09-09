@@ -6,6 +6,7 @@
 import {
   API_SECTION,
   RELEASE_NOTES_SECTION,
+  VERSIONED_SECTIONS,
   type VersionedSection,
 } from './versions';
 
@@ -90,8 +91,13 @@ function buildHiddenArchivedPageMap(
 ): Map<string, VersionedSection> {
   const map = new Map<string, VersionedSection>();
   const hidden = new Set(hiddenSections);
-  const allSections: VersionedSection[] = [API_SECTION, RELEASE_NOTES_SECTION];
-  for (const section of allSections) {
+  // Iterate the canonical `VERSIONED_SECTIONS` list from `versions.ts`
+  // (not a local literal) so adding a new versioned section there also
+  // extends rule 2 to it — otherwise the new section would silently keep
+  // a self-canonical on its current-latest URL while `public/_redirects`
+  // 301s that URL to the shim, reintroducing the duplicate-content
+  // signal the reorg was built to eliminate.
+  for (const section of VERSIONED_SECTIONS) {
     for (const version of section.versions) {
       // Rule 1 — every versioned page of a hidden section is hidden.
       // Rule 2 — the current-latest versioned page of _any_ section is

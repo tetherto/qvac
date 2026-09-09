@@ -37,7 +37,9 @@
 import {
   API_DIR,
   RELEASE_NOTES_DIR,
+  fileExists,
   parseVersion,
+  readFrontmatterField,
   readLatestFromVersionsTs,
   runStep,
   seriesFileName,
@@ -45,6 +47,7 @@ import {
   writeLatestSeriesAliasRedirects,
   writeShim,
 } from "./lib/release-shared.js";
+import * as path from "path";
 
 export interface MinorOptions {
   forceExtract: boolean;
@@ -73,6 +76,28 @@ export async function releaseMinor(newVersion: string, options: MinorOptions) {
     );
   }
 
+  // Fail-fast pre-flight: the shim rewrites below are only safe if the
+  // outgoing series' versioned page still exists on disk. Under the
+  // shim-based layout that file is the only surviving copy of the
+  // outgoing series' content — the old freeze-and-rename dance is gone,
+  // so nothing else in this flow re-creates it. If it's absent (rolled-
+  // back release, hand-edited tree, accidental deletion, partial
+  // checkout), the shims would silently repoint to the incoming series
+  // and the outgoing series page would drop off the site with no diff
+  // that looks wrong — until someone hits a 404 weeks later. Turn that
+  // silent regression into a hard failure that refuses to rotate.
+  if (outgoing) {
+    const out = parseVersion(outgoing);
+    for (const dir of [API_DIR, RELEASE_NOTES_DIR]) {
+      const f = path.join(dir, seriesFileName(out.major, out.minor));
+      if (!(await fileExists(f))) {
+        throw new Error(
+          `Outgoing series page missing: ${f} — rotating the shim would orphan v${out.major}.${out.minor}.x.`,
+        );
+      }
+    }
+  }
+
   const apiFlags: string[] = [];
   if (options.forceExtract) apiFlags.push("--force-extract");
 
@@ -86,6 +111,24 @@ export async function releaseMinor(newVersion: string, options: MinorOptions) {
     `bun run scripts/generate-release-notes.ts ${newVersion}`,
   );
 
+  // Mirror the versioned page's freshly-written description onto the
+  // shim so the canonical bare URL and the versioned URL always ship
+  // the same meta description. Keeping the string in one place (the
+  // template that produced the versioned file) avoids the silent drift
+  // that hardcoding it here would eventually cause — same trick
+  // `patch-latest` uses for the release-notes shim.
+  const apiSeriesPath = path.join(
+    API_DIR,
+    seriesFileName(parsed.major, parsed.minor),
+  );
+  const apiDescription = await readFrontmatterField(apiSeriesPath, "description");
+  if (!apiDescription) {
+    throw new Error(
+      `API summary description missing from ${apiSeriesPath}. ` +
+        `generate-api-docs.ts must write a frontmatter description for the shim to mirror.`,
+    );
+  }
+
   console.log(
     `\n3️⃣  Rewriting API summary shim to <include> ${seriesFileName(parsed.major, parsed.minor)}...`,
   );
@@ -93,7 +136,7 @@ export async function releaseMinor(newVersion: string, options: MinorOptions) {
     API_DIR,
     seriesFileName(parsed.major, parsed.minor),
     `API Summary — ${incomingSeries} (latest)`,
-    "One-page reference of all public functions and objects exported by @qvac/sdk",
+    apiDescription,
   );
 
   console.log(
