@@ -93,6 +93,7 @@ struct SplitDevice {
   bool isOpenCl = false;
   bool isMetal = false;
   bool supportsSplitBuffer = false;
+  bool isRpc = false;
 };
 
 struct SplitDeviceSelection {
