@@ -52,7 +52,7 @@ function appendExtensionsNotice(lines: string[], report: CoverageReport): void {
 
 export function formatCoverageReportHuman(report: CoverageReport, rows: CoverageRow[]): string {
   const lines: string[] = []
-  lines.push('qvac serve openai — coverage')
+  lines.push('qvac serve --openai — coverage')
   lines.push('')
   appendUnknownNotice(lines, report)
   appendExtensionsNotice(lines, report)
@@ -88,7 +88,7 @@ export function formatCoverageReportHuman(report: CoverageReport, rows: Coverage
   }
   lines.push('')
   lines.push('For per-endpoint behavior notes and caveats:')
-  lines.push('  qvac serve openai --docs     # then open http://<host>:<port>/docs')
+  lines.push('  qvac serve --openai --docs   # then open http://<host>:<port>/docs')
   lines.push('  curl <host>:<port>/openapi.json   # raw spec (always exposed)')
   lines.push('  curl <host>:<port>/docs/json      # spec via swagger-ui (when --docs is set)')
   return lines.join('\n')

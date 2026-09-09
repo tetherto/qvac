@@ -53,6 +53,18 @@ on:
         type: string
         required: false
         default: ""
+    outputs:
+      # One entry per run-integration-tests matrix row, resolved through the
+      # same runner_names outputs the matrix rows use (matrix.runner ||
+      # matrix.os), so a runner-label rename cannot desynchronize the two.
+      # benchmark-performance-tts-ggml.yml feeds this to the aggregator's
+      # --expect-devices gate so a lane that loses its rtf-results artifact
+      # fails the summarize job instead of silently shrinking the report.
+      # Keep in step with the matrix `include` list below — the arity is
+      # asserted by scripts/perf-report/__tests__/rtf-expected-devices-guard.test.js.
+      rtf_expected_devices:
+        description: "Comma-separated device labels every RTF benchmark matrix row reports as"
+        value: ${{ format('{0},{1},{2},{3},{4},{5},{6}', jobs.runner_names.outputs.linux_ubuntu2204_x64_gpu, jobs.runner_names.outputs.linux_ubuntu2404_x64_gpu, jobs.runner_names.outputs.ubuntu_2604, jobs.runner_names.outputs.ubuntu_2404_arm, jobs.runner_names.outputs.macos_arm64_gpu, jobs.runner_names.outputs.macos_15_large, jobs.runner_names.outputs.win_2025_x64_gpu) }}
 
 # Least-privilege default scoped to the whole file (CodeQL
 # actions/missing-workflow-permissions).  Individual jobs widen this as
@@ -96,15 +108,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Both linux GPU runners carry an NVIDIA card and a prebuild that
-          # bundles the CUDA and Vulkan backends; pin one runner per backend so
-          # each keeps dedicated coverage instead of both resolving to the
-          # engine's CUDA-first preference.
+          # Both linux GPU runners carry an NVIDIA card; the published
+          # linux-x64 prebuild ships Vulkan only, so both rows pin vulkan.
           - os: ubuntu-22.04
             platform: linux
             arch: x64
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
-            gpu_backend: cuda
+            gpu_backend: vulkan
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -254,11 +264,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
-          # /usr/local/cuda/lib64: the self-hosted linux GPU runners keep the
-          # CUDA toolkit there without registering it in ldconfig; the CUDA
-          # backend module's cudart/cuBLAS DT_NEEDED entries resolve from it.
-          # Harmless where the directory does not exist.
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'linux' && ':/usr/local/cuda/lib64' || '' }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       # Benchmark leg (run_rtf_benchmarks=true, set by
@@ -288,11 +294,7 @@ jobs:
           QVAC_TTS_GGML_BENCHMARK_MATRIX_OVERRIDE: ${{ inputs.benchmark_matrix_json }}
           QVAC_TTS_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
           QVAC_TTS_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
-          # /usr/local/cuda/lib64: the self-hosted linux GPU runners keep the
-          # CUDA toolkit there without registering it in ldconfig; the CUDA
-          # backend module's cudart/cuBLAS DT_NEEDED entries resolve from it.
-          # Harmless where the directory does not exist.
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.platform == 'linux' && ':/usr/local/cuda/lib64' || '' }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -335,14 +337,38 @@ jobs:
             exit 1
           fi
 
+      # Two attempts. The retry exists for DATA RECOVERY: a transient upload
+      # failure (the asr-ggml matrix lost all 48 darwin-arm64 rows of run
+      # 34062003154 to a CreateArtifact ETIMEDOUT) silently drops this device
+      # from the consolidated report, and a second attempt keeps the report
+      # COMPLETE rather than merely flagged. Losing both attempts does not by
+      # itself turn the run red — this job runs with job-level
+      # continue-on-error — the summarize job's --expect-devices gate is what
+      # fails the run on a missing device. `if-no-files-found: error` instead
+      # of `warn` so a zero-file upload is loud; the verify step above already
+      # guarantees files exist on the happy path.
       - name: Upload RTF benchmark results
+        id: upload-rtf-results
         if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: rtf-results-tts-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
           path: |
             packages/tts-ggml/benchmarks/results/rtf-benchmark-*.json
             packages/tts-ggml/benchmarks/results/streaming-benchmark-*.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
+
+      - name: Upload RTF benchmark results (retry)
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks && steps.upload-rtf-results.outcome == 'failure' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-tts-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
+          path: |
+            packages/tts-ggml/benchmarks/results/rtf-benchmark-*.json
+            packages/tts-ggml/benchmarks/results/streaming-benchmark-*.json
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
 

@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: QVAC CLI provides tools and an HTTP server that exposes an OpenAI-compatible API.
+description: QVAC CLI provides tools and an HTTP server exposing the QVAC API, with an optional OpenAI-compatible extension.
 ogImage: /og-cli.png
 schemaType: TechArticle
 ---
@@ -52,12 +52,17 @@ npx --package "@qvac/cli" qvac --help
 ```
 </Callout>
 
-## OpenAI-compatible HTTP server
+## HTTP server
 
-QVAC CLI provides an HTTP server that is compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview), enabling broad integration with the AI ecosystem. It internally translates HTTP requests into SDK calls. As a result, any system compatible with the OpenAI REST API can point to `http://localhost:11434/v1/` and work without changes.
+QVAC CLI provides an HTTP server that internally translates HTTP requests into
+SDK calls, with an optional extension compatible with the
+[OpenAI REST API](https://developers.openai.com/api/reference/overview), enabling
+broad integration with the AI ecosystem. Run it with `qvac serve --openai` and
+any system compatible with the OpenAI REST API can point to
+`http://localhost:11434/v1/` and work without changes.
 
 <Card href="/cli/http-server" title="HTTP server">
-  Learn how to run a local HTTP server that exposes an OpenAI-compatible API.
+  Learn how to run a local HTTP server and mount the API surfaces you need.
 </Card>
 
 ## Interactive config generator
@@ -97,12 +102,15 @@ Generate a tree-shaken Bare worker bundle with selected plugins.
 | `-q, --quiet` | Minimal output |
 | `-v, --verbose` | Detailed output |
 
-### `qvac serve openai`
+### `qvac serve`
 
-Start an OpenAI-compatible REST API server.
+Start the HTTP server. `qvac serve openai` is a deprecated alias for
+`qvac serve --openai --no-default`.
 
 | Option | Description |
 | --- | --- |
+| `--openai` | Mount the OpenAI-compatible REST API |
+| `--no-default` | Do not mount the QVAC surface |
 | `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
 | `-p, --port <number>` | Port to listen on (default: `11434`) |
 | `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
@@ -124,17 +132,17 @@ Scripts that previously relied on wildcard CORS must name every trusted browser 
 
 ```bash
 # Before: allowed every browser origin
-qvac serve openai --cors
+qvac serve --openai --cors
 
 # After: optionally retain validation and repeat once per trusted origin
-qvac serve openai --cors \
+qvac serve --openai --cors \
   --cors-origin https://app.example.com \
   --cors-origin http://localhost:3000
 ```
 
 ### `qvac configure`
 
-Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go straight to [`qvac serve openai`](#qvac-serve-openai). It searches the models the SDK provides — by name or by capability (role, addon, quantization) — and on a wide terminal previews, for the highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename its alias, set config parameters (guided by the SDK's config schema — each field shows its type and description and is validated on entry, for model types the SDK exposes a schema for; currently llama.cpp chat + embedding), and (with `$EDITOR`) tweak the entry and review the result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C` aborts without writing. Existing entries are preserved; re-running is idempotent per model.
+Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go straight to [`qvac serve --openai`](#qvac-serve). It searches the models the SDK provides — by name or by capability (role, addon, quantization) — and on a wide terminal previews, for the highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename its alias, set config parameters (guided by the SDK's config schema — each field shows its type and description and is validated on entry, for model types the SDK exposes a schema for; currently llama.cpp chat + embedding), and (with `$EDITOR`) tweak the entry and review the result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C` aborts without writing. Existing entries are preserved; re-running is idempotent per model.
 
 ```bash
 qvac configure                 # interactive

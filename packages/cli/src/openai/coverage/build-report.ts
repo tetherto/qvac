@@ -15,7 +15,15 @@ import type {
 } from '@/openai/coverage/types'
 
 const COVERAGE_DIR = dirname(fileURLToPath(import.meta.url))
-export const DEFAULT_ROUTER = join(COVERAGE_DIR, '..', '..', 'serve', 'routes')
+export const DEFAULT_ROUTER = join(
+  COVERAGE_DIR,
+  '..',
+  '..',
+  'serve',
+  'extensions',
+  'openai',
+  'routes'
+)
 
 function percent(n: number, total: number): number {
   if (total === 0) return 0

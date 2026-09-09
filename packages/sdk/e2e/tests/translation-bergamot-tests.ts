@@ -115,6 +115,20 @@ export const bergamotEnFrBatchMultiple: TestDefinition = {
   }
 }
 
+export const bergamotEnFrBatchArray: TestDefinition = {
+  testId: 'translation-bergamot-en-fr-batch-array',
+  params: {
+    texts: ['Good morning', 'The weather is nice.', 'Thank you.'],
+    resource: 'bergamot-en-fr'
+  },
+  expectation: { validation: 'contains-any', contains: ['bonjour', 'matin', 'temps', 'merci'] },
+  metadata: {
+    category: 'translation-bergamot',
+    dependency: 'bergamot-en-fr',
+    estimatedDurationMs: 20000
+  }
+}
+
 // --- EN → ES (bergamot-en-es) ---
 
 export const bergamotEnEsBasic = createBergamotTest(
@@ -182,6 +196,7 @@ export const translationBergamotTests = [
   bergamotEnFrStats,
   bergamotEnFrBatchBasic,
   bergamotEnFrBatchMultiple,
+  bergamotEnFrBatchArray,
   // EN → ES
   bergamotEnEsBasic,
   bergamotEnEsLongText,

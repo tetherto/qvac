@@ -33,7 +33,8 @@ const {
   dedupeRecords,
   renderMarkdown,
   renderHtml,
-  buildCoverage
+  buildCoverage,
+  missingExpectedDevices
 } = require('../aggregate-asr-ggml-rtf')
 
 function whisperDesktopReport (useGPU) {
@@ -585,7 +586,51 @@ test('coverage reports GPU backends per engine as well as overall', () => {
   // The parakeet row is CPU-only, so parakeet still has zero GPU coverage even
   // though the overall table shows vulkan.
   assert.deepEqual(coverage.byEngine.parakeet.gpuBackendsCovered, [])
-  assert.deepEqual(coverage.byEngine.parakeet.missingBackends, ['vulkan', 'metal', 'opencl'])
+  // Core ML is expected coverage for parakeet (encoder sidecar) but not for
+  // whisper, whose port builds without WHISPER_COREML -- so it must not show up
+  // as a whisper gap, nor in the overall cascade.
+  assert.deepEqual(coverage.byEngine.parakeet.missingBackends, ['vulkan', 'metal', 'opencl', 'coreml'])
+  assert.deepEqual(coverage.byEngine.whisper.missingBackends, ['metal', 'opencl'])
+  assert.deepEqual(coverage.missingBackends, ['metal', 'opencl'])
+})
+
+test('a parakeet coreml row keeps its label and counts toward parakeet GPU coverage', () => {
+  const report = parakeetDesktopReport(true)
+  report.platform = 'darwin-arm64'
+  report.platformName = 'darwin'
+  report.labels.backend = 'coreml'
+  report.summary.activeBackend = 'coreml'
+  report.summary.encoderOnCoreml = 1
+
+  const record = normalizeDesktopRecord(
+    report,
+    'rtf-benchmark-darwin-arm64-tdt-q8_0-gpu-coreml.json'
+  )
+
+  assert.equal(record.backend, 'coreml')
+  assert.equal(record.gpu, 'gpu')
+
+  const coverage = buildCoverage([record])
+  assert.deepEqual(coverage.byEngine.parakeet.gpuBackendsCovered, ['coreml'])
+  assert.ok(!coverage.byEngine.parakeet.missingBackends.includes('coreml'))
+})
+
+test('coreml and metal rows for the same model never dedupe together', () => {
+  const metal = parakeetDesktopReport(true)
+  metal.platform = 'darwin-arm64'
+  metal.platformName = 'darwin'
+  metal.labels.backend = 'metal'
+
+  const coreml = JSON.parse(JSON.stringify(metal))
+  coreml.labels.backend = 'coreml'
+
+  const deduped = dedupeRecords([
+    normalizeDesktopRecord(metal, 'rtf-benchmark-darwin-arm64-tdt-q8_0-gpu.json'),
+    normalizeDesktopRecord(coreml, 'rtf-benchmark-darwin-arm64-tdt-q8_0-gpu-coreml.json')
+  ])
+
+  assert.equal(deduped.length, 2)
+  assert.deepEqual(deduped.map(record => record.backend).sort(), ['coreml', 'metal'])
 })
 
 test('markdown table carries the Engine column, memory columns and per-engine coverage', () => {
@@ -618,4 +663,50 @@ test('html table includes the Engine header, memory columns and rounded values',
   assert.ok(html.includes('<td>906</td>'), 'peak RSS should be rounded to 906 in a table cell')
   assert.ok(html.includes('<td>812</td>'), 'avg RSS should be rounded to 812 in a table cell')
   assert.ok(html.includes('<td>parakeet</td>'))
+})
+
+// ---------------------------------------------------------------------------
+// Expected-device gate (--expect-devices)
+
+test('missing expected devices are detected from desktop rows only', () => {
+  const records = [
+    normalizeDesktopRecord(whisperDesktopReport(true), 'rtf-benchmark-linux-x64-ggml-tiny-q5_1-gpu.json'),
+    { source: 'mobile-ci', device: 'qvac-macos26-arm64-gpu' },
+    { source: 'manual', device: 'macos-15-large' }
+  ]
+  assert.deepEqual(missingExpectedDevices(records, []), [])
+  assert.deepEqual(missingExpectedDevices(records, ['qvac-ubuntu2404-x64-gpu']), [])
+  // Mobile and manual rows never stand in for a desktop lane: only the
+  // whisper desktop record's device satisfies the expectation.
+  assert.deepEqual(
+    missingExpectedDevices(records, ['qvac-ubuntu2404-x64-gpu', 'qvac-macos26-arm64-gpu', 'macos-15-large']),
+    ['qvac-macos26-arm64-gpu', 'macos-15-large']
+  )
+})
+
+test('coverage, markdown and html surface missing expected devices', () => {
+  const records = [normalizeDesktopRecord(whisperDesktopReport(true), 'rtf-benchmark-linux-x64-ggml-tiny-q5_1-gpu.json')]
+  const expected = ['qvac-ubuntu2404-x64-gpu', 'qvac-macos26-arm64-gpu']
+
+  const coverage = buildCoverage(records, expected)
+  assert.deepEqual(coverage.expectedDesktopDevices, expected)
+  assert.deepEqual(coverage.missingDesktopDevices, ['qvac-macos26-arm64-gpu'])
+  assert.equal(buildCoverage(records).expectedDesktopDevices, undefined)
+
+  const markdown = renderMarkdown(records, expected)
+  assert.ok(markdown.includes('- Expected desktop devices reporting: 1/2'))
+  assert.ok(markdown.includes('MISSING desktop devices'))
+  assert.ok(markdown.includes('qvac-macos26-arm64-gpu'))
+  assert.ok(!renderMarkdown(records).includes('Expected desktop devices'))
+
+  const html = renderHtml(records, expected)
+  assert.ok(html.includes('MISSING desktop devices'))
+  assert.ok(html.includes('qvac-macos26-arm64-gpu'))
+})
+
+test('a fully reporting device list renders without the missing-devices warning', () => {
+  const records = [normalizeDesktopRecord(whisperDesktopReport(true), 'rtf-benchmark-linux-x64-ggml-tiny-q5_1-gpu.json')]
+  const markdown = renderMarkdown(records, ['qvac-ubuntu2404-x64-gpu'])
+  assert.ok(markdown.includes('- Expected desktop devices reporting: 1/1'))
+  assert.ok(!markdown.includes('MISSING desktop devices'))
 })
