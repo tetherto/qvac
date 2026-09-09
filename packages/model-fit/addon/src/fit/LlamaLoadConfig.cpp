@@ -239,6 +239,11 @@ std::string normalizedDeviceId(const BackendDevice& device) {
   if (!isCuda) {
     return id;
   }
+  // CUDA's -vN suffix is only a registry decoration for PCI ids. Preserve
+  // MIG/MPS virtual-device identities, which Fabric keeps distinct.
+  if (lower(id).find("pci") == std::string::npos) {
+    return id;
+  }
   const size_t suffix = id.rfind("-v");
   if (suffix == std::string::npos || suffix + 2 == id.size() ||
       !std::ranges::all_of(id.substr(suffix + 2), [](unsigned char chr) {
