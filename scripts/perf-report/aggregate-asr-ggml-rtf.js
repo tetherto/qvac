@@ -279,6 +279,15 @@ function reportQuant (report, sourceFile) {
     ''
 }
 
+// whisper stamps its internal per-call encode/decode timers into the summary;
+// parakeet reports have no equivalent, so their rows render n/a.
+function whisperPhaseTimings (summary) {
+  return {
+    encodeMs: Number((summary.whisperEncodeMs || {}).mean),
+    decodeMsPerCall: Number((summary.whisperDecodeMs || {}).mean)
+  }
+}
+
 /**
  * One normalizer for both engines' desktop-shaped reports (`summary.rtf` etc.).
  * whisper reports do not carry `addonVersion` or a probed GPU name yet, so those
@@ -289,13 +298,6 @@ function normalizeReport (report, sourceFile, source) {
   const summary = report.summary || {}
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
-  // whisper-only per-call phase timers from whisper's internal timings; the
-  // parakeet reports have no equivalent, so those rows render n/a. Kept in the
-  // table because an engine regression can hide inside a flat-looking RTF: the
-  // QVAC-24716 Windows regression only localized once decode ms/call was read
-  // out of the raw artifacts (encode flat, decode 3.5 -> 9.6 ms/call).
-  const encodeMs = summary.whisperEncodeMs || {}
-  const decodeMs = summary.whisperDecodeMs || {}
   const memory = summary.memory || {}
   const platformName = report.platformName || report.platform || ''
   const useGPU = Boolean(
@@ -329,8 +331,7 @@ function normalizeReport (report, sourceFile, source) {
     p50: Number(rtf.p50),
     p95: Number(rtf.p95),
     wallMs: Number(wallMs.mean),
-    encodeMs: Number(encodeMs.mean),
-    decodeMsPerCall: Number(decodeMs.mean),
+    ...whisperPhaseTimings(summary),
     avgRssMb: numberOrNaN(memory.avgRssMb),
     peakRssMb: numberOrNaN(memory.peakRssMb),
     reclaimedMb: numberOrNaN(memory.reclaimedMb),
