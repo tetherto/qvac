@@ -59,15 +59,14 @@ The `verified` label is **no longer used to authorize CI**. It may still appear 
 | `test-e2e-full` | Runs the full E2E suite (currently SDK-only). | E2E workflows | Long-running; use for release branches and major changes. |
 | `e2e-tested` | Set automatically by the E2E workflow once a run has completed against the PR. | E2E workflows | Status indicator only; does not pass/fail by itself — see linked run. |
 | `NLP` | Marks PRs touching `packages/llm-llamacpp/` or `packages/embed-llamacpp/`. | Routing in approval workflows | Casing matters: it's `NLP`, not `nlp`. |
-| `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`, `run-mobile-addon-tests`, `run-coload-tests` | Select expensive CI stages on addon PR workflows. | `ci-router` composite in `on-pr-*` workflows | External forks can use these after `fork-ci` approval; internal same-repo PRs skip the fork-ci gate. |
+| `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`, `run-mobile-addon-tests` | Select expensive CI stages on addon PR workflows. | `ci-router` composite in `on-pr-*` workflows | External forks can use these after `fork-ci` approval; internal same-repo PRs skip the fork-ci gate. |
 
 > **`run-mobile-addon-tests` no longer starts a standalone mobile suite.** Per-addon
 > mobile (AWS Device Farm) tests are now **on-demand only** — run them from
 > **Actions → `Mobile Integration Tests (<addon>)` → Run workflow**, choosing the
 > platform, device(s) and an optional test filter. See
-> [MOBILE-ON-DEMAND.md](./MOBILE-ON-DEMAND.md). The label is kept (and still gates
-> the on-device co-load smoke) for a possible future re-enable; do not rely on it
-> to launch a per-addon mobile run.
+> [MOBILE-ON-DEMAND.md](./MOBILE-ON-DEMAND.md). The label is kept for a possible
+> future re-enable; do not rely on it to launch a per-addon mobile run.
 
 Standard GitHub labels (`bug`, `documentation`, `enhancement`, `good first issue`, `help wanted`, `question`, `wontfix`, `duplicate`, `invalid`) and Dependabot/CodeQL labels (`dependencies`, `javascript`, `github_actions`) are unchanged.
 

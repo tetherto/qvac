@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0] - 2026-09-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.1` -> `10297.1.2` (mtmd temporal merge is now opt-in per bitmap, so two adjacent equal-size still images are no longer fused into a video chunk and `clip_encode` no longer aborts with an output buffer size mismatch; no API change for this package).
+
+  Released as a **minor**, consistent with `@qvac/embed-llamacpp` 0.39.0 and `@qvac/llm-llamacpp` 0.51.0 in the same release. `@qvac/model-fit`, `@qvac/ocr-ggml`, `@qvac/translation-nmtcpp`, `@qvac/vla-ggml` and `@qvac/classification-ggml` pin `"@qvac/fabric": "^0.10.0"`, which on a `0.x` version resolves `>=0.10.0 <0.11.0`, so they adopt this release deliberately by widening their range rather than automatically.
+
 ## [0.10.0] - 2026-08-29
 
 ### Changed
