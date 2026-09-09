@@ -7,7 +7,9 @@ name: Benchmark (ASR GGML)
 #   - `dataset` merges the old whisper `dataset_type` + `arabic_dataset`
 #     inputs (an arabic_* choice implies the Common Voice Arabic path).
 #   - `workdir` is hardcoded to packages/asr-ggml.
-#   - `streaming_chunk_size` is a documented default (64000 bytes ≈ 1s f32le).
+#   - `streaming_chunk_size` is a documented whisper default (64000 bytes ≈ 1s
+#     f32le); parakeet streaming is driven by the ms-based controls in the
+#     client's config-parakeet*.yaml templates (streaming_chunk_ms).
 #   - `max_samples: -1` means "engine default": whisper auto-selects by model
 #     size, parakeet defaults to 50.
 # Whisper-scoped inputs (language/model_size/custom_model_repo) are ignored on
@@ -703,6 +705,7 @@ jobs:
 
           # Select the appropriate config file for this model type
           case "$MODEL_TYPE" in
+            unified) CONFIG_FILE="config-parakeet-unified.yaml" ;;
             ctc) CONFIG_FILE="config-parakeet-ctc.yaml" ;;
             eou) CONFIG_FILE="config-parakeet-eou.yaml" ;;
             sortformer) CONFIG_FILE="config-parakeet-sortformer.yaml" ;;
@@ -716,6 +719,7 @@ jobs:
           # Set timeout based on model type
           case "$MODEL_TYPE" in
             tdt) TIMEOUT=120 ;;
+            unified) TIMEOUT=120 ;;
             ctc) TIMEOUT=60 ;;
             eou) TIMEOUT=120 ;;
             sortformer) TIMEOUT=180 ;;
@@ -723,14 +727,16 @@ jobs:
             *) TIMEOUT=120 ;;
           esac
 
-          # Double timeout for streaming mode
+          # Real streaming decodes chunk-by-chunk with per-chunk encoder
+          # passes, so it needs more headroom than batch: 4x, not 2x.
           if [ "$STREAMING_MODE" = "true" ]; then
-            TIMEOUT=$((TIMEOUT * 2))
+            TIMEOUT=$((TIMEOUT * 4))
           fi
 
           CONFIG_PATH="benchmarks/client/config/${CONFIG_FILE}"
 
-          # Update config file with runtime values
+          # Update config file with runtime values. The ms-based streaming
+          # controls (streaming_chunk_ms etc.) come from the template itself.
           sed -i "s|timeout:.*|timeout: ${TIMEOUT}|" "$CONFIG_PATH"
           sed -i "s|path:.*|path: \"${RUNNER_MODEL_PATH}\"|" "$CONFIG_PATH"
           sed -i "s|speaker_group:.*|speaker_group: \"clean\"|" "$CONFIG_PATH"
@@ -741,7 +747,6 @@ jobs:
           sed -i "/^model:/,/^[^ ]/ s|  language:.*|  language: \"${MODEL_LANGUAGE}\"|" "$CONFIG_PATH"
           sed -i "/^model:/,/^[^ ]/ s|  use_gpu:.*|  use_gpu: ${USE_GPU}|" "$CONFIG_PATH"
           sed -i "/^model:/,/^[^ ]/ s|  streaming:.*|  streaming: ${STREAMING_MODE}|" "$CONFIG_PATH"
-          sed -i "/^model:/,/^[^ ]/ s|  streaming_chunk_size:.*|  streaming_chunk_size: ${STREAMING_CHUNK_SIZE}|" "$CONFIG_PATH"
 
           echo "=== Updated ${CONFIG_FILE} ==="
           cat "$CONFIG_PATH"

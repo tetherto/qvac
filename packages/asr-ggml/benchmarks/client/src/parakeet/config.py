@@ -35,6 +35,7 @@ class Language(str, Enum):
 
 class ModelType(str, Enum):
     TDT = "tdt"
+    UNIFIED = "unified"
     CTC = "ctc"
     EOU = "eou"
     SORTFORMER = "sortformer"
@@ -80,8 +81,10 @@ class ModelConfig(BaseModel):
     use_gpu: bool = Field(False, description="Enable GPU acceleration")
     caption_enabled: bool = Field(False, description="Enable caption/subtitle mode")
     timestamps_enabled: bool = Field(True, description="Include timestamps in output")
-    streaming: bool = Field(False, description="Enable streaming mode (chunked processing)")
-    streaming_chunk_size: int = Field(64000, description="Chunk size in bytes for streaming mode")
+    streaming: bool = Field(False, description="Enable streaming mode (duplex streaming session)")
+    streaming_chunk_ms: int = Field(320, gt=0, description="Streaming chunk size in milliseconds")
+    streaming_history_ms: Optional[int] = Field(None, gt=0, description="Sortformer rolling-history window in milliseconds")
+    streaming_emit_partials: bool = Field(True, description="Emit partial hypotheses before chunk boundaries")
 
     @model_validator(mode='after')
     def validate_model_config(self):

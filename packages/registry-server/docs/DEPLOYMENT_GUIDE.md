@@ -411,7 +411,9 @@ For production, configure `QVAC_INDEXER_KEYS` so CI clients connect directly to 
 QVAC_INDEXER_KEYS=<indexer1-z32-public-key>,<indexer2-z32-public-key>
 ```
 
-The RPC client picks a random indexer from the list on each connection attempt and only accepts peers whose public key matches the configured keys.
+When a live model sync contains at least one new model, the client queries each configured indexer for available space on its registry `--storage` filesystem and selects the indexer with the most space. Metadata-only and deprecation-only syncs retain the normal random selection. In all cases, the client only accepts peers whose public key matches the configured keys.
+
+Capacity-aware selection assumes that registry storage, `MODEL_DRIVES_STORAGE`, and `TEMP_STORAGE` reside on the same attached filesystem on each indexer. Hugging Face ingestion may temporarily require approximately twice the artifact size because the downloaded cache is copied into temporary ingestion storage.
 
 If `QVAC_INDEXER_KEYS` is not set, the client falls back to topic-based discovery (backward compatible).
 
