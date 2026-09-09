@@ -297,15 +297,20 @@ SplitDeviceSelection selectSplitDevices(
 
 std::optional<std::string> remapTensorSplit(
     const std::string& value, const SplitDeviceSelection& selection) {
+  bool mappingChanged = selection.devices.size() != selection.sourceGpuCount;
+  for (size_t index = 0; !mappingChanged && index < selection.devices.size();
+       ++index) {
+    mappingChanged = selection.devices[index].sourceGpuIndex != index;
+  }
+  if (!mappingChanged) {
+    return value;
+  }
   std::string normalized = value;
   std::ranges::replace(normalized, '/', ',');
   std::vector<std::string> proportions;
   std::istringstream values(normalized);
   for (std::string proportion; std::getline(values, proportion, ',');) {
     proportions.push_back(std::move(proportion));
-  }
-  if (proportions.size() == selection.devices.size()) {
-    return normalized;
   }
   if (proportions.size() != selection.sourceGpuCount) {
     return std::nullopt;
@@ -781,7 +786,6 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     // what keeps the weights off the GPU.
     splitMode = LLAMA_SPLIT_MODE_NONE;
     config.erase("tensor-split");
-    config.erase("tensor_split");
   } else if (
       splitMode == LLAMA_SPLIT_MODE_ROW &&
       !std::ranges::all_of(
