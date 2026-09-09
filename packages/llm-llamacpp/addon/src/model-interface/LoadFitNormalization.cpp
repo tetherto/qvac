@@ -651,16 +651,68 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 &adrenoVersion,
                 isFinetuning,
                 &isMaliGpu);
+            const bool isOpenCl = name.find("opencl") != std::string::npos;
+            const bool isMetal = name.find("metal") != std::string::npos ||
+                                 name.rfind("mtl", 0) == 0;
             return SelectedBackend{
                 .type = type,
                 .name = std::move(name),
                 .adrenoVersion = adrenoVersion,
-                .isMaliGpu = isMaliGpu};
+                .isMaliGpu = isMaliGpu,
+                .isOpenCl = isOpenCl,
+                .isMetal = isMetal};
           },
       .gpuBackendSupportsRowSplit =
           []() { return backend_selection::gpuBackendSupportsRowSplit(); },
-      .splitDeviceNames =
-          []() { return backend_selection::getSplitDeviceNames(); }};
+      .splitDevices =
+          []() { return backend_selection::getSplitDeviceSelection(); }};
+}
+
+void remapTensorSplit(
+    ConfigMap& config,
+    const backend_selection::SplitDeviceSelection& selection) {
+  auto hyphen = config.find("tensor-split");
+  auto underscore = config.find("tensor_split");
+  if (hyphen != config.end() && underscore != config.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "both 'tensor-split' and 'tensor_split' are present; use one or the "
+        "other.");
+  }
+  auto value = hyphen != config.end() ? hyphen : underscore;
+  if (value == config.end()) {
+    return;
+  }
+  bool mappingChanged = selection.devices.size() != selection.sourceGpuCount;
+  for (size_t index = 0; !mappingChanged && index < selection.devices.size();
+       ++index) {
+    mappingChanged = selection.devices[index].sourceGpuIndex != index;
+  }
+  if (!mappingChanged) {
+    return;
+  }
+  std::string normalized = value->second;
+  std::ranges::replace(normalized, '/', ',');
+  const std::vector<std::string> proportions = split(normalized, ',');
+  if (proportions.size() != selection.sourceGpuCount) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: tensor-split has %zu values for %zu registered GPU devices; "
+            "cannot reconcile it with the %zu eligible devices.\n",
+            K_LEGACY_PARSER_NAME.data(),
+            proportions.size(),
+            selection.sourceGpuCount,
+            selection.devices.size()));
+  }
+  std::string remapped;
+  for (const backend_selection::SplitDevice& device : selection.devices) {
+    if (!remapped.empty()) {
+      remapped += ',';
+    }
+    remapped += proportions[device.sourceGpuIndex];
+  }
+  value->second = std::move(remapped);
 }
 
 NormalizedLoad normalizeLoadForFit(
@@ -817,8 +869,40 @@ NormalizedLoad normalizeLoadForFit(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
-    const SelectedBackend selected = dependencies.resolveBackend(
-        preferredBackend, mainGpu, metadata, finetuneOverrides.active);
+    backend_selection::SplitDeviceSelection splitSelection;
+    SelectedBackend selected;
+    if (preferredBackend == BackendType::GPU &&
+        splitMode != LLAMA_SPLIT_MODE_NONE) {
+      splitSelection = dependencies.splitDevices();
+      if (!splitSelection.devices.empty()) {
+        const backend_selection::SplitDevice& primary =
+            splitSelection.devices.front();
+        selected = {
+            .type = BackendType::GPU,
+            .name = primary.name,
+            .adrenoVersion = primary.adrenoVersion,
+            .isMaliGpu = primary.isMaliGpu,
+            .isOpenCl = primary.isOpenCl,
+            .isMetal = primary.isMetal};
+      } else if (!splitSelection.rejectedDevices.empty()) {
+        std::string rejected;
+        for (const std::string& device : splitSelection.rejectedDevices) {
+          if (!rejected.empty()) {
+            rejected += ", ";
+          }
+          rejected += device;
+        }
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[LlamaModel] no eligible GPU backend found; rejected %s; "
+                "falling back to CPU\n",
+                rejected.c_str()));
+      }
+    } else {
+      selected = dependencies.resolveBackend(
+          preferredBackend, mainGpu, metadata, finetuneOverrides.active);
+    }
     result.adrenoVersion = selected.adrenoVersion;
 
     // QVAC-21257: optional runtime override for the multimodal projector
@@ -861,14 +945,7 @@ NormalizedLoad normalizeLoadForFit(
       }
     }
 
-    std::vector<std::string> splitDevices;
-    if (selected.type == BackendType::GPU &&
-        splitMode != LLAMA_SPLIT_MODE_NONE) {
-      splitDevices = dependencies.splitDeviceNames();
-    }
-    const bool useGpu =
-        selected.type == BackendType::GPU &&
-        (splitMode == LLAMA_SPLIT_MODE_NONE || !splitDevices.empty());
+    const bool useGpu = selected.type == BackendType::GPU;
 
     if (useGpu) {
       params.mmproj_backend = selected.name;
@@ -934,15 +1011,12 @@ NormalizedLoad normalizeLoadForFit(
       result.runtimeBackendDevice = 1;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
-        if (std::holds_alternative<int>(mainGpu.value())) {
-          configFilemap["main-gpu"] =
-              std::to_string(std::get<int>(mainGpu.value()));
-        } else {
-          QLOG_IF(
-              Priority::WARNING,
-              "[LlamaModel] main-gpu 'dedicated'/'integrated' ignored in "
-              "multi-GPU split-mode; use an integer device index instead\n");
-        }
+        QLOG_IF(
+            Priority::WARNING,
+            "[LlamaModel] main-gpu is ignored in multi-GPU split-mode\n");
+      }
+      if (splitMode != LLAMA_SPLIT_MODE_NONE) {
+        remapTensorSplit(configFilemap, splitSelection);
       }
     } else if (
         selected.type == BackendType::CPU ||
@@ -978,28 +1052,30 @@ NormalizedLoad normalizeLoadForFit(
       configVector.emplace_back(useGpu ? selected.name : "none");
     } else {
       std::string deviceList;
-      for (const std::string& device : splitDevices) {
+      params.devices.clear();
+      params.devices.reserve(splitSelection.devices.size() + 1);
+      for (const backend_selection::SplitDevice& device :
+           splitSelection.devices) {
         if (!deviceList.empty()) {
           deviceList += ",";
         }
-        deviceList += device;
+        deviceList += device.name;
+        params.devices.push_back(device.handle);
       }
-      configVector.emplace_back("--device");
-      configVector.emplace_back(deviceList);
+      params.devices.push_back(nullptr);
       QLOG_IF(
           Priority::INFO,
           string_format(
               "[LlamaModel] split mode: pinning to %zu eligible device(s): "
               "%s\n",
-              splitDevices.size(),
+              splitSelection.devices.size(),
               deviceList.c_str()));
     }
     configFilemap.erase("device");
 
     isGpu = useGpu;
-    isOpenCl = isGpu && selected.name.find("opencl") != std::string::npos;
-    isMetal = isGpu && (selected.name.find("metal") != std::string::npos ||
-                        selected.name.rfind("mtl", 0) == 0);
+    isOpenCl = isGpu && selected.isOpenCl;
+    isMetal = isGpu && selected.isMetal;
   }
 
   tuneLoadConfigMap(

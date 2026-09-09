@@ -326,14 +326,24 @@ class LoadFitNormalizationTest : public ::testing::Test {
 protected:
   test_common::MockModelMetaData metadata_{false, "llama"};
 
-  // splitDevices defaults to {"none"} on purpose: a non-empty list is
-  // forwarded as `--device a,b`, and qvac-fabric's parser rejects names that
-  // do not exist on the host running the test, so a real device name cannot be
-  // the default. "none" keeps split parsing host-independent; pass {} to test
-  // the CPU fallback.
+  static backend_selection::SplitDeviceSelection
+  splitSelection(const std::vector<std::string>& names) {
+    static char handles[16];
+    backend_selection::SplitDeviceSelection selection;
+    selection.sourceGpuCount = names.size();
+    for (size_t index = 0; index < names.size(); ++index) {
+      selection.devices.push_back(
+          {.name = names[index],
+           .handle = reinterpret_cast<ggml_backend_dev_t>(&handles[index]),
+           .sourceGpuIndex = index});
+    }
+    return selection;
+  }
+
   static lfn::NormalizationDependencies backend(
       lfn::SelectedBackend selected, bool supportsRowSplit = false,
-      std::vector<std::string> splitDevices = {"none"}) {
+      std::vector<std::string> splitDevices = {"mock-device"}) {
+    const auto devices = splitSelection(splitDevices);
     return {
         .resolveBackend = [selected](
                               backend_selection::BackendType,
@@ -342,7 +352,7 @@ protected:
                               bool) { return selected; },
         .gpuBackendSupportsRowSplit =
             [supportsRowSplit]() { return supportsRowSplit; },
-        .splitDeviceNames = [splitDevices]() { return splitDevices; }};
+        .splitDevices = [devices]() { return devices; }};
   }
 
   static lfn::ConfigMap baseConfig() {
@@ -390,10 +400,91 @@ TEST_F(LoadFitNormalizationTest, CpuFallbackClearsGpuPlacement) {
       std::move(config),
       metadata_,
       {},
-      backend({.type = backend_selection::CPU, .name = "none"}));
+      backend({.type = backend_selection::CPU, .name = "none"}, false, {}));
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.params.main_gpu, -1);
   EXPECT_EQ(result.runtimeBackendDevice, 0);
+}
+
+TEST_F(
+    LoadFitNormalizationTest,
+    SplitModeUsesEligibleSetWhenRawMainGpuTargetsRejectedDevice) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["main-gpu"] = "0";
+  auto dependencies =
+      backend({.type = backend_selection::CPU, .name = "none"}, false, {});
+  auto selection = splitSelection({"vulkan0"});
+  selection.sourceGpuCount = 2;
+  selection.devices.front().sourceGpuIndex = 1;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_NE(result.params.devices.front(), nullptr);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies = backend(
+      {.type = backend_selection::GPU,
+       .name = "opencl0",
+       .adrenoVersion = 830,
+       .isOpenCl = true});
+  auto selection = splitSelection({"vulkan0"});
+  selection.devices.front().isOpenCl = false;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_FALSE(result.adrenoVersion.has_value());
+  EXPECT_EQ(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitFollowsFilteredDeviceMapping) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,2,3";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.sourceGpuCount = 3;
+  selection.devices[0].sourceGpuIndex = 0;
+  selection.devices[1].sourceGpuIndex = 2;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[1], 3.0F);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsAmbiguousCardinality) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,3";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.sourceGpuCount = 3;
+  selection.devices[0].sourceGpuIndex = 0;
+  selection.devices[1].sourceGpuIndex = 2;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
 }
 
 TEST_F(LoadFitNormalizationTest, RowSplitDegradesOnlyWhenUnsupported) {
@@ -417,7 +508,8 @@ TEST_F(LoadFitNormalizationTest, RowSplitDegradesOnlyWhenUnsupported) {
 
 TEST_F(LoadFitNormalizationTest, RowSplitProbeRunsOnlyForSelectedGpuRowMode) {
   int probeCalls = 0;
-  auto dependencies = backend({.type = backend_selection::CPU, .name = "none"});
+  auto dependencies =
+      backend({.type = backend_selection::CPU, .name = "none"}, false, {});
   dependencies.gpuBackendSupportsRowSplit = [&probeCalls]() {
     ++probeCalls;
     return false;
@@ -429,18 +521,12 @@ TEST_F(LoadFitNormalizationTest, RowSplitProbeRunsOnlyForSelectedGpuRowMode) {
       "/tmp/model.gguf", std::move(cpuRowConfig), metadata_, {}, dependencies));
   EXPECT_EQ(probeCalls, 0);
 
-  dependencies.resolveBackend =
-      [](backend_selection::BackendType,
-         const std::optional<backend_selection::MainGpu>&,
-         const ModelMetaData&,
-         bool) {
-        return lfn::SelectedBackend{
-            .type = backend_selection::GPU, .name = "none"};
-      };
   static_cast<void>(lfn::normalizeLoadForFit(
       "/tmp/model.gguf", baseConfig(), metadata_, {}, dependencies));
   EXPECT_EQ(probeCalls, 0);
 
+  const auto devices = splitSelection({"mock-device"});
+  dependencies.splitDevices = [devices]() { return devices; };
   auto gpuRowConfig = baseConfig();
   gpuRowConfig["split-mode"] = "row";
   static_cast<void>(lfn::normalizeLoadForFit(
@@ -525,33 +611,23 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFitOverrideBeatsExplicitFitOn) {
   }
 }
 
-// Asserting the list reaches fabric's parser: a name that cannot exist makes
-// the arg loop throw naming --device, which only happens if it was forwarded.
-// parse_device_list splits on ',' and reports only the first element it cannot
-// resolve, so seeing element 0 named back proves the list was forwarded and
-// split.
-TEST_F(LoadFitNormalizationTest, SplitModesForwardEligibleDeviceList) {
+TEST_F(LoadFitNormalizationTest, SplitModesPinEligibleDeviceHandles) {
   for (const char* mode : {"layer", "row", "tensor"}) {
     auto config = baseConfig();
     config["split-mode"] = mode;
-    try {
-      static_cast<void>(lfn::normalizeLoadForFit(
-          "/tmp/model.gguf",
-          std::move(config),
-          metadata_,
-          {},
-          backend(
-              {.type = backend_selection::GPU, .name = "vulkan0"},
-              true,
-              {"qvac-nonexistent-device-0", "qvac-nonexistent-device-1"})));
-      FAIL() << mode << " mode must forward --device";
-    } catch (const qvac_errors::StatusError& error) {
-      EXPECT_THAT(error.what(), ::testing::HasSubstr("--device"))
-          << "mode: " << mode;
-      EXPECT_THAT(
-          error.what(), ::testing::HasSubstr("qvac-nonexistent-device-0"))
-          << "mode: " << mode;
-    }
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "vulkan0"},
+            true,
+            {"mock-device-0", "mock-device-1"}));
+    ASSERT_EQ(result.params.devices.size(), 3U) << "mode: " << mode;
+    EXPECT_NE(result.params.devices[0], nullptr) << "mode: " << mode;
+    EXPECT_NE(result.params.devices[1], nullptr) << "mode: " << mode;
+    EXPECT_EQ(result.params.devices[2], nullptr) << "mode: " << mode;
   }
 }
 
@@ -571,6 +647,8 @@ TEST_F(LoadFitNormalizationTest, SplitModeWithNoEnumerableDevicesUsesCpu) {
   EXPECT_EQ(result.runtimeBackendDevice, 0);
   EXPECT_NE(result.params.cache_type_k, GGML_TYPE_Q8_0);
   EXPECT_NE(result.params.cache_type_v, GGML_TYPE_Q8_0);
+  ASSERT_EQ(result.params.devices.size(), 1U);
+  EXPECT_EQ(result.params.devices.front(), nullptr);
 }
 
 // A caller-supplied fit=on must still be honoured outside tensor mode.
@@ -945,7 +1023,7 @@ TEST_F(LoadFitNormalizationTest, TensorSplitCpuFallbackClearsToNone) {
       std::move(config),
       metadata_,
       {},
-      backend({.type = backend_selection::CPU, .name = "none"}));
+      backend({.type = backend_selection::CPU, .name = "none"}, false, {}));
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.params.main_gpu, -1);
   EXPECT_EQ(result.runtimeBackendDevice, 0);
@@ -1071,7 +1149,7 @@ TEST_F(
   EXPECT_EQ(result.fitSnapshot.nUbatch, 128U);
   EXPECT_EQ(result.fitSnapshot.nParallel, 2U);
   EXPECT_EQ(result.fitSnapshot.splitMode, LLAMA_SPLIT_MODE_LAYER);
-  EXPECT_EQ(result.fitSnapshot.mainGpu, 1);
+  EXPECT_EQ(result.fitSnapshot.mainGpu, 0);
   EXPECT_EQ(result.fitSnapshot.tensorSplit[0], 0.25F);
   EXPECT_EQ(result.fitSnapshot.tensorSplit[1], 0.75F);
   EXPECT_EQ(result.fitSnapshot.typeK, static_cast<int32_t>(GGML_TYPE_Q8_0));

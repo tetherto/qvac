@@ -81,11 +81,31 @@ std::pair<BackendType, std::string> chooseBackend(
     std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
     bool* outIsMaliGpu = nullptr);
 
-/// @brief Count GPU devices available for multi-GPU split mode.
-/// Returns the number of discrete GPUs when any are present; otherwise
-/// falls back to the iGPU count. This mirrors backends like Vulkan which
-/// exclude iGPUs by default when discrete GPUs exist.
+/// @brief Count devices in the final Fabric-compatible split set.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
+
+struct SplitDevice {
+  std::string name;
+  ggml_backend_dev_t handle = nullptr;
+  size_t sourceGpuIndex = 0;
+  std::optional<int> adrenoVersion;
+  bool isMaliGpu = false;
+  bool isOpenCl = false;
+  bool isMetal = false;
+  bool supportsSplitBuffer = false;
+};
+
+struct SplitDeviceSelection {
+  std::vector<SplitDevice> devices;
+  size_t sourceGpuCount = 0;
+  std::vector<std::string> rejectedDevices;
+};
+
+/// @brief The authoritative allowlisted device set for multi-GPU modes.
+SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
+
+/// @brief `getSplitDeviceSelection()` against the real ggml registry.
+SplitDeviceSelection getSplitDeviceSelection();
 
 /// @brief The ordered eligible device names to hand to `--device` for
 /// multi-GPU split modes.
@@ -93,7 +113,8 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 /// Selection mirrors qvac-fabric's filtered branch (`src/llama.cpp`) while
 /// applying this addon's supported-backend allowlist:
 ///   - CUDA and RPC GPU devices are eligible for their upcoming Fabric builds.
-///   - Discrete GPUs when any are present, otherwise the integrated ones.
+///   - RPC devices are prepended and do not suppress a local integrated GPU.
+///   - Local discrete GPUs when any are present, otherwise one integrated GPU.
 ///   - Duplicates are dropped by `ggml_backend_dev_props::device_id`, the same
 ///     key fabric uses. Deduping by *description* would be wrong: Vulkan sets
 ///     the description to the raw device name, which is identical for two
@@ -108,11 +129,10 @@ std::vector<std::string> getSplitDeviceNames();
 
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
 /// True only when at least one eligible GPU device is present AND every
-/// eligible GPU/iGPU device's backend provides split buffers, because fabric
-/// requires split buffers from each device it distributes over and throws on
-/// the first one that lacks them. Callers should degrade row -> layer when this
-/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
-/// this is false in every shipped configuration.
+/// device in the final split set provides split buffers, because fabric throws
+/// on the first participating device that lacks them. Callers should degrade
+/// row -> layer when this returns false. As of qvac-fabric v10069 only SYCL
+/// provides split buffers, so this is false in every shipped configuration.
 bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 
 /// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend

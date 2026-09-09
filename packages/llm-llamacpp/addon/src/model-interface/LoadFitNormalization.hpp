@@ -74,6 +74,8 @@ struct SelectedBackend {
   std::string name = "none";
   std::optional<int> adrenoVersion;
   bool isMaliGpu = false;
+  bool isOpenCl = false;
+  bool isMetal = false;
 };
 
 using BackendResolver = std::function<SelectedBackend(
@@ -84,8 +86,8 @@ using BackendResolver = std::function<SelectedBackend(
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
   std::function<bool()> gpuBackendSupportsRowSplit;
-  /// Eligible devices to pin for every multi-GPU split mode.
-  std::function<std::vector<std::string>()> splitDeviceNames;
+  /// Authoritative eligible device set for every multi-GPU split mode.
+  std::function<backend_selection::SplitDeviceSelection()> splitDevices;
 };
 
 struct NormalizedLoad {
