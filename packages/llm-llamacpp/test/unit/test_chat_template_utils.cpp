@@ -703,6 +703,60 @@ TEST_F(ChatTemplateUtilsTest, GetPromptFlagsToolDefinitionsDropped) {
   EXPECT_TRUE(rendered.grammar.empty());
 }
 
+// The silent case, and the one a successful render used to hide: a template
+// that never references `tools` *or* tool calls renders happily and leaves the
+// definitions out. Nothing downstream can tell that apart from a tools-aware
+// render, which is exactly what `toolDefinitionsDropped` exists to answer — so
+// the flag is keyed on the template's own caps, not only on the renderer that
+// produced the prompt.
+//
+// Not an exotic template: any GGUF whose embedded template has no tools branch
+// behaves this way, which is most models not tuned for tool calling.
+TEST_F(ChatTemplateUtilsTest, GetPromptFlagsAToolsIgnoringJinjaTemplate) {
+  // Renders the conversation correctly and mentions neither tools nor tool
+  // calls, so fabric's caps report support for neither.
+  constexpr const char* TOOLS_IGNORING_TEMPLATE =
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, TOOLS_IGNORING_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_TRUE(rendered.renderedByJinja)
+      << "the render succeeded; this is not the legacy fallback";
+  EXPECT_EQ(rendered.prompt.find("get_weather"), std::string::npos)
+      << "the tool never reached the prompt: " << rendered.prompt;
+  EXPECT_TRUE(rendered.toolDefinitionsDropped)
+      << "a successful render that omitted the tools must still report the "
+         "drop, or the caller is told its tools were fine";
+  EXPECT_TRUE(inputs.tools.empty())
+      << "omitted tools must not leak to callers, or a tool grammar could be "
+         "applied for definitions the model never read";
+}
+
+// The other side of the same guard: a template that *does* describe tools must
+// not be reported as dropping them. Without this the caps check would turn
+// every tools request into a false positive, which is worse than the false
+// negative it was added to fix.
+TEST_F(ChatTemplateUtilsTest, GetPromptDoesNotFlagAToolsAwareTemplate) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_FALSE(rendered.toolDefinitionsDropped);
+  EXPECT_NE(rendered.prompt.find("get_weather"), std::string::npos)
+      << "the tool must be in the prompt: " << rendered.prompt;
+  EXPECT_EQ(inputs.tools.size(), 1u) << "tools must not be stripped";
+}
+
 TEST_F(ChatTemplateUtilsTest, GetPromptLegacyFallbackMarksProvenance) {
   common_chat_templates_ptr tmpls =
       common_chat_templates_init(nullptr, ALWAYS_RAISING_TEMPLATE);

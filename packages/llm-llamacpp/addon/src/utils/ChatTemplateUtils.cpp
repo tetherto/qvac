@@ -289,6 +289,38 @@ getChatTemplate(const ::llama_model* model, const common_params& params) {
   return chatTemplate;
 }
 
+namespace {
+
+/// Whether the active chat template can put tool definitions in front of the
+/// model at all. Both caps come from fabric analysing the template body
+/// (`jinja::caps_get`): `supports_tools` means the template renders the `tools`
+/// variable itself, and `supports_tool_calls` means it at least renders
+/// assistant tool calls — enough for fabric to apply a fallback that describes
+/// the tools, which is the case it warns about at chat.cpp:3300-3304.
+///
+/// A template that does neither renders *successfully* while silently leaving
+/// the definitions out, which is the one way a tools-stripped render used to
+/// escape `toolDefinitionsDropped`. It is not an exotic case: any GGUF whose
+/// embedded template has no tools branch behaves this way, which is most
+/// models that were not tuned for tool calling.
+bool templateCanConveyTools(const struct common_chat_templates* tmpls) {
+  if (tmpls == nullptr) {
+    return false;
+  }
+  const std::map<std::string, bool> caps =
+      common_chat_templates_get_caps(tmpls);
+  const auto capOr = [&caps](const char* key, bool fallback) {
+    const auto found = caps.find(key);
+    return found == caps.end() ? fallback : found->second;
+  };
+  // Defaulting a missing key to `true` keeps a caps map that stops reporting
+  // these from turning every tools request into a reported drop; fabric's own
+  // defaults are `true` for both.
+  return capOr("supports_tools", true) || capOr("supports_tool_calls", true);
+}
+
+} // namespace
+
 PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs) {
@@ -325,17 +357,32 @@ PromptRenderResult getPrompt(
   std::string firstError;
   try {
     auto params = common_chat_templates_apply(tmpls, inputs);
-    // The legacy (non-Jinja) renderer succeeds while silently ignoring
-    // `inputs.tools`, so a successful render is still a tools-stripped one
-    // whenever jinja is off and tools were supplied.
+    // Two ways a *successful* render still leaves the tools out. The legacy
+    // (non-Jinja) renderer ignores `inputs.tools` outright. And a Jinja
+    // template that references neither `tools` nor tool calls renders happily
+    // without them — the silent case, and the one this flag exists to expose,
+    // since nothing else in the pipeline can tell the difference.
     const bool legacyDroppedTools = !inputs.use_jinja && !inputs.tools.empty();
-    if (legacyDroppedTools) {
+    const bool jinjaOmittedTools = inputs.use_jinja && !inputs.tools.empty() &&
+                                   !templateCanConveyTools(tmpls);
+    const bool droppedTools = legacyDroppedTools || jinjaOmittedTools;
+    if (jinjaOmittedTools) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[ChatTemplateUtils] chat template describes neither tools nor tool "
+          "calls; the tool definitions were not rendered and the model never "
+          "saw them\n");
+    }
+    if (droppedTools) {
+      // Keep the header's contract: callers never see a tool list the
+      // rendered prompt does not carry. That is also what stops a tool
+      // grammar being applied for tools the model cannot have read.
       inputs.tools.clear();
     }
     return exportParams(
         std::move(params),
         /* renderedByJinja = */ inputs.use_jinja,
-        /* toolDefinitionsDropped = */ legacyDroppedTools);
+        /* toolDefinitionsDropped = */ droppedTools);
   } catch (const std::exception& e) {
     firstError = e.what();
   } catch (...) {

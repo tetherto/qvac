@@ -17,11 +17,14 @@
   list keeps its case-insensitive matching. A template stop is a protocol
   delimiter, so folding its case would let a `</ASSISTANT>` the template never
   emits truncate ordinary content.
-- `RuntimeStats.toolDefinitionsDropped` reports renders where the template
-  rejected the tool definitions, or where the prompt was rendered without a
-  Jinja template, and the model therefore never saw the tools. It is a
-  per-request figure: a job reports what happened to its own render, not what
-  happened across whatever else was in flight beside it.
+- `RuntimeStats.toolDefinitionsDropped` reports renders where the model never
+  saw the tools the request supplied — because the template rejected them,
+  because the prompt was rendered without a Jinja template, or because the
+  active template describes neither tools nor tool calls and so left them out
+  while rendering successfully. That last case is the quiet one, and it covers
+  any model whose embedded template has no tools branch. It is a per-request
+  figure: a job reports what happened to its own render, not what happened
+  across whatever else was in flight beside it.
 - `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
   function name) controls whether a tool call is forced, allowed or disabled for
   a request that declares tools; a function name restricts the call to it.

@@ -1213,3 +1213,64 @@ TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
 
   fs::remove_all(cacheDir);
 }
+
+// Cancelling mid-generation with a live tool grammar. The rollback code itself
+// is untouched by this PR, but the *sampler state* is new, and it is the half
+// that survives a reset: `common_sampler_reset` clears `prev` and the chain and
+// nothing else, so a grammar and a reasoning-budget matcher advanced by the
+// cancelled request are still advanced afterwards. What has to hold is that the
+// next request inherits neither — not the cursor, not the constraint.
+//
+// `remove_thinking_from_context` is forced off so the cursor assertion reads
+// the cancel rollback rather than end-of-generation compaction, which moves
+// `nPast` for its own reasons.
+TEST_F(ToolGrammarModelTest, CancelWithLiveToolGrammarLeavesNextRequestClean) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  config_["reasoning-budget"] = "64";
+  config_["n_predict"] = "512";
+  auto model = createModel();
+  ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr)
+      << "this test must exercise the long-lived single-prompt context";
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  const llama_pos preRequestNPast = llama_memory_seq_pos_max(mem, 0) + 1;
+
+  // Cancel only after enough pieces to be sure the lazy grammar and the
+  // budget matcher have both seen accepted tokens; one piece could still be
+  // the opening `<think>`.
+  constexpr int kPiecesBeforeCancel = 8;
+  std::atomic<int> pieces{0};
+  LlamaModel::Prompt cancelled = makePrompt(THINKING_TOOL_PROMPT);
+  cancelled.generationParams.remove_thinking_from_context = false;
+  cancelled.outputCallback = [&](const std::string&) {
+    if (pieces.fetch_add(1) == kPiecesBeforeCancel) {
+      model->cancel();
+    }
+  };
+  ASSERT_NO_THROW(model->processPrompt(cancelled));
+  ASSERT_GT(pieces.load(), kPiecesBeforeCancel)
+      << "generation never reached the cancel point, so no sampler state was "
+         "advanced and this test proves nothing";
+
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, preRequestNPast)
+      << "the cancel must roll the cursor back to where the request started";
+
+  // The part that would break if the cancelled request's sampler state
+  // survived: a following request carrying no tools must be unconstrained.
+  LlamaModelTestPeer::llmContext(*model)->resetStopFlag();
+  const std::string plain = model->processPrompt(makePrompt(PLAIN_PROMPT));
+  EXPECT_FALSE(plain.empty())
+      << "the next request must run, not inherit the cancelled request's stop "
+         "state";
+  EXPECT_FALSE(hasToolCallBlock(plain))
+      << "the next request was still constrained by the cancelled request's "
+         "tool grammar: "
+      << plain;
+  EXPECT_TRUE(sampling(*model).grammar.empty())
+      << "the cancelled request's tool grammar is still resident";
+  EXPECT_TRUE(sampling(*model).grammar_triggers.empty())
+      << "the cancelled request's lazy triggers are still attached";
+}
