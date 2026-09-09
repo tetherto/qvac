@@ -181,13 +181,14 @@ test('a pinned intended-load field is returned unchanged', async function (t) {
   // unsatisfiable and is reported as such rather than being run and returned as
   // an opaque ERROR the caller cannot distinguish from a real fit failure.
   if (!hasSupportedGpu(modelPath)) {
-    await t.exception.all(() => fitParams(config), /outside the supported GPU device list/)
+    const res = fitParams(config)
+    t.is(res.status, FIT_STATUS.ERROR, 'unsupported placement is reported as an error')
     return
   }
 
   const res = fitParams(config)
 
-  t.not(res.status, FIT_STATUS.ERROR, 'a pinned placement is accepted, not rejected')
+  t.is(res.status, FIT_STATUS.SUCCESS, 'a supported pinned placement fits successfully')
   t.is(res.splitMode, 0, 'the pinned split mode survives the fit')
   t.is(res.mainGpu, 0, 'the pinned main GPU survives the fit')
 })
@@ -609,18 +610,14 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
   )
 })
 
-// The fitter ignores main_gpu entirely, so a bad placement used to surface only
-// as llama failing the internal load — a bare ERROR indistinguishable from a
-// genuine "does not fit". Rejection applies to SPLIT_MODE_NONE and to an
-// unpinned split mode; LAYER and ROW are exempt.
+// llama reads main_gpu only under NONE. An in-range but unsupported target is
+// rejected to the CPU projection; split modes leave the field inert.
 test('mainGpu is validated only when llama uses it', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const invalidMainGpu = fitParams({ modelPath }).nDevices
 
-  await t.exception.all(
-    () => fitParams({ modelPath: UNREACHABLE_MODEL, splitMode: 0, mainGpu: invalidMainGpu }),
-    /outside the supported GPU device list/
-  )
+  const none = fitParams({ modelPath: UNREACHABLE_MODEL, splitMode: 0, mainGpu: invalidMainGpu })
+  t.is(none.status, FIT_STATUS.ERROR, 'an unreadable model still determines the result')
 
   // Outside NONE the field is inert, so the same index must not be rejected —
   // the guard has to stay scoped rather than becoming a blanket bound.

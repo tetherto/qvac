@@ -156,8 +156,9 @@ struct FitResult {
 
   /// `enum llama_split_mode` — how the model is split across multiple GPUs.
   int32_t splitMode = 0;
-  /// Device holding the model, or -1 for an explicit CPU-only NONE placement.
-  int32_t mainGpu = 0;
+  /// Raw discovered-device index used for NONE placement, or -1 when the
+  /// resulting plan is CPU-only. Split modes ignore this field.
+  int32_t mainGpu = -1;
   /// `enum ggml_type` for the K cache. Changes KV memory, so it changes the
   /// fit.
   int32_t typeK = 0;
