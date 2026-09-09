@@ -1,0 +1,99 @@
+{
+  "name": "@qvac/model-fit",
+  "root": "packages/model-fit",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/model-fit",
+        "ci": {
+          "hasCppLint": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts+lint",
+          "hasFabricLockstep": true
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/model-fit",
+        "ci": {
+          "artifactNamePrefix": "model-fit-",
+          "includeVulkanSdk": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/model-fit"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/model-fit",
+        "ci": {
+          "testCommandSuffix": true,
+          "linuxArmApt": ["mesa-vulkan-drivers"],
+          "modelCache": [{ "warm": "true" }],
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
+            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm" },
+            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-24.04-arm" },
+            { "os": "macos-15-xlarge", "platform": "darwin", "arch": "arm64" },
+            { "os": "macos-15-large", "platform": "darwin", "arch": "x64" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
+          ]
+        }
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/model-fit",
+        "ci": {
+          "carveOut": true
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/model-fit"
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/model-fit",
+        "ci": {
+          "buildStep": "none",
+          "nameTransform": "none",
+          "repoName": "model-fit",
+          "testGateMode": "none"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}

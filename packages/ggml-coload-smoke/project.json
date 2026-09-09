@@ -1,0 +1,20 @@
+{
+  "name": "@qvac/ggml-coload-smoke",
+  "root": "packages/ggml-coload-smoke",
+  "targets": {
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/ggml-coload-smoke"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/ggml-coload-smoke"
+      }
+    }
+  }
+}
