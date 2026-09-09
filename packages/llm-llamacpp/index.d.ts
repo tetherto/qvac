@@ -502,11 +502,20 @@ declare namespace LlmLlamacpp {
          */
         thinkingBlockDiscards: number;
         /**
-         * Number of prompt renders in this request where the chat template
-         * rejected the tool definitions and the prompt was produced without
-         * them, so the model never saw the tools. Per-inference for single
-         * requests; summed across completed slots for batch requests. 0 when no
-         * tools were sent or the template accepted them.
+         * Number of prompt renders in this request that provably left the tool
+         * definitions out — the template either rejected them, or supplying them
+         * did not change the rendered prompt at all. Such a render has its tool
+         * list stripped, so no tool grammar constrains it.
+         *
+         * Read this in one direction only. Non-zero means definitions were dropped
+         * and the model did not see them. **0 is not a guarantee that the model saw
+         * every definition**: a template that renders only some of the supplied
+         * tools, or names them in a form the prompt does not carry verbatim,
+         * changes the render and so reports no drop. Answering that needs the
+         * renderer to report what it consumed.
+         *
+         * Per-inference for single requests; summed across completed slots for
+         * batch requests. 0 when no tools were sent.
          */
         toolDefinitionsDropped: number;
         /**

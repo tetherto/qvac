@@ -310,9 +310,9 @@ namespace {
 /// Any name is enough — a partial render still put tools in front of the
 /// model, and reporting a drop for that would be a false positive.
 ///
-/// Residual, and not closable from here: a tool name that happens to appear in
-/// the conversation text masks an omission. That needs the renderer to report
-/// what it rendered.
+/// A name present in the prompt is only evidence of a render when the
+/// conversation could not have supplied it; `messagesNameAnyTool` below is
+/// what decides that, and `jinjaRenderOmittedTools` is the entry point.
 bool promptNamesAnyTool(
     const std::string& prompt, const std::vector<common_chat_tool>& tools) {
   for (const common_chat_tool& tool : tools) {
@@ -324,6 +324,113 @@ bool promptNamesAnyTool(
     }
   }
   return false;
+}
+
+/// Whether the conversation itself carries any of the tool names, in any field
+/// the renderer can put into the prompt.
+///
+/// This is the masking source. It is not exotic: the ordinary multi-turn tool
+/// loop replays prior calls, and `tool_calls[].name` and `tool_name` hold the
+/// tool's own name by construction — so the second turn of every tool
+/// conversation reaches the prompt carrying a name the template need not have
+/// rendered.
+bool messagesNameAnyTool(
+    const std::vector<common_chat_msg>& messages,
+    const std::vector<common_chat_tool>& tools) {
+  auto mentions = [&tools](const std::string& text) {
+    if (text.empty()) {
+      return false;
+    }
+    for (const common_chat_tool& tool : tools) {
+      if (!tool.name.empty() && text.find(tool.name) != std::string::npos) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const common_chat_msg& message : messages) {
+    if (mentions(message.content) || mentions(message.reasoning_content) ||
+        mentions(message.tool_name)) {
+      return true;
+    }
+    for (const common_chat_msg_content_part& part : message.content_parts) {
+      if (mentions(part.text)) {
+        return true;
+      }
+    }
+    for (const common_chat_tool_call& call : message.tool_calls) {
+      if (mentions(call.name) || mentions(call.arguments)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/// Renders the same inputs with the tools removed and reports whether that
+/// changed the prompt at all.
+///
+/// An identical prompt is a *proof* of omission rather than a heuristic: the
+/// only thing that differs between the two renders is the tool list, so a
+/// byte-identical result means supplying the tools had no effect on what the
+/// model will read. The conversation text is present in both renders, which is
+/// precisely why this survives masking where a substring scan cannot.
+///
+/// Everything else is held identical by copying `inputs` — including `now`,
+/// which is a plain `time_point` member, so there is no clock skew between the
+/// two renders. `tool_choice` is left alone because it never reaches Jinja; it
+/// is consumed on the grammar side.
+bool renderIsUnchangedWithoutTools(
+    const struct common_chat_templates* tmpls,
+    const common_chat_templates_inputs& inputs,
+    const std::string& promptWithTools) {
+  common_chat_templates_inputs probe = inputs;
+  probe.tools.clear();
+  try {
+    auto probeParams = common_chat_templates_apply(tmpls, probe);
+    return probeParams.prompt == promptWithTools;
+  } catch (...) {
+    // A template that cannot render this conversation without tools raises
+    // here. That is not evidence the definitions were emitted — but it is not
+    // evidence they were dropped either, and this flag *strips the tool list*,
+    // so it must never fire on a guess. Fail towards leaving the caller's
+    // tools alone.
+    return false;
+  }
+}
+
+/// Whether a successful Jinja render left the tool definitions out.
+///
+/// Sound in the direction it is used: every drop reported here is a drop that
+/// happened. It does not claim the converse — see the note on
+/// `PromptRenderResult::toolDefinitionsDropped` for the partial-render
+/// residual that no prompt-side check can close.
+///
+/// A capability answer cannot stand in for any of this.
+/// `common_chat_templates_get_caps()` decides `supports_tools` by executing the
+/// template against fabric's own synthetic probe conversation and checking
+/// whether the probe touched `tools[0].function.name`
+/// (common/jinja/caps.cpp:242-247). That probe leads with a user turn, so a
+/// template guarding its tool block on the conversation shape reports
+/// "capable" and can still omit the block for a request shaped differently —
+/// the shape-sensitivity QVAC-23251 hit.
+bool jinjaRenderOmittedTools(
+    const struct common_chat_templates* tmpls,
+    const common_chat_templates_inputs& inputs, const std::string& prompt) {
+  // No name reached the prompt at all. The definitions cannot have been
+  // rendered without their names, so this is a drop, and no probe is needed.
+  if (!promptNamesAnyTool(prompt, inputs.tools)) {
+    return true;
+  }
+  // A name is in the prompt and the conversation does not contain it, so the
+  // template is the only thing that can have put it there. Also a drop-free
+  // answer without a second render, which keeps the probe off the common path.
+  if (!messagesNameAnyTool(inputs.messages, inputs.tools)) {
+    return false;
+  }
+  // Ambiguous: the name is in the prompt and also in the conversation. Only a
+  // differential render can say which one put it there.
+  return renderIsUnchangedWithoutTools(tmpls, inputs, prompt);
 }
 
 } // namespace
@@ -374,13 +481,13 @@ PromptRenderResult getPrompt(
     const bool legacyDroppedTools = !inputs.use_jinja && !inputs.tools.empty();
     const bool jinjaOmittedTools =
         inputs.use_jinja && !inputs.tools.empty() &&
-        !promptNamesAnyTool(params.prompt, inputs.tools);
+        jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
     const bool droppedTools = legacyDroppedTools || jinjaOmittedTools;
     if (jinjaOmittedTools) {
       QLOG_IF(
           Priority::ERROR,
-          "[ChatTemplateUtils] the rendered prompt names none of the supplied "
-          "tools; the chat template left the definitions out and the model "
+          "[ChatTemplateUtils] supplying the tools did not change the rendered "
+          "prompt; the chat template left the definitions out and the model "
           "never saw them\n");
     }
     if (droppedTools) {

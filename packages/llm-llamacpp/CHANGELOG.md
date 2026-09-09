@@ -17,16 +17,22 @@
   list keeps its case-insensitive matching. A template stop is a protocol
   delimiter, so folding its case would let a `</ASSISTANT>` the template never
   emits truncate ordinary content.
-- `RuntimeStats.toolDefinitionsDropped` reports renders where the model never
-  saw the tools the request supplied — because the template rejected them,
-  because the prompt was rendered without a Jinja template, or because the
-  template rendered successfully while leaving them out. That last case is the
-  quiet one, and it is decided by looking at the prompt that was produced
-  rather than at what the template is capable of: it covers both a template
-  with no tools branch at all and one whose tool block is guarded on a
-  conversation shape this request did not have. It is a per-request figure: a
-  job reports what happened to its own render, not what happened across
-  whatever else was in flight beside it.
+- `RuntimeStats.toolDefinitionsDropped` reports renders that provably left the
+  supplied tool definitions out — because the template rejected them, because
+  the prompt was rendered without a Jinja template, or because the template
+  rendered successfully while leaving them out. That last case is the quiet
+  one, and it is decided from the prompt that was produced rather than from
+  what the template is capable of: it covers both a template with no tools
+  branch at all and one whose tool block is guarded on a conversation shape
+  this request did not have. Where a tool name also occurs in the conversation
+  — which the ordinary multi-turn tool loop guarantees, since it replays the
+  call by name — the render is repeated with the tools removed and the drop is
+  decided by whether that changed the prompt, so conversation text cannot mask
+  an omission. The counter reads in one direction: non-zero means the
+  definitions were dropped, while 0 is **not** a promise that the model saw all
+  of them, because a template that renders only some of the tools still changes
+  the render. It is a per-request figure: a job reports what happened to its own
+  render, not what happened across whatever else was in flight beside it.
 - `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
   function name) controls whether a tool call is forced, allowed or disabled for
   a request that declares tools; a function name restricts the call to it.

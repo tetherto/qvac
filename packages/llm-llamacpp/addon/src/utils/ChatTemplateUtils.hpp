@@ -217,8 +217,17 @@ struct PromptRenderResult {
   /// must never be treated as a tool grammar.
   bool renderedByJinja = true;
 
-  /// True when the template rejected the tool definitions and the prompt was
-  /// rendered without them.
+  /// True when this render provably left the tool definitions out: either the
+  /// template raised on them and the tools-stripped retry produced the prompt,
+  /// or supplying the tools demonstrably did not change what was rendered.
+  ///
+  /// Read it in one direction only. `true` is a proof of omission — the flag
+  /// also clears `inputs.tools`, so it never fires on a guess. `false` is
+  /// *not* a promise that the model saw every definition: a template that
+  /// renders one of three tools, or names them in a form the prompt does not
+  /// carry verbatim, changes the render and so reports no drop. Answering that
+  /// needs the renderer to report what it consumed, which fabric does not
+  /// currently expose.
   bool toolDefinitionsDropped = false;
 };
 

@@ -761,6 +761,136 @@ TEST_F(ChatTemplateUtilsTest, GetPromptFlagsAToolsIgnoringJinjaTemplate) {
          "applied for definitions the model never read";
 }
 
+// The masking case, and the reason a substring scan cannot carry this flag on
+// its own: the *same* tools-ignoring template, with the tool's name occurring
+// in ordinary conversation text. A check that reads "the prompt names a tool,
+// so the tools were rendered" reports no drop here and tells the caller its
+// definitions were fine when the template never referenced them.
+//
+// A user can name a tool in prose, which is what this covers.
+// `GetPromptFlagsAMaskedNameFromReplayedToolCalls` below covers the shape that
+// makes masking routine rather than incidental.
+TEST_F(ChatTemplateUtilsTest, GetPromptFlagsAToolNameFromTheConversation) {
+  constexpr const char* kToolsIgnoringTemplate =
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, kToolsIgnoringTemplate);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.messages = {common_chat_msg{
+      /* role = */ "user",
+      /* content = */ "please call get_weather for Paris",
+  }};
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_TRUE(rendered.renderedByJinja);
+  EXPECT_NE(rendered.prompt.find("get_weather"), std::string::npos)
+      << "precondition: the name is in the prompt, from the user's text";
+  EXPECT_TRUE(rendered.toolDefinitionsDropped)
+      << "the template references tools nowhere; the name in the prompt came "
+         "from the conversation, not from a rendered definition";
+  EXPECT_TRUE(inputs.tools.empty())
+      << "a masked omission must strip the tools like any other omission";
+}
+
+// Masking as the *ordinary* case rather than an odd one, which is what
+// makes the substring scan untenable rather than merely imperfect.
+//
+// A tools-describing template whose definitions block is guarded on the
+// conversation shape (the QVAC-23251 shape again) renders the message
+// history either way. So the moment the loop takes its second turn, the
+// history replays `tool_calls[].name`, the prompt carries the tool's own
+// name, and the guard has still dropped every definition. Every
+// multi-turn tool conversation on such a template reaches this state; a
+// name-in-the-prompt check reports no drop for all of them.
+TEST_F(ChatTemplateUtilsTest, GetPromptFlagsAMaskedNameFromReplayedToolCalls) {
+  // Describes tools (so fabric applies no tool-call fallback of its own) and
+  // renders call history, but emits the definitions only for a user-first
+  // conversation.
+  // `<def>` rather than `<tool>` for the definitions: `tool` is also a message
+  // role, so `<{{ m.role }}>` would emit the same marker for the result turn.
+  constexpr const char* kUserFirstWithHistoryTemplate =
+      "{%- if messages[0].role == 'user' and tools %}"
+      "{%- for t in tools %}<def>{{ t.function.name }}</def>{%- endfor %}"
+      "{%- endif %}"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}"
+      "{%- for c in m.tool_calls %}<call>{{ c.function.name }}</call>"
+      "{%- endfor %}{%- endfor %}"
+      "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, kUserFirstWithHistoryTemplate);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_msg system;
+  system.role = "system";
+  system.content = "You are helpful.";
+  common_chat_msg ask;
+  ask.role = "user";
+  ask.content = "What is the weather in Paris?";
+  common_chat_msg call;
+  call.role = "assistant";
+  call.tool_calls = {common_chat_tool_call{
+      /* name = */ "get_weather",
+      /* arguments = */ R"({"city":"Paris"})",
+      /* id = */ "call_1",
+  }};
+  common_chat_msg result;
+  result.role = "tool";
+  result.tool_name = "get_weather";
+  result.content = "17C";
+
+  // System-first, so the guard drops the definitions for this render.
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.messages = {system, ask, call, result};
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_EQ(rendered.prompt.find("<def>"), std::string::npos)
+      << "precondition: the guard dropped the definitions: " << rendered.prompt;
+  EXPECT_NE(rendered.prompt.find("get_weather"), std::string::npos)
+      << "precondition: the replayed call still put the name in the prompt: "
+      << rendered.prompt;
+  EXPECT_TRUE(rendered.toolDefinitionsDropped)
+      << "a replayed tool call is not a rendered definition; removing the "
+         "tools leaves this prompt byte-identical: "
+      << rendered.prompt;
+  EXPECT_TRUE(inputs.tools.empty())
+      << "a masked omission must strip the tools like any other omission";
+}
+
+// The other direction of the same check, so the masking fix cannot be
+// satisfied by reporting a drop for everything: a template that really does
+// render the definitions, on a conversation that also names the tool. The
+// differential render is what separates this from the case above — removing
+// the tools changes this prompt and leaves the masked one identical.
+TEST_F(ChatTemplateUtilsTest, GetPromptFlagsAMaskedNameOnARenderingTemplate) {
+  constexpr const char* kToolsRenderingTemplate =
+      "{%- if tools %}{%- for t in tools %}<tool>{{ t.function.name }}</tool>"
+      "{%- endfor %}{%- endif %}"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, kToolsRenderingTemplate);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.messages = {common_chat_msg{
+      /* role = */ "user",
+      /* content = */ "please call get_weather for Paris",
+  }};
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_FALSE(rendered.toolDefinitionsDropped)
+      << "the template rendered <tool>get_weather</tool>; a conversation that "
+         "also names the tool must not turn that into a reported drop";
+  EXPECT_FALSE(inputs.tools.empty())
+      << "a rendered tool list must survive for the grammar to constrain";
+}
+
 // A tools-capable template that omits the definitions for *this* conversation.
 // The guard fires on a leading user turn, which fabric's own capability probe
 // supplies (common/jinja/caps.cpp feeds a synthetic user-first conversation),

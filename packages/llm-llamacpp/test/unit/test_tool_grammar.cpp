@@ -767,35 +767,70 @@ TEST_F(ToolGrammarModelTest, BatchToolChoiceIsHonouredPerSlot) {
   EXPECT_FALSE(results[2].empty())
       << "the none slot must complete rather than inherit a peer's grammar";
 
-  // Second wave over the now-freed sequence ids, with the two constrained
-  // choices swapped. This cannot fail today — `submitLocked` builds a fresh
-  // `SequenceDriver` per admission, so there is no object for a stale choice to
-  // survive in — and it is here to pin that lifecycle rather than to catch a
-  // live bug: driver pooling or a reused slot cache would break it first.
-  LlamaModel::Prompt reversedNamed = makePrompt(TWO_TOOLS_PROMPT);
-  reversedNamed.generationParams.tool_choice = "get_time";
-  reversedNamed.generationParams.reasoning_budget = 0;
-  LlamaModel::Prompt reversedRequired = makePrompt(TWO_TOOLS_PROMPT);
-  reversedRequired.generationParams.tool_choice = "required";
-  reversedRequired.generationParams.reasoning_budget = 0;
+  // Second wave over the now-freed sequence ids. This cannot fail today —
+  // `submitLocked` builds a fresh `SequenceDriver` per admission, so there is
+  // no object for a stale choice to survive in — and it is here to pin that
+  // lifecycle rather than to catch a live bug: driver pooling or a reused slot
+  // cache would break it first.
+  //
+  // Every transition below has to be *discriminating*: the assertion must fail
+  // if the previous wave's grammar survived. That rules out landing on the tool
+  // the prompt already asks for, because an unconstrained or stale-`required`
+  // slot reaches `get_time` on its own and the assertion would pass without the
+  // new choice being honoured at all.
+  //
+  //   slot 0  required -> named get_weather : a surviving `required` permits
+  //           both tools, and the prompt pulls it to `get_time`, so only a
+  //           fresh named grammar produces `get_weather`.
+  //   slot 1  named get_weather -> named get_time : two named grammars, each
+  //           of which hard-excludes the other's tool. Deterministic in both
+  //           directions regardless of what the model would have preferred.
+  LlamaModel::Prompt reusedRequiredSlot = makePrompt(TWO_TOOLS_PROMPT);
+  reusedRequiredSlot.generationParams.tool_choice = "get_weather";
+  reusedRequiredSlot.generationParams.reasoning_budget = 0;
+  LlamaModel::Prompt reusedNamedSlot = makePrompt(TWO_TOOLS_PROMPT);
+  reusedNamedSlot.generationParams.tool_choice = "get_time";
+  reusedNamedSlot.generationParams.reasoning_budget = 0;
 
   const auto second =
-      model->processPromptBatch({reversedNamed, reversedRequired, none});
+      model->processPromptBatch({reusedRequiredSlot, reusedNamedSlot, none});
   ASSERT_EQ(second.size(), 3u);
 
-  // Slot 0 carried `required` in the first wave and a name in the second: it
-  // must now be restricted, which a surviving `required` would not be.
-  const std::string reversedCall = firstToolCallBlock(second[0]);
-  ASSERT_FALSE(reversedCall.empty())
+  // Slot 0 carried `required` and now carries a name for the tool the prompt
+  // does not ask for. A surviving `required` grammar would call `get_time`.
+  const std::string wasRequired = firstToolCallBlock(second[0]);
+  ASSERT_FALSE(wasRequired.empty())
       << "the reused slot must honour its new named choice: " << second[0];
-  EXPECT_NE(reversedCall.find("get_time"), std::string::npos)
-      << "the reused slot called the wrong tool: " << reversedCall;
-  EXPECT_EQ(reversedCall.find("get_weather"), std::string::npos)
+  EXPECT_NE(wasRequired.find("get_weather"), std::string::npos)
+      << "the slot that carried `required` did not honour its new name; a "
+         "stale eager grammar would have reached the tool the prompt asks "
+         "for: "
+      << wasRequired;
+  EXPECT_EQ(wasRequired.find("get_time"), std::string::npos)
       << "the reused slot reached a tool its new choice excludes: "
-      << reversedCall;
-  EXPECT_TRUE(hasToolCallBlock(second[1]))
-      << "the slot that carried a name must honour `required` now: "
-      << second[1];
+      << wasRequired;
+
+  // Slot 1 goes named -> named. A surviving `get_weather` grammar cannot emit
+  // `get_time`, and a fresh `get_time` grammar cannot emit `get_weather`, so
+  // this discriminates whichever way the model would have leaned.
+  const std::string wasNamed = firstToolCallBlock(second[1]);
+  ASSERT_FALSE(wasNamed.empty())
+      << "the reused slot must honour its new named choice: " << second[1];
+  EXPECT_NE(wasNamed.find("get_time"), std::string::npos)
+      << "the slot that carried `get_weather` did not move to its new name: "
+      << wasNamed;
+  EXPECT_EQ(wasNamed.find("get_weather"), std::string::npos)
+      << "the previous wave's named grammar survived into the reused slot: "
+      << wasNamed;
+
+  // No output assertion for the `none` slot, deliberately. `tool_choice:
+  // "none"` drops the grammar but leaves the definitions in the prompt, so the
+  // model may still emit a call — `ToolChoiceNoneAppliesNoGrammar` asserts on
+  // the sampler for exactly that reason. Asserting the absence of a call here
+  // would be flaky rather than discriminating; there is no deterministic
+  // negative signal available for a `none` slot.
+  EXPECT_FALSE(second[2].empty())
+      << "the none slot must complete rather than inherit a peer's grammar";
 }
 
 // A rejected `tool_choice` must not cost the caller its warm cache. The throw
@@ -1220,6 +1255,28 @@ TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
 // nothing else, so a grammar and a reasoning-budget matcher advanced by the
 // cancelled request are still advanced afterwards. What has to hold is that the
 // next request inherits neither — not the cursor, not the constraint.
+//
+// Scope, and why this fixture is the right one. `rollbackCurrentRequest()` runs
+// two mechanisms in sequence: the state rollback, which is
+// architecture-specific, and the sampler reset, which is not. This test covers
+// the second — the only one this PR adds state to — and deliberately does not
+// re-cover the first. Qwen3-0.6B is pure attention, so the
+// `RecurrentStateSnapshot` restore path in `TextLlmContext.cpp` is not entered
+// here, and that path already has dedicated coverage on the Qwen3.5 hybrid
+// fixture in `test_cancel_rollback.cpp`:
+//
+//   * `SnapshotRestoreRoundtripQwen35Hybrid`     — the restore primitive
+//   * `OnCancelRestoresPreRequestSnapshotOnHybrid` — cancel restores the
+//                                                    pre-request checkpoint
+//   * `HybridModelSurvivesMidGenCancel`          — mid-generation cancel
+//   * `MidPrefillCancelRollsBackHybridCache`     — mid-prefill cancel
+//
+// A combined case — a live tool grammar driven through the full-state restore
+// path on the hybrid fixture — would be a stronger single regression than
+// either half, and the fixture is present to build it on. It is tracked
+// separately rather than added here: the two mechanisms run in sequence and
+// are independent, and each already has coverage, so the combination would
+// pin no behaviour that is unpinned today.
 //
 // `remove_thinking_from_context` is forced off so the cursor assertion reads
 // the cancel rollback rather than end-of-generation compaction, which moves
