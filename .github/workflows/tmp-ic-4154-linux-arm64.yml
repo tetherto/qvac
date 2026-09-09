@@ -1,0 +1,108 @@
+name: tmp-ic-4154 Linux arm64 investigation
+
+on:
+  push:
+    branches:
+      - tmp-ic-4154
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  test-linux-arm64:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
+    timeout-minutes: 360
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WORKDIR: packages/llm-llamacpp
+      MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      NO_GPU: "true"
+
+    steps:
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
+        with:
+          platform: linux
+          arch: arm64
+
+      - name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Setup AWS
+        uses: ./.github/actions/setup-aws-prebuild
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Setup vcpkg
+        uses: ./.github/actions/setup-vcpkg
+        with:
+          platform: linux
+          arch: arm64
+
+      - name: Clean mutable vcpkg state
+        shell: bash
+        run: |
+          rm -rf "$VCPKG_ROOT/buildtrees"/*
+          rm -rf "$VCPKG_ROOT/packages"/*
+
+      - name: Setup Vulkan SDK
+        uses: ./.github/actions/setup-vulkan-sdk
+        with:
+          platform: linux
+          arch: arm64
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Setup Bare tooling
+        uses: ./.github/actions/setup-bare-tooling
+        with:
+          extra-packages: brittle
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      - name: Build llm-llamacpp from source
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run build
+
+      - name: Run cache state machine three times
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx brittle -r test/integration/all.js test/integration/cache-state-machine.test.js
+
+          for attempt in 1 2 3; do
+            echo "cache-state-machine attempt ${attempt}/3"
+            set +e
+            bare test/integration/all.js --exit 2>&1 | tee "test-output-${attempt}.log"
+            test_exit=${PIPESTATUS[0]}
+            set -e
+            if [ "$test_exit" -ne 0 ]; then
+              exit "$test_exit"
+            fi
+          done
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: tmp-ic-4154-linux-arm64-${{ github.run_id }}
+          path: |
+            ${{ env.WORKDIR }}/test-output-*.log
+            ${{ env.VCPKG_ROOT }}/buildtrees/*/*.log
+          if-no-files-found: ignore
+          retention-days: 14

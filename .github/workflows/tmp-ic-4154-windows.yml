@@ -1,0 +1,104 @@
+name: tmp-ic-4154 Windows x64 investigation
+
+on:
+  push:
+    branches:
+      - tmp-ic-4154
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  test-windows-x64:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
+    timeout-minutes: 360
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WORKDIR: packages/llm-llamacpp
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
+        with:
+          platform: win32
+          arch: x64
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Setup AWS and Windows CLI
+        uses: ./.github/actions/setup-aws-prebuild
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Setup vcpkg
+        uses: ./.github/actions/setup-vcpkg
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: win32
+          arch: x64
+
+      - name: Clean mutable vcpkg state
+        shell: bash
+        run: |
+          rm -rf "$VCPKG_ROOT/buildtrees"/*
+          rm -rf "$VCPKG_ROOT/packages"/*
+
+      - name: Set Vulkan SDK path
+        shell: powershell
+        run: |
+          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PATH=C:\VulkanSDK\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup Bare tooling
+        uses: ./.github/actions/setup-bare-tooling
+        with:
+          shell_type: powershell
+          extra-packages: brittle
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      - name: Build llm-llamacpp from source
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run build
+
+      - name: Run affected integration tests
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          npx brittle -r test/integration/all.js `
+            test/integration/cache-state-machine.test.js `
+            test/integration/continuous-batching.test.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          & bare test/integration/all.js --exit 2>&1 | Tee-Object test-output.log
+          $testExit = $LASTEXITCODE
+          exit $testExit
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: tmp-ic-4154-windows-x64-${{ github.run_id }}
+          path: |
+            ${{ env.WORKDIR }}/test-output.log
+            ${{ env.VCPKG_ROOT }}/buildtrees/*/*.log
+          if-no-files-found: ignore
+          retention-days: 14
