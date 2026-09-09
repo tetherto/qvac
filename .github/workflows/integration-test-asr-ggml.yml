@@ -76,6 +76,18 @@ on:
         required: false
         default: "packages/asr-ggml"
         type: string
+    outputs:
+      # One entry per run-integration-tests matrix row, resolved through the
+      # same runner_names outputs the matrix rows use (matrix.runner ||
+      # matrix.os), so a runner-label rename cannot desynchronize the two.
+      # benchmark-performance-asr-ggml.yml feeds this to the aggregator's
+      # --expect-devices gate so a lane that loses its rtf-results artifact
+      # fails the summarize job instead of silently shrinking the report.
+      # Keep in step with the matrix `include` list below — the arity is
+      # asserted by scripts/perf-report/__tests__/rtf-expected-devices-guard.test.js.
+      rtf_expected_devices:
+        description: "Comma-separated device labels every RTF benchmark matrix row reports as"
+        value: ${{ format('{0},{1},{2},{3},{4},{5},{6},{7}', jobs.runner_names.outputs.linux_ubuntu2204_x64, jobs.runner_names.outputs.linux_ubuntu2204_x64_gpu, jobs.runner_names.outputs.linux_ubuntu2404_x64_gpu, jobs.runner_names.outputs.ubuntu_2604, jobs.runner_names.outputs.ubuntu_2404_arm, jobs.runner_names.outputs.macos_arm64_gpu, jobs.runner_names.outputs.macos_15_large, jobs.runner_names.outputs.win_2025_x64_gpu) }}
 
 jobs:
   runner_names:
@@ -546,7 +558,19 @@ jobs:
       # Runner-qualified artifact name: two same-platform runners (e.g.
       # qvac-ubuntu2204-x64 cpu-only and qvac-ubuntu2204-x64-gpu) would
       # otherwise collide on one artifact name.
+      #
+      # Two attempts. The retry exists for DATA RECOVERY: a transient upload
+      # failure (run 34062003154, CreateArtifact ETIMEDOUT on the darwin-arm64
+      # runner) silently dropped all 48 of that lane's rows from the
+      # consolidated report, and a second attempt keeps the report COMPLETE
+      # rather than merely flagged. Losing both attempts does not by itself
+      # turn the run red — this job runs with job-level continue-on-error —
+      # the summarize job's --expect-devices gate is what fails the run on a
+      # missing device. `if-no-files-found: error` instead of `warn` so a
+      # zero-file upload is loud; the verify step above already guarantees
+      # files exist on the happy path.
       - name: Upload RTF benchmark results
+        id: upload-rtf-results
         if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
         continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
@@ -554,7 +578,17 @@ jobs:
           name: rtf-results-asr-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
           path: packages/asr-ggml/benchmarks/results/rtf-benchmark-*.json
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
+
+      - name: Upload RTF benchmark results (retry)
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks && steps.upload-rtf-results.outcome == 'failure' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-asr-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
+          path: packages/asr-ggml/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: error
+          overwrite: true
 
       - name: Print run state (Unix)
         if: ${{ matrix.platform != 'win32' }}

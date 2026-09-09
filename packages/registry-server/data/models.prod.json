@@ -8677,6 +8677,39 @@
     "link": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
+    "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
+    "quantization": "f16",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "nemotron", "streaming", "ggml"],
+    "notes": "F16 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
+    "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
+    "quantization": "q4_0",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "nemotron", "streaming", "ggml"],
+    "notes": "Q4_0 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
+    "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "nemotron", "streaming", "ggml"],
+    "notes": "Q8_0 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/mmproj-F16.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Vision projector (mmproj) for Qwen3.8 Flash Next 177B",

@@ -5,16 +5,16 @@ option(ENABLE_COVERAGE "Enable coverage" OFF)
 
 # Vulkan / Metal / OpenCL are wired per-platform by the unconditional
 # speech-cpp dependencies in vcpkg.json. CUDA is opt-in because it needs
-# nvcc on the build host; the linux-x64 prebuild turns it on (the prebuild
-# workflow installs the toolkit) and the runtime needs only the NVIDIA
-# driver plus resolvable CUDA runtime libraries. On linux-x64 the cuda
-# feature flips the ggml-speech port into hybrid GGML_BACKEND_DL mode:
-# every backend (CPU variants, Vulkan, CUDA) arrives as a dlopen-able
-# MODULE .so that the loose-file pickup below stages next to the .bare,
-# and only the CUDA module carries CUDA DT_NEEDED entries, so hosts that
-# cannot resolve them skip it and fall back to Vulkan or CPU. No direct
-# CUDA linkage here (mirrors tts-ggml); nvcc's clang host-compiler setup
-# lives in vcpkg-overlays/toolchains/linux-clang.cmake.
+# nvcc on the build host; published prebuilds ship without it, and the
+# runtime needs only the NVIDIA driver plus resolvable CUDA runtime
+# libraries. On linux-x64, linux-arm64 and win32-x64 the cuda feature
+# flips the ggml-speech port into hybrid GGML_BACKEND_DL mode: every
+# backend (CPU variants, Vulkan, CUDA) arrives as a runtime-loadable
+# MODULE (.so / .dll) that the loose-file pickup below stages next to
+# the .bare, and only the CUDA module links the CUDA runtime, so hosts
+# that cannot resolve it skip it and fall back to Vulkan or CPU. No
+# direct CUDA linkage here (mirrors tts-ggml); nvcc's clang
+# host-compiler setup lives in vcpkg-overlays/toolchains/linux-clang.cmake.
 option(ASR_CUDA "Enable the CUDA GPU backend (requires nvcc on the build host)" OFF)
 
 if(BUILD_TESTING)
@@ -99,11 +99,11 @@ message(STATUS "Building asr-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}
 # both engines. Two branches:
 #   1. IMPORTED targets that `find_package(ggml)` already surfaced
 #      (CPU on Android, all backends on Linux desktop).
-#   2. Loose `libqvac-speech-ggml-*.so` MODULE files that ggml-config
-#      deliberately omits from GGML_AVAILABLE_BACKENDS' IMPORTED set
-#      (Vulkan + OpenCL on Android; CPU variants + Vulkan + CUDA on
-#      hybrid Linux builds (arm64, x64 with ASR_CUDA) — the loader
-#      picks them up at runtime via `ggml_backend_load_all_from_path()`).
+#   2. Loose MODULE files that ggml-config deliberately omits from
+#      GGML_AVAILABLE_BACKENDS' IMPORTED set (Vulkan + OpenCL on
+#      Android; CPU variants + Vulkan + CUDA on hybrid desktop builds:
+#      linux-arm64, linux-x64 / win32-x64 with ASR_CUDA) — the loader
+#      picks them up at runtime via `ggml_backend_load_all_from_path()`.
 # Hybrid-mode caveat: the ggml-speech vcpkg port builds Android with
 # GGML_BACKEND_DL=ON + GGML_CPU_STATIC=ON, so only the CPU backend
 # ships as a static archive AND as an IMPORTED ggml::ggml-cpu target;
@@ -121,20 +121,21 @@ endif()
 
 # Loose-file pickup for MODULE backends that aren't surfaced as
 # IMPORTED targets by find_package(ggml). Glob runs at configure time —
-# the .so files come from ggml-speech's `file(INSTALL ...)` step in its
-# portfile, which has already completed by the time vcpkg hands control
-# back to us. Apple / Windows static-only configs return an empty list
-# and skip the install rule.
+# the module files come from ggml-speech's portfile pickup into lib/
+# (.so on Linux/Android, .dll on Windows), which has already completed
+# by the time vcpkg hands control back to us. Apple / static-only
+# configs return an empty list and skip the install rule.
 set(BACKEND_DL_LOOSE_SOS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
+if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ASR_CUDA))
   if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
     message(WARNING "asr-ggml: VCPKG_INSTALLED_PATH "
       "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
-      "ggml backend .so pickup -- the runtime may fail to find "
+      "ggml backend module pickup -- the runtime may fail to find "
       "dynamically-loadable ggml backend modules.")
   else()
     file(GLOB BACKEND_DL_LOOSE_SOS
-      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so")
+      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so"
+      "${VCPKG_INSTALLED_PATH}/lib/qvac-speech-ggml-*.dll")
     foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
       message(STATUS "asr-ggml: will stage ggml backend ${_lib}")
     endforeach()
