@@ -348,12 +348,7 @@ bool applySplitDeviceSelection(
         "other.");
   }
   auto tensorSplit = hyphen != config.end() ? hyphen : underscore;
-  bool mappingChanged = selection.devices.size() != selection.sourceGpuCount;
-  for (size_t index = 0; !mappingChanged && index < selection.devices.size();
-       ++index) {
-    mappingChanged = selection.devices[index].sourceGpuIndex != index;
-  }
-  if (mappingChanged && tensorSplit != config.end()) {
+  if (tensorSplit != config.end()) {
     std::string normalized = tensorSplit->second;
     std::ranges::replace(normalized, '/', ',');
     std::vector<std::string> proportions;
@@ -361,7 +356,9 @@ bool applySplitDeviceSelection(
     for (std::string value; std::getline(values, value, ',');) {
       proportions.emplace_back(std::move(value));
     }
-    if (proportions.size() != selection.sourceGpuCount) {
+    if (proportions.size() == selection.devices.size()) {
+      tensorSplit->second = std::move(normalized);
+    } else if (proportions.size() != selection.sourceGpuCount) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
@@ -370,15 +367,16 @@ bool applySplitDeviceSelection(
               proportions.size(),
               selection.sourceGpuCount,
               selection.devices.size()));
-    }
-    std::string remapped;
-    for (const backend_selection::SplitDevice& device : selection.devices) {
-      if (!remapped.empty()) {
-        remapped += ',';
+    } else {
+      std::string remapped;
+      for (const backend_selection::SplitDevice& device : selection.devices) {
+        if (!remapped.empty()) {
+          remapped += ',';
+        }
+        remapped += proportions[device.sourceGpuIndex];
       }
-      remapped += proportions[device.sourceGpuIndex];
+      tensorSplit->second = std::move(remapped);
     }
-    tensorSplit->second = std::move(remapped);
   }
 
   params.devices.clear();
@@ -483,7 +481,9 @@ BertModelSetup setupParams(
       splitSelection = getSplitDeviceSelection();
       if (!splitSelection.devices.empty()) {
         chosenBackend = {BackendType::GPU, splitSelection.devices.front().name};
-        isOpenCl = splitSelection.devices.front().isOpenCl;
+        isOpenCl = std::ranges::any_of(
+            splitSelection.devices,
+            [](const SplitDevice& device) { return device.isOpenCl; });
       } else if (!splitSelection.rejectedDevices.empty()) {
         std::string message =
             "[BertModel] no eligible GPU backend found; rejected ";
