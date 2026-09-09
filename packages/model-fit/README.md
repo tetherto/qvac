@@ -55,12 +55,18 @@ const plan = fitParams({
 
 ### The memory projection
 
-`projection` explains the verdict in bytes: one row per device in registration
-order, then a final `"host"` row, each carrying `totalBytes`/`freeBytes` (the
-budget the verdict was judged against) and `modelBytes`/`contextBytes`/
-`computeBytes` (the projected demand at the **resolved** parameters). A
-`does-not-fit` with numbers shows how far it missed; a `fits` shows how much
-headroom the margin left.
+`projection` explains the verdict in bytes: one row per device the model was
+assigned to, in the order llama.cpp holds them (`llama_model_get_device`, the
+same index `tensorSplit` uses), then a final `"host"` row. Each row carries
+`totalBytes`/`freeBytes` (the budget the verdict was judged against) and
+`modelBytes`/`contextBytes`/`computeBytes` (the projected demand at the
+**resolved** parameters). A `does-not-fit` with numbers shows how far it
+missed; a `fits` shows how much headroom the margin left.
+
+The device rows are not `nDevices`. `nDevices` is `ggml_backend_dev_count()`
+and includes the CPU device, whose demand is folded into the `"host"` row, so
+`projection.length - 1` is usually `nDevices - 1`. Match rows by `name`, never
+by position against `nDevices`.
 
 It is present on SUCCESS and FAILURE, and absent in three cases a consumer must
 handle: an ERROR verdict, a result from an older addon or process runner, and a
@@ -418,7 +424,5 @@ returns a real projection rather than `ERROR`.
 - Narrow llama.cpp LLM path only. Multimodal `mmproj` GPU memory is **not**
   counted by the fitter yet (upstream issue) — projections under-count for
   VLM/OCR models, so treat those as "unknown".
-- The per-device MiB breakdown is only emitted to the log by llama.cpp
-  (`llama_memory_breakdown_print`); it is not exposed as data here. This addon
-  returns the actionable plan (layers / context / split), not the raw byte
-  breakdown.
+- The per-device byte breakdown (`projection`) comes from one extra no-alloc
+  probe after the fit, so a result costs roughly two probes instead of one.

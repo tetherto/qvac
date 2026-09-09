@@ -125,10 +125,15 @@ export interface FitDeviceInventory {
   /** Of those, how many are accelerators (GPU or iGPU). 0 means host-only. */
   nGpuDevices: number
   /**
-   * Per-device projected memory at the resolved parameters, ending with the
-   * host row. Populated on SUCCESS and FAILURE; empty on ERROR, and empty when
-   * the probe that produces it fails. Optional because results decoded from an
-   * older addon or process runner predate the field.
+   * Projected memory per device the model was assigned to, in the order
+   * llama.cpp holds them (`llama_model_get_device`, the index `tensorSplit`
+   * uses), ending with the host row. The device rows are not `nDevices`: the
+   * CPU device is counted there but its demand lands in the host row. Match
+   * rows by `name`, not by position against `nDevices`.
+   *
+   * Populated on SUCCESS and FAILURE; empty on ERROR, and empty when the probe
+   * that produces it fails. Optional because results decoded from an older
+   * addon or process runner predate the field.
    */
   projection?: FitProjectionRow[]
 }

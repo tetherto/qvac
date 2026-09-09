@@ -55,7 +55,10 @@ void captureProjection(
         hpNctTrain,
         hpNexpert,
         GGML_LOG_LEVEL_INFO);
-    // One row per device in `devs` order, then the host row.
+    // `devs` is the model's device list (`llama_model_get_device`), filled by
+    // the same probe that produced `rows`, so the zip cannot drift. It is not
+    // `nDevices` (`ggml_backend_dev_count`): the CPU device is counted there
+    // but its demand is folded into the trailing host row.
     if (rows.size() != devs.size() + 1) {
       return;
     }

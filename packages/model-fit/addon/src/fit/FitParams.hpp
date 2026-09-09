@@ -195,9 +195,11 @@ struct FitResult {
   /// means the projection is host-only and carries no GPU offload information.
   size_t nGpuDevices = 0;
 
-  /// Per-device projected memory at the resolved parameters, ending with the
-  /// host row. Populated on SUCCESS and FAILURE; empty on ERROR, and empty when
-  /// the probe that produces it fails.
+  /// Projected memory per device the model was assigned to, in
+  /// `llama_model_get_device` order (the index `tensorSplit` uses), ending with
+  /// the host row. Not `nDevices`: the CPU device is counted there but its
+  /// demand lands in the host row. Populated on SUCCESS and FAILURE; empty on
+  /// ERROR, and empty when the probe that produces it fails.
   std::vector<FitProjectionRow> projection;
 };
 
