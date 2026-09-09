@@ -214,6 +214,15 @@ public:
   forceNextSampledTokenInsideReasoningForTesting(llama_token token) noexcept {
     forcedNextSampledTokenForTesting_ = token;
   }
+  /// Forces this context's tools-dropped count, so a test can give a slot a
+  /// known value without needing a chat template that actually rejects tool
+  /// definitions — unreachable through the addon's config, since fabric
+  /// defaults `use_jinja` to true and `--chat-template` is not registered for
+  /// `LLAMA_EXAMPLE_COMMON`. Used to prove the count is reported per request
+  /// rather than aggregated across concurrent ones.
+  void forceToolDefinitionsDroppedForTesting(int32_t value) noexcept {
+    toolDefinitionsDropped_ = value;
+  }
   /// The live sampler, for tests that have to probe fabric-side sampler state
   /// no field on this class mirrors — the reasoning-budget matcher's, in
   /// particular. Null when a failed restore left the context without one.

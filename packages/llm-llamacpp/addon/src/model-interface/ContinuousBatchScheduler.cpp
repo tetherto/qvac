@@ -246,11 +246,8 @@ BatchResult ContinuousBatchScheduler::processBatch(
   });
   ensureWorkerStartedLocked();
   for (size_t i = 0; i < requests.size(); i++) {
-    pending_.enqueue(
-        QueuedRequest{
-            .request = std::move(requests[i]),
-            .group = group,
-            .outputIndex = i});
+    pending_.enqueue(QueuedRequest{
+        .request = std::move(requests[i]), .group = group, .outputIndex = i});
   }
   workCv_.notify_all();
   workCv_.wait(lock, [&group] { return group->done; });
@@ -388,9 +385,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             qvac_errors::general_error::InvalidArgument),
         "ContinuousBatchScheduler::submit: failed to add to batch "
         "(MultiRequestBatcher::AddStatus=" +
-            std::to_string(
-                static_cast<int>(
-                    MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
+            std::to_string(static_cast<int>(
+                MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
             ")");
   }
   const uint32_t seqId = *maybeSeqId;
@@ -406,9 +402,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             qvac_errors::general_error::InvalidArgument),
         "ContinuousBatchScheduler::submit: failed to add to batch "
         "(MultiRequestBatcher::AddStatus=" +
-            std::to_string(
-                static_cast<int>(
-                    MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
+            std::to_string(static_cast<int>(
+                MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
             ")");
   }
   std::unique_ptr<SequenceDriver> driver = driverFactory_(
@@ -524,18 +519,17 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   if (queued.group) {
     queued.group->admittedCount++;
   }
-  slots_[seqId].emplace(
-      SlotState{
-          .streams = std::move(streamsLocal),
-          .driver = std::move(driver),
-          .cacheKey = std::move(request.cacheKey),
-          .group = std::move(queued.group),
-          .outputIndex = queued.outputIndex,
-          .saveCacheToDisk = request.saveCacheToDisk,
-          .activeCacheSavedToDisk = isCacheLoaded,
-          .prefillOnly = request.prefill,
-          .enqueuedAt = request.enqueuedAt,
-          .admissionId = admissionId});
+  slots_[seqId].emplace(SlotState{
+      .streams = std::move(streamsLocal),
+      .driver = std::move(driver),
+      .cacheKey = std::move(request.cacheKey),
+      .group = std::move(queued.group),
+      .outputIndex = queued.outputIndex,
+      .saveCacheToDisk = request.saveCacheToDisk,
+      .activeCacheSavedToDisk = isCacheLoaded,
+      .prefillOnly = request.prefill,
+      .enqueuedAt = request.enqueuedAt,
+      .admissionId = admissionId});
   cacheGuard.dismiss();
   // A true return means the caller already holds a cancel for this request:
   // tear the slot down before it ever decodes.
@@ -552,14 +546,13 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     if (slots_[seqId]->group && slots_[seqId]->group->totalCount > 1) {
       failGroupLocked(
           slots_[seqId]->group,
-          std::make_exception_ptr(
-              qvac_errors::StatusError(
-                  ADDON_ID,
-                  qvac_lib_inference_addon_llama::errors::toString(
-                      qvac_lib_inference_addon_llama::errors::Cancelled),
-                  "ContinuousBatchScheduler: request cancelled before it "
-                  "could run (queued behind the parallel limit when its "
-                  "group was cancelled)")));
+          std::make_exception_ptr(qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_lib_inference_addon_llama::errors::toString(
+                  qvac_lib_inference_addon_llama::errors::Cancelled),
+              "ContinuousBatchScheduler: request cancelled before it "
+              "could run (queued behind the parallel limit when its "
+              "group was cancelled)")));
     }
     // Not covered by failGroupLocked when the group was already settled by
     // an earlier refusal (its early-out skips the teardown loop), so tear
@@ -714,9 +707,8 @@ ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() noexcept {
       try {
         QLOG_IF(
             Priority::ERROR,
-            std::string(
-                "[ContinuousBatch] fatal: unrecoverable failure "
-                "reacquiring scheduler mutex, aborting: ") +
+            std::string("[ContinuousBatch] fatal: unrecoverable failure "
+                        "reacquiring scheduler mutex, aborting: ") +
                 e.what());
       } catch (...) {
       }
@@ -888,12 +880,11 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       }
     }
 
-    auto decodeError = std::make_exception_ptr(
-        qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_lib_inference_addon_llama::errors::toString(
-                qvac_lib_inference_addon_llama::errors::FailedToDecode),
-            "llama_decode returned non-zero: " + std::to_string(decodeRc)));
+    auto decodeError = std::make_exception_ptr(qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::FailedToDecode),
+        "llama_decode returned non-zero: " + std::to_string(decodeRc)));
 
     for (const auto& group : affectedGroups) {
       failGroupLocked(group, decodeError);
@@ -1204,14 +1195,13 @@ void ContinuousBatchScheduler::applyGroupQueuedCancelLocked(
   // next frees.
   failGroupLocked(
       group,
-      std::make_exception_ptr(
-          qvac_errors::StatusError(
-              ADDON_ID,
-              qvac_lib_inference_addon_llama::errors::toString(
-                  qvac_lib_inference_addon_llama::errors::Cancelled),
-              "ContinuousBatchScheduler: request cancelled before it "
-              "could run (queued behind the parallel limit when its "
-              "group was cancelled)")));
+      std::make_exception_ptr(qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_lib_inference_addon_llama::errors::toString(
+              qvac_lib_inference_addon_llama::errors::Cancelled),
+          "ContinuousBatchScheduler: request cancelled before it "
+          "could run (queued behind the parallel limit when its "
+          "group was cancelled)")));
 }
 
 void ContinuousBatchScheduler::recordPendingGroupCancel(
@@ -1452,14 +1442,13 @@ void ContinuousBatchScheduler::cancelPendingLocked() {
     if (queued.group) {
       failGroupLocked(
           queued.group,
-          std::make_exception_ptr(
-              qvac_errors::StatusError(
-                  ADDON_ID,
-                  qvac_lib_inference_addon_llama::errors::toString(
-                      qvac_lib_inference_addon_llama::errors::Cancelled),
-                  "ContinuousBatchScheduler: request cancelled before it "
-                  "could run (queued behind the parallel limit when cancel "
-                  "was requested)")));
+          std::make_exception_ptr(qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_lib_inference_addon_llama::errors::toString(
+                  qvac_lib_inference_addon_llama::errors::Cancelled),
+              "ContinuousBatchScheduler: request cancelled before it "
+              "could run (queued behind the parallel limit when cancel "
+              "was requested)")));
     }
   }
 }
@@ -1576,6 +1565,11 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
   for (const ObservedRequestStats& stats : all) {
     agg.generatedTokens += stats.generatedTokens;
     agg.promptTokens += stats.promptTokens;
+    // Summed like the token counts rather than averaged: a multi-item group's
+    // caller asked one question, and "two of my renders dropped their tools"
+    // is the honest answer to it.
+    agg.thinkingBlockDiscards += stats.thinkingBlockDiscards;
+    agg.toolDefinitionsDropped += stats.toolDefinitionsDropped;
     // Kept only while every request reports the same reason: a one-item group
     // (the concurrent single-prompt path) keeps it, a mixed group drops it.
     if (&stats == &all.front()) {
@@ -1634,8 +1628,16 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
   // request's observed end-to-end figures for its submitter, next to its
   // output.
   if (slot.group) {
-    slot.group->requestStats[slot.outputIndex] =
+    ObservedRequestStats observed =
         computeObservedStats(slot.enqueuedAt, req, stopReason);
+    // Set here rather than inside `computeObservedStats`, which is a pure
+    // function of the request's own stamps: these two come off the slot driver,
+    // which only this function holds. The same two values also go into the
+    // scheduler-wide accumulator above — that copy stays, for the whole-model
+    // `runtimeStats()` read.
+    observed.thinkingBlockDiscards = thinkingDiscards;
+    observed.toolDefinitionsDropped = toolsDropped;
+    slot.group->requestStats[slot.outputIndex] = std::move(observed);
   }
 }
 

@@ -511,6 +511,11 @@ TEST_F(
   // generation-params restore so the assertions below can still see the
   // sampler the accept was gated on.
   config_["reasoning-budget"] = "64";
+  // The fixture's 96 does not reach the call: after the synthetic close the
+  // model spends what is left restating the request in prose and runs out
+  // mid-sentence. 512 lets it finish and emit the call, which is what makes
+  // the end-to-end assertion at the bottom possible.
+  config_["n_predict"] = "512";
   auto model = createModel();
   ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr)
       << "this test must exercise the long-lived single-prompt context";
@@ -588,6 +593,22 @@ TEST_F(
   EXPECT_TRUE(
       qvac_lib_inference_addon_llama::utils::reasoningBudgetSamplerBuilt(s))
       << "without a budget sampler the accept is skipped as unsafe";
+
+  // And the end of the contract, which the sampler probe alone does not
+  // reach: the request goes on to arm the lazy grammar on `<tool_call>` and
+  // emit a call the grammar admits. A recovered request that could no longer
+  // be constrained would still satisfy every assertion above.
+  const std::string call = firstToolCallBlock(output);
+  ASSERT_FALSE(call.empty())
+      << "no tool call after the recovery, so the lazy grammar was never "
+         "armed: "
+      << output;
+  EXPECT_NE(call.find("get_weather"), std::string::npos)
+      << "the call must name the one declared tool: " << call;
+  EXPECT_NE(call.find("\"city\""), std::string::npos)
+      << "the grammar admits only the declared argument shape, whose one "
+         "required property is `city`: "
+      << call;
 }
 
 // `onLogitsReady` reaches the substitution through its own inline branch when
@@ -604,6 +625,9 @@ TEST_F(
   }
   config_["parallel"] = "2";
   config_["reasoning-budget"] = "64";
+  // See the single-prompt twin: the recovered slot needs room to finish its
+  // prose and reach the call.
+  config_["n_predict"] = "512";
   auto model = createModel();
   auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr) << "parallel=2 must build the scheduler";
@@ -670,6 +694,19 @@ TEST_F(
   EXPECT_FALSE(budgetStillCounting)
       << "this slot's reasoning-budget matcher was still COUNTING after the "
          "close, so the substituted close never reached its sampler";
+
+  // Same end-of-contract assertion as the single-prompt twin: the recovered
+  // slot must go on to arm its lazy grammar and complete a call the grammar
+  // admits, while its sibling is still running.
+  const std::string call = firstToolCallBlock(streamed);
+  ASSERT_FALSE(call.empty())
+      << "the recovered slot never entered a tool call, so its lazy grammar "
+         "was never armed: "
+      << streamed;
+  EXPECT_NE(call.find("get_weather"), std::string::npos)
+      << "the call must name the one declared tool: " << call;
+  EXPECT_NE(call.find("\"city\""), std::string::npos)
+      << "the grammar admits only the declared argument shape: " << call;
 }
 
 // `BatchToolGrammarIsPerRequest` above proves a tool grammar does not cross
@@ -729,6 +766,36 @@ TEST_F(ToolGrammarModelTest, BatchToolChoiceIsHonouredPerSlot) {
 
   EXPECT_FALSE(results[2].empty())
       << "the none slot must complete rather than inherit a peer's grammar";
+
+  // Second wave over the now-freed sequence ids, with the two constrained
+  // choices swapped. This cannot fail today — `submitLocked` builds a fresh
+  // `SequenceDriver` per admission, so there is no object for a stale choice to
+  // survive in — and it is here to pin that lifecycle rather than to catch a
+  // live bug: driver pooling or a reused slot cache would break it first.
+  LlamaModel::Prompt reversedNamed = makePrompt(TWO_TOOLS_PROMPT);
+  reversedNamed.generationParams.tool_choice = "get_time";
+  reversedNamed.generationParams.reasoning_budget = 0;
+  LlamaModel::Prompt reversedRequired = makePrompt(TWO_TOOLS_PROMPT);
+  reversedRequired.generationParams.tool_choice = "required";
+  reversedRequired.generationParams.reasoning_budget = 0;
+
+  const auto second =
+      model->processPromptBatch({reversedNamed, reversedRequired, none});
+  ASSERT_EQ(second.size(), 3u);
+
+  // Slot 0 carried `required` in the first wave and a name in the second: it
+  // must now be restricted, which a surviving `required` would not be.
+  const std::string reversedCall = firstToolCallBlock(second[0]);
+  ASSERT_FALSE(reversedCall.empty())
+      << "the reused slot must honour its new named choice: " << second[0];
+  EXPECT_NE(reversedCall.find("get_time"), std::string::npos)
+      << "the reused slot called the wrong tool: " << reversedCall;
+  EXPECT_EQ(reversedCall.find("get_weather"), std::string::npos)
+      << "the reused slot reached a tool its new choice excludes: "
+      << reversedCall;
+  EXPECT_TRUE(hasToolCallBlock(second[1]))
+      << "the slot that carried a name must honour `required` now: "
+      << second[1];
 }
 
 // A rejected `tool_choice` must not cost the caller its warm cache. The throw
@@ -786,6 +853,36 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
       << "the key must still be usable after the rejection";
   EXPECT_GT(test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0)
       << "the follow-up re-prefilled from empty instead of the checkpoint";
+
+  // The other half, and a genuinely different path: everything above runs
+  // against an already-active session, where `handleCache` short-circuits on
+  // `sessionPath_ == cacheKey`. A checkpoint restored from disk goes through
+  // `loadCache` instead — a fresh model on the same key. Same rejection, same
+  // guarantee.
+  const auto persistedSize = fs::file_size(cacheKey);
+  const auto persistedWrite = fs::last_write_time(cacheKey);
+  auto reloaded = createModel();
+
+  LlamaModel::Prompt rejectedAfterLoad = makePrompt(TOOL_PROMPT);
+  rejectedAfterLoad.cacheKey = cacheKey;
+  rejectedAfterLoad.saveCacheToDisk = true;
+  rejectedAfterLoad.generationParams.tool_choice = "notDeclared";
+  EXPECT_THROW(
+      reloaded->processPrompt(rejectedAfterLoad), qvac_errors::StatusError);
+
+  EXPECT_EQ(fs::file_size(cacheKey), persistedSize)
+      << "the rejection overwrote a checkpoint it had only loaded";
+  EXPECT_TRUE(fs::last_write_time(cacheKey) == persistedWrite)
+      << "the rejection rewrote a checkpoint it had only loaded";
+
+  LlamaModel::Prompt loadedFollowUp = makePrompt(TOOL_PROMPT);
+  loadedFollowUp.cacheKey = cacheKey;
+  loadedFollowUp.saveCacheToDisk = true;
+  EXPECT_FALSE(reloaded->processPrompt(loadedFollowUp).empty())
+      << "a checkpoint loaded from disk must survive the rejection too";
+  EXPECT_GT(
+      test_common::getStatValue(reloaded->runtimeStats(), "CacheTokens"), 0)
+      << "the reloaded follow-up re-prefilled from empty";
 
   fs::remove_all(cacheDir);
 }
@@ -1056,4 +1153,63 @@ TEST_F(ToolGrammarModelTest, MtmdBatchReasoningEOSRecoveryKeepsSlotAlive) {
   EXPECT_FALSE(budgetStillCounting)
       << "this multimodal slot's reasoning-budget matcher was still COUNTING "
          "after the close";
+}
+
+// The interaction this PR actually introduced between the two features:
+// EOS substitution seeds the compactor itself (`recordCloseMarkerForReplay` +
+// `requestCloseCapture` at each substitution site) because the substituted
+// close never passes through the `updateReasoningBuffer` handshake that
+// normally trips capture. Get that wrong and `compactThinkSpan` bails at
+// `end < 0` — the discard silently does not happen — or, worse, the replay
+// restores a prefix that opens a `<think>` nothing closes, which only shows up
+// on the *next* request from that cache. So this drives a synthetic close with
+// compaction on, persists the cache, and then reuses it.
+TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  const fs::path cacheDir = "synthetic_close_cache_dir";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
+
+  config_["reasoning-budget"] = "64";
+  config_["n_predict"] = "512";
+  auto model = createModel();
+  auto* textContext =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(textContext, nullptr);
+  const llama_token eos =
+      llama_vocab_eos(llama_model_get_vocab(textContext->getModel()));
+  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
+
+  LlamaModel::Prompt first = makePrompt(THINKING_TOOL_PROMPT);
+  first.cacheKey = cacheKey;
+  first.saveCacheToDisk = true;
+  first.generationParams.remove_thinking_from_context = true;
+  textContext->forceNextSampledTokenInsideReasoningForTesting(eos);
+
+  const std::string output = model->processPrompt(first);
+  ASSERT_NE(output.find(THINK_CLOSE_TAG), std::string::npos)
+      << "EOS must be replaced by the cached close tag: " << output;
+  EXPECT_GT(
+      test_common::getStatValue(model->runtimeStats(), "thinkingBlockDiscards"),
+      0)
+      << "the substituted close must reach the compactor, or the span end "
+         "stays unset and nothing is discarded: "
+      << output;
+  ASSERT_TRUE(fs::exists(cacheKey)) << "the cache must have been persisted";
+
+  // The part a discard assertion alone cannot catch: a compaction that
+  // rewound to an unbalanced prefix leaves a cache whose next turn is broken,
+  // not one that fails now.
+  LlamaModel::Prompt followUp = makePrompt(THINKING_TOOL_PROMPT);
+  followUp.cacheKey = cacheKey;
+  followUp.saveCacheToDisk = true;
+  followUp.generationParams.remove_thinking_from_context = true;
+  EXPECT_FALSE(model->processPrompt(followUp).empty())
+      << "the cache left behind by a compacted synthetic close must still be "
+         "usable";
+
+  fs::remove_all(cacheDir);
 }

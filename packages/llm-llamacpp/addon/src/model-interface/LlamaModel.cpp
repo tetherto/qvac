@@ -876,11 +876,20 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       {"CacheTokens", stats.cacheTokens},
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
-      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
-      {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
+      // Both from `observed`, not the aggregate: the aggregate is
+      // `group->stats = stats_`, a copy of the scheduler-wide accumulator, so
+      // under overlapping top-level `run()` calls it reports a peer's figures
+      // as this job's. `toolDefinitionsDropped` cannot tolerate that at all —
+      // it answers "did *my* render lose its tools", which is what the SDK
+      // consumes in place of a heuristic (QVAC-23460) — and
+      // `thinkingBlockDiscards` moves with it rather than leaving two adjacent
+      // stats on different attribution rules.
+      {"thinkingBlockDiscards", observed.thinkingBlockDiscards},
+      {"toolDefinitionsDropped", observed.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted, matching
       // batchRuntimeStatsLocked: concurrent prompts share the one
       // per-context accumulator, so a per-job value would be misattributed.
+      // Unlike the two above, those have no per-slot source to move to.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
   // Unlike the vision counters, the stop reason IS per-sequence, so a job can

@@ -19,7 +19,9 @@
   emits truncate ordinary content.
 - `RuntimeStats.toolDefinitionsDropped` reports renders where the template
   rejected the tool definitions, or where the prompt was rendered without a
-  Jinja template, and the model therefore never saw the tools.
+  Jinja template, and the model therefore never saw the tools. It is a
+  per-request figure: a job reports what happened to its own render, not what
+  happened across whatever else was in flight beside it.
 - `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
   function name) controls whether a tool call is forced, allowed or disabled for
   a request that declares tools; a function name restricts the call to it.
@@ -83,6 +85,13 @@
   generation after a single token. Only relevant to a user-supplied template
   that emits one, since no template shipped by a qvac package populates the
   field at all.
+- `RuntimeStats.thinkingBlockDiscards` on a completed job is now that job's own
+  count rather than a batch-wide total. Both it and the new
+  `toolDefinitionsDropped` were read from the scheduler's shared accumulator,
+  which is copied into every job's terminal snapshot — so with several requests
+  in flight each one was told the sum of all of them. Only the per-job
+  (`jobEnded`) figures change; a whole-model `runtimeStats()` read is still the
+  aggregate it always was.
 - Upstream chat-template render errors and sampler-rebuild failures are
   sanitised and length-capped before they reach the log, as caller-supplied
   values already were. A model-supplied template controls that text, so it

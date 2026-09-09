@@ -334,6 +334,27 @@ TEST(ObservedRequestStats, GroupAggregateAveragesActiveAndSumsCounts) {
   EXPECT_EQ(agg.promptTokens, 35);
 }
 
+// The two per-slot counters sum like the token counts rather than averaging:
+// a group's caller asked one question, and "two of my renders dropped their
+// tools" is the honest answer to it. Summing is also what leaves a one-item
+// group — the concurrent single-prompt path — reporting its own figure
+// unchanged.
+TEST(ObservedRequestStats, GroupAggregateSumsPerSlotCounters) {
+  const std::vector<ObservedRequestStats> group{
+      {.thinkingBlockDiscards = 2, .toolDefinitionsDropped = 1},
+      {.thinkingBlockDiscards = 3, .toolDefinitionsDropped = 0},
+      {.thinkingBlockDiscards = 0, .toolDefinitionsDropped = 1}};
+
+  const ObservedRequestStats agg = aggregateObservedStats(group);
+  EXPECT_EQ(agg.thinkingBlockDiscards, 5);
+  EXPECT_EQ(agg.toolDefinitionsDropped, 2);
+
+  const ObservedRequestStats single = aggregateObservedStats(
+      {{.thinkingBlockDiscards = 4, .toolDefinitionsDropped = 1}});
+  EXPECT_EQ(single.thinkingBlockDiscards, 4);
+  EXPECT_EQ(single.toolDefinitionsDropped, 1);
+}
+
 TEST(ObservedRequestStats, GroupAggregateOfNothingIsZero) {
   const ObservedRequestStats agg = aggregateObservedStats({});
   EXPECT_DOUBLE_EQ(agg.ttftMs, 0.0);
