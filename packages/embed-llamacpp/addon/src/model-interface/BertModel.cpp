@@ -89,7 +89,7 @@ void batchDecode(
             toString(FailedToGetTokenEmbeddings),
             "Failed to get token embeddings");
       }
-    else {
+    } else {
       // try to get sequence embeddings - supported only when pooling_type is
       // not NONE
       embd = llama_get_embeddings_seq(
