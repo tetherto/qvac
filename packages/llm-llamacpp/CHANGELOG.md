@@ -67,6 +67,27 @@
   budget sampler is what keeps a lazy tool grammar from arming inside the
   reasoning block, so without it a `<tool_call>` written inside `<think>`
   constrained the rest of the reasoning to tool-call syntax.
+- `reasoning_budget` is now enforced on every request, not only the first, for
+  models whose chat template force-opens the reasoning channel (a prompt ending
+  in `<think>`). The reasoning-budget matcher is stateful and survives a
+  request; it re-arms on its own when the *model* emits the opening tag, which
+  is why the Qwen3 family was unaffected, but a force-opened channel gives it no
+  tag to re-arm on and the second request onwards ran uncapped.
+- A failed multimodal request no longer costs the *next* one its turn. Media is
+  staged on the model's vision context and consumed when the prompt is
+  tokenized, so a request that failed in between — an invalid per-request
+  `grammar` or `json_schema`, among others — left its image behind, and the
+  following image request was then rejected outright for carrying more images
+  than its prompt had markers.
+- An empty string in a chat template's `additional_stops` no longer ends every
+  generation after a single token. Only relevant to a user-supplied template
+  that emits one, since no template shipped by a qvac package populates the
+  field at all.
+- Upstream chat-template render errors and sampler-rebuild failures are
+  sanitised and length-capped before they reach the log, as caller-supplied
+  values already were. A model-supplied template controls that text, so it
+  could previously forge log lines or, for a large template, write one very
+  large record per failing request.
 
 ## [0.51.0] - 2026-09-08
 

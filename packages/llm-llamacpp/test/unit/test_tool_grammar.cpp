@@ -789,3 +789,234 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   fs::remove_all(cacheDir);
 }
+
+// The other half of the media-leak story, and the half `validateToolChoice`
+// cannot cover. Media is staged before `tokenizeChat`, which drains it, so
+// every way of leaving this request that skips the drain leaks a bitmap —
+// `requireSampler()` and `requireToolChoiceHonoured()` inside `tokenizeChat`
+// ahead of `mtmd_tokenize`, a throw out of `applyGenerationParams`, and the
+// no-messages early return. `resetState` does not touch `bitmaps_`, so the
+// catch-all does not clean up either.
+//
+// `requireToolChoiceHonoured` is the reachable one: with Jinja off the legacy
+// renderer silently ignores the tool definitions, so `toolDefinitionsDropped`
+// is true and a `"required"` choice cannot be honoured. Note the missing
+// `tools=true` below, which is what turns Jinja off.
+TEST_F(ToolGrammarModelTest, PreDrainThrowLeavesNoMediaBehind) {
+  using MP = test_common::TestModelPath;
+  MP qwen35(
+      "Qwen3.5-0.8B-Q8_0.gguf",
+      "QWEN35_MODEL_PATH",
+      MP::OnMissing::Skip,
+      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
+  MP mmproj(
+      "mmproj-Qwen3.5-0.8B-F16.gguf",
+      "QWEN35_MMPROJ_PATH",
+      MP::OnMissing::Skip,
+      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
+  if (!qwen35.found() || !mmproj.found()) {
+    GTEST_SKIP() << qwen35.missingMessage() << "; " << mmproj.missingMessage();
+  }
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    GTEST_SKIP() << "multimodal test image not found at " << imagePath;
+  }
+
+  std::unordered_map<std::string, std::string> config = config_;
+  config["ctx_size"] = "8192";
+  auto model = std::make_unique<LlamaModel>(
+      std::string(qwen35.path), std::string(mmproj.path), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  auto* mtmdContext =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(mtmdContext, nullptr);
+
+  // An unparseable per-request grammar: `applyGenerationParams` rejects it via
+  // `common_sampler_init` after `resolveChatAndTools` has staged the bitmap and
+  // before `tokenizeChat` is entered. One guard covers this and the throws
+  // inside `tokenizeChat`, so exercising the cheap one proves the mechanism;
+  // the expensive ones need a template that rejects tool definitions, which no
+  // model in the unit-test set ships.
+  LlamaModel::Prompt rejected = makePrompt(MEDIA_TOOL_PROMPT);
+  rejected.media.push_back(readBinaryFile(imagePath));
+  rejected.generationParams.grammar = "root ::= ((((";
+  // `EXPECT_ANY_THROW`, not `EXPECT_THROW(..., StatusError)`: on this path the
+  // GBNF parse failure escapes as fabric's own `std::runtime_error("failed to
+  // parse grammar")` rather than a mapped `StatusError`, unlike the batch
+  // path's `submitLocked`, which maps it. Not this test's subject — what
+  // matters here is only that the request left by *some* throw.
+  EXPECT_ANY_THROW(model->processPrompt(rejected));
+
+  EXPECT_EQ(MtmdLlmContextTestPeer::loadedMediaCount(*mtmdContext), 0u)
+      << "a throw between staging and the tokenizeChat drain left the bitmap "
+         "behind";
+
+  // The consequence: without the guard the next image request dies in
+  // `mtmd_tokenize` with two bitmaps for one marker.
+  LlamaModel::Prompt accepted = makePrompt(MEDIA_TOOL_PROMPT);
+  accepted.media.push_back(readBinaryFile(imagePath));
+  EXPECT_FALSE(model->processPrompt(accepted).empty());
+  EXPECT_EQ(MtmdLlmContextTestPeer::loadedMediaCount(*mtmdContext), 0u);
+}
+
+// Multimodal twin of
+// `ReasoningEOSInsideThinkingIsReplacedAndGenerationContinues`. The two
+// contexts duplicate the EOS-substitution recovery rather than sharing it, so a
+// divergence between them is precisely what a text-only test cannot see.
+// Single-prompt path: `MtmdLlmContext::generateResponse` samples its own
+// tokens, separately from `onLogitsReady`.
+TEST_F(ToolGrammarModelTest, MtmdReasoningEOSInsideThinkingIsReplaced) {
+  using MP = test_common::TestModelPath;
+  MP qwen35(
+      "Qwen3.5-0.8B-Q8_0.gguf",
+      "QWEN35_MODEL_PATH",
+      MP::OnMissing::Skip,
+      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
+  MP mmproj(
+      "mmproj-Qwen3.5-0.8B-F16.gguf",
+      "QWEN35_MMPROJ_PATH",
+      MP::OnMissing::Skip,
+      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
+  if (!qwen35.found() || !mmproj.found()) {
+    GTEST_SKIP() << qwen35.missingMessage() << "; " << mmproj.missingMessage();
+  }
+
+  std::unordered_map<std::string, std::string> config = config_;
+  config["ctx_size"] = "8192";
+  config["reasoning-budget"] = "64";
+  auto model = std::make_unique<LlamaModel>(
+      std::string(qwen35.path), std::string(mmproj.path), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+  ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr)
+      << "this test must exercise the single-prompt path";
+
+  auto* mtmdContext =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(mtmdContext, nullptr);
+  const llama_token eos =
+      llama_vocab_eos(llama_model_get_vocab(mtmdContext->getModel()));
+  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
+
+  mtmdContext->forceNextSampledTokenInsideReasoningForTesting(eos);
+
+  // Probed on the piece that CARRIES the close, not the one after it, and the
+  // difference is a real divergence between the two contexts rather than a
+  // detail of this test: `MtmdLlmContext` accepts the substituted token before
+  // streaming it, where `TextLlmContext::handleReasoningEOS` streams first and
+  // accepts after. Probing "the piece after the close" — correct for the text
+  // twin — never fires here, because this path also `break`s out of generation
+  // at the close instead of banning EOG for one token and continuing.
+  std::string streamed;
+  bool probed = false;
+  bool budgetStillCounting = false;
+  LlamaModel::Prompt prompt = makePrompt(THINKING_TOOL_PROMPT);
+  prompt.outputCallback = [&](const std::string& piece) {
+    streamed += piece;
+    if (!probed && streamed.find(THINK_CLOSE_TAG) != std::string::npos) {
+      probed = true;
+      budgetStillCounting = common_sampler_reasoning_budget_force(
+          mtmdContext->samplerForTesting());
+    }
+  };
+  model->processPrompt(prompt);
+
+  ASSERT_NE(streamed.find(THINK_CLOSE_TAG), std::string::npos)
+      << "EOS must be replaced by the cached close tag: " << streamed;
+
+  ASSERT_TRUE(probed) << "the close was never streamed: " << streamed;
+  EXPECT_FALSE(budgetStillCounting)
+      << "the multimodal context's reasoning-budget matcher was still "
+         "COUNTING after the close, so its substituted close never reached "
+         "its sampler";
+}
+
+// And the multimodal scheduler path, `MtmdLlmContext::onLogitsReady`. Nothing
+// in this suite had run a multimodal model under the scheduler before, though
+// nothing prevented it: `isMultiBatchActivated` is `llama_n_seq_max(ctx) > 1`
+// with no multimodal exclusion, so `buildDriverFactory` hands out
+// `MtmdLlmContext` drivers whenever an mmproj model is loaded with parallel
+// >= 2. The first assertion below is that harness fact.
+TEST_F(ToolGrammarModelTest, MtmdBatchReasoningEOSRecoveryKeepsSlotAlive) {
+  using MP = test_common::TestModelPath;
+  MP qwen35(
+      "Qwen3.5-0.8B-Q8_0.gguf",
+      "QWEN35_MODEL_PATH",
+      MP::OnMissing::Skip,
+      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
+  MP mmproj(
+      "mmproj-Qwen3.5-0.8B-F16.gguf",
+      "QWEN35_MMPROJ_PATH",
+      MP::OnMissing::Skip,
+      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
+  if (!qwen35.found() || !mmproj.found()) {
+    GTEST_SKIP() << qwen35.missingMessage() << "; " << mmproj.missingMessage();
+  }
+
+  std::unordered_map<std::string, std::string> config = config_;
+  config["ctx_size"] = "8192";
+  config["parallel"] = "2";
+  config["reasoning-budget"] = "64";
+  auto model = std::make_unique<LlamaModel>(
+      std::string(qwen35.path), std::string(mmproj.path), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "a multimodal model at parallel=2 must still build the scheduler";
+
+  auto* loadedContext = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(loadedContext, nullptr);
+  const llama_token eos =
+      llama_vocab_eos(llama_model_get_vocab(loadedContext->getModel()));
+  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
+
+  MtmdLlmContext* toolsDriver = nullptr;
+  qvac_lib_inference_addon_llama::batching::DriverFactory original =
+      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDriverFactory(
+      *scheduler,
+      [original, eos, &toolsDriver](
+          const common_params& params, uint32_t seqId, llama_pos ceiling) {
+        std::unique_ptr<SequenceDriver> driver =
+            original(params, seqId, ceiling);
+        auto* mtmd = dynamic_cast<MtmdLlmContext*>(driver.get());
+        if (mtmd != nullptr && seqId == 0) {
+          toolsDriver = mtmd;
+          mtmd->forceNextSampledTokenInsideReasoningForTesting(eos);
+        }
+        return driver;
+      });
+
+  std::string streamed;
+  bool closeSeen = false;
+  bool probed = false;
+  bool budgetStillCounting = false;
+  LlamaModel::Prompt toolsPrompt = makePrompt(THINKING_TOOL_PROMPT);
+  toolsPrompt.outputCallback = [&](const std::string& piece) {
+    streamed += piece;
+    if (closeSeen && !probed && toolsDriver != nullptr) {
+      probed = true;
+      budgetStillCounting = common_sampler_reasoning_budget_force(
+          toolsDriver->samplerForTesting());
+    }
+    closeSeen =
+        closeSeen || streamed.find(THINK_CLOSE_TAG) != std::string::npos;
+  };
+
+  const auto results = model->processPromptBatch(
+      {toolsPrompt, makePrompt(THINKING_PLAIN_PROMPT)});
+  ASSERT_EQ(results.size(), 2u);
+  ASSERT_NE(toolsDriver, nullptr) << "seq 0's driver was never built";
+  EXPECT_NE(streamed.find(THINK_CLOSE_TAG), std::string::npos)
+      << "the tools slot's EOS must be replaced by the close tag: " << streamed;
+  EXPECT_FALSE(results[1].empty())
+      << "the sibling must survive the tools slot's grammar processing";
+
+  ASSERT_TRUE(probed) << "nothing was streamed after the close: " << streamed;
+  EXPECT_FALSE(budgetStillCounting)
+      << "this multimodal slot's reasoning-budget matcher was still COUNTING "
+         "after the close";
+}

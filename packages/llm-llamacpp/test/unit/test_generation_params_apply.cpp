@@ -671,3 +671,59 @@ TEST(GenerationParamsApplyTest, NoGrammarOverrideLeavesCompanionsAlone) {
   EXPECT_EQ(sampling.generation_prompt, "<|im_start|>assistant\n");
   EXPECT_TRUE(sampling.grammar_lazy);
 }
+
+// The `generation_prompt` guard: it is set only when the grammar this request
+// will carry can accept the prefix, NONE or TOOL_CALLS. Reaching it needs a
+// positive `reasoning_budget` *and* a real tokenizer together — the enclosing
+// `if (tokenize && ...)` short-circuits otherwise, which is why the
+// without-tokenizer case above leaves the branch unexercised.
+//
+// OUTPUT_FORMAT is the case the guard exists for: a model loaded with a
+// positive `reasoning_budget` used to fail every `json_schema` request against
+// a thinking template, for as long as it stayed loaded.
+TEST(
+    TemplateDerivedSamplingTest,
+    ReasoningBudgetWithheldGenerationPromptFromJsonSchemaGrammar) {
+  common_params params;
+  params.reasoning_budget = 8;
+  params.sampling.grammar =
+      common_grammar(COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, "root ::= \"{}\"");
+
+  EXPECT_TRUE(configureTemplateDerivedSampling(
+      params,
+      thinkingTokenizer(),
+      reasoningRender(),
+      /* toolsRequested = */ false,
+      std::nullopt));
+  EXPECT_EQ(params.sampling.reasoning_budget_tokens, 8)
+      << "the cap itself still applies; only the prefix is withheld";
+  EXPECT_FALSE(params.sampling.reasoning_budget_start.empty())
+      << "the budget sampler must still be built";
+  EXPECT_TRUE(params.sampling.generation_prompt.empty())
+      << "a json_schema grammar cannot accept the template's thinking prefix";
+}
+
+// The permissive half of the same guard, so the assertion above cannot pass
+// merely because something else cleared `generation_prompt`.
+TEST(
+    TemplateDerivedSamplingTest,
+    ReasoningBudgetKeepsGenerationPromptForAcceptingGrammars) {
+  for (const auto type :
+       {COMMON_GRAMMAR_TYPE_NONE, COMMON_GRAMMAR_TYPE_TOOL_CALLS}) {
+    common_params params;
+    params.reasoning_budget = 8;
+    if (type != COMMON_GRAMMAR_TYPE_NONE) {
+      params.sampling.grammar = common_grammar(type, "root ::= \"x\"");
+    }
+
+    EXPECT_TRUE(configureTemplateDerivedSampling(
+        params,
+        thinkingTokenizer(),
+        reasoningRender(),
+        /* toolsRequested = */ false,
+        std::nullopt));
+    EXPECT_EQ(params.sampling.generation_prompt, "<assistant><think>")
+        << "grammar type " << static_cast<int>(type)
+        << " admits the thinking prefix and must keep it";
+  }
+}

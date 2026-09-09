@@ -1004,6 +1004,26 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   std::string out;
   ResolvedPrompt resolved = resolveChatAndTools(prompt);
 
+  // Media staged above is consumed by `tokenizeChat`, which drains `bitmaps_`
+  // on both its success and its `mtmd_tokenize`-failure paths — but only if it
+  // is reached. Nothing else clears them: `resetState` does not touch
+  // `bitmaps_`, so neither does the catch-all's
+  // `resetAndInvalidateActiveCache()`. A bitmap left staged makes the *next*
+  // multimodal request hand `mtmd_tokenize` more bitmaps than its text has
+  // markers, which fabric refuses outright — one request's failure costing the
+  // following one its turn.
+  //
+  // Four ways out of this function skip `tokenizeChat`, which is why the guard
+  // sits here rather than inside it: the early return just below, a throw from
+  // `applyGenerationParams` (an invalid per-request `grammar` / `json_schema`),
+  // and — inside `tokenizeChat` but ahead of the drain — `requireSampler()`
+  // and `requireToolChoiceHonoured()`. Dismissed once eval has returned,
+  // whatever it returned: by then the drain has run or the throw has been
+  // handled. `resetMedia()` on an already-drained list is an empty `clear()`,
+  // and a no-op virtual on text-only contexts.
+  ScopeGuard mediaGuard(
+      [this] { state_->llmContext_->resetMedia(); }, "mediaGuard/staged-media");
+
   if (resolved.shouldResetAfterInference &&
       state_->llmContext_->getNPast() > 0) {
     resetState(true);
@@ -1062,6 +1082,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
                   resolved.tools,
                   resolved.isCacheLoaded,
                   prompt.prefill);
+    // Eval owns the media from here: `tokenizeChat` has drained it, or has
+    // thrown past this line and left the guard to.
+    mediaGuard.dismiss();
 
     if (!evalResult.ok) {
       QLOG_IF(

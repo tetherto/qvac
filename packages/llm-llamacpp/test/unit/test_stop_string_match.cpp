@@ -82,6 +82,24 @@ TEST(StopStringMatchTest, ListsKeepTheirOwnRulesWhenCombined) {
       << "the template stop must not borrow the antiprompt's case rule";
 }
 
+// An empty stop must never match. `find("")` returns 0, not `npos`, so
+// without the guard a single empty entry ends every generation on its first
+// token — with a normal stop reason and nothing in the log. Neither list is
+// filtered at the source: `templateStops_` is whatever the template put in
+// `additional_stops`, `antipromptLower_` whatever the caller passed.
+TEST(StopStringMatchTest, EmptyStopEntriesNeverMatch) {
+  EXPECT_FALSE(matchesAnyStopString("any output at all", {}, {""}))
+      << "an empty template stop would end every generation";
+  EXPECT_FALSE(matchesAnyStopString("any output at all", {""}, {}))
+      << "an empty antiprompt would end every generation";
+  EXPECT_FALSE(matchesAnyStopString("", {""}, {""}));
+
+  // And an empty entry must not mask a real one sitting beside it.
+  const std::vector<std::string> withEmpty{"", ASSISTANT_CLOSE};
+  EXPECT_TRUE(matchesAnyStopString("done</assistant>", {}, withEmpty));
+  EXPECT_FALSE(matchesAnyStopString("still talking", {}, withEmpty));
+}
+
 // Byte-wise matching, so a multibyte delimiter survives intact. `toLowerAscii`
 // leaves bytes >= 0x80 alone for this reason; a locale-dependent fold could
 // corrupt one and stop matching a delimiter the template does emit.

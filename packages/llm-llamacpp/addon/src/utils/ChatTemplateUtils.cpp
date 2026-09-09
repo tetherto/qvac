@@ -352,7 +352,7 @@ PromptRenderResult getPrompt(
           string_format(
               "[ChatTemplateUtils] chat template rejected the tool "
               "definitions; rendering without tools. Error: %s\n",
-              firstError.c_str()));
+              forLogMessage(firstError, K_MAX_LOG_DIAGNOSTIC).c_str()));
       inputs.tools.clear();
       return exportParams(
           std::move(params),
@@ -370,7 +370,7 @@ PromptRenderResult getPrompt(
           "[ChatTemplateUtils] chat template could not render this "
           "conversation; falling back to the legacy renderer, which ignores "
           "tools. Error: %s\n",
-          firstError.c_str()));
+          forLogMessage(firstError, K_MAX_LOG_DIAGNOSTIC).c_str()));
   inputs.use_jinja = false;
   auto params = common_chat_templates_apply(tmpls, inputs);
   const bool legacyDroppedTools = !inputs.tools.empty();
@@ -500,7 +500,7 @@ bool applyToolGrammar(
             string_format(
                 "[ChatTemplateUtils] tool grammar trigger word is not a "
                 "preserved token; not applying the tool grammar: %s\n",
-                trigger.value.c_str()));
+                forLogMessage(trigger.value).c_str()));
         return false;
       }
       common_grammar_trigger promoted;
@@ -822,8 +822,29 @@ bool configureTemplateDerivedSampling(
   // its terminal state, and common_sampler_reset() rewinds only the sampler
   // chain, never the grammar. So an applied tool grammar always needs a fresh
   // sampler, even when the grammar text is identical to the last request's.
+  //
+  // The reasoning-budget sampler needs the same treatment, for a narrower but
+  // real case. `common_sampler::reset()` clears `prev` and the chain and
+  // nothing else (common/sampling.cpp:124-128), so an `rbudget` left in
+  // REASONING_BUDGET_DONE by a request that exhausted its cap survives into
+  // the next one, and an identical render is `samplingChanged`-false.
+  //
+  // That is harmless when the model emits its own reasoning opener: DONE
+  // re-arms on a sampled start tag and resets `remaining` to the full budget
+  // (common/reasoning-budget.cpp:146-160), which is how the Qwen3 family
+  // behaves. It is not harmless when the *template* force-opens the channel
+  // (a DeepSeek-R1-style prompt ending in `<think>`): then no start tag is
+  // ever sampled, the matcher is armed only by the prefill feed inside
+  // `common_sampler_init` (sampling.cpp:319-322), and without a rebuild the
+  // second request's cap goes unenforced for as long as the model stays
+  // loaded. Forced unconditionally rather than gated on a force-open
+  // predicate, because the cost is one `common_sampler_init` on a request
+  // that already asked for a reasoning cap — the same trade the tool-grammar
+  // term above already makes.
+  const bool statefulSamplerApplied =
+      toolGrammarApplied || reasoningBudgetSamplerBuilt(next);
   const bool changed =
-      toolGrammarApplied || samplingChanged(params.sampling, next);
+      statefulSamplerApplied || samplingChanged(params.sampling, next);
   if (changed) {
     params.sampling = std::move(next);
   }

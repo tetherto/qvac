@@ -10,6 +10,12 @@ namespace utils {
 /// Longest caller-supplied fragment echoed into an error or log message.
 inline constexpr size_t K_MAX_LOG_ECHO = 64;
 
+/// Cap for a diagnostic an operator is meant to act on, rather than a value
+/// echoed back at its caller — an upstream chat-template render error, say,
+/// whose text quotes the offending template fragment. Bounded all the same,
+/// because such a message can embed a whole rendered prompt.
+inline constexpr size_t K_MAX_LOG_DIAGNOSTIC = 512;
+
 /// Lowercases in place, for case-insensitive stop-string matching. Kept here
 /// so the two LLM contexts share one definition.
 inline std::string toLowerAscii(std::string_view value) {
@@ -32,12 +38,18 @@ inline std::string toLowerAscii(std::string_view value) {
  * async job path the error *code* is dropped, so the message text is the whole
  * signal. An unbounded value would bloat it, and control characters would let
  * a caller forge log lines. Replaces non-printable bytes with '?' and
- * truncates to `K_MAX_LOG_ECHO`, marking the cut with an ellipsis.
+ * truncates to `maxLen`, marking the cut with an ellipsis.
+ *
+ * `maxLen` defaults to `K_MAX_LOG_ECHO`, the right cap for a value being
+ * quoted back at the caller who supplied it. Pass `K_MAX_LOG_DIAGNOSTIC` for
+ * an upstream diagnostic that has to stay actionable — the sanitising matters
+ * there too, since a model-supplied template controls the text.
  */
-inline std::string forLogMessage(std::string_view value) {
-  const bool truncated = value.size() > K_MAX_LOG_ECHO;
+inline std::string
+forLogMessage(std::string_view value, size_t maxLen = K_MAX_LOG_ECHO) {
+  const bool truncated = value.size() > maxLen;
   std::string out;
-  const size_t kept = truncated ? K_MAX_LOG_ECHO : value.size();
+  const size_t kept = truncated ? maxLen : value.size();
   out.reserve(kept + (truncated ? 3 : 0));
   for (size_t i = 0; i < kept; ++i) {
     const auto c = static_cast<unsigned char>(value[i]);

@@ -32,6 +32,14 @@ namespace utils {
  * Matching scans the whole window rather than its tail because one token can
  * decode to many characters, so a short stop like "\n" may sit at the start of
  * such a token, far from the string's end.
+ *
+ * Empty entries are skipped in both lists, and that is load-bearing rather
+ * than tidiness: `find("")` returns 0, not `npos`, so a single empty stop
+ * would end every generation on its first token — with a normal stop reason
+ * and nothing in the log to explain it. Neither list is filtered at the
+ * source: `templateStops_` is whatever the template put in
+ * `additional_stops`, and `antipromptLower_` is whatever the caller passed as
+ * a load-time antiprompt.
  */
 inline bool matchesAnyStopString(
     std::string_view recentOutput,
@@ -43,13 +51,14 @@ inline bool matchesAnyStopString(
   if (!antipromptsLower.empty()) {
     const std::string recentLower = toLowerAscii(recentOutput);
     for (const std::string& antiprompt : antipromptsLower) {
-      if (recentLower.find(antiprompt) != std::string::npos) {
+      if (!antiprompt.empty() &&
+          recentLower.find(antiprompt) != std::string::npos) {
         return true;
       }
     }
   }
   for (const std::string& stop : templateStops) {
-    if (recentOutput.find(stop) != std::string_view::npos) {
+    if (!stop.empty() && recentOutput.find(stop) != std::string_view::npos) {
       return true;
     }
   }

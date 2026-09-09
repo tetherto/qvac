@@ -1442,8 +1442,7 @@ namespace LlmLlamacpp {
      * rejected the tool definitions and the prompt was produced without
      * them, so the model never saw the tools. Per-inference for single
      * requests; summed across completed slots for batch requests. 0 when no
-     * tools were sent or the template accepted them. Only delivered when the
-     * model was created with `opts: { stats: true }`.
+     * tools were sent or the template accepted them.
      */
     toolDefinitionsDropped: number;
     /**

@@ -10,6 +10,7 @@
 #include "addon/LlmErrors.hpp"
 #include "common/json-schema-to-grammar.h"
 #include "common/log.h"
+#include "utils/LogSafeString.hpp"
 
 void applyGenerationOverridesToSampling(
     common_params_sampling& sampling, int& nPredict,
@@ -203,7 +204,10 @@ std::function<void()> applyGenerationParamsToContext(
           "%s: failed to rebuild the sampler while restoring "
           "per-request generation params: %s\n",
           __func__,
-          ex.what());
+          qvac_lib_inference_addon_llama::utils::forLogMessage(
+              ex.what(),
+              qvac_lib_inference_addon_llama::utils::K_MAX_LOG_DIAGNOSTIC)
+              .c_str());
     } catch (...) {
       smpl.reset();
       LOG_WRN(

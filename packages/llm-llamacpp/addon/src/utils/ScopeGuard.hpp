@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "common/common.h"
+#include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 
 template <typename F> class ScopeGuard {
@@ -53,11 +54,22 @@ private:
   // `QLOG_IF` to match the package's other logging header
   // (model-interface/ReasoningRecoveryHelpers.hpp), so a guard failure honours
   // the configured verbosity and lands in the same sink as its callers.
+  //
+  // `reason` is a `what()` from whatever threw, and the callables guarded here
+  // include sampler rebuilds whose GBNF parse errors quote the offending
+  // grammar text — so it is sanitised rather than echoed raw. `label_` is a
+  // compile-time literal from the guard's construction site and needs none.
   void logCleanupFailure(const char* reason) const noexcept {
     try {
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          string_format("ScopeGuard(%s): cleanup threw: %s\n", label_, reason));
+          string_format(
+              "ScopeGuard(%s): cleanup threw: %s\n",
+              label_,
+              qvac_lib_inference_addon_llama::utils::forLogMessage(
+                  reason,
+                  qvac_lib_inference_addon_llama::utils::K_MAX_LOG_DIAGNOSTIC)
+                  .c_str()));
     } catch (...) { // NOLINT(bugprone-empty-catch)
       // Nothing left to do: the logger is the thing that failed.
     }

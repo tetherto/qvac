@@ -321,7 +321,9 @@ void MtmdLlmContext::requireSampler() {
   } catch (const std::exception& ex) {
     QLOG_IF(
         Priority::WARNING,
-        string_format("[MtmdLlm] sampler rebuild threw: %s\n", ex.what()));
+        string_format(
+            "[MtmdLlm] sampler rebuild threw: %s\n",
+            forLogMessage(ex.what(), K_MAX_LOG_DIAGNOSTIC).c_str()));
   }
   if (smpl_) {
     QLOG_IF(
@@ -854,6 +856,15 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
 
     llama_token tokenId =
         common_sampler_sample(smpl_.get(), modelCtx_.lctx, -1);
+    // Test-only substitution; see
+    // `forceNextSampledTokenInsideReasoningForTesting` for why it is gated on
+    // the reasoning state and why it precedes the accept. Twin in
+    // `onLogitsReady` below, because the two paths sample separately.
+    if (forcedNextSampledTokenForTesting_ != LLAMA_TOKEN_NULL &&
+        reasoningState_.inside_reasoning) {
+      tokenId = forcedNextSampledTokenForTesting_;
+      forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
+    }
     common_sampler_accept(smpl_.get(), tokenId, true);
     --nRemain;
 
@@ -1508,13 +1519,12 @@ PrefillPlan MtmdLlmContext::preparePrefill(
           mtmd_input_chunk_get_tokens_text(chunk, &nTokens);
       plan.tokens.insert(plan.tokens.end(), tokens, tokens + nTokens);
     } else {
-      plan.mediaBarriers.push_back(
-          MediaBarrier{
-              .afterTextTokens = plan.tokens.size(),
-              .mediaIndex = i,
-              .nPos = mtmd_input_chunk_get_n_pos(chunk),
-              .nKvTokens = static_cast<llama_pos>(
-                  mtmd_input_chunk_get_n_tokens(chunk))});
+      plan.mediaBarriers.push_back(MediaBarrier{
+          .afterTextTokens = plan.tokens.size(),
+          .mediaIndex = i,
+          .nPos = mtmd_input_chunk_get_n_pos(chunk),
+          .nKvTokens =
+              static_cast<llama_pos>(mtmd_input_chunk_get_n_tokens(chunk))});
     }
   }
 
@@ -1701,6 +1711,12 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
   llama_token tokenId = LLAMA_TOKEN_NULL;
   if (sampledToken) {
     tokenId = common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
+    // Test-only substitution; twin of the one in `generateResponse` above.
+    if (forcedNextSampledTokenForTesting_ != LLAMA_TOKEN_NULL &&
+        reasoningState_.inside_reasoning) {
+      tokenId = forcedNextSampledTokenForTesting_;
+      forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
+    }
     common_sampler_accept(smpl_.get(), tokenId, true);
   } else {
     tokenId = forcedTokens_.front();
