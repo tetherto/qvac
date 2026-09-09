@@ -27,7 +27,9 @@ const {
   normalizeReport,
   normalizeMobileRecords,
   renderMarkdown,
-  renderHtml
+  renderHtml,
+  buildCoverage,
+  missingExpectedDevices
 } = require('../aggregate-bci-rtf')
 
 function desktopReport (useGPU) {
@@ -186,4 +188,49 @@ test('html table includes the memory columns and rounded values', () => {
   // Guards against the header/cell lists silently desyncing on future edits.
   assert.ok(html.includes('<td>403</td>'), 'peak RSS should be rounded to 403 in a table cell')
   assert.ok(html.includes('<td>318</td>'), 'avg RSS should be rounded to 318 in a table cell')
+})
+
+// ---------------------------------------------------------------------------
+// Expected-device gate (--expect-devices)
+
+test('missing expected devices are detected from desktop rows only', () => {
+  const records = [
+    normalizeReport(desktopReport(true), 'rtf-benchmark-linux-x64-ggml-bci-windowed-gpu.json', 'desktop-ci'),
+    { source: 'mobile-ci', device: 'qvac-macos26-arm64-gpu' },
+    { source: 'manual', device: 'macos-15-large' }
+  ]
+  assert.deepEqual(missingExpectedDevices(records, []), [])
+  assert.deepEqual(missingExpectedDevices(records, ['qvac-ubuntu2404-x64-gpu']), [])
+  // Mobile and manual rows never stand in for a desktop lane.
+  assert.deepEqual(
+    missingExpectedDevices(records, ['qvac-ubuntu2404-x64-gpu', 'qvac-macos26-arm64-gpu', 'macos-15-large']),
+    ['qvac-macos26-arm64-gpu', 'macos-15-large']
+  )
+})
+
+test('coverage, markdown and html surface missing expected devices', () => {
+  const records = [normalizeReport(desktopReport(true), 'rtf-benchmark-linux-x64-ggml-bci-windowed-gpu.json', 'desktop-ci')]
+  const expected = ['qvac-ubuntu2404-x64-gpu', 'qvac-macos26-arm64-gpu']
+
+  const coverage = buildCoverage(records, expected)
+  assert.deepEqual(coverage.expectedDesktopDevices, expected)
+  assert.deepEqual(coverage.missingDesktopDevices, ['qvac-macos26-arm64-gpu'])
+  assert.equal(buildCoverage(records).expectedDesktopDevices, undefined)
+
+  const markdown = renderMarkdown(records, expected)
+  assert.ok(markdown.includes('- Expected desktop devices reporting: 1/2'))
+  assert.ok(markdown.includes('MISSING desktop devices'))
+  assert.ok(markdown.includes('qvac-macos26-arm64-gpu'))
+  assert.ok(!renderMarkdown(records).includes('Expected desktop devices'))
+
+  const html = renderHtml(records, expected)
+  assert.ok(html.includes('MISSING desktop devices'))
+  assert.ok(html.includes('qvac-macos26-arm64-gpu'))
+})
+
+test('a fully reporting device list renders without the missing-devices warning', () => {
+  const records = [normalizeReport(desktopReport(true), 'rtf-benchmark-linux-x64-ggml-bci-windowed-gpu.json', 'desktop-ci')]
+  const markdown = renderMarkdown(records, ['qvac-ubuntu2404-x64-gpu'])
+  assert.ok(markdown.includes('- Expected desktop devices reporting: 1/1'))
+  assert.ok(!markdown.includes('MISSING desktop devices'))
 })

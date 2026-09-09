@@ -97,7 +97,6 @@ const falseRoute = {
   run_cpp_tests: 'false',
   run_desktop: 'false',
   run_mobile: 'false',
-  run_coload: 'false',
 }
 
 const baselineRoute = {
@@ -129,7 +128,6 @@ test('ci-router: trusted non-PR events enable every stage', () => {
       run_cpp_tests: 'true',
       run_desktop: 'true',
       run_mobile: 'true',
-      run_coload: 'true',
     },
   )
 })
@@ -176,20 +174,6 @@ test('ci-router: internal granular labels select only requested stages', () => {
   )
 })
 
-test('ci-router: run-coload-tests selects the co-load stage and its prebuild', () => {
-  // The co-load overlays the PR's freshly-built prebuild, so the label pulls in
-  // run_prebuilds too. The Device Farm leg keys off run_mobile, so the co-load
-  // label alone is the cheap desktop co-load.
-  assert.deepEqual(
-    route({ PR_LABELS_JSON: '["run-coload-tests"]' }),
-    {
-      ...baselineRoute,
-      run_prebuilds: 'true',
-      run_coload: 'true',
-    },
-  )
-})
-
 test('ci-router: external fork ready PR gets baseline routing without verified label', () => {
   assert.deepEqual(route({ HEAD_REPO: 'outsider/qvac' }), baselineRoute)
   assert.deepEqual(
@@ -210,7 +194,7 @@ test('ci-router: external fork draft runs nothing even with heavy labels', () =>
     route({
       HEAD_REPO: 'outsider/qvac',
       IS_DRAFT: 'true',
-      PR_LABELS_JSON: '["run-coload-tests"]',
+      PR_LABELS_JSON: '["run-desktop-addon-tests"]',
     }),
     falseRoute,
   )
@@ -661,47 +645,6 @@ test('check-approvals no longer depends on verified and skips drafts', () => {
   const source = read('.github/workflows/check-approvals.yml')
   assert.doesNotMatch(source, /verified/)
   assert.match(source, /!github\.event\.pull_request\.draft/)
-})
-
-test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation gated', () => {
-  // The standalone coload-smoke-mobile-ggml.yml is replaced by a reusable
-  // workflow wired into each addon's on-pr pipeline. The expensive Device Farm
-  // leg stays opt-in: it requires the co-load label AND the mobile label, and
-  // authorisation (ci-router enforces same-repo/non-draft for internal PRs;
-  // fork-ci gates external forks via fork-approval). The reusable itself must
-  // pull_request trigger that could bypass that gating.
-  const reusable = read('.github/workflows/coload-smoke-mobile.yml')
-  assert.match(reusable, /on:\s*\n\s*workflow_call:/)
-  assert.match(
-    reusable,
-    /uses:\s*\.\/\.github\/workflows\/test-android-sdk\.yml/,
-  )
-  for (const path of [
-    '.github/workflows/on-pr-asr-ggml.yml',
-    '.github/workflows/on-pr-tts-ggml.yml',
-  ]) {
-    const block = jobBlock(read(path), 'coload-smoke-mobile')
-    assert.match(
-      block,
-      /uses:\s*\.\/\.github\/workflows\/coload-smoke-mobile\.yml/,
-      `${path} runs the reusable mobile co-load`,
-    )
-    assert.match(
-      block,
-      /needs\.ci-router\.outputs\.run_coload == 'true'/,
-      `${path} Device Farm co-load requires the co-load label`,
-    )
-    assert.match(
-      block,
-      /needs\.ci-router\.outputs\.run_mobile == 'true'/,
-      `${path} Device Farm co-load requires the mobile label`,
-    )
-    assert.match(
-      block,
-      /needs:[\s\S]*?\bfork-approval\b/,
-      `${path} Device Farm co-load requires fork-approval`,
-    )
-  }
 })
 
 const AWS_OIDC_SECRET = 'AWS_OIDC_ROLE_ARN'
