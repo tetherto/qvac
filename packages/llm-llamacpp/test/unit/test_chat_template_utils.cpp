@@ -606,6 +606,31 @@ TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsReservedToolNames) {
   EXPECT_NO_THROW(resolveToolChoice(std::nullopt, {nearMiss}));
 }
 
+// An empty name is unselectable from both directions — the JS layer rejects
+// `tool_choice: ""` outright, and natively an empty choice is read as `auto` —
+// so it breaks the same invariant as a reserved name and is rejected with it.
+// It would also give the tool the bare `"tool-"` grammar rule.
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsAnEmptyToolName) {
+  common_chat_tool unnamed = makeWeatherTool();
+  unnamed.name = "";
+  EXPECT_THROW(
+      resolveToolChoice(std::nullopt, {unnamed}), qvac_errors::StatusError)
+      << "an unnameable tool must not be accepted under auto";
+  EXPECT_THROW(
+      resolveToolChoice(std::string("required"), {unnamed}),
+      qvac_errors::StatusError);
+
+  // Rejected as a single declaration, not only as a pair: two empty names
+  // already fold to the same rule and would trip the collision check instead,
+  // which is what hid this.
+  common_chat_tool alsoUnnamed = makeWeatherTool();
+  alsoUnnamed.name = "";
+  alsoUnnamed.description = "a second unnamed tool";
+  EXPECT_THROW(
+      resolveToolChoice(std::nullopt, {unnamed, alsoUnnamed}),
+      qvac_errors::StatusError);
+}
+
 TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsUnknownOrToolless) {
   const std::vector<common_chat_tool> tools{makeWeatherTool()};
   EXPECT_THROW(
@@ -706,20 +731,18 @@ TEST_F(ChatTemplateUtilsTest, GetPromptFlagsToolDefinitionsDropped) {
 // The silent case, and the one a successful render used to hide: a template
 // that never references `tools` *or* tool calls renders happily and leaves the
 // definitions out. Nothing downstream can tell that apart from a tools-aware
-// render, which is exactly what `toolDefinitionsDropped` exists to answer — so
-// the flag is keyed on the template's own caps, not only on the renderer that
-// produced the prompt.
+// render, which is exactly what `toolDefinitionsDropped` exists to answer.
 //
 // Not an exotic template: any GGUF whose embedded template has no tools branch
 // behaves this way, which is most models not tuned for tool calling.
 TEST_F(ChatTemplateUtilsTest, GetPromptFlagsAToolsIgnoringJinjaTemplate) {
   // Renders the conversation correctly and mentions neither tools nor tool
   // calls, so fabric's caps report support for neither.
-  constexpr const char* TOOLS_IGNORING_TEMPLATE =
+  constexpr const char* kToolsIgnoringTemplate =
       "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
       "{%- if add_generation_prompt %}<assistant>{%- endif %}";
   common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, TOOLS_IGNORING_TEMPLATE);
+      common_chat_templates_init(nullptr, kToolsIgnoringTemplate);
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs inputs = makeQwenInputs();
@@ -738,10 +761,61 @@ TEST_F(ChatTemplateUtilsTest, GetPromptFlagsAToolsIgnoringJinjaTemplate) {
          "applied for definitions the model never read";
 }
 
+// A tools-capable template that omits the definitions for *this* conversation.
+// The guard fires on a leading user turn, which fabric's own capability probe
+// supplies (common/jinja/caps.cpp feeds a synthetic user-first conversation),
+// so `supports_tools` reports true — while a request whose first message is a
+// system turn renders with no tools at all. A capability answer reports no
+// drop here; only looking at what was rendered catches it.
+//
+// This is the shape QVAC-23251 hit, where the Qwen3.5 template rejected a
+// prefix primed without a user turn. That template raised and so was caught by
+// the retry path; one that silently omits instead needs this.
+TEST_F(ChatTemplateUtilsTest, GetPromptFlagsAConditionalOmissionForThisRender) {
+  constexpr const char* kUserFirstToolsTemplate =
+      "{%- if messages[0].role == 'user' and tools %}"
+      "{%- for t in tools %}<tool>{{ t.function.name }}</tool>{%- endfor %}"
+      "{%- endif %}"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, kUserFirstToolsTemplate);
+  ASSERT_NE(tmpls, nullptr);
+
+  // Same template, two conversations. User-first renders the tools.
+  {
+    common_chat_templates_inputs inputs = makeQwenInputs();
+    inputs.tools = {makeWeatherTool()};
+    const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+    EXPECT_NE(rendered.prompt.find("get_weather"), std::string::npos)
+        << rendered.prompt;
+    EXPECT_FALSE(rendered.toolDefinitionsDropped)
+        << "the tools were rendered for this conversation";
+  }
+
+  // System-first does not, though the template is just as capable.
+  {
+    common_chat_templates_inputs inputs = makeQwenInputs();
+    inputs.messages.insert(
+        inputs.messages.begin(),
+        common_chat_msg{/* role = */ "system", /* content = */ "Be brief."});
+    inputs.tools = {makeWeatherTool()};
+    const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+    EXPECT_EQ(rendered.prompt.find("get_weather"), std::string::npos)
+        << "the guard did not fire, so nothing named the tool: "
+        << rendered.prompt;
+    EXPECT_TRUE(rendered.toolDefinitionsDropped)
+        << "a capability check reports no drop here; the flag has to describe "
+           "this render";
+    EXPECT_TRUE(inputs.tools.empty())
+        << "omitted tools must not leak to callers";
+  }
+}
+
 // The other side of the same guard: a template that *does* describe tools must
-// not be reported as dropping them. Without this the caps check would turn
-// every tools request into a false positive, which is worse than the false
-// negative it was added to fix.
+// not be reported as dropping them. Without this the check would turn every
+// tools request into a false positive, which is worse than the false negative
+// it was added to fix.
 TEST_F(ChatTemplateUtilsTest, GetPromptDoesNotFlagAToolsAwareTemplate) {
   common_chat_templates_ptr tmpls =
       common_chat_templates_init(nullptr, getFixedQwen3Template());

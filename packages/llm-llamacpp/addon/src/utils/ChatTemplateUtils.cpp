@@ -291,32 +291,39 @@ getChatTemplate(const ::llama_model* model, const common_params& params) {
 
 namespace {
 
-/// Whether the active chat template can put tool definitions in front of the
-/// model at all. Both caps come from fabric analysing the template body
-/// (`jinja::caps_get`): `supports_tools` means the template renders the `tools`
-/// variable itself, and `supports_tool_calls` means it at least renders
-/// assistant tool calls — enough for fabric to apply a fallback that describes
-/// the tools, which is the case it warns about at chat.cpp:3300-3304.
+/// Whether a rendered prompt actually names any of the tools it was given.
 ///
-/// A template that does neither renders *successfully* while silently leaving
-/// the definitions out, which is the one way a tools-stripped render used to
-/// escape `toolDefinitionsDropped`. It is not an exotic case: any GGUF whose
-/// embedded template has no tools branch behaves this way, which is most
-/// models that were not tuned for tool calling.
-bool templateCanConveyTools(const struct common_chat_templates* tmpls) {
-  if (tmpls == nullptr) {
-    return false;
+/// This is deliberately a property of *this render* rather than of the
+/// template. `common_chat_templates_get_caps()` cannot answer the question:
+/// `jinja::caps_get` decides `supports_tools` by executing the template
+/// against fabric's own synthetic probe conversation and checking whether the
+/// probe touched `tools[0].function.name` (common/jinja/caps.cpp:242-247). The
+/// probe leads with a user turn, so a template that guards its tool block on
+/// the conversation shape reports "capable" from the probe and can still omit
+/// the block for a request shaped differently — the same shape-sensitivity
+/// QVAC-23251 hit, where the Qwen3.5 template rejected a prefix primed without
+/// a user turn. A capability answer would report no drop for a render that
+/// dropped everything.
+///
+/// Substring, not parse: a template that emitted the definitions cannot have
+/// done so without their names, so a name that is absent was not rendered.
+/// Any name is enough — a partial render still put tools in front of the
+/// model, and reporting a drop for that would be a false positive.
+///
+/// Residual, and not closable from here: a tool name that happens to appear in
+/// the conversation text masks an omission. That needs the renderer to report
+/// what it rendered.
+bool promptNamesAnyTool(
+    const std::string& prompt, const std::vector<common_chat_tool>& tools) {
+  for (const common_chat_tool& tool : tools) {
+    // An empty name is unnameable and matches everywhere; `validateToolNames`
+    // rejects it before a real request reaches here, and skipping it keeps a
+    // directly-constructed `getPrompt` call from reading as "rendered".
+    if (!tool.name.empty() && prompt.find(tool.name) != std::string::npos) {
+      return true;
+    }
   }
-  const std::map<std::string, bool> caps =
-      common_chat_templates_get_caps(tmpls);
-  const auto capOr = [&caps](const char* key, bool fallback) {
-    const auto found = caps.find(key);
-    return found == caps.end() ? fallback : found->second;
-  };
-  // Defaulting a missing key to `true` keeps a caps map that stops reporting
-  // these from turning every tools request into a reported drop; fabric's own
-  // defaults are `true` for both.
-  return capOr("supports_tools", true) || capOr("supports_tool_calls", true);
+  return false;
 }
 
 } // namespace
@@ -359,19 +366,22 @@ PromptRenderResult getPrompt(
     auto params = common_chat_templates_apply(tmpls, inputs);
     // Two ways a *successful* render still leaves the tools out. The legacy
     // (non-Jinja) renderer ignores `inputs.tools` outright. And a Jinja
-    // template that references neither `tools` nor tool calls renders happily
-    // without them — the silent case, and the one this flag exists to expose,
-    // since nothing else in the pipeline can tell the difference.
+    // template can render happily without them — because it references tools
+    // nowhere, or because whatever guards its tool block did not hold for this
+    // conversation. That second one is the silent case this flag exists to
+    // expose, since nothing else in the pipeline can tell it from a
+    // tools-aware render.
     const bool legacyDroppedTools = !inputs.use_jinja && !inputs.tools.empty();
-    const bool jinjaOmittedTools = inputs.use_jinja && !inputs.tools.empty() &&
-                                   !templateCanConveyTools(tmpls);
+    const bool jinjaOmittedTools =
+        inputs.use_jinja && !inputs.tools.empty() &&
+        !promptNamesAnyTool(params.prompt, inputs.tools);
     const bool droppedTools = legacyDroppedTools || jinjaOmittedTools;
     if (jinjaOmittedTools) {
       QLOG_IF(
           Priority::ERROR,
-          "[ChatTemplateUtils] chat template describes neither tools nor tool "
-          "calls; the tool definitions were not rendered and the model never "
-          "saw them\n");
+          "[ChatTemplateUtils] the rendered prompt names none of the supplied "
+          "tools; the chat template left the definitions out and the model "
+          "never saw them\n");
     }
     if (droppedTools) {
       // Keep the header's contract: callers never see a tool list the
@@ -582,13 +592,30 @@ bool applyToolGrammar(
 
 namespace {
 
+/// Two ways a declared name cannot be used to select its own tool, both
+/// rejected at declaration time so the invariant holds that every accepted
+/// definition can be named.
+///
 /// `auto`, `none` and `required` are the `tool_choice` mode words, matched by
-/// `resolveToolChoiceCore` before it ever looks a function up. A tool carrying
-/// one of them would be advertised in the prompt and yet be unselectable:
-/// `none` would silently disable tools rather than choose one, and `required`
-/// would mean "any tool". Rejected at declaration time so the invariant holds
-/// that every accepted definition can be named.
-void rejectReservedToolName(const std::string& name) {
+/// `resolveToolChoiceCore` before it ever looks a function up: such a tool
+/// would be advertised in the prompt and yet unselectable, with `none`
+/// silently disabling tools rather than choosing one and `required` meaning
+/// "any tool".
+///
+/// An empty name is unselectable for the same reason from both directions —
+/// the JS layer rejects `tool_choice: ""` outright, and natively an empty
+/// choice is read as `auto` — and it would also give the tool the bare
+/// `"tool-"` grammar rule. Note two empty names already collide under the
+/// fold below; only a single one reached here.
+void rejectUnselectableToolName(const std::string& name) {
+  if (name.empty()) {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "prompt declares a tool with an empty name, which could never be "
+        "selected by generationParams.tool_choice");
+  }
   if (name != "auto" && name != "none" && name != "required") {
     return;
   }
@@ -603,13 +630,14 @@ void rejectReservedToolName(const std::string& name) {
           forLogMessage(name).c_str()));
 }
 
-/// Three conditions are rejected outright, because each one makes a tool the
+/// Four conditions are rejected outright, because each one makes a tool the
 /// caller declared unreachable or ambiguous:
 ///  - two tools sharing a name: `tool_choice: "<name>"` cannot say which, and
 ///    the template gets two blocks the model cannot tell apart;
-///  - a name equal to one of the `tool_choice` mode words: the mode branches in
-///    `resolveToolChoiceCore` run before the function lookup, so such a tool
-///    can never be selected by name;
+///  - a name equal to one of the `tool_choice` mode words, and an empty name:
+///    both are matched by `resolveToolChoiceCore` before the function lookup,
+///    so neither tool can ever be selected by name (see
+///    `rejectUnselectableToolName`);
 ///  - two names that fold to the same grammar rule, which lets one shadow the
 ///    other while both stay advertised in the prompt.
 ///
@@ -633,7 +661,7 @@ void validateToolNames(const std::vector<common_chat_tool>& tools) {
               "prompt declares two tools named %s",
               forLogMessage(tool.name).c_str()));
     }
-    rejectReservedToolName(tool.name);
+    rejectUnselectableToolName(tool.name);
     // Mirrors fabric's `rule_name()` (common/peg-parser.cpp), which is
     // `std::regex_replace(name, "[^a-zA-Z0-9-]+", "-")`: every byte outside
     // `[A-Za-z0-9-]` folds to '-', and a *run* of them collapses to a single

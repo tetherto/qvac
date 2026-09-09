@@ -20,11 +20,13 @@
 - `RuntimeStats.toolDefinitionsDropped` reports renders where the model never
   saw the tools the request supplied — because the template rejected them,
   because the prompt was rendered without a Jinja template, or because the
-  active template describes neither tools nor tool calls and so left them out
-  while rendering successfully. That last case is the quiet one, and it covers
-  any model whose embedded template has no tools branch. It is a per-request
-  figure: a job reports what happened to its own render, not what happened
-  across whatever else was in flight beside it.
+  template rendered successfully while leaving them out. That last case is the
+  quiet one, and it is decided by looking at the prompt that was produced
+  rather than at what the template is capable of: it covers both a template
+  with no tools branch at all and one whose tool block is guarded on a
+  conversation shape this request did not have. It is a per-request figure: a
+  job reports what happened to its own render, not what happened across
+  whatever else was in flight beside it.
 - `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
   function name) controls whether a tool call is forced, allowed or disabled for
   a request that declares tools; a function name restricts the call to it.
@@ -39,12 +41,15 @@
   staged on the multimodal context, so a bad value costs only the caller's own
   request — previously the stray bitmap made the *next* multimodal request fail
   in `mtmd_tokenize` with more bitmaps than markers.
-- Tool definitions in a prompt are validated before rendering, and two further
-  cases now fail with `InvalidArgument` alongside the existing duplicate-name
-  check, because each one leaves a declared tool unreachable:
+- Tool definitions in a prompt are validated before rendering, and three
+  further cases now fail with `InvalidArgument` alongside the existing
+  duplicate-name check, because each one leaves a declared tool unreachable:
   - a tool named `auto`, `none` or `required`. Those are the `tool_choice` mode
     words and are matched before any function lookup, so such a tool would be
     advertised in the prompt and yet never be selectable by name.
+  - a tool with an empty name, which is unselectable for the same reason from
+    both directions: `tool_choice: ""` is rejected outright by the JS layer,
+    and natively an empty choice is read as `"auto"`.
   - two tool names that fold to the same grammar rule — `get_weather` and
     `get-weather`, say. Every tool grammar names its rules after the tool, so
     both names resolve to whichever rule was registered last: under `"auto"` or
