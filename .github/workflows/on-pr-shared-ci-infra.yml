@@ -85,6 +85,8 @@ jobs:
         run: node --test scripts/ci/__tests__/*.test.cjs
       - name: Validate shared agent configuration
         run: node scripts/ci/validate-agent-config.mjs
+      - name: Test agent setup migration safety
+        run: bash scripts/ci/test-agent-setup.sh
 
   model-availability:
     name: Model availability (${{ matrix.package }})

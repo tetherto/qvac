@@ -89,6 +89,25 @@ Agent files copied to Cursor have Claude-specific frontmatter (`model`, `color`,
 Repository skills such as `qv-addon-changelog` and `qv-sdk-changelog` are managed
 in `.agents/skills`; setup mirrors them only for Claude Code.
 
+### Migrating existing Claude skill links
+
+`/setup claude` automatically replaces per-skill links that point to the former
+`.cursor/skills/<name>` location. It unlinks only the compatibility link and does
+not modify its `.cursor` target.
+
+If `.claude/skills` itself is a symlink, setup stops without changing it because
+the shared target may contain personal skills. Inspect that target and preserve
+anything still needed, then remove only the directory symlink and rerun setup:
+
+```bash
+rm .claude/skills
+bash packages/ocr-ggml/.agent/setup.sh claude
+```
+
+Any other existing file, directory, or unrelated symlink at a generated skill
+destination is also left untouched. Setup reports the collision so it can be
+moved or removed explicitly.
+
 ## Full Pipeline (`/orchestrate`)
 
 ```

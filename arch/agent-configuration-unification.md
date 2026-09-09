@@ -38,8 +38,11 @@ The Claude adapter uses per-skill symlinks on Unix:
 
 On Windows, `/setup claude` creates ignored copies because ordinary Git and
 developer environments do not reliably permit symlink creation. The setup script
-records only entries it generated, removes those entries on the next run, and
-leaves the tracked bootstrap and unrelated local skills alone.
+records only entries it generated and verifies ownership before replacing them.
+It automatically migrates exact per-skill links to the former `.cursor/skills`
+tree, but stops with recovery instructions for shared-directory links and other
+ambiguous collisions. The tracked bootstrap and unrelated local skills are left
+alone.
 
 ## Implemented changes
 
