@@ -34,11 +34,21 @@ type TtsGgmlDebugModel = {
   _audio8CodecEncoderPath?: string
   _referenceText?: string
   _greedy?: boolean
+  _nCtx?: number
+  _kvCacheType?: string
+  _speed?: number
+  _steps?: number
+  _referenceAudio?: string
+  _promptText?: string
+  _cosyvoiceS3tokModelPath?: string
+  _cosyvoiceCampplusModelPath?: string
   _config?: {
     language?: string
     useGPU?: boolean
     outputSampleRate?: number
     vulkanCacheDir?: string
+    backendsDir?: string
+    openclCacheDir?: string
   }
   getEngineType?: () => string
 }
@@ -503,4 +513,163 @@ test('ttsPlugin createModel: wires the Audio8 constructor surface', async (t) =>
   t.is(model._seed, 42)
   t.is(model._outputSampleRate, 44100)
   t.alike(model._config, { useGPU: true, outputSampleRate: 44100 })
+})
+
+test('ttsPlugin createModel: wires the Chatterbox options the addon gained', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-chatterbox-parity',
+    modelPath: '/tmp/chatterbox-t3.gguf',
+    artifacts: { s3genPath: '/tmp/chatterbox-s3gen.gguf' },
+    modelConfig: {
+      ttsEngine: 'chatterbox',
+      language: 'en',
+      outputSampleRate: 16000,
+      ttsSpeed: 1.25,
+      nCtx: 1000,
+      kvCacheType: 'q8_0',
+      backendsDir: '/opt/backends',
+      openclCacheDir: '/cache/opencl'
+    }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  // `speed` is a top-level constructor option, not a `config` field.
+  t.is(model._speed, 1.25)
+  t.is(model._nCtx, 1000)
+  t.is(model._kvCacheType, 'q8_0')
+  t.is(model._outputSampleRate, 16000)
+  t.is(model._config?.language, 'en')
+  t.is(model._config?.outputSampleRate, 16000)
+  t.is(model._config?.backendsDir, '/opt/backends')
+  t.is(model._config?.openclCacheDir, '/cache/opencl')
+})
+
+test('ttsPlugin createModel: wires the Supertonic options the addon honours', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-supertonic-parity',
+    modelPath: '/tmp/supertonic3-q8_0.gguf',
+    artifacts: {},
+    modelConfig: {
+      ttsEngine: 'supertonic',
+      language: 'en',
+      pace: 'fast',
+      threads: 4,
+      nGpuLayers: 99,
+      seed: 7,
+      backendsDir: '/opt/backends'
+    }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model._pace, 'fast')
+  t.is(model._threads, 4)
+  t.is(model._nGpuLayers, 99)
+  t.is(model._seed, 7)
+  t.is(model._config?.backendsDir, '/opt/backends')
+})
+
+test('ttsPlugin resolveConfig: resolves the Parler LavaSR sources', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const resolved = await ttsPlugin.resolveConfig!(
+    {
+      ttsEngine: 'parler',
+      lavasrEnhancerModelSrc: 'registry://s3/lavasr/enhancer.gguf',
+      lavasrDenoiserModelSrc: 'registry://s3/lavasr/denoiser.gguf'
+    },
+    {
+      resolveModelPath: async (src: unknown) =>
+        String(src).includes('enhancer') ? '/tmp/enhancer.gguf' : '/tmp/denoiser.gguf',
+      modelSrc: 'registry://s3/parler-mini-v1-q8_0.gguf',
+      modelType: 'tts-ggml'
+    }
+  )
+
+  t.alike(resolved.artifacts, {
+    lavasrEnhancerPath: '/tmp/enhancer.gguf',
+    lavasrDenoiserPath: '/tmp/denoiser.gguf'
+  })
+  // The sources are load-only; the runtime config must not carry them through.
+  const runtime = resolved.config as Record<string, unknown>
+  t.is(runtime['lavasrEnhancerModelSrc'], undefined)
+  t.is(runtime['lavasrDenoiserModelSrc'], undefined)
+})
+
+test('ttsPlugin createModel: forwards the Parler LavaSR files', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-parler-lavasr',
+    modelPath: '/tmp/parler-mini-v1-q8_0.gguf',
+    artifacts: {
+      lavasrEnhancerPath: '/tmp/enhancer.gguf',
+      lavasrDenoiserPath: '/tmp/denoiser.gguf'
+    },
+    modelConfig: { ttsEngine: 'parler' }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model.getEngineType?.(), 'parler')
+  t.is(model._enhancerGgufPath, '/tmp/enhancer.gguf')
+  t.is(model._denoiserGgufPath, '/tmp/denoiser.gguf')
+})
+
+test('ttsPlugin resolveConfig: resolves the CosyVoice3 cloning artifacts', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const resolved = await ttsPlugin.resolveConfig!(
+    {
+      ttsEngine: 'cosyvoice3',
+      referenceAudioSrc: 's3:///example/reference.wav',
+      cosyvoice3S3tokModelSrc: 'registry://s3/cosyvoice3-s3tok-f16.gguf',
+      cosyvoice3CampplusModelSrc: 'registry://s3/cosyvoice3-campplus-f32.gguf',
+      promptText: 'the verbatim transcript'
+    },
+    {
+      resolveModelPath: async (src: unknown) => {
+        const s = String(src)
+        if (s.includes('reference')) return '/tmp/reference.wav'
+        if (s.includes('s3tok')) return '/tmp/s3tok.gguf'
+        return '/tmp/campplus.gguf'
+      },
+      modelSrc: 'registry://s3/cosyvoice3-llm-q8_0.gguf',
+      modelType: 'tts-ggml'
+    }
+  )
+
+  t.alike(resolved.artifacts, {
+    referenceAudioPath: '/tmp/reference.wav',
+    cosyvoiceS3tokPath: '/tmp/s3tok.gguf',
+    cosyvoiceCampplusPath: '/tmp/campplus.gguf'
+  })
+  // promptText is conditioning, not an artifact — it rides the runtime config.
+  t.is((resolved.config as Record<string, unknown>)['promptText'], 'the verbatim transcript')
+})
+
+test('ttsPlugin createModel: wires CosyVoice3 voice cloning', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-cosyvoice3-clone',
+    modelPath: '/tmp/cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+    artifacts: {
+      referenceAudioPath: '/tmp/reference.wav',
+      cosyvoiceS3tokPath: '/tmp/s3tok.gguf',
+      cosyvoiceCampplusPath: '/tmp/campplus.gguf'
+    },
+    modelConfig: { ttsEngine: 'cosyvoice3', promptText: 'the verbatim transcript' }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model.getEngineType?.(), 'cosyvoice3')
+  t.is(model._referenceAudio, '/tmp/reference.wav')
+  t.is(model._promptText, 'the verbatim transcript')
+  // Explicit paths, not name-prefix discovery: the cloning GGUFs are separate
+  // registry artifacts and do not land in the model directory.
+  t.is(model._cosyvoiceS3tokModelPath, '/tmp/s3tok.gguf')
+  t.is(model._cosyvoiceCampplusModelPath, '/tmp/campplus.gguf')
 })

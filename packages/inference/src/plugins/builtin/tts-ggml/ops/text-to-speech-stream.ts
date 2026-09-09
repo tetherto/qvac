@@ -8,7 +8,13 @@ import Buffer from 'bare-buffer'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
 import { TextToSpeechStreamFailedError } from '@/errors/index'
-import { type TtsStreamChunk, type TtsOpYield, collectTtsStats } from '@/utils/tts-stats'
+import type { TtsStats as AddonTtsStats } from '@/utils/addon-responses'
+import {
+  type TtsStreamChunk,
+  type TtsOpYield,
+  collectTtsStats,
+  chunkMetadata
+} from '@/utils/tts-stats'
 import {
   assertParlerJobOptionsSupported,
   getParlerJobOptions
@@ -20,12 +26,7 @@ type RunStreamingModel = {
     options?: Record<string, unknown>
   ) => Promise<{
     iterate: () => AsyncIterable<TtsStreamChunk>
-    stats?: {
-      audioDurationMs?: number
-      totalSamples?: number
-      enhancerBackendDevice?: number
-      enhancerBackendId?: number
-    }
+    stats?: AddonTtsStats
   }>
 }
 
@@ -134,13 +135,7 @@ export async function* textToSpeechStream(
     if (buf.length === 0) {
       continue
     }
-    yield {
-      buffer: buf,
-      ...(data.chunkIndex !== undefined ? { chunkIndex: data.chunkIndex } : {}),
-      ...(typeof data.sentenceChunk === 'string' && data.sentenceChunk.length > 0
-        ? { sentenceChunk: data.sentenceChunk }
-        : {})
-    }
+    yield { buffer: buf, ...chunkMetadata(data) }
   }
 
   const modelExecutionMs = nowMs() - modelStart

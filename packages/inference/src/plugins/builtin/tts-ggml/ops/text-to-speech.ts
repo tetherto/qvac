@@ -2,9 +2,14 @@ import { getModel } from '@/runtime/model-registry'
 import { ttsRequestSchema, type TtsRequest, type TtsStats } from '@/schemas/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
-import type { TtsResponse } from '@/utils/addon-responses'
+import type { TtsResponse, TtsStats as AddonTtsStats } from '@/utils/addon-responses'
 import { TextToSpeechFailedError } from '@/errors/index'
-import { type TtsStreamChunk, type TtsOpYield, collectTtsStats } from '@/utils/tts-stats'
+import {
+  type TtsStreamChunk,
+  type TtsOpYield,
+  collectTtsStats,
+  chunkMetadata
+} from '@/utils/tts-stats'
 import {
   assertParlerJobOptionsSupported,
   getParlerJobOptions,
@@ -17,12 +22,7 @@ type RunStreamModel = {
     options?: ParlerJobOptions & { locale?: string; maxChunkScalars?: number }
   ) => Promise<{
     iterate: () => AsyncIterable<TtsStreamChunk>
-    stats?: {
-      audioDurationMs?: number
-      totalSamples?: number
-      enhancerBackendDevice?: number
-      enhancerBackendId?: number
-    }
+    stats?: AddonTtsStats
   }>
 }
 
@@ -76,15 +76,17 @@ export async function* textToSpeech(
 
     if (!stream) {
       let completeBuffer: number[] = []
+      let sampleRate: number | undefined
       for await (const data of response.iterate()) {
         // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
         if (data.outputArray != null) {
+          sampleRate ??= data.sampleRate
           completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
         }
       }
       const modelExecutionMs = nowMs() - modelStart
       const stats = collectTtsStats(response)
-      yield { buffer: completeBuffer }
+      yield { buffer: completeBuffer, ...(sampleRate !== undefined ? { sampleRate } : {}) }
       return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
     }
 
@@ -93,13 +95,7 @@ export async function* textToSpeech(
       if (data.outputArray == null) continue
       const buf = Array.from(data.outputArray)
       if (buf.length === 0) continue
-      yield {
-        buffer: buf,
-        ...(data.chunkIndex !== undefined ? { chunkIndex: data.chunkIndex } : {}),
-        ...(typeof data.sentenceChunk === 'string' && data.sentenceChunk.length > 0
-          ? { sentenceChunk: data.sentenceChunk }
-          : {})
-      }
+      yield { buffer: buf, ...chunkMetadata(data) }
     }
 
     const modelExecutionMs = nowMs() - modelStart
@@ -109,27 +105,38 @@ export async function* textToSpeech(
 
   const response = (await model.run({
     input: text,
-    inputType,
+    // The addon's job field is `type`; `inputType` was never read. (The native
+    // layer ignores it today, so this is wiring, not a behaviour change.)
+    type: inputType,
     ...(stream ? { streamOutput: true } : {}),
+    // `run({ streamOutput: true })` runs the same chunker as `runStream()`, so
+    // the chunking knobs apply here too — they used to be honoured only on the
+    // sentenceStream path.
+    ...(stream && sentenceStreamLocale !== undefined ? { locale: sentenceStreamLocale } : {}),
+    ...(stream && sentenceStreamMaxChunkScalars !== undefined
+      ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
+      : {}),
     ...parlerJobOptions
   })) as unknown as TtsResponse
 
   if (!stream) {
     let completeBuffer: number[] = []
+    let sampleRate: number | undefined
 
     for await (const data of response.iterate()) {
+      sampleRate ??= data.sampleRate
       completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
     }
 
     const modelExecutionMs = nowMs() - modelStart
     const stats = collectTtsStats(response)
 
-    yield { buffer: completeBuffer }
+    yield { buffer: completeBuffer, ...(sampleRate !== undefined ? { sampleRate } : {}) }
     return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
   }
 
   for await (const data of response.iterate()) {
-    yield { buffer: Array.from(data.outputArray) }
+    yield { buffer: Array.from(data.outputArray), ...chunkMetadata(data) }
   }
 
   const modelExecutionMs = nowMs() - modelStart

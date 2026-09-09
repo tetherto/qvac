@@ -24,7 +24,18 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 The SDK returns raw, mono, signed 16-bit PCM samples as a plain `number[]`. With `stream: false`, the `buffer` promise resolves to the complete sample array and `bufferStream` is empty. With `stream: true`, `buffer` resolves to `[]` and `bufferStream` yields individual samples as they become available. The data has no WAV header or other container metadata; use the [example utility](#utils) to write it as a WAV file.
 
-The response does not include a sample rate. Use the rate implied by the loaded engine and its configuration:
+`textToSpeech()` also returns a `sampleRate` promise, resolved from the first
+audio frame the engine emits. Prefer it over inferring the rate from the load
+config — `outputSampleRate` and the LavaSR enhancer both change it. It resolves
+to `undefined` when the run produced no audio.
+
+```ts
+const result = textToSpeech({ modelId, text: "Hello.", stream: false });
+const pcm = await result.buffer;
+const sampleRate = await result.sampleRate; // e.g. 48000 with the enhancer
+```
+
+For reference, the rate each configuration produces:
 
 | Configuration           | Output sample rate                                                                                                  |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -34,6 +45,30 @@ The response does not include a sample rate. Use the rate implied by the loaded 
 | CosyVoice3              | 24,000 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 24,000 Hz unless the LavaSR enhancer is loaded |
 | Audio8                  | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | LavaSR enhancer enabled | 48,000 Hz by default, or `modelConfig.outputSampleRate` when set                                                    |
+
+## Runtime statistics
+
+`textToSpeech()` returns a `stats` promise carrying the engine's own runtime
+statistics from the final frame (`undefined` if the run reported none):
+
+| Field | Meaning |
+| ----- | ------- |
+| `audioDuration` | Length of the synthesized audio, in milliseconds. |
+| `totalTime` | Wall-clock synthesis time, in milliseconds. |
+| `realTimeFactor` | Synthesis time divided by audio duration; below 1.0 is faster than real time. |
+| `tokensPerSecond` | Decode throughput. On Audio8 this counts codec frames. |
+| `totalSamples` | PCM sample count. |
+| `generatedFrames` | Audio8 only: codec frames generated, on a fixed 46 ms grid. |
+| `backendDevice` | Compute device chosen at load: `0` CPU, `1` GPU. |
+| `backendId` | Backend family: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other GPU. |
+| `gpuUnsupported` | `1` when a GPU is present but unusable by engine policy, so the run fell back to CPU. |
+| `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU. |
+| `enhancerBackendId` | LavaSR enhancer backend family, same codes as `backendId`. |
+
+```ts
+const stats = await result.stats;
+console.log(stats?.realTimeFactor, stats?.backendId, stats?.gpuUnsupported);
+```
 
 ## Models
 
@@ -55,6 +90,20 @@ await loadModel({
 
 <Callout type="info">Omitting `ttsEngine` defaults to Chatterbox.</Callout>
 
+The multilingual (MTL) GGUFs need a tokenizer asset for two languages:
+`mecabDictSrc` is required for Japanese (`language: "ja"`) and `cangjieTsvSrc`
+for Chinese (`language: "zh"`). Both are rejected at load if missing.
+
+`ttsSpeed` is Chatterbox's speech-rate control — a pitch-preserving WSOLA
+time-stretch bounded to `0.25`–`4.0` (Chatterbox has no `pace` channel).
+`nCtx` caps the T3 context length in tokens (~25 tokens ≈ 1 s of audio); the
+KV cache is allocated up front at that length, so it directly bounds memory.
+`kvCacheType` picks the KV-cache dtype — `f16` (the safe cross-backend
+default), `f32`, or `q8_0` (smaller and faster where the backend implements
+its ops). `seed`, `threads`, `nGpuLayers`, `outputSampleRate`, `backendsDir`,
+and `openclCacheDir` work as on the other engines, and Chatterbox supports
+[LavaSR](#lavasr) post-processing.
+
 ### Supertonic
 
 Supertonic uses a **single GGUF** via top-level `modelSrc`. Set `voice`, `ttsSpeed`, and `ttsNumInferenceSteps` in `modelConfig` as needed. Multilingual output is selected by the GGUF (e.g. `TTS_MULTILINGUAL_SUPERTONIC2_Q8_0`) plus `language`.
@@ -70,6 +119,17 @@ await loadModel({
   },
 });
 ```
+
+Supertonic takes its speech rate either as an exact multiplier (`ttsSpeed`) or
+as the canonical `pace` vocabulary (`slow` / `moderate` / `fast`), which maps
+onto the duration multiplier relative to the GGUF's own default. The two are
+mutually exclusive and rejected together at load. Unlike Parler and CosyVoice3,
+Supertonic conditions `pace` when the engine is built, so it cannot be changed
+per request — set it in `modelConfig`.
+
+`seed`, `threads`, `nGpuLayers`, `outputSampleRate`, `backendsDir`, and
+`openclCacheDir` work as on the other engines; `vulkanCacheDir` additionally
+persists the compiled Vulkan pipeline cache when `useGPU` is set.
 
 ### Parler-TTS
 
@@ -128,8 +188,10 @@ Set `streamChunkTokens` above zero to enable native chunk streaming;
 `streamFirstChunkTokens` only tunes the first chunk and does not enable
 streaming by itself. Native streaming emits at 44.1 kHz, so omit
 `outputSampleRate` or set it to `44100` when `streamChunkTokens > 0`.
-Integer generation controls use signed 32-bit values. Parler does not support
-LavaSR post-processing.
+Integer generation controls use signed 32-bit values. Parler also supports
+[LavaSR](#lavasr) post-processing via `lavasrEnhancerModelSrc` and
+`lavasrDenoiserModelSrc` (the denoiser is batch-only — disable native chunk
+streaming to use it).
 
 The generated Python client uses the same contract:
 
@@ -167,8 +229,9 @@ async for response in text_to_speech(transport, request):
 CosyVoice3 uses the **LLM GGUF** as the top-level `modelSrc`; its registry
 companion set auto-downloads the flow and HiFT GGUFs, the baked `voice.gguf`,
 and the tokenizer files alongside it. Speech is synthesized with the baked
-default voice — the engine's reference-audio path is reserved and voice
-cloning is not yet exposed — and emits native 24 kHz audio.
+default voice unless you supply a reference recording (see
+[voice cloning](#cosyvoice3-voice-cloning) below), and emits native 24 kHz
+audio.
 
 ```ts
 const modelId = await loadModel({
@@ -219,6 +282,48 @@ desktop Linux/Windows, and OpenCL on Adreno Android devices; `threads`,
 the other engines. CosyVoice3 also supports [LavaSR](#lavasr)
 post-processing via `lavasrEnhancerModelSrc` (48 kHz bandwidth extension) and
 `lavasrDenoiserModelSrc` (batch-only; runs before the enhancer).
+
+#### CosyVoice3 voice cloning
+
+Supply `referenceAudioSrc` — a WAV of 0.5–30 s (5–15 s of clean speech is the
+sweet spot; multichannel input is downmixed to mono) — to replace the baked
+voice with the speaker in the recording. Cloning needs two extra GGUFs that are
+**not** part of the LLM's companion set, because they are a ~300 MB opt-in:
+
+- `cosyvoice3S3tokModelSrc` — the speech tokenizer (`speech_tokenizer_v3`).
+  Constants: `TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0`,
+  `TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16`, `TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32`.
+- `cosyvoice3CampplusModelSrc` — the CAM++ speaker encoder. Constant:
+  `TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32`.
+
+`promptText` selects the cloning mode: set it to the verbatim transcript of the
+recording for **zero-shot** cloning (best fidelity in the reference's own
+language), or omit it for **cross-lingual** cloning (timbre only, so you can
+synthesize a different language than the reference speaks). Cloning composes
+with `instruct`.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "cosyvoice3",
+    referenceAudioSrc: { path: "/path/to/reference.wav" },
+    cosyvoice3S3tokModelSrc: TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0.src,
+    cosyvoice3CampplusModelSrc: TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32.src,
+    // Zero-shot: the exact words spoken in reference.wav.
+    // Omit promptText for cross-lingual cloning.
+    promptText: "This is exactly what the reference recording says.",
+  },
+});
+```
+
+<Callout type="warn">
+  The reference is baked at load. All three fields are validated together — a
+  reference without either cloning GGUF is rejected at load rather than
+  silently falling back to the baked voice. Changing voices means loading the
+  model again.
+</Callout>
 
 ### Audio8
 
@@ -278,10 +383,17 @@ For model constants, see [SDK — Models](/introduction#models).
 
 ### LavaSR
 
-With Chatterbox, Supertonic, or CosyVoice3, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag.
+With Chatterbox, Supertonic, Parler, or CosyVoice3, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag. (Audio8 is the one engine whose native config does not read them.)
 
 - `lavasrDenoiserModelSrc` — a denoiser GGUF that cleans the speech (noise reduction). It runs **first** and is rate-preserving. Constants: `TTS_DENOISER_LAVASR_FP16`, `TTS_DENOISER_LAVASR_FP32`.
 - `lavasrEnhancerModelSrc` — an enhancer GGUF that neurally bandwidth-extends the output to **48 kHz**. It runs **after** the denoiser. Constants: `TTS_ENHANCER_LAVASR_FP16`, `TTS_ENHANCER_LAVASR_FP32`.
+
+<Callout type="warn">
+  The denoiser needs the whole utterance, so it cannot be combined with native
+  chunk streaming (`streamChunkTokens > 0`) on Chatterbox, Parler, or
+  CosyVoice3. The combination is rejected at load. The enhancer has no such
+  restriction — it resamples seam-free across chunk boundaries.
+</Callout>
 
 ```ts
 await loadModel({

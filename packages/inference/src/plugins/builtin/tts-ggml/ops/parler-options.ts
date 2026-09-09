@@ -1,3 +1,4 @@
+import { TTS_COSYVOICE3_EMOTIONS } from '@/schemas/index'
 import type { TextToSpeechStreamRequest, TtsRequest } from '@/schemas/index'
 import { PluginRequestValidationFailedError } from '@/errors/index'
 
@@ -71,6 +72,20 @@ export function assertParlerJobOptionsSupported(
       throw new PluginRequestValidationFailedError(
         handlerName,
         `${parlerOnlyKeys.join(', ')} ${parlerOnlyKeys.length === 1 ? 'is' : 'are'} only supported by Parler TTS models; CosyVoice3 supports emotion and pace`
+      )
+    }
+    // The request schema validates `emotion` against Parler's 12-value
+    // vocabulary because a request carries only an opaque modelId. Now that
+    // the engine is known, narrow it to the four CosyVoice3 has a trained
+    // instruction for — the addon rejects the other eight, and rejecting them
+    // here names the supported set instead of surfacing a raw addon throw.
+    if (
+      options.emotion !== undefined &&
+      !(TTS_COSYVOICE3_EMOTIONS as readonly string[]).includes(options.emotion)
+    ) {
+      throw new PluginRequestValidationFailedError(
+        handlerName,
+        `emotion "${options.emotion}" is not supported by CosyVoice3; use one of ${TTS_COSYVOICE3_EMOTIONS.join(', ')}`
       )
     }
     // CosyVoice3 is trained on one instruction per synthesis; a request that

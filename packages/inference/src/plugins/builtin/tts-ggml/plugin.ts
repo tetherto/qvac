@@ -33,6 +33,21 @@ import { TtsArtifactsRequiredError, LegacyTtsModelDeprecatedError } from '@/erro
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
 import { textToSpeechStream } from '@/plugins/builtin/tts-ggml/ops/text-to-speech-stream'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
+import type { TtsOpYield } from '@/utils/tts-stats'
+
+// Everything a TTS frame carries beyond its PCM, forwarded verbatim from the
+// op yield onto the wire frame. Both handlers use it so the two response
+// shapes cannot drift apart.
+function ttsFrameMetadata(value: TtsOpYield) {
+  return {
+    ...(value.sampleRate !== undefined ? { sampleRate: value.sampleRate } : {}),
+    ...(value.chunkIndex !== undefined ? { chunkIndex: value.chunkIndex } : {}),
+    ...(typeof value.sentenceChunk === 'string' && value.sentenceChunk.length > 0
+      ? { sentenceChunk: value.sentenceChunk }
+      : {}),
+    ...(value.isLast !== undefined ? { isLast: value.isLast } : {})
+  }
+}
 
 function rejectLegacyOnnxFields(cfg: object) {
   const record = cfg as Record<string, unknown>
@@ -126,15 +141,8 @@ async function resolveSupertonicConfig(
   return { config: runtime, artifacts: lavasrArtifacts }
 }
 
-function resolveParlerConfig(config: TtsParlerLoadConfig): ResolveResult<TtsRuntimeConfig> {
-  return { config, artifacts: {} }
-}
-
-// CosyVoice3's multi-file layout (flow/HiFT GGUFs, voice.gguf, vocab.json,
-// merges.txt) rides the primary model's registry companion set, so only the
-// optional LavaSR post-processing sources need resolution here.
-async function resolveCosyvoice3Config(
-  config: TtsCosyvoice3LoadConfig,
+async function resolveParlerConfig(
+  config: TtsParlerLoadConfig,
   ctx: ResolveContext
 ): Promise<ResolveResult<TtsRuntimeConfig>> {
   const { lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ...runtime } = config
@@ -145,6 +153,43 @@ async function resolveCosyvoice3Config(
   )
 
   return { config: runtime, artifacts: lavasrArtifacts }
+}
+
+// CosyVoice3's multi-file layout (flow/HiFT GGUFs, voice.gguf, vocab.json,
+// merges.txt) rides the primary model's registry companion set. The voice
+// cloning add-ons are deliberately not in that set — they are a ~300 MB opt-in
+// — so they are resolved here alongside the optional LavaSR sources.
+async function resolveCosyvoice3Config(
+  config: TtsCosyvoice3LoadConfig,
+  ctx: ResolveContext
+): Promise<ResolveResult<TtsRuntimeConfig>> {
+  const {
+    lavasrEnhancerModelSrc,
+    lavasrDenoiserModelSrc,
+    referenceAudioSrc,
+    cosyvoice3S3tokModelSrc,
+    cosyvoice3CampplusModelSrc,
+    ...runtime
+  } = config
+
+  const resolve = ctx.resolveModelPath
+  const [lavasrArtifacts, referenceAudioPath, cosyvoiceS3tokPath, cosyvoiceCampplusPath] =
+    await Promise.all([
+      resolveLavasrArtifacts(lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ctx),
+      referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined),
+      cosyvoice3S3tokModelSrc ? resolve(cosyvoice3S3tokModelSrc) : Promise.resolve(undefined),
+      cosyvoice3CampplusModelSrc ? resolve(cosyvoice3CampplusModelSrc) : Promise.resolve(undefined)
+    ])
+
+  return {
+    config: runtime,
+    artifacts: {
+      ...lavasrArtifacts,
+      ...(referenceAudioPath ? { referenceAudioPath } : {}),
+      ...(cosyvoiceS3tokPath ? { cosyvoiceS3tokPath } : {}),
+      ...(cosyvoiceCampplusPath ? { cosyvoiceCampplusPath } : {})
+    }
+  }
 }
 
 async function resolveAudio8Config(
@@ -171,6 +216,20 @@ async function resolveAudio8Config(
       ...(audio8CodecEncoderPath ? { audio8CodecEncoderPath } : {}),
       ...(referenceAudioPath ? { referenceAudioPath } : {})
     }
+  }
+}
+
+// The generic ggml backend-loading knobs, forwarded on `config` the same way
+// Supertonic's vulkanCacheDir already is. Parler and Audio8 configs carry no
+// `openclCacheDir` (their native builders do not read it), so it is simply
+// absent for them.
+function ggmlBackendConfig(config: {
+  backendsDir?: string | undefined
+  openclCacheDir?: string | undefined
+}) {
+  return {
+    ...(config.backendsDir !== undefined ? { backendsDir: config.backendsDir } : {}),
+    ...(config.openclCacheDir !== undefined ? { openclCacheDir: config.openclCacheDir } : {})
   }
 }
 
@@ -221,12 +280,20 @@ function createChatterboxModel(
       : {}),
     ...(config.cfmSteps !== undefined ? { cfmSteps: config.cfmSteps } : {}),
     ...(config.cfgRate !== undefined ? { cfgRate: config.cfgRate } : {}),
+    ...(config.nCtx !== undefined ? { nCtx: config.nCtx } : {}),
+    ...(config.kvCacheType !== undefined ? { kvCacheType: config.kvCacheType } : {}),
+    // Chatterbox has no pace channel; `speed` is its only rate control.
+    ...(config.ttsSpeed !== undefined ? { speed: config.ttsSpeed } : {}),
     ...(config.threads !== undefined ? { threads: config.threads } : {}),
     ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
     ...(config.seed !== undefined ? { seed: config.seed } : {}),
     config: {
       language: config.language ?? 'en',
-      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {})
+      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.outputSampleRate !== undefined
+        ? { outputSampleRate: config.outputSampleRate }
+        : {}),
+      ...ggmlBackendConfig(config)
     },
     logger,
     opts: { stats: true },
@@ -255,16 +322,26 @@ function createSupertonicModel(
     files: { supertonicModel, ...lavasrFiles(artifacts) },
     voice: config.voice ?? 'F1',
     ...(config.ttsSpeed !== undefined ? { speed: config.ttsSpeed } : {}),
+    // Supertonic conditions pace when the engine is built, so it arrives as a
+    // constructor option rather than a per-request field.
+    ...(config.pace !== undefined ? { pace: config.pace } : {}),
     ...(config.ttsNumInferenceSteps !== undefined
       ? { numInferenceSteps: config.ttsNumInferenceSteps }
       : {}),
+    ...(config.threads !== undefined ? { threads: config.threads } : {}),
+    ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
+    ...(config.seed !== undefined ? { seed: config.seed } : {}),
     config: {
       language: config.language ?? 'en',
-      useGPU: config.useGPU ?? false,
+      // Supertonic defaults to CPU, but the addon rejects a stated `useGPU`
+      // that contradicts `nGpuLayers`. Deriving the default from the layer
+      // count keeps `nGpuLayers: 99` on its own usable instead of throwing.
+      useGPU: config.useGPU ?? (config.nGpuLayers !== undefined && config.nGpuLayers !== 0),
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
         : {}),
-      ...(config.vulkanCacheDir !== undefined ? { vulkanCacheDir: config.vulkanCacheDir } : {})
+      ...(config.vulkanCacheDir !== undefined ? { vulkanCacheDir: config.vulkanCacheDir } : {}),
+      ...ggmlBackendConfig(config)
     },
     logger,
     opts: { stats: true },
@@ -278,7 +355,8 @@ function createSupertonicModel(
 function createParlerModel(
   modelId: string,
   config: TtsParlerRuntimeConfig,
-  params: CreateModelParams
+  params: CreateModelParams,
+  artifacts: Record<string, string | undefined>
 ): PluginModelResult {
   const parlerModel = params.modelPath
   if (!parlerModel) {
@@ -289,7 +367,7 @@ function createParlerModel(
 
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_PARLER,
-    files: { parlerModel },
+    files: { parlerModel, ...lavasrFiles(artifacts) },
     ...(config.description !== undefined ? { description: config.description } : {}),
     ...(config.voiceDescription !== undefined ? { voiceDescription: config.voiceDescription } : {}),
     ...(config.voice !== undefined ? { voice: config.voice } : {}),
@@ -319,7 +397,8 @@ function createParlerModel(
       ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
-        : {})
+        : {}),
+      ...ggmlBackendConfig(config)
     },
     logger,
     opts: { stats: true },
@@ -352,6 +431,10 @@ function createCosyvoice3Model(
     throw new TtsArtifactsRequiredError()
   }
 
+  const referenceAudioPath = artifacts['referenceAudioPath']
+  const cosyvoiceS3tokModel = artifacts['cosyvoiceS3tokPath']
+  const cosyvoiceCampplusModel = artifacts['cosyvoiceCampplusPath']
+
   const logger = createStreamLogger(modelId, ModelType.ttsGgml)
 
   const model = new TTSGgml({
@@ -362,8 +445,14 @@ function createCosyvoice3Model(
     files: {
       cosyvoiceModelDir: dirname(cosyvoiceLlmModel),
       cosyvoiceLlmModel,
+      // Cloning add-ons live outside the companion set, so pass explicit paths
+      // rather than relying on the addon's name-prefix discovery in the dir.
+      ...(cosyvoiceS3tokModel ? { cosyvoiceS3tokModel } : {}),
+      ...(cosyvoiceCampplusModel ? { cosyvoiceCampplusModel } : {}),
       ...lavasrFiles(artifacts)
     },
+    ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
+    ...(config.promptText !== undefined ? { promptText: config.promptText } : {}),
     ...(config.emotion !== undefined ? { emotion: config.emotion } : {}),
     ...(config.pace !== undefined ? { pace: config.pace } : {}),
     ...(config.instruct !== undefined ? { instruct: toAddonInstruct(config.instruct) } : {}),
@@ -380,7 +469,8 @@ function createCosyvoice3Model(
       ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
-        : {})
+        : {}),
+      ...ggmlBackendConfig(config)
     },
     logger,
     opts: { stats: true },
@@ -429,7 +519,8 @@ function createAudio8Model(
       ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
-        : {})
+        : {}),
+      ...ggmlBackendConfig(config)
     },
     logger,
     opts: { stats: true },
@@ -451,7 +542,7 @@ export const ttsPlugin = definePlugin({
 
     // Same default as the former onnx-tts plugin: omitting `ttsEngine` → Chatterbox.
     if (ttsEngine === 'parler') {
-      return resolveParlerConfig(cfg as TtsParlerLoadConfig)
+      return resolveParlerConfig(cfg as TtsParlerLoadConfig, ctx)
     }
     if (ttsEngine === 'cosyvoice3') {
       return resolveCosyvoice3Config(cfg as TtsCosyvoice3LoadConfig, ctx)
@@ -470,7 +561,7 @@ export const ttsPlugin = definePlugin({
     const artifacts = params.artifacts ?? {}
 
     if (config.ttsEngine === 'parler') {
-      return createParlerModel(params.modelId, config, params)
+      return createParlerModel(params.modelId, config, params, artifacts)
     }
     if (config.ttsEngine === 'cosyvoice3') {
       return createCosyvoice3Model(params.modelId, config, params, artifacts)
@@ -502,13 +593,7 @@ export const ttsPlugin = definePlugin({
               type: 'textToSpeech' as const,
               buffer: result.value.buffer,
               done: false,
-              ...(result.value.chunkIndex !== undefined
-                ? { chunkIndex: result.value.chunkIndex }
-                : {}),
-              ...(typeof result.value.sentenceChunk === 'string' &&
-              result.value.sentenceChunk.length > 0
-                ? { sentenceChunk: result.value.sentenceChunk }
-                : {})
+              ...ttsFrameMetadata(result.value)
             }
             result = await stream.next()
           }
@@ -546,13 +631,7 @@ export const ttsPlugin = definePlugin({
               type: 'textToSpeechStream' as const,
               buffer: result.value.buffer,
               done: false,
-              ...(result.value.chunkIndex !== undefined
-                ? { chunkIndex: result.value.chunkIndex }
-                : {}),
-              ...(typeof result.value.sentenceChunk === 'string' &&
-              result.value.sentenceChunk.length > 0
-                ? { sentenceChunk: result.value.sentenceChunk }
-                : {})
+              ...ttsFrameMetadata(result.value)
             }
             result = await stream.next()
           }
