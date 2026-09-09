@@ -4,7 +4,7 @@ description: A local AI SDK for building cross-platform, P2P applications and sy
 ogImage: /og-home.png
 ---
 
-import { MessagesSquare, Hash, Languages, Mic, Music, Speech, Volume2, ScanText, Image as ImageIcon, Video, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Brain, DoorOpen, Server, MonitorPlay } from 'lucide-react'
+import { MessagesSquare, Hash, Languages, Mic, Music, Speech, Volume2, ScanText, Image as ImageIcon, Video, Rotate3d, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Brain, DoorOpen, Server, MonitorPlay } from 'lucide-react'
 import { SiPython, SiTypescript } from '@icons-pack/react-simple-icons'
 
 ## Why QVAC?
@@ -41,6 +41,9 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   </Card>
   <Card href="/ai-capabilities/video-generation" title={<span className="inline-flex items-center gap-2"><Video className="size-4 text-[var(--color-fd-primary)]" />Video generation</span>}>
     Text-to-video and image-to-video generation via a customized Diffusion backend.
+  </Card>
+  <Card href="/ai-capabilities/world-simulation" title={<span className="inline-flex items-center gap-2"><Rotate3d className="size-4 text-[var(--color-fd-primary)]" />World simulation</span>}>
+    Turn a first-frame image and navigation controls into a streamed, navigable video via an interactive world model.
   </Card>
   <Card href="/ai-capabilities/music-generation" title={<span className="inline-flex items-center gap-2"><Music className="size-4 text-[var(--color-fd-primary)]" />Music generation</span>}>
     Generate music from text prompts and lyrics via ACE-Step or MiniMax-Music3.
