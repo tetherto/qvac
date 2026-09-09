@@ -108,6 +108,11 @@ std::string normalizedDeviceId(
   if (!isCuda) {
     return deviceId;
   }
+  // Only normalize CUDA's registry suffix on PCI ids; MIG/MPS virtual ids are
+  // distinct Fabric devices and must not collapse here.
+  if (lowerCopy(deviceId).find("pci") == std::string::npos) {
+    return deviceId;
+  }
   const size_t suffix = deviceId.rfind("-v");
   if (suffix == std::string::npos || suffix + 2 == deviceId.size() ||
       !std::ranges::all_of(deviceId.substr(suffix + 2), [](unsigned char chr) {
