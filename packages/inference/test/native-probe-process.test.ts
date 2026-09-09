@@ -1,19 +1,19 @@
 import test from 'brittle'
 import { fileURLToPath } from 'bare-url'
 
-import { runIsolatedFit } from '@/model-fit/run-isolated-fit'
+import { runIsolatedFit } from '@/resources/model-fit/native-probe/run-isolated-fit'
 
 // The engine always runs under Bare, so unlike the pre-relocation SDK suite
 // there is no Node-parent variant: this test IS the Bare parent, driving one
 // real disposable child per case through the actual `bare` spawn path.
 //
 // Resolved against the compiled test's own location: the fixture compiles to
-// ./fixtures/model-fit/fit-runner-fixture.js beside it under test/dist.
+// ./fixtures/native-probe/fit-runner-fixture.js beside it under test/dist.
 // `import.meta` is not modeled by this package's TS libs; the compiled test
 // runs as ESM under Bare where it exists.
 const testModuleUrl = (import.meta as unknown as { url: string }).url
 const runnerFixturePath = fileURLToPath(
-  new URL('./fixtures/model-fit/fit-runner-fixture.js', testModuleUrl)
+  new URL('./fixtures/native-probe/fit-runner-fixture.js', testModuleUrl)
 )
 
 function run(mode: 'completed' | 'error' | 'hang' | 'abort') {

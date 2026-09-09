@@ -15,7 +15,7 @@ import {
   type RunIsolatedFitOptions,
   type SpawnContext,
   type WritableChildStream
-} from '@/model-fit/run-isolated-fit'
+} from '@/resources/model-fit/native-probe/run-isolated-fit'
 
 const LOAD_KIND = 'completion' as const
 const CONFIG = {

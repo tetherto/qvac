@@ -1,7 +1,7 @@
 import test from 'brittle'
 
 import { ModelType } from '@/schemas/index'
-import { createLlamaFitRequest } from '@/model-fit/create-llama-fit-request'
+import { createLlamaFitRequest } from '@/resources/model-fit/native-probe/create-llama-fit-request'
 
 const COMPLETION_CONFIG = {
   ctx_size: 4096,

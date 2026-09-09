@@ -3,9 +3,9 @@ import type { FitLlamaResult } from '@qvac/model-fit/process'
 
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
-import type { CanonicalModelType } from '@/schemas/index'
-import { createLlamaFitRequest } from '@/model-fit/create-llama-fit-request'
-import type { runIsolatedFit } from '@/model-fit/run-isolated-fit'
+import type { CanonicalModelType, NativeProbeFit, NativeProbeVerdict } from '@/schemas/index'
+import { createLlamaFitRequest } from '@/resources/model-fit/native-probe/create-llama-fit-request'
+import type { runIsolatedFit } from '@/resources/model-fit/native-probe/run-isolated-fit'
 
 /**
  * Shorter than the supervisor's own 60s default: this check sits in front of a
@@ -21,6 +21,20 @@ const ADVISORY_FIT_TIMEOUT_MS = 30_000
  */
 const ADVISORY_FIT_BASE_MARGIN_MIB = 1024
 
+/**
+ * Names the headroom policy these two numbers add up to: withhold
+ * `ADVISORY_FIT_BASE_MARGIN_MIB`, plus the on-disk bytes of every model already
+ * resident in this worker.
+ *
+ * Deliberately *not* `interactive-v1` (withhold 20%, cap 2 GiB desktop / 1 GiB
+ * mobile), which `assessModelFit` applies. That policy is applied by the SDK to
+ * a budget the SDK computed; here the child owns the budget (total − wired −
+ * compressor, measured inside the disposable process) and `marginMiB` is the
+ * only lever this side has. Reconciling the two means one entry point owning
+ * both bases — see the precedence note on `nativeProbeFitSchema`.
+ */
+const NATIVE_PROBE_ESTIMATOR_VERSION = 'native-probe-v1'
+
 const BYTES_PER_MIB = 1024 * 1024
 
 /**
@@ -28,20 +42,14 @@ const BYTES_PER_MIB = 1024 * 1024
  * not admission decisions. `@qvac/model-fit` duplicates the loader's policy for
  * this experiment and the real loader neither consumes nor verifies the fitted
  * plan, so neither verdict is denial-grade and no verdict changes the load.
+ *
+ * The outcome is the wire shape: `loadModel` hands it to the model registry and
+ * `getLoadedModelInfo` returns it, so no caller has to read a verdict out of a
+ * log line.
  */
-export type AdvisoryFitVerdict = 'fit' | 'does-not-fit' | 'unknown'
+export type AdvisoryFitVerdict = NativeProbeVerdict
 
-export interface AdvisoryFitOutcome {
-  verdict: AdvisoryFitVerdict
-  /** Machine-readable explanation; never derived from log text. */
-  reason: string
-  message?: string
-  plan?: {
-    nCtx: number
-    nGpuLayers: number
-    nGpuDevices: number
-  }
-}
+export type AdvisoryFitOutcome = NativeProbeFit
 
 export interface AdvisoryFitInput {
   modelId: string
@@ -137,18 +145,24 @@ async function resolveRunFit(
   explicit: typeof runIsolatedFit | undefined
 ): Promise<typeof runIsolatedFit> {
   if (explicit !== undefined) return explicit
-  return (await import('@/model-fit/run-isolated-fit')).runIsolatedFit
+  return (await import('@/resources/model-fit/native-probe/run-isolated-fit')).runIsolatedFit
 }
+
+const PROVENANCE = {
+  basis: 'native-probe',
+  estimatorVersion: NATIVE_PROBE_ESTIMATOR_VERSION
+} as const
 
 function unknown(reason: string, message?: string): AdvisoryFitOutcome {
   return message === undefined
-    ? { verdict: 'unknown', reason }
-    : { verdict: 'unknown', reason, message }
+    ? { ...PROVENANCE, verdict: 'unknown', reason }
+    : { ...PROVENANCE, verdict: 'unknown', reason, message }
 }
 
 function classify(result: FitLlamaResult): AdvisoryFitOutcome {
   if (result.status === 0) {
     return {
+      ...PROVENANCE,
       verdict: 'fit',
       reason: result.reason,
       plan: {
@@ -159,7 +173,7 @@ function classify(result: FitLlamaResult): AdvisoryFitOutcome {
     }
   }
   if (result.status === 1) {
-    return { verdict: 'does-not-fit', reason: result.reason }
+    return { ...PROVENANCE, verdict: 'does-not-fit', reason: result.reason }
   }
   // `model-unreadable`, `no-backend-device`, and `unsupported-config` are all
   // absence of evidence, not evidence of insufficiency.

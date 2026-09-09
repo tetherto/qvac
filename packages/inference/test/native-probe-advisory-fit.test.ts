@@ -4,8 +4,8 @@ import type { FitLlamaResult } from '@qvac/model-fit/process'
 
 import type { Logger } from '@/logging/types'
 import { ModelType } from '@/schemas/index'
-import { runAdvisoryFitCheck } from '@/model-fit/advisory-fit'
-import type { IsolatedFitResult } from '@/model-fit/run-isolated-fit'
+import { runAdvisoryFitCheck } from '@/resources/model-fit/native-probe/advisory-fit'
+import type { IsolatedFitResult } from '@/resources/model-fit/native-probe/run-isolated-fit'
 
 const COMPLETION_INPUT = {
   modelId: 'llm-1',
@@ -65,6 +65,11 @@ function recordingLogger(): { logger: Logger; records: Recorded[] } {
 
 const zeroResident = () => Promise.resolve(0)
 
+// Every outcome carries the same provenance, so `alike` needs it in each
+// expectation. Asserted rather than ignored: it is what tells a caller which
+// evidence class and headroom policy produced the verdict.
+const PROVENANCE = { basis: 'native-probe', estimatorVersion: 'native-probe-v1' } as const
+
 function fitReturning(result: IsolatedFitResult) {
   const calls: unknown[][] = []
   const runFit = (...args: unknown[]) => {
@@ -86,6 +91,7 @@ test('advisory fit: reports a projected fit with its plan', async (t) => {
   })
 
   t.alike(outcome, {
+    ...PROVENANCE,
     verdict: 'fit',
     reason: 'fits',
     plan: { nCtx: 4096, nGpuLayers: 32, nGpuDevices: 1 }
@@ -110,7 +116,7 @@ test('advisory fit: reports a projected insufficiency without denying the load',
     logger
   })
 
-  t.alike(outcome, { verdict: 'does-not-fit', reason: 'does-not-fit' })
+  t.alike(outcome, { ...PROVENANCE, verdict: 'does-not-fit', reason: 'does-not-fit' })
   t.is(records[0]?.level, 'warn')
   t.ok(records[0]?.message.includes('the load continues unchanged'))
 })
@@ -130,7 +136,7 @@ test('advisory fit: treats every non-verdict fit result as absent evidence', asy
       logger
     })
 
-    t.alike(outcome, { verdict: 'unknown', reason })
+    t.alike(outcome, { ...PROVENANCE, verdict: 'unknown', reason })
   }
 })
 
@@ -150,7 +156,7 @@ test('advisory fit: treats every supervisor failure as absent evidence', async (
       logger
     })
 
-    t.alike(outcome, { verdict: 'unknown', reason, message: 'child failed' })
+    t.alike(outcome, { ...PROVENANCE, verdict: 'unknown', reason, message: 'child failed' })
     t.is(records[0]?.level, 'info')
   }
 })
@@ -183,7 +189,7 @@ test('advisory fit: the env opt-out disables the check without logging', async (
     logger
   })
 
-  t.alike(outcome, { verdict: 'unknown', reason: 'disabled' })
+  t.alike(outcome, { ...PROVENANCE, verdict: 'unknown', reason: 'disabled' })
   t.is(calls.length, 0)
   t.is(records.length, 0)
 })
@@ -200,6 +206,7 @@ test('advisory fit: never launches a child on mobile', async (t) => {
   })
 
   t.alike(outcome, {
+    ...PROVENANCE,
     verdict: 'unknown',
     reason: 'unsupported-load',
     message: 'mobile has no disposable process boundary'
@@ -218,6 +225,7 @@ test('advisory fit: absorbs a supervisor that rejects', async (t) => {
   })
 
   t.alike(outcome, {
+    ...PROVENANCE,
     verdict: 'unknown',
     reason: 'internal-error',
     message: 'TypeError: supervisor exploded'
@@ -237,6 +245,7 @@ test('advisory fit: absorbs a supervisor that throws synchronously', async (t) =
   })
 
   t.alike(outcome, {
+    ...PROVENANCE,
     verdict: 'unknown',
     reason: 'internal-error',
     message: 'RangeError: bad request'
@@ -305,6 +314,7 @@ test('advisory fit: absorbs a resident-bytes probe that rejects', async (t) => {
   })
 
   t.alike(outcome, {
+    ...PROVENANCE,
     verdict: 'unknown',
     reason: 'internal-error',
     message: 'TypeError: registry unavailable'

@@ -21,7 +21,7 @@ import {
   ModelFileLocateFailedError
 } from '@/errors/index'
 import { getPlugin } from '@/plugins/index'
-import { runAdvisoryFitCheck } from '@/model-fit/advisory-fit'
+import { runAdvisoryFitCheck } from '@/resources/model-fit/native-probe/advisory-fit'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { getEngineLogger } from '@/logging/index'
@@ -98,8 +98,9 @@ export async function loadModel(
   // to the ordinary load below. Runs after config resolution and path
   // validation so it sees the same state the real load uses, and before
   // `createModel()` so it never competes with the native load for device
-  // memory.
-  await runAdvisoryFitCheck({
+  // memory. The outcome is kept and stored on the registry entry, so
+  // `getLoadedModelInfo` can return it instead of callers scraping the log.
+  const fitProbe = await runAdvisoryFitCheck({
     modelId,
     modelType: modelType as CanonicalModelType,
     modelPath,
@@ -133,7 +134,8 @@ export async function loadModel(
       path: modelPath,
       config: modelConfig,
       modelType: modelType as CanonicalModelType,
-      name: modelName
+      name: modelName,
+      fitProbe
     })
 
     const loadResult: LoadModelResult =
