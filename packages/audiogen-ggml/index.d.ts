@@ -101,12 +101,30 @@ export interface GenerateOptions {
      */
     simpleMode?: boolean;
     /**
+     * Query Rewriting: the LM FORMAT pass rewrites the caption into a detailed
+     * musical description before synthesis, preserving the lyric content and
+     * filling any metadata left unset. Unlike Simple Mode — which expands a bare
+     * query and writes lyrics from scratch — this takes caption AND lyrics as
+     * input, so real `lyrics` are required (`'[Instrumental]'` belongs to Simple
+     * Mode) and the two options are mutually exclusive. Requires
+     * `taskType: 'text2music'`; faithful rewriting needs the 1.7B LM.
+     */
+    rewriteQuery?: boolean;
+    /**
      * Percentile loudness normalization on the generated audio (default true):
      * the 99.999th-percentile sample scales to full scale and the tiny tail
      * above it clips, matching the reference loudness. Set false for the raw
      * engine output. Audio edits are never normalized.
      */
     normalizeLoudness?: boolean;
+    /**
+     * Synchronized lyric timestamps: after synthesis, the engine aligns the
+     * lyrics with the generated audio and delivers karaoke-style LRC text in
+     * `stats.lrc` with an alignment confidence in `stats.lyricsScore`. Requires
+     * lyrics to align: pass `lyrics` (or let Simple Mode write them) —
+     * instrumental requests are rejected. Requires `taskType: 'text2music'`.
+     */
+    generateLrc?: boolean;
     /**
      * Teacher-forced LM quality scoring of the generated audio codes against
      * the request: `stats.qualityScore` reports a weighted [0, 1] score
@@ -242,6 +260,8 @@ export interface AudiogenPcmChunk {
     outputArray: Int16Array;
     sampleRate: number;
     channels: number;
+    /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+    lrc?: string;
 }
 /** A progress tick delivered through the run's output stream. */
 export interface AudiogenProgressChunk {
@@ -289,6 +309,14 @@ export interface AudiogenStats {
     backendId?: number;
     /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
     gpuFallbackReason?: number;
+    /**
+     * Lyric-to-audio alignment confidence in [0, 1]. Present only when the run
+     * set `generateLrc`; the LRC text itself rides on the PCM chunk (`lrc`) and
+     * is repeated here for convenience.
+     */
+    lyricsScore?: number;
+    /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
+    lrc?: string;
     /**
      * Weighted quality of the generated codes against the request, in [0, 1]
      * (caption/lyrics PMI plus metadata recall). Present only when the run set
@@ -374,6 +402,7 @@ export declare class AudioGen {
     private _destroyed;
     private _cancelPromise;
     private _cancellingResponse;
+    private _lastLrc;
     private _cancelTerminalResolve;
     private _lastUnderstand;
     constructor(options?: AudioGenOptions);

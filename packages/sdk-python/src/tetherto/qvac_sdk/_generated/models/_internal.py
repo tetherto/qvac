@@ -1068,6 +1068,9 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -1197,6 +1200,9 @@ class BatchCompletionStreamResponseStats(GeneratedBaseModel):
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -1938,6 +1944,9 @@ class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseM
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -2462,6 +2471,9 @@ class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel)
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None

@@ -11,6 +11,7 @@ test('normalizeCompletionStats: drops non-finite addon numbers', (t) => {
   const stats: LlmStats = {
     TTFT: Number.NaN,
     TPS: Number.POSITIVE_INFINITY,
+    ppTPS: 850.5,
     CacheTokens: 12,
     promptTokens: Number.NEGATIVE_INFINITY,
     generatedTokens: 40,
@@ -20,6 +21,7 @@ test('normalizeCompletionStats: drops non-finite addon numbers', (t) => {
   const normalized = normalizeCompletionStats(stats)
 
   t.alike(normalized, {
+    promptTokensPerSecond: 850.5,
     cacheTokens: 12,
     generatedTokens: 40,
     backendDevice: 'gpu'
@@ -30,10 +32,15 @@ test('normalizeCompletionStats: drops non-finite addon numbers', (t) => {
 test('normalizeCompletionStats: returns undefined when no finite stats remain', (t) => {
   const normalized = normalizeCompletionStats({
     TTFT: Number.NaN,
-    TPS: Number.POSITIVE_INFINITY
+    TPS: Number.POSITIVE_INFINITY,
+    ppTPS: Number.NaN
   })
 
   t.is(normalized, undefined)
+})
+
+test('normalizeCompletionStats: keeps prefill throughput as the only stat', (t) => {
+  t.alike(normalizeCompletionStats({ ppTPS: 640 }), { promptTokensPerSecond: 640 })
 })
 
 test('withEmittedTokens: attaches streamed piece count without overwriting decode count', (t) => {
