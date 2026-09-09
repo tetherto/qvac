@@ -46,14 +46,16 @@ Which rebuild command you run depends on what changed.
 | You changed                              | Command                      | Rebuild packaged apps?                    |
 | ---------------------------------------- | ---------------------------- | ----------------------------------------- |
 | Inference source (`packages/inference/`) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
-| SDK source (`packages/sdk/` outside e2e) | `npm run install:build:sdk`  | Yes — `--skip-build` will miss the change |
+| SDK source (`packages/sdk/` outside e2e) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
 | Test code or assets in `e2e/`            | `npm run install:build`      | Yes for mobile and Electron               |
 | Only the producer side (filter, suite)   | none                         | No — use `--skip-build`                   |
 
 - `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
-- `install:build:sdk` builds `packages/sdk/` (`prepare:sdk`), clears the SDK snapshot, reconciles
-  `@qvac/inference` if it was previously pinned (see below), then reinstalls and bundles. Use when only
-  the SDK changed; `packages/inference` stays on its published range.
+- `install:build:sdk` is a faster opt-in shortcut: it builds `packages/sdk/` (`prepare:sdk`), clears the
+  SDK snapshot, reconciles `@qvac/inference` if it was previously pinned (see below), then reinstalls and
+  bundles — skipping the inference rebuild and leaving `@qvac/inference` on its published range. Only
+  reach for it when you know your local `packages/inference` matches what's published. CI always builds
+  inference from the branch, so anything else can pass here and still fail there.
 - `install:build:full` builds the whole local chain — `packages/inference` → `packages/sdk` → `e2e` — and is
   the one to run when in doubt. `packages/sdk` pins `@qvac/inference` to a published range, so the script
   packs the local inference to a tarball, swaps the spec in for the install, and restores the manifest
@@ -82,13 +84,13 @@ Which rebuild command you run depends on what changed.
 `clean:*` scripts are split by what they throw away, so a routine reset doesn't cost you more than it needs
 to:
 
-| Script               | Removes                                                                                 |
-| -------------------- | --------------------------------------------------------------------------------------- |
-| `clean:build`        | `dist`, `build`, `out`, `qvac`, `.sdk-e2e`, the generated `snap/*` build dirs           |
-| `clean:config`       | Generated `qvac.config*.json`                                                           |
-| `clean:cache`        | `.qvac-cache` (downloaded models), `.qvac-worker-backup`, `rag-hyperdb`, `rag-turbovec` |
-| `clean:dependencies` | `node_modules` / lockfiles here, in `packages/sdk`, and in `packages/inference`         |
-| `clean:all`          | All of the above                                                                        |
+| Script               | Removes                                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clean:build`        | `dist`, `build`, `out`, `qvac`, `.sdk-e2e`, the generated `snap/*` build dirs, and the mobile consumer pin (it names a tarball in `.sdk-e2e`) |
+| `clean:config`       | Generated `qvac.config*.json`                                                                                                                 |
+| `clean:cache`        | `.qvac-cache` (downloaded models), `.qvac-worker-backup`, `rag-hyperdb`, `rag-turbovec`                                                       |
+| `clean:dependencies` | `node_modules` / lockfiles here, in `packages/sdk`, and in `packages/inference`                                                               |
+| `clean:all`          | All of the above                                                                                                                              |
 
 **`clean:cache` and `clean:all` discard downloaded models.** If `cacheDirectory` is configured to a local
 path (CI always does this; see `.github/workflows/test-node-sdk.yml`), that's where `run:bootstrap:*`

@@ -149,6 +149,7 @@ Always show the recommendation before the tier prompt. The user can override it.
 
 - **SDK (`packages/sdk`) default**: recommend **T2**. This covers install/build, changed examples if present, and changed e2e on desktop. Mobile is opt-in because it is slower and usually covered by CI.
 - **Non-SDK default**: recommend the smallest tier that includes at least unit-level validation. Usually T2.
+- **`packages/inference` touched**: discovery attaches `sdkE2eSetup` / `sdkE2eCwd` to it, but inference has no e2e or examples of its own, so the non-SDK default above would leave the setup command with nothing to run after it. Pair it with an SDK e2e run in `sdkE2eCwd` and recommend **T4** (`--suite smoke` on desktop) — that is what CI runs for an inference change, and with no changed e2e files T2 has no filter to work from. If the PR also touches `packages/sdk/e2e`, use that package's changed tests / `relatedTests` filter instead.
 - **No examples**: if no changed or related examples are discovered, mark examples `not applicable`.
 - **No tests discovered**: recommend install/build only and ask the user to confirm build-only validation.
 - **Mixed PRs**: recommend the highest minimum required by any touched package. Example: SDK + addon changes means SDK T3 plus addon unit scripts.

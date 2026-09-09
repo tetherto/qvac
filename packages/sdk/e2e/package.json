@@ -20,7 +20,7 @@
     "test:snap:refresh": "node scripts/run-snap-refresh-test.mjs",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "clean:build": "rm -rf dist build out qvac .sdk-e2e snap/dist snap/electron-dist snap/parts snap/prime snap/stage",
+    "clean:build": "npm run unpin:consumer-inference && rm -rf dist build out qvac .sdk-e2e snap/dist snap/electron-dist snap/parts snap/prime snap/stage",
     "clean:config": "rm -rf qvac.config.json qvac.config.e2e.generated.json",
     "clean:cache": "rm -rf .qvac-cache .qvac-worker-backup rag-hyperdb rag-turbovec",
     "clean:dependencies": "rm -rf node_modules package-lock.json ../node_modules ../dist ../bun.lock ../package-lock.json ../../inference/node_modules ../../inference/dist ../../inference/bun.lock ../../inference/package-lock.json",

@@ -34,25 +34,14 @@ function findLocalInferenceTarball() {
   return path.join(ARTIFACT_DIR, tarballs[0])
 }
 
-export function pinConsumerInference(tarball) {
-  if (!fs.existsSync(TEMPLATE)) {
-    throw new Error(
-      `Mobile consumer template not found at ${path.relative(E2E_DIR, TEMPLATE)}.\n` +
-        'Install the e2e dependencies first ("npm install --install-links"). If @qvac/test-suite ' +
-        'moved its templates, fix this script rather than skipping it: without the pin the mobile ' +
-        `bundle silently embeds the published ${DEPENDENCY} and crashes at bootstrap.`
-    )
-  }
-
+function writeOverride(spec) {
   const template = JSON.parse(fs.readFileSync(TEMPLATE, 'utf8'))
   const overrides = { ...(template.overrides ?? {}) }
-  const expected = tarball === undefined ? undefined : pathToFileURL(tarball).href
 
-  if (expected === undefined) {
-    if (overrides[DEPENDENCY] === undefined) return undefined
+  if (spec === undefined) {
     delete overrides[DEPENDENCY]
   } else {
-    overrides[DEPENDENCY] = expected
+    overrides[DEPENDENCY] = spec
   }
 
   if (Object.keys(overrides).length > 0) {
@@ -63,12 +52,31 @@ export function pinConsumerInference(tarball) {
   fs.writeFileSync(TEMPLATE, `${JSON.stringify(template, null, 2)}\n`)
 
   const written = JSON.parse(fs.readFileSync(TEMPLATE, 'utf8')).overrides?.[DEPENDENCY]
-  if (written !== expected) {
+  if (written !== spec) {
     throw new Error(
-      `Failed to pin ${DEPENDENCY} in the mobile consumer template: expected ${expected ?? '<unset>'}, found ${written ?? '<unset>'}.`
+      `Failed to pin ${DEPENDENCY} in the mobile consumer template: expected ${spec ?? '<unset>'}, found ${written ?? '<unset>'}.`
     )
   }
   return written
+}
+
+export function pinConsumerInference(tarball) {
+  if (!fs.existsSync(TEMPLATE)) {
+    throw new Error(
+      `Mobile consumer template not found at ${path.relative(E2E_DIR, TEMPLATE)}.\n` +
+        'Install the e2e dependencies first ("npm install --install-links"). If @qvac/test-suite ' +
+        'moved its templates, fix this script rather than skipping it: without the pin the mobile ' +
+        `bundle silently embeds the published ${DEPENDENCY} and crashes at bootstrap.`
+    )
+  }
+  return writeOverride(pathToFileURL(tarball).href)
+}
+
+// Tolerant where pinning is strict: this runs from clean:build and before the
+// tarball is rebuilt, on trees that may not have node_modules yet.
+export function clearConsumerInferencePin() {
+  if (!fs.existsSync(TEMPLATE)) return undefined
+  return writeOverride(undefined)
 }
 
 export function reportConsumerInferencePin(spec) {
@@ -83,13 +91,16 @@ export function reportConsumerInferencePin(spec) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const clear = process.argv.includes('--clear')
-  const tarball = clear ? undefined : findLocalInferenceTarball()
-  if (!clear && tarball === undefined) {
-    throw new Error(
-      `No ${DEPENDENCY} tarball in ${path.relative(E2E_DIR, ARTIFACT_DIR)}. ` +
-        'Run "npm run install:build:full" to build and pack it, or pass --clear to drop the pin.'
-    )
+  if (process.argv.includes('--clear')) {
+    reportConsumerInferencePin(clearConsumerInferencePin())
+  } else {
+    const tarball = findLocalInferenceTarball()
+    if (tarball === undefined) {
+      throw new Error(
+        `No ${DEPENDENCY} tarball in ${path.relative(E2E_DIR, ARTIFACT_DIR)}. ` +
+          'Run "npm run install:build:full" to build and pack it, or pass --clear to drop the pin.'
+      )
+    }
+    reportConsumerInferencePin(pinConsumerInference(tarball))
   }
-  reportConsumerInferencePin(pinConsumerInference(tarball))
 }

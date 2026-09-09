@@ -2,8 +2,12 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { pinConsumerInference, reportConsumerInferencePin } from './pin-consumer-inference.mjs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import {
+  clearConsumerInferencePin,
+  pinConsumerInference,
+  reportConsumerInferencePin
+} from './pin-consumer-inference.mjs'
 import { resetInstallState } from './reconcile-e2e-inference.mjs'
 
 const E2E_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -12,6 +16,8 @@ const INFERENCE_DIR = path.resolve(SDK_DIR, '..', 'inference')
 const ARTIFACT_DIR = path.join(E2E_DIR, '.sdk-e2e', 'inference')
 const SDK_MANIFEST = path.join(SDK_DIR, 'package.json')
 const DEPENDENCY = '@qvac/inference'
+// 128 + signal number.
+const SIGNAL_EXIT_CODES = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }
 
 function run(command, args, cwd, capture = false) {
   return execFileSync(command, args, {
@@ -25,8 +31,30 @@ function step(message) {
   console.log(`\n[36m▶ ${message}[0m`)
 }
 
+// Mirrors .github/actions/sdk-e2e-prepare-inference/prepare.mjs, win32 branch
+// included, so local and CI manifests carry the same spec.
+function toLocalTarballSpec(tarballPath) {
+  if (process.platform === 'win32') {
+    return path.win32.resolve(tarballPath).replaceAll('\\', '/')
+  }
+  return pathToFileURL(path.resolve(tarballPath)).href
+}
+
+// Every local form this script — or an older revision of it — could leave
+// behind. A published range never starts this way.
+function isLocalPathSpec(spec) {
+  return (
+    spec.startsWith('file:') ||
+    spec.startsWith('/') ||
+    spec.startsWith('.') ||
+    /^[a-zA-Z]:[\\/]/.test(spec)
+  )
+}
+
 function packInference() {
   step('Building and packing packages/inference')
+  // The pin names a tarball in ARTIFACT_DIR, which is about to be deleted.
+  clearConsumerInferencePin()
   fs.rmSync(ARTIFACT_DIR, { recursive: true, force: true })
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true })
   run('bun', ['install', '--ignore-scripts'], INFERENCE_DIR)
@@ -45,6 +73,22 @@ function packInference() {
 }
 
 const originalManifest = fs.readFileSync(SDK_MANIFEST, 'utf8')
+const manifest = JSON.parse(originalManifest)
+const previousSpec = manifest.dependencies?.[DEPENDENCY]
+
+if (previousSpec === undefined) {
+  throw new Error(`packages/sdk/package.json has no ${DEPENDENCY} dependency to override`)
+}
+// Left unchecked, a leftover becomes the "original" restoreManifest() writes
+// back, cementing it for every later run.
+if (isLocalPathSpec(previousSpec)) {
+  throw new Error(
+    `packages/sdk/package.json already points ${DEPENDENCY} at a local path (${previousSpec}).\n` +
+      'That is a leftover from an interrupted run. Restore it before rebuilding:\n' +
+      '  git checkout -- packages/sdk/package.json'
+  )
+}
+
 let manifestRestored = false
 
 function restoreManifest() {
@@ -54,10 +98,10 @@ function restoreManifest() {
   console.log(`\n↩️  Restored ${DEPENDENCY} in packages/sdk/package.json`)
 }
 
-for (const signal of ['SIGINT', 'SIGTERM']) {
+for (const [signal, exitCode] of Object.entries(SIGNAL_EXIT_CODES)) {
   process.on(signal, () => {
     restoreManifest()
-    process.exit(signal === 'SIGINT' ? 130 : 143)
+    process.exit(exitCode)
   })
 }
 
@@ -66,19 +110,7 @@ let consumerPin
 try {
   const tarball = packInference()
 
-  const manifest = JSON.parse(originalManifest)
-  const previousSpec = manifest.dependencies?.[DEPENDENCY]
-  if (previousSpec === undefined) {
-    throw new Error(`packages/sdk/package.json has no ${DEPENDENCY} dependency to override`)
-  }
-  if (previousSpec.startsWith('file:')) {
-    throw new Error(
-      `packages/sdk/package.json already points ${DEPENDENCY} at a local path (${previousSpec}).\n` +
-        'That is a leftover from an interrupted run. Restore it before rebuilding:\n' +
-        '  git checkout -- packages/sdk/package.json'
-    )
-  }
-  manifest.dependencies[DEPENDENCY] = tarball
+  manifest.dependencies[DEPENDENCY] = toLocalTarballSpec(tarball)
   fs.writeFileSync(SDK_MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`)
   console.log(`\n📦 ${DEPENDENCY}: ${previousSpec} -> ${path.relative(E2E_DIR, tarball)}`)
 
