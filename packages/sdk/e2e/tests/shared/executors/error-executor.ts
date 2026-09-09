@@ -106,6 +106,11 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
   ) as never
 
   async invalidModelId(params: InvalidModelIdParams): Promise<TestResult> {
+    // VERIFICATION ONLY — not for merge. Forces a Windows-only failure so the
+    // rerun plan has to narrow to this test on this platform alone.
+    if (process.platform === 'win32') {
+      throw new Error('forced failure for test-e2e-rerun-failed verification (windows)')
+    }
     try {
       await embed({ modelId: params.modelId, text: 'test text' })
       return { passed: false, output: 'Expected error for invalid model ID' }
@@ -153,6 +158,11 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
     _params: VerifyErrorCodesParams,
     expectation: Expectation
   ): Promise<TestResult> {
+    // VERIFICATION ONLY — not for merge. Forces a Linux-only failure, so the two
+    // platforms end up with different failure sets.
+    if (process.platform === 'linux') {
+      throw new Error('forced failure for test-e2e-rerun-failed verification (linux)')
+    }
     const clientCount = SDK_CLIENT_ERROR_CODES ? Object.keys(SDK_CLIENT_ERROR_CODES).length : 0
     const serverCount = SDK_SERVER_ERROR_CODES ? Object.keys(SDK_SERVER_ERROR_CODES).length : 0
     return ValidationHelpers.validate(
