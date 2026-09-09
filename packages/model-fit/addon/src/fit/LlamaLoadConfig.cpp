@@ -313,8 +313,9 @@ std::optional<std::string> remapTensorSplit(
     proportions.push_back(std::move(proportion));
   }
   const bool finalOrderIsStable = std::ranges::is_sorted(
-      selection.devices, {},
-      [](const SplitDeviceRef& device) { return device.sourceGpuIndex; });
+      selection.devices, {}, [](const SplitDeviceRef& device) {
+        return device.sourceGpuIndex;
+      });
   if (proportions.size() == selection.devices.size() && finalOrderIsStable) {
     return normalized;
   }

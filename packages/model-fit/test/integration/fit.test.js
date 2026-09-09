@@ -617,8 +617,8 @@ test('mainGpu is validated only when llama uses it', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const invalidMainGpu = fitParams({ modelPath }).nDevices
 
-    const res = fitParams({ modelPath: UNREACHABLE_MODEL, splitMode: 0, mainGpu: invalidMainGpu })
-    t.is(res.status, FIT_STATUS.ERROR, 'unreadable model determines the result')
+  const res = fitParams({ modelPath: UNREACHABLE_MODEL, splitMode: 0, mainGpu: invalidMainGpu })
+  t.is(res.status, FIT_STATUS.ERROR, 'unreadable model determines the result')
 
   // Outside NONE the field is inert, so the same index must not be rejected —
   // the guard has to stay scoped rather than becoming a blanket bound.
