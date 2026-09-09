@@ -28,7 +28,15 @@ Every step is mandatory. Do **not** ask the user whether to do `CHANGELOG_LLM.md
 
 If the user doesn't specify, ask which SDK pod package they want to generate a changelog for.
 
-Package slugs match git tags (`sdk`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
+Package slugs match git tags (`sdk`, `inference`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
+
+**`sdk` and `inference` are separate releases that share a major and minor.** Moving to a
+new major.minor is two changelogs and two releases, engine first: `--package=inference`
+for `release-inference-<x.y.z>`, then `--package=sdk` for `release-sdk-<x.y.z>`. Engine
+commits are scanned into the SDK changelog too (`CHANGELOG_EXTRA_SCAN_DIRS` in
+`scripts/sdk/package-paths.cjs`), so the engine's user-facing changes appear in the SDK
+release notes as well — the SDK is where consumers read them. A patch on either side is
+one release of its own.
 
 **Working branch (when cutting from a release line):** use
 `chore/<pkg>-<x.y.z>-changelog` (e.g. `chore/sdk-0.17.0-changelog`). Do **not**
@@ -207,26 +215,28 @@ before committing.
 
 See `.cursor/skills/qv-notice-generate/SKILL.md` for full details.
 
-### Step 7: Sync lockstep clients (only when `--package=sdk`)
+### Step 7: Set the `@qvac/inference` version (only when `--package=sdk`)
 
-`@qvac/sdk` and `tetherto-qvac-sdk` release in lockstep at the
-`@qvac/inference` version anchor. Every sdk release must stamp that anchor into
-sdk and regenerate the Python
-client (`SDK_VERSION` and other `_generated/` outputs). Skip this step for any
-other `--package` value.
+`@qvac/sdk` shares a major.minor with the `@qvac/inference` range it depends on,
+and `tetherto-qvac-sdk` is generated from `@qvac/sdk` at the same version. An sdk
+release sets both and regenerates the Python client (`SDK_VERSION` and the other
+`_generated/` outputs). Skip this step for any other `--package` value — an
+`--package=inference` release does not touch the SDK.
 
-Read and follow `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md` (Steps 1–3).
+Read and follow `.cursor/skills/qv-sdk-inference-version/SKILL.md` (Steps 1–4).
 Short form:
 
 ```bash
-node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-sdk-pod.mjs
+npm view @qvac/inference@<x.y.z> version
+node .cursor/skills/qv-sdk-inference-version/scripts/set-inference-version.mjs --engine-version=<x.y.z>
 
 cd packages/sdk-python
 .venv/bin/python3 scripts/generate.py
 .venv/bin/python3 scripts/generate.py --check
 ```
 
-Include sdk-python generated updates in the release commit. The Python
+`<x.y.z>` is the `@qvac/inference` version this release ships against, already
+published. Include sdk-python generated updates in the release commit. The Python
 client does not get its own changelog — history lives in `packages/sdk/CHANGELOG.md`.
 
 ### Step 8: Generate site docs (only when `--package=sdk`)
@@ -280,7 +290,7 @@ A clean build confirms nothing on the website broke. Treat a build failure as
 **Staging follows the same convention as the other steps.** Like every other
 step, this one only generates files — it never runs `git add` or `git commit`.
 The three surfaces above are part of the release commit (same as Step 7's
-lockstep-client files: "Include … in the release commit"), and every
+version files: "Include … in the release commit"), and every
 generation/build byproduct is gitignored — exactly like Step 5's
 `announcement-post.txt` — so a normal `git status` review shows only the
 committable files. Let the user review before committing. Generated + gitignored
@@ -353,7 +363,7 @@ Before completing:
 - [ ] Generated markdown is prettier-clean (`prettier --check` on the changelog output passes)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] NOTICE file updated for the target package
-- [ ] When `--package=sdk`: `qv-sdk-lockstep-sync` run (sdk-python), python `generate.py --check` passing
+- [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
 - [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and `git status` shows only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` as committable docs changes (byproducts gitignored)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
@@ -367,6 +377,6 @@ Before completing:
 - PR format: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
 - NOTICE generation: `.cursor/skills/qv-notice-generate/SKILL.md`
-- sdk lockstep clients: `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md`
+- sdk @qvac/inference version: `.cursor/skills/qv-sdk-inference-version/SKILL.md`
 - Docs site pipeline (Step 8): `docs/website/docs-workflow.md`
 - Release PR branch naming (org `release-*` push / Merge Guard): `.cursor/skills/qv-sdk-pr-create/SKILL.md`

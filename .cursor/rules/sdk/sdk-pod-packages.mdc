@@ -33,7 +33,11 @@ Changelog / release `--package=` values use the **tag slug** (see `scripts/sdk/p
       -> @qvac/openclaw-plugin
 ```
 
-`@qvac/sdk` and `packages/sdk-python` (`tetherto-qvac-sdk`) stay lockstep at the `@qvac/inference` version anchor via `qv-sdk-lockstep-sync` (not listed above). Use `/qv-agent-stack-sync` for plan / prepare-cascade / promote.
+`packages/sdk-python` (`tetherto-qvac-sdk`, not listed above) is generated from `@qvac/sdk` and publishes at the same version.
+
+`@qvac/inference` releases on its own from `release-inference-<x.y.z>` (`publish-inference.yml`), and `@qvac/sdk` shares its major and minor. A new major.minor is two releases in order — engine, then SDK — see `qv-sdk-inference-version`.
+
+Use `/qv-agent-stack-sync` for plan / prepare-cascade / promote.
 
 ## Glob Patterns
 

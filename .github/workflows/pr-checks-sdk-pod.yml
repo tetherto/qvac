@@ -254,8 +254,9 @@ jobs:
 
             # Pack the in-repo @qvac/inference so each consumer below redirects
             # the SDK's transitive @qvac/inference to it via an npm `overrides`
-            # entry — sdk and inference ship lockstep, so the consumer resolves
-            # the engine at this commit rather than a published release.
+            # entry. This check is about the packaged SDK — install cleanliness,
+            # single copies, a loadable entry point — so it runs against the
+            # engine at this commit rather than a published release.
             inference_tgz=""
             if [ -n "$(jq -r '.dependencies["@qvac/inference"] // empty' package.json)" ]; then
               echo "::group::Pack in-repo @qvac/inference for consumer install"
@@ -374,11 +375,12 @@ jobs:
             # sdk-source:<source> script does that source's setup (e.g. link the
             # in-repo SDK); absent = plain install of the committed dependency.
             #
-            # Workspace must rewrite the committed range to a sibling file:
-            # dep *before* install. Otherwise lockstep backmerge PRs into
-            # main fail at bun/npm install when @qvac/inference@^x.y.z is
-            # not on npm yet. Published/default keep install-first so they
-            # still resolve from the registry.
+            # Workspace rewrites the committed range to a sibling file: dep
+            # *before* install, so the leg tests the SDK against the engine at
+            # this commit and never resolves the range. Published/default
+            # install first, so they resolve the committed range from the
+            # registry — that is the leg that proves the manifest about to be
+            # published is installable.
             src_idx=0
             for SRC in $SOURCES; do
               # Bracketed source shown after each check name, e.g. "build [workspace]".

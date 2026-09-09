@@ -213,6 +213,27 @@ Instead, ensure `main` reflects the shipped version + changelog via one of these
 
 > Goal: `main` remains the single source of truth for current development state, while release lines are controlled targets for NPM publishing.
 
+### 5) `@qvac/inference` before `@qvac/sdk`
+
+`@qvac/sdk` and `@qvac/inference` expose the same API, so their versions share a
+major and minor. The SDK's `@qvac/inference` dependency range is installed from NPM
+when the SDK is built for release, so the engine is published first.
+
+Moving both to a new major.minor is therefore two releases, in order:
+
+1. `release-inference-<x.y.z>` → `publish-inference.yml` publishes `@qvac/inference`
+   and tags `inference-v<x.y.z>`.
+2. `release-sdk-<x.y.z>` → the release PR sets `packages/sdk` `version` and its
+   `@qvac/inference` range to that version (`/qv-sdk-inference-version`), then
+   `publish-sdk.yml` publishes `@qvac/sdk` and `tetherto-qvac-sdk`.
+
+Each gets its own changelog and its own backmerge PR to `main`. Patch releases are
+independent: an SDK patch leaves its range alone, and an engine patch is picked up by
+the existing range with no SDK release at all.
+
+`packages/sdk` `lint` fails when its own version and its `@qvac/inference` range
+differ in major or minor, so the two cannot drift unnoticed.
+
 ---
 
 ## Patch flow (x.y.z → x.y.(z+1))
