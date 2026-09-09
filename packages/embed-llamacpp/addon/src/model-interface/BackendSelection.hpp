@@ -50,7 +50,6 @@ struct SplitDevice {
   size_t sourceGpuIndex;
   bool isOpenCl;
   bool supportsSplitBuffer;
-  bool isRpc = false;
 };
 
 struct SplitDeviceSelection {
