@@ -3498,6 +3498,87 @@ class LoadedModelInfoToolDialect(Enum):
     dsml = "dsml"
 
 
+class NativeProbeFitVerdict(Enum):
+    fit = "fit"
+    does_not_fit = "does-not-fit"
+    unknown = "unknown"
+
+
+class NativeProbeFitPlan(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    n_ctx: Annotated[
+        int,
+        Field(
+            alias="nCtx",
+            description="Context the probe resolved for this load, in tokens.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_layers: Annotated[
+        int,
+        Field(
+            alias="nGpuLayers",
+            description="Layers the probe would offload.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_devices: Annotated[
+        int,
+        Field(
+            alias="nGpuDevices",
+            description="GPU devices the offload would span.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class NativeProbeFit(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    verdict: Annotated[
+        NativeProbeFitVerdict,
+        Field(
+            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+            title="NativeProbeFitVerdict",
+        ),
+    ]
+    basis: Annotated[
+        Literal["native-probe"],
+        Field(
+            description="Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+        ),
+    ] = "native-probe"
+    estimator_version: Annotated[
+        str,
+        Field(
+            alias="estimatorVersion",
+            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy — `native-probe-v1` withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker.",
+        ),
+    ]
+    reason: Annotated[
+        str,
+        Field(
+            description="Machine-readable reason for the verdict. Never parsed out of log text."
+        ),
+    ]
+    message: Annotated[
+        str | None, Field(description="Human-readable detail, when the reason has any.")
+    ] = None
+    plan: Annotated[
+        NativeProbeFitPlan | None,
+        Field(
+            description="Placement the probe projected. Present only on a `fit` verdict.",
+            title="NativeProbeFitPlan",
+        ),
+    ] = None
+
+
 class LoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -3513,6 +3594,14 @@ class LoadedModelInfo(GeneratedBaseModel):
     tool_dialect: Annotated[
         LoadedModelInfoToolDialect | None,
         Field(alias="toolDialect", title="LoadedModelInfoToolDialect"),
+    ] = None
+    fit_probe: Annotated[
+        NativeProbeFit | None,
+        Field(
+            alias="fitProbe",
+            description="Verdict of the advisory native fit probe run just before this load. Absent on models registered before the field existed, and on any load that never reached registration — a projected insufficiency that then failed to load leaves its verdict only in the engine log.",
+            title="NativeProbeFit",
+        ),
     ] = None
 
 
