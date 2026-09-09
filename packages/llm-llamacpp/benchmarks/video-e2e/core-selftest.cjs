@@ -1,0 +1,28 @@
+'use strict'
+const test = require('brittle')
+const os = require('bare-os')
+const path = require('bare-path')
+const { clips } = require('./video-config.cjs')
+const { download, extract, hashFile } = require('./video-core.cjs')
+
+test('verified download, full decode, key decode and short all-frame extraction', async (t) => {
+  const clip = clips[0]
+  const directory = path.join(os.tmpdir(), 'qvac-video-e2e-selftest-' + Date.now())
+  const result = await download(clip, directory)
+  t.is(result.cached, false, 'test downloads the real clip')
+  t.is(hashFile(result.file), clip.sha256, 'exact reference bytes')
+  t.is((await download(clip, directory)).cached, true, 'verified local file is reused')
+  const full = extract(result.file, 'full')
+  t.is(full.record.decodedFrames, 300, 'flush includes all delayed frames')
+  t.is(full.frames.length, 10, 'bounded one-fps sample')
+  t.is(full.frames[0].ppm.subarray(0, 2).toString(), 'P6', 'standard binary PNM images')
+  t.is(full.frames[0].width, 448, 'downscaled width')
+  const key = extract(result.file, 'key')
+  t.is(key.frames.length, 2, 'actual sparse codec keys, not artificial one-fps frames')
+  t.ok(key.frames[1].ptsS > 8, 'key-frame gap is measured honestly')
+  t.alike(key.frames[0].ppm, full.frames[0].ppm, 'key-frame pixels equal full decode')
+  const all = extract(result.file, 'all-short', { limitSeconds: 1, maxFrames: 64 })
+  t.is(all.frames.length, 30, 'all frames of a one-second burst')
+  t.exception(() => extract(result.file, 'invalid'), /invalid extraction mode/)
+  console.log('Self-test reference file retained at ' + result.file)
+})

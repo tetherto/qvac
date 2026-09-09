@@ -51,6 +51,11 @@ on:
         type: string
         required: false
         default: ""
+      device_farm_job_timeout_minutes:
+        description: "Device Farm paid-device time ceiling per run. Default 120 preserves existing callers."
+        type: string
+        required: false
+        default: "120"
       pre_build_script:
         description: "Optional node script (path under packages/llm-llamacpp) run before the mobile build to bootstrap a benchmark into the framework (stage files + regenerate the test list). Default '' = no-op."
         type: string
@@ -608,6 +613,7 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          job-timeout-minutes: ${{ inputs.device_farm_job_timeout_minutes || '120' }}
 
       - name: Monitor Device Farm test runs
         id: monitor
@@ -666,5 +672,3 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
-
-

@@ -14,6 +14,10 @@ name: Benchmark VLM (model comparison)
 on:
   workflow_dispatch:
     inputs:
+      video_e2e:
+        description: "Temporary QVAC-23856 video latency study: exactly one iPhone 16 Pro and one S25 Ultra; existing image benchmark is not run"
+        type: boolean
+        default: false
       ref:
         description: "  addon ref — qvac branch / tag / SHA (default: current branch)"
         required: false
@@ -73,7 +77,48 @@ permissions:
   pull-requests: write
   id-token: write
 
+concurrency:
+  group: vlm-comparison-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  video-e2e-mobile:
+    if: ${{ inputs.video_e2e }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: Android
+            model: Samsung Galaxy S25 Ultra
+            manufacturer: Samsung
+          - platform: iOS
+            model: Apple iPhone 16 Pro
+            manufacturer: Apple
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      platforms: ${{ matrix.platform }}
+      device_model: ${{ matrix.model }}
+      device_manufacturer: ${{ matrix.manufacturer }}
+      device_model_operator: EQUALS
+      test_groups: '[{"name":"videoE2e","grep":"runVideoE2eTest"}]'
+      pre_build_script: benchmarks/video-e2e/stage.cjs
+      addon_npm_version: "@tetherto/llm-llamacpp-mono@0.51.0-tmp.runid-34220546522"
+      qvac_perf_runs: "1"
+      qvac_perf_warmup_runs: "1"
+      per_test_timeout_minutes: "20"
+      device_farm_job_timeout_minutes: "30"
+      mocha_timeout_ms: "1200000"
+      artifact_suffix: video-e2e
+    secrets: inherit
+
   # ── Context ────────────────────────────────────────────────────────
   # Resolves the repo + ref so downstream jobs check out the right
   # commit even when the workflow_dispatch is invoked without `ref`,
@@ -82,6 +127,7 @@ jobs:
   # GitHub Actions doesn't allow `matrix.*` references in job-level
   # conditions — they're evaluated before the matrix is expanded.
   context:
+    if: ${{ !inputs.video_e2e }}
     runs-on: ubuntu-latest
     outputs:
       repository: ${{ steps.ctx.outputs.repository }}
