@@ -36,6 +36,7 @@ test('the CUDA build remains opt-in', () => {
 test('the CUDA feature targets supported desktop platforms', () => {
   const dependency = cudaSpeechDependency()
 
+  assert.equal(vcpkgManifest.features[CUDA_FEATURE].supports, DESKTOP_PLATFORM)
   assert.deepEqual(dependency.features, [CUDA_FEATURE])
   assert.equal(dependency['default-features'], false)
   assert.equal(dependency.platform, DESKTOP_PLATFORM)

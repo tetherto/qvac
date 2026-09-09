@@ -48,6 +48,7 @@
   "features": {
     "cuda": {
       "description": "Enable CUDA GPU acceleration",
+      "supports": "!(osx | ios | android)",
       "dependencies": [
         {
           "name": "speech-cpp",

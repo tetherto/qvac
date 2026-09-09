@@ -38,9 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require `speech-cpp` port revision `2026-09-04#1`, which adds the engine's
   ACE-Step LRC generation, audio understanding (reverse pipeline) and Query
   Rewriting (FORMAT pass) on top of the teacher-forced LM quality scoring,
-  fixes Windows CUDA engine unloading, and refreshes backend capabilities after
-  module reloads. Floor `ggml-speech` at 2026-09-09 for hybrid CUDA modules on
-  linux-arm64 and win32-x64 and correct module-local timing initialization.
+  and rejects `[Instrumental]` lyrics under Query Rewriting. Floor
+  `ggml-speech` at 2026-09-09 for hybrid CUDA modules on linux-arm64 and
+  win32-x64 and correct module-local timing initialization.
 
 ## [0.3.3] - 2026-09-01
 
