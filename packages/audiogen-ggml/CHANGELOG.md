@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Extend opt-in CUDA builds (`ENABLE_CUDA=ON`) from linux-x64 to linux-arm64
+  and win32-x64. CUDA, Vulkan, and CPU variants ship as runtime-loaded modules
+  beside the addon, allowing hosts without an NVIDIA stack to fall back to
+  Vulkan or CPU. Published prebuilds remain CUDA-free.
 - `generateLrc` generation control: karaoke-style synchronized lyric
   timestamps in `stats.lrc` (standard LRC text) with an alignment confidence
   in `stats.lyricsScore`. Requires lyrics — explicit or Simple-Mode written —
@@ -31,9 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Require `speech-cpp` port revision `2026-09-03#1`, which adds the engine's
+- Require `speech-cpp` port revision `2026-09-04#1`, which adds the engine's
   ACE-Step LRC generation, audio understanding (reverse pipeline) and Query
-  Rewriting (FORMAT pass) on top of the teacher-forced LM quality scoring.
+  Rewriting (FORMAT pass) on top of the teacher-forced LM quality scoring,
+  fixes Windows CUDA engine unloading, and refreshes backend capabilities after
+  module reloads. Floor `ggml-speech` at 2026-09-09 for hybrid CUDA modules on
+  linux-arm64 and win32-x64 and correct module-local timing initialization.
 
 ## [0.3.3] - 2026-09-01
 
