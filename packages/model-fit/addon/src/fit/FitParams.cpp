@@ -40,8 +40,7 @@ std::mutex
 /// `mparams`/`cparams` must still borrow from live storage when this is called.
 void captureProjection(
     const std::string& modelPath, const llama_model_params& mparams,
-    const llama_context_params& cparams, uint64_t marginBytes,
-    FitResult& out) {
+    const llama_context_params& cparams, uint64_t marginBytes, FitResult& out) {
   try {
     std::vector<ggml_backend_dev_t> devs;
     uint32_t hpNgl = 0;
