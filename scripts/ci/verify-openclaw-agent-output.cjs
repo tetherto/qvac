@@ -30,6 +30,15 @@ const MAX_COMPLIANT_REPLY_CHARS = 120
 // directive with no answer behind it.
 const ROUTING_TOKEN = /\[\[[^\]]*\]\]/g
 
+// Tool-call markup that leaked into visible assistant text is a malformed tool
+// call, not an answer. Run 34373081345 replied with a literal empty
+// `<tool_call></tool_call>` block and nothing else. The whole block goes,
+// contents included: a token emitted *inside* tool-call markup was never
+// spoken to the user, so counting it as the answer would be the same kind of
+// can't-fail check this verifier exists to remove. An unclosed opener is
+// stripped to end-of-text, because a truncated block is markup too.
+const TOOL_CALL_MARKUP = /<tool_call\b[\s\S]*?(?:<\/tool_call>|$)/gi
+
 function parseJsonOutput (value) {
   try {
     return JSON.parse(value)
@@ -72,7 +81,7 @@ function verifyAgentOutput (text, model) {
     throw new Error('OpenClaw agent produced no assistant text')
   }
 
-  const compact = finalText.replace(ROUTING_TOKEN, '').trim()
+  const compact = finalText.replace(TOOL_CALL_MARKUP, '').replace(ROUTING_TOKEN, '').trim()
   if (!compact) {
     throw new Error(`OpenClaw agent replied with no content: ${finalText.trim().slice(0, 300)}`)
   }

@@ -142,3 +142,45 @@ test('does not satisfy the content check from the echoed prompt alone', () => {
   assert.match(text, /qvac-ok/, 'fixture must still echo the prompt in meta.finalPromptText')
   assertRejects(text, /did not include qvac-ok/)
 })
+
+// Real payload from run 34373081345: with the Tool Search trio advertised and
+// a prompt that told it not to call tools, the model emitted an empty
+// `<tool_call></tool_call>` block as its entire visible reply. `stopReason` is
+// "stop" and nothing is aborted, so only the content check can catch it.
+test('rejects leaked tool-call markup as the whole reply', () => {
+  assertRejects(fixture('leaked-tool-call-markup'), /replied with no content/)
+})
+
+// The token inside tool-call markup was never spoken to the user. Accepting it
+// would rebuild the can't-fail check this verifier exists to remove.
+test('does not satisfy the content check from inside tool-call markup', () => {
+  assertRejects(
+    mutated('leaked-tool-call-markup', (d) => {
+      d.meta.finalAssistantVisibleText = '<tool_call>\n{"name":"say","args":{"text":"qvac-ok"}}\n</tool_call>'
+      d.payloads = [{ text: d.meta.finalAssistantVisibleText, mediaUrl: null }]
+    }),
+    /replied with no content/
+  )
+})
+
+test('does not satisfy the content check from an unclosed tool-call block', () => {
+  assertRejects(
+    mutated('leaked-tool-call-markup', (d) => {
+      d.meta.finalAssistantVisibleText = '<tool_call>{"name":"say","args":{"text":"qvac-ok"'
+      d.payloads = [{ text: d.meta.finalAssistantVisibleText, mediaUrl: null }]
+    }),
+    /replied with no content/
+  )
+})
+
+// Stripping markup must not swallow a real answer that happens to sit beside
+// it -- that would be a new blind spot, not a fix.
+test('accepts a real answer alongside leaked markup', () => {
+  verifyAgentOutput(
+    mutated('pass-qvac-ok', (d) => {
+      d.meta.finalAssistantVisibleText = '<tool_call>\n</tool_call>\nqvac-ok'
+      d.payloads = [{ text: d.meta.finalAssistantVisibleText, mediaUrl: null }]
+    }),
+    MODEL
+  )
+})

@@ -344,15 +344,26 @@ if [[ "${SKIP_OPENCLAW_AGENT:-0}" == "1" ]]; then
   exit 0
 fi
 
-# The prompt has to be answerable in chat and not performable as a task.
-# "Reply with exactly this text and nothing else: qvac-ok" read as a file-write
-# instruction to a 0.8b model holding filesystem tools: in run 33881468610 it
-# called `write` with content=qvac-ok against the workspace directory, failed
-# with EISDIR, retried the same call, and then asked which path to use -- a
-# verification failure with nothing wrong on the QVAC side. Naming the channel
-# ("in chat") and ruling tools out removes that reading; the bounded tool
-# profile removes most of the temptation.
-AGENT_PROMPT="${AGENT_PROMPT:-Answer in chat with the single word qvac-ok. Do not call any tools and do not write any files.}"
+# The prompt has to be answerable in chat and not performable as a task, and it
+# must not mention tools at all. Two measured failures shaped this wording:
+#
+#   "Reply with exactly this text and nothing else: qvac-ok" -- read as a
+#   file-write instruction. Run 33881468610 called `write` with
+#   content=qvac-ok against the workspace directory, hit EISDIR, retried the
+#   same call, then asked which path to use. "this text" is the problem.
+#
+#   "Answer in chat with the single word qvac-ok. Do not call any tools and do
+#   not write any files." -- naming tools primed them. Run 34373081345 replied
+#   with a literal empty `<tool_call></tool_call>` block as its visible text.
+#   Negation does not restrain a 0.8b model; it just puts tool syntax in front
+#   of it.
+#
+# So: ask for a sentence, not for text, and say nothing about tools. This is
+# also the OpenCode sibling smoke's prompt, which has answered correctly on
+# this same model through this same serve across every scheduled run since
+# 2026-08-31 -- the only wording here with a track record. Keeping the two
+# tripwires on one prompt is deliberate (QVAC-24621).
+AGENT_PROMPT="${AGENT_PROMPT:-Reply with one short sentence that includes qvac-ok.}"
 
 # Each attempt gets a fresh session id. Retrying into the same session would
 # replay the poisoned transcript that caused the first failure -- the 2026-08-27
