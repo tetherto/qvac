@@ -790,6 +790,43 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
   fs::remove_all(cacheDir);
 }
 
+// Moving `validateToolChoice` ahead of the media load also moved it ahead of
+// `processPromptImpl`'s no-messages early return, which changes what an empty
+// prompt carrying a demanding `tool_choice` does: it used to return "" in
+// silence, and now it reports the contradiction. That is the documented
+// contract — "`required` or a function name without tools throws" — which the
+// early return had been quietly exempting itself from. Pinned because it is a
+// behaviour change no reviewer asked for, so it should not be able to drift
+// back unnoticed.
+TEST_F(ToolGrammarModelTest, DemandingToolChoiceOnAnEmptyPromptIsRejected) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+
+  for (const char* choice : {"required", "get_weather"}) {
+    LlamaModel::Prompt empty = makePrompt("[]");
+    empty.generationParams.tool_choice = choice;
+    EXPECT_THROW(model->processPrompt(empty), qvac_errors::StatusError)
+        << "tool_choice " << choice << " cannot be honoured by an empty prompt";
+  }
+
+  // Unchanged for the choices an empty prompt can satisfy: "auto" and "none"
+  // ask for nothing, so the early return still applies.
+  for (const char* choice : {"auto", "none"}) {
+    LlamaModel::Prompt empty = makePrompt("[]");
+    empty.generationParams.tool_choice = choice;
+    EXPECT_NO_THROW({
+      EXPECT_TRUE(model->processPrompt(empty).empty())
+          << "tool_choice " << choice << " must still return early";
+    });
+  }
+
+  // And with no choice at all, which is the case `LlamaModelTest.EmptyPrompt`
+  // already covers on the other side of this boundary.
+  EXPECT_NO_THROW(EXPECT_TRUE(model->processPrompt(makePrompt("[]")).empty()));
+}
+
 // The other half of the media-leak story, and the half `validateToolChoice`
 // cannot cover. Media is staged before `tokenizeChat`, which drains it, so
 // every way of leaving this request that skips the drain leaks a bitmap —
