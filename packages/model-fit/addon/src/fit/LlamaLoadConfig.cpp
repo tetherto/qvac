@@ -312,6 +312,12 @@ std::optional<std::string> remapTensorSplit(
   for (std::string proportion; std::getline(values, proportion, ',');) {
     proportions.push_back(std::move(proportion));
   }
+  const bool finalOrderIsStable = std::ranges::is_sorted(
+      selection.devices, {},
+      [](const SplitDeviceRef& device) { return device.sourceGpuIndex; });
+  if (proportions.size() == selection.devices.size() && finalOrderIsStable) {
+    return normalized;
+  }
   if (proportions.size() != selection.sourceGpuCount) {
     return std::nullopt;
   }
