@@ -1376,6 +1376,9 @@
                           "tokensPerSecond": {
                             "type": "number"
                           },
+                          "promptTokensPerSecond": {
+                            "type": "number"
+                          },
                           "cacheTokens": {
                             "type": "number"
                           },
@@ -1496,6 +1499,9 @@
               "type": "number"
             },
             "tokensPerSecond": {
+              "type": "number"
+            },
+            "promptTokensPerSecond": {
               "type": "number"
             },
             "cacheTokens": {
@@ -2442,6 +2448,9 @@
                       "tokensPerSecond": {
                         "type": "number"
                       },
+                      "promptTokensPerSecond": {
+                        "type": "number"
+                      },
                       "cacheTokens": {
                         "type": "number"
                       },
@@ -3029,6 +3038,9 @@
                       "tokensPerSecond": {
                         "type": "number"
                       },
+                      "promptTokensPerSecond": {
+                        "type": "number"
+                      },
                       "cacheTokens": {
                         "type": "number"
                       },
@@ -3312,6 +3324,21 @@
           },
           "required": ["type", "all"],
           "title": "DeleteCacheAllRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "deleteCache"
+            },
+            "auto": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": ["type", "auto"],
+          "title": "DeleteCacheAutoRequest"
         },
         {
           "type": "object",
