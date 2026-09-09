@@ -253,13 +253,18 @@ safeTest(
     const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
     const sessionName = path.join(dirPath, 'cache-cancel.bin')
     const warmStats = await runAndCollectStats(model, buildPrompt(), cacheOpts(sessionName))
-    const stats = await runAndCancelAfterFirstToken(model, buildPrompt(), cacheOpts(sessionName))
+    const stats = await runAndCancelAfterFirstToken(
+      model,
+      buildPrompt({ followUp: true }),
+      cacheOpts(sessionName)
+    )
     const delta = toNumber(stats.CacheTokens) - toNumber(warmStats.CacheTokens)
     // Cancel = "request never happened": cache is rolled back to the
     // pre-request cursor, so delta versus the warm baseline must be ~0
     // (allow ±1 for BOS/EOS bookkeeping). Prompt / generated counters
     // still reflect work the model performed.
     t.ok(Math.abs(delta) <= 1, `cache delta (${delta}) ~0 after cancel rollback`)
+    t.is(stats._chunkCount, 1, 'cancelled immediately after first follow-up chunk')
     const threshold = 20
     t.ok(
       stats.generatedTokens > 0,

@@ -1029,19 +1029,23 @@ test(
   async (t) => {
     const model = await setupModel(t, { parallel: '4' })
 
-    // Group 0 is two hard-capped short prompts (predict 8 each, so its group
-    // sum can never pass 16); group 1 carries a long story job — the groups'
-    // token counts diverge by construction, the discriminator below.
+    const shortRequestPredictCap = 8
+    // Group 0 is hard-capped per short request, so its sum can equal but never
+    // exceed the derived group cap. Group 1 carries a long story job — the
+    // groups' token counts diverge by construction, the discriminator below.
     const groupCases = [
       ['capital-france', 'sky-color'],
       ['story-otter', 'frozen-water']
     ].map((ids) => ids.map((id) => CASES.find((item) => item.id === id)))
+    const shortGroupCap = groupCases[0].length * shortRequestPredictCap
 
     const toBatchInput = (items) =>
       items.map((item) => ({
         id: item.id,
         prompt: buildPrompt(item),
-        runOptions: item.story ? runOptionsForCase(item) : { generationParams: { predict: 8 } }
+        runOptions: item.story
+          ? runOptionsForCase(item)
+          : { generationParams: { predict: shortRequestPredictCap } }
       }))
 
     // Fire both batch runs before awaiting either, so the groups overlap.
@@ -1077,12 +1081,12 @@ test(
     // Own-scale discriminator: group 0 (two one-word answers) must stay tiny,
     // group 1 (story job) must dwarf it. Under the old epoch-global snapshot
     // both groups would report the same total (story included) and group 0
-    // would blow past 16.
+    // would blow past the inclusive group cap.
     const shortGroupGenerated = toNumber(responses[0].stats.generatedTokens)
     const storyGroupGenerated = toNumber(responses[1].stats.generatedTokens)
     t.ok(
-      shortGroupGenerated < 16 && shortGroupGenerated < storyGroupGenerated,
-      `group 0 generatedTokens (${shortGroupGenerated}) stays at its own scale vs story group (${storyGroupGenerated}) — groups never read each other's figures`
+      shortGroupGenerated <= shortGroupCap && shortGroupGenerated < storyGroupGenerated,
+      `group 0 generatedTokens (${shortGroupGenerated}) stays within its inclusive ${shortGroupCap}-token cap vs story group (${storyGroupGenerated}) — groups never read each other's figures`
     )
     t.ok(storyGroupGenerated > 20, `story group generated a long output (${storyGroupGenerated})`)
 
