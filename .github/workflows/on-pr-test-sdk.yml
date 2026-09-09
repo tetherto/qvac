@@ -209,7 +209,12 @@ jobs:
               && needs.resolve-rerun.outputs.should-run == 'true'))
     uses: ./.github/workflows/test-sdk.yml
     with:
-      targets: ${{ needs.resolve-rerun.outputs.targets || 'desktop + mobile' }}
+      # VERIFICATION BRANCH ONLY — do not merge. Narrowed so a base run costs two
+      # desktop runners and five sub-10ms tests instead of the full desktop+mobile
+      # catalog. On main these are `desktop + mobile`, no filter, three runners.
+      targets: ${{ needs.resolve-rerun.outputs.targets || 'desktop' }}
+      desktop-platforms: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu"]'
+      filter: error-
       suite: ${{ needs.resolve-config.outputs.suite }}
       rerun-plan: ${{ needs.resolve-rerun.outputs.rerun-plan }}
       test-version: ${{ github.event.pull_request.head.sha }}
