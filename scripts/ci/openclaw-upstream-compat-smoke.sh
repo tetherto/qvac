@@ -8,9 +8,10 @@ VERIFY_PROMPT_SURFACE="$SCRIPT_DIR/verify-openclaw-prompt-surface.cjs"
 SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
 QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
-# Keep in step with OPENCLAW_AGENT_TIMEOUT_SECONDS below: readiness is awaited
-# inside the agent run, so a longer value here is unreachable.
-QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-300000}"
+# Keep under OPENCLAW_AGENT_TIMEOUT_SECONDS below: readiness is awaited inside
+# the agent run, so a longer value here is unreachable. Observed readiness,
+# including the model download on a cold runner, is ~20-30s.
+QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-180000}"
 
 # One knob for the agent-turn deadline, in seconds, passed to `openclaw agent
 # --timeout`. OpenClaw then reports the deadline in its own JSON envelope, so a
@@ -23,7 +24,13 @@ QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-300000}"
 # 600s default were the same number, so the shell won and every deadline
 # arrived as an opaque SIGTERM with empty stdout -- which is what runs
 # 33952858599 through 34200142844 recorded instead of a diagnosis.
-OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-420}"
+#
+# 240s is sized to the bounded surface, not the old one. A whole healthy
+# attempt measured ~80s wall on run 34373947615 (model load plus a 9s ttft on a
+# 715-token prompt), so this is 3x headroom. It also has to be small enough
+# that the full attempt budget fits the job timeout: see the arithmetic in
+# .github/workflows/openclaw-upstream-compat.yml.
+OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-240}"
 OPENCLAW_AGENT_BACKSTOP_SECONDS="$((OPENCLAW_AGENT_TIMEOUT_SECONDS + 60))"
 
 # OpenClaw's tool catalog is upstream-controlled and it sets the prompt size,
@@ -395,15 +402,25 @@ run_agent_attempt() {
   fi
 }
 
-# Replaying this verifier over the 13 most recent scheduled runs that produced
-# agent output, 6 did not answer the prompt -- a ~46% per-attempt rate, every
-# one of them reported green at the time. The failures are model variance, not
-# integration breakage: bare `[[reply_to_current]]` routing tokens (x4), and
-# unrelated replies like "Hello." So retry enough times that model variance does
-# not dominate the signal. At the measured rate three attempts leave ~10%, and
-# the sharpened prompt should push it well below that. Every attempt is kept as
-# an artifact so a real break is still legible.
-OPENCLAW_AGENT_MAX_ATTEMPTS="${OPENCLAW_AGENT_MAX_ATTEMPTS:-3}"
+# This model does not reliably answer the prompt, and that is variance rather
+# than integration breakage. Replaying the verifier over the 13 most recent
+# scheduled runs that produced agent output, 6 did not answer -- a ~46%
+# per-attempt rate, every one of them reported green at the time (bare
+# `[[reply_to_current]]` routing tokens x4, and unrelated replies like
+# "Hello."). Run 34373947615 on the bounded surface went 3-for-3 the same way:
+# two generic greetings ("Hello! I'm qvac, ready to help with your work.") then
+# `qvac-ok` on the last attempt.
+#
+# So the attempt budget carries the variance, and it just got much cheaper to
+# raise. Attempts used to cost up to the full 600s deadline, which is why three
+# was the ceiling; on the bounded surface a whole attempt is ~80s wall
+# (ttft ~9s, one turn), measured across all three attempts of run 34373947615.
+# Six attempts is ~8m, well inside the job budget, and takes a 46% per-attempt
+# miss rate to ~1%.
+#
+# Every attempt is kept as an artifact, so a real break stays legible and the
+# miss rate stays measurable rather than assumed.
+OPENCLAW_AGENT_MAX_ATTEMPTS="${OPENCLAW_AGENT_MAX_ATTEMPTS:-6}"
 agent_ok=0
 agent_failure=""
 

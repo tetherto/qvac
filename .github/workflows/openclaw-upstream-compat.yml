@@ -20,13 +20,17 @@ on:
   workflow_dispatch:
     inputs:
       attempts:
-        description: "Agent attempts before failing (1 makes a debugging run ~8m instead of ~24m)"
+        description: "Agent attempts before failing (1 for a single-shot debugging run)"
         required: false
-        default: "3"
+        default: "6"
       tool_profile:
         description: "OpenClaw tools.profile for the run (minimal | coding | messaging | full)"
         required: false
         default: "minimal"
+      agent_prompt:
+        description: "Override the agent prompt. For calibrating compliance without a code change; blank uses the default."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -41,14 +45,13 @@ env:
   # inside the agent run, so a readyTimeoutMs longer than the agent timeout can
   # never be reached -- the agent timeout fires first and reports an opaque kill
   # instead of the plugin's "service never became healthy" error. Observed
-  # readiness is ~20s, so 5m is generous and leaves the rest of the 7m deadline
-  # for the turn itself.
-  QVAC_READY_TIMEOUT_MS: "300000"
+  # readiness is ~20-30s including the model download, so 3m is generous.
+  QVAC_READY_TIMEOUT_MS: "180000"
   # Passed to `openclaw agent --timeout`, so a deadline arrives as a readable
-  # JSON envelope rather than a SIGTERM. With the tool surface pinned to
-  # `minimal` a healthy turn is well inside this; the pre-fix regime needed
-  # ~190s per turn purely to prefill 35 tool schemas.
-  OPENCLAW_AGENT_TIMEOUT_SECONDS: "420"
+  # JSON envelope rather than a SIGTERM. A healthy attempt on the bounded
+  # surface is ~80s wall (run 34373947615); the pre-fix regime needed ~190s per
+  # turn purely to prefill 36 tool schemas.
+  OPENCLAW_AGENT_TIMEOUT_SECONDS: "240"
 
 jobs:
   smoke:
@@ -56,10 +59,12 @@ jobs:
     runs-on: ubuntu-latest
     # PR runs skip the agent turn (SKIP_OPENCLAW_AGENT below) so 15m covers
     # install + plugin setup. Scheduled/dispatch runs need install and setup
-    # (~6m observed) plus the attempt budget: three attempts against the 480s
-    # backstop is 24m, so 30m is the worst case and 40m leaves margin without
-    # letting a wedged run burn a full hour.
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 40 }}
+    # (~6m observed) plus the attempt budget, and the budget has to fit: six
+    # attempts against the 300s backstop is 30m, so 36m is the worst case.
+    # 45m leaves margin without letting a wedged run burn a full hour. Raising
+    # `attempts` past 6 on a dispatch can exceed this -- the job timeout kills
+    # the run before the artifact upload, so raise this too if you do.
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 45 }}
     permissions:
       contents: read
     steps:
@@ -77,8 +82,11 @@ jobs:
           QVAC_MODEL: ${{ env.QVAC_SMOKE_MODEL }}
           QVAC_READY_TIMEOUT_MS: ${{ env.QVAC_READY_TIMEOUT_MS }}
           OPENCLAW_AGENT_TIMEOUT_SECONDS: ${{ env.OPENCLAW_AGENT_TIMEOUT_SECONDS }}
-          OPENCLAW_AGENT_MAX_ATTEMPTS: ${{ inputs.attempts || '3' }}
+          OPENCLAW_AGENT_MAX_ATTEMPTS: ${{ inputs.attempts || '6' }}
           OPENCLAW_TOOL_PROFILE: ${{ inputs.tool_profile || 'minimal' }}
+          # Blank falls through to the script's default, so scheduled runs are
+          # unaffected. The script must therefore treat empty as unset.
+          AGENT_PROMPT: ${{ inputs.agent_prompt }}
           SKIP_OPENCLAW_AGENT: ${{ github.event_name == 'pull_request' && '1' || '0' }}
         run: bash scripts/ci/openclaw-upstream-compat-smoke.sh
 
