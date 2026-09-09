@@ -48,3 +48,5 @@ Use `.github/PULL_REQUEST_TEMPLATE/addon.md` as the template. If there are addit
 Fill in the template based on the combined change set. Return the completed PR description to the user as a message.
 
 Do NOT create or modify any additional files when producing the PR description.
+
+Do not add `packages/cli` to a native addon PR. If a follow-up SDK exposure PR is expected, remind the author that CLI belongs there (see `.cursor/rules/sdk/first-class-product-parity.mdc`).
