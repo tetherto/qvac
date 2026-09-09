@@ -101,8 +101,6 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: tmp-ic-4154-linux-arm64-${{ github.run_id }}
-          path: |
-            ${{ env.WORKDIR }}/test-output-*.log
-            ${{ env.VCPKG_ROOT }}/buildtrees/*/*.log
+          path: ${{ env.WORKDIR }}/test-output-*.log
           if-no-files-found: ignore
           retention-days: 14

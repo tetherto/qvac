@@ -89,8 +89,9 @@ jobs:
             test/integration/continuous-batching.test.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          & bare test/integration/all.js --exit 2>&1 | Tee-Object test-output.log
+          cmd /d /s /c "bare test/integration/all.js --exit > test-output.log 2>&1"
           $testExit = $LASTEXITCODE
+          Get-Content test-output.log
           exit $testExit
 
       - name: Upload failure logs
@@ -98,8 +99,6 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: tmp-ic-4154-windows-x64-${{ github.run_id }}
-          path: |
-            ${{ env.WORKDIR }}/test-output.log
-            ${{ env.VCPKG_ROOT }}/buildtrees/*/*.log
+          path: ${{ env.WORKDIR }}/test-output.log
           if-no-files-found: ignore
           retention-days: 14
