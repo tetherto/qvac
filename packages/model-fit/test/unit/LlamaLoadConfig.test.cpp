@@ -708,8 +708,10 @@ int main() {
         ModelTraits{},
         {rocm, vulkan, vulkan1, cpu()});
     expect(
-        !ambiguousTensorSplit.supported,
-        "filtered split lists must reject ambiguous tensor-share cardinality");
+        ambiguousTensorSplit.supported &&
+            ambiguousTensorSplit.params.tensor_split[0] == 2.0F &&
+            ambiguousTensorSplit.params.tensor_split[1] == 3.0F,
+        "final-list tensor shares must remain positional after filtering");
 
     const auto layerMainGpu = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
