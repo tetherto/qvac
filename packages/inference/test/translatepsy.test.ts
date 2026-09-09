@@ -2,7 +2,12 @@ import test from 'brittle'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getLanguage, translate } from '@/plugins/ops/translate'
 import { isTranslatePsyModel } from '@/plugins/ops/translatepsy-utils'
-import { llmConfigSchema, ModelType, type TranslateParams } from '@/schemas/index'
+import {
+  AFRICAN_LANGUAGES_MAP,
+  llmConfigSchema,
+  ModelType,
+  type TranslateParams
+} from '@/schemas/index'
 
 const expectedMessages = [
   {
@@ -184,6 +189,104 @@ test('translate: existing generic and AfriqueGemma prompts keep their decoding b
     ]
   ])
 })
+
+test('translate: adding language names does not expand Afrique prompt selection', async (t) => {
+  // This baseline changes only when prompt behavior intentionally changes.
+  const legacyAfriqueCodes = new Set([
+    'afr_Latn',
+    'swh_Latn',
+    'ary_Arab',
+    'som_Latn',
+    'amh_Ethi',
+    'arz_Arab',
+    'hau_Latn',
+    'kin_Latn',
+    'zul_Latn',
+    'ibo_Latn',
+    'plt_Latn',
+    'xho_Latn',
+    'sna_Latn',
+    'yor_Latn',
+    'nya_Latn',
+    'sot_Latn',
+    'tir_Ethi',
+    'aeb_Arab',
+    'gaz_Latn',
+    'tsn_Latn'
+  ])
+  const codes = new Set([...legacyAfriqueCodes, ...AFRICAN_LANGUAGES_MAP.keys()])
+  for (const code of codes) {
+    for (const direction of ['from', 'to']) {
+      const from = direction === 'from' ? code : 'en'
+      const to = direction === 'to' ? code : 'en'
+      const result = await runTranslation(
+        { path: '/models/other.gguf' },
+        { from, to, context: 'Use a formal tone' }
+      )
+      const fromLanguage = getLanguage(from)
+      const toLanguage = getLanguage(to)
+      const afrique = legacyAfriqueCodes.has(code)
+      t.alike(
+        result.calls[0]?.[0],
+        [
+          {
+            role: afrique ? 'user' : 'system',
+            content: afrique
+              ? `Translate ${fromLanguage} to ${toLanguage}.\n${fromLanguage}: How are you today?\n${toLanguage}:`
+              : `Use a formal tone. Translate the following text from ${fromLanguage} into ${toLanguage}. Only output the translation, nothing else.\n\n${fromLanguage}: How are you today?\n${toLanguage}:`
+          }
+        ],
+        `${direction}=${code}`
+      )
+    }
+  }
+})
+
+for (const local of [
+  { name: 'GENERIC', path: '/models/other.gguf' },
+  { name: 'AFRICAN_4B_TRANSLATION_Q4_K_M', path: '/models/AfriqueGemma-4B.Q4_K_M.gguf' }
+]) {
+  test(`translate: ${local.name} keeps context and the generic prompt for Lingala, Luganda, and Wolof`, async (t) => {
+    for (const [language, ...codes] of [
+      ['Lingala', 'ln', 'lin', 'lin_Latn'],
+      ['Luganda', 'lg', 'lug', 'lug_Latn'],
+      ['Wolof', 'wo', 'wol', 'wol_Latn']
+    ]) {
+      for (const code of codes) {
+        for (const direction of ['from', 'to']) {
+          const from = direction === 'from' ? code : 'en'
+          const to = direction === 'to' ? code : 'en'
+          const fromLanguage = direction === 'from' ? language : 'English'
+          const toLanguage = direction === 'to' ? language : 'English'
+          const result = await runTranslation(local, { from, to, context: 'Use a formal tone' })
+          const messages = [
+            {
+              role: 'system',
+              content: `Use a formal tone. Translate the following text from ${fromLanguage} into ${toLanguage}. Only output the translation, nothing else.\n\n${fromLanguage}: How are you today?\n${toLanguage}:`
+            }
+          ]
+          const expectedCall =
+            local.name === 'GENERIC'
+              ? [
+                  messages,
+                  {
+                    generationParams: {
+                      temp: 0,
+                      top_k: 1,
+                      top_p: 1,
+                      repeat_penalty: 1.3,
+                      seed: 42,
+                      predict: 256
+                    }
+                  }
+                ]
+              : [messages]
+          t.alike(result.calls, [expectedCall], `${direction}=${code}`)
+        }
+      }
+    }
+  })
+}
 
 test('translate: resolves full language names from ISO and script-qualified codes', (t) => {
   const languages = [

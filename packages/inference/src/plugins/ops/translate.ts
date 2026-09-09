@@ -52,6 +52,13 @@ const AFRICAN_LANGUAGE_ALIASES = new Map([
   ['orm', 'gaz_Latn']
 ])
 
+// Names missing from langdetect-text, kept separate from Afrique prompt selection.
+const ADDITIONAL_LANGUAGE_NAMES = new Map([
+  ['lin', 'Lingala'],
+  ['lug', 'Luganda'],
+  ['wol', 'Wolof']
+])
+
 export function getLanguage(code: string | undefined): string {
   if (!code) return ''
   const languageCode = AFRICAN_LANGUAGE_ALIASES.get(code) ?? code
@@ -59,7 +66,8 @@ export function getLanguage(code: string | undefined): string {
   for (const [scriptCode, name] of AFRICAN_LANGUAGES_MAP) {
     if (scriptCode.split('_')[0] === languageCode) return name
   }
-  const fullName = getLangName(languageCode.split('_')[0]!)
+  const baseCode = languageCode.split('_')[0]!
+  const fullName = ADDITIONAL_LANGUAGE_NAMES.get(baseCode) ?? getLangName(baseCode)
   return fullName ?? code.toUpperCase()
 }
 
