@@ -121,6 +121,18 @@ export const modelFitBasisSchema = z.enum([
   'device-budget'
 ])
 
+/**
+ * What kind of evidence a verdict rests on.
+ *
+ * - `calibration`: a two-sided estimate from coefficients measured on this
+ *   platform. The only evidence that can support `likely-fits`.
+ * - `computed-only`: a floor computed from catalog facts alone — artifact bytes,
+ *   plus the KV cache for llama.cpp models. It omits every engine cost that
+ *   only a real load can tell, so it can refuse a model but never confirm one.
+ *   This is what an uncalibrated platform, including Android and iOS, reports.
+ */
+export const modelFitEvidenceSchema = z.enum(['calibration', 'computed-only'])
+
 export const modelFitBudgetSchema = z.object({
   totalBytes: z
     .number()
@@ -144,11 +156,28 @@ export const modelFitBudgetSchema = z.object({
 export const modelFitModelResultSchema = z.object({
   name: z.string().describe('Catalog name of the assessed model.'),
   verdict: modelFitVerdictSchema,
-  estimate: byteRangeSchema.optional().describe('Absent when this model assessed as `unknown`.'),
+  evidence: modelFitEvidenceSchema
+    .optional()
+    .describe(
+      'What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.'
+    ),
+  estimate: byteRangeSchema
+    .optional()
+    .describe(
+      'Two-sided bound from calibrated coefficients. Absent under computed-only evidence, or when this model assessed as `unknown` for want of any evidence.'
+    ),
+  floorBytes: z
+    .number()
+    .optional()
+    .describe(
+      'Under computed-only evidence: the smallest resident footprint the catalog facts prove — artifact bytes, plus the KV cache for llama.cpp. A floor only; the true cost is above it by an unmeasured amount.'
+    ),
   estimatorVersion: z
     .string()
     .optional()
-    .describe('Estimator that produced the bounds, e.g. `llm-v1`.'),
+    .describe(
+      'Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.'
+    ),
   reasons: z.array(z.string()).describe('Why this model got this verdict.')
 })
 
@@ -158,8 +187,23 @@ export const assessModelFitResultSchema = z.object({
     'The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.'
   ),
   execution: modelFitExecutionSchema.describe('The declared execution mode this result assumed.'),
+  evidence: modelFitEvidenceSchema
+    .optional()
+    .describe(
+      'The weakest evidence any candidate rests on: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent when no candidate could be assessed at all.'
+    ),
   budget: modelFitBudgetSchema.optional().describe('Absent when memory evidence was unusable.'),
-  estimate: byteRangeSchema.optional().describe('Absent when the combined verdict is `unknown`.'),
+  estimate: byteRangeSchema
+    .optional()
+    .describe(
+      'Combined two-sided bound. Absent when the combined verdict is `unknown` for want of evidence, and under computed-only evidence, which has no upper bound.'
+    ),
+  floorBytes: z
+    .number()
+    .optional()
+    .describe(
+      'Under computed-only evidence: the combined floor across every candidate, aggregated under `execution`. Compared against the budget for `likely-too-large`; never enough for `likely-fits`.'
+    ),
   models: z.array(modelFitModelResultSchema).describe('Per-candidate verdicts, in input order.'),
   reasons: z.array(z.string()).describe('Why the combined verdict came out this way.'),
   assumptions: z
@@ -234,6 +278,7 @@ export type ModelFitWorkload = z.infer<typeof modelFitWorkloadSchema>
 export type ModelFitCandidate = z.infer<typeof modelFitCandidateSchema>
 export type ModelFitExecution = z.infer<typeof modelFitExecutionSchema>
 export type ModelFitBasis = z.infer<typeof modelFitBasisSchema>
+export type ModelFitEvidence = z.infer<typeof modelFitEvidenceSchema>
 export type ModelFitBudget = z.infer<typeof modelFitBudgetSchema>
 export type ModelFitModelResult = z.infer<typeof modelFitModelResultSchema>
 export type AssessModelFitInput = z.input<typeof assessModelFitInputSchema>

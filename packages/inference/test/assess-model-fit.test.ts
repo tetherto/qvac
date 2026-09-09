@@ -2,6 +2,7 @@ import test from 'brittle'
 import { estimateLlm, LLM_ESTIMATOR_VERSION } from '@/resources/model-fit/estimators/llm'
 import { estimateWhisper } from '@/resources/model-fit/estimators/whisper'
 import { assessModelFitFromResources } from '@/resources/model-fit/assess'
+import { computeFloor, FLOOR_VERSION } from '@/resources/model-fit/floor'
 import { fitResidentMemory, kvObservation } from '@/resources/model-fit/calibration/fit'
 import type { CalibrationPoint } from '@/resources/model-fit/calibration/fit'
 import type { PlatformCalibration } from '@/resources/model-fit/types'
@@ -806,7 +807,7 @@ test('assess: one unknown model makes the combined verdict unknown', (t) => {
   t.ok(result.models[1]!.reasons.some((r) => r.includes('no resource profile')))
 })
 
-test('assess: an uncalibrated platform yields unknown for every model', (t) => {
+test('assess: an uncalibrated platform yields unknown, never likely-fits, for a model inside the budget', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
@@ -824,6 +825,9 @@ test('assess: an uncalibrated platform yields unknown for every model', (t) => {
     result.models[0]!.reasons.some((r) => r.includes('no validated calibration for linux-arm64')),
     'the per-model reason names the uncalibrated platform'
   )
+  t.is(result.evidence, 'computed-only', 'what evidence there is, is the computed floor')
+  t.absent(result.estimate, 'and a floor is not an estimate')
+  t.ok(result.floorBytes, 'the floor itself is reported')
 })
 
 test('assess: an unrecognized platform yields unknown', (t) => {
@@ -875,6 +879,303 @@ test('assess: a companion artifact missing from the catalog yields unknown', (t)
 
   t.is(result.verdict, 'unknown')
   t.ok(result.models[0]!.reasons.some((r) => r.includes('`artifacts`')))
+})
+
+// ---------------------------------------------------------------------------
+// Computed floor — the zero-fetch gate on uncalibrated platforms
+// ---------------------------------------------------------------------------
+
+// Every term calibration adds on top of the weights and the KV cache is
+// non-negative, so a floor with all of them at zero holds on any platform and
+// any backend. That is what lets it refuse a model without a fixture; it is
+// also why it can never confirm one.
+
+test('computeFloor: a llama.cpp floor is the weights plus the KV cache at the narrowest default width', (t) => {
+  const elements = 32 * 8 * 256 * 4096
+
+  const floor = computeFloor({
+    profile: profile({ artifactBytes: 4_000_000_000 }),
+    workload: { kind: 'llm', contextTokens: 4096 },
+    extraArtifactBytes: 500_000_000
+  })
+  t.is(
+    floor.bytes,
+    Math.ceil(4_500_000_000 + elements * Q8_0),
+    'model plus companions plus a q8_0 cache: the GPU default, which is the cheaper one'
+  )
+  t.ok(floor.assumptions.some((a) => a.includes('q8_0')))
+  t.ok(floor.assumptions.some((a) => a.includes('cannot overstate the cost')))
+
+  const bitnet = computeFloor({
+    profile: profile({ artifactBytes: 0, ggufFacts: denseFacts({ architecture: 'bitnet' }) }),
+    workload: { kind: 'llm', contextTokens: 4096 },
+    extraArtifactBytes: 0
+  })
+  t.is(bitnet.bytes, elements * F16, 'flash attention off keeps the cache f16 on every backend')
+
+  const clamped = computeFloor({
+    profile: profile({ artifactBytes: 0, ggufFacts: denseFacts({ contextLength: 2048 }) }),
+    workload: { kind: 'llm', contextTokens: 1_000_000 },
+    extraArtifactBytes: 0
+  })
+  t.is(clamped.bytes, Math.ceil(32 * 8 * 256 * 2048 * Q8_0), 'sized for the trained context')
+  t.ok(clamped.assumptions.some((a) => a.includes('clamped to the trained context')))
+})
+
+test('computeFloor: without a sized KV cache the floor is the weights alone', (t) => {
+  const noFacts = computeFloor({
+    profile: { schemaVersion: 1, engine: 'llamacpp-completion', artifactBytes: 123 },
+    workload: { kind: 'llm', contextTokens: 4096 },
+    extraArtifactBytes: 0
+  })
+  t.is(noFacts.bytes, 123)
+  t.ok(noFacts.reasons.some((r) => r.includes('weights only')))
+
+  const audioOnLlama = computeFloor({
+    profile: profile({ artifactBytes: 123 }),
+    workload: { kind: 'audio', windowMs: 30_000, streaming: false },
+    extraArtifactBytes: 0
+  })
+  t.is(audioOnLlama.bytes, 123, 'a workload with no context sizes no cache')
+
+  const whisper = computeFloor({
+    profile: profile({
+      engine: 'whispercpp-transcription',
+      artifactBytes: 123,
+      ggufFacts: undefined
+    }),
+    workload: { kind: 'audio', windowMs: 30_000, streaming: false },
+    extraArtifactBytes: 0
+  })
+  t.is(whisper.bytes, 123)
+  t.ok(whisper.reasons.some((r) => r.includes('engine-owned')))
+
+  const tts = computeFloor({
+    profile: profile({ engine: 'tts-ggml', artifactBytes: 123, ggufFacts: undefined }),
+    workload: { kind: 'llm', contextTokens: 1 },
+    extraArtifactBytes: 0
+  })
+  t.is(tts.bytes, 123, 'an engine with no estimator still has a file size')
+})
+
+test('assess: an uncalibrated platform refuses from the computed floor and never confirms a fit', (t) => {
+  // An 8 GiB phone with 2 GiB in use: 6 GiB available, the mobile reserve
+  // capped at 1 GiB, a 5 GiB budget. No fixture for android-arm64.
+  const phone = resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB })
+  const kv = Math.ceil(32 * 8 * 256 * 4096 * Q8_0)
+  const assess = (artifactBytes: number) =>
+    assessModelFitFromResources({
+      models: [candidate({ workload: { kind: 'llm', contextTokens: 4096 } })],
+      execution: 'sequential',
+      resources: phone,
+      platform: 'android-arm64',
+      calibration: undefined,
+      resolveProfile: () => profile({ artifactBytes })
+    })
+
+  const tooLarge = assess(6 * GIB)
+  t.is(tooLarge.verdict, 'likely-too-large')
+  t.is(tooLarge.basis, 'system-memory')
+  t.is(tooLarge.budget?.availableAfterReserveBytes, 5 * GIB)
+  t.is(tooLarge.evidence, 'computed-only')
+  t.is(tooLarge.floorBytes, 6 * GIB + kv)
+  t.absent(tooLarge.estimate, 'a floor has no upper bound to report as an estimate')
+  t.is(tooLarge.models[0]!.verdict, 'likely-too-large')
+  t.is(tooLarge.models[0]!.evidence, 'computed-only')
+  t.is(tooLarge.models[0]!.floorBytes, 6 * GIB + kv)
+  t.is(tooLarge.models[0]!.estimatorVersion, FLOOR_VERSION)
+  t.absent(tooLarge.models[0]!.estimate)
+  t.ok(
+    tooLarge.models[0]!.reasons.some((r) =>
+      r.includes('no validated calibration for android-arm64')
+    ),
+    'the reason the verdict is only a floor is kept'
+  )
+  t.ok(tooLarge.models[0]!.reasons.some((r) => r.includes('floor alone exceeds the budget')))
+  t.ok(tooLarge.reasons.some((r) => r.includes('never confirm a fit')))
+
+  const atBudget = assess(5 * GIB - kv)
+  t.is(atBudget.verdict, 'unknown', 'a floor exactly at the budget is not over it')
+  const justOver = assess(5 * GIB - kv + 1)
+  t.is(justOver.verdict, 'likely-too-large', 'one byte over is')
+
+  // A model far inside the budget is still unknown: the floor cannot say what
+  // the load adds on top, and that is the whole reason calibration exists.
+  const tiny = assess(10 * MIB)
+  t.is(tiny.verdict, 'unknown')
+  t.is(tiny.evidence, 'computed-only')
+  t.is(tiny.models[0]!.verdict, 'unknown')
+  t.ok(tiny.models[0]!.reasons.some((r) => r.includes('a fit cannot be claimed')))
+})
+
+test('assess: two floors that each fit alone can still refuse the set together', (t) => {
+  // The same 5 GiB budget as above.
+  const phone = resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB })
+  const kv = Math.ceil(32 * 8 * 256 * 4096 * Q8_0)
+  const result = assessModelFitFromResources({
+    models: [
+      candidate({ model: { name: 'A', sha256Checksum: 'a'.repeat(64) } }),
+      candidate({ model: { name: 'B', sha256Checksum: 'b'.repeat(64) } })
+    ],
+    execution: 'sequential',
+    resources: phone,
+    platform: 'android-arm64',
+    calibration: undefined,
+    resolveProfile: () => profile({ artifactBytes: 3 * GIB })
+  })
+
+  t.is(result.models[0]!.verdict, 'unknown', '3 GiB plus cache is inside a 5 GiB budget')
+  t.is(result.models[1]!.verdict, 'unknown')
+  t.is(result.verdict, 'likely-too-large', 'both resident at once is not')
+  t.is(result.floorBytes, 2 * (3 * GIB + kv), 'floors sum like resident lower bounds')
+})
+
+test('assess: iOS refuses from the floor once the per-process allowance is known', (t) => {
+  const kv = Math.ceil(32 * 8 * 256 * 4096 * Q8_0)
+  const assess = (artifactBytes: number, sample: Parameters<typeof resources>[0]) =>
+    assessModelFitFromResources({
+      models: [candidate()],
+      execution: 'sequential',
+      resources: resources(sample),
+      platform: 'ios-arm64',
+      calibration: undefined,
+      resolveProfile: () => profile({ artifactBytes })
+    })
+
+  // System memory must not stand in for the allowance: no budget, no verdict —
+  // but the floor itself is still computed and reported.
+  const withoutMetric = assess(6 * GIB, { totalBytes: 8 * GIB, usedBytes: 2 * GIB })
+  t.is(withoutMetric.verdict, 'unknown')
+  t.absent(withoutMetric.budget)
+  t.is(withoutMetric.models[0]!.verdict, 'unknown')
+  t.is(withoutMetric.models[0]!.floorBytes, 6 * GIB + kv)
+  t.ok(
+    withoutMetric.reasons.some((r) => r.includes('per-process allowance metric is not available'))
+  )
+
+  // Allowance 2.5 GiB, footprint 1 GiB, mobile reserve 0.5 GiB: a 2 GiB budget.
+  const perProcess = { processUsedBytes: 1 * GIB, processAvailableBytes: 2.5 * GIB }
+  const tooLarge = assess(6 * GIB, perProcess)
+  t.is(tooLarge.basis, 'process-memory')
+  t.is(tooLarge.verdict, 'likely-too-large')
+  t.is(tooLarge.evidence, 'computed-only')
+  t.is(tooLarge.budget?.availableAfterReserveBytes, 2 * GIB)
+
+  const small = assess(1 * GIB, perProcess)
+  t.is(small.verdict, 'unknown', 'inside the allowance is still not a fit without calibration')
+})
+
+test('assess: an unrecognized platform still refuses from the floor', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate({ workload: { kind: 'llm', contextTokens: 1 } })],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
+    platform: undefined,
+    calibration: undefined,
+    resolveProfile: () => profile({ artifactBytes: 5 * GIB })
+  })
+
+  t.is(result.verdict, 'likely-too-large', '5 GiB of weights against a 4 GiB budget')
+  t.is(result.evidence, 'computed-only')
+  t.ok(result.reasons.some((r) => r.includes('not one this assessment covers')))
+})
+
+// The floor is the fallback everywhere, including on a calibrated platform for
+// a model the estimator refuses — audio here, whose coefficients are unmeasured.
+test('assess: on a calibrated platform a model the estimator refuses falls back to its floor', (t) => {
+  const llm = candidate({ model: { name: 'LLM', sha256Checksum: 'a'.repeat(64) } })
+  const whisper = candidate({
+    model: { name: 'WHISPER', sha256Checksum: 'b'.repeat(64) },
+    workload: { kind: 'audio', windowMs: 30_000, streaming: false }
+  })
+  const resolveProfile = (whisperBytes: number) => (checksum: string) =>
+    checksum === 'a'.repeat(64)
+      ? profile({ artifactBytes: 1 * GIB })
+      : profile({
+          engine: 'whispercpp-transcription',
+          artifactBytes: whisperBytes,
+          ggufFacts: undefined
+        })
+  // 8 GiB total, 3 GiB used: a 4 GiB budget.
+  const assess = (models: ModelFitCandidate[], whisperBytes: number) =>
+    assessModelFitFromResources({
+      models,
+      execution: 'sequential',
+      resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
+      platform: 'darwin-arm64',
+      calibration: calibration(),
+      resolveProfile: resolveProfile(whisperBytes)
+    })
+
+  const alone = assess([whisper], 5 * GIB)
+  t.is(
+    alone.verdict,
+    'likely-too-large',
+    '5 GiB of weights do not fit a 4 GiB budget, coefficients or not'
+  )
+  t.is(alone.evidence, 'computed-only')
+  t.ok(alone.models[0]!.reasons.some((r) => r.includes('has not been measured')))
+  t.ok(alone.models[0]!.reasons.some((r) => r.includes('weights only')))
+
+  const mixed = assess([llm, whisper], 5 * GIB)
+  t.is(mixed.models[0]!.verdict, 'likely-fits')
+  t.is(mixed.models[0]!.evidence, 'calibration')
+  t.is(mixed.models[1]!.verdict, 'likely-too-large')
+  t.is(mixed.models[1]!.evidence, 'computed-only')
+  t.is(mixed.verdict, 'likely-too-large')
+  t.is(mixed.evidence, 'computed-only', 'the set rests on its weakest evidence')
+  t.absent(mixed.estimate)
+  t.is(mixed.floorBytes, mixed.models[0]!.estimate!.lowerBoundBytes + 5 * GIB)
+
+  const bothInside = assess([llm, whisper], 100 * MIB)
+  t.is(bothInside.models[0]!.verdict, 'likely-fits')
+  t.is(bothInside.verdict, 'unknown', 'one floor in the set means the set is never likely-fits')
+})
+
+// A discrete card holds the weights in its own memory, so the system budget
+// bounds nothing there: no floor can be compared, and the answer stays unknown.
+test('assess: a discrete GPU without coefficients gets no floor', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 20 * GIB,
+      vramUsedBytes: 1 * GIB,
+      systemTotalBytes: 8 * GIB,
+      systemUsedBytes: 7 * GIB
+    }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveGpuCalibration: () => undefined,
+    resolveProfile: () => profile({ artifactBytes: 6 * GIB })
+  })
+
+  t.is(
+    result.verdict,
+    'unknown',
+    '6 GiB against 1 GiB of system RAM proves nothing when the weights may live in VRAM'
+  )
+  t.absent(result.evidence)
+  t.absent(result.floorBytes)
+  t.absent(result.models[0]!.floorBytes)
+})
+
+// An integrated GPU allocates out of system RAM, so the floor holds there even
+// without the shared fixture — the budget measures the memory the load uses.
+test('assess: an integrated GPU without shared coefficients still gets the floor', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ gpu: true, totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
+    platform: 'linux-x64',
+    calibration: calibration(),
+    resolveSharedGpuCalibration: () => undefined,
+    resolveProfile: () => profile({ artifactBytes: 6 * GIB })
+  })
+
+  t.is(result.verdict, 'likely-too-large')
+  t.is(result.evidence, 'computed-only')
+  t.ok(result.models[0]!.reasons.some((r) => r.includes('a GPU is present')))
 })
 
 // ---------------------------------------------------------------------------

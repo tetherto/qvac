@@ -2,6 +2,7 @@ import type {
   AssessModelFitResult,
   ModelFitBasis,
   ModelFitCandidate,
+  ModelFitEvidence,
   ModelFitExecution,
   ModelFitModelResult,
   ModelFitVerdict
@@ -12,6 +13,7 @@ import { getModelResourceProfile } from '@/models/registry/resource-profiles'
 import { getGpuCalibration, getSharedGpuCalibration } from '@/resources/model-fit/calibration/index'
 import { estimateLlm } from '@/resources/model-fit/estimators/llm'
 import { estimateWhisper } from '@/resources/model-fit/estimators/whisper'
+import { computeFloor, FLOOR_VERSION } from '@/resources/model-fit/floor'
 import type {
   ByteRange,
   EstimatorResult,
@@ -44,6 +46,22 @@ const CPU_CALIBRATED_PLATFORMS: readonly ModelFitPlatform[] = [
 
 /** Resolves a checksum to its catalog resource profile. */
 export type ProfileResolver = (sha256Checksum: string) => ModelResourceProfile | undefined
+
+/**
+ * What one candidate came out as. An `estimate` is a two-sided bound from
+ * calibrated coefficients; a `floor` is the computed lower bound alone, taken
+ * when no coefficients describe the load but the model still executes out of
+ * the memory the budget measures; `unknown` is neither.
+ */
+type Evaluation =
+  | Extract<EstimatorResult, { kind: 'estimate' }>
+  | {
+      kind: 'floor'
+      bytes: number
+      reasons: readonly string[]
+      assumptions: readonly string[]
+    }
+  | Extract<EstimatorResult, { kind: 'unknown' }>
 
 export interface AssessModelFitOptions {
   models: readonly ModelFitCandidate[]
@@ -167,8 +185,22 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     assumptions.push(calibrationAssumption(platform, effectiveCalibration))
   }
 
+  // Without coefficients, the computed floor still says something — but only
+  // where the model executes out of the memory the budget measures. A discrete
+  // card holds the weights in its own memory, so the system budget bounds
+  // nothing there and the floor has no budget to be compared against.
+  const floorApplies = !onDevice && boundBySystemMemory(resources, platform)
+
   const evaluated = models.map((candidate) =>
-    evaluate(candidate, platform, effectiveCalibration, resources, resolveProfile, gpuMode)
+    evaluate(
+      candidate,
+      platform,
+      effectiveCalibration,
+      resources,
+      resolveProfile,
+      gpuMode,
+      floorApplies
+    )
   )
 
   for (const { result } of evaluated) {
@@ -181,23 +213,38 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     toModelResult(candidate, result, budget, deviceBudgets, alsoBoundBy)
   )
 
-  const estimates = evaluated
-    .map(({ result }) => result)
-    .filter((result): result is Extract<EstimatorResult, { kind: 'estimate' }> => {
+  const results = evaluated.map(({ result }) => result)
+  const estimates = results.filter(
+    (result): result is Extract<Evaluation, { kind: 'estimate' }> => {
       return result.kind === 'estimate'
-    })
+    }
+  )
+  const anyUnknown = results.some((result) => result.kind === 'unknown')
+  const anyFloor = results.some((result) => result.kind === 'floor')
 
-  const anyUnknown = estimates.length !== evaluated.length
-  const combined = anyUnknown ? undefined : aggregate(estimates, execution)
+  // A two-sided bound needs every candidate estimated; a floor needs every
+  // candidate to have at least a floor. One model with neither leaves the set
+  // with no evidence at all.
+  const combined = anyUnknown || anyFloor ? undefined : aggregate(estimates, execution)
+  const combinedFloor = anyUnknown ? undefined : aggregateFloor(results, execution)
+
+  const evidence: ModelFitEvidence | undefined = anyFloor
+    ? 'computed-only'
+    : estimates.length > 0
+      ? 'calibration'
+      : undefined
 
   if (anyUnknown) {
     reasons.push('at least one model could not be estimated, so the combined verdict is unknown')
   }
 
-  const verdict: ModelFitVerdict =
-    !budget || !combined
-      ? 'unknown'
-      : verdictAgainst(combined, deviceBudgets ?? [budget], alsoBoundBy)
+  const verdict: ModelFitVerdict = !budget
+    ? 'unknown'
+    : combined
+      ? verdictAgainst(combined, deviceBudgets ?? [budget], alsoBoundBy)
+      : combinedFloor !== undefined
+        ? floorVerdict(combinedFloor, deviceBudgets ?? [budget])
+        : 'unknown'
 
   if (onDevice && combined && alsoBoundBy) {
     reasons.push(
@@ -219,104 +266,137 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     )
   }
 
+  if (anyFloor) {
+    reasons.push(
+      'at least one model is bounded only by its computed floor (weights, plus the KV cache for llama.cpp), which can refuse the set but never confirm a fit'
+    )
+  }
+
   return {
     verdict,
     basis,
     execution,
+    ...(evidence && { evidence }),
     ...(budget && { budget }),
     ...(combined && {
       estimate: { lowerBoundBytes: combined.lower, upperBoundBytes: combined.upper }
     }),
+    ...(anyFloor && combinedFloor !== undefined && { floorBytes: combinedFloor }),
     models: modelResults,
     reasons,
     assumptions
   }
 }
 
+/**
+ * Whether every allocation a load makes comes out of the memory the system (or
+ * process) budget measures — the precondition for the computed floor to be
+ * compared against that budget.
+ *
+ * True on unified-memory platforms whatever the collector reports, and on a
+ * CPU-calibrated platform when no usable GPU is present or every usable GPU
+ * allocates out of system RAM. A card with its own memory, or a device whose
+ * class cannot be told (an AMD APU on linux), fails it: the weights may live
+ * where the budget cannot see them.
+ */
+function boundBySystemMemory(
+  resources: SystemResources,
+  platform: ModelFitPlatform | undefined
+): boolean {
+  if (platform !== undefined && !CPU_CALIBRATED_PLATFORMS.includes(platform)) return true
+
+  const gpus = usableGpus(resources)
+  if (gpus.length === 0) return true
+  if (platform && gpus.some((gpu) => integratedIsIndistinguishable(gpu, platform))) return false
+  return gpus.every(allocatesFromSystemMemory)
+}
+
+/**
+ * One candidate's evaluation: the calibrated estimate when the coefficients
+ * describe this load, otherwise the computed floor where a floor can be
+ * compared at all, otherwise `unknown`. Whatever kept the estimate from
+ * forming stays in the reasons, so a floor verdict still says why it is only
+ * a floor.
+ */
 function evaluate(
   candidate: ModelFitCandidate,
   platform: ModelFitPlatform | undefined,
   calibration: PlatformCalibration | undefined,
   resources: SystemResources,
   resolveProfile: ProfileResolver,
-  gpuMode: boolean
-): { candidate: ModelFitCandidate; result: EstimatorResult } {
-  if (!calibration) {
-    return {
-      candidate,
-      result: {
-        kind: 'unknown',
-        estimatorVersion: 'none',
-        reasons: [
-          platform
-            ? `no validated calibration for ${platform}`
-            : 'the runtime platform is not one this assessment covers'
-        ]
-      }
-    }
-  }
-
-  // A GPU is present and neither GPU mode engaged, so the only coefficients
-  // left were measured with the offload disabled — not how this host runs.
-  if (!gpuMode && platform && CPU_CALIBRATED_PLATFORMS.includes(platform) && hasGpu(resources)) {
-    return {
-      candidate,
-      result: {
-        kind: 'unknown',
-        estimatorVersion: 'none',
-        reasons: [
-          'a GPU is present, so the model executes on it rather than on the CPU this platform’s coefficients were measured against'
-        ]
-      }
-    }
-  }
-
+  gpuMode: boolean,
+  floorApplies: boolean
+): { candidate: ModelFitCandidate; result: Evaluation } {
   const profile = resolveProfile(candidate.model.sha256Checksum)
   if (!profile) {
-    return {
-      candidate,
-      result: {
-        kind: 'unknown',
-        estimatorVersion: 'none',
-        reasons: ['no resource profile in the catalog for this checksum']
-      }
-    }
-  }
-
-  const estimator = ESTIMATORS[profile.engine as keyof typeof ESTIMATORS]
-  if (!estimator) {
-    return {
-      candidate,
-      result: {
-        kind: 'unknown',
-        estimatorVersion: 'none',
-        reasons: [`engine '${profile.engine}' has no estimator in this phase`]
-      }
-    }
+    return { candidate, result: unknown('no resource profile in the catalog for this checksum') }
   }
 
   const extra = extraArtifactBytes(candidate, resolveProfile)
   if (extra === undefined) {
     return {
       candidate,
-      result: {
-        kind: 'unknown',
-        estimatorVersion: 'none',
-        reasons: ['an entry in `artifacts` has no resource profile in the catalog']
-      }
+      result: unknown('an entry in `artifacts` has no resource profile in the catalog')
     }
   }
 
+  const estimated = estimate(candidate, profile, extra, platform, calibration, resources, gpuMode)
+  if (estimated.kind === 'estimate' || !floorApplies) return { candidate, result: estimated }
+
+  const floor = computeFloor({ profile, workload: candidate.workload, extraArtifactBytes: extra })
   return {
     candidate,
-    result: estimator({
-      profile,
-      workload: candidate.workload,
-      extraArtifactBytes: extra,
-      calibration,
-      hasGpu: hasGpu(resources)
-    })
+    result: {
+      kind: 'floor',
+      bytes: floor.bytes,
+      reasons: [...estimated.reasons, ...floor.reasons],
+      assumptions: [...(estimated.assumptions ?? []), ...floor.assumptions]
+    }
   }
+}
+
+function unknown(reason: string): Extract<EstimatorResult, { kind: 'unknown' }> {
+  return { kind: 'unknown', estimatorVersion: 'none', reasons: [reason] }
+}
+
+/** Runs the calibrated estimator for a candidate, or says why it cannot. */
+function estimate(
+  candidate: ModelFitCandidate,
+  profile: ModelResourceProfile,
+  extraArtifactBytes: number,
+  platform: ModelFitPlatform | undefined,
+  calibration: PlatformCalibration | undefined,
+  resources: SystemResources,
+  gpuMode: boolean
+): EstimatorResult {
+  if (!calibration) {
+    return unknown(
+      platform
+        ? `no validated calibration for ${platform}`
+        : 'the runtime platform is not one this assessment covers'
+    )
+  }
+
+  // A GPU is present and neither GPU mode engaged, so the only coefficients
+  // left were measured with the offload disabled — not how this host runs.
+  if (!gpuMode && platform && CPU_CALIBRATED_PLATFORMS.includes(platform) && hasGpu(resources)) {
+    return unknown(
+      'a GPU is present, so the model executes on it rather than on the CPU this platform’s coefficients were measured against'
+    )
+  }
+
+  const estimator = ESTIMATORS[profile.engine as keyof typeof ESTIMATORS]
+  if (!estimator) {
+    return unknown(`engine '${profile.engine}' has no estimator in this phase`)
+  }
+
+  return estimator({
+    profile,
+    workload: candidate.workload,
+    extraArtifactBytes,
+    calibration,
+    hasGpu: hasGpu(resources)
+  })
 }
 
 /**
@@ -711,6 +791,49 @@ function aggregate(
   return { lower: persistentLower + workingLower, upper: persistentUpper + workingUpper }
 }
 
+/**
+ * The combined lower bound when at least one candidate has only a floor: every
+ * estimate contributes its own lower bound, every floor its bytes, aggregated
+ * the same way as `aggregate` — a floor has no working peak to add.
+ *
+ * @returns `undefined` when any candidate has no evidence at all.
+ */
+function aggregateFloor(
+  results: readonly Evaluation[],
+  execution: ModelFitExecution
+): number | undefined {
+  let persistent = 0
+  let working = 0
+
+  for (const result of results) {
+    if (result.kind === 'unknown') return undefined
+    if (result.kind === 'floor') {
+      persistent += result.bytes
+      continue
+    }
+    persistent += result.persistent.lower
+    working =
+      execution === 'concurrent'
+        ? working + result.working.lower
+        : Math.max(working, result.working.lower)
+  }
+
+  return persistent + working
+}
+
+/**
+ * A floor can only refuse: over the largest candidate budget it is
+ * `likely-too-large`, and anything else is `unknown`, because the cost above
+ * the floor is unmeasured and could be anything.
+ */
+function floorVerdict(
+  floorBytes: number,
+  candidates: readonly NonNullable<AssessModelFitResult['budget']>[]
+): ModelFitVerdict {
+  const room = candidates.map((budget) => budget.availableAfterReserveBytes)
+  return floorBytes > Math.max(...room) ? 'likely-too-large' : 'unknown'
+}
+
 function compare(estimate: ByteRange, budget: number): ModelFitVerdict {
   if (estimate.lower > budget) return 'likely-too-large'
   if (estimate.upper <= budget) return 'likely-fits'
@@ -719,7 +842,7 @@ function compare(estimate: ByteRange, budget: number): ModelFitVerdict {
 
 function toModelResult(
   candidate: ModelFitCandidate,
-  result: EstimatorResult,
+  result: Evaluation,
   budget: AssessModelFitResult['budget'],
   /** Every candidate GPU budget, when the host has more than one. */
   deviceBudgets: readonly NonNullable<AssessModelFitResult['budget']>[] | undefined,
@@ -733,6 +856,25 @@ function toModelResult(
     }
   }
 
+  if (result.kind === 'floor') {
+    const verdict = budget ? floorVerdict(result.bytes, deviceBudgets ?? [budget]) : 'unknown'
+    return {
+      name: candidate.model.name,
+      verdict,
+      evidence: 'computed-only',
+      floorBytes: result.bytes,
+      estimatorVersion: FLOOR_VERSION,
+      reasons: [
+        ...result.reasons,
+        !budget
+          ? 'no usable system-memory sample, so this model has no verdict'
+          : verdict === 'likely-too-large'
+            ? 'the computed floor alone exceeds the budget'
+            : 'the computed floor is within the budget, but without calibration the cost above it is unbounded, so a fit cannot be claimed'
+      ]
+    }
+  }
+
   const total: ByteRange = {
     lower: result.persistent.lower + result.working.lower,
     upper: result.persistent.upper + result.working.upper
@@ -741,6 +883,7 @@ function toModelResult(
   return {
     name: candidate.model.name,
     verdict: budget ? verdictAgainst(total, deviceBudgets ?? [budget], alsoBoundBy) : 'unknown',
+    evidence: 'calibration',
     estimate: { lowerBoundBytes: total.lower, upperBoundBytes: total.upper },
     estimatorVersion: result.estimatorVersion,
     reasons: budget

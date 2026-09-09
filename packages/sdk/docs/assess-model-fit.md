@@ -18,10 +18,49 @@ model for you, or make any claim about speed.
 | `unknown`          | The evidence does not support either claim.               |
 
 `unknown` is a real answer, not an error. Show it as "can't say" — never as "no".
-It is what you get when the catalog has no GGUF metadata for a model, when the
-platform has no validated calibration, when memory metrics are unsupported, or
-when a requested engine has no estimator yet. If any one model in a call is
-`unknown`, the combined verdict is `unknown`; each model still reports its own.
+It is what you get when the catalog has no profile for a model, when memory
+metrics are unsupported, and whenever the only evidence is a
+[computed floor](#two-kinds-of-evidence) that the model does not exceed. If any
+one model in a call is `unknown`, the combined verdict is `unknown`; each model
+still reports its own.
+
+## Two kinds of evidence
+
+Every verdict says what it rests on, in `evidence` — on the result and on each
+model:
+
+| `evidence`      | What it is                                                                                                          | Can say                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `calibration`   | A two-sided `estimate` from coefficients measured on this platform.                                                 | any verdict                     |
+| `computed-only` | A floor from catalog facts alone: artifact bytes, plus the KV cache for llama.cpp models. Reported as `floorBytes`. | `likely-too-large` or `unknown` |
+
+The floor omits everything that only a real load can tell you — engine
+overhead, compute buffers, a completion's working peak — and all of those are
+non-negative, so it never overstates the cost. That makes it valid on every
+platform and backend without a fixture: a model whose floor alone exceeds the
+budget is `likely-too-large` anywhere. It is also why it can never say
+`likely-fits`: how far above the floor the load lands is exactly what
+calibration measures.
+
+`computed-only` is what you get on a platform with no validated calibration —
+Android, iOS, `win32-arm64` — and on a calibrated platform for a model its
+estimator refuses (audio, today). A set of candidates rests on its weakest
+evidence: one `computed-only` model makes the combined `evidence`
+`computed-only`, and the combined verdict can then refuse the set but not
+confirm it. Under `computed-only` there is no `estimate`; `floorBytes` carries
+the bound instead, aggregated under `execution` for the combined result.
+
+Branch on `evidence`, not on the verdict alone: an `unknown` under
+`computed-only` for a small model is "no calibration here", not "too close to
+call". A UI that hides `likely-too-large` models and shows the rest works
+identically under both kinds of evidence; one that wants to promote a
+`likely-fits` needs `calibration`.
+
+The floor is only compared where the model executes out of the memory the
+budget measures — unified-memory devices, CPU-only desktops, integrated GPUs.
+A desktop with a discrete GPU and no coefficients for it stays `unknown`, since
+the weights would live in the card's memory and the system budget bounds
+nothing about them.
 
 ## Usage
 
@@ -42,7 +81,8 @@ if (result.verdict === 'likely-too-large') {
 }
 
 for (const model of result.models) {
-  console.log(model.name, model.verdict, model.reasons)
+  // `evidence` says whether an `unknown` is a near-miss or just uncalibrated
+  console.log(model.name, model.verdict, model.evidence, model.reasons)
 }
 ```
 
@@ -86,7 +126,8 @@ What "total" and "in use" mean depends on the result's `basis`:
   system budget there would defend verdicts the OS does not honor. The budget
   is the per-process allowance the OS reports plus the current footprint. A
   build that cannot state that allowance assesses as `unknown` rather than
-  returning a confidently wrong `likely-fits`.
+  returning a confidently wrong `likely-fits`; the computed floor is still
+  reported, it just has nothing to be compared against.
 
 - **`device-memory`** — a discrete GPU's own memory, used when the model will
   execute there. Only for a GPU whose readings the collector established are
@@ -123,9 +164,13 @@ reported in `assumptions`.
 | Workloads | `llm`, `audio`                                                          |
 | Platforms | every desktop except `win32-arm64` — see the calibration status below   |
 
-Everything outside this table assesses as `unknown`. Parakeet, translation, TTS,
-OCR, diffusion, and the vision projector (`mmproj-*`) half of a multimodal load
-are phase 2.
+That is the surface with `calibration` evidence. Everything outside it — other
+engines, Android, iOS, `win32-arm64`, audio — assesses from the
+[computed floor](#two-kinds-of-evidence): `likely-too-large` when even the
+weights (plus the KV cache, for llama.cpp) exceed the budget, `unknown`
+otherwise. Parakeet, translation, TTS, OCR, diffusion, and the vision projector
+(`mmproj-*`) half of a multimodal load have no estimator yet, so the floor is
+their file size.
 
 **Calibration status.** A platform only reports estimates once its coefficients
 have been measured on real hardware and a held-out model has validated inside
@@ -154,10 +199,11 @@ only gets verdicts through the Vulkan backend, because that is the only GPU
 backend `@qvac/llm-llamacpp` ships; a card reachable through another API alone
 is `unknown`.
 
-Audio workloads (`whispercpp-transcription`) return `unknown` on every platform:
+Audio workloads (`whispercpp-transcription`) have no estimate on any platform:
 their coefficients await the harness's whisper pass, and the estimator refuses
-the unmeasured placeholders rather than consuming them. Every other engine
-returns `unknown` because it has no estimator yet.
+the unmeasured placeholders rather than consuming them, so they fall back to the
+computed floor. Every other engine assesses from the floor too, having no
+estimator yet.
 
 The per-platform numbers, the held-out results and the gaps still open are in
 `@qvac/inference`'s `src/resources/model-fit/calibration/METHODOLOGY.md`.
@@ -195,6 +241,10 @@ card for it but not the RAM does not read as a fit.
 It returns `unknown` whenever the evidence is not defensible: **an uncalibrated
 backend** for the placement in play, a GPU whose readings carry no usable
 scope, or cards that disagree on the backend or on the scope of their readings.
+An integrated GPU without its shared fixture still gets the computed floor,
+because it allocates out of the system RAM the budget measures; a discrete card
+without its fixture does not, because the weights would live in memory the
+budget cannot see.
 
 Apple silicon is unaffected: its memory is unified, so a GPU allocation is
 system RAM and the system basis already covers it.

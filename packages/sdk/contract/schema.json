@@ -410,6 +410,12 @@
           "description": "The declared execution mode this result assumed.",
           "title": "AssessModelFitResponseExecution"
         },
+        "evidence": {
+          "description": "The weakest evidence any candidate rests on: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent when no candidate could be assessed at all.",
+          "type": "string",
+          "enum": ["calibration", "computed-only"],
+          "title": "AssessModelFitResponseEvidence"
+        },
         "budget": {
           "description": "Absent when memory evidence was unusable.",
           "type": "object",
@@ -446,7 +452,7 @@
           "title": "AssessModelFitResponseBudget"
         },
         "estimate": {
-          "description": "Absent when the combined verdict is `unknown`.",
+          "description": "Combined two-sided bound. Absent when the combined verdict is `unknown` for want of evidence, and under computed-only evidence, which has no upper bound.",
           "type": "object",
           "properties": {
             "lowerBoundBytes": {
@@ -459,6 +465,10 @@
           "required": ["lowerBoundBytes", "upperBoundBytes"],
           "additionalProperties": false,
           "title": "AssessModelFitResponseEstimate"
+        },
+        "floorBytes": {
+          "description": "Under computed-only evidence: the combined floor across every candidate, aggregated under `execution`. Compared against the budget for `likely-too-large`; never enough for `likely-fits`.",
+          "type": "number"
         },
         "models": {
           "type": "array",
@@ -474,8 +484,14 @@
                 "enum": ["likely-fits", "likely-too-large", "unknown"],
                 "title": "AssessModelFitResponseModelsItemVerdict"
               },
+              "evidence": {
+                "description": "What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
+                "type": "string",
+                "enum": ["calibration", "computed-only"],
+                "title": "AssessModelFitResponseModelsItemEvidence"
+              },
               "estimate": {
-                "description": "Absent when this model assessed as `unknown`.",
+                "description": "Two-sided bound from calibrated coefficients. Absent under computed-only evidence, or when this model assessed as `unknown` for want of any evidence.",
                 "type": "object",
                 "properties": {
                   "lowerBoundBytes": {
@@ -489,8 +505,12 @@
                 "additionalProperties": false,
                 "title": "AssessModelFitResponseModelsItemEstimate"
               },
+              "floorBytes": {
+                "description": "Under computed-only evidence: the smallest resident footprint the catalog facts prove — artifact bytes, plus the KV cache for llama.cpp. A floor only; the true cost is above it by an unmeasured amount.",
+                "type": "number"
+              },
               "estimatorVersion": {
-                "description": "Estimator that produced the bounds, e.g. `llm-v1`.",
+                "description": "Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
                 "type": "string"
               },
               "reasons": {
