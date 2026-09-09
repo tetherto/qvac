@@ -3,14 +3,57 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 VERIFY_AGENT_OUTPUT="$SCRIPT_DIR/verify-openclaw-agent-output.cjs"
+VERIFY_PROMPT_SURFACE="$SCRIPT_DIR/verify-openclaw-prompt-surface.cjs"
 
 SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
 QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
-# Keep in step with OPENCLAW_AGENT_TIMEOUT below: readiness is awaited inside
-# the agent run, so a longer value here is unreachable.
-QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-480000}"
-OPENCLAW_AGENT_TIMEOUT="${OPENCLAW_AGENT_TIMEOUT:-10m}"
+# Keep in step with OPENCLAW_AGENT_TIMEOUT_SECONDS below: readiness is awaited
+# inside the agent run, so a longer value here is unreachable.
+QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-300000}"
+
+# One knob for the agent-turn deadline, in seconds, passed to `openclaw agent
+# --timeout`. OpenClaw then reports the deadline in its own JSON envelope, so a
+# timed-out attempt still leaves a parseable artifact. The shell `timeout` below
+# is only a backstop for a process that ignores its own deadline -- upstream
+# recommends exactly that shape ("keep a hard-kill backstop such as
+# `timeout -k 60 600 openclaw agent ...`", docs/cli/agent.md).
+#
+# Previously these two raced: the script's `timeout 10m` and OpenClaw's own
+# 600s default were the same number, so the shell won and every deadline
+# arrived as an opaque SIGTERM with empty stdout -- which is what runs
+# 33952858599 through 34200142844 recorded instead of a diagnosis.
+OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-420}"
+OPENCLAW_AGENT_BACKSTOP_SECONDS="$((OPENCLAW_AGENT_TIMEOUT_SECONDS + 60))"
+
+# OpenClaw's tool catalog is upstream-controlled and it sets the prompt size,
+# which on a 2-core CPU runner sets the per-turn cost. Measured on this smoke:
+# 35 advertised tools inflate the prompt to ~11.3k tokens and cost ~190s per
+# turn to prefill (run 33881468610, openclaw 2026.9.1); the same run's one
+# no-tools request prefilled 540 tokens in 4.9s. Three turns at ~190s cannot
+# fit any sane deadline, so the tripwire could not pass for behavioural
+# reasons at all.
+#
+# The count is not ours to control. Across three consecutive upstream releases,
+# with nothing changing on the QVAC side: 2026.9.1 advertised 35, 2026.9.2
+# advertised 36 (run 34200142844, failed), 2026.9.3 advertised 12 (run
+# 34324684069, passed first try). Pin it instead: `tools.profile` is OpenClaw's
+# stable tool-policy knob and `minimal` is a documented profile
+# (openclaw docs/gateway/config-tools.md).
+#
+# `tools: true` stays on in the plugin config below, so tool schemas are still
+# rendered through the Jinja path a real agent host uses. This bounds the
+# surface; it does not switch tool support off. Note that the plugin's
+# `tools: false` would not be the same thing -- serve forwards the client's
+# tool array either way and the non-Jinja renderer then discards it, so
+# `tools: false` asserts a path no agent host actually runs.
+OPENCLAW_TOOL_PROFILE="${OPENCLAW_TOOL_PROFILE:-minimal}"
+
+# A bounded surface is the fix, so an unbounded one has to be a visible failure
+# rather than a slow pass. If upstream widens what `tools.profile` admits, this
+# reports the drift directly instead of leaving a future reader to infer it
+# from a timeout.
+OPENCLAW_MAX_ADVERTISED_TOOLS="${OPENCLAW_MAX_ADVERTISED_TOOLS:-8}"
 OPENCLAW_PACKAGE_SPEC="${OPENCLAW_PACKAGE_SPEC:-openclaw@latest}"
 QVAC_OPENCLAW_PLUGIN_SPEC="${QVAC_OPENCLAW_PLUGIN_SPEC:-@qvac/openclaw-plugin@latest}"
 QVAC_CLI_SPEC="${QVAC_CLI_SPEC:-@qvac/cli@latest}"
@@ -243,6 +286,14 @@ npx openclaw onboard \
   > "$ARTIFACT_DIR/openclaw-onboard.stdout" \
   2> "$ARTIFACT_DIR/openclaw-onboard.stderr"
 
+# Set after `onboard`, which defaults a fresh config to `tools.profile: coding`
+# (the full 35-tool surface). Onboarding preserves an explicit profile, so the
+# order is not load-bearing -- setting it here just makes that independent of
+# upstream's preserve-or-overwrite behaviour.
+npx openclaw config set tools.profile "$OPENCLAW_TOOL_PROFILE" \
+  > "$ARTIFACT_DIR/openclaw-config-tool-profile.stdout" \
+  2> "$ARTIFACT_DIR/openclaw-config-tool-profile.stderr"
+
 npx openclaw config validate \
   > "$ARTIFACT_DIR/openclaw-config-validate.stdout" \
   2> "$ARTIFACT_DIR/openclaw-config-validate.stderr"
@@ -293,6 +344,16 @@ if [[ "${SKIP_OPENCLAW_AGENT:-0}" == "1" ]]; then
   exit 0
 fi
 
+# The prompt has to be answerable in chat and not performable as a task.
+# "Reply with exactly this text and nothing else: qvac-ok" read as a file-write
+# instruction to a 0.8b model holding filesystem tools: in run 33881468610 it
+# called `write` with content=qvac-ok against the workspace directory, failed
+# with EISDIR, retried the same call, and then asked which path to use -- a
+# verification failure with nothing wrong on the QVAC side. Naming the channel
+# ("in chat") and ruling tools out removes that reading; the bounded tool
+# profile removes most of the temptation.
+AGENT_PROMPT="${AGENT_PROMPT:-Answer in chat with the single word qvac-ok. Do not call any tools and do not write any files.}"
+
 # Each attempt gets a fresh session id. Retrying into the same session would
 # replay the poisoned transcript that caused the first failure -- the 2026-08-27
 # timeout looped for 13 turns before the run was killed, and resuming it would
@@ -306,13 +367,14 @@ run_agent_attempt() {
     --local
     --session-id "qvac-openclaw-upstream-compat-${attempt}"
     --model "qvac/${QVAC_MODEL}"
-    --message "Reply with exactly this text and nothing else: qvac-ok"
+    --message "$AGENT_PROMPT"
     --thinking off
+    --timeout "$OPENCLAW_AGENT_TIMEOUT_SECONDS"
     --json
   )
 
   if command -v timeout > /dev/null 2>&1; then
-    timeout "$OPENCLAW_AGENT_TIMEOUT" "${run_openclaw[@]}" \
+    timeout -k 30 "$OPENCLAW_AGENT_BACKSTOP_SECONDS" "${run_openclaw[@]}" \
       > "$stdout_path" \
       2> "$stderr_path"
   else
@@ -346,11 +408,17 @@ for (( attempt = 1; attempt <= OPENCLAW_AGENT_MAX_ATTEMPTS; attempt++ )); do
   cp "$attempt_stderr" "$ARTIFACT_DIR/openclaw-agent.stderr"
 
   if (( agent_status != 0 )); then
-    if (( agent_status == 124 )); then
-      agent_failure="attempt ${attempt}: agent timed out after ${OPENCLAW_AGENT_TIMEOUT}"
-    else
-      agent_failure="attempt ${attempt}: agent exited ${agent_status}"
-    fi
+    case "$agent_status" in
+      # 124/137 mean the shell backstop had to kill a process that blew past
+      # its own deadline, and they arrive with empty stdout -- that is what
+      # every failure between runs 33952858599 and 34200142844 looked like.
+      # Any other non-zero status is OpenClaw exiting on its own terms, so its
+      # stdout should hold a JSON envelope worth reading; 2 is the status
+      # upstream documents for a deadline (openclaw docs/cli/agent.md).
+      124 | 137) agent_failure="attempt ${attempt}: agent ignored its ${OPENCLAW_AGENT_TIMEOUT_SECONDS}s deadline and was killed by the ${OPENCLAW_AGENT_BACKSTOP_SECONDS}s backstop" ;;
+      2) agent_failure="attempt ${attempt}: agent exited 2, upstream's documented deadline status (limit ${OPENCLAW_AGENT_TIMEOUT_SECONDS}s); see openclaw-agent.attempt-${attempt}.stdout" ;;
+      *) agent_failure="attempt ${attempt}: agent exited ${agent_status}; see openclaw-agent.attempt-${attempt}.stdout" ;;
+    esac
     echo "$agent_failure" >&2
     continue
   fi
@@ -366,6 +434,21 @@ for (( attempt = 1; attempt <= OPENCLAW_AGENT_MAX_ATTEMPTS; attempt++ )); do
   echo "$agent_failure" >&2
 done
 
+# The advertised tool count and prompt size are what explain a slow turn, and
+# neither was surfaced anywhere a reader would look -- the numbers behind #4112
+# had to be dug out of the raw artifact. Report them next to the result, on the
+# failure path too, and fail a run whose surface drifted past the ceiling.
+surface_status=0
+node "$VERIFY_PROMPT_SURFACE" \
+  "$ARTIFACT_DIR/qvac-serve.stdout" \
+  "$OPENCLAW_TOOL_PROFILE" \
+  "$OPENCLAW_MAX_ADVERTISED_TOOLS" \
+  "$ARTIFACT_DIR/prompt-surface.md" || surface_status=$?
+
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" && -f "$ARTIFACT_DIR/prompt-surface.md" ]]; then
+  cat "$ARTIFACT_DIR/prompt-surface.md" >> "$GITHUB_STEP_SUMMARY"
+fi
+
 if (( agent_ok != 1 )); then
   echo "OpenClaw agent failed after ${OPENCLAW_AGENT_MAX_ATTEMPTS} attempt(s): ${agent_failure}" >&2
   {
@@ -373,6 +456,26 @@ if (( agent_ok != 1 )); then
     echo "## Smoke result"
     echo
     echo "OpenClaw agent failed after ${OPENCLAW_AGENT_MAX_ATTEMPTS} attempt(s): ${agent_failure}"
+    echo
+    echo "See \`prompt-surface.md\` for the tool count and prompt size this run drove."
+  } | tee "$ARTIFACT_DIR/smoke-result.md" > /dev/null
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    cat "$ARTIFACT_DIR/smoke-result.md" >> "$GITHUB_STEP_SUMMARY"
+  fi
+  exit 1
+fi
+
+# Deliberately after the turn passed: a widened surface is real compatibility
+# drift and should be reported as such, not hidden behind a green run that only
+# got slower.
+if (( surface_status != 0 )); then
+  {
+    echo
+    echo "## Smoke result"
+    echo
+    echo "The agent turn answered correctly, but the advertised tool surface is above the \`${OPENCLAW_MAX_ADVERTISED_TOOLS}\` ceiling -- see \`prompt-surface.md\`."
+    echo
+    echo "Upstream widened what \`tools.profile=${OPENCLAW_TOOL_PROFILE}\` admits. Re-pin the surface, or raise \`OPENCLAW_MAX_ADVERTISED_TOOLS\` if the wider set is intended; leaving it unbounded is what made this tripwire unable to pass in #4112."
   } | tee "$ARTIFACT_DIR/smoke-result.md" > /dev/null
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     cat "$ARTIFACT_DIR/smoke-result.md" >> "$GITHUB_STEP_SUMMARY"

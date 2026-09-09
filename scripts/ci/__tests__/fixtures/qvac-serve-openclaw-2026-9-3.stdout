@@ -1,0 +1,5 @@
+← 200 GET /v1/models (3ms)
+→ POST /v1/chat/completions
+  chat model=qwen3.5-0.8b messages=3 stream=true tools=12 genParams={"predict":8192}
+  streaming done tokens=21 finish=stop ttft=37049ms tps=19.0 prompt=2499 cache=11399 gen=21 backend=cpu
+← 200 POST /v1/chat/completions (137.38s)
