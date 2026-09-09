@@ -69,7 +69,14 @@ function assertProjection(result) {
         if (!isRecord(row) || typeof row['name'] !== 'string') {
             throw new TypeError('Fit process result projection rows must carry a string name');
         }
-        for (const key of ['totalBytes', 'freeBytes', 'modelBytes', 'contextBytes', 'computeBytes']) {
+        for (const key of [
+            'totalBytes',
+            'freeBytes',
+            'marginBytes',
+            'modelBytes',
+            'contextBytes',
+            'computeBytes'
+        ]) {
             assertNumber(row, key);
         }
     }

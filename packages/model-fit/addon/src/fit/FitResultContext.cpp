@@ -10,6 +10,8 @@ void finalizeFitContext(FitResult& result, uint32_t trainedCtx) {
       result.status = 2;
       result.fits = false;
       result.reason = FitReason::ModelUnreadable;
+      // ERROR carries no projection; the probe may already have run.
+      result.projection.clear();
     }
   }
 }

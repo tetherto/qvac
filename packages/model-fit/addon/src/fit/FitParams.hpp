@@ -132,7 +132,10 @@ struct FitProjectionRow {
   /// Device name as the backend reports it, or "host" for the host row.
   std::string name;
   uint64_t totalBytes = 0;
+  /// Raw backend gauge. The fitter judged against `freeBytes - marginBytes`.
   uint64_t freeBytes = 0;
+  /// The margin applied to this row, in bytes (`marginMiB` * MiB).
+  uint64_t marginBytes = 0;
   uint64_t modelBytes = 0;
   uint64_t contextBytes = 0;
   uint64_t computeBytes = 0;

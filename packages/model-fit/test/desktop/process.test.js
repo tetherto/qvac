@@ -192,6 +192,7 @@ test('response parser accepts, omits, and rejects projections', async (t) => {
           name: 'MTL0',
           totalBytes: 19998441472,
           freeBytes: 1443887104,
+          marginBytes: 1073741824,
           modelBytes: 11355000000,
           contextBytes: 6442450944,
           computeBytes: 460000000
@@ -200,6 +201,7 @@ test('response parser accepts, omits, and rejects projections', async (t) => {
           name: 'host',
           totalBytes: 25769803776,
           freeBytes: 20000000000,
+          marginBytes: 1073741824,
           modelBytes: 0,
           contextBytes: 0,
           computeBytes: 46137344
@@ -225,6 +227,7 @@ test('response parser accepts, omits, and rejects projections', async (t) => {
           name: 'MTL0',
           totalBytes: 19998441472,
           freeBytes: 0,
+          marginBytes: 1073741824,
           modelBytes: 19998441472,
           contextBytes: 0,
           computeBytes: 0
@@ -260,11 +263,40 @@ test('response parser accepts, omits, and rejects projections', async (t) => {
         result: {
           ...completedFitResult(),
           projection: [
-            { totalBytes: 1, freeBytes: 1, modelBytes: 1, contextBytes: 1, computeBytes: 1 }
+            {
+              totalBytes: 1,
+              freeBytes: 1,
+              marginBytes: 1,
+              modelBytes: 1,
+              contextBytes: 1,
+              computeBytes: 1
+            }
           ]
         }
       }),
     /must carry a string name/
+  )
+  // A row without the margin cannot be turned into a budget.
+  await t.exception.all(
+    () =>
+      parseFitProcessResponse({
+        version: 1,
+        status: 'completed',
+        result: {
+          ...completedFitResult(),
+          projection: [
+            {
+              name: 'MTL0',
+              totalBytes: 1,
+              freeBytes: 1,
+              modelBytes: 1,
+              contextBytes: 1,
+              computeBytes: 1
+            }
+          ]
+        }
+      }),
+    /marginBytes must be a number/
   )
   await t.exception.all(
     () =>

@@ -95,7 +95,13 @@ export interface FitProjectionRow {
     /** Device name as the backend reports it, or `"host"` for the host row. */
     name: string;
     totalBytes: number;
+    /**
+     * Raw backend gauge, before the margin. The budget the verdict was judged
+     * against is `freeBytes - marginBytes`; headroom is that minus the demand.
+     */
     freeBytes: number;
+    /** The margin applied to this row, in bytes (`marginMiB` × 1 MiB). */
+    marginBytes: number;
     modelBytes: number;
     contextBytes: number;
     computeBytes: number;

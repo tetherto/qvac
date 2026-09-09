@@ -203,6 +203,10 @@ js_value_t* fitResultObject(js_env_t* env, const FitResult& result) {
         jsu::Number::create(env, static_cast<double>(row.freeBytes)));
     entry.setProperty(
         env,
+        "marginBytes",
+        jsu::Number::create(env, static_cast<double>(row.marginBytes)));
+    entry.setProperty(
+        env,
         "modelBytes",
         jsu::Number::create(env, static_cast<double>(row.modelBytes)));
     entry.setProperty(

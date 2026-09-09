@@ -286,12 +286,22 @@ test('a decided verdict carries its per-device memory projection', async functio
   t.is(host.name, 'host', 'the trailing row is the host')
   for (const row of res.projection) {
     t.ok(typeof row.name === 'string' && row.name.length > 0, 'row is named')
-    for (const key of ['totalBytes', 'freeBytes', 'modelBytes', 'contextBytes', 'computeBytes']) {
+    for (const key of [
+      'totalBytes',
+      'freeBytes',
+      'marginBytes',
+      'modelBytes',
+      'contextBytes',
+      'computeBytes'
+    ]) {
       t.ok(
         Number.isFinite(row[key]) && row[key] >= 0,
         `${row.name}.${key} is a non-negative number`
       )
     }
+    // The budget the verdict was judged against is `freeBytes - marginBytes`,
+    // so the row has to carry the margin the request asked for.
+    t.is(row.marginBytes, 1024 * 1024 * 1024, `${row.name} carries the requested margin`)
   }
 
   // Describes this load, not a machine snapshot: the weight bytes must land somewhere.

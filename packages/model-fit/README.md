@@ -58,10 +58,15 @@ const plan = fitParams({
 `projection` explains the verdict in bytes: one row per device the model was
 assigned to, in the order llama.cpp holds them (`llama_model_get_device`, the
 same index `tensorSplit` uses), then a final `"host"` row. Each row carries
-`totalBytes`/`freeBytes` (the budget the verdict was judged against) and
+`totalBytes`/`freeBytes` (the raw backend gauge), `marginBytes` (the margin
+the fitter applied to that row, `marginMiB` × 1 MiB) and
 `modelBytes`/`contextBytes`/`computeBytes` (the projected demand at the
-**resolved** parameters). A `does-not-fit` with numbers shows how far it
-missed; a `fits` shows how much headroom the margin left.
+**resolved** parameters). The budget the verdict was judged against is
+`freeBytes - marginBytes`, so headroom on a row is
+`freeBytes - marginBytes - (modelBytes + contextBytes + computeBytes)`; the
+raw `freeBytes` alone reads positive for a `does-not-fit` that missed by less
+than the margin. A `does-not-fit` with numbers shows how far it missed; a
+`fits` shows how much headroom the margin left.
 
 The device rows are not `nDevices`. `nDevices` is `ggml_backend_dev_count()`
 and includes the CPU device, whose demand is folded into the `"host"` row, so

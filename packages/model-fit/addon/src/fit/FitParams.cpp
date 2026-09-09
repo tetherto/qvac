@@ -40,7 +40,8 @@ std::mutex
 /// `mparams`/`cparams` must still borrow from live storage when this is called.
 void captureProjection(
     const std::string& modelPath, const llama_model_params& mparams,
-    const llama_context_params& cparams, FitResult& out) {
+    const llama_context_params& cparams, uint64_t marginBytes,
+    FitResult& out) {
   try {
     std::vector<ggml_backend_dev_t> devs;
     uint32_t hpNgl = 0;
@@ -70,6 +71,7 @@ void captureProjection(
           {name == nullptr ? "" : name,
            static_cast<uint64_t>(rows[i].total),
            static_cast<uint64_t>(rows[i].free),
+           marginBytes,
            static_cast<uint64_t>(rows[i].model),
            static_cast<uint64_t>(rows[i].context),
            static_cast<uint64_t>(rows[i].compute)});
@@ -473,8 +475,9 @@ FitResult runFit(const FitRequest& req) {
   // A fitted 0 means "the trained context", not a usable load plan.
   detail::finalizeFitContext(out, trainedCtx);
 
-  if (status != COMMON_PARAMS_FIT_STATUS_ERROR) {
-    captureProjection(req.modelPath, mparams, cparams, out);
+  // `out.status`, not the local: finalize above may have downgraded to ERROR.
+  if (out.status != static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR)) {
+    captureProjection(req.modelPath, mparams, cparams, margins[0], out);
   }
 
   return out;
@@ -593,8 +596,14 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
 
   // Before the tensorSplit move below: `modelParams.tensor_split` points into
   // `execution.tensorSplit`, and the projection probe reads modelParams.
+  // finalizeFitContext runs after this and clears the rows if it downgrades.
   if (status != COMMON_PARAMS_FIT_STATUS_ERROR) {
-    captureProjection(req.modelPath, modelParams, contextParams, out);
+    captureProjection(
+        req.modelPath,
+        modelParams,
+        contextParams,
+        static_cast<uint64_t>(req.marginMiB) * 1024ULL * 1024ULL,
+        out);
   }
 
   out.tensorSplit = std::move(execution.tensorSplit);
