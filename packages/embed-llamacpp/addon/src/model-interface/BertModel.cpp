@@ -6,6 +6,7 @@
 #include <cstring>
 #include <map>
 #include <ranges>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 
@@ -331,22 +332,61 @@ std::size_t BertEmbeddings::size() const { return embeddingCount_; }
 
 std::size_t BertEmbeddings::embeddingSize() const { return embeddingSize_; }
 
-bool appendSplitDeviceArgument(
-    std::vector<std::string>& configVector,
-    const std::function<std::vector<std::string>()>& splitDeviceNames) {
-  const std::vector<std::string> devices = splitDeviceNames();
-  if (devices.empty()) {
+bool applySplitDeviceSelection(
+    common_params& params, std::unordered_map<std::string, std::string>& config,
+    const backend_selection::SplitDeviceSelection& selection) {
+  if (selection.devices.empty()) {
     return false;
   }
-  std::string deviceList;
-  for (const std::string& device : devices) {
-    if (!deviceList.empty()) {
-      deviceList += ",";
-    }
-    deviceList += device;
+
+  auto hyphen = config.find("tensor-split");
+  auto underscore = config.find("tensor_split");
+  if (hyphen != config.end() && underscore != config.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "both 'tensor-split' and 'tensor_split' are present; use one or the "
+        "other.");
   }
-  configVector.emplace_back("--device");
-  configVector.emplace_back(std::move(deviceList));
+  auto tensorSplit = hyphen != config.end() ? hyphen : underscore;
+  bool mappingChanged = selection.devices.size() != selection.sourceGpuCount;
+  for (size_t index = 0; !mappingChanged && index < selection.devices.size();
+       ++index) {
+    mappingChanged = selection.devices[index].sourceGpuIndex != index;
+  }
+  if (mappingChanged && tensorSplit != config.end()) {
+    std::string normalized = tensorSplit->second;
+    std::ranges::replace(normalized, '/', ',');
+    std::vector<std::string> proportions;
+    std::istringstream values(normalized);
+    for (std::string value; std::getline(values, value, ',');) {
+      proportions.emplace_back(std::move(value));
+    }
+    if (proportions.size() != selection.sourceGpuCount) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "tensor-split has %zu values for %zu registered GPU devices; "
+              "cannot reconcile it with the %zu eligible devices.",
+              proportions.size(),
+              selection.sourceGpuCount,
+              selection.devices.size()));
+    }
+    std::string remapped;
+    for (const backend_selection::SplitDevice& device : selection.devices) {
+      if (!remapped.empty()) {
+        remapped += ',';
+      }
+      remapped += proportions[device.sourceGpuIndex];
+    }
+    tensorSplit->second = std::move(remapped);
+  }
+
+  params.devices.clear();
+  params.devices.reserve(selection.devices.size() + 1);
+  for (const backend_selection::SplitDevice& device : selection.devices) {
+    params.devices.push_back(device.handle);
+  }
+  params.devices.push_back(nullptr);
   return true;
 }
 
@@ -435,16 +475,35 @@ BertModelSetup setupParams(
     const BackendType preferredBackend =
         preferredBackendTypeFromString(deviceIt->second);
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
-    const std::pair<BackendType, std::string> chosenBackend =
-        chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
-    std::vector<std::string> splitDeviceArgument;
-    const bool hasSplitDevices =
-        splitMode == LLAMA_SPLIT_MODE_NONE ||
-        appendSplitDeviceArgument(splitDeviceArgument, [] {
-          return backend_selection::getSplitDeviceNames();
-        });
-    const bool useGpu =
-        chosenBackend.first == BackendType::GPU && hasSplitDevices;
+    std::pair<BackendType, std::string> chosenBackend{BackendType::CPU, "none"};
+    SplitDeviceSelection splitSelection;
+    bool isOpenCl = false;
+    if (preferredBackend == BackendType::GPU &&
+        splitMode != LLAMA_SPLIT_MODE_NONE) {
+      splitSelection = getSplitDeviceSelection();
+      if (!splitSelection.devices.empty()) {
+        chosenBackend = {BackendType::GPU, splitSelection.devices.front().name};
+        isOpenCl = splitSelection.devices.front().isOpenCl;
+      } else if (!splitSelection.rejectedDevices.empty()) {
+        std::string message =
+            "[BertModel] no eligible GPU backend found; rejected ";
+        for (size_t index = 0; index < splitSelection.rejectedDevices.size();
+             ++index) {
+          if (index > 0) {
+            message += ", ";
+          }
+          message += splitSelection.rejectedDevices[index];
+        }
+        message += "; falling back to CPU\n";
+        llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
+      }
+    } else {
+      chosenBackend =
+          chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
+      isOpenCl = chosenBackend.first == BackendType::GPU &&
+                 chosenBackend.second.find("opencl") != std::string::npos;
+    }
+    const bool useGpu = chosenBackend.first == BackendType::GPU;
 
     if (useGpu) {
       result.resolvedBackendDevice = 1;
@@ -453,7 +512,10 @@ BertModelSetup setupParams(
       // rejects the load outright on backends without it. Degrade row -> layer
       // to keep the model loadable.
       if (splitMode == LLAMA_SPLIT_MODE_ROW &&
-          !backend_selection::gpuBackendSupportsRowSplit()) {
+          !std::ranges::all_of(
+              splitSelection.devices, [](const SplitDevice& device) {
+                return device.supportsSplitBuffer;
+              })) {
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_WARN,
             "[BertModel] split-mode 'row' is not supported by this GPU "
@@ -466,16 +528,13 @@ BertModelSetup setupParams(
       params.split_mode = splitMode;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
-        if (std::holds_alternative<int>(mainGpu.value())) {
-          configFilemap["main-gpu"] =
-              std::to_string(std::get<int>(mainGpu.value()));
-        } else {
-          qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
-              GGML_LOG_LEVEL_WARN,
-              "[BertModel] main-gpu 'dedicated'/'integrated' ignored in "
-              "multi-GPU split-mode; use an integer device index instead\n",
-              nullptr);
-        }
+        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+            GGML_LOG_LEVEL_WARN,
+            "[BertModel] main-gpu is ignored in multi-GPU split-mode\n",
+            nullptr);
+      }
+      if (splitMode != LLAMA_SPLIT_MODE_NONE) {
+        applySplitDeviceSelection(params, configFilemap, splitSelection);
       }
     } else if (
         chosenBackend.first == BackendType::CPU ||
@@ -491,6 +550,7 @@ BertModelSetup setupParams(
             nullptr);
         splitMode = LLAMA_SPLIT_MODE_NONE;
         configFilemap.erase("tensor-split");
+        configFilemap.erase("tensor_split");
       }
     } else {
       throw qvac_errors::StatusError(
@@ -501,19 +561,12 @@ BertModelSetup setupParams(
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(useGpu ? chosenBackend.second : "none");
-    } else {
-      configVector.insert(
-          configVector.end(),
-          splitDeviceArgument.begin(),
-          splitDeviceArgument.end());
     }
     configFilemap.erase(deviceIt);
 
     // Disable flash attention by default when the chosen GPU backend is
     // OpenCL: it is not reliably supported there. Users who pass an
     // explicit "flash-attn"/"flash_attn" override are respected.
-    const bool isOpenCl =
-        useGpu && chosenBackend.second.find("opencl") != std::string::npos;
     const bool userSetFlashAttn = configFilemap.contains("flash-attn") ||
                                   configFilemap.contains("flash_attn");
     if (isOpenCl && !userSetFlashAttn) {

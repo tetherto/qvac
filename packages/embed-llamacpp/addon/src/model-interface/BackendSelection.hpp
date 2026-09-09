@@ -44,6 +44,20 @@ struct BackendInterface {
   llamaLogCallbackF llamaLogCallback;
 };
 
+struct SplitDevice {
+  std::string name;
+  ggml_backend_dev_t handle;
+  size_t sourceGpuIndex;
+  bool isOpenCl;
+  bool supportsSplitBuffer;
+};
+
+struct SplitDeviceSelection {
+  std::vector<SplitDevice> devices;
+  size_t sourceGpuCount = 0;
+  std::vector<std::string> rejectedDevices;
+};
+
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const std::optional<MainGpu>& mainGpu = std::nullopt);
@@ -55,11 +69,15 @@ std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu = std::nullopt);
 
-/// @brief Count GPU devices available for multi-GPU split mode.
-/// Returns the number of discrete GPUs when any are present; otherwise
-/// falls back to the iGPU count. This mirrors backends like Vulkan which
-/// exclude iGPUs by default when discrete GPUs exist.
+/// @brief Count devices in the final Fabric-compatible split set.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
+
+/// @brief Select the Fabric-compatible split list, with RPC first, local
+/// discrete GPUs preferred over the first iGPU, and duplicate devices removed.
+SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
+
+/// @brief `getSplitDeviceSelection()` against the real ggml registry.
+SplitDeviceSelection getSplitDeviceSelection();
 
 /// @brief Eligible split devices, preferring discrete and deduplicating by id.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);

@@ -992,28 +992,65 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
   }
 }
 
-TEST_F(BertModelTest, SplitDeviceProviderPinsEligibleConsumerList) {
-  std::vector<std::string> arguments;
-  size_t providerCalls = 0;
-  const bool appended = appendSplitDeviceArgument(arguments, [&providerCalls] {
-    ++providerCalls;
-    return std::vector<std::string>{"Vulkan0", "Vulkan1"};
-  });
+TEST_F(BertModelTest, SplitDeviceSelectionPinsEligibleConsumerList) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config;
+  auto first = reinterpret_cast<ggml_backend_dev_t>(0x1);
+  auto second = reinterpret_cast<ggml_backend_dev_t>(0x2);
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0", .handle = first, .sourceGpuIndex = 0},
+           {.name = "Vulkan1", .handle = second, .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
 
-  EXPECT_TRUE(appended);
-  EXPECT_EQ(providerCalls, 1U);
-  ASSERT_EQ(arguments.size(), 2U);
-  EXPECT_EQ(arguments[0], "--device");
-  EXPECT_EQ(arguments[1], "Vulkan0,Vulkan1");
+  EXPECT_TRUE(applySplitDeviceSelection(params, config, selection));
+  ASSERT_EQ(params.devices.size(), 3U);
+  EXPECT_EQ(params.devices[0], first);
+  EXPECT_EQ(params.devices[1], second);
+  EXPECT_EQ(params.devices[2], nullptr);
 }
 
-TEST_F(BertModelTest, EmptySplitDeviceProviderAddsNoArgument) {
-  std::vector<std::string> arguments;
-  const bool appended = appendSplitDeviceArgument(
-      arguments, [] { return std::vector<std::string>{}; });
+TEST_F(BertModelTest, SplitDeviceSelectionRemapsTensorShares) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{
+      {"tensor-split", "1,2,3"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "RPC0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 2}},
+      .sourceGpuCount = 3};
 
-  EXPECT_FALSE(appended);
-  EXPECT_TRUE(arguments.empty());
+  EXPECT_TRUE(applySplitDeviceSelection(params, config, selection));
+  EXPECT_EQ(config.at("tensor-split"), "1,3");
+}
+
+TEST_F(BertModelTest, AmbiguousTensorSharesAreRejected) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{{"tensor-split", "3"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
+
+  EXPECT_THROW(
+      applySplitDeviceSelection(params, config, selection),
+      qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, EmptySplitDeviceSelectionLeavesParamsUntouched) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config;
+  const bool applied = applySplitDeviceSelection(
+      params, config, backend_selection::SplitDeviceSelection{});
+
+  EXPECT_FALSE(applied);
+  EXPECT_TRUE(params.devices.empty());
 }
 
 TEST_F(BertModelTest, CommonParamsParseSplitModeCaseInsensitive) {
