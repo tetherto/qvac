@@ -3093,6 +3093,66 @@
     "link": "https://huggingface.co/baidu/Unlimited-OCR"
   },
   {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF/resolve/14d6fd1e24c9f94a5e40c2e91c066241aede0dce/TranslatePsy-AfriSLM-0.8B-Q4_K_M-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "TranslatePsy-AfriSLM 0.8B - English and African language translation",
+    "quantization": "Q4_K_M",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "translation", "translatepsy-afrislm", "african"],
+    "notes": "Importance-matrix Q4_K_M quantization of qvac/TranslatePsy-AfriSLM-0.8B. Supports English and 19 Sub-Saharan African languages."
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriSLM-0.8B-Q8-GGUF/resolve/55220bcc74bed219ad9db9ab378f6aae31850974/TranslatePsy-AfriSLM-0.8B-Q8_0-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "TranslatePsy-AfriSLM 0.8B - English and African language translation",
+    "quantization": "Q8_0",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "translation", "translatepsy-afrislm", "african"],
+    "notes": "Importance-matrix Q8_0 quantization of qvac/TranslatePsy-AfriSLM-0.8B. Supports English and 19 Sub-Saharan African languages."
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriSLM-2B-Q4-GGUF/resolve/9bcceadebbcc5d36bba9f7f02141300a95ae8d04/TranslatePsy-AfriSLM-2B-Q4_K_M-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "TranslatePsy-AfriSLM 2B - English and African language translation",
+    "quantization": "Q4_K_M",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "translation", "translatepsy-afrislm", "african"],
+    "notes": "Importance-matrix Q4_K_M quantization of qvac/TranslatePsy-AfriSLM-2B. Supports English and 19 Sub-Saharan African languages."
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriSLM-2B-Q8-GGUF/resolve/d2394ae5e3052740ac4af7f60d41fb2432cbd7ac/TranslatePsy-AfriSLM-2B-Q8_0-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "TranslatePsy-AfriSLM 2B - English and African language translation",
+    "quantization": "Q8_0",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "translation", "translatepsy-afrislm", "african"],
+    "notes": "Importance-matrix Q8_0 quantization of qvac/TranslatePsy-AfriSLM-2B. Supports English and 19 Sub-Saharan African languages."
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriSLM-4B-Q4-GGUF/resolve/82df4b20772a4a46f38b421a569a90d53a93f657/TranslatePsy-AfriSLM-4B-Q4_K_M-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "TranslatePsy-AfriSLM 4B - English and African language translation",
+    "quantization": "Q4_K_M",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "translation", "translatepsy-afrislm", "african"],
+    "notes": "Importance-matrix Q4_K_M quantization of qvac/TranslatePsy-AfriSLM-4B. Supports English and 19 Sub-Saharan African languages."
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranslatePsy-AfriSLM-4B-Q8-GGUF/resolve/523cdfa7d4b056c2b64f4ee32f95175a99d53663/TranslatePsy-AfriSLM-4B-Q8_0-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "TranslatePsy-AfriSLM 4B - English and African language translation",
+    "quantization": "Q8_0",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "translation", "translatepsy-afrislm", "african"],
+    "notes": "Importance-matrix Q8_0 quantization of qvac/TranslatePsy-AfriSLM-4B. Supports English and 19 Sub-Saharan African languages."
+  },
+  {
     "source": "https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "AfriqueGemma 4B - African language model (20 languages + EN/FR/PT/AR)",
