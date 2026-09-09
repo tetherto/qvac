@@ -53,10 +53,7 @@ test('decideCachedHistorySlice: stale count (slice would be empty) falls back an
     { role: 'user', content: 'u2' }
   ]
   const { messages, clearStaleCount } = decideCachedHistorySlice(3, true, history)
-  t.alike(messages, [
-    { role: 'user', content: 'u1' },
-    { role: 'user', content: 'u2' }
-  ])
+  t.alike(messages, history, 'the whole history goes, system message included')
   t.is(clearStaleCount, true, 'caller must be told to clear the stale savedCount')
 })
 
@@ -66,28 +63,28 @@ test('decideCachedHistorySlice: savedCount > history.length falls back and flags
     { role: 'user', content: 'u1' }
   ]
   const { messages, clearStaleCount } = decideCachedHistorySlice(10, true, history)
-  t.alike(messages, [{ role: 'user', content: 'u1' }])
+  t.alike(messages, history, 'the whole history goes, system message included')
   t.is(clearStaleCount, true)
 })
 
-test('decideCachedHistorySlice: savedCount = 0, cache exists → strip system, no clear', (t) => {
+test('decideCachedHistorySlice: savedCount = 0 sends the whole history, no clear', (t) => {
   const history: HistoryMessage[] = [
     { role: 'system', content: 'sys' },
     { role: 'user', content: 'u1' }
   ]
   const { messages, clearStaleCount } = decideCachedHistorySlice(0, true, history)
-  t.alike(messages, [{ role: 'user', content: 'u1' }])
+  t.alike(messages, history, 'nothing is cached to leave out')
   t.is(clearStaleCount, false)
 })
 
-test('decideCachedHistorySlice: cache does not exist → strip system regardless of savedCount', (t) => {
+test('decideCachedHistorySlice: no cache sends the whole history regardless of savedCount', (t) => {
   const history: HistoryMessage[] = [
     { role: 'system', content: 'sys' },
     { role: 'user', content: 'u1' }
   ]
   const { messages, clearStaleCount } = decideCachedHistorySlice(2, false, history)
-  t.alike(messages, [{ role: 'user', content: 'u1' }])
-  t.is(clearStaleCount, false, 'no-cache path does not touch cachedMessageCounts')
+  t.alike(messages, history, 'nothing is cached to leave out')
+  t.is(clearStaleCount, false, 'an unconsulted boundary is left alone')
 })
 
 test('decideCachedHistorySlice: empty history returns empty, no clear', (t) => {
@@ -107,10 +104,7 @@ test('decideCachedHistorySlice: savedCount = history.length slices to [] and fla
     { role: 'user', content: 'u2' }
   ]
   const { messages, clearStaleCount } = decideCachedHistorySlice(history.length, true, history)
-  t.alike(messages, [
-    { role: 'user', content: 'u1' },
-    { role: 'user', content: 'u2' }
-  ])
+  t.alike(messages, history, 'the whole history goes, system message included')
   t.is(clearStaleCount, true)
 })
 
@@ -131,10 +125,7 @@ test('regression: an externally-seeded stale savedCount still triggers the fallb
   ]
   const { messages, clearStaleCount } = decideCachedHistorySlice(savedCount, true, history)
 
-  t.alike(messages, [
-    { role: 'user', content: 'u1' },
-    { role: 'user', content: 'u2' }
-  ])
+  t.alike(messages, history, 'the whole history goes, system message included')
   t.is(clearStaleCount, true, 'must prompt caller to clean up the stale count')
 })
 
