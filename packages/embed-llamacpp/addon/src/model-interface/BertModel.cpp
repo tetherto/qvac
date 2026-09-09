@@ -362,12 +362,12 @@ bool applySplitDeviceSelection(
       proportions.emplace_back(std::move(value));
     }
     const bool finalOrderIsStable = std::ranges::is_sorted(
-        selection.devices, {},
+        selection.devices,
+        {},
         [](const backend_selection::SplitDevice& device) {
           return device.sourceGpuIndex;
         });
-    if (proportions.size() == selection.devices.size() &&
-        finalOrderIsStable) {
+    if (proportions.size() == selection.devices.size() && finalOrderIsStable) {
       tensorSplit->second = std::move(normalized);
     } else {
       if (proportions.size() != selection.sourceGpuCount) {
