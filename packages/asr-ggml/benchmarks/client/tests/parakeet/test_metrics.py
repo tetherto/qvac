@@ -1,5 +1,5 @@
 import pytest
-from src.parakeet.metrics import calculate_wer, calculate_cer
+from src.parakeet.metrics import calculate_wer, calculate_cer, summarize_first_partial_latency
 
 
 class TestWER:
@@ -34,3 +34,13 @@ class TestCER:
         references = ["hallo"]
         cer = calculate_cer(predictions, references)
         assert cer > 0
+
+
+class TestFirstPartialLatency:
+    def test_empty_latencies_summarize_to_none(self):
+        assert summarize_first_partial_latency([]) is None
+
+    def test_average_and_median(self):
+        summary = summarize_first_partial_latency([100.0, 200.0, 600.0])
+        assert summary["avg_ms"] == 300.0
+        assert summary["median_ms"] == 200.0

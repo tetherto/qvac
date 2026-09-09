@@ -12,9 +12,9 @@ const modelId = await loadModel({
   modelType: 'sdcpp-generation',
   modelConfig: {
     mode: 'world',
-    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
+    taehvModelSrc: ABOT_WORLD_0_5B_LF_TAEHV_VAE,
     t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
-    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
+    vaeModelSrc: ABOT_WORLD_0_5B_LF_WAN_VAE,
     world: { kvCache: true, frameJpegQuality: 85 }
   }
 })

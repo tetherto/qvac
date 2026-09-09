@@ -7,6 +7,13 @@
     "Victor-Rodzko",
     "arun-mani-j"
   ],
+  "approvalLeads": [
+    "gianni-cor",
+    "yuranich",
+    "iancris",
+    "GustavoA1604",
+    "Proletter"
+  ],
   "ownedPaths": [
     "packages/sdk/",
     "packages/cli/",
@@ -19,5 +26,6 @@
     "packages/registry-server/",
     "plugins/opencode/",
     "plugins/openclaw/"
-  ]
+  ],
+  "docPaths": ["docs/website/content/docs/"]
 }
