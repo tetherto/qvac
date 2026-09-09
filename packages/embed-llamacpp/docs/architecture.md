@@ -74,7 +74,7 @@ Tier 1: Platform targets for which prebuilds are provided as defined by the .git
 - inference-addon-cpp (≥1.1.5#1): C++ addon framework
 - @qvac/infer-base: Provides `createJobHandler` and `exclusiveRunQueue` helpers (composition, no base class)
 - @qvac/logging: `QvacLogger` wrapper and native logging bridge
-- qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
+- @qvac/fabric (^0.12.0): Shared llama.cpp/ggml inference engine, including the vector-index API
 - Bare Runtime (≥1.24.0): JavaScript runtime (provides `bare-fs` for direct file streaming)
 
 ---
@@ -133,7 +133,7 @@ graph TB
 | @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` helpers (composition, no base class) |
 | @qvac/logging | Framework | ^0.1.0 | `QvacLogger` wrapper and C++ log routing |
 | inference-addon-cpp | Native | ≥1.1.5#1 | C++ addon framework |
-| qvac-fabric-llm.cpp | Native | ≥7248.2.3 | llama.cpp-based inference engine |
+| @qvac/fabric | Native | ^0.12.0 | Shared llama.cpp/ggml inference engine + vector-index, dynamically linked as `qvac__fabric@0.bare` |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution, `bare-fs`, `bare-path` |
 
 **Integration Points:**

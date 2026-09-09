@@ -36,7 +36,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
 
 **Dependencies:**
 - inference-addon-cpp (≥1.1.2): C++ addon framework
-- qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
+- @qvac/fabric (^0.12.0): Shared llama.cpp/ggml inference engine, including the vector-index API. Installed from npm; do not use `--omit=optional`
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
 

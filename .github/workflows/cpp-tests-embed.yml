@@ -15,6 +15,13 @@ on:
         type: string
         required: false
         default: "packages/embed-llamacpp"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -104,7 +111,23 @@ jobs:
         shell: bash
         run: |
           npm install
-      
+
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch || 'x64' }}
+
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
 
@@ -198,8 +221,6 @@ jobs:
         id: cpp-tests
         working-directory: ${{ env.WORKDIR }}
         shell: bash
-        env:
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt
         run: |
           set -euo pipefail
 
@@ -208,11 +229,16 @@ jobs:
             exit 1
           fi
 
-          cd build/test/unit/
-          ./addon-test --gtest_output=xml:cpp-test-results.xml
+          # scripts/run-cpp-tests.js applies the fabric-boundary ASAN_OPTIONS
+          # (alloc_dealloc_mismatch=0:detect_leaks=0). addon-test links ASan but
+          # dlopens the non-ASan, -static-libstdc++ @qvac/fabric prebuild;
+          # cross-module new/delete and fabric's long-lived runtime allocations
+          # would otherwise abort after gtest already passed. See
+          # test/unit/CMakeLists.txt.
+          npm run test:cpp:run
 
-          if [ -f cpp-test-results.xml ]; then
-            test_count=$(grep -c '<testcase' cpp-test-results.xml || echo "0")
+          if [ -f build/test/unit/cpp-test-results.xml ]; then
+            test_count=$(grep -c '<testcase' build/test/unit/cpp-test-results.xml || echo "0")
             if [ "$test_count" -eq 0 ]; then
               echo "ERROR: No tests were executed! Test count: $test_count"
               exit 1
