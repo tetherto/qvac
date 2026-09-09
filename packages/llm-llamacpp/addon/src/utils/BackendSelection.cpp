@@ -158,6 +158,12 @@ std::string normalizedDeviceId(
   if (!isCuda) {
     return deviceId;
   }
+  // CUDA appends -vN to PCI ids when exposing one physical card through
+  // multiple registries. Do not apply that rule to MIG/MPS identities, whose
+  // virtual-device suffixes are meaningful Fabric ids.
+  if (lowerCopy(deviceId).find("pci") == std::string::npos) {
+    return deviceId;
+  }
   const size_t suffix = deviceId.rfind("-v");
   if (suffix == std::string::npos || suffix + 2 == deviceId.size() ||
       !std::ranges::all_of(deviceId.substr(suffix + 2), [](unsigned char chr) {
