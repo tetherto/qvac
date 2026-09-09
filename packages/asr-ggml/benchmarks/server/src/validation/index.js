@@ -50,12 +50,16 @@ const ParakeetConfigSchema = z
     path: ['language']
   })
 
+// Streaming is driven by the addon's ms-based controls (runStreaming
+// vocabulary), not byte slicing: chunk/history sizes are milliseconds.
 const ParakeetRunConfigSchema = z.object({
   path: z.string().min(1, 'Model path is required'),
   parakeetConfig: ParakeetConfigSchema.optional(),
   sampleRate: z.number().int().positive().optional().default(16000),
   streaming: z.boolean().optional().default(false),
-  streamingChunkSize: z.number().int().positive().optional().default(16384)
+  streamingChunkMs: z.number().int().positive().optional(),
+  streamingHistoryMs: z.number().int().positive().optional(),
+  streamingEmitPartials: z.boolean().optional()
 })
 
 const ParakeetSchema = z.object({
