@@ -1,17 +1,15 @@
-# RPC PoC overlay (QVAC-24112 follow-on / RPC distributed inference).
+# qvac-fabric v10297.1.2 overlay.
 #
-# The registry port builds tag v10297.0.0 (2b6f2227c), which predates the RPC
-# tensor-parallel, pipeline-parallel, ACCEL pipeline-device exclusion, and
-# parallel endpoint-connect fixes now merged on temp-10297. Building GGML_RPC
-# against the tag would compile the pre-#201 RPC backend: no `-sm tensor` over
-# RPC, no async/events, protocol v5 instead of v7, and no RDMA transport.
+# The registry port baseline used by llm-llamacpp may lag the fabric release
+# tag. Keep this overlay pinned to the release consumed by qvac-fabric
+# dependents so RPC, multimodal, and platform backend fixes resolve together.
 #
 # vcpkg_from_git (not _from_github) so a branch SHA needs no tarball SHA512 and
 # the clone reuses existing git credentials for the private repo.
 vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
   URL https://github.com/tetherto/qvac-fabric-llm.cpp
-  REF 9d181fe643481d9a1cdf241871fe5935ae407ebe
+  REF 4238f1ff50165b79b736f38b7348e8fe0a1d4d63
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
