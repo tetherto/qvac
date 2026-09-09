@@ -6,6 +6,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string_view>
 #include <unordered_map>
@@ -226,6 +227,104 @@ bool isEligibleGpu(const BackendDevice& device, bool isEmbedding) {
   return isVulkan || isMetal;
 }
 
+bool isRpc(const BackendDevice& device) {
+  return lower(device.name).starts_with("rpc") ||
+         lower(device.registryName) == "rpc";
+}
+
+std::string normalizedDeviceId(const BackendDevice& device) {
+  std::string id = device.deviceId;
+  const bool isCuda = lower(device.name).starts_with("cuda") ||
+                      lower(device.registryName) == "cuda";
+  if (!isCuda) {
+    return id;
+  }
+  const size_t suffix = id.rfind("-v");
+  if (suffix == std::string::npos || suffix + 2 == id.size() ||
+      !std::ranges::all_of(id.substr(suffix + 2), [](unsigned char chr) {
+        return std::isdigit(chr) != 0;
+      })) {
+    return id;
+  }
+  id.erase(suffix);
+  return id;
+}
+
+struct SplitDeviceRef {
+  const BackendDevice* device;
+  size_t sourceGpuIndex;
+};
+
+struct SplitDeviceSelection {
+  std::vector<SplitDeviceRef> devices;
+  size_t sourceGpuCount = 0;
+};
+
+SplitDeviceSelection selectSplitDevices(
+    const std::vector<BackendDevice>& devices, bool isEmbedding) {
+  SplitDeviceSelection result;
+  std::vector<SplitDeviceRef> rpc;
+  std::vector<SplitDeviceRef> discrete;
+  std::vector<SplitDeviceRef> integrated;
+  std::unordered_set<std::string> seenDiscrete;
+  for (const BackendDevice& device : devices) {
+    if (!isGpu(device)) {
+      continue;
+    }
+    const size_t sourceGpuIndex = result.sourceGpuCount++;
+    if (!isEligibleGpu(device, isEmbedding) || device.handle == nullptr) {
+      continue;
+    }
+    SplitDeviceRef selected{&device, sourceGpuIndex};
+    if (isRpc(device)) {
+      rpc.push_back(selected);
+    } else if (device.type == BackendDeviceType::IntegratedGpu) {
+      if (integrated.empty()) {
+        integrated.push_back(selected);
+      }
+    } else {
+      const std::string id = normalizedDeviceId(device);
+      if (id.empty() || seenDiscrete.insert(id).second) {
+        discrete.push_back(selected);
+      }
+    }
+  }
+  result.devices = std::move(rpc);
+  const auto& local = discrete.empty() ? integrated : discrete;
+  result.devices.insert(result.devices.end(), local.begin(), local.end());
+  return result;
+}
+
+std::optional<std::string> remapTensorSplit(
+    const std::string& value, const SplitDeviceSelection& selection) {
+  bool mappingChanged = selection.devices.size() != selection.sourceGpuCount;
+  for (size_t index = 0; !mappingChanged && index < selection.devices.size();
+       ++index) {
+    mappingChanged = selection.devices[index].sourceGpuIndex != index;
+  }
+  if (!mappingChanged) {
+    return value;
+  }
+  std::string normalized = value;
+  std::ranges::replace(normalized, '/', ',');
+  std::vector<std::string> proportions;
+  std::istringstream values(normalized);
+  for (std::string proportion; std::getline(values, proportion, ',');) {
+    proportions.push_back(std::move(proportion));
+  }
+  if (proportions.size() != selection.sourceGpuCount) {
+    return std::nullopt;
+  }
+  std::string remapped;
+  for (const SplitDeviceRef& device : selection.devices) {
+    if (!remapped.empty()) {
+      remapped += ',';
+    }
+    remapped += proportions[device.sourceGpuIndex];
+  }
+  return remapped;
+}
+
 int adrenoVersion(const BackendDevice& device) {
   const std::string description = lower(device.description);
   const size_t adreno = description.find("adreno");
@@ -254,18 +353,11 @@ BackendSelection selectGpu(
     const std::optional<int>& requestedIndex, bool isEmbedding) {
   if (requestedIndex.has_value()) {
     const int index = requestedIndex.value();
-    const std::vector<ggml_backend_dev_t> eligible =
-        eligibleBackendDeviceHandles(
-            devices,
-            isEmbedding ? LlamaLoadKind::Embedding : LlamaLoadKind::Completion);
-    if (index >= 0 && static_cast<size_t>(index) + 1 < eligible.size()) {
-      const auto selected = std::ranges::find_if(
-          devices,
-          [handle = eligible[static_cast<size_t>(index)]](
-              const BackendDevice& device) { return device.handle == handle; });
-      if (selected != devices.end() && isEligibleGpu(*selected, isEmbedding)) {
+    if (index >= 0 && static_cast<size_t>(index) < devices.size()) {
+      const BackendDevice& selected = devices[static_cast<size_t>(index)];
+      if (selected.handle != nullptr && isEligibleGpu(selected, isEmbedding)) {
         return {
-            .selected = &*selected, .adrenoVersion = adrenoVersion(*selected)};
+            .selected = &selected, .adrenoVersion = adrenoVersion(selected)};
       }
       return {};
     }
@@ -311,21 +403,6 @@ BackendSelection selectGpu(
   return {
       .selected = discrete != nullptr ? discrete : integrated,
       .adrenoVersion = maxAdrenoVersion};
-}
-
-bool allGpuDevicesSupportSplit(
-    const std::vector<BackendDevice>& devices, bool isEmbedding) {
-  bool sawGpu = false;
-  for (const BackendDevice& device : devices) {
-    if (!isEligibleGpu(device, isEmbedding)) {
-      continue;
-    }
-    sawGpu = true;
-    if (!device.supportsSplitBuffer) {
-      return false;
-    }
-  }
-  return sawGpu;
 }
 
 NormalizedLlamaLoad unsupported(std::string detail) {
@@ -505,37 +582,19 @@ std::vector<BackendDevice> discoverBackendDevices() {
   return devices;
 }
 
-// Mirrors llama's own default device ordering — discrete GPUs first,
-// integrated ones only when no discrete GPU exists, deduplicated by
-// device_id — restricted to the supported families. Terminated by nullptr
-// because llama walks `devices` to the terminator.
+// Mirrors llama's own default ordering: RPC devices first, then local discrete
+// GPUs or the first local iGPU, with local duplicates removed by device_id.
+// The result is restricted to supported families and terminated by nullptr.
 std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind) {
   const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;
-  std::vector<ggml_backend_dev_t> discrete;
-  std::vector<ggml_backend_dev_t> integrated;
-  std::unordered_set<std::string> seenDiscrete;
-  std::unordered_set<std::string> seenIntegrated;
-  for (const BackendDevice& device : devices) {
-    if (!isEligibleGpu(device, isEmbedding) || device.handle == nullptr) {
-      continue;
-    }
-    if (device.type == BackendDeviceType::Gpu) {
-      if (!device.deviceId.empty() &&
-          !seenDiscrete.insert(device.deviceId).second) {
-        continue;
-      }
-      discrete.push_back(device.handle);
-    } else {
-      if (!device.deviceId.empty() &&
-          !seenIntegrated.insert(device.deviceId).second) {
-        continue;
-      }
-      integrated.push_back(device.handle);
-    }
+  const SplitDeviceSelection selection =
+      selectSplitDevices(devices, isEmbedding);
+  std::vector<ggml_backend_dev_t> selected;
+  selected.reserve(selection.devices.size() + 1);
+  for (const SplitDeviceRef& device : selection.devices) {
+    selected.push_back(device.device->handle);
   }
-  std::vector<ggml_backend_dev_t> selected =
-      !discrete.empty() ? std::move(discrete) : std::move(integrated);
   selected.push_back(nullptr);
   return selected;
 }
@@ -543,12 +602,15 @@ std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
 std::optional<size_t> eligibleBackendDeviceOrdinal(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
     size_t mainGpuIndex) {
-  const std::vector<ggml_backend_dev_t> eligible =
-      eligibleBackendDeviceHandles(devices, loadKind);
-  if (mainGpuIndex + 1 >= eligible.size()) {
+  if (mainGpuIndex >= devices.size()) {
     return std::nullopt;
   }
-  return mainGpuIndex;
+  const BackendDevice& selected = devices[mainGpuIndex];
+  const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;
+  if (selected.handle == nullptr || !isEligibleGpu(selected, isEmbedding)) {
+    return std::nullopt;
+  }
+  return 0;
 }
 
 bool applyBackendDeviceAllowlist(
@@ -565,6 +627,8 @@ bool applyBackendDeviceAllowlist(
   if (!mapped.has_value()) {
     return false;
   }
+  storage = {devices[mainGpuIndex.value()].handle, nullptr};
+  params.devices = storage.data();
   params.main_gpu = static_cast<int>(mapped.value());
   return true;
 }
@@ -696,12 +760,19 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
 
   const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;
   BackendSelection selection;
+  SplitDeviceSelection splitSelection;
   if (requestedDevice == "gpu") {
-    selection = selectGpu(
-        devices,
-        traits,
-        splitMode == LLAMA_SPLIT_MODE_NONE ? mainGpu : std::nullopt,
-        isEmbedding);
+    if (splitMode == LLAMA_SPLIT_MODE_NONE) {
+      selection = selectGpu(devices, traits, mainGpu, isEmbedding);
+    } else {
+      splitSelection = selectSplitDevices(devices, isEmbedding);
+      if (!splitSelection.devices.empty()) {
+        selection = {
+            .selected = splitSelection.devices.front().device,
+            .adrenoVersion =
+                adrenoVersion(*splitSelection.devices.front().device)};
+      }
+    }
   }
   const BackendDevice* selected = selection.selected;
   const bool useGpu = selected != nullptr && requestedDevice == "gpu";
@@ -717,8 +788,25 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     config.erase("tensor-split");
   } else if (
       splitMode == LLAMA_SPLIT_MODE_ROW &&
-      !allGpuDevicesSupportSplit(devices, isEmbedding)) {
+      !std::ranges::all_of(
+          splitSelection.devices, [](const SplitDeviceRef& device) {
+            return device.device->supportsSplitBuffer;
+          })) {
     splitMode = LLAMA_SPLIT_MODE_LAYER;
+  }
+
+  if (useGpu && splitMode != LLAMA_SPLIT_MODE_NONE) {
+    if (const auto tensorSplit = config.find("tensor-split");
+        tensorSplit != config.end()) {
+      const std::optional<std::string> remapped =
+          remapTensorSplit(tensorSplit->second, splitSelection);
+      if (!remapped.has_value()) {
+        return unsupported(
+            "tensor-split cardinality does not match the registered GPU "
+            "device list after filtering");
+      }
+      tensorSplit->second = remapped.value();
+    }
   }
 
   const std::string backendName =
@@ -846,8 +934,13 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
       out.params.devices = {selected->handle, nullptr};
       out.params.main_gpu = 0;
     } else {
-      out.params.devices = eligibleBackendDeviceHandles(devices, loadKind);
-      out.params.main_gpu = mainGpu.value_or(0);
+      out.params.devices.clear();
+      out.params.devices.reserve(splitSelection.devices.size() + 1);
+      for (const SplitDeviceRef& device : splitSelection.devices) {
+        out.params.devices.push_back(device.device->handle);
+      }
+      out.params.devices.push_back(nullptr);
+      out.params.main_gpu = 0;
     }
   }
   return out;

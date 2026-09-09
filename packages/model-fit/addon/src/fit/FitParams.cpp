@@ -252,26 +252,27 @@ FitResult runFit(const FitRequest& req) {
   // llama reads main_gpu only under LLAMA_SPLIT_MODE_NONE. LAYER and ROW leave
   // it inert, so it is not validated there. An unpinned split mode is
   // validated: it goes in at llama's default, which is precisely the condition
-  // under which the fitter is free to rewrite it, and a fitter that lands on
-  // NONE indexes main_gpu against the compacted supported-device list handed
-  // to it below — so the ordinal has to be valid up front. The extra no-GPU
-  // placement check further down still applies only to an explicit NONE.
+  // under which the fitter is free to rewrite it. If it lands on NONE, the raw
+  // registry target is converted to a one-device supported list below, so the
+  // identity has to be valid up front. The extra no-GPU placement check further
+  // down still applies only to an explicit NONE.
   const bool mainGpuIsUsed =
       req.hasMainGpu && req.mainGpu >= 0 &&
       (!req.hasSplitMode || req.splitMode == LLAMA_SPLIT_MODE_NONE);
 
-  // mainGpu is an ordinal into the supported-device list this fit hands llama
-  // as `devices`, so it is validated against that list here rather than left
-  // to llama, whose default inventory is no longer what it sees.
-  if (mainGpuIsUsed && !eligibleBackendDeviceOrdinal(
-                            discoveredDevices,
-                            LlamaLoadKind::Completion,
-                            static_cast<size_t>(req.mainGpu))
-                            .has_value()) {
-    throw std::invalid_argument(
-        "model-fit: mainGpu " + std::to_string(req.mainGpu) +
-        " is outside the supported GPU device list");
-  }
+  const bool mainGpuInRange =
+      mainGpuIsUsed &&
+      static_cast<size_t>(req.mainGpu) < discoveredDevices.size();
+  const bool rejectedMainGpu =
+      mainGpuInRange && !eligibleBackendDeviceOrdinal(
+                             discoveredDevices,
+                             LlamaLoadKind::Completion,
+                             static_cast<size_t>(req.mainGpu))
+                             .has_value();
+  const std::optional<size_t> selectedMainGpu =
+      mainGpuInRange && !rejectedMainGpu
+          ? std::optional<size_t>(static_cast<size_t>(req.mainGpu))
+          : std::nullopt;
 
   // Validate the NONE placement now that there is a machine to validate it
   // against.
@@ -297,7 +298,7 @@ FitResult runFit(const FitRequest& req) {
     // registered there is no such device, and llama rejects every index
     // including the default 0, except for the exact CPU-only sentinel
     // configuration.
-    if (!explicitCpuPlacement && eligibleGpuDevices == 0) {
+    if (!explicitCpuPlacement && !rejectedMainGpu && eligibleGpuDevices == 0) {
       throw std::invalid_argument(
           "model-fit: splitMode NONE places the whole model on one GPU, but no "
           "supported GPU device is registered");
@@ -381,23 +382,26 @@ FitResult runFit(const FitRequest& req) {
   applyFitRequest(req, mparams, cparams);
   const bool explicitCpuPlacement = req.hasNGpuLayers && req.nGpuLayers == 0 &&
                                     req.hasMainGpu && req.mainGpu == -1;
-  if (explicitCpuPlacement) {
+  if (explicitCpuPlacement || rejectedMainGpu) {
     eligibleDevices = {nullptr};
   }
-  if (!explicitCpuPlacement) {
+  if (!explicitCpuPlacement && !rejectedMainGpu) {
     const bool applied = applyBackendDeviceAllowlist(
         mparams,
         eligibleDevices,
         discoveredDevices,
         LlamaLoadKind::Completion,
-        mainGpuIsUsed ? std::optional<size_t>(static_cast<size_t>(req.mainGpu))
-                      : std::nullopt);
+        selectedMainGpu);
     if (!applied) {
       throw std::invalid_argument(
           "model-fit: mainGpu identity changed while preparing fit inputs");
     }
+    if (mainGpuIsUsed && !mainGpuInRange) {
+      mparams.main_gpu = 0;
+    }
   } else {
     mparams.devices = eligibleDevices.data();
+    mparams.main_gpu = -1;
   }
 
   // Writable scratch buffers the fit API requires. Sizes are dictated by the
@@ -449,7 +453,8 @@ FitResult runFit(const FitRequest& req) {
   // a layer count, the plan reports the CPU sentinels (0 layers, NONE, -1)
   // whatever split mode or mainGpu was pinned. The raw device counts above
   // stay untouched.
-  if (eligibleGpuDevices == 0 && (!req.hasNGpuLayers || req.nGpuLayers == -1)) {
+  if ((rejectedMainGpu || eligibleGpuDevices == 0) &&
+      (!req.hasNGpuLayers || req.nGpuLayers == -1)) {
     out.nGpuLayers = 0;
     out.splitMode = static_cast<int32_t>(LLAMA_SPLIT_MODE_NONE);
     out.mainGpu = -1;

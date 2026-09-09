@@ -72,7 +72,8 @@ struct FitRequest {
   int32_t splitMode = 0;
   bool hasSplitMode = false;
 
-  /// Device holding the model, or -1 for an explicit CPU-only NONE placement.
+  /// Raw ggml registry index for NONE placement. The returned plan uses 0 for
+  /// the selected one-device list, or -1 for any CPU-only projection.
   int32_t mainGpu = 0;
   bool hasMainGpu = false;
 
@@ -192,7 +193,7 @@ struct FitResult {
 ///  - a `modelPath` that is empty or relative;
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
 ///  - a pinned `splitMode` of NONE on a host with no supported GPU, unless the
-///    request is CPU-only, or a `mainGpu` outside the supported device list;
+///    request is CPU-only or its raw `mainGpu` target is rejected to CPU;
 ///  - an `nCtx`, or an explicitly requested `nCtxMin`, above the context
 ///    length the model declares.
 FitResult runFit(const FitRequest& req);
