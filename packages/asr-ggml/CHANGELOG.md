@@ -52,6 +52,16 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Raise the `speech-cpp` floor to 2026-09-09 (ggml-speech 2026-09-09#1).
+  Parakeet CPU transcription is 2.2 to 2.6x faster on x86 desktops: the TDT
+  decoder runs as ggml graphs instead of a host loop, positional projections
+  are cached per graph, and the encoder drops several full-tensor copies.
+  ggml now builds with tinyBLAS on linux-x64 and darwin-arm64, and the
+  linux-x64 prebuild ships the per-arch CPU backend modules beside the addon
+  (AVX-512 hosts no longer run the AVX2 kernels), the same hybrid layout the
+  cuda build already used. The window also carries the memory-fit preflight
+  APIs, the hybrid RNN-T head, and Nemotron OpenCL support.
+
 - Raise the `speech-cpp` floor to 2026-09-03. Silero VAD now honors
   `use_gpu`: the compute backends match the weight placement, fixing the
   ggml_backend_sched abort ("pre-allocated tensor in a buffer that cannot

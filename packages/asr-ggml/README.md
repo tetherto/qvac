@@ -512,10 +512,11 @@ gated behind the `ASR_CUDA` CMake option — supported on linux-x64,
 linux-arm64 and win32-x64. Published prebuilds do not enable it; build it
 yourself with `npm run build:cuda` (or `bare-make generate -D ASR_CUDA=ON`),
 which adds the `cuda` feature to the `speech-cpp` dependency and turns on
-`GGML_CUDA`. On these platforms the cuda feature flips ggml into hybrid
-dynamically-loaded backend mode: the CPU-variant, Vulkan, and CUDA backends
-ship as runtime-loaded modules (`.so` on Linux, `.dll` on Windows) next to
-the addon, and only the CUDA module depends on the CUDA runtime. Engaging
+`GGML_CUDA`. Every linux-x64 and linux-arm64 build, and win32-x64 with the
+cuda feature, uses ggml's hybrid dynamically-loaded backend mode: the
+per-arch CPU-variant and Vulkan backends ship as runtime-loaded modules
+(`.so` on Linux, `.dll` on Windows) next to the addon, the cuda builds add
+the CUDA module, and only that module depends on the CUDA runtime. Engaging
 CUDA requires the NVIDIA driver plus the CUDA 13 runtime libraries (cudart
 and cuBLAS) resolvable at load time; hosts that cannot resolve them —
 including CPU-only and non-NVIDIA machines — skip the module and fall back
