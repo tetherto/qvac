@@ -194,6 +194,7 @@ extern const SdCtxHandlersMap SD_CTX_HANDLERS;
 
 /** True when a params_backend assignment contains the disk backend. */
 bool paramsBackendSpecUsesDisk(const std::string& spec);
+/** Prepends the offload_to_cpu default before explicit module assignments. */
 std::string
 effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu);
 

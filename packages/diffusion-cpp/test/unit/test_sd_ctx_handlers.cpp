@@ -19,15 +19,15 @@ static SdCtxConfig applyOne(const std::string& key, const std::string& value) {
 }
 
 static void expectRemovedBackendOption(
-    const std::string& key, const std::string& replacement) {
-  for (const auto* value : {"true", "1"}) {
+    const std::string& key, const std::string& guidance) {
+  for (const auto* value : {"true", "1", "maybe"}) {
     try {
       applyOne(key, value);
       FAIL() << key << " should be rejected when set to " << value;
     } catch (const StatusError& error) {
       EXPECT_EQ(
           std::string(error.what()),
-          key + " is no longer supported. Use " + replacement + ".");
+          key + " is no longer supported. " + guidance);
     }
   }
   for (const auto* value : {"false", "0"}) {
@@ -177,9 +177,17 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
   EXPECT_EQ(SD_CTX_HANDLERS.count("control_net_cpu"), 0U);
   EXPECT_EQ(SD_CTX_HANDLERS.count("clip_on_cpu"), 0U);
   EXPECT_EQ(SD_CTX_HANDLERS.count("vae_on_cpu"), 0U);
-  expectRemovedBackendOption("control_net_cpu", "backend=controlnet=cpu");
-  expectRemovedBackendOption("clip_on_cpu", "backend=te=cpu");
-  expectRemovedBackendOption("vae_on_cpu", "backend=vae=cpu");
+  expectRemovedBackendOption(
+      "control_net_cpu",
+      "Use backend=controlnet=cpu to run the ControlNet graph on CPU.");
+  expectRemovedBackendOption(
+      "clip_on_cpu",
+      "Use params_backend=te=cpu to keep text encoder parameters in CPU RAM, "
+      "or backend=te=cpu to run its graph on CPU.");
+  expectRemovedBackendOption(
+      "vae_on_cpu",
+      "Use params_backend=vae=cpu to keep VAE parameters in CPU RAM, or "
+      "backend=vae=cpu to run its graph on CPU.");
   EXPECT_TRUE(applyOne("vae_auto_cpu_fallback", "true").vaeAutoCpuFallback);
   EXPECT_FLOAT_EQ(
       applyOne("vae_auto_cpu_fallback_memory_ratio", "0.75")
@@ -235,7 +243,7 @@ TEST(SdCtxHandlers_MemoryFlags, ReportsRemovedOptionsInStableOrder) {
     EXPECT_EQ(
         std::string(error.what()),
         "control_net_cpu is no longer supported. Use "
-        "backend=controlnet=cpu.");
+        "backend=controlnet=cpu to run the ControlNet graph on CPU.");
   }
 }
 

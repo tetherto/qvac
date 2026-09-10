@@ -443,20 +443,24 @@ void applySdCtxHandlers(
     const std::unordered_map<std::string, std::string>& configMap) {
   static const std::array<std::pair<const char*, const char*>, 3>
       deprecatedBackendOptions{{
-          {"control_net_cpu", "backend=controlnet=cpu"},
-          {"clip_on_cpu", "backend=te=cpu"},
-          {"vae_on_cpu", "backend=vae=cpu"},
+          {"control_net_cpu",
+           "Use backend=controlnet=cpu to run the ControlNet graph on CPU."},
+          {"clip_on_cpu",
+           "Use params_backend=te=cpu to keep text encoder parameters in CPU "
+           "RAM, or backend=te=cpu to run its graph on CPU."},
+          {"vae_on_cpu",
+           "Use params_backend=vae=cpu to keep VAE parameters in CPU RAM, or "
+           "backend=vae=cpu to run its graph on CPU."},
       }};
-  for (const auto& [key, replacement] : deprecatedBackendOptions) {
+  for (const auto& [key, guidance] : deprecatedBackendOptions) {
     const auto option = configMap.find(key);
     if (option == configMap.end()) {
       continue;
     }
-    const bool enabled = parseBool(option->second, key);
     std::string message = std::string(key) + " is no longer supported.";
-    message += enabled
-                   ? " Use " + std::string(replacement) + "."
-                   : " Remove it; no replacement is needed when it is false.";
+    message += option->second == "false" || option->second == "0"
+                   ? " Remove it; no replacement is needed when it is false."
+                   : " " + std::string(guidance);
     throw StatusError(general_error::InvalidArgument, message);
   }
 

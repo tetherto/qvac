@@ -76,7 +76,7 @@ async function setupModel(t) {
     },
     config: {
       device: useCpu ? 'cpu' : 'gpu',
-      backend: isAndroid ? 'vae=cpu' : undefined,
+      params_backend: isAndroid ? 'vae=cpu' : undefined,
       threads: 4,
       prediction: 'v',
       diffusion_fa: true,
