@@ -159,6 +159,25 @@ export const allModels = [
     endpointCategory: 'image'
   } as const,
   {
+    name: 'WAN_2_2_COMFYUI_REPACKAGED_VAE',
+    src: `registry://hf/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/fb1388adc906ab39ffc26ee40e96b22886b56bc4/split_files/vae/wan2.2_vae.safetensors`,
+    registryPath:
+      'Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/fb1388adc906ab39ffc26ee40e96b22886b56bc4/split_files/vae/wan2.2_vae.safetensors',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3023119,
+    blobBlockLength: 21506,
+    blobByteOffset: 198106115752,
+    modelId: 'wan2.2_vae.safetensors',
+    addon: 'diffusion',
+    expectedSize: 1409400960,
+    sha256Checksum: 'e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156',
+    engine: 'sdcpp-generation',
+    quantization: '',
+    params: '',
+    endpointCategory: 'image'
+  } as const,
+  {
     name: 'SD_V2_1_1B_Q4_0',
     src: `registry://hf/gpustack/stable-diffusion-v2-1-GGUF/resolve/12ddc22724f6da35f0b6006e459fae66eaf56931/stable-diffusion-v2-1-Q4_0.gguf`,
     registryPath:
@@ -232,6 +251,136 @@ export const allModels = [
     engine: 'sdcpp-generation',
     quantization: 'Q8_0',
     params: '3B',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'WAN2_2_TI2V_5B_Q5_K_S',
+    src: `registry://hf/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF/resolve/9873ba175b4b204a81f4a43c9644e6c385ee4459/Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf`,
+    registryPath:
+      'hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF/resolve/9873ba175b4b204a81f4a43c9644e6c385ee4459/Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2968725,
+    blobBlockLength: 54394,
+    blobByteOffset: 194541376456,
+    modelId: 'Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf',
+    addon: 'diffusion',
+    expectedSize: 3564739296,
+    sha256Checksum: '3024aef1dfa6a474ea76886d67fa6cdf029366d4a934f28ceec217f77b2cfd2d',
+    engine: 'sdcpp-generation',
+    quantization: 'Q5_K_S',
+    params: '5B',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'LTX_2_3_22B_Q2_K',
+    src: `registry://hf/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q2_K.gguf`,
+    registryPath:
+      'QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q2_K.gguf',
+    registrySource: 'hf',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2109880,
+    blobBlockLength: 189342,
+    blobByteOffset: 138266497571,
+    modelId: 'LTX-2.3-22B-distilled-1.1-Q2_K.gguf',
+    addon: 'diffusion',
+    expectedSize: 12408656544,
+    sha256Checksum: 'af151db26e3b0a87e805d899d3f105aa0a11f9124893d47ca3f39e47b27cfa8f',
+    engine: 'sdcpp-generation',
+    quantization: 'Q2_K',
+    params: '22B',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'LTX_2_3_22B_Q5_K_M',
+    src: `registry://hf/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf`,
+    registryPath:
+      'QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf',
+    registrySource: 'hf',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2299222,
+    blobBlockLength: 295845,
+    blobByteOffset: 150675154115,
+    modelId: 'LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf',
+    addon: 'diffusion',
+    expectedSize: 19388448416,
+    sha256Checksum: 'ddd6cb9f4d90f37072bf18609f679cd843639dc0cccf59585bf75ba37b78718b',
+    engine: 'sdcpp-generation',
+    quantization: 'Q5_K_M',
+    params: '22B',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'ABOT_WORLD_0_5B_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/abot-world-0-5b-lf-dit-q8_0.gguf`,
+    registryPath:
+      'qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/abot-world-0-5b-lf-dit-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3044690,
+    blobBlockLength: 89806,
+    blobByteOffset: 199519695654,
+    modelId: 'abot-world-0-5b-lf-dit-q8_0.gguf',
+    addon: 'diffusion',
+    expectedSize: 5885489920,
+    sha256Checksum: 'f63276a210af0fe26daf7b95f29b02666c005f3e6557eaac9ea1be24e3367e1b',
+    engine: 'sdcpp-generation',
+    quantization: 'Q8_0',
+    params: '5B',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'ABOT_WORLD_0_5B_LF_TAEHV_VAE',
+    src: `registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf`,
+    registryPath: 'qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3134496,
+    blobBlockLength: 349,
+    blobByteOffset: 205405185574,
+    modelId: 'taew2_2_f16.gguf',
+    addon: 'diffusion',
+    expectedSize: 22844832,
+    sha256Checksum: '848dda048c3fe4e5ace4e39f10e31798d894c7fb54458b6f730e5c0a9003eac2',
+    engine: 'sdcpp-generation',
+    quantization: 'F16',
+    params: '',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'UMT5_XXL_ENC_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/umt5-xxl-enc-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/umt5-xxl-enc-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3134845,
+    blobBlockLength: 92102,
+    blobByteOffset: 205428030406,
+    modelId: 'umt5-xxl-enc-q8_0.gguf',
+    addon: 'diffusion',
+    expectedSize: 6035988320,
+    sha256Checksum: 'd529e94552a9793407ac5e8164624718373868ebe7227912c6221c9bb16bea4b',
+    engine: 'sdcpp-generation',
+    quantization: 'Q8_0',
+    params: '',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'ABOT_WORLD_0_5B_LF_WAN_VAE',
+    src: `registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf`,
+    registryPath: 'qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3226947,
+    blobBlockLength: 21508,
+    blobByteOffset: 211464018726,
+    modelId: 'wan2.2_vae_f16.gguf',
+    addon: 'diffusion',
+    expectedSize: 1409493568,
+    sha256Checksum: '281782f96ae387e8be97c036ca3b0ddcc3dc7d6540170da57ed94c7953c9fd1f',
+    engine: 'sdcpp-generation',
+    quantization: 'F16',
+    params: '',
     endpointCategory: 'image'
   } as const,
   {
@@ -365,22 +514,79 @@ export const allModels = [
     endpointCategory: 'image'
   } as const,
   {
-    name: 'QWEN3_4B_Q4_K_M',
-    src: `registry://hf/unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf`,
+    name: 'GEMMA_3_12B_Q4_K_XL',
+    src: `registry://hf/unsloth/gemma-3-12b-it-GGUF/resolve/d15e4c7dc21dc55d56bf8549db57a71ad8a2a35d/gemma-3-12b-it-UD-Q4_K_XL.gguf`,
     registryPath:
-      'unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf',
+      'unsloth/gemma-3-12b-it-GGUF/resolve/d15e4c7dc21dc55d56bf8549db57a71ad8a2a35d/gemma-3-12b-it-UD-Q4_K_XL.gguf',
     registrySource: 'hf',
     blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 296679,
-    blobBlockLength: 38106,
-    blobByteOffset: 19441407821,
-    modelId: 'Qwen3-4B-Q4_K_M.gguf',
+    blobBlockOffset: 2595067,
+    blobBlockLength: 113407,
+    blobByteOffset: 170063602531,
+    modelId: 'gemma-3-12b-it-UD-Q4_K_XL.gguf',
     addon: 'diffusion',
-    expectedSize: 2497281312,
-    sha256Checksum: 'f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a',
+    expectedSize: 7432229216,
+    sha256Checksum: '68d0b2d09575a5ad04c71c61598d1a74b63d26db89cc6e379314ade5f3beb0b3',
     engine: 'sdcpp-generation',
-    quantization: 'Q4_K_M',
-    params: '4B',
+    quantization: 'Q4_K_XL',
+    params: '12B',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS',
+    src: `registry://hf/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors`,
+    registryPath:
+      'unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2933444,
+    blobBlockLength: 35281,
+    blobByteOffset: 192229231744,
+    modelId: 'ltx-2.3-22b-distilled_embeddings_connectors.safetensors',
+    addon: 'diffusion',
+    expectedSize: 2312144712,
+    sha256Checksum: 'c61cbb396e2a8175d8b2da51f0fdac885a4ccd22c9f64dafa5aa2c455dc8a507',
+    engine: 'sdcpp-generation',
+    quantization: '',
+    params: '',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'LTX_2_3_AUDIO_VAE',
+    src: `registry://hf/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors`,
+    registryPath:
+      'unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2927876,
+    blobBlockLength: 5568,
+    blobByteOffset: 191864378604,
+    modelId: 'ltx-2.3-22b-distilled_audio_vae.safetensors',
+    addon: 'diffusion',
+    expectedSize: 364853140,
+    sha256Checksum: '3cd6a6eb8cb28f5ecc12f1f3126952b2a3d2b0b42ad3270e63cefafafe0d9b57',
+    engine: 'sdcpp-generation',
+    quantization: '',
+    params: '',
+    endpointCategory: 'image'
+  } as const,
+  {
+    name: 'LTX_2_3_VIDEO_VAE',
+    src: `registry://hf/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors`,
+    registryPath:
+      'unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2905716,
+    blobBlockLength: 22160,
+    blobByteOffset: 190412122082,
+    modelId: 'ltx-2.3-22b-distilled_video_vae.safetensors',
+    addon: 'diffusion',
+    expectedSize: 1452256522,
+    sha256Checksum: 'e68d6d8f8a42942ac9b862cc315beb3bc30805a8876c7ad63ba5bf7a2b8e168a',
+    engine: 'sdcpp-generation',
+    quantization: '',
+    params: '',
     endpointCategory: 'image'
   } as const,
   {
@@ -677,6 +883,25 @@ export const allModels = [
     endpointCategory: 'chat'
   } as const,
   {
+    name: 'GEMMA4_2B_MULTIMODAL_Q8_0',
+    src: `registry://hf/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q8_0.gguf`,
+    registryPath:
+      'bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q8_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4341686,
+    blobBlockLength: 75798,
+    blobByteOffset: 284524569674,
+    modelId: 'google_gemma-4-E2B-it-Q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 4967495424,
+    sha256Checksum: 'f1a9243ad2da99b3c4706dd0d549b9dcb0a3f49c7e1a46e01f9f582f876265b0',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '2B',
+    endpointCategory: 'chat'
+  } as const,
+  {
     name: 'MMPROJ_GEMMA4_2B_MULTIMODAL_BF16',
     src: `registry://hf/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-bf16.gguf`,
     registryPath:
@@ -788,6 +1013,63 @@ export const allModels = [
     engine: 'llamacpp-completion',
     quantization: 'f16',
     params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'MOE_35B_INST_IQ2_XXS',
+    src: `registry://hf/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf`,
+    registryPath:
+      'bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4692905,
+    blobBlockLength: 149208,
+    blobByteOffset: 307541841194,
+    modelId: 'Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf',
+    addon: 'llm',
+    expectedSize: 9778452896,
+    sha256Checksum: '43a084de380dbba2aad32a6adff5395f47f7434a5a57294b8d113bb09228961f',
+    engine: 'llamacpp-completion',
+    quantization: 'iq2_xxs',
+    params: '35B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'MOE_35B_INST_Q4_K_M',
+    src: `registry://hf/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q4_K_M.gguf`,
+    registryPath:
+      'bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q4_K_M.gguf',
+    registrySource: 'hf',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 4141510,
+    blobBlockLength: 326408,
+    blobByteOffset: 271411128067,
+    modelId: 'Kwaipilot_KAT-Coder-V2.5-Dev-Q4_K_M.gguf',
+    addon: 'llm',
+    expectedSize: 21391448480,
+    sha256Checksum: '4221c26e5663502d1c96fc901c9967d0e70ce2dcfaa5a9fb9280a46bd19e3c07',
+    engine: 'llamacpp-completion',
+    quantization: 'q4_k_m',
+    params: '35B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'MOE_35B_INST_Q8_0',
+    src: `registry://hf/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q8_0.gguf`,
+    registryPath:
+      'bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q8_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4950610,
+    blobBlockLength: 563274,
+    blobByteOffset: 324430696842,
+    modelId: 'Kwaipilot_KAT-Coder-V2.5-Dev-Q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 36914690464,
+    sha256Checksum: '5fa510f44779b0e3d38a6678985f417a1c65e3000405ca5d6dcf7fd065e47a15',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '35B',
     endpointCategory: 'chat'
   } as const,
   {
@@ -1016,6 +1298,44 @@ export const allModels = [
     engine: 'llamacpp-completion',
     quantization: 'q8_0',
     params: '0.8B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'MMPROJ_QWEN3_5_2B_MULTIMODAL_Q8_0',
+    src: `registry://hf/mradermacher/Qwen3.5-2B-GGUF/resolve/33cc6944e40cb93e38332cd46b2a6e3c6acf081e/Qwen3.5-2B.mmproj-Q8_0.gguf`,
+    registryPath:
+      'mradermacher/Qwen3.5-2B-GGUF/resolve/33cc6944e40cb93e38332cd46b2a6e3c6acf081e/Qwen3.5-2B.mmproj-Q8_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2096998,
+    blobBlockLength: 5565,
+    blobByteOffset: 137422520270,
+    modelId: 'Qwen3.5-2B.mmproj-Q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 364664384,
+    sha256Checksum: '526dbf85f350baf3a5107b1f14e629e94571c7cbab4277476fbdaaa8c4a31a64',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '2B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'MMPROJ_QWEN3_5_4B_MULTIMODAL_Q8_0',
+    src: `registry://hf/mradermacher/Qwen3.5-4B-GGUF/resolve/1a5df2c0cba51dae8ac5888420360d8703707171/Qwen3.5-4B.mmproj-Q8_0.gguf`,
+    registryPath:
+      'mradermacher/Qwen3.5-4B-GGUF/resolve/1a5df2c0cba51dae8ac5888420360d8703707171/Qwen3.5-4B.mmproj-Q8_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2102563,
+    blobBlockLength: 5599,
+    blobByteOffset: 137787184654,
+    modelId: 'Qwen3.5-4B.mmproj-Q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 366894656,
+    sha256Checksum: '40a4f07d7bbdbb43011d6cf35ef751e4b1829ff47ee8aa4964c6296f571725ad',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '4B',
     endpointCategory: 'chat'
   } as const,
   {
@@ -1825,6 +2145,557 @@ export const allModels = [
     ]
   } as const,
   {
+    name: 'MMPROJ_OCR_3B_MULTIMODAL_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ocr/gguf/unlimited-ocr/2026-07-25/mmproj-unlimited-ocr-Q8_0.gguf`,
+    registryPath:
+      'qvac_models_compiled/ocr/gguf/unlimited-ocr/2026-07-25/mmproj-unlimited-ocr-Q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2747036,
+    blobBlockLength: 7038,
+    blobByteOffset: 180022973923,
+    modelId: 'mmproj-unlimited-ocr-Q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 461225856,
+    sha256Checksum: 'c7c9eb64a20f03b30a327a450381d2159e75012fddb2e806a590e4651d3d65d8',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '3B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_1_7B_MEDICAL_BF16',
+    src: `registry://hf/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-bf16.gguf`,
+    registryPath:
+      'qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-bf16.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 3703310,
+    blobBlockLength: 62099,
+    blobByteOffset: 242688318154,
+    modelId: 'medpsy-1.7b-bf16.gguf',
+    addon: 'llm',
+    expectedSize: 4069679040,
+    sha256Checksum: '97ee99dfc4845218b369fbb16c85106bcfcf38f89e623346c891c3dc1b4b5ab1',
+    engine: 'llamacpp-completion',
+    quantization: 'bf16',
+    params: '1.7B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_1_7B_MEDICAL_IQ3_M',
+    src: `registry://hf/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq3_m-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq3_m-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 3765409,
+    blobBlockLength: 15707,
+    blobByteOffset: 246757997194,
+    modelId: 'medpsy-1.7b-iq3_m-imat.gguf',
+    addon: 'llm',
+    expectedSize: 1029365952,
+    sha256Checksum: '4f2aeaba2db768a80637a2b9666317d8453b7bcb59fcc2fc8f0e44e1178e2758',
+    engine: 'llamacpp-completion',
+    quantization: 'iq3_m',
+    params: '1.7B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_1_7B_MEDICAL_IQ3_XXS',
+    src: `registry://hf/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq3_xxs-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq3_xxs-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 3781116,
+    blobBlockLength: 13551,
+    blobByteOffset: 247787363146,
+    modelId: 'medpsy-1.7b-iq3_xxs-imat.gguf',
+    addon: 'llm',
+    expectedSize: 888064192,
+    sha256Checksum: 'fce8d5870bb9b22d29ff89f29491cb2b5662ec121ef0214c50cf7988068c37c8',
+    engine: 'llamacpp-completion',
+    quantization: 'iq3_xxs',
+    params: '1.7B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_1_7B_MEDICAL_IQ4_NL',
+    src: `registry://hf/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq4_nl-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq4_nl-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 3794667,
+    blobBlockLength: 18760,
+    blobByteOffset: 248675427338,
+    modelId: 'medpsy-1.7b-iq4_nl-imat.gguf',
+    addon: 'llm',
+    expectedSize: 1229453504,
+    sha256Checksum: 'e1a9cc5390e02007fc6a5c5a74a23e4c20e6e25ba81d99b6d21f491887e04979',
+    engine: 'llamacpp-completion',
+    quantization: 'iq4_nl',
+    params: '1.7B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_1_7B_MEDICAL_IQ4_XS',
+    src: `registry://hf/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq4_xs-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-iq4_xs-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 3813427,
+    blobBlockLength: 17940,
+    blobByteOffset: 249904880842,
+    modelId: 'medpsy-1.7b-iq4_xs-imat.gguf',
+    addon: 'llm',
+    expectedSize: 1175689408,
+    sha256Checksum: '7816dbcdc90dcea1ec7ae3fe8a54d702e8d5c478493ee3a4605f71dfcb970409',
+    engine: 'llamacpp-completion',
+    quantization: 'iq4_xs',
+    params: '1.7B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_1_7B_MEDICAL_Q4_K_M',
+    src: `registry://hf/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-q4_k_m-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-q4_k_m-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 3831367,
+    blobBlockLength: 19569,
+    blobByteOffset: 251080570250,
+    modelId: 'medpsy-1.7b-q4_k_m-imat.gguf',
+    addon: 'llm',
+    expectedSize: 1282439360,
+    sha256Checksum: '41ee947d9cce72ec657577219fd1798fabeabf0d832217fe23c9d6d3d18d5880',
+    engine: 'llamacpp-completion',
+    quantization: 'q4_k_m',
+    params: '1.7B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_1_7B_MEDICAL_Q5_K_M',
+    src: `registry://hf/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-q5_k_m-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-q5_k_m-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 3850936,
+    blobBlockLength: 22458,
+    blobByteOffset: 252363009610,
+    modelId: 'medpsy-1.7b-q5_k_m-imat.gguf',
+    addon: 'llm',
+    expectedSize: 1471805632,
+    sha256Checksum: '05e8e51af9a09ebe06433971f66ba86f5ce1be2e8b53db9dc83b13244c33c00e',
+    engine: 'llamacpp-completion',
+    quantization: 'q5_k_m',
+    params: '1.7B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_1_7B_MEDICAL_Q8_0',
+    src: `registry://hf/qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-q8_0.gguf`,
+    registryPath:
+      'qvac/MedPsy-1.7B-GGUF/resolve/fd4cecc90c2de8dce4b112795456a54be9c59363/medpsy-1.7b-q8_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 3873394,
+    blobBlockLength: 33036,
+    blobByteOffset: 253834815242,
+    modelId: 'medpsy-1.7b-q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 2165039040,
+    sha256Checksum: '03ebb130aa6e818a8cf733301381c9edb69c94e0e1ad556595b1d5545a1c5073',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '1.7B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_4B_MEDICAL_BF16',
+    src: `registry://hf/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-bf16.gguf`,
+    registryPath:
+      'qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-bf16.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 3906430,
+    blobBlockLength: 134723,
+    blobByteOffset: 255999854282,
+    modelId: 'medpsy-4b-bf16.gguf',
+    addon: 'llm',
+    expectedSize: 8829197344,
+    sha256Checksum: '0ca2678e1fea2547fabe6c9859605e69425942538f5cc190e12dcffeebfa78c4',
+    engine: 'llamacpp-completion',
+    quantization: 'bf16',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_4B_MEDICAL_IQ3_M',
+    src: `registry://hf/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq3_m-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq3_m-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4041153,
+    blobBlockLength: 32502,
+    blobByteOffset: 264829051626,
+    modelId: 'medpsy-4b-iq3_m-imat.gguf',
+    addon: 'llm',
+    expectedSize: 2130025760,
+    sha256Checksum: 'd4bb000febb07d70342be8964aa02fd747b8574617526f8a9abdeadc38c287b9',
+    engine: 'llamacpp-completion',
+    quantization: 'iq3_m',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_4B_MEDICAL_IQ3_XXS',
+    src: `registry://hf/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq3_xxs-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq3_xxs-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4073655,
+    blobBlockLength: 28036,
+    blobByteOffset: 266959077386,
+    modelId: 'medpsy-4b-iq3_xxs-imat.gguf',
+    addon: 'llm',
+    expectedSize: 1837317920,
+    sha256Checksum: '00358ed1f556b4c6801986c10f81e142095c69b3e94997b878dd3604560ed6c5',
+    engine: 'llamacpp-completion',
+    quantization: 'iq3_xxs',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_4B_MEDICAL_IQ4_NL',
+    src: `registry://hf/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq4_nl-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq4_nl-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4101691,
+    blobBlockLength: 39675,
+    blobByteOffset: 268796395306,
+    modelId: 'medpsy-4b-iq4_nl-imat.gguf',
+    addon: 'llm',
+    expectedSize: 2600131360,
+    sha256Checksum: '7deecba2614a1e8bd8b549f57f4e507be90d88dbea704fda2a355373fbb781df',
+    engine: 'llamacpp-completion',
+    quantization: 'iq4_nl',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_4B_MEDICAL_IQ4_XS',
+    src: `registry://hf/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq4_xs-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-iq4_xs-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4141366,
+    blobBlockLength: 37802,
+    blobByteOffset: 271396526666,
+    modelId: 'medpsy-4b-iq4_xs-imat.gguf',
+    addon: 'llm',
+    expectedSize: 2477384480,
+    sha256Checksum: '0098a76248d769b6e8e041d8fced2270c66962e257c5da4d4008cedd45ef051c',
+    engine: 'llamacpp-completion',
+    quantization: 'iq4_xs',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_4B_MEDICAL_Q4_K_M',
+    src: `registry://hf/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-q4_k_m-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-q4_k_m-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4179168,
+    blobBlockLength: 41444,
+    blobByteOffset: 273873911146,
+    modelId: 'medpsy-4b-q4_k_m-imat.gguf',
+    addon: 'llm',
+    expectedSize: 2716068640,
+    sha256Checksum: '2ecbf622a2856f631001f20f593669aa03acba39977f521bef80cd8600864980',
+    engine: 'llamacpp-completion',
+    quantization: 'q4_k_m',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_4B_MEDICAL_Q5_K_M',
+    src: `registry://hf/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-q5_k_m-imat.gguf`,
+    registryPath:
+      'qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-q5_k_m-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4220612,
+    blobBlockLength: 48171,
+    blobByteOffset: 276589979786,
+    modelId: 'medpsy-4b-q5_k_m-imat.gguf',
+    addon: 'llm',
+    expectedSize: 3156921120,
+    sha256Checksum: '68bd5e14cd87ff40bba5d08fbef2da9a6088b11aacab8466ef3f13a602e2d868',
+    engine: 'llamacpp-completion',
+    quantization: 'q5_k_m',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'HEALTHCARE_4B_MEDICAL_Q8_0',
+    src: `registry://hf/qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-q8_0.gguf`,
+    registryPath:
+      'qvac/MedPsy-4B-GGUF/resolve/ad85e5a6f745027a576595df9acf745b071353b3/medpsy-4b-q8_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4268783,
+    blobBlockLength: 71620,
+    blobByteOffset: 279746900906,
+    modelId: 'medpsy-4b-q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 4693670944,
+    sha256Checksum: 'b754795a8415d4ba56952da3cb3b994e69c04d61111eec6239938c80aebe93a7',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q4_K_M',
+    src: `registry://hf/qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF/resolve/14d6fd1e24c9f94a5e40c2e91c066241aede0dce/TranslatePsy-AfriSLM-0.8B-Q4_K_M-imat.gguf`,
+    registryPath:
+      'qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF/resolve/14d6fd1e24c9f94a5e40c2e91c066241aede0dce/TranslatePsy-AfriSLM-0.8B-Q4_K_M-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3312610,
+    blobBlockLength: 10259,
+    blobByteOffset: 217077626726,
+    modelId: 'TranslatePsy-AfriSLM-0.8B-Q4_K_M-imat.gguf',
+    addon: 'llm',
+    expectedSize: 672329792,
+    sha256Checksum: '4af8ee1df3ec9008f763ebe95e6f21df3acd8d42c541feeb13314ca22e560afc',
+    engine: 'llamacpp-completion',
+    quantization: 'Q4_K_M',
+    params: '0.8B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q8_0',
+    src: `registry://hf/qvac/TranslatePsy-AfriSLM-0.8B-Q8-GGUF/resolve/55220bcc74bed219ad9db9ab378f6aae31850974/TranslatePsy-AfriSLM-0.8B-Q8_0-imat.gguf`,
+    registryPath:
+      'qvac/TranslatePsy-AfriSLM-0.8B-Q8-GGUF/resolve/55220bcc74bed219ad9db9ab378f6aae31850974/TranslatePsy-AfriSLM-0.8B-Q8_0-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3322869,
+    blobBlockLength: 16511,
+    blobByteOffset: 217749956518,
+    modelId: 'TranslatePsy-AfriSLM-0.8B-Q8_0-imat.gguf',
+    addon: 'llm',
+    expectedSize: 1082015808,
+    sha256Checksum: 'b5056635be0c9bb832f0c964dc063bd4b4462e253f9f9d94eebf0aa0960b7798',
+    engine: 'llamacpp-completion',
+    quantization: 'Q8_0',
+    params: '0.8B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q4_K_M',
+    src: `registry://hf/qvac/TranslatePsy-AfriSLM-2B-Q4-GGUF/resolve/9bcceadebbcc5d36bba9f7f02141300a95ae8d04/TranslatePsy-AfriSLM-2B-Q4_K_M-imat.gguf`,
+    registryPath:
+      'qvac/TranslatePsy-AfriSLM-2B-Q4-GGUF/resolve/9bcceadebbcc5d36bba9f7f02141300a95ae8d04/TranslatePsy-AfriSLM-2B-Q4_K_M-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3339380,
+    blobBlockLength: 23811,
+    blobByteOffset: 218831972326,
+    modelId: 'TranslatePsy-AfriSLM-2B-Q4_K_M-imat.gguf',
+    addon: 'llm',
+    expectedSize: 1560461376,
+    sha256Checksum: 'fc2a80532e58e0655efd9e68c5b7cb2c4373222e736bcc88de648502a4e30361',
+    engine: 'llamacpp-completion',
+    quantization: 'Q4_K_M',
+    params: '2B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q8_0',
+    src: `registry://hf/qvac/TranslatePsy-AfriSLM-2B-Q8-GGUF/resolve/d2394ae5e3052740ac4af7f60d41fb2432cbd7ac/TranslatePsy-AfriSLM-2B-Q8_0-imat.gguf`,
+    registryPath:
+      'qvac/TranslatePsy-AfriSLM-2B-Q8-GGUF/resolve/d2394ae5e3052740ac4af7f60d41fb2432cbd7ac/TranslatePsy-AfriSLM-2B-Q8_0-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3363191,
+    blobBlockLength: 38946,
+    blobByteOffset: 220392433702,
+    modelId: 'TranslatePsy-AfriSLM-2B-Q8_0-imat.gguf',
+    addon: 'llm',
+    expectedSize: 2552356928,
+    sha256Checksum: '940436f99196c1183d0a38addbbb2c643cb5edfcb939003dacc8c4bd68079f85',
+    engine: 'llamacpp-completion',
+    quantization: 'Q8_0',
+    params: '2B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q4_K_M',
+    src: `registry://hf/qvac/TranslatePsy-AfriSLM-4B-Q4-GGUF/resolve/82df4b20772a4a46f38b421a569a90d53a93f657/TranslatePsy-AfriSLM-4B-Q4_K_M-imat.gguf`,
+    registryPath:
+      'qvac/TranslatePsy-AfriSLM-4B-Q4-GGUF/resolve/82df4b20772a4a46f38b421a569a90d53a93f657/TranslatePsy-AfriSLM-4B-Q4_K_M-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3402137,
+    blobBlockLength: 46790,
+    blobByteOffset: 222944790630,
+    modelId: 'TranslatePsy-AfriSLM-4B-Q4_K_M-imat.gguf',
+    addon: 'llm',
+    expectedSize: 3066385344,
+    sha256Checksum: '166226feb6144f6e416e4936706eb5f9183526a05141410156c578c48b4bd4f1',
+    engine: 'llamacpp-completion',
+    quantization: 'Q4_K_M',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q8_0',
+    src: `registry://hf/qvac/TranslatePsy-AfriSLM-4B-Q8-GGUF/resolve/523cdfa7d4b056c2b64f4ee32f95175a99d53663/TranslatePsy-AfriSLM-4B-Q8_0-imat.gguf`,
+    registryPath:
+      'qvac/TranslatePsy-AfriSLM-4B-Q8-GGUF/resolve/523cdfa7d4b056c2b64f4ee32f95175a99d53663/TranslatePsy-AfriSLM-4B-Q8_0-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3448927,
+    blobBlockLength: 78703,
+    blobByteOffset: 226011175974,
+    modelId: 'TranslatePsy-AfriSLM-4B-Q8_0-imat.gguf',
+    addon: 'llm',
+    expectedSize: 5157833664,
+    sha256Checksum: '296d6426b922a09c6615a81dee6e0aaae6f1f608fd2c320316f1e6ce09314aac',
+    engine: 'llamacpp-completion',
+    quantization: 'Q8_0',
+    params: '4B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0',
+    src: `registry://hf/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/mmproj-visionpsy-nano-460m-flash-q8.gguf`,
+    registryPath:
+      'qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/mmproj-visionpsy-nano-460m-flash-q8.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3310950,
+    blobBlockLength: 1660,
+    blobByteOffset: 216968844582,
+    modelId: 'mmproj-visionpsy-nano-460m-flash-q8.gguf',
+    addon: 'llm',
+    expectedSize: 108782144,
+    sha256Checksum: 'bbb0691873a4e638f6928898b3c3be9a4730bd4ced301197726a4fcb549695d0',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '460M',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M',
+    src: `registry://hf/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q4_k_m-imat.gguf`,
+    registryPath:
+      'qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q4_k_m-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3306324,
+    blobBlockLength: 4626,
+    blobByteOffset: 216665701094,
+    modelId: 'visionpsy-nano-460m-flash-q4_k_m-imat.gguf',
+    addon: 'llm',
+    expectedSize: 303143488,
+    sha256Checksum: '90b0abe16180f1fe5918bc5d89c3b6eeaf40520a50f906d6303a59a32b699fbc',
+    engine: 'llamacpp-completion',
+    quantization: 'q4_k_m',
+    params: '460M',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'VISIONPSY_NANO_460M_MULTIMODAL_Q8_0',
+    src: `registry://hf/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q8_0.gguf`,
+    registryPath:
+      'qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q8_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3299660,
+    blobBlockLength: 6664,
+    blobByteOffset: 216229025094,
+    modelId: 'visionpsy-nano-460m-flash-q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 436676000,
+    sha256Checksum: '66d84c0f552c96ec6734d8cef7f0a3192f4f2df2cd781a193339df194f501a12',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '460M',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1',
+    src: `registry://hf/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf`,
+    registryPath:
+      'qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3298000,
+    blobBlockLength: 1660,
+    blobByteOffset: 216120242950,
+    modelId: 'mmproj-visionpsy-nano-460m-q8.gguf',
+    addon: 'llm',
+    expectedSize: 108782144,
+    sha256Checksum: '92f1bb80acaba3e7b59b6534f47447b830330bc9051018d6d8b5d768e58503c2',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '460M',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M_1',
+    src: `registry://hf/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q4_k_m-imat.gguf`,
+    registryPath:
+      'qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q4_k_m-imat.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3293374,
+    blobBlockLength: 4626,
+    blobByteOffset: 215817099462,
+    modelId: 'visionpsy-nano-460m-q4_k_m-imat.gguf',
+    addon: 'llm',
+    expectedSize: 303143488,
+    sha256Checksum: '41794b9f501e30f44f19c8be4b87b965db77fbd3e4c7625291999cff7966db8a',
+    engine: 'llamacpp-completion',
+    quantization: 'q4_k_m',
+    params: '460M',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1',
+    src: `registry://hf/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf`,
+    registryPath:
+      'qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3286710,
+    blobBlockLength: 6664,
+    blobByteOffset: 215380423462,
+    modelId: 'visionpsy-nano-460m-q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 436676000,
+    sha256Checksum: 'fc70a6c6eed7d2f82ed48cbd52cc7118b249eff8b91112ef9cbfca6813a1eefa',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
+    params: '460M',
+    endpointCategory: 'chat'
+  } as const,
+  {
     name: 'QWEN3_8B_INST_Q4_K_M',
     src: `registry://hf/Qwen/Qwen3-8B-GGUF/blob/main/Qwen3-8B-Q4_K_M.gguf`,
     registryPath: 'Qwen/Qwen3-8B-GGUF/blob/main/Qwen3-8B-Q4_K_M.gguf',
@@ -1878,6 +2749,54 @@ export const allModels = [
     quantization: 'q4_k',
     params: '2B',
     endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD',
+    src: `registry://hf/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf`,
+    registryPath:
+      'unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf',
+    registrySource: 'hf',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2754074,
+    blobBlockLength: 81,
+    blobByteOffset: 180484199779,
+    modelId: 'DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf',
+    addon: 'llm',
+    expectedSize: 90926928288,
+    sha256Checksum: '057a3aacf912e079f22d07b94bc3b4ef46c6632476bc0bd1761347eb08edb2aa',
+    engine: 'llamacpp-completion',
+    quantization: 'UD-IQ2_M',
+    params: '304B',
+    endpointCategory: 'chat',
+    shardMetadata: [
+      {
+        filename: 'DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf',
+        expectedSize: 5257664,
+        sha256Checksum: '057a3aacf912e079f22d07b94bc3b4ef46c6632476bc0bd1761347eb08edb2aa',
+        blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+        blobBlockOffset: 2754074,
+        blobBlockLength: 81,
+        blobByteOffset: 180484199779
+      },
+      {
+        filename: 'DeepSeek-V4-Flash-0731-UD-IQ2_M-00002-of-00003.gguf',
+        expectedSize: 49956780160,
+        sha256Checksum: '700405274473b58fa26be4f14e4a194c2e7554fa3a052f62a0c50c568e89fc1f',
+        blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+        blobBlockOffset: 2754155,
+        blobBlockLength: 762280,
+        blobByteOffset: 180489457443
+      },
+      {
+        filename: 'DeepSeek-V4-Flash-0731-UD-IQ2_M-00003-of-00003.gguf',
+        expectedSize: 40964890464,
+        sha256Checksum: 'a69102ddfaf4a84426e11fdb66716654f4260dc3a1de3ade9fd50e006b8691d3',
+        blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+        blobBlockOffset: 3516435,
+        blobBlockLength: 625075,
+        blobByteOffset: 230446237603
+      }
+    ]
   } as const,
   {
     name: 'GPT_OSS_20B_INST_Q4_K_M',
@@ -1990,6 +2909,25 @@ export const allModels = [
     engine: 'llamacpp-completion',
     quantization: 'q4',
     params: '1.7B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'QWEN3_4B_Q4_K_M',
+    src: `registry://hf/unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf`,
+    registryPath:
+      'unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf',
+    registrySource: 'hf',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 296679,
+    blobBlockLength: 38106,
+    blobByteOffset: 19441407821,
+    modelId: 'Qwen3-4B-Q4_K_M.gguf',
+    addon: 'llm',
+    expectedSize: 2497281312,
+    sha256Checksum: 'f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a',
+    engine: 'llamacpp-completion',
+    quantization: 'q4_K_M',
+    params: '4B',
     endpointCategory: 'chat'
   } as const,
   {
@@ -2160,6 +3098,25 @@ export const allModels = [
     sha256Checksum: 'fc90339420b4298887aafb307a4291c55440b730133bbffe6ba9630503dcb548',
     engine: 'llamacpp-completion',
     quantization: 'q6_k',
+    params: '2B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'QWEN3_5_2B_MULTIMODAL_Q8_0',
+    src: `registry://hf/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q8_0.gguf`,
+    registryPath:
+      'unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q8_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4417484,
+    blobBlockLength: 30701,
+    blobByteOffset: 289492065098,
+    modelId: 'Qwen3.5-2B-Q8_0.gguf',
+    addon: 'llm',
+    expectedSize: 2012012800,
+    sha256Checksum: '1b04acba824817554f4ce23639bc8495ff70453b8fcb047900c731521021f2c1',
+    engine: 'llamacpp-completion',
+    quantization: 'q8_0',
     params: '2B',
     endpointCategory: 'chat'
   } as const,
@@ -2465,6 +3422,225 @@ export const allModels = [
     engine: 'llamacpp-completion',
     quantization: 'q6_k_xl',
     params: '35B-A3B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'MMPROJ_QWEN3_8_27B_MULTIMODAL_F16',
+    src: `registry://hf/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/mmproj-F16.gguf`,
+    registryPath:
+      'unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/mmproj-F16.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 6343547,
+    blobBlockLength: 14155,
+    blobByteOffset: 415717872874,
+    modelId: 'mmproj-F16.gguf',
+    addon: 'llm',
+    expectedSize: 927607488,
+    sha256Checksum: 'cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e',
+    engine: 'llamacpp-completion',
+    quantization: 'f16',
+    params: '27B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL',
+    src: `registry://hf/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q4_K_XL.gguf`,
+    registryPath:
+      'unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q4_K_XL.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5590046,
+    blobBlockLength: 273490,
+    blobByteOffset: 366336486570,
+    modelId: 'Qwen3.8-27B-UD-Q4_K_XL.gguf',
+    addon: 'llm',
+    expectedSize: 17923394624,
+    sha256Checksum: 'bee238bbeb3dc0a34bde4d0dedbaee1f98c009e8bb4226f03070054c12fb1372',
+    engine: 'llamacpp-completion',
+    quantization: 'UD-Q4_K_XL',
+    params: '27B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL',
+    src: `registry://hf/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q8_K_XL.gguf`,
+    registryPath:
+      'unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q8_K_XL.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5863536,
+    blobBlockLength: 480011,
+    blobByteOffset: 384259881194,
+    modelId: 'Qwen3.8-27B-UD-Q8_K_XL.gguf',
+    addon: 'llm',
+    expectedSize: 31457991680,
+    sha256Checksum: 'af36ecb6b5db1407953345b746c14ac93f0657dda413910b4348683a2d990377',
+    engine: 'llamacpp-completion',
+    quantization: 'UD-Q8_K_XL',
+    params: '27B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'MMPROJ_QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_F16',
+    src: `registry://hf/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/mmproj-F16.gguf`,
+    registryPath:
+      'unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/mmproj-F16.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 10274174,
+    blobBlockLength: 13795,
+    blobByteOffset: 673315081002,
+    modelId: 'mmproj-F16.gguf',
+    addon: 'llm',
+    expectedSize: 904004000,
+    sha256Checksum: '1f7b7f0b984cf065c604360c29c8098362ed61b290db0ff12c6f360bb1a8a980',
+    engine: 'llamacpp-completion',
+    quantization: 'f16',
+    params: '177B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD',
+    src: `registry://hf/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/UD-Q2_K_XL/Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00003.gguf`,
+    registryPath:
+      'unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/UD-Q2_K_XL/Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00003.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 6396262,
+    blobBlockLength: 168,
+    blobByteOffset: 419172484266,
+    modelId: 'Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00003.gguf',
+    addon: 'llm',
+    expectedSize: 78869128864,
+    sha256Checksum: 'a4f3b21e77353999829f2f767e9ac21ce9c71d29a74f2cc9eda48c9bf23c8b86',
+    engine: 'llamacpp-completion',
+    quantization: 'UD-Q2_K_XL',
+    params: '177B',
+    endpointCategory: 'chat',
+    shardMetadata: [
+      {
+        filename: 'Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00003.gguf',
+        expectedSize: 10946624,
+        sha256Checksum: 'a4f3b21e77353999829f2f767e9ac21ce9c71d29a74f2cc9eda48c9bf23c8b86',
+        blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+        blobBlockOffset: 6396262,
+        blobBlockLength: 168,
+        blobByteOffset: 419172484266
+      },
+      {
+        filename: 'Qwen3.8-Flash-Next-UD-Q2_K_XL-00002-of-00003.gguf',
+        expectedSize: 49979779296,
+        sha256Checksum: '2e3bf1ee7d2a04e261e9f342a2d968f696cce5941d082b0e434deb9b1edc12c6',
+        blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+        blobBlockOffset: 6396430,
+        blobBlockLength: 762631,
+        blobByteOffset: 419183430890
+      },
+      {
+        filename: 'Qwen3.8-Flash-Next-UD-Q2_K_XL-00003-of-00003.gguf',
+        expectedSize: 28878402944,
+        sha256Checksum: 'ec8c106759fdf4f463039c34c0707718d7d8908d53d892bd4f002e71620803f9',
+        blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+        blobBlockOffset: 7159061,
+        blobBlockLength: 440650,
+        blobByteOffset: 469163210186
+      }
+    ]
+  } as const,
+  {
+    name: 'QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD',
+    src: `registry://hf/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf`,
+    registryPath:
+      'unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf',
+    registrySource: 'hf',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 7599711,
+    blobBlockLength: 168,
+    blobByteOffset: 498041613130,
+    modelId: 'Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf',
+    addon: 'llm',
+    expectedSize: 111334654784,
+    sha256Checksum: '4448186216b3af4cc558bbce2c3213f01608f8f8b2e5267a9767971dd3ec8082',
+    engine: 'llamacpp-completion',
+    quantization: 'UD-Q4_K_XL',
+    params: '177B',
+    endpointCategory: 'chat',
+    shardMetadata: [
+      {
+        filename: 'Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf',
+        expectedSize: 10946624,
+        sha256Checksum: '4448186216b3af4cc558bbce2c3213f01608f8f8b2e5267a9767971dd3ec8082',
+        blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+        blobBlockOffset: 7599711,
+        blobBlockLength: 168,
+        blobByteOffset: 498041613130
+      },
+      {
+        filename: 'Qwen3.8-Flash-Next-UD-Q4_K_XL-00002-of-00004.gguf',
+        expectedSize: 49859583136,
+        sha256Checksum: '3f342f1c1580473f1ee94ddd5b28206e8c07a70fa1a366f59d1d6c922919a6c9',
+        blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+        blobBlockOffset: 8360676,
+        blobBlockLength: 760797,
+        blobByteOffset: 547912142890
+      },
+      {
+        filename: 'Qwen3.8-Flash-Next-UD-Q4_K_XL-00003-of-00004.gguf',
+        expectedSize: 49376141504,
+        sha256Checksum: '56758f40269cad5cd9b0d3d6fbae0f40f6d5be6de49e4ab392dbe83157d9cbd3',
+        blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+        blobBlockOffset: 9336305,
+        blobBlockLength: 753421,
+        blobByteOffset: 611850955978
+      },
+      {
+        filename: 'Qwen3.8-Flash-Next-UD-Q4_K_XL-00004-of-00004.gguf',
+        expectedSize: 12087983520,
+        sha256Checksum: '753bda48b98ba4f1636134a90a967de1b2d3908a236c026e464777342e53510a',
+        blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+        blobBlockOffset: 10089726,
+        blobBlockLength: 184448,
+        blobByteOffset: 661227097482
+      }
+    ]
+  } as const,
+  {
+    name: 'MMPROJ_OCR_3B_MULTIMODAL_F16',
+    src: `registry://hf/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/mmproj-unlimited-ocr-F16.gguf`,
+    registryPath:
+      'vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/mmproj-unlimited-ocr-F16.gguf',
+    registrySource: 'hf',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2734443,
+    blobBlockLength: 12593,
+    blobByteOffset: 179197728355,
+    modelId: 'mmproj-unlimited-ocr-F16.gguf',
+    addon: 'llm',
+    expectedSize: 825245568,
+    sha256Checksum: '75e2a133676a82189b10fb1c55b5b32aedc6ede796dd6d8d7c1f901d20ebc7df',
+    engine: 'llamacpp-completion',
+    quantization: 'f16',
+    params: '3B',
+    endpointCategory: 'chat'
+  } as const,
+  {
+    name: 'OCR_3B_MULTIMODAL_Q4_0',
+    src: `registry://hf/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/unlimited-ocr-Q4_0.gguf`,
+    registryPath:
+      'vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/unlimited-ocr-Q4_0.gguf',
+    registrySource: 'hf',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2708474,
+    blobBlockLength: 25969,
+    blobByteOffset: 177495831747,
+    modelId: 'unlimited-ocr-Q4_0.gguf',
+    addon: 'llm',
+    expectedSize: 1701896608,
+    sha256Checksum: '970a1aaf244044b19c186f872af66e154f349761f5f74bb485140b35c5e4f079',
+    engine: 'llamacpp-completion',
+    quantization: 'q4_0',
+    params: '3B',
     endpointCategory: 'chat'
   } as const,
   {
@@ -16046,639 +17222,132 @@ export const allModels = [
     endpointCategory: 'translation'
   } as const,
   {
-    name: 'OCR_CRAFT_DETECTOR',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 448228,
-    blobBlockLength: 1268,
-    blobByteOffset: 29373103601,
-    modelId: 'detector_craft.onnx',
-    addon: 'ocr',
-    expectedSize: 83058594,
-    sha256Checksum: '0ca3aed5da83250025bc01eb3ad1fc21482d3cee814fae22343de13c221e02e9',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_LATIN_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_512/recognizer_latin.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_512/recognizer_latin.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 447992,
-    blobBlockLength: 236,
-    blobByteOffset: 29357691733,
-    modelId: 'recognizer_latin.onnx',
-    addon: 'ocr',
-    expectedSize: 15411868,
-    sha256Checksum: '5dfcc50a6b2a237d62bd160f1b578a65e5cf445ff30c7a8b2fddec30bbde2098',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_ARABIC_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_arabic.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_arabic.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 795898,
-    blobBlockLength: 3285,
-    blobByteOffset: 52156429955,
-    modelId: 'recognizer_arabic.onnx',
-    addon: 'ocr',
-    expectedSize: 215232646,
-    sha256Checksum: 'c592747bb80b17bdeb77cd35397b60b2ad121ad4a14a84cf97ea2476fea0abbd',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_BENGALI_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_bengali.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_bengali.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 799183,
-    blobBlockLength: 3284,
-    blobByteOffset: 52371662601,
-    modelId: 'recognizer_bengali.onnx',
-    addon: 'ocr',
-    expectedSize: 215201866,
-    sha256Checksum: '3a817445513e57398c1012c189fef046719466c91a46e6b7c6fc618ad89ed416',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_CYRILLIC_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_cyrillic.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_cyrillic.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 802467,
-    blobBlockLength: 233,
-    blobByteOffset: 52586864467,
-    modelId: 'recognizer_cyrillic.onnx',
-    addon: 'ocr',
-    expectedSize: 15250809,
-    sha256Checksum: '7eeeda79f6970bf2d522bce10592b6e681e44336fd4fc9e7ffd49a114ee983a0',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_DEVANAGARI_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_devanagari.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_devanagari.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 802700,
-    blobBlockLength: 3285,
-    blobByteOffset: 52602115276,
-    modelId: 'recognizer_devanagari.onnx',
-    addon: 'ocr',
-    expectedSize: 215238802,
-    sha256Checksum: 'f9f3da8db6360c5cc48f9e5fd75a78705738a1160ee9fba4544461a24d34a194',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_JAPANESE_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_japanese.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_japanese.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 805985,
-    blobBlockLength: 265,
-    blobByteOffset: 52817354078,
-    modelId: 'recognizer_japanese.onnx',
-    addon: 'ocr',
-    expectedSize: 17314007,
-    sha256Checksum: 'e76fb3af253c54b3a28988c968f6afb3be9b0270a89618845638c14aa01f52e3',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_KANNADA_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_kannada.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_kannada.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 806250,
-    blobBlockLength: 233,
-    blobByteOffset: 52834668085,
-    modelId: 'recognizer_kannada.onnx',
-    addon: 'ocr',
-    expectedSize: 15209689,
-    sha256Checksum: 'bb29ad21f3b8c154d17db46613b14d394144b8cfbb6d5b80a0274a2bf2d03996',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_KOREAN_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_korean.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_korean.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 806483,
-    blobBlockLength: 246,
-    blobByteOffset: 52849877774,
-    modelId: 'recognizer_korean.onnx',
-    addon: 'ocr',
-    expectedSize: 16074237,
-    sha256Checksum: 'ec313ff3adf17d9f0931a756eed384b2d4dc289f1bf518aea81800b1cf54ec9b',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_LATIN_RECOGNIZER_1',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_latin.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_latin.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 806729,
-    blobBlockLength: 235,
-    blobByteOffset: 52865952011,
-    modelId: 'recognizer_latin.onnx',
-    addon: 'ocr',
-    expectedSize: 15398841,
-    sha256Checksum: 'fbae7f3d321cf4891ed8c5da7599d0695acc93c638056d837383f9b317730273',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_TAMIL_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_tamil.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_tamil.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 806964,
-    blobBlockLength: 3283,
-    blobByteOffset: 52881350852,
-    modelId: 'recognizer_tamil.onnx',
-    addon: 'ocr',
-    expectedSize: 215146462,
-    sha256Checksum: '6ea5201e534245dc6b13be45ce7837ad601045c790dfcb0b26e7f26c4068bf48',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_TELUGU_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_telugu.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_telugu.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 810247,
-    blobBlockLength: 233,
-    blobByteOffset: 53096497314,
-    modelId: 'recognizer_telugu.onnx',
-    addon: 'ocr',
-    expectedSize: 15207633,
-    sha256Checksum: '37cf83c803102b84964fc9d3fa1a02c4df979d077a2f4795cdea1a7b4f88b9cd',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_THAI_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_thai.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_thai.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 810480,
-    blobBlockLength: 3284,
-    blobByteOffset: 53111704947,
-    modelId: 'recognizer_thai.onnx',
-    addon: 'ocr',
-    expectedSize: 215216230,
-    sha256Checksum: '3bb9260eeedf6a1675f3d9f773a83f93e828d44a6737e8e928bb491e64921e79',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_ZH_SIM_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_sim.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_sim.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 813764,
-    blobBlockLength: 335,
-    blobByteOffset: 53326921177,
-    modelId: 'recognizer_zh_sim.onnx',
-    addon: 'ocr',
-    expectedSize: 21944121,
-    sha256Checksum: '34b53c185aea7d43648d1ae03eedb9c8b38555cadb2c9e5c048ed9b25c447bc6',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_ZH_TRA_RECOGNIZER',
-    src: `registry://s3/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_tra.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_tra.onnx',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 814099,
-    blobBlockLength: 3447,
-    blobByteOffset: 53348865298,
-    modelId: 'recognizer_zh_tra.onnx',
-    addon: 'ocr',
-    expectedSize: 225894842,
-    sha256Checksum: '234c8454c81661d78d016b1ecf3dc60eab3a652e78d8ba4891079d5211a4a378',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'OCR_RECOGNIZER_CRNN_MOBILENET_V3_SMALL',
-    src: `registry://s3/qvac_models_compiled/ocr/doctr/2026-03-04/crnn_mobilenet_v3_small.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/doctr/2026-03-04/crnn_mobilenet_v3_small.onnx',
+    name: 'OCR_DOCTR',
+    src: `registry://s3/qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/crnn_mobilenet_v3_small.gguf`,
+    registryPath: 'qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/crnn_mobilenet_v3_small.gguf',
     registrySource: 's3',
     blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 52952,
+    blobBlockOffset: 2109794,
+    blobBlockLength: 65,
+    blobByteOffset: 138260962318,
+    modelId: 'crnn_mobilenet_v3_small.gguf',
+    addon: 'ocr',
+    expectedSize: 4198144,
+    sha256Checksum: '9ab222298a53c007ffb64d15246412b15354be1646693fa5f5d5f068a1a84213',
+    engine: 'ggml-ocr',
+    quantization: '',
+    params: '',
+    endpointCategory: 'ocr'
+  } as const,
+  {
+    name: 'OCR_DOCTR_1',
+    src: `registry://s3/qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/db_mobilenet_v3_large.gguf`,
+    registryPath: 'qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/db_mobilenet_v3_large.gguf',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2109666,
     blobBlockLength: 128,
-    blobByteOffset: 3469774431,
-    modelId: 'crnn_mobilenet_v3_small.onnx',
+    blobByteOffset: 138252609678,
+    modelId: 'db_mobilenet_v3_large.gguf',
     addon: 'ocr',
-    expectedSize: 8331378,
-    sha256Checksum: 'bded4d49b3e91dac24591ed4f0af3de4c3baab1f9cc07e8e7dc07c9ba66b3b33',
-    engine: 'onnx-ocr',
+    expectedSize: 8352640,
+    sha256Checksum: '6665fcf101c583643de546f628b7ea73870833698496ad0894fb8c92eba49478',
+    engine: 'ggml-ocr',
     quantization: '',
     params: '',
     endpointCategory: 'ocr'
   } as const,
   {
-    name: 'OCR_DETECTOR_DB_MOBILENET_V3_LARGE',
-    src: `registry://s3/qvac_models_compiled/ocr/doctr/2026-03-04/db_mobilenet_v3_large.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/doctr/2026-03-04/db_mobilenet_v3_large.onnx',
+    name: 'OCR_CRAFT',
+    src: `registry://s3/qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/craft_mlt_25k.gguf`,
+    registryPath: 'qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/craft_mlt_25k.gguf',
     registrySource: 's3',
     blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 51232,
-    blobBlockLength: 246,
-    blobByteOffset: 3357109887,
-    modelId: 'db_mobilenet_v3_large.onnx',
+    blobBlockOffset: 2108162,
+    blobBlockLength: 1269,
+    blobByteOffset: 138154079310,
+    modelId: 'craft_mlt_25k.gguf',
     addon: 'ocr',
-    expectedSize: 16076965,
-    sha256Checksum: '4987e7bdea372559808bd5add85fda10e179dc639696fb489e59a197a25b4c64',
-    engine: 'onnx-ocr',
+    expectedSize: 83133856,
+    sha256Checksum: '74501993caf4581ce09b280f49a1b3d249c0f5a78496e047718b398457a875aa',
+    engine: 'ggml-ocr',
     quantization: '',
     params: '',
     endpointCategory: 'ocr'
   } as const,
   {
-    name: 'OCR_DETECTOR_DB_RESNET50',
-    src: `registry://s3/qvac_models_compiled/ocr/doctr/2026-03-04/db_resnet50.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/doctr/2026-03-04/db_resnet50.onnx',
+    name: 'OCR_LATIN',
+    src: `registry://s3/qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/latin_g2.gguf`,
+    registryPath: 'qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/latin_g2.gguf',
     registrySource: 's3',
     blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 49692,
-    blobBlockLength: 1540,
-    blobByteOffset: 3256190858,
-    modelId: 'db_resnet50.onnx',
+    blobBlockOffset: 2109431,
+    blobBlockLength: 235,
+    blobByteOffset: 138237213166,
+    modelId: 'latin_g2.gguf',
     addon: 'ocr',
-    expectedSize: 100919029,
-    sha256Checksum: '69ba00155c16b198d062f5a7b9cdb446c82aed81812d7ff5a74e01ab41421d55',
-    engine: 'onnx-ocr',
+    expectedSize: 15396512,
+    sha256Checksum: 'dd1c7a436e9175904e63683e939635892f45c8c6377d5e14e87cf8b175e10768',
+    engine: 'ggml-ocr',
     quantization: '',
     params: '',
     endpointCategory: 'ocr'
   } as const,
   {
-    name: 'OCR_RECOGNIZER_PARSEQ',
-    src: `registry://s3/qvac_models_compiled/ocr/doctr/2026-03-04/parseq.onnx`,
-    registryPath: 'qvac_models_compiled/ocr/doctr/2026-03-04/parseq.onnx',
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_F16_F16',
+    src: `registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf`,
+    registryPath:
+      'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf',
     registrySource: 's3',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 51478,
-    blobBlockLength: 1474,
-    blobByteOffset: 3373186852,
-    modelId: 'parseq.onnx',
-    addon: 'ocr',
-    expectedSize: 96587579,
-    sha256Checksum: '00b40714e00039c8c04891e5fd98ad5cb46c34fa7133ba09e2a55d4b28d42a68',
-    engine: 'onnx-ocr',
-    quantization: '',
-    params: '',
-    endpointCategory: 'ocr'
-  } as const,
-  {
-    name: 'PARAKEET_EOU_DECODER_FP32',
-    src: `registry://hf/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/decoder_joint.onnx`,
-    registryPath:
-      'altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/decoder_joint.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1133412,
-    blobBlockLength: 326,
-    blobByteOffset: 74269643751,
-    modelId: 'decoder_joint.onnx',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3248455,
+    blobBlockLength: 21061,
+    blobByteOffset: 212873512294,
+    modelId: 'indic-conformer-ctc.f16.gguf',
     addon: 'parakeet',
-    expectedSize: 21347639,
-    sha256Checksum: '9d2553ac043c2fc5f69e970769b0fb8ab9103fbfdeb7d26a1ea9729d4bd2dddd',
+    expectedSize: 1380198336,
+    sha256Checksum: '78566cbce8fe23b85c5c956d3bd9125a351d6aedd43e8e38470ecb00075e3b37',
     engine: 'parakeet-transcription',
-    quantization: 'fp32',
-    params: '120M',
+    quantization: 'f16',
+    params: '600M',
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_EOU_ENCODER_FP32',
-    src: `registry://hf/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/encoder.onnx`,
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q4_0_Q4_0',
+    src: `registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf`,
     registryPath:
-      'altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/encoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1133738,
-    blobBlockLength: 7009,
-    blobByteOffset: 74290991390,
-    modelId: 'encoder.onnx',
+      'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3269516,
+    blobBlockLength: 5973,
+    blobByteOffset: 214253710630,
+    modelId: 'indic-conformer-ctc.q4_0.gguf',
     addon: 'parakeet',
-    expectedSize: 459341289,
-    sha256Checksum: 'd472887cc38a784a5bfc21c2dbe247639edc3b3f9992388d8ceceaec07256b5b',
+    expectedSize: 391389696,
+    sha256Checksum: 'adf2dbe247896ab2812404a693f4c4b52145dc76811c88490e286d2efe6f5b32',
     engine: 'parakeet-transcription',
-    quantization: 'fp32',
-    params: '120M',
+    quantization: 'q4_0',
+    params: '600M',
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_EOU_TOKENIZER',
-    src: `registry://hf/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/tokenizer.json`,
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q8_0_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf`,
     registryPath:
-      'altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/tokenizer.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1140747,
-    blobBlockLength: 1,
-    blobByteOffset: 74750332679,
-    modelId: 'tokenizer.json',
+      'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3275489,
+    blobBlockLength: 11221,
+    blobByteOffset: 214645100326,
+    modelId: 'indic-conformer-ctc.q8_0.gguf',
     addon: 'parakeet',
-    expectedSize: 20053,
-    sha256Checksum: 'f6b0ad8690559351fa478116fe0985a203b76f7c040f3a9381f485c99c0325f8',
+    expectedSize: 735323136,
+    sha256Checksum: 'ed7df4144243f7a41cb6d057a824f22c52c3aabb5971b6654803b8d94e0f1f1a',
     engine: 'parakeet-transcription',
-    quantization: '',
-    params: '120M',
-    endpointCategory: 'transcription'
-  } as const,
-  {
-    name: 'PARAKEET_SORTFORMER_FP32',
-    src: `registry://hf/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/a3e0e6c8485b963cfdee82e4e961af1a9daca99d/diar_streaming_sortformer_4spk-v2.onnx`,
-    registryPath:
-      'cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/a3e0e6c8485b963cfdee82e4e961af1a9daca99d/diar_streaming_sortformer_4spk-v2.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1140748,
-    blobBlockLength: 7512,
-    blobByteOffset: 74750352732,
-    modelId: 'diar_streaming_sortformer_4spk-v2.onnx',
-    addon: 'parakeet',
-    expectedSize: 492242946,
-    sha256Checksum: '7dbfc7cba4615e07b679f7d65b5e0edd22a4b7b1ab69505a594f2f90421bd9c1',
-    engine: 'parakeet-transcription',
-    quantization: 'fp32',
-    params: '123M',
-    endpointCategory: 'transcription'
-  } as const,
-  {
-    name: 'PARAKEET_TDT_DECODER_FP32',
-    src: `registry://hf/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/decoder_joint-model.onnx`,
-    registryPath:
-      'istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/decoder_joint-model.onnx',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 37800,
-    blobBlockLength: 1107,
-    blobByteOffset: 2477191026,
-    modelId: 'decoder_joint-model.onnx',
-    addon: 'parakeet',
-    expectedSize: 72520893,
-    sha256Checksum: 'e978ddf6688527182c10fde2eb4b83068421648985ef23f7a86be732be8706c1',
-    engine: 'parakeet-transcription',
-    quantization: 'fp32',
-    params: '0.6B',
-    endpointCategory: 'transcription'
-  } as const,
-  {
-    name: 'PARAKEET_TDT_ENCODER_FP32',
-    src: `registry://hf/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx`,
-    registryPath:
-      'istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 0,
-    blobBlockLength: 638,
-    blobByteOffset: 0,
-    modelId: 'encoder-model.onnx',
-    addon: 'parakeet',
-    expectedSize: 41770866,
-    sha256Checksum: '98a74b21b4cc0017c1e7030319a4a96f4a9506e50f0708f3a516d02a77c96bb1',
-    engine: 'parakeet-transcription',
-    quantization: 'fp32',
-    params: '0.6B',
-    endpointCategory: 'transcription',
-    companionSet: {
-      setKey: '58bc6ded7c93a073',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx',
-          registrySource: 'hf',
-          targetName: 'encoder-model.onnx',
-          expectedSize: 41770866,
-          sha256Checksum: '98a74b21b4cc0017c1e7030319a4a96f4a9506e50f0708f3a516d02a77c96bb1',
-          blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-          blobBlockOffset: 0,
-          blobBlockLength: 638,
-          blobByteOffset: 0,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx.data',
-          registrySource: 'hf',
-          targetName: 'encoder-model.onnx.data',
-          expectedSize: 2435420160,
-          sha256Checksum: '9a22d372c51455c34f13405da2520baefb7125bd16981397561423ed32d24f36',
-          blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-          blobBlockOffset: 638,
-          blobBlockLength: 37162,
-          blobByteOffset: 41770866
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'PARAKEET_TDT_ENCODER_DATA_FP32',
-    src: `registry://hf/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx.data`,
-    registryPath:
-      'istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx.data',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 638,
-    blobBlockLength: 37162,
-    blobByteOffset: 41770866,
-    modelId: 'encoder-model.onnx.data',
-    addon: 'parakeet',
-    expectedSize: 2435420160,
-    sha256Checksum: '9a22d372c51455c34f13405da2520baefb7125bd16981397561423ed32d24f36',
-    engine: 'parakeet-transcription',
-    quantization: 'fp32',
-    params: '0.6B',
-    endpointCategory: 'transcription'
-  } as const,
-  {
-    name: 'PARAKEET_TDT_PREPROCESSOR_FP32',
-    src: `registry://hf/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/nemo128.onnx`,
-    registryPath:
-      'istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/nemo128.onnx',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 38909,
-    blobBlockLength: 3,
-    blobByteOffset: 2549805858,
-    modelId: 'nemo128.onnx',
-    addon: 'parakeet',
-    expectedSize: 139764,
-    sha256Checksum: 'a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f',
-    engine: 'parakeet-transcription',
-    quantization: 'fp32',
-    params: '0.6B',
-    endpointCategory: 'transcription'
-  } as const,
-  {
-    name: 'PARAKEET_TDT_VOCAB',
-    src: `registry://hf/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/vocab.txt`,
-    registryPath:
-      'istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/vocab.txt',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 38907,
-    blobBlockLength: 2,
-    blobByteOffset: 2549711919,
-    modelId: 'vocab.txt',
-    addon: 'parakeet',
-    expectedSize: 93939,
-    sha256Checksum: 'd58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d',
-    engine: 'parakeet-transcription',
-    quantization: '',
-    params: '0.6B',
-    endpointCategory: 'transcription'
-  } as const,
-  {
-    name: 'PARAKEET_CTC_FP32',
-    src: `registry://hf/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx`,
-    registryPath:
-      'onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1148260,
-    blobBlockLength: 14,
-    blobByteOffset: 75242595678,
-    modelId: 'model.onnx',
-    addon: 'parakeet',
-    expectedSize: 887486,
-    sha256Checksum: '5c459a949508ff0da5b36e8d94feb8ed1746fea9e732879117dd7c1f78a8a86c',
-    engine: 'parakeet-transcription',
-    quantization: 'fp32',
-    params: '0.6B',
-    endpointCategory: 'transcription',
-    companionSet: {
-      setKey: 'e224cc55eb5e3e4d',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx',
-          registrySource: 'hf',
-          targetName: 'model.onnx',
-          expectedSize: 887486,
-          sha256Checksum: '5c459a949508ff0da5b36e8d94feb8ed1746fea9e732879117dd7c1f78a8a86c',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 1148260,
-          blobBlockLength: 14,
-          blobByteOffset: 75242595678,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx_data',
-          registrySource: 'hf',
-          targetName: 'model.onnx_data',
-          expectedSize: 2435004420,
-          sha256Checksum: '8ebe1f7360dc705dfe8163fe72bc7a4d9b823d9ef6d426f1f1f8da18fffcc1ec',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 1148274,
-          blobBlockLength: 37156,
-          blobByteOffset: 75243483164
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'PARAKEET_CTC_DATA_FP32',
-    src: `registry://hf/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx_data`,
-    registryPath:
-      'onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1148274,
-    blobBlockLength: 37156,
-    blobByteOffset: 75243483164,
-    modelId: 'model.onnx_data',
-    addon: 'parakeet',
-    expectedSize: 2435004420,
-    sha256Checksum: '8ebe1f7360dc705dfe8163fe72bc7a4d9b823d9ef6d426f1f1f8da18fffcc1ec',
-    engine: 'parakeet-transcription',
-    quantization: 'fp32',
-    params: '0.6B',
-    endpointCategory: 'transcription'
-  } as const,
-  {
-    name: 'PARAKEET_CTC_TOKENIZER',
-    src: `registry://hf/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/tokenizer.json`,
-    registryPath:
-      'onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/tokenizer.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1185430,
-    blobBlockLength: 7,
-    blobByteOffset: 77678487584,
-    modelId: 'tokenizer.json',
-    addon: 'parakeet',
-    expectedSize: 412363,
-    sha256Checksum: 'f3f1dd45c3889ed2b5bf67180caf05f51d7d7e4948c20e5f24d8c24df9cc47aa',
-    engine: 'parakeet-transcription',
-    quantization: '',
-    params: '0.6B',
+    quantization: 'q8_0',
+    params: '600M',
     endpointCategory: 'transcription'
   } as const,
   {
@@ -16865,999 +17534,207 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_DECODER_INT8',
-    src: `registry://s3/qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/decoder_joint-model.onnx`,
-    registryPath:
-      'qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/decoder_joint-model.onnx',
+    name: 'PARAKEET_TDT_PARAKEET_CTC_0_6B_F16_F16',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf',
     registrySource: 's3',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 100929,
-    blobBlockLength: 818,
-    blobByteOffset: 6612957534,
-    modelId: 'decoder_joint-model.onnx',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2199878,
+    blobBlockLength: 20931,
+    blobByteOffset: 144155091746,
+    modelId: 'parakeet-ctc-0.6b.f16.gguf',
     addon: 'parakeet',
-    expectedSize: 53592361,
-    sha256Checksum: 'f2ab8a752a7b356d18dcdd0eb18d0c57dec3c2fda8a35c95837bdc44fe9ea0f6',
+    expectedSize: 1371674432,
+    sha256Checksum: 'b4e813c1b6057c4c005e9996a0724b02aedc339f5d1b7c9c0c5a8b4ebdeb75cf',
     engine: 'parakeet-transcription',
-    quantization: 'int8',
+    quantization: 'f16',
     params: '0.6B',
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_ENCODER_INT8',
-    src: `registry://s3/qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/encoder-model.onnx`,
-    registryPath:
-      'qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/encoder-model.onnx',
+    name: 'PARAKEET_TDT_PARAKEET_CTC_0_6B_Q4_0_Q4_0',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf',
     registrySource: 's3',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 90977,
-    blobBlockLength: 9952,
-    blobByteOffset: 5960773535,
-    modelId: 'encoder-model.onnx',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2220809,
+    blobBlockLength: 5946,
+    blobByteOffset: 145526766178,
+    modelId: 'parakeet-ctc-0.6b.q4_0.gguf',
     addon: 'parakeet',
-    expectedSize: 652183999,
-    sha256Checksum: '6139d2fa7e1b086097b277c7149725edbab89cc7c7ae64b23c741be4055aff09',
+    expectedSize: 389648768,
+    sha256Checksum: '2b7fce0479f6f18e90a0ff50d644bc9cee6b2382fddf8fca88364bbf729343da',
     engine: 'parakeet-transcription',
-    quantization: 'int8',
+    quantization: 'q4_0',
     params: '0.6B',
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PREPROCESSOR_INT8',
-    src: `registry://s3/qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/preprocessor.onnx`,
-    registryPath:
-      'qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/preprocessor.onnx',
+    name: 'PARAKEET_TDT_PARAKEET_EOU_120M_V1_F16_F16',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf',
     registrySource: 's3',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 101749,
-    blobBlockLength: 3,
-    blobByteOffset: 6666643834,
-    modelId: 'preprocessor.onnx',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2226755,
+    blobBlockLength: 3936,
+    blobByteOffset: 145916414946,
+    modelId: 'parakeet-eou-120m-v1.f16.gguf',
     addon: 'parakeet',
-    expectedSize: 140499,
-    sha256Checksum: '6f942bcff39cf304412a9877a30e52c3967fd92b6d1d4212af8f8a195efa78c9',
+    expectedSize: 257939840,
+    sha256Checksum: 'd474dacc63ad8df1a9003f888bcb48c476d7dadec3e2ef5106a75f426e47cb63',
     engine: 'parakeet-transcription',
-    quantization: 'int8',
+    quantization: 'f16',
+    params: '120M',
+    endpointCategory: 'transcription'
+  } as const,
+  {
+    name: 'PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_F16_F16',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2230691,
+    blobBlockLength: 21478,
+    blobByteOffset: 146174354786,
+    modelId: 'parakeet-tdt-0.6b-v3.f16.gguf',
+    addon: 'parakeet',
+    expectedSize: 1407544256,
+    sha256Checksum: '896463ab74886d027538709f3a21d141b7a99061d4b337a2777c142926f91416',
+    engine: 'parakeet-transcription',
+    quantization: 'f16',
     params: '0.6B',
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944751,
-    blobBlockLength: 97,
-    blobByteOffset: 61906381774,
-    modelId: 'conditional_decoder.onnx',
-    addon: 'tts',
-    expectedSize: 6350448,
-    sha256Checksum: '1656d0d31332bae1854839959a3139300ebb67c178651dfa3f8c5fbfa5351351',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '24f5c81fe00112b1',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder.onnx',
-          expectedSize: 6350448,
-          sha256Checksum: '1656d0d31332bae1854839959a3139300ebb67c178651dfa3f8c5fbfa5351351',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 944751,
-          blobBlockLength: 97,
-          blobByteOffset: 61906381774,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx_data',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder.onnx_data',
-          expectedSize: 533970816,
-          sha256Checksum: '51d58345a272747665ec9d5bb61e01835258a940e321a288582ac4c18cf01b5a',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 944848,
-          blobBlockLength: 8148,
-          blobByteOffset: 61912732222
-        }
-      ]
-    }
+    name: 'PARAKEET_TDT_F16_1',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2252169,
+    blobBlockLength: 4207,
+    blobByteOffset: 147581899042,
+    modelId: 'sortformer-4spk-v1.f16.gguf',
+    addon: 'parakeet',
+    expectedSize: 275697312,
+    sha256Checksum: 'c6206e62af54a4ebb2fb07847dc6e6b58c3938a210fabfd81a1e1f21a9362b76',
+    engine: 'parakeet-transcription',
+    quantization: 'f16',
+    params: '123M',
+    endpointCategory: 'transcription'
   } as const,
   {
-    name: 'TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32_DATA',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx_data`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx_data',
-    registrySource: 'hf',
+    name: 'PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_F16_F16',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf',
+    registrySource: 's3',
     blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944848,
-    blobBlockLength: 8148,
-    blobByteOffset: 61912732222,
-    modelId: 'conditional_decoder.onnx_data',
-    addon: 'tts',
-    expectedSize: 533970816,
-    sha256Checksum: '51d58345a272747665ec9d5bb61e01835258a940e321a288582ac4c18cf01b5a',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
+    blobBlockOffset: 6357702,
+    blobBlockLength: 21220,
+    blobByteOffset: 416645480362,
+    modelId: 'parakeet-unified-en-0.6b.f16.gguf',
+    addon: 'parakeet',
+    expectedSize: 1390644608,
+    sha256Checksum: 'a9b228101e8c3eeabeb5a38f1948f2a0a1ced9262e3261fcb301a935e38c4f28',
+    engine: 'parakeet-transcription',
+    quantization: 'f16',
+    params: '0.6B',
+    endpointCategory: 'transcription'
   } as const,
   {
-    name: 'TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx`,
+    name: 'PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_Q4_0_Q4_0',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf`,
     registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx',
-    registrySource: 'hf',
+      'qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf',
+    registrySource: 's3',
     blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 952996,
-    blobBlockLength: 1,
-    blobByteOffset: 62446703038,
-    modelId: 'embed_tokens.onnx',
-    addon: 'tts',
-    expectedSize: 13286,
-    sha256Checksum: 'f785819ca4f6271262d5bb8971d62796c3a909e3b031982c113dbe83a4c3b854',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'd9cd5615f97aa165',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx',
-          registrySource: 'hf',
-          targetName: 'embed_tokens.onnx',
-          expectedSize: 13286,
-          sha256Checksum: 'f785819ca4f6271262d5bb8971d62796c3a909e3b031982c113dbe83a4c3b854',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 952996,
-          blobBlockLength: 1,
-          blobByteOffset: 62446703038,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx_data',
-          registrySource: 'hf',
-          targetName: 'embed_tokens.onnx_data',
-          expectedSize: 68390912,
-          sha256Checksum: '2a15f7dd73b2ee47f6edf87740324011594b5a528ed6471ae55e327ed6cad68c',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 952997,
-          blobBlockLength: 1044,
-          blobByteOffset: 62446716324
-        }
-      ]
-    }
+    blobBlockOffset: 6378922,
+    blobBlockLength: 6028,
+    blobByteOffset: 418036124970,
+    modelId: 'parakeet-unified-en-0.6b.q4_0.gguf',
+    addon: 'parakeet',
+    expectedSize: 395029120,
+    sha256Checksum: '98651c49ef4e3dbc2606f91bbc870431b84fdad739e9ff491e958d0f61c89a97',
+    engine: 'parakeet-transcription',
+    quantization: 'q4_0',
+    params: '0.6B',
+    endpointCategory: 'transcription'
   } as const,
   {
-    name: 'TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32_DATA',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx_data`,
+    name: 'PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_Q8_0_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf`,
     registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx_data',
-    registrySource: 'hf',
+      'qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf',
+    registrySource: 's3',
     blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 952997,
-    blobBlockLength: 1044,
-    blobByteOffset: 62446716324,
-    modelId: 'embed_tokens.onnx_data',
-    addon: 'tts',
-    expectedSize: 68390912,
-    sha256Checksum: '2a15f7dd73b2ee47f6edf87740324011594b5a528ed6471ae55e327ed6cad68c',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
+    blobBlockOffset: 6384950,
+    blobBlockLength: 11312,
+    blobByteOffset: 418431154090,
+    modelId: 'parakeet-unified-en-0.6b.q8_0.gguf',
+    addon: 'parakeet',
+    expectedSize: 741330176,
+    sha256Checksum: '48102e55d61aaa827b89af03d772106e37de6ee12e8746f278f6315e71d980ad',
+    engine: 'parakeet-transcription',
+    quantization: 'q8_0',
+    params: '0.6B',
+    endpointCategory: 'transcription'
   } as const,
   {
-    name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx`,
+    name: 'PARAKEET_TDT_PREPROCESSOR_F16',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf`,
     registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 994834,
-    blobBlockLength: 3,
-    blobByteOffset: 65188370943,
-    modelId: 'language_model_fp16.onnx',
-    addon: 'tts',
-    expectedSize: 172657,
-    sha256Checksum: '0c36a5bbbc2a4ed8c345033896612cd320fd0971a0f5e6447ab4cdd2d7f22e36',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '353bb697efea258c',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx',
-          registrySource: 'hf',
-          targetName: 'language_model_fp16.onnx',
-          expectedSize: 172657,
-          sha256Checksum: '0c36a5bbbc2a4ed8c345033896612cd320fd0971a0f5e6447ab4cdd2d7f22e36',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 994834,
-          blobBlockLength: 3,
-          blobByteOffset: 65188370943,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'language_model_fp16.onnx_data',
-          expectedSize: 1040316416,
-          sha256Checksum: '16dca11ae994e78427fa3090cc6faf347a15988ca40809c1bd9f2721f3b759a0',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 994837,
-          blobBlockLength: 15874,
-          blobByteOffset: 65188543600
-        }
-      ]
-    }
+      'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3527630,
+    blobBlockLength: 21818,
+    blobByteOffset: 231169009638,
+    modelId: 'nemotron-3.5-asr-streaming-0.6b.f16.gguf',
+    addon: 'parakeet',
+    expectedSize: 1429807168,
+    sha256Checksum: 'af090772797632dcea0546985b112f86a9a10e0d87d10a2b74bd6ae57464aded',
+    engine: 'parakeet-transcription',
+    quantization: 'f16',
+    params: '0.6B',
+    endpointCategory: 'transcription'
   } as const,
   {
-    name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16_DATA',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx_data`,
+    name: 'PARAKEET_TDT_PREPROCESSOR_Q4_0',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf`,
     registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 994837,
-    blobBlockLength: 15874,
-    blobByteOffset: 65188543600,
-    modelId: 'language_model_fp16.onnx_data',
-    addon: 'tts',
-    expectedSize: 1040316416,
-    sha256Checksum: '16dca11ae994e78427fa3090cc6faf347a15988ca40809c1bd9f2721f3b759a0',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech'
+      'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3549448,
+    blobBlockLength: 6184,
+    blobByteOffset: 232598816806,
+    modelId: 'nemotron-3.5-asr-streaming-0.6b.q4_0.gguf',
+    addon: 'parakeet',
+    expectedSize: 405212736,
+    sha256Checksum: 'fee699b3257ce0cfd249f490ab9f9791d9e0f6f8781e4354db2aa5584e594c82',
+    engine: 'parakeet-transcription',
+    quantization: 'q4_0',
+    params: '0.6B',
+    endpointCategory: 'transcription'
   } as const,
   {
-    name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx`,
+    name: 'PARAKEET_TDT_PREPROCESSOR_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf`,
     registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1010711,
-    blobBlockLength: 4,
-    blobByteOffset: 66228860016,
-    modelId: 'language_model_q4.onnx',
-    addon: 'tts',
-    expectedSize: 227911,
-    sha256Checksum: '7f8cdca83b2493536cbf3acf421199808a3d68736f55f4eabd20ef8a99da4313',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '98c5d1550c77e389',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx',
-          registrySource: 'hf',
-          targetName: 'language_model_q4.onnx',
-          expectedSize: 227911,
-          sha256Checksum: '7f8cdca83b2493536cbf3acf421199808a3d68736f55f4eabd20ef8a99da4313',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 1010711,
-          blobBlockLength: 4,
-          blobByteOffset: 66228860016,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx_data',
-          registrySource: 'hf',
-          targetName: 'language_model_q4.onnx_data',
-          expectedSize: 353621248,
-          sha256Checksum: 'e79ab8784122a501718868b9631ff46e151c552d9b24e50f25d721f375e3526c',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 1010715,
-          blobBlockLength: 5396,
-          blobByteOffset: 66229087927
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4_DATA',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx_data`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1010715,
-    blobBlockLength: 5396,
-    blobByteOffset: 66229087927,
-    modelId: 'language_model_q4.onnx_data',
-    addon: 'tts',
-    expectedSize: 353621248,
-    sha256Checksum: 'e79ab8784122a501718868b9631ff46e151c552d9b24e50f25d721f375e3526c',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_EN_ES_CHATTERBOX_Q4F16',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1016111,
-    blobBlockLength: 4,
-    blobByteOffset: 66582709175,
-    modelId: 'language_model_q4f16.onnx',
-    addon: 'tts',
-    expectedSize: 229388,
-    sha256Checksum: '3b78e9235be5e2e2a811e482399155cb30415f6d87c98c21d12bf48843fc928f',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '91e42830d2e36b4b',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx',
-          registrySource: 'hf',
-          targetName: 'language_model_q4f16.onnx',
-          expectedSize: 229388,
-          sha256Checksum: '3b78e9235be5e2e2a811e482399155cb30415f6d87c98c21d12bf48843fc928f',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 1016111,
-          blobBlockLength: 4,
-          blobByteOffset: 66582709175,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'language_model_q4f16.onnx_data',
-          expectedSize: 304737408,
-          sha256Checksum: 'bdbc79504d20742b5d028074b4f1cdca8872e013fdfbbcea6b8b03154fe85a42',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 1016115,
-          blobBlockLength: 4650,
-          blobByteOffset: 66582938563
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4F16_DATA',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx_data`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1016115,
-    blobBlockLength: 4650,
-    blobByteOffset: 66582938563,
-    modelId: 'language_model_q4f16.onnx_data',
-    addon: 'tts',
-    expectedSize: 304737408,
-    sha256Checksum: 'bdbc79504d20742b5d028074b4f1cdca8872e013fdfbbcea6b8b03154fe85a42',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 963083,
-    blobBlockLength: 3,
-    blobByteOffset: 63107566724,
-    modelId: 'language_model.onnx',
-    addon: 'tts',
-    expectedSize: 171387,
-    sha256Checksum: '861a34585605e8ad671051788afc495dcbeaee833a41523a1b33aded9c3babc7',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'cf5a4b123e29d36d',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx',
-          registrySource: 'hf',
-          targetName: 'language_model.onnx',
-          expectedSize: 171387,
-          sha256Checksum: '861a34585605e8ad671051788afc495dcbeaee833a41523a1b33aded9c3babc7',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 963083,
-          blobBlockLength: 3,
-          blobByteOffset: 63107566724,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx_data',
-          registrySource: 'hf',
-          targetName: 'language_model.onnx_data',
-          expectedSize: 2080632832,
-          sha256Checksum: 'b3556d41085196c122b7197e4d44ec4475b6d7cfe0971a70faa95caa38ad787a',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 963086,
-          blobBlockLength: 31748,
-          blobByteOffset: 63107738111
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32_DATA',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx_data`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 963086,
-    blobBlockLength: 31748,
-    blobByteOffset: 63107738111,
-    modelId: 'language_model.onnx_data',
-    addon: 'tts',
-    expectedSize: 2080632832,
-    sha256Checksum: 'b3556d41085196c122b7197e4d44ec4475b6d7cfe0971a70faa95caa38ad787a',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 954041,
-    blobBlockLength: 19,
-    blobByteOffset: 62515107236,
-    modelId: 'speech_encoder.onnx',
-    addon: 'tts',
-    expectedSize: 1184608,
-    sha256Checksum: '8f1c8a0f89b77bf9cd5dd8f2e034eb2c79dc00fe70d41196b28c257643b00ccb',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'a4836655ee2c5b8c',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx',
-          registrySource: 'hf',
-          targetName: 'speech_encoder.onnx',
-          expectedSize: 1184608,
-          sha256Checksum: '8f1c8a0f89b77bf9cd5dd8f2e034eb2c79dc00fe70d41196b28c257643b00ccb',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 954041,
-          blobBlockLength: 19,
-          blobByteOffset: 62515107236,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx_data',
-          registrySource: 'hf',
-          targetName: 'speech_encoder.onnx_data',
-          expectedSize: 591274880,
-          sha256Checksum: '92f8f290fc9720e169bc2412c507209e20b03f6564bc3243739e25c56f7dfb8f',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 954060,
-          blobBlockLength: 9023,
-          blobByteOffset: 62516291844
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32_DATA',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx_data`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 954060,
-    blobBlockLength: 9023,
-    blobByteOffset: 62516291844,
-    modelId: 'speech_encoder.onnx_data',
-    addon: 'tts',
-    expectedSize: 591274880,
-    sha256Checksum: '92f8f290fc9720e169bc2412c507209e20b03f6564bc3243739e25c56f7dfb8f',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX',
-    src: `registry://hf/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/tokenizer.json`,
-    registryPath:
-      'onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/tokenizer.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 1020765,
-    blobBlockLength: 2,
-    blobByteOffset: 66887675971,
-    modelId: 'tokenizer.json',
-    addon: 'tts',
-    expectedSize: 71798,
-    sha256Checksum: '29d48c4a178f6af3ad5130097c34744639e9294847b38a7b912c8c68027cb819',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_LATENT_DENOISER_SUPERTONIC_FP32',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 941170,
-    blobBlockLength: 7,
-    blobByteOffset: 61671954279,
-    modelId: 'latent_denoiser.onnx',
-    addon: 'tts',
-    expectedSize: 398102,
-    sha256Checksum: '9a639a8c05c9be111848562c5cf10ea2697a589c6341830aac479d0ce7b75aa9',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '9ad174701f2dc744',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx',
-          registrySource: 'hf',
-          targetName: 'latent_denoiser.onnx',
-          expectedSize: 398102,
-          sha256Checksum: '9a639a8c05c9be111848562c5cf10ea2697a589c6341830aac479d0ce7b75aa9',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 941170,
-          blobBlockLength: 7,
-          blobByteOffset: 61671954279,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx_data',
-          registrySource: 'hf',
-          targetName: 'latent_denoiser.onnx_data',
-          expectedSize: 132098880,
-          sha256Checksum: 'cde4abf1136defce235bc446eaab4954a57721ae8d5a4754cdd337bf191b612f',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 941177,
-          blobBlockLength: 2016,
-          blobByteOffset: 61672352381
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_LATENT_DENOISER_SUPERTONIC_FP32_DATA',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx_data`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 941177,
-    blobBlockLength: 2016,
-    blobByteOffset: 61672352381,
-    modelId: 'latent_denoiser.onnx_data',
-    addon: 'tts',
-    expectedSize: 132098880,
-    sha256Checksum: 'cde4abf1136defce235bc446eaab4954a57721ae8d5a4754cdd337bf191b612f',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_TEXT_ENCODER_SUPERTONIC_FP32',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 940729,
-    blobBlockLength: 7,
-    blobByteOffset: 61643094358,
-    modelId: 'text_encoder.onnx',
-    addon: 'tts',
-    expectedSize: 433169,
-    sha256Checksum: '50a03d29d5dc95918eeff578f542b814f3cf5a741f927116f5a8462a76ff6898',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '76d0aa8384649723',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx',
-          registrySource: 'hf',
-          targetName: 'text_encoder.onnx',
-          expectedSize: 433169,
-          sha256Checksum: '50a03d29d5dc95918eeff578f542b814f3cf5a741f927116f5a8462a76ff6898',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 940729,
-          blobBlockLength: 7,
-          blobByteOffset: 61643094358,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx_data',
-          registrySource: 'hf',
-          targetName: 'text_encoder.onnx_data',
-          expectedSize: 28426752,
-          sha256Checksum: '6415854f135a318909dc716e90f83a391d9a91bd9da09bdb6d6763d6b0a6c102',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 940736,
-          blobBlockLength: 434,
-          blobByteOffset: 61643527527
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_TEXT_ENCODER_SUPERTONIC_FP32_DATA',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx_data`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 940736,
-    blobBlockLength: 434,
-    blobByteOffset: 61643527527,
-    modelId: 'text_encoder.onnx_data',
-    addon: 'tts',
-    expectedSize: 28426752,
-    sha256Checksum: '6415854f135a318909dc716e90f83a391d9a91bd9da09bdb6d6763d6b0a6c102',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_DECODER_SUPERTONIC_FP32',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 943193,
-    blobBlockLength: 1,
-    blobByteOffset: 61804451261,
-    modelId: 'voice_decoder.onnx',
-    addon: 'tts',
-    expectedSize: 59921,
-    sha256Checksum: '83c104006dabcd6b568c0d5acb6fec18f65609d2391dd2c459e4440e85027669',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '19ca8337c16df8f7',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx',
-          registrySource: 'hf',
-          targetName: 'voice_decoder.onnx',
-          expectedSize: 59921,
-          sha256Checksum: '83c104006dabcd6b568c0d5acb6fec18f65609d2391dd2c459e4440e85027669',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 943193,
-          blobBlockLength: 1,
-          blobByteOffset: 61804451261,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx_data',
-          registrySource: 'hf',
-          targetName: 'voice_decoder.onnx_data',
-          expectedSize: 101353472,
-          sha256Checksum: 'ea52402c9ba5131ee2b3901a86db2f0b435b322169cd75157e053493d967d17f',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 943194,
-          blobBlockLength: 1547,
-          blobByteOffset: 61804511182
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_VOICE_DECODER_SUPERTONIC_FP32_DATA',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx_data`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 943194,
-    blobBlockLength: 1547,
-    blobByteOffset: 61804511182,
-    modelId: 'voice_decoder.onnx_data',
-    addon: 'tts',
-    expectedSize: 101353472,
-    sha256Checksum: 'ea52402c9ba5131ee2b3901a86db2f0b435b322169cd75157e053493d967d17f',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_TOKENIZER_SUPERTONIC',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 940728,
-    blobBlockLength: 1,
-    blobByteOffset: 61643092320,
-    modelId: 'tokenizer.json',
-    addon: 'tts',
-    expectedSize: 2038,
-    sha256Checksum: 'da6954f045585fc12c8ea9831b3c3eb1c5bffc8ef7ff6b6db7de781cd472ee01',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F1.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F1.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944741,
-    blobBlockLength: 1,
-    blobByteOffset: 61905864654,
-    modelId: 'F1.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: '5ef84e3421e4f80994a5a40a18ba39ba9fc48175c41ae6cf3e56418820872dbf',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC_1',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F2.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F2.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944742,
-    blobBlockLength: 1,
-    blobByteOffset: 61905916366,
-    modelId: 'F2.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: '1949cf0e066c4278980d2b835cf334dab0f8f781704c9116bf48a072278f7c72',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC_2',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F3.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F3.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944743,
-    blobBlockLength: 1,
-    blobByteOffset: 61905968078,
-    modelId: 'F3.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: '38ee1d62ad8a02877ab0d08b501742b76cf3586ed888514df1a7f27cc0f8d171',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC_3',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F4.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F4.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944744,
-    blobBlockLength: 1,
-    blobByteOffset: 61906019790,
-    modelId: 'F4.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: '63890c361868a296c51f9aee114f51e0a9a92c3f46a91582539545f7ab408a72',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC_4',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F5.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F5.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944745,
-    blobBlockLength: 1,
-    blobByteOffset: 61906071502,
-    modelId: 'F5.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: '793223d8d11e0ee49721842ebdc7bd46b4487579588f646953e75ad3fc8ffb9c',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC_5',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M1.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M1.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944746,
-    blobBlockLength: 1,
-    blobByteOffset: 61906123214,
-    modelId: 'M1.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: '7d53fbaaccf39a358010dcc5f289fc1d5cb350fe5f518be35f62cc518d794892',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC_6',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M2.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M2.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944747,
-    blobBlockLength: 1,
-    blobByteOffset: 61906174926,
-    modelId: 'M2.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: '2e02979a394f89002d920f0bcc006206d4cd8da90e8cc82d0532831a5bb20e79',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC_7',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M3.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M3.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944748,
-    blobBlockLength: 1,
-    blobByteOffset: 61906226638,
-    modelId: 'M3.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: '470d2b6b77239628ce90ba879ca5366fb5e6103fdd7e7053954a7b6d5dc2142a',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC_8',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M4.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M4.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944749,
-    blobBlockLength: 1,
-    blobByteOffset: 61906278350,
-    modelId: 'M4.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: '4700e92c614fd34971a8ed9c8140c2f2162ab8ef3067f8e1e7ef67c3e6488fb7',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_VOICE_STYLE_SUPERTONIC_9',
-    src: `registry://hf/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M5.bin`,
-    registryPath:
-      'onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M5.bin',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 944750,
-    blobBlockLength: 1,
-    blobByteOffset: 61906330062,
-    modelId: 'M5.bin',
-    addon: 'tts',
-    expectedSize: 51712,
-    sha256Checksum: 'c40fbc4093d113ef261cbc7bfe3f080dd813d3168347d682c78b1ca71a07da1f',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
+      'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3555632,
+    blobBlockLength: 11621,
+    blobByteOffset: 233004029542,
+    modelId: 'nemotron-3.5-asr-streaming-0.6b.q8_0.gguf',
+    addon: 'parakeet',
+    expectedSize: 761593408,
+    sha256Checksum: 'f6ad1b9912c03c95b3377eaf0fc2fee635a4e4904409d8efac1944343d9f3360',
+    engine: 'parakeet-transcription',
+    quantization: 'q8_0',
+    params: '0.6B',
+    endpointCategory: 'transcription'
   } as const,
   {
     name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX',
@@ -17929,6 +17806,222 @@ export const allModels = [
     engine: 'tts-ggml',
     quantization: 'fp16',
     params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MECAB_IPADIC_CHATTERBOX',
+    src: `registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin`,
+    registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2093023,
+    blobBlockLength: 5,
+    blobByteOffset: 137162353845,
+    modelId: 'char.bin',
+    addon: 'tts',
+    expectedSize: 262496,
+    sha256Checksum: '81bba502ae48fa005a374819f15e44452eb68086a8b323ec20a044d514400832',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MECAB_IPADIC_CHATTERBOX_1',
+    src: `registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/dicrc`,
+    registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/dicrc',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2093028,
+    blobBlockLength: 1,
+    blobByteOffset: 137162616341,
+    modelId: 'dicrc',
+    addon: 'tts',
+    expectedSize: 693,
+    sha256Checksum: 'add6bb131a75e69478961ea59712541ace3779f7c5daa4da80d281f097c9d4d1',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MECAB_IPADIC_CHATTERBOX_2',
+    src: `registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/matrix.bin`,
+    registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/matrix.bin',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2093029,
+    blobBlockLength: 53,
+    blobByteOffset: 137162617034,
+    modelId: 'matrix.bin',
+    addon: 'tts',
+    expectedSize: 3463716,
+    sha256Checksum: 'ee44d7350cdcb680ebd699f83e121be1dc63310f8832d55bcb537a068177611a',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MECAB_IPADIC_CHATTERBOX_3',
+    src: `registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/mecabrc`,
+    registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/mecabrc',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2093082,
+    blobBlockLength: 1,
+    blobByteOffset: 137166080750,
+    modelId: 'mecabrc',
+    addon: 'tts',
+    expectedSize: 123,
+    sha256Checksum: '7d7446bf89bbf5f0ae18ba108e265a3ca5ece1447cce34e2f37e318d925e7276',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MECAB_IPADIC_CHATTERBOX_4',
+    src: `registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/sys.dic`,
+    registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/sys.dic',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2093083,
+    blobBlockLength: 751,
+    blobByteOffset: 137166080873,
+    modelId: 'sys.dic',
+    addon: 'tts',
+    expectedSize: 49198251,
+    sha256Checksum: '7b912bfe6d67824dd378187737c9c2c09254cf07a072e65349ff1585ea348432',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MECAB_IPADIC_CHATTERBOX_5',
+    src: `registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/unk.dic`,
+    registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/unk.dic',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2093834,
+    blobBlockLength: 1,
+    blobByteOffset: 137215279124,
+    modelId: 'unk.dic',
+    addon: 'tts',
+    expectedSize: 5690,
+    sha256Checksum: '6903ccc5b0bc4dceeaa53b005da1b5b6c60636b581ce4aa6b9c41997d958e473',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_CODEC_DECODER_AUDIO8_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5545464,
+    blobBlockLength: 4002,
+    blobByteOffset: 363414973610,
+    modelId: 'audio8-codec-decoder-f16.gguf',
+    addon: 'tts',
+    expectedSize: 262241216,
+    sha256Checksum: '3fd77e4d9f2e71033944f37d961674b901709146bb98ed33787985c6cdf8cf4e',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '0.6B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_CODEC_DECODER_AUDIO8_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5549466,
+    blobBlockLength: 3214,
+    blobByteOffset: 363677214826,
+    modelId: 'audio8-codec-decoder-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 210631616,
+    sha256Checksum: '0f6378cb3ad5b535cde616f75f405afaf498743e5742beae2948ab0665003316',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '0.6B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_CODEC_ENCODER_AUDIO8_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5552680,
+    blobBlockLength: 6363,
+    blobByteOffset: 363887846442,
+    modelId: 'audio8-codec-encoder-f16.gguf',
+    addon: 'tts',
+    expectedSize: 416985952,
+    sha256Checksum: 'd9f0407f959eb029aeda6e53fac467819e01e835f984e4de1c95eec463bf3608',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '0.6B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_CODEC_ENCODER_AUDIO8_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5559043,
+    blobBlockLength: 4023,
+    blobByteOffset: 364304832394,
+    modelId: 'audio8-codec-encoder-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 263631712,
+    sha256Checksum: '44c96a7a69995aa4f086c3973c6a763b4fef328e01d96d02cf86d66de28e2706',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '0.6B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_LM_MULTILINGUAL_AUDIO8_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5513884,
+    blobBlockLength: 18776,
+    blobByteOffset: 361345387306,
+    modelId: 'audio8-lm-f16.gguf',
+    addon: 'tts',
+    expectedSize: 1230479552,
+    sha256Checksum: '863a92c482184cdfd172cc77c55d6d8f71f132cbe154b2aa64d5f48a19e6f118',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '0.6B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_LM_MULTILINGUAL_AUDIO8_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5532660,
+    blobBlockLength: 12804,
+    blobByteOffset: 362575866858,
+    modelId: 'audio8-lm-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 839106752,
+    sha256Checksum: 'f33c58b2fd46320c01544eec961112b4b9778106ce883e86914dd38854072d40',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '0.6B',
     endpointCategory: 'speech'
   } as const,
   {
@@ -18148,6 +18241,474 @@ export const allModels = [
     endpointCategory: 'speech'
   } as const,
   {
+    name: 'TTS_CANGJIE_ZH_CHATTERBOX',
+    src: `registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv`,
+    registryPath: 'qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2109859,
+    blobBlockLength: 21,
+    blobByteOffset: 138265160462,
+    modelId: 'Cangjie5_TC.tsv',
+    addon: 'tts',
+    expectedSize: 1337109,
+    sha256Checksum: '23369fd6c6587f185a5c2a0dfe3fffb0a4d14eb09510dc72a8b2682680267905',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2755824,
+    blobBlockLength: 20354,
+    blobByteOffset: 180588991010,
+    modelId: 'cosyvoice3-flow-f32.gguf',
+    addon: 'tts',
+    expectedSize: 1333857632,
+    sha256Checksum: '002fe52ee02cef4e76f8114bfd810bb64aefb44a218666b01872a46e5c0349fc',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: '0.5B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_HIFT_COSYVOICE_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-hift-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-hift-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2776178,
+    blobBlockLength: 1268,
+    blobByteOffset: 181922848642,
+    modelId: 'cosyvoice3-hift-f32.gguf',
+    addon: 'tts',
+    expectedSize: 83087520,
+    sha256Checksum: '65af74b042568add308144363125120713ed94adfa8e66486194950ac6e80f85',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: '0.5B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2777446,
+    blobBlockLength: 14855,
+    blobByteOffset: 182005936162,
+    modelId: 'cosyvoice3-llm-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 973496000,
+    sha256Checksum: '1baeea863cc7796d56fe409dbb0b9ddd4cb50b82336054c0df419e3ec96a852e',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '0.5B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_TOKENIZER_COSYVOICE',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/merges.txt`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/merges.txt',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3044625,
+    blobBlockLength: 22,
+    blobByteOffset: 199515516712,
+    modelId: 'merges.txt',
+    addon: 'tts',
+    expectedSize: 1402109,
+    sha256Checksum: 'ac8ff86a72bee70828fbc1119bc4398c6f3a9a6e490d7b0dbe917be025478bd0',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/vocab.json`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/vocab.json',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3044647,
+    blobBlockLength: 43,
+    blobByteOffset: 199516918821,
+    modelId: 'vocab.json',
+    addon: 'tts',
+    expectedSize: 2776833,
+    sha256Checksum: 'ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_VOICE_COSYVOICE',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-en.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-en.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2792301,
+    blobBlockLength: 3,
+    blobByteOffset: 182979432162,
+    modelId: 'voice-en.gguf',
+    addon: 'tts',
+    expectedSize: 179584,
+    sha256Checksum: '69f00c782198dc911062c9d1222fe39c85a6f954211a96796050aec3f0980ed7',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_VOICE_COSYVOICE_1',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-zh-2.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-zh-2.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2792304,
+    blobBlockLength: 4,
+    blobByteOffset: 182979611746,
+    modelId: 'voice-zh-2.gguf',
+    addon: 'tts',
+    expectedSize: 223456,
+    sha256Checksum: '7ae1e48754a552ac00d1ae189b272a23d99ef7040448dd198d11362dc312fa73',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_VOICE_COSYVOICE_2',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-zh-female.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-zh-female.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2792308,
+    blobBlockLength: 1,
+    blobByteOffset: 182979835202,
+    modelId: 'voice-zh-female.gguf',
+    addon: 'tts',
+    expectedSize: 57664,
+    sha256Checksum: '6b28adda2e7539fb75c1848f6825d4ccc28bf2e46d156aefb0abf6ef8d35df05',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-campplus-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-campplus-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5563066,
+    blobBlockLength: 421,
+    blobByteOffset: 364568464106,
+    modelId: 'cosyvoice3-campplus-f32.gguf',
+    addon: 'tts',
+    expectedSize: 27530656,
+    sha256Checksum: '6844883ee7b9c73e029369a2428fd48657b48111a2ca087662bf538e4ac1388f',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5563487,
+    blobBlockLength: 7578,
+    blobByteOffset: 364595994762,
+    modelId: 'cosyvoice3-s3tok-f16.gguf',
+    addon: 'tts',
+    expectedSize: 496605536,
+    sha256Checksum: '5a6e5209c8680071e121d5d493e3dc8c92fc6944a8f986a5446b74589c5c4c91',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5571065,
+    blobBlockLength: 14778,
+    blobByteOffset: 365092600298,
+    modelId: 'cosyvoice3-s3tok-f32.gguf',
+    addon: 'tts',
+    expectedSize: 968464736,
+    sha256Checksum: '09aa40049d54d3c7ca752af09ddcba3ca7462df5bb8e8f163bd13f4c0e1a5c8c',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5585843,
+    blobBlockLength: 4203,
+    blobByteOffset: 366061065034,
+    modelId: 'cosyvoice3-s3tok-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 275421536,
+    sha256Checksum: '7cc4968b010bac6e41cce317ae8a59a702883446140761fd323d91ce99803953',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_ENHANCER_LAVASR_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/lavasr/2026-06-26/lavasr-enhancer-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/lavasr/2026-06-26/lavasr-enhancer-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4340403,
+    blobBlockLength: 429,
+    blobByteOffset: 284440571850,
+    modelId: 'lavasr-enhancer-f16.gguf',
+    addon: 'tts',
+    expectedSize: 28051008,
+    sha256Checksum: '81349380fa62c654b1c5df99f57efb04cb8600bb810f17654e4b64237bc9f554',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_ENHANCER_LAVASR_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/lavasr/2026-06-26/lavasr-enhancer-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/lavasr/2026-06-26/lavasr-enhancer-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4340832,
+    blobBlockLength: 854,
+    blobByteOffset: 284468622858,
+    modelId: 'lavasr-enhancer-f32.gguf',
+    addon: 'tts',
+    expectedSize: 55946816,
+    sha256Checksum: '602eca4250ce60f7edc9a0a21402112ca33fe8f2350296a8a66360ff4d688c2e',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_DENOISER_LAVASR_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2256376,
+    blobBlockLength: 8,
+    blobByteOffset: 147857596354,
+    modelId: 'lavasr-denoiser-f16.gguf',
+    addon: 'tts',
+    expectedSize: 505696,
+    sha256Checksum: '8de76a6e0e494fc71c779f25736506535bdce984d2313d5e1637e9bac383955b',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_DENOISER_LAVASR_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2256384,
+    blobBlockLength: 12,
+    blobByteOffset: 147858102050,
+    modelId: 'lavasr-denoiser-f32.gguf',
+    addon: 'tts',
+    expectedSize: 722528,
+    sha256Checksum: 'b46a16dcf14fefdbc33b4a993541440a3d6f8c90a3ee2b77e15d5405950935a5',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: '',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2256396,
+    blobBlockLength: 40226,
+    blobByteOffset: 147858824578,
+    modelId: 'parler-indic-f16.gguf',
+    addon: 'tts',
+    expectedSize: 2636192608,
+    sha256Checksum: 'bdd113678a5e6b1fdc985a49e52576bc35cfd76164930557555ce4e46f1dbf1f',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '880M',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2296622,
+    blobBlockLength: 55961,
+    blobByteOffset: 150495017186,
+    modelId: 'parler-indic-f32.gguf',
+    addon: 'tts',
+    expectedSize: 3667407712,
+    sha256Checksum: '8f5e8bd0e5b0c3f949ebff055269192bdd7ef7443bdc4e0ca46c6b49c55826a4',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: '880M',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2352583,
+    blobBlockLength: 19644,
+    blobByteOffset: 154162424898,
+    modelId: 'parler-indic-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 1287330656,
+    sha256Checksum: '3754448c805085b3d096f6c3070d9e9684d63b0c34adc5e81bb6acfe0bc16644',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '880M',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_LARGE_V1_EN_PARLER_TTS_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-large-v1-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-large-v1-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2372227,
+    blobBlockLength: 109723,
+    blobByteOffset: 155449755554,
+    modelId: 'parler-large-v1-f16.gguf',
+    addon: 'tts',
+    expectedSize: 7190761024,
+    sha256Checksum: 'a47d96e28b942b2589b940c10996240aa52fb4043cb32a49aec9530052674d32',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '2.3B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_LARGE_V1_EN_PARLER_TTS_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-large-v1-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-large-v1-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2481950,
+    blobBlockLength: 141043,
+    blobByteOffset: 162640516578,
+    modelId: 'parler-large-v1-f32.gguf',
+    addon: 'tts',
+    expectedSize: 9243376192,
+    sha256Checksum: 'd066480e6c329533f28485df5082eb09630d0e4d341e032225112ef0d17be8d4',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: '2.3B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_LARGE_V1_EN_PARLER_TTS_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-large-v1-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-large-v1-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2622993,
+    blobBlockLength: 42282,
+    blobByteOffset: 171883892770,
+    modelId: 'parler-large-v1-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 2770947648,
+    sha256Checksum: 'ab71ac8744da28d93063446c5c834e48f6fd8ead2369f92527d038e6de470360',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '2.3B',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MINI_V1_EN_PARLER_TTS_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2665275,
+    blobBlockLength: 38322,
+    blobByteOffset: 174654840418,
+    modelId: 'parler-mini-v1-f16.gguf',
+    addon: 'tts',
+    expectedSize: 2511459808,
+    sha256Checksum: '84f636e1a9a11df6236e0e742db95065d4924af049f677e1ac3ffd6d1f0c98af',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '880M',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MINI_V1_EN_PARLER_TTS_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2703597,
+    blobBlockLength: 52227,
+    blobByteOffset: 177166300226,
+    modelId: 'parler-mini-v1-f32.gguf',
+    addon: 'tts',
+    expectedSize: 3422690784,
+    sha256Checksum: 'd07b34918304d4b7e9ced3c59271a39d31e2693fe18a9c6c9dcaa9f7f7b87b6e',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: '880M',
+    endpointCategory: 'speech'
+  } as const,
+  {
+    name: 'TTS_MINI_V1_EN_PARLER_TTS_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4448185,
+    blobBlockLength: 17740,
+    blobByteOffset: 291504077898,
+    modelId: 'parler-mini-v1-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 1162597856,
+    sha256Checksum: 'b8a72142b73e540b8aa801519ce47bc235439330d6f2d41bf0e37ba059b3160f',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '880M',
+    endpointCategory: 'speech'
+  } as const,
+  {
     name: 'TTS_EN_SUPERTONIC_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic-q4_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic-q4_0.gguf',
@@ -18220,2182 +18781,74 @@ export const allModels = [
     endpointCategory: 'speech'
   } as const,
   {
-    name: 'TTS_DENOISER_LAVASR_FP32',
-    src: `registry://s3/qvac_models_compiled/onnx/lavasr/2026-04-03/denoiser_core_legacy_fixed63.onnx`,
-    registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/denoiser_core_legacy_fixed63.onnx',
+    name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP16',
+    src: `registry://s3/qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f16.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f16.gguf',
     registrySource: 's3',
     blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198918,
-    blobBlockLength: 28,
-    blobByteOffset: 144097399428,
-    modelId: 'denoiser_core_legacy_fixed63.onnx',
+    blobBlockOffset: 3694076,
+    blobBlockLength: 3153,
+    blobByteOffset: 242083189834,
+    modelId: 'supertonic3-f16.gguf',
     addon: 'tts',
-    expectedSize: 1815317,
-    sha256Checksum: '8afa7f4db9f356f7bfb575bb207d8673a728a7baf6773e0b10226a5e15687f2a',
+    expectedSize: 206631232,
+    sha256Checksum: '0947ef62dc9928489315ec47488b3d0f32b7e8fa47c556a9155f72c966cd73dc',
     engine: 'tts-ggml',
-    quantization: 'fp32',
+    quantization: 'fp16',
     params: '',
     endpointCategory: 'speech'
   } as const,
   {
-    name: 'TTS_ENHANCER_BACKBONE_LAVASR_FP32',
-    src: `registry://s3/qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx`,
-    registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx',
+    name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP32',
+    src: `registry://s3/qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f32.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f32.gguf',
     registrySource: 's3',
     blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198058,
-    blobBlockLength: 3,
-    blobByteOffset: 144041164373,
-    modelId: 'enhancer_backbone.onnx',
+    blobBlockOffset: 3697229,
+    blobBlockLength: 6081,
+    blobByteOffset: 242289821066,
+    modelId: 'supertonic3-f32.gguf',
     addon: 'tts',
-    expectedSize: 190195,
-    sha256Checksum: '841e96d261dffdf1dc974f3d29e2cfcf1b16fd0b358749c1ace0bbfa1d4c8ddd',
+    expectedSize: 398497088,
+    sha256Checksum: '72a81bb8b87ef6d12165ce5302010b6192f0424877954ad4568ca8a7ee46e1e5',
     engine: 'tts-ggml',
     quantization: 'fp32',
     params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '240e4f609ef49d13',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx',
-          registrySource: 's3',
-          targetName: 'enhancer_backbone.onnx',
-          expectedSize: 190195,
-          sha256Checksum: '841e96d261dffdf1dc974f3d29e2cfcf1b16fd0b358749c1ace0bbfa1d4c8ddd',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 2198058,
-          blobBlockLength: 3,
-          blobByteOffset: 144041164373,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx.data',
-          registrySource: 's3',
-          targetName: 'enhancer_backbone.onnx.data',
-          expectedSize: 51773440,
-          sha256Checksum: 'a125a4ede7cfdd1073d906a3cadf2171a30be6a40f296ad28772e0ba258de8c5',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 2198061,
-          blobBlockLength: 790,
-          blobByteOffset: 144041354568
-        }
-      ]
-    }
+    endpointCategory: 'speech'
   } as const,
   {
-    name: 'TTS_ENHANCER_BACKBONE_LAVASR_FP32_1',
-    src: `registry://s3/qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx.data`,
-    registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx.data',
+    name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q8_0',
+    src: `registry://s3/qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q8_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q8_0.gguf',
     registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198061,
-    blobBlockLength: 790,
-    blobByteOffset: 144041354568,
-    modelId: 'enhancer_backbone.onnx.data',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2093835,
+    blobBlockLength: 1934,
+    blobByteOffset: 137215284814,
+    modelId: 'supertonic3-q8_0.gguf',
     addon: 'tts',
-    expectedSize: 51773440,
-    sha256Checksum: 'a125a4ede7cfdd1073d906a3cadf2171a30be6a40f296ad28772e0ba258de8c5',
+    expectedSize: 126745792,
+    sha256Checksum: '139ba4f76ff1c703cd072030b4e28fa009593162dc686aa2b3ce588991179899',
     engine: 'tts-ggml',
-    quantization: 'fp32',
+    quantization: 'q8_0',
     params: '',
     endpointCategory: 'speech'
   } as const,
   {
-    name: 'TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32',
-    src: `registry://s3/qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx`,
-    registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx',
+    name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q4_0',
+    src: `registry://s3/qvac_models_compiled/ggml/supertonic/2026-06-24/supertonic3-q4_0.gguf`,
+    registryPath: 'qvac_models_compiled/ggml/supertonic/2026-06-24/supertonic3-q4_0.gguf',
     registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198851,
-    blobBlockLength: 1,
-    blobByteOffset: 144093128008,
-    modelId: 'enhancer_spec_head.onnx',
-    addon: 'tts',
-    expectedSize: 7484,
-    sha256Checksum: 'f66fd164c55fd1b07e5cea5e687c71522b192f452691128fd7ae4e6b26dbc683',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'b4c4d4008b8cd2b7',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx',
-          registrySource: 's3',
-          targetName: 'enhancer_spec_head.onnx',
-          expectedSize: 7484,
-          sha256Checksum: 'f66fd164c55fd1b07e5cea5e687c71522b192f452691128fd7ae4e6b26dbc683',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 2198851,
-          blobBlockLength: 1,
-          blobByteOffset: 144093128008,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx.data',
-          registrySource: 's3',
-          targetName: 'enhancer_spec_head.onnx.data',
-          expectedSize: 4263936,
-          sha256Checksum: 'b855e309b027af9aa75285b97b345571b6bd695a30fde434d06c979d83885fd6',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 2198852,
-          blobBlockLength: 66,
-          blobByteOffset: 144093135492
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32_1',
-    src: `registry://s3/qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx.data`,
-    registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx.data',
-    registrySource: 's3',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198852,
-    blobBlockLength: 66,
-    blobByteOffset: 144093135492,
-    modelId: 'enhancer_spec_head.onnx.data',
-    addon: 'tts',
-    expectedSize: 4263936,
-    sha256Checksum: 'b855e309b027af9aa75285b97b345571b6bd695a30fde434d06c979d83885fd6',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 888458,
-    blobBlockLength: 33,
-    blobByteOffset: 58218557580,
-    modelId: 'conditional_decoder_fp16.onnx',
-    addon: 'tts',
-    expectedSize: 2104016,
-    sha256Checksum: 'cbdc0281548eb90a02fa2430647237df63fa0cb695e42b91c10b860b9b6d2230',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '33f90b4f2c14ce8b',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder_fp16.onnx',
-          expectedSize: 2104016,
-          sha256Checksum: 'cbdc0281548eb90a02fa2430647237df63fa0cb695e42b91c10b860b9b6d2230',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 888458,
-          blobBlockLength: 33,
-          blobByteOffset: 58218557580,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder_fp16.onnx_data',
-          expectedSize: 384019328,
-          sha256Checksum: 'c6c3e79e6ff86bc41f77381a3d67b8edaa16b13e43a2700ca8159d0894bd594a',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 888491,
-          blobBlockLength: 5860,
-          blobByteOffset: 58220661596
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 888491,
-    blobBlockLength: 5860,
-    blobByteOffset: 58220661596,
-    modelId: 'conditional_decoder_fp16.onnx_data',
-    addon: 'tts',
-    expectedSize: 384019328,
-    sha256Checksum: 'c6c3e79e6ff86bc41f77381a3d67b8edaa16b13e43a2700ca8159d0894bd594a',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 908135,
-    blobBlockLength: 34,
-    blobByteOffset: 59507802472,
-    modelId: 'conditional_decoder_q4.onnx',
-    addon: 'tts',
-    expectedSize: 2179022,
-    sha256Checksum: 'dccb7a6cea3472dc7f7d070eeb70ade18e6327fb4ec61a3d62cf211bfed90ea2',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '71925140895dd0fb',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder_q4.onnx',
-          expectedSize: 2179022,
-          sha256Checksum: 'dccb7a6cea3472dc7f7d070eeb70ade18e6327fb4ec61a3d62cf211bfed90ea2',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 908135,
-          blobBlockLength: 34,
-          blobByteOffset: 59507802472,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx_data',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder_q4.onnx_data',
-          expectedSize: 246397384,
-          sha256Checksum: 'b5c5317e0b79a1a19dd3d5e2b2091ea06b15716716ab801a54eaeb906c6971ec',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 908169,
-          blobBlockLength: 3760,
-          blobByteOffset: 59509981494
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 908169,
-    blobBlockLength: 3760,
-    blobByteOffset: 59509981494,
-    modelId: 'conditional_decoder_q4.onnx_data',
-    addon: 'tts',
-    expectedSize: 246397384,
-    sha256Checksum: 'b5c5317e0b79a1a19dd3d5e2b2091ea06b15716716ab801a54eaeb906c6971ec',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 935390,
-    blobBlockLength: 37,
-    blobByteOffset: 61293443741,
-    modelId: 'conditional_decoder_q4f16.onnx',
-    addon: 'tts',
-    expectedSize: 2394210,
-    sha256Checksum: '17c9f7caef818605df2dc197c2f41682c0bda7fe437b8652dae8366de8b68b7e',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '7f54ee2de8be85a6',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder_q4f16.onnx',
-          expectedSize: 2394210,
-          sha256Checksum: '17c9f7caef818605df2dc197c2f41682c0bda7fe437b8652dae8366de8b68b7e',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 935390,
-          blobBlockLength: 37,
-          blobByteOffset: 61293443741,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder_q4f16.onnx_data',
-          expectedSize: 162996136,
-          sha256Checksum: '3e53cc7cc05e72957797c620e1bf0c6d6b909df937de4756c6e534d50854ca3e',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 935427,
-          blobBlockLength: 2488,
-          blobByteOffset: 61295837951
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 935427,
-    blobBlockLength: 2488,
-    blobByteOffset: 61295837951,
-    modelId: 'conditional_decoder_q4f16.onnx_data',
-    addon: 'tts',
-    expectedSize: 162996136,
-    sha256Checksum: '3e53cc7cc05e72957797c620e1bf0c6d6b909df937de4756c6e534d50854ca3e',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 921513,
-    blobBlockLength: 34,
-    blobByteOffset: 60384292589,
-    modelId: 'conditional_decoder_quantized.onnx',
-    addon: 'tts',
-    expectedSize: 2202035,
-    sha256Checksum: '2af3b150196d9d559cd3c91e03da80eb27a466032369dc2b57ea729cddad3ebb',
-    engine: 'tts-ggml',
-    quantization: 'quantized',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'f73f7a3f68d0b2a8',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder_quantized.onnx',
-          expectedSize: 2202035,
-          sha256Checksum: '2af3b150196d9d559cd3c91e03da80eb27a466032369dc2b57ea729cddad3ebb',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 921513,
-          blobBlockLength: 34,
-          blobByteOffset: 60384292589,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx_data',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder_quantized.onnx_data',
-          expectedSize: 326548688,
-          sha256Checksum: '4918ca09e05e41d2b4aa1ace6201d1cd911ffc58a42801002bab177d495cfe0a',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 921547,
-          blobBlockLength: 4983,
-          blobByteOffset: 60386494624
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 921547,
-    blobBlockLength: 4983,
-    blobByteOffset: 60386494624,
-    modelId: 'conditional_decoder_quantized.onnx_data',
-    addon: 'tts',
-    expectedSize: 326548688,
-    sha256Checksum: '4918ca09e05e41d2b4aa1ace6201d1cd911ffc58a42801002bab177d495cfe0a',
-    engine: 'tts-ggml',
-    quantization: 'quantized',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 847555,
-    blobBlockLength: 29,
-    blobByteOffset: 55538237192,
-    modelId: 'conditional_decoder.onnx',
-    addon: 'tts',
-    expectedSize: 1889468,
-    sha256Checksum: '8c43f3a1d0ddb1a86e226a244d7cda5396c67f5c6412789c23900c646e3ffc50',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '551caf7c863ac598',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder.onnx',
-          expectedSize: 1889468,
-          sha256Checksum: '8c43f3a1d0ddb1a86e226a244d7cda5396c67f5c6412789c23900c646e3ffc50',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 847555,
-          blobBlockLength: 29,
-          blobByteOffset: 55538237192,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx_data',
-          registrySource: 'hf',
-          targetName: 'conditional_decoder.onnx_data',
-          expectedSize: 768593792,
-          sha256Checksum: '05f162a519f3e9abaf0b7337ae037f4af8b2b30c4455d39b2c61ed3a9b2b5476',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 847584,
-          blobBlockLength: 11728,
-          blobByteOffset: 55540126660
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 847584,
-    blobBlockLength: 11728,
-    blobByteOffset: 55540126660,
-    modelId: 'conditional_decoder.onnx_data',
-    addon: 'tts',
-    expectedSize: 768593792,
-    sha256Checksum: '05f162a519f3e9abaf0b7337ae037f4af8b2b30c4455d39b2c61ed3a9b2b5476',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 886680,
-    blobBlockLength: 1,
-    blobByteOffset: 58102149554,
-    modelId: 'embed_tokens_fp16.onnx',
-    addon: 'tts',
-    expectedSize: 1754,
-    sha256Checksum: 'f7a7a83e91337e10add2fad054544421f9080e27b72af1aef27f339a1a66776c',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'b1bc9d091f52ca6a',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx',
-          registrySource: 'hf',
-          targetName: 'embed_tokens_fp16.onnx',
-          expectedSize: 1754,
-          sha256Checksum: 'f7a7a83e91337e10add2fad054544421f9080e27b72af1aef27f339a1a66776c',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 886680,
-          blobBlockLength: 1,
-          blobByteOffset: 58102149554,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'embed_tokens_fp16.onnx_data',
-          expectedSize: 116406272,
-          sha256Checksum: 'cdda886a9e58ad39059fe8f6cf5a3a628994a1a2dfc1a8b58502c252fec70327',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 886681,
-          blobBlockLength: 1777,
-          blobByteOffset: 58102151308
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 886681,
-    blobBlockLength: 1777,
-    blobByteOffset: 58102151308,
-    modelId: 'embed_tokens_fp16.onnx_data',
-    addon: 'tts',
-    expectedSize: 116406272,
-    sha256Checksum: 'cdda886a9e58ad39059fe8f6cf5a3a628994a1a2dfc1a8b58502c252fec70327',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 907565,
-    blobBlockLength: 1,
-    blobByteOffset: 59470513244,
-    modelId: 'embed_tokens_q4.onnx',
-    addon: 'tts',
-    expectedSize: 2844,
-    sha256Checksum: 'fd6ba1d22902e8f539d3dd6d7c1c44b98ebb4c84ebbb5e47fcb826ddcf667561',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'f29a0a423cbcd2bc',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx',
-          registrySource: 'hf',
-          targetName: 'embed_tokens_q4.onnx',
-          expectedSize: 2844,
-          sha256Checksum: 'fd6ba1d22902e8f539d3dd6d7c1c44b98ebb4c84ebbb5e47fcb826ddcf667561',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 907565,
-          blobBlockLength: 1,
-          blobByteOffset: 59470513244,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx_data',
-          registrySource: 'hf',
-          targetName: 'embed_tokens_q4.onnx_data',
-          expectedSize: 37286384,
-          sha256Checksum: 'f54a51e234b509b64c3a03bb79e1149fba7e2eba6c2d9c222f18883379e1f5d8',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 907566,
-          blobBlockLength: 569,
-          blobByteOffset: 59470516088
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 907566,
-    blobBlockLength: 569,
-    blobByteOffset: 59470516088,
-    modelId: 'embed_tokens_q4.onnx_data',
-    addon: 'tts',
-    expectedSize: 37286384,
-    sha256Checksum: 'f54a51e234b509b64c3a03bb79e1149fba7e2eba6c2d9c222f18883379e1f5d8',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 934875,
-    blobBlockLength: 1,
-    blobByteOffset: 61259792505,
-    modelId: 'embed_tokens_q4f16.onnx',
-    addon: 'tts',
-    expectedSize: 2548,
-    sha256Checksum: 'e5c9507c89e770e35d68bdd669e4ae44b34272232e84f010f2c97959feae79b3',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '69d01d68e2a72bf8',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx',
-          registrySource: 'hf',
-          targetName: 'embed_tokens_q4f16.onnx',
-          expectedSize: 2548,
-          sha256Checksum: 'e5c9507c89e770e35d68bdd669e4ae44b34272232e84f010f2c97959feae79b3',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 934875,
-          blobBlockLength: 1,
-          blobByteOffset: 61259792505,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'embed_tokens_q4f16.onnx_data',
-          expectedSize: 33648688,
-          sha256Checksum: '37e96447b5f3ef46f46fb35cc599cfcb95b277e5528cc0c89bab78169da620ef',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 934876,
-          blobBlockLength: 514,
-          blobByteOffset: 61259795053
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 934876,
-    blobBlockLength: 514,
-    blobByteOffset: 61259795053,
-    modelId: 'embed_tokens_q4f16.onnx_data',
-    addon: 'tts',
-    expectedSize: 33648688,
-    sha256Checksum: '37e96447b5f3ef46f46fb35cc599cfcb95b277e5528cc0c89bab78169da620ef',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 920485,
-    blobBlockLength: 1,
-    blobByteOffset: 60316992326,
-    modelId: 'embed_tokens_quantized.onnx',
-    addon: 'tts',
-    expectedSize: 2887,
-    sha256Checksum: '0efe1bc01c2c48a98425a74444fd9887924d887f922c2722a6ec961ebb9e1db6',
-    engine: 'tts-ggml',
-    quantization: 'quantized',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'd64517c10b1f2a5d',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx',
-          registrySource: 'hf',
-          targetName: 'embed_tokens_quantized.onnx',
-          expectedSize: 2887,
-          sha256Checksum: '0efe1bc01c2c48a98425a74444fd9887924d887f922c2722a6ec961ebb9e1db6',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 920485,
-          blobBlockLength: 1,
-          blobByteOffset: 60316992326,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx_data',
-          registrySource: 'hf',
-          targetName: 'embed_tokens_quantized.onnx_data',
-          expectedSize: 67297376,
-          sha256Checksum: '9025d04c124899823124b1d7bb7069b1f535fb8a6c2d88f97520eb6fecced986',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 920486,
-          blobBlockLength: 1027,
-          blobByteOffset: 60316995213
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 920486,
-    blobBlockLength: 1027,
-    blobByteOffset: 60316995213,
-    modelId: 'embed_tokens_quantized.onnx_data',
-    addon: 'tts',
-    expectedSize: 67297376,
-    sha256Checksum: '9025d04c124899823124b1d7bb7069b1f535fb8a6c2d88f97520eb6fecced986',
-    engine: 'tts-ggml',
-    quantization: 'quantized',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 844001,
-    blobBlockLength: 1,
-    blobByteOffset: 55305422590,
-    modelId: 'embed_tokens.onnx',
-    addon: 'tts',
-    expectedSize: 2058,
-    sha256Checksum: '27796e8252f36b463b0421cafdcc35b5f1e670ab0d96c9182f37ac6571c2f4bc',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'd28edd54895b90f5',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx',
-          registrySource: 'hf',
-          targetName: 'embed_tokens.onnx',
-          expectedSize: 2058,
-          sha256Checksum: '27796e8252f36b463b0421cafdcc35b5f1e670ab0d96c9182f37ac6571c2f4bc',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 844001,
-          blobBlockLength: 1,
-          blobByteOffset: 55305422590,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx_data',
-          registrySource: 'hf',
-          targetName: 'embed_tokens.onnx_data',
-          expectedSize: 232812544,
-          sha256Checksum: 'a1c37edc6ec6adb655351f02e958da297221b50211c2c01b69312cb6f008a293',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 844002,
-          blobBlockLength: 3553,
-          blobByteOffset: 55305424648
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 844002,
-    blobBlockLength: 3553,
-    blobByteOffset: 55305424648,
-    modelId: 'embed_tokens.onnx_data',
-    addon: 'tts',
-    expectedSize: 232812544,
-    sha256Checksum: 'a1c37edc6ec6adb655351f02e958da297221b50211c2c01b69312cb6f008a293',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 894351,
-    blobBlockLength: 4,
-    blobByteOffset: 58604680924,
-    modelId: 'language_model_fp16.onnx',
-    addon: 'tts',
-    expectedSize: 209456,
-    sha256Checksum: '396b35570dd1dbc5f537ffc932c3e69130ab8a09bf1390469d92338c8eae7da4',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '45d1ac921a78ac7c',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx',
-          registrySource: 'hf',
-          targetName: 'language_model_fp16.onnx',
-          expectedSize: 209456,
-          sha256Checksum: '396b35570dd1dbc5f537ffc932c3e69130ab8a09bf1390469d92338c8eae7da4',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 894351,
-          blobBlockLength: 4,
-          blobByteOffset: 58604680924,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'language_model_fp16.onnx_data',
-          expectedSize: 634862406,
-          sha256Checksum: 'd730d6437126d3e232747b26e2a7adece68844f22133277ca5012298ffe36f93',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 894355,
-          blobBlockLength: 9688,
-          blobByteOffset: 58604890380
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 894355,
-    blobBlockLength: 9688,
-    blobByteOffset: 58604890380,
-    modelId: 'language_model_fp16.onnx_data',
-    addon: 'tts',
-    expectedSize: 634862406,
-    sha256Checksum: 'd730d6437126d3e232747b26e2a7adece68844f22133277ca5012298ffe36f93',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 911929,
-    blobBlockLength: 5,
-    blobByteOffset: 59756378878,
-    modelId: 'language_model_q4.onnx',
-    addon: 'tts',
-    expectedSize: 274572,
-    sha256Checksum: 'b39d03d3f8b943b9e60c6fce3fb41191dbc1df4589f913291db1e214eef669b1',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '3e9f08f1693434fb',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx',
-          registrySource: 'hf',
-          targetName: 'language_model_q4.onnx',
-          expectedSize: 274572,
-          sha256Checksum: 'b39d03d3f8b943b9e60c6fce3fb41191dbc1df4589f913291db1e214eef669b1',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 911929,
-          blobBlockLength: 5,
-          blobByteOffset: 59756378878,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx_data',
-          registrySource: 'hf',
-          targetName: 'language_model_q4.onnx_data',
-          expectedSize: 204456572,
-          sha256Checksum: '2c029dc0acf48752473d8c74c72b5ceaaad76b9886fe106eaf2022142d5b5d5e',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 911934,
-          blobBlockLength: 3120,
-          blobByteOffset: 59756653450
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 911934,
-    blobBlockLength: 3120,
-    blobByteOffset: 59756653450,
-    modelId: 'language_model_q4.onnx_data',
-    addon: 'tts',
-    expectedSize: 204456572,
-    sha256Checksum: '2c029dc0acf48752473d8c74c72b5ceaaad76b9886fe106eaf2022142d5b5d5e',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 937915,
-    blobBlockLength: 5,
-    blobByteOffset: 61458834087,
-    modelId: 'language_model_q4f16.onnx',
-    addon: 'tts',
-    expectedSize: 276803,
-    sha256Checksum: '4c5d83674c52bb71683a1ea1f60e2608b80cda48aafce67e8f8c03162c474ad5',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '90ef94e71680af09',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx',
-          registrySource: 'hf',
-          targetName: 'language_model_q4f16.onnx',
-          expectedSize: 276803,
-          sha256Checksum: '4c5d83674c52bb71683a1ea1f60e2608b80cda48aafce67e8f8c03162c474ad5',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 937915,
-          blobBlockLength: 5,
-          blobByteOffset: 61458834087,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'language_model_q4f16.onnx_data',
-          expectedSize: 183981430,
-          sha256Checksum: 'f084f21f977e365e76e622d2958c309ff894537f7b7133ac7fc5ce8fc055d6f9',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 937920,
-          blobBlockLength: 2808,
-          blobByteOffset: 61459110890
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 937920,
-    blobBlockLength: 2808,
-    blobByteOffset: 61459110890,
-    modelId: 'language_model_q4f16.onnx_data',
-    addon: 'tts',
-    expectedSize: 183981430,
-    sha256Checksum: 'f084f21f977e365e76e622d2958c309ff894537f7b7133ac7fc5ce8fc055d6f9',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 926530,
-    blobBlockLength: 5,
-    blobByteOffset: 60713043312,
-    modelId: 'language_model_quantized.onnx',
-    addon: 'tts',
-    expectedSize: 279670,
-    sha256Checksum: '0b40581277e30b7034331ec8c3ad47ed71d321f015b387a95221e54e2fcbfde8',
-    engine: 'tts-ggml',
-    quantization: 'quantized',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '24f3196f529d67af',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx',
-          registrySource: 'hf',
-          targetName: 'language_model_quantized.onnx',
-          expectedSize: 279670,
-          sha256Checksum: '0b40581277e30b7034331ec8c3ad47ed71d321f015b387a95221e54e2fcbfde8',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 926530,
-          blobBlockLength: 5,
-          blobByteOffset: 60713043312,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx_data',
-          registrySource: 'hf',
-          targetName: 'language_model_quantized.onnx_data',
-          expectedSize: 367962860,
-          sha256Checksum: 'ec9945df36cb5d131d46688f2609fd715fbfcb0b8ee9681af5c84118de2d55a2',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 926535,
-          blobBlockLength: 5615,
-          blobByteOffset: 60713322982
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 926535,
-    blobBlockLength: 5615,
-    blobByteOffset: 60713322982,
-    modelId: 'language_model_quantized.onnx_data',
-    addon: 'tts',
-    expectedSize: 367962860,
-    sha256Checksum: 'ec9945df36cb5d131d46688f2609fd715fbfcb0b8ee9681af5c84118de2d55a2',
-    engine: 'tts-ggml',
-    quantization: 'quantized',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 859312,
-    blobBlockLength: 4,
-    blobByteOffset: 56308720452,
-    modelId: 'language_model.onnx',
-    addon: 'tts',
-    expectedSize: 207266,
-    sha256Checksum: 'c12e31df78c74f9589b165c8d51e65171f5028b77b7fedb41900f55f7f410dc8',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '8ee93fc7439a8e37',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx',
-          registrySource: 'hf',
-          targetName: 'language_model.onnx',
-          expectedSize: 207266,
-          sha256Checksum: 'c12e31df78c74f9589b165c8d51e65171f5028b77b7fedb41900f55f7f410dc8',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 859312,
-          blobBlockLength: 4,
-          blobByteOffset: 56308720452,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx_data',
-          registrySource: 'hf',
-          targetName: 'language_model.onnx_data',
-          expectedSize: 1269724812,
-          sha256Checksum: '67db106868f5354b2e425651f1791aef36ae3e6f00ac5e1d91e32c985cad6b39',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 859316,
-          blobBlockLength: 19375,
-          blobByteOffset: 56308927718
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 859316,
-    blobBlockLength: 19375,
-    blobByteOffset: 56308927718,
-    modelId: 'language_model.onnx_data',
-    addon: 'tts',
-    expectedSize: 1269724812,
-    sha256Checksum: '67db106868f5354b2e425651f1791aef36ae3e6f00ac5e1d91e32c985cad6b39',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 878691,
-    blobBlockLength: 19,
-    blobByteOffset: 57578652530,
-    modelId: 'speech_encoder_fp16.onnx',
-    addon: 'tts',
-    expectedSize: 1189888,
-    sha256Checksum: '5544f87c3e1615a31f5dc3ccdf9ba52a9f5fb8f6018e72796235fc1cfd5ebc9f',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'ae62d0fa9f3988d9',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx',
-          registrySource: 'hf',
-          targetName: 'speech_encoder_fp16.onnx',
-          expectedSize: 1189888,
-          sha256Checksum: '5544f87c3e1615a31f5dc3ccdf9ba52a9f5fb8f6018e72796235fc1cfd5ebc9f',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 878691,
-          blobBlockLength: 19,
-          blobByteOffset: 57578652530,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'speech_encoder_fp16.onnx_data',
-          expectedSize: 522307136,
-          sha256Checksum: 'd24b817ff61489373ab13033cbdc28a5ba8347341248a00f9a63f10888e81d73',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 878710,
-          blobBlockLength: 7970,
-          blobByteOffset: 57579842418
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 878710,
-    blobBlockLength: 7970,
-    blobByteOffset: 57579842418,
-    modelId: 'speech_encoder_fp16.onnx_data',
-    addon: 'tts',
-    expectedSize: 522307136,
-    sha256Checksum: 'd24b817ff61489373ab13033cbdc28a5ba8347341248a00f9a63f10888e81d73',
-    engine: 'tts-ggml',
-    quantization: 'fp16',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 904043,
-    blobBlockLength: 19,
-    blobByteOffset: 59239752786,
-    modelId: 'speech_encoder_q4.onnx',
-    addon: 'tts',
-    expectedSize: 1200346,
-    sha256Checksum: '37956c20b67bed85a0da4bc83509d67b5969a1b257d1c546516a5236a17ad71e',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '51d47e9adf4cd869',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx',
-          registrySource: 'hf',
-          targetName: 'speech_encoder_q4.onnx',
-          expectedSize: 1200346,
-          sha256Checksum: '37956c20b67bed85a0da4bc83509d67b5969a1b257d1c546516a5236a17ad71e',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 904043,
-          blobBlockLength: 19,
-          blobByteOffset: 59239752786,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx_data',
-          registrySource: 'hf',
-          targetName: 'speech_encoder_q4.onnx_data',
-          expectedSize: 229560112,
-          sha256Checksum: '58956db217c6443e49c91bdd54d7cf76b4a243f225c748b7bf746459fc27bc7d',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 904062,
-          blobBlockLength: 3503,
-          blobByteOffset: 59240953132
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 904062,
-    blobBlockLength: 3503,
-    blobByteOffset: 59240953132,
-    modelId: 'speech_encoder_q4.onnx_data',
-    addon: 'tts',
-    expectedSize: 229560112,
-    sha256Checksum: '58956db217c6443e49c91bdd54d7cf76b4a243f225c748b7bf746459fc27bc7d',
-    engine: 'tts-ggml',
-    quantization: 'q4',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 932150,
-    blobBlockLength: 19,
-    blobByteOffset: 61081285842,
-    modelId: 'speech_encoder_q4f16.onnx',
-    addon: 'tts',
-    expectedSize: 1217655,
-    sha256Checksum: '004407d26127c1d8e974bd213ecff8dbe67611527ca7a1930e656b80d9c51125',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'f5c445135945fed5',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx',
-          registrySource: 'hf',
-          targetName: 'speech_encoder_q4f16.onnx',
-          expectedSize: 1217655,
-          sha256Checksum: '004407d26127c1d8e974bd213ecff8dbe67611527ca7a1930e656b80d9c51125',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 932150,
-          blobBlockLength: 19,
-          blobByteOffset: 61081285842,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx_data',
-          registrySource: 'hf',
-          targetName: 'speech_encoder_q4f16.onnx_data',
-          expectedSize: 177289008,
-          sha256Checksum: 'c017ab57887418e0609afdef52b0cbc17f43cb304e78af44300c0292cd2b2fa9',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 932169,
-          blobBlockLength: 2706,
-          blobByteOffset: 61082503497
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 932169,
-    blobBlockLength: 2706,
-    blobByteOffset: 61082503497,
-    modelId: 'speech_encoder_q4f16.onnx_data',
-    addon: 'tts',
-    expectedSize: 177289008,
-    sha256Checksum: 'c017ab57887418e0609afdef52b0cbc17f43cb304e78af44300c0292cd2b2fa9',
-    engine: 'tts-ggml',
-    quantization: 'q4f16',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 915054,
-    blobBlockLength: 19,
-    blobByteOffset: 59961110022,
-    modelId: 'speech_encoder_quantized.onnx',
-    addon: 'tts',
-    expectedSize: 1205728,
-    sha256Checksum: '5b6f15870a43cf97892df86fc550a0ef4763522d527cde72b2a4316f80a34de4',
-    engine: 'tts-ggml',
-    quantization: 'quantized',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: '00381b6db7f2b857',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx',
-          registrySource: 'hf',
-          targetName: 'speech_encoder_quantized.onnx',
-          expectedSize: 1205728,
-          sha256Checksum: '5b6f15870a43cf97892df86fc550a0ef4763522d527cde72b2a4316f80a34de4',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 915054,
-          blobBlockLength: 19,
-          blobByteOffset: 59961110022,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx_data',
-          registrySource: 'hf',
-          targetName: 'speech_encoder_quantized.onnx_data',
-          expectedSize: 354676576,
-          sha256Checksum: 'd59861fb55e806fbeee731da9d4f8ff819fb5735de5d15e262d902594ee4dbb6',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 915073,
-          blobBlockLength: 5412,
-          blobByteOffset: 59962315750
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 915073,
-    blobBlockLength: 5412,
-    blobByteOffset: 59962315750,
-    modelId: 'speech_encoder_quantized.onnx_data',
-    addon: 'tts',
-    expectedSize: 354676576,
-    sha256Checksum: 'd59861fb55e806fbeee731da9d4f8ff819fb5735de5d15e262d902594ee4dbb6',
-    engine: 'tts-ggml',
-    quantization: 'quantized',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 828041,
-    blobBlockLength: 18,
-    blobByteOffset: 54259537686,
-    modelId: 'speech_encoder.onnx',
-    addon: 'tts',
-    expectedSize: 1172072,
-    sha256Checksum: '4d66128037517dd51d370edc9b89ce36d42c75dcbd96e7216c7fb45dfae36045',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech',
-    companionSet: {
-      setKey: 'c2ae8c52ce330071',
-      primaryKey: 'modelPath',
-      files: [
-        {
-          key: 'modelPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx',
-          registrySource: 'hf',
-          targetName: 'speech_encoder.onnx',
-          expectedSize: 1172072,
-          sha256Checksum: '4d66128037517dd51d370edc9b89ce36d42c75dcbd96e7216c7fb45dfae36045',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 828041,
-          blobBlockLength: 18,
-          blobByteOffset: 54259537686,
-          primary: true
-        },
-        {
-          key: 'dataPath',
-          registryPath:
-            'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx_data',
-          registrySource: 'hf',
-          targetName: 'speech_encoder.onnx_data',
-          expectedSize: 1044712832,
-          sha256Checksum: 'c9915ff6c529e7bb80983b525255e6744d6c39c7e35b12720925ba99ed0d0a2f',
-          blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-          blobBlockOffset: 828059,
-          blobBlockLength: 15942,
-          blobByteOffset: 54260709758
-        }
-      ]
-    }
-  } as const,
-  {
-    name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32_DATA',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx_data`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx_data',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 828059,
-    blobBlockLength: 15942,
-    blobByteOffset: 54260709758,
-    modelId: 'speech_encoder.onnx_data',
-    addon: 'tts',
-    expectedSize: 1044712832,
-    sha256Checksum: 'c9915ff6c529e7bb80983b525255e6744d6c39c7e35b12720925ba99ed0d0a2f',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_TOKENIZER_EN_CHATTERBOX',
-    src: `registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/tokenizer.json`,
-    registryPath:
-      'ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/tokenizer.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 827986,
-    blobBlockLength: 55,
-    blobByteOffset: 54255975414,
-    modelId: 'tokenizer.json',
-    addon: 'tts',
-    expectedSize: 3562272,
-    sha256Checksum: '3f04e34bea22f9144d1a19151154095bc9ce0430bf421304f5797e716288a906',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/duration_predictor.onnx`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/duration_predictor.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2193975,
-    blobBlockLength: 24,
-    blobByteOffset: 143774135142,
-    modelId: 'duration_predictor.onnx',
-    addon: 'tts',
-    expectedSize: 1521526,
-    sha256Checksum: '6d556b3691165c364be91dc0bd894656b5949f5acd2750d8ec2f954010845011',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/text_encoder.onnx`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/text_encoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2193999,
-    blobBlockLength: 419,
-    blobByteOffset: 143775656668,
-    modelId: 'text_encoder.onnx',
-    addon: 'tts',
-    expectedSize: 27431318,
-    sha256Checksum: 'dd5f535ed629f7df86071043e15f541ce1b2ab7f1bdbce4c7892b307bca79fa3',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/tts.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/tts.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2193974,
-    blobBlockLength: 1,
-    blobByteOffset: 143774126443,
-    modelId: 'tts.json',
-    addon: 'tts',
-    expectedSize: 8699,
-    sha256Checksum: 'ee531d9af9b80438a2ed703e22155ee6c83b12595ab22fd3bb6de94c7502fe96',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/unicode_indexer.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/unicode_indexer.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198946,
-    blobBlockLength: 5,
-    blobByteOffset: 144099214745,
-    modelId: 'unicode_indexer.json',
-    addon: 'tts',
-    expectedSize: 262196,
-    sha256Checksum: 'b7662a73a0703f43b97c0f2e089f8e8325e26f5d841aca393b5a54c509c92df1',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/vector_estimator.onnx`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/vector_estimator.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2194418,
-    blobBlockLength: 2022,
-    blobByteOffset: 143803087986,
-    modelId: 'vector_estimator.onnx',
-    addon: 'tts',
-    expectedSize: 132471364,
-    sha256Checksum: '105e9d66fd8756876b210a6b4aa03fc393b1eaca3a8dadcc8d9a3bc785c86a35',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/vocoder.onnx`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/vocoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2196440,
-    blobBlockLength: 1548,
-    blobByteOffset: 143935559350,
-    modelId: 'vocoder.onnx',
-    addon: 'tts',
-    expectedSize: 101405066,
-    sha256Checksum: '19bd51f47a186069c752403518a40f7ea4c647455056d2511f7249691ecddf7c',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F1.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F1.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2197988,
-    blobBlockLength: 7,
-    blobByteOffset: 144036964416,
-    modelId: 'F1.json',
-    addon: 'tts',
-    expectedSize: 420050,
-    sha256Checksum: '6106950ebeb8a5da29ea22075f605db659cd07dbc288a68292543d9129aa250f',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F2.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F2.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2197995,
-    blobBlockLength: 7,
-    blobByteOffset: 144037384466,
-    modelId: 'F2.json',
-    addon: 'tts',
-    expectedSize: 420293,
-    sha256Checksum: '8b97feb16d79ac0447136796708feac5f83dbabe92a5be1168212653c38729ae',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_2',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F3.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F3.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198002,
-    blobBlockLength: 7,
-    blobByteOffset: 144037804759,
-    modelId: 'F3.json',
-    addon: 'tts',
-    expectedSize: 419887,
-    sha256Checksum: '7eda5bccb4e6eb7f228fa182462d5fcf982d77628234603599027f0734d70c29',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F4.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F4.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198009,
-    blobBlockLength: 7,
-    blobByteOffset: 144038224646,
-    modelId: 'F4.json',
-    addon: 'tts',
-    expectedSize: 419642,
-    sha256Checksum: 'e056fc2bee393edc8bff761eb28f33fb461e8dad828c3b05348a010ac1b7bb79',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F5.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F5.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198016,
-    blobBlockLength: 7,
-    blobByteOffset: 144038644288,
-    modelId: 'F5.json',
-    addon: 'tts',
-    expectedSize: 419709,
-    sha256Checksum: 'ce7645ad7e3c13cca04e0d62bf890ef9ac401988005ba8f5e9c9b59257bc6931',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M1.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M1.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198023,
-    blobBlockLength: 7,
-    blobByteOffset: 144039063997,
-    modelId: 'M1.json',
-    addon: 'tts',
-    expectedSize: 420510,
-    sha256Checksum: 'a04c823cbda6dd1c7de131ec68fea83bbb70d7f29d61623304eb871e3b83b5a1',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M2.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M2.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198030,
-    blobBlockLength: 7,
-    blobByteOffset: 144039484507,
-    modelId: 'M2.json',
-    addon: 'tts',
-    expectedSize: 420285,
-    sha256Checksum: '7ddd07bf873a3fd67d09ef4e8293b486beb658158b47e371166198e4c6926072',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M3.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M3.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198037,
-    blobBlockLength: 7,
-    blobByteOffset: 144039904792,
-    modelId: 'M3.json',
-    addon: 'tts',
-    expectedSize: 420005,
-    sha256Checksum: 'e8e77a56459e4dc8cdfeb88e6f778dc9a0adf22e1184414f4b0e82a5d1edbe72',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M4.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M4.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198044,
-    blobBlockLength: 7,
-    blobByteOffset: 144040324797,
-    modelId: 'M4.json',
-    addon: 'tts',
-    expectedSize: 419957,
-    sha256Checksum: '95322725e4d25d9ed4e7dcccbf0f3726b0e9a2471d876b7942373218dbd30174',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9',
-    src: `registry://hf/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M5.json`,
-    registryPath:
-      'Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M5.json',
-    registrySource: 'hf',
-    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
-    blobBlockOffset: 2198051,
-    blobBlockLength: 7,
-    blobByteOffset: 144040744754,
-    modelId: 'M5.json',
-    addon: 'tts',
-    expectedSize: 419619,
-    sha256Checksum: 'be52f82327da63ff18481ce2dd8060c7df432e0168d748745ef3e21b92d706a5',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/duration_predictor.onnx`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/duration_predictor.onnx',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 707944,
-    blobBlockLength: 23,
-    blobByteOffset: 46393934781,
-    modelId: 'duration_predictor.onnx',
-    addon: 'tts',
-    expectedSize: 1500789,
-    sha256Checksum: 'b861580c56a0cba2a2b82aa697ecb3c5a163c3240c60a0ddfac369d21d054092',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/text_encoder.onnx`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/text_encoder.onnx',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 707526,
-    blobBlockLength: 418,
-    blobByteOffset: 46366586408,
-    modelId: 'text_encoder.onnx',
-    addon: 'tts',
-    expectedSize: 27348373,
-    sha256Checksum: 'ba0c8ea74aeb5df00d21a89b8d47c71317f47120232e3deef95024dba37dbd88',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/tts.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/tts.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 707521,
-    blobBlockLength: 1,
-    blobByteOffset: 46366315629,
-    modelId: 'tts.json',
-    addon: 'tts',
-    expectedSize: 8645,
-    sha256Checksum: '4dac5f986698a3ace9a97ea2545d43f6c8ba120d25e005f8c905128281be9b6d',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/unicode_indexer.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/unicode_indexer.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 707522,
-    blobBlockLength: 4,
-    blobByteOffset: 46366324274,
-    modelId: 'unicode_indexer.json',
-    addon: 'tts',
-    expectedSize: 262134,
-    sha256Checksum: '0c3800ba4fb1fc760c9070eb43a0ad5a68279ec165742591a68ea3edca452978',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/vector_estimator.onnx`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/vector_estimator.onnx',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 707967,
-    blobBlockLength: 2022,
-    blobByteOffset: 46395435570,
-    modelId: 'vector_estimator.onnx',
-    addon: 'tts',
-    expectedSize: 132471364,
-    sha256Checksum: 'b3f82ecd2e9decc4e2236048b03628a1c1d5f14a792ba274a59b7325107aa6a6',
-    engine: 'tts-ggml',
-    quantization: 'fp32',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F1.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F1.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711537,
-    blobBlockLength: 7,
-    blobByteOffset: 46629312000,
-    modelId: 'F1.json',
-    addon: 'tts',
-    expectedSize: 420622,
-    sha256Checksum: '1450bcad84a2790eaf73f85e763dd5bae7c399f55d692c4835cf4f7686b5a10f',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F2.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F2.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711544,
-    blobBlockLength: 7,
-    blobByteOffset: 46629732622,
-    modelId: 'F2.json',
-    addon: 'tts',
-    expectedSize: 420905,
-    sha256Checksum: '47c8d44445ef8ac8aae8ef5806feca21903483cbd4f1232e405184a40520a549',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F3.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F3.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711551,
-    blobBlockLength: 7,
-    blobByteOffset: 46630153527,
-    modelId: 'F3.json',
-    addon: 'tts',
-    expectedSize: 420019,
-    sha256Checksum: '93d17bf5e967d11b9119877bab9e3c6a43350f9146a8db265abba102f29cdb36',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F4.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F4.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711558,
-    blobBlockLength: 7,
-    blobByteOffset: 46630573546,
-    modelId: 'F4.json',
-    addon: 'tts',
-    expectedSize: 420646,
-    sha256Checksum: '325d8da46877089a67b7dfe1e59d04133d1f883754670af6b612a64b5ea697f2',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F5.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F5.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711565,
-    blobBlockLength: 7,
-    blobByteOffset: 46630994192,
-    modelId: 'F5.json',
-    addon: 'tts',
-    expectedSize: 420080,
-    sha256Checksum: '72fd8e30dc65d2ad18a4bfdc48c925b5635219c1cb09a93096a81707bd2f695e',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M1.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M1.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711572,
-    blobBlockLength: 7,
-    blobByteOffset: 46631414272,
-    modelId: 'M1.json',
-    addon: 'tts',
-    expectedSize: 421053,
-    sha256Checksum: '273c9ba6582d2e00383d8fbe2f5d660d86e8fba849c91ff695384d1a6e2e02f1',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M2.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M2.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711579,
-    blobBlockLength: 7,
-    blobByteOffset: 46631835325,
-    modelId: 'M2.json',
-    addon: 'tts',
-    expectedSize: 421027,
-    sha256Checksum: '26898a9ec3de1b5bf8cc3f6cbf41930543ca0403f2201e12aad849691ff315dd',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M3.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M3.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711586,
-    blobBlockLength: 7,
-    blobByteOffset: 46632256352,
-    modelId: 'M3.json',
-    addon: 'tts',
-    expectedSize: 420483,
-    sha256Checksum: '208b4f6d66ce68a1067602aa7e71b20d98d74a981ba14bdaa5df4df2c40e4068',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M4.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M4.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711593,
-    blobBlockLength: 7,
-    blobByteOffset: 46632676835,
-    modelId: 'M4.json',
-    addon: 'tts',
-    expectedSize: 420577,
-    sha256Checksum: '733eec0e79cfd8e506368cdad0e863cf581d172caa31b9d412be613fd8649120',
-    engine: 'tts-ggml',
-    quantization: '',
-    params: '',
-    endpointCategory: 'speech'
-  } as const,
-  {
-    name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9',
-    src: `registry://hf/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M5.json`,
-    registryPath:
-      'Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M5.json',
-    registrySource: 'hf',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 711600,
-    blobBlockLength: 7,
-    blobByteOffset: 46633097412,
-    modelId: 'M5.json',
-    addon: 'tts',
-    expectedSize: 420456,
-    sha256Checksum: 'f0c80d2f423f8a916cf3a92ee4356d63622265a9ab34ea79994eb7f751d2d245',
-    engine: 'tts-ggml',
-    quantization: '',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2198586,
+    blobBlockLength: 1292,
+    blobByteOffset: 144070433378,
+    modelId: 'supertonic3-q4_0.gguf',
+    addon: 'tts',
+    expectedSize: 84658368,
+    sha256Checksum: 'e3f3edc816b3fb4d8dae0067b2cc7e3dbeaac1e78e21293c803bd57011425fb7',
+    engine: 'tts-ggml',
+    quantization: 'q4_0',
     params: '',
     endpointCategory: 'speech'
   } as const,
@@ -21210,436 +19663,419 @@ export const CLIP_VISION_H: ModelConstant<'image'> = allModels[4]
 export const WAN2_1_T2V_1_3B_FP16: ModelConstant<'image'> = allModels[5]
 export const UMT5_XXL_FP16: ModelConstant<'image'> = allModels[6]
 export const WAN_2_1_COMFYUI_REPACKAGED_VAE: ModelConstant<'image'> = allModels[7]
-export const SD_V2_1_1B_Q4_0: ModelConstant<'image'> = allModels[8]
-export const SD_V2_1_1B_Q8_0: ModelConstant<'image'> = allModels[9]
-export const SDXL_BASE_1_0_3B_Q4_0: ModelConstant<'image'> = allModels[10]
-export const SDXL_BASE_1_0_3B_Q8_0: ModelConstant<'image'> = allModels[11]
-export const REALESRGAN_X4PLUS_ANIME_6B: ModelConstant<'image'> = allModels[12]
-export const REALESRGAN_X4PLUS: ModelConstant<'image'> = allModels[13]
-export const REALESRNET_X4PLUS: ModelConstant<'image'> = allModels[14]
-export const FLUX_2_KLEIN_4B_Q4_0: ModelConstant<'image'> = allModels[15]
-export const FLUX_2_KLEIN_4B_Q4_K_M: ModelConstant<'image'> = allModels[16]
-export const FLUX_2_KLEIN_4B_Q6_K: ModelConstant<'image'> = allModels[17]
-export const FLUX_2_KLEIN_4B_Q8_0: ModelConstant<'image'> = allModels[18]
-export const QWEN3_4B_Q4_K_M: ModelConstant<'image'> = allModels[19]
-export const GTE_LARGE_FP16: ModelConstant<'embedding'> = allModels[20]
-export const GTE_LARGE_335M_FP16_SHARD: ModelConstant<'embedding'> = allModels[21]
-export const GTE_LARGE_335M_FP16_TENSORS: ModelConstant<'embedding'> = allModels[22]
-export const EMBEDDINGGEMMA_300M_BF16: ModelConstant<'embedding'> = allModels[23]
-export const EMBEDDINGGEMMA_300M_F32: ModelConstant<'embedding'> = allModels[24]
-export const EMBEDDINGGEMMA_300M_Q4_0: ModelConstant<'embedding'> = allModels[25]
-export const EMBEDDINGGEMMA_300M_Q8_0: ModelConstant<'embedding'> = allModels[26]
-export const GEMMA4_31B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[27]
-export const GEMMA4_31B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[28]
-export const MMPROJ_GEMMA4_31B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[29]
-export const MMPROJ_GEMMA4_31B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[30]
-export const GEMMA4_2B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[31]
-export const GEMMA4_2B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[32]
-export const MMPROJ_GEMMA4_2B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[33]
-export const MMPROJ_GEMMA4_2B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[34]
-export const GEMMA4_4B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[35]
-export const GEMMA4_4B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[36]
-export const MMPROJ_GEMMA4_4B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[37]
-export const MMPROJ_GEMMA4_4B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[38]
-export const SALAMANDRATA_2B_INST_Q4: ModelConstant<'chat'> = allModels[39]
-export const SALAMANDRATA_2B_INST_Q8: ModelConstant<'chat'> = allModels[40]
-export const MMPROJ_GEMMA4_2B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[41]
-export const MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[42]
-export const MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[43]
-export const SMOLVLM2_500M_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[44]
-export const SMOLVLM2_500M_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[45]
-export const SMOLLM2_360M_INST_Q8: ModelConstant<'chat'> = allModels[46]
-export const LASER_DOLPHIN_2X7B_INST_Q2_K: ModelConstant<'chat'> = allModels[47]
-export const LLAMA_TOOL_CALLING_1B_INST_Q4_K: ModelConstant<'chat'> = allModels[48]
-export const AFRICAN_4B_TRANSLATION_Q4_K_M: ModelConstant<'chat'> = allModels[49]
-export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[50]
-export const OCR_0_6B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[51]
-export const MMPROJ_OCR_0_6B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[52]
-export const BITNET_B1_58_3B_INST_TQ2_0: ModelConstant<'chat'> = allModels[53]
-export const BITNET_0_7B_INST_TQ2_0: ModelConstant<'chat'> = allModels[54]
-export const BITNET_1B_INST_TQ2_0: ModelConstant<'chat'> = allModels[55]
-export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD: ModelConstant<'chat'> = allModels[56]
-export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS: ModelConstant<'chat'> = allModels[57]
-export const GPT_OSS_120B_INST_Q4_K_M_SHARD: ModelConstant<'chat'> = allModels[58]
-export const GPT_OSS_120B_INST_Q4_K_M_TENSORS: ModelConstant<'chat'> = allModels[59]
-export const LLAMA_3_2_1B_INST_Q4_0_SHARD: ModelConstant<'chat'> = allModels[60]
-export const LLAMA_3_2_1B_INST_Q4_0_TENSORS: ModelConstant<'chat'> = allModels[61]
-export const MEDGEMMA_4B_IT_Q4_1_SHARD: ModelConstant<'chat'> = allModels[62]
-export const MEDGEMMA_4B_IT_Q4_1_TENSORS: ModelConstant<'chat'> = allModels[63]
-export const MEDGEMMA_4B_IT_Q8_0_SHARD: ModelConstant<'chat'> = allModels[64]
-export const QWEN3_1_7B_INST_Q4_SHARD: ModelConstant<'chat'> = allModels[65]
-export const QWEN3_1_7B_INST_Q4_TENSORS: ModelConstant<'chat'> = allModels[66]
-export const QWEN3_4B_INST_Q4_K_M: ModelConstant<'chat'> = allModels[67]
-export const QWEN3_4B_INST_Q4_SHARD: ModelConstant<'chat'> = allModels[68]
-export const QWEN3_4B_INST_Q4_TENSORS: ModelConstant<'chat'> = allModels[69]
-export const SALAMANDRATA_2B_INST_Q4_SHARD: ModelConstant<'chat'> = allModels[70]
-export const SALAMANDRATA_2B_INST_Q4_TENSORS: ModelConstant<'chat'> = allModels[71]
-export const SALAMANDRATA_2B_INST_Q8_SHARD: ModelConstant<'chat'> = allModels[72]
-export const QWEN3_8B_INST_Q4_K_M: ModelConstant<'chat'> = allModels[73]
-export const MMPROJ_QWEN3VL_2B_MULTIMODAL_Q4_K: ModelConstant<'chat'> = allModels[74]
-export const QWEN3VL_2B_MULTIMODAL_Q4_K: ModelConstant<'chat'> = allModels[75]
-export const GPT_OSS_20B_INST_Q4_K_M: ModelConstant<'chat'> = allModels[76]
-export const LLAMA_3_2_1B_INST_Q4_0: ModelConstant<'chat'> = allModels[77]
-export const MEDGEMMA_4B_IT_Q4_1: ModelConstant<'chat'> = allModels[78]
-export const MEDGEMMA_4B_IT_Q8_0: ModelConstant<'chat'> = allModels[79]
-export const QWEN3_600M_INST_Q4: ModelConstant<'chat'> = allModels[80]
-export const QWEN3_1_7B_INST_Q4: ModelConstant<'chat'> = allModels[81]
-export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[82]
-export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[83]
-export const QWEN3_5_0_8B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[84]
-export const QWEN3_5_0_8B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[85]
-export const QWEN3_5_0_8B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[86]
-export const MMPROJ_QWEN3_5_2B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[87]
-export const MMPROJ_QWEN3_5_2B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[88]
-export const QWEN3_5_2B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[89]
-export const QWEN3_5_2B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[90]
-export const MMPROJ_QWEN3_5_4B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[91]
-export const MMPROJ_QWEN3_5_4B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[92]
-export const QWEN3_5_4B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[93]
-export const QWEN3_5_4B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[94]
-export const MMPROJ_QWEN3_5_9B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[95]
-export const MMPROJ_QWEN3_5_9B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[96]
-export const QWEN3_5_9B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[97]
-export const QWEN3_5_9B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[98]
-export const MMPROJ_QWEN3_6_27B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[99]
-export const MMPROJ_QWEN3_6_27B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[100]
-export const QWEN3_6_27B_MULTIMODAL_Q4_K_XL: ModelConstant<'chat'> = allModels[101]
-export const QWEN3_6_27B_MULTIMODAL_Q6_K_XL: ModelConstant<'chat'> = allModels[102]
-export const MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[103]
-export const MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[104]
-export const QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[105]
-export const QWEN3_6_35B_A3B_MULTIMODAL_Q6_K_XL: ModelConstant<'chat'> = allModels[106]
-export const BERGAMOT_AR_EN: ModelConstant<'translation'> = allModels[109]
-export const BERGAMOT_AZ_EN: ModelConstant<'translation'> = allModels[113]
-export const BERGAMOT_BE_EN: ModelConstant<'translation'> = allModels[117]
-export const BERGAMOT_BG_EN: ModelConstant<'translation'> = allModels[121]
-export const BERGAMOT_BN_EN: ModelConstant<'translation'> = allModels[125]
-export const BERGAMOT_BS_EN: ModelConstant<'translation'> = allModels[129]
-export const BERGAMOT_CA_EN: ModelConstant<'translation'> = allModels[133]
-export const BERGAMOT_CS_EN: ModelConstant<'translation'> = allModels[137]
-export const BERGAMOT_DA_EN: ModelConstant<'translation'> = allModels[141]
-export const BERGAMOT_DE_EN: ModelConstant<'translation'> = allModels[145]
-export const BERGAMOT_EL_EN: ModelConstant<'translation'> = allModels[149]
-export const BERGAMOT_EN_AR: ModelConstant<'translation'> = allModels[153]
-export const BERGAMOT_EN_AZ: ModelConstant<'translation'> = allModels[157]
-export const BERGAMOT_EN_BG: ModelConstant<'translation'> = allModels[161]
-export const BERGAMOT_EN_BN: ModelConstant<'translation'> = allModels[165]
-export const BERGAMOT_EN_BS: ModelConstant<'translation'> = allModels[169]
-export const BERGAMOT_EN_CA: ModelConstant<'translation'> = allModels[173]
-export const BERGAMOT_EN_CS: ModelConstant<'translation'> = allModels[177]
-export const BERGAMOT_EN_DA: ModelConstant<'translation'> = allModels[181]
-export const BERGAMOT_EN_DE: ModelConstant<'translation'> = allModels[185]
-export const BERGAMOT_EN_EL: ModelConstant<'translation'> = allModels[189]
-export const BERGAMOT_EN_ES: ModelConstant<'translation'> = allModels[193]
-export const BERGAMOT_EN_ET: ModelConstant<'translation'> = allModels[197]
-export const BERGAMOT_EN_FA: ModelConstant<'translation'> = allModels[201]
-export const BERGAMOT_EN_FI: ModelConstant<'translation'> = allModels[205]
-export const BERGAMOT_EN_FR: ModelConstant<'translation'> = allModels[209]
-export const BERGAMOT_EN_GU: ModelConstant<'translation'> = allModels[213]
-export const BERGAMOT_EN_HE: ModelConstant<'translation'> = allModels[217]
-export const BERGAMOT_EN_HI: ModelConstant<'translation'> = allModels[221]
-export const BERGAMOT_EN_HR: ModelConstant<'translation'> = allModels[225]
-export const BERGAMOT_EN_HU: ModelConstant<'translation'> = allModels[229]
-export const BERGAMOT_EN_ID: ModelConstant<'translation'> = allModels[233]
-export const BERGAMOT_EN_IS: ModelConstant<'translation'> = allModels[237]
-export const BERGAMOT_EN_IT: ModelConstant<'translation'> = allModels[241]
-export const BERGAMOT_EN_JA: ModelConstant<'translation'> = allModels[245]
-export const BERGAMOT_EN_KN: ModelConstant<'translation'> = allModels[250]
-export const BERGAMOT_EN_KO: ModelConstant<'translation'> = allModels[254]
-export const BERGAMOT_EN_LT: ModelConstant<'translation'> = allModels[259]
-export const BERGAMOT_EN_LV: ModelConstant<'translation'> = allModels[263]
-export const BERGAMOT_EN_ML: ModelConstant<'translation'> = allModels[267]
-export const BERGAMOT_EN_MS: ModelConstant<'translation'> = allModels[271]
-export const BERGAMOT_EN_NB: ModelConstant<'translation'> = allModels[275]
-export const BERGAMOT_EN_NL: ModelConstant<'translation'> = allModels[279]
-export const BERGAMOT_EN_NO: ModelConstant<'translation'> = allModels[283]
-export const BERGAMOT_EN_PL: ModelConstant<'translation'> = allModels[287]
-export const BERGAMOT_EN_PT: ModelConstant<'translation'> = allModels[291]
-export const BERGAMOT_EN_RO: ModelConstant<'translation'> = allModels[295]
-export const BERGAMOT_EN_RU: ModelConstant<'translation'> = allModels[299]
-export const BERGAMOT_EN_SK: ModelConstant<'translation'> = allModels[303]
-export const BERGAMOT_EN_SL: ModelConstant<'translation'> = allModels[307]
-export const BERGAMOT_EN_SQ: ModelConstant<'translation'> = allModels[311]
-export const BERGAMOT_EN_SR: ModelConstant<'translation'> = allModels[315]
-export const BERGAMOT_EN_SV: ModelConstant<'translation'> = allModels[319]
-export const BERGAMOT_EN_TA: ModelConstant<'translation'> = allModels[323]
-export const BERGAMOT_EN_TE: ModelConstant<'translation'> = allModels[327]
-export const BERGAMOT_EN_TH: ModelConstant<'translation'> = allModels[331]
-export const BERGAMOT_EN_TR: ModelConstant<'translation'> = allModels[335]
-export const BERGAMOT_EN_UK: ModelConstant<'translation'> = allModels[339]
-export const BERGAMOT_EN_VI: ModelConstant<'translation'> = allModels[343]
-export const BERGAMOT_EN_ZH: ModelConstant<'translation'> = allModels[347]
-export const BERGAMOT_ES_EN: ModelConstant<'translation'> = allModels[352]
-export const BERGAMOT_ET_EN: ModelConstant<'translation'> = allModels[356]
-export const BERGAMOT_FA_EN: ModelConstant<'translation'> = allModels[360]
-export const BERGAMOT_FI_EN: ModelConstant<'translation'> = allModels[364]
-export const BERGAMOT_FR_EN: ModelConstant<'translation'> = allModels[368]
-export const BERGAMOT_GU_EN: ModelConstant<'translation'> = allModels[372]
-export const BERGAMOT: ModelConstant<'translation'> = allModels[376]
-export const BERGAMOT_HE_EN: ModelConstant<'translation'> = allModels[380]
-export const BERGAMOT_HI_EN: ModelConstant<'translation'> = allModels[384]
-export const BERGAMOT_HR_EN: ModelConstant<'translation'> = allModels[388]
-export const BERGAMOT_HU_EN: ModelConstant<'translation'> = allModels[392]
-export const BERGAMOT_ID_EN: ModelConstant<'translation'> = allModels[396]
-export const BERGAMOT_IS_EN: ModelConstant<'translation'> = allModels[400]
-export const BERGAMOT_IT_EN: ModelConstant<'translation'> = allModels[404]
-export const BERGAMOT_JA_EN: ModelConstant<'translation'> = allModels[408]
-export const BERGAMOT_KN_EN: ModelConstant<'translation'> = allModels[412]
-export const BERGAMOT_KO_EN: ModelConstant<'translation'> = allModels[416]
-export const BERGAMOT_LT_EN: ModelConstant<'translation'> = allModels[420]
-export const BERGAMOT_LV_EN: ModelConstant<'translation'> = allModels[424]
-export const BERGAMOT_ML_EN: ModelConstant<'translation'> = allModels[428]
-export const BERGAMOT_MS_EN: ModelConstant<'translation'> = allModels[432]
-export const BERGAMOT_MT_EN: ModelConstant<'translation'> = allModels[436]
-export const BERGAMOT_NB_EN: ModelConstant<'translation'> = allModels[440]
-export const BERGAMOT_NL_EN: ModelConstant<'translation'> = allModels[444]
-export const BERGAMOT_NN_EN: ModelConstant<'translation'> = allModels[448]
-export const BERGAMOT_NO_EN: ModelConstant<'translation'> = allModels[452]
-export const BERGAMOT_PL_EN: ModelConstant<'translation'> = allModels[456]
-export const BERGAMOT_PT_EN: ModelConstant<'translation'> = allModels[460]
-export const BERGAMOT_RO_EN: ModelConstant<'translation'> = allModels[464]
-export const BERGAMOT_RU_EN: ModelConstant<'translation'> = allModels[468]
-export const BERGAMOT_SK_EN: ModelConstant<'translation'> = allModels[472]
-export const BERGAMOT_SL_EN: ModelConstant<'translation'> = allModels[476]
-export const BERGAMOT_SQ_EN: ModelConstant<'translation'> = allModels[480]
-export const BERGAMOT_SR_EN: ModelConstant<'translation'> = allModels[484]
-export const BERGAMOT_SV_EN: ModelConstant<'translation'> = allModels[488]
-export const BERGAMOT_TA_EN: ModelConstant<'translation'> = allModels[492]
-export const BERGAMOT_TE_EN: ModelConstant<'translation'> = allModels[496]
-export const BERGAMOT_TH_EN: ModelConstant<'translation'> = allModels[500]
-export const BERGAMOT_TR_EN: ModelConstant<'translation'> = allModels[504]
-export const BERGAMOT_UK_EN: ModelConstant<'translation'> = allModels[508]
-export const BERGAMOT_VI_EN: ModelConstant<'translation'> = allModels[512]
-export const BERGAMOT_ZH_EN: ModelConstant<'translation'> = allModels[516]
-export const MARIAN_EN_HI_INDIC_1B_F16: ModelConstant<'translation'> = allModels[518]
-export const MARIAN_EN_HI_INDIC_200M_F16: ModelConstant<'translation'> = allModels[519]
-export const MARIAN_HI_EN_INDIC_1B_F16: ModelConstant<'translation'> = allModels[520]
-export const MARIAN_HI_EN_INDIC_200M_F16: ModelConstant<'translation'> = allModels[521]
-export const MARIAN_HI_HI_INDIC_1B_F16: ModelConstant<'translation'> = allModels[522]
-export const MARIAN_HI_HI_INDIC_320M_F16: ModelConstant<'translation'> = allModels[523]
-export const MARIAN_EN_HI_INDIC_1B_Q4_0: ModelConstant<'translation'> = allModels[524]
-export const MARIAN_EN_HI_INDIC_200M_Q4_0: ModelConstant<'translation'> = allModels[525]
-export const MARIAN_HI_EN_INDIC_1B_Q4_0: ModelConstant<'translation'> = allModels[526]
-export const MARIAN_HI_EN_INDIC_200M_Q4_0: ModelConstant<'translation'> = allModels[527]
-export const MARIAN_HI_HI_INDIC_1B_Q4_0: ModelConstant<'translation'> = allModels[528]
-export const MARIAN_HI_HI_INDIC_320M_Q4_0: ModelConstant<'translation'> = allModels[529]
-export const OCR_CRAFT_DETECTOR: ModelConstant<'ocr'> = allModels[530]
-export const OCR_LATIN_RECOGNIZER: ModelConstant<'ocr'> = allModels[531]
-export const OCR_ARABIC_RECOGNIZER: ModelConstant<'ocr'> = allModels[532]
-export const OCR_BENGALI_RECOGNIZER: ModelConstant<'ocr'> = allModels[533]
-export const OCR_CYRILLIC_RECOGNIZER: ModelConstant<'ocr'> = allModels[534]
-export const OCR_DEVANAGARI_RECOGNIZER: ModelConstant<'ocr'> = allModels[535]
-export const OCR_JAPANESE_RECOGNIZER: ModelConstant<'ocr'> = allModels[536]
-export const OCR_KANNADA_RECOGNIZER: ModelConstant<'ocr'> = allModels[537]
-export const OCR_KOREAN_RECOGNIZER: ModelConstant<'ocr'> = allModels[538]
-export const OCR_LATIN_RECOGNIZER_1: ModelConstant<'ocr'> = allModels[539]
-export const OCR_TAMIL_RECOGNIZER: ModelConstant<'ocr'> = allModels[540]
-export const OCR_TELUGU_RECOGNIZER: ModelConstant<'ocr'> = allModels[541]
-export const OCR_THAI_RECOGNIZER: ModelConstant<'ocr'> = allModels[542]
-export const OCR_ZH_SIM_RECOGNIZER: ModelConstant<'ocr'> = allModels[543]
-export const OCR_ZH_TRA_RECOGNIZER: ModelConstant<'ocr'> = allModels[544]
-export const OCR_RECOGNIZER_CRNN_MOBILENET_V3_SMALL: ModelConstant<'ocr'> = allModels[545]
-export const OCR_DETECTOR_DB_MOBILENET_V3_LARGE: ModelConstant<'ocr'> = allModels[546]
-export const OCR_DETECTOR_DB_RESNET50: ModelConstant<'ocr'> = allModels[547]
-export const OCR_RECOGNIZER_PARSEQ: ModelConstant<'ocr'> = allModels[548]
-export const PARAKEET_EOU_DECODER_FP32: ModelConstant<'transcription'> = allModels[549]
-export const PARAKEET_EOU_ENCODER_FP32: ModelConstant<'transcription'> = allModels[550]
-export const PARAKEET_EOU_TOKENIZER: ModelConstant<'transcription'> = allModels[551]
-export const PARAKEET_SORTFORMER_FP32: ModelConstant<'transcription'> = allModels[552]
-export const PARAKEET_TDT_DECODER_FP32: ModelConstant<'transcription'> = allModels[553]
-export const PARAKEET_TDT_ENCODER_FP32: ModelConstant<'transcription'> = allModels[554]
-export const PARAKEET_TDT_PREPROCESSOR_FP32: ModelConstant<'transcription'> = allModels[556]
-export const PARAKEET_TDT_VOCAB: ModelConstant<'transcription'> = allModels[557]
-export const PARAKEET_CTC_FP32: ModelConstant<'transcription'> = allModels[558]
-export const PARAKEET_CTC_TOKENIZER: ModelConstant<'transcription'> = allModels[560]
+export const WAN_2_2_COMFYUI_REPACKAGED_VAE: ModelConstant<'image'> = allModels[8]
+export const SD_V2_1_1B_Q4_0: ModelConstant<'image'> = allModels[9]
+export const SD_V2_1_1B_Q8_0: ModelConstant<'image'> = allModels[10]
+export const SDXL_BASE_1_0_3B_Q4_0: ModelConstant<'image'> = allModels[11]
+export const SDXL_BASE_1_0_3B_Q8_0: ModelConstant<'image'> = allModels[12]
+export const WAN2_2_TI2V_5B_Q5_K_S: ModelConstant<'image'> = allModels[13]
+export const LTX_2_3_22B_Q2_K: ModelConstant<'image'> = allModels[14]
+export const LTX_2_3_22B_Q5_K_M: ModelConstant<'image'> = allModels[15]
+export const ABOT_WORLD_0_5B_Q8_0: ModelConstant<'image'> = allModels[16]
+export const ABOT_WORLD_0_5B_LF_TAEHV_VAE: ModelConstant<'image'> = allModels[17]
+export const UMT5_XXL_ENC_Q8_0: ModelConstant<'image'> = allModels[18]
+export const ABOT_WORLD_0_5B_LF_WAN_VAE: ModelConstant<'image'> = allModels[19]
+export const REALESRGAN_X4PLUS_ANIME_6B: ModelConstant<'image'> = allModels[20]
+export const REALESRGAN_X4PLUS: ModelConstant<'image'> = allModels[21]
+export const REALESRNET_X4PLUS: ModelConstant<'image'> = allModels[22]
+export const FLUX_2_KLEIN_4B_Q4_0: ModelConstant<'image'> = allModels[23]
+export const FLUX_2_KLEIN_4B_Q4_K_M: ModelConstant<'image'> = allModels[24]
+export const FLUX_2_KLEIN_4B_Q6_K: ModelConstant<'image'> = allModels[25]
+export const FLUX_2_KLEIN_4B_Q8_0: ModelConstant<'image'> = allModels[26]
+export const GEMMA_3_12B_Q4_K_XL: ModelConstant<'image'> = allModels[27]
+export const LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS: ModelConstant<'image'> = allModels[28]
+export const LTX_2_3_AUDIO_VAE: ModelConstant<'image'> = allModels[29]
+export const LTX_2_3_VIDEO_VAE: ModelConstant<'image'> = allModels[30]
+export const GTE_LARGE_FP16: ModelConstant<'embedding'> = allModels[31]
+export const GTE_LARGE_335M_FP16_SHARD: ModelConstant<'embedding'> = allModels[32]
+export const GTE_LARGE_335M_FP16_TENSORS: ModelConstant<'embedding'> = allModels[33]
+export const EMBEDDINGGEMMA_300M_BF16: ModelConstant<'embedding'> = allModels[34]
+export const EMBEDDINGGEMMA_300M_F32: ModelConstant<'embedding'> = allModels[35]
+export const EMBEDDINGGEMMA_300M_Q4_0: ModelConstant<'embedding'> = allModels[36]
+export const EMBEDDINGGEMMA_300M_Q8_0: ModelConstant<'embedding'> = allModels[37]
+export const GEMMA4_31B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[38]
+export const GEMMA4_31B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[39]
+export const MMPROJ_GEMMA4_31B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[40]
+export const MMPROJ_GEMMA4_31B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[41]
+export const GEMMA4_2B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[42]
+export const GEMMA4_2B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[43]
+export const GEMMA4_2B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[44]
+export const MMPROJ_GEMMA4_2B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[45]
+export const MMPROJ_GEMMA4_2B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[46]
+export const GEMMA4_4B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[47]
+export const GEMMA4_4B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[48]
+export const MMPROJ_GEMMA4_4B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[49]
+export const MMPROJ_GEMMA4_4B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[50]
+export const MOE_35B_INST_IQ2_XXS: ModelConstant<'chat'> = allModels[51]
+export const MOE_35B_INST_Q4_K_M: ModelConstant<'chat'> = allModels[52]
+export const MOE_35B_INST_Q8_0: ModelConstant<'chat'> = allModels[53]
+export const SALAMANDRATA_2B_INST_Q4: ModelConstant<'chat'> = allModels[54]
+export const SALAMANDRATA_2B_INST_Q8: ModelConstant<'chat'> = allModels[55]
+export const MMPROJ_GEMMA4_2B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[56]
+export const MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[57]
+export const MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[58]
+export const SMOLVLM2_500M_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[59]
+export const SMOLVLM2_500M_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[60]
+export const SMOLLM2_360M_INST_Q8: ModelConstant<'chat'> = allModels[61]
+export const LASER_DOLPHIN_2X7B_INST_Q2_K: ModelConstant<'chat'> = allModels[62]
+export const LLAMA_TOOL_CALLING_1B_INST_Q4_K: ModelConstant<'chat'> = allModels[63]
+export const AFRICAN_4B_TRANSLATION_Q4_K_M: ModelConstant<'chat'> = allModels[64]
+export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[65]
+export const MMPROJ_QWEN3_5_2B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[66]
+export const MMPROJ_QWEN3_5_4B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[67]
+export const OCR_0_6B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[68]
+export const MMPROJ_OCR_0_6B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[69]
+export const BITNET_B1_58_3B_INST_TQ2_0: ModelConstant<'chat'> = allModels[70]
+export const BITNET_0_7B_INST_TQ2_0: ModelConstant<'chat'> = allModels[71]
+export const BITNET_1B_INST_TQ2_0: ModelConstant<'chat'> = allModels[72]
+export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD: ModelConstant<'chat'> = allModels[73]
+export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS: ModelConstant<'chat'> = allModels[74]
+export const GPT_OSS_120B_INST_Q4_K_M_SHARD: ModelConstant<'chat'> = allModels[75]
+export const GPT_OSS_120B_INST_Q4_K_M_TENSORS: ModelConstant<'chat'> = allModels[76]
+export const LLAMA_3_2_1B_INST_Q4_0_SHARD: ModelConstant<'chat'> = allModels[77]
+export const LLAMA_3_2_1B_INST_Q4_0_TENSORS: ModelConstant<'chat'> = allModels[78]
+export const MEDGEMMA_4B_IT_Q4_1_SHARD: ModelConstant<'chat'> = allModels[79]
+export const MEDGEMMA_4B_IT_Q4_1_TENSORS: ModelConstant<'chat'> = allModels[80]
+export const MEDGEMMA_4B_IT_Q8_0_SHARD: ModelConstant<'chat'> = allModels[81]
+export const QWEN3_1_7B_INST_Q4_SHARD: ModelConstant<'chat'> = allModels[82]
+export const QWEN3_1_7B_INST_Q4_TENSORS: ModelConstant<'chat'> = allModels[83]
+export const QWEN3_4B_INST_Q4_K_M: ModelConstant<'chat'> = allModels[84]
+export const QWEN3_4B_INST_Q4_SHARD: ModelConstant<'chat'> = allModels[85]
+export const QWEN3_4B_INST_Q4_TENSORS: ModelConstant<'chat'> = allModels[86]
+export const SALAMANDRATA_2B_INST_Q4_SHARD: ModelConstant<'chat'> = allModels[87]
+export const SALAMANDRATA_2B_INST_Q4_TENSORS: ModelConstant<'chat'> = allModels[88]
+export const SALAMANDRATA_2B_INST_Q8_SHARD: ModelConstant<'chat'> = allModels[89]
+export const MMPROJ_OCR_3B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[90]
+export const HEALTHCARE_1_7B_MEDICAL_BF16: ModelConstant<'chat'> = allModels[91]
+export const HEALTHCARE_1_7B_MEDICAL_IQ3_M: ModelConstant<'chat'> = allModels[92]
+export const HEALTHCARE_1_7B_MEDICAL_IQ3_XXS: ModelConstant<'chat'> = allModels[93]
+export const HEALTHCARE_1_7B_MEDICAL_IQ4_NL: ModelConstant<'chat'> = allModels[94]
+export const HEALTHCARE_1_7B_MEDICAL_IQ4_XS: ModelConstant<'chat'> = allModels[95]
+export const HEALTHCARE_1_7B_MEDICAL_Q4_K_M: ModelConstant<'chat'> = allModels[96]
+export const HEALTHCARE_1_7B_MEDICAL_Q5_K_M: ModelConstant<'chat'> = allModels[97]
+export const HEALTHCARE_1_7B_MEDICAL_Q8_0: ModelConstant<'chat'> = allModels[98]
+export const HEALTHCARE_4B_MEDICAL_BF16: ModelConstant<'chat'> = allModels[99]
+export const HEALTHCARE_4B_MEDICAL_IQ3_M: ModelConstant<'chat'> = allModels[100]
+export const HEALTHCARE_4B_MEDICAL_IQ3_XXS: ModelConstant<'chat'> = allModels[101]
+export const HEALTHCARE_4B_MEDICAL_IQ4_NL: ModelConstant<'chat'> = allModels[102]
+export const HEALTHCARE_4B_MEDICAL_IQ4_XS: ModelConstant<'chat'> = allModels[103]
+export const HEALTHCARE_4B_MEDICAL_Q4_K_M: ModelConstant<'chat'> = allModels[104]
+export const HEALTHCARE_4B_MEDICAL_Q5_K_M: ModelConstant<'chat'> = allModels[105]
+export const HEALTHCARE_4B_MEDICAL_Q8_0: ModelConstant<'chat'> = allModels[106]
+export const TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q4_K_M: ModelConstant<'chat'> = allModels[107]
+export const TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q8_0: ModelConstant<'chat'> = allModels[108]
+export const TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q4_K_M: ModelConstant<'chat'> = allModels[109]
+export const TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q8_0: ModelConstant<'chat'> = allModels[110]
+export const TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q4_K_M: ModelConstant<'chat'> = allModels[111]
+export const TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q8_0: ModelConstant<'chat'> = allModels[112]
+export const MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[113]
+export const VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[114]
+export const VISIONPSY_NANO_460M_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[115]
+export const MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1: ModelConstant<'chat'> = allModels[116]
+export const VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M_1: ModelConstant<'chat'> = allModels[117]
+export const VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1: ModelConstant<'chat'> = allModels[118]
+export const QWEN3_8B_INST_Q4_K_M: ModelConstant<'chat'> = allModels[119]
+export const MMPROJ_QWEN3VL_2B_MULTIMODAL_Q4_K: ModelConstant<'chat'> = allModels[120]
+export const QWEN3VL_2B_MULTIMODAL_Q4_K: ModelConstant<'chat'> = allModels[121]
+export const DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD: ModelConstant<'chat'> = allModels[122]
+export const GPT_OSS_20B_INST_Q4_K_M: ModelConstant<'chat'> = allModels[123]
+export const LLAMA_3_2_1B_INST_Q4_0: ModelConstant<'chat'> = allModels[124]
+export const MEDGEMMA_4B_IT_Q4_1: ModelConstant<'chat'> = allModels[125]
+export const MEDGEMMA_4B_IT_Q8_0: ModelConstant<'chat'> = allModels[126]
+export const QWEN3_600M_INST_Q4: ModelConstant<'chat'> = allModels[127]
+export const QWEN3_1_7B_INST_Q4: ModelConstant<'chat'> = allModels[128]
+export const QWEN3_4B_Q4_K_M: ModelConstant<'chat'> = allModels[129]
+export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[130]
+export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[131]
+export const QWEN3_5_0_8B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[132]
+export const QWEN3_5_0_8B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[133]
+export const QWEN3_5_0_8B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[134]
+export const MMPROJ_QWEN3_5_2B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[135]
+export const MMPROJ_QWEN3_5_2B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[136]
+export const QWEN3_5_2B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[137]
+export const QWEN3_5_2B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[138]
+export const QWEN3_5_2B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[139]
+export const MMPROJ_QWEN3_5_4B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[140]
+export const MMPROJ_QWEN3_5_4B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[141]
+export const QWEN3_5_4B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[142]
+export const QWEN3_5_4B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[143]
+export const MMPROJ_QWEN3_5_9B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[144]
+export const MMPROJ_QWEN3_5_9B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[145]
+export const QWEN3_5_9B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[146]
+export const QWEN3_5_9B_MULTIMODAL_Q6_K: ModelConstant<'chat'> = allModels[147]
+export const MMPROJ_QWEN3_6_27B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[148]
+export const MMPROJ_QWEN3_6_27B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[149]
+export const QWEN3_6_27B_MULTIMODAL_Q4_K_XL: ModelConstant<'chat'> = allModels[150]
+export const QWEN3_6_27B_MULTIMODAL_Q6_K_XL: ModelConstant<'chat'> = allModels[151]
+export const MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_BF16: ModelConstant<'chat'> = allModels[152]
+export const MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[153]
+export const QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[154]
+export const QWEN3_6_35B_A3B_MULTIMODAL_Q6_K_XL: ModelConstant<'chat'> = allModels[155]
+export const MMPROJ_QWEN3_8_27B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[156]
+export const QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL: ModelConstant<'chat'> = allModels[157]
+export const QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL: ModelConstant<'chat'> = allModels[158]
+export const MMPROJ_QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[159]
+export const QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD: ModelConstant<'chat'> =
+  allModels[160]
+export const QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD: ModelConstant<'chat'> =
+  allModels[161]
+export const MMPROJ_OCR_3B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[162]
+export const OCR_3B_MULTIMODAL_Q4_0: ModelConstant<'chat'> = allModels[163]
+export const BERGAMOT_AR_EN: ModelConstant<'translation'> = allModels[166]
+export const BERGAMOT_AZ_EN: ModelConstant<'translation'> = allModels[170]
+export const BERGAMOT_BE_EN: ModelConstant<'translation'> = allModels[174]
+export const BERGAMOT_BG_EN: ModelConstant<'translation'> = allModels[178]
+export const BERGAMOT_BN_EN: ModelConstant<'translation'> = allModels[182]
+export const BERGAMOT_BS_EN: ModelConstant<'translation'> = allModels[186]
+export const BERGAMOT_CA_EN: ModelConstant<'translation'> = allModels[190]
+export const BERGAMOT_CS_EN: ModelConstant<'translation'> = allModels[194]
+export const BERGAMOT_DA_EN: ModelConstant<'translation'> = allModels[198]
+export const BERGAMOT_DE_EN: ModelConstant<'translation'> = allModels[202]
+export const BERGAMOT_EL_EN: ModelConstant<'translation'> = allModels[206]
+export const BERGAMOT_EN_AR: ModelConstant<'translation'> = allModels[210]
+export const BERGAMOT_EN_AZ: ModelConstant<'translation'> = allModels[214]
+export const BERGAMOT_EN_BG: ModelConstant<'translation'> = allModels[218]
+export const BERGAMOT_EN_BN: ModelConstant<'translation'> = allModels[222]
+export const BERGAMOT_EN_BS: ModelConstant<'translation'> = allModels[226]
+export const BERGAMOT_EN_CA: ModelConstant<'translation'> = allModels[230]
+export const BERGAMOT_EN_CS: ModelConstant<'translation'> = allModels[234]
+export const BERGAMOT_EN_DA: ModelConstant<'translation'> = allModels[238]
+export const BERGAMOT_EN_DE: ModelConstant<'translation'> = allModels[242]
+export const BERGAMOT_EN_EL: ModelConstant<'translation'> = allModels[246]
+export const BERGAMOT_EN_ES: ModelConstant<'translation'> = allModels[250]
+export const BERGAMOT_EN_ET: ModelConstant<'translation'> = allModels[254]
+export const BERGAMOT_EN_FA: ModelConstant<'translation'> = allModels[258]
+export const BERGAMOT_EN_FI: ModelConstant<'translation'> = allModels[262]
+export const BERGAMOT_EN_FR: ModelConstant<'translation'> = allModels[266]
+export const BERGAMOT_EN_GU: ModelConstant<'translation'> = allModels[270]
+export const BERGAMOT_EN_HE: ModelConstant<'translation'> = allModels[274]
+export const BERGAMOT_EN_HI: ModelConstant<'translation'> = allModels[278]
+export const BERGAMOT_EN_HR: ModelConstant<'translation'> = allModels[282]
+export const BERGAMOT_EN_HU: ModelConstant<'translation'> = allModels[286]
+export const BERGAMOT_EN_ID: ModelConstant<'translation'> = allModels[290]
+export const BERGAMOT_EN_IS: ModelConstant<'translation'> = allModels[294]
+export const BERGAMOT_EN_IT: ModelConstant<'translation'> = allModels[298]
+export const BERGAMOT_EN_JA: ModelConstant<'translation'> = allModels[302]
+export const BERGAMOT_EN_KN: ModelConstant<'translation'> = allModels[307]
+export const BERGAMOT_EN_KO: ModelConstant<'translation'> = allModels[311]
+export const BERGAMOT_EN_LT: ModelConstant<'translation'> = allModels[316]
+export const BERGAMOT_EN_LV: ModelConstant<'translation'> = allModels[320]
+export const BERGAMOT_EN_ML: ModelConstant<'translation'> = allModels[324]
+export const BERGAMOT_EN_MS: ModelConstant<'translation'> = allModels[328]
+export const BERGAMOT_EN_NB: ModelConstant<'translation'> = allModels[332]
+export const BERGAMOT_EN_NL: ModelConstant<'translation'> = allModels[336]
+export const BERGAMOT_EN_NO: ModelConstant<'translation'> = allModels[340]
+export const BERGAMOT_EN_PL: ModelConstant<'translation'> = allModels[344]
+export const BERGAMOT_EN_PT: ModelConstant<'translation'> = allModels[348]
+export const BERGAMOT_EN_RO: ModelConstant<'translation'> = allModels[352]
+export const BERGAMOT_EN_RU: ModelConstant<'translation'> = allModels[356]
+export const BERGAMOT_EN_SK: ModelConstant<'translation'> = allModels[360]
+export const BERGAMOT_EN_SL: ModelConstant<'translation'> = allModels[364]
+export const BERGAMOT_EN_SQ: ModelConstant<'translation'> = allModels[368]
+export const BERGAMOT_EN_SR: ModelConstant<'translation'> = allModels[372]
+export const BERGAMOT_EN_SV: ModelConstant<'translation'> = allModels[376]
+export const BERGAMOT_EN_TA: ModelConstant<'translation'> = allModels[380]
+export const BERGAMOT_EN_TE: ModelConstant<'translation'> = allModels[384]
+export const BERGAMOT_EN_TH: ModelConstant<'translation'> = allModels[388]
+export const BERGAMOT_EN_TR: ModelConstant<'translation'> = allModels[392]
+export const BERGAMOT_EN_UK: ModelConstant<'translation'> = allModels[396]
+export const BERGAMOT_EN_VI: ModelConstant<'translation'> = allModels[400]
+export const BERGAMOT_EN_ZH: ModelConstant<'translation'> = allModels[404]
+export const BERGAMOT_ES_EN: ModelConstant<'translation'> = allModels[409]
+export const BERGAMOT_ET_EN: ModelConstant<'translation'> = allModels[413]
+export const BERGAMOT_FA_EN: ModelConstant<'translation'> = allModels[417]
+export const BERGAMOT_FI_EN: ModelConstant<'translation'> = allModels[421]
+export const BERGAMOT_FR_EN: ModelConstant<'translation'> = allModels[425]
+export const BERGAMOT_GU_EN: ModelConstant<'translation'> = allModels[429]
+export const BERGAMOT: ModelConstant<'translation'> = allModels[433]
+export const BERGAMOT_HE_EN: ModelConstant<'translation'> = allModels[437]
+export const BERGAMOT_HI_EN: ModelConstant<'translation'> = allModels[441]
+export const BERGAMOT_HR_EN: ModelConstant<'translation'> = allModels[445]
+export const BERGAMOT_HU_EN: ModelConstant<'translation'> = allModels[449]
+export const BERGAMOT_ID_EN: ModelConstant<'translation'> = allModels[453]
+export const BERGAMOT_IS_EN: ModelConstant<'translation'> = allModels[457]
+export const BERGAMOT_IT_EN: ModelConstant<'translation'> = allModels[461]
+export const BERGAMOT_JA_EN: ModelConstant<'translation'> = allModels[465]
+export const BERGAMOT_KN_EN: ModelConstant<'translation'> = allModels[469]
+export const BERGAMOT_KO_EN: ModelConstant<'translation'> = allModels[473]
+export const BERGAMOT_LT_EN: ModelConstant<'translation'> = allModels[477]
+export const BERGAMOT_LV_EN: ModelConstant<'translation'> = allModels[481]
+export const BERGAMOT_ML_EN: ModelConstant<'translation'> = allModels[485]
+export const BERGAMOT_MS_EN: ModelConstant<'translation'> = allModels[489]
+export const BERGAMOT_MT_EN: ModelConstant<'translation'> = allModels[493]
+export const BERGAMOT_NB_EN: ModelConstant<'translation'> = allModels[497]
+export const BERGAMOT_NL_EN: ModelConstant<'translation'> = allModels[501]
+export const BERGAMOT_NN_EN: ModelConstant<'translation'> = allModels[505]
+export const BERGAMOT_NO_EN: ModelConstant<'translation'> = allModels[509]
+export const BERGAMOT_PL_EN: ModelConstant<'translation'> = allModels[513]
+export const BERGAMOT_PT_EN: ModelConstant<'translation'> = allModels[517]
+export const BERGAMOT_RO_EN: ModelConstant<'translation'> = allModels[521]
+export const BERGAMOT_RU_EN: ModelConstant<'translation'> = allModels[525]
+export const BERGAMOT_SK_EN: ModelConstant<'translation'> = allModels[529]
+export const BERGAMOT_SL_EN: ModelConstant<'translation'> = allModels[533]
+export const BERGAMOT_SQ_EN: ModelConstant<'translation'> = allModels[537]
+export const BERGAMOT_SR_EN: ModelConstant<'translation'> = allModels[541]
+export const BERGAMOT_SV_EN: ModelConstant<'translation'> = allModels[545]
+export const BERGAMOT_TA_EN: ModelConstant<'translation'> = allModels[549]
+export const BERGAMOT_TE_EN: ModelConstant<'translation'> = allModels[553]
+export const BERGAMOT_TH_EN: ModelConstant<'translation'> = allModels[557]
+export const BERGAMOT_TR_EN: ModelConstant<'translation'> = allModels[561]
+export const BERGAMOT_UK_EN: ModelConstant<'translation'> = allModels[565]
+export const BERGAMOT_VI_EN: ModelConstant<'translation'> = allModels[569]
+export const BERGAMOT_ZH_EN: ModelConstant<'translation'> = allModels[573]
+export const MARIAN_EN_HI_INDIC_1B_F16: ModelConstant<'translation'> = allModels[575]
+export const MARIAN_EN_HI_INDIC_200M_F16: ModelConstant<'translation'> = allModels[576]
+export const MARIAN_HI_EN_INDIC_1B_F16: ModelConstant<'translation'> = allModels[577]
+export const MARIAN_HI_EN_INDIC_200M_F16: ModelConstant<'translation'> = allModels[578]
+export const MARIAN_HI_HI_INDIC_1B_F16: ModelConstant<'translation'> = allModels[579]
+export const MARIAN_HI_HI_INDIC_320M_F16: ModelConstant<'translation'> = allModels[580]
+export const MARIAN_EN_HI_INDIC_1B_Q4_0: ModelConstant<'translation'> = allModels[581]
+export const MARIAN_EN_HI_INDIC_200M_Q4_0: ModelConstant<'translation'> = allModels[582]
+export const MARIAN_HI_EN_INDIC_1B_Q4_0: ModelConstant<'translation'> = allModels[583]
+export const MARIAN_HI_EN_INDIC_200M_Q4_0: ModelConstant<'translation'> = allModels[584]
+export const MARIAN_HI_HI_INDIC_1B_Q4_0: ModelConstant<'translation'> = allModels[585]
+export const MARIAN_HI_HI_INDIC_320M_Q4_0: ModelConstant<'translation'> = allModels[586]
+export const OCR_DOCTR: ModelConstant<'ocr'> = allModels[587]
+export const OCR_DOCTR_1: ModelConstant<'ocr'> = allModels[588]
+export const OCR_CRAFT: ModelConstant<'ocr'> = allModels[589]
+export const OCR_LATIN: ModelConstant<'ocr'> = allModels[590]
+export const PARAKEET_INDIC_CONFORMER_CTC_F16_F16: ModelConstant<'transcription'> = allModels[591]
+export const PARAKEET_INDIC_CONFORMER_CTC_Q4_0_Q4_0: ModelConstant<'transcription'> = allModels[592]
+export const PARAKEET_INDIC_CONFORMER_CTC_Q8_0_Q8_0: ModelConstant<'transcription'> = allModels[593]
 export const PARAKEET_TDT_PARAKEET_CTC_0_6B_Q8_0_Q8_0: ModelConstant<'transcription'> =
-  allModels[561]
+  allModels[594]
 export const PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q8_0_Q8_0: ModelConstant<'transcription'> =
-  allModels[562]
+  allModels[595]
 export const PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q8_0_Q8_0: ModelConstant<'transcription'> =
-  allModels[563]
-export const PARAKEET_TDT_Q8_0: ModelConstant<'transcription'> = allModels[564]
-export const PARAKEET_TDT_F16: ModelConstant<'transcription'> = allModels[565]
-export const PARAKEET_TDT_Q4_0: ModelConstant<'transcription'> = allModels[566]
-export const PARAKEET_TDT_Q8_0_1: ModelConstant<'transcription'> = allModels[567]
+  allModels[596]
+export const PARAKEET_TDT_Q8_0: ModelConstant<'transcription'> = allModels[597]
+export const PARAKEET_TDT_F16: ModelConstant<'transcription'> = allModels[598]
+export const PARAKEET_TDT_Q4_0: ModelConstant<'transcription'> = allModels[599]
+export const PARAKEET_TDT_Q8_0_1: ModelConstant<'transcription'> = allModels[600]
 export const PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q4_0_Q4_0: ModelConstant<'transcription'> =
-  allModels[568]
+  allModels[601]
 export const PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q4_0_Q4_0: ModelConstant<'transcription'> =
-  allModels[569]
-export const PARAKEET_TDT_Q4_0_1: ModelConstant<'transcription'> = allModels[570]
-export const PARAKEET_TDT_DECODER_INT8: ModelConstant<'transcription'> = allModels[571]
-export const PARAKEET_TDT_ENCODER_INT8: ModelConstant<'transcription'> = allModels[572]
-export const PARAKEET_TDT_PREPROCESSOR_INT8: ModelConstant<'transcription'> = allModels[573]
-export const TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32: ModelConstant<'speech'> =
-  allModels[574]
-export const TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32: ModelConstant<'speech'> = allModels[576]
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16: ModelConstant<'speech'> =
-  allModels[578]
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4: ModelConstant<'speech'> = allModels[580]
-export const TTS_EN_ES_CHATTERBOX_Q4F16: ModelConstant<'speech'> = allModels[582]
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32: ModelConstant<'speech'> =
-  allModels[584]
-export const TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32: ModelConstant<'speech'> =
-  allModels[586]
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX: ModelConstant<'speech'> = allModels[588]
-export const TTS_LATENT_DENOISER_SUPERTONIC_FP32: ModelConstant<'speech'> = allModels[589]
-export const TTS_TEXT_ENCODER_SUPERTONIC_FP32: ModelConstant<'speech'> = allModels[591]
-export const TTS_VOICE_DECODER_SUPERTONIC_FP32: ModelConstant<'speech'> = allModels[593]
-export const TTS_TOKENIZER_SUPERTONIC: ModelConstant<'speech'> = allModels[595]
-export const TTS_VOICE_STYLE_SUPERTONIC: ModelConstant<'speech'> = allModels[596]
-export const TTS_VOICE_STYLE_SUPERTONIC_1: ModelConstant<'speech'> = allModels[597]
-export const TTS_VOICE_STYLE_SUPERTONIC_2: ModelConstant<'speech'> = allModels[598]
-export const TTS_VOICE_STYLE_SUPERTONIC_3: ModelConstant<'speech'> = allModels[599]
-export const TTS_VOICE_STYLE_SUPERTONIC_4: ModelConstant<'speech'> = allModels[600]
-export const TTS_VOICE_STYLE_SUPERTONIC_5: ModelConstant<'speech'> = allModels[601]
-export const TTS_VOICE_STYLE_SUPERTONIC_6: ModelConstant<'speech'> = allModels[602]
-export const TTS_VOICE_STYLE_SUPERTONIC_7: ModelConstant<'speech'> = allModels[603]
-export const TTS_VOICE_STYLE_SUPERTONIC_8: ModelConstant<'speech'> = allModels[604]
-export const TTS_VOICE_STYLE_SUPERTONIC_9: ModelConstant<'speech'> = allModels[605]
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX: ModelConstant<'speech'> = allModels[606]
-export const TTS_S3GEN_EN_CHATTERBOX: ModelConstant<'speech'> = allModels[607]
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[608]
-export const TTS_T3_TURBO_EN_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[609]
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<'speech'> = allModels[610]
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<'speech'> = allModels[611]
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0: ModelConstant<'speech'> = allModels[612]
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0: ModelConstant<'speech'> = allModels[613]
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<'speech'> = allModels[614]
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<'speech'> = allModels[615]
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<'speech'> = allModels[616]
-export const TTS_S3GEN_EN_CHATTERBOX_Q4_0: ModelConstant<'speech'> = allModels[617]
-export const TTS_S3GEN_EN_CHATTERBOX_Q5_0: ModelConstant<'speech'> = allModels[618]
-export const TTS_S3GEN_EN_CHATTERBOX_Q8_0: ModelConstant<'speech'> = allModels[619]
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<'speech'> = allModels[620]
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0: ModelConstant<'speech'> = allModels[621]
-export const TTS_EN_SUPERTONIC_Q4_0: ModelConstant<'speech'> = allModels[622]
-export const TTS_EN_SUPERTONIC_Q8_0: ModelConstant<'speech'> = allModels[623]
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0: ModelConstant<'speech'> = allModels[624]
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0: ModelConstant<'speech'> = allModels[625]
-export const TTS_DENOISER_LAVASR_FP32: ModelConstant<'speech'> = allModels[626]
-export const TTS_ENHANCER_BACKBONE_LAVASR_FP32: ModelConstant<'speech'> = allModels[627]
-export const TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32: ModelConstant<'speech'> = allModels[629]
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[631]
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4: ModelConstant<'speech'> = allModels[633]
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16: ModelConstant<'speech'> = allModels[635]
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED: ModelConstant<'speech'> =
-  allModels[637]
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32: ModelConstant<'speech'> = allModels[639]
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[641]
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4: ModelConstant<'speech'> = allModels[643]
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16: ModelConstant<'speech'> = allModels[645]
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED: ModelConstant<'speech'> = allModels[647]
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32: ModelConstant<'speech'> = allModels[649]
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[651]
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4: ModelConstant<'speech'> = allModels[653]
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16: ModelConstant<'speech'> = allModels[655]
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED: ModelConstant<'speech'> = allModels[657]
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32: ModelConstant<'speech'> = allModels[659]
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[661]
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4: ModelConstant<'speech'> = allModels[663]
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16: ModelConstant<'speech'> = allModels[665]
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED: ModelConstant<'speech'> = allModels[667]
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32: ModelConstant<'speech'> = allModels[669]
-export const TTS_TOKENIZER_EN_CHATTERBOX: ModelConstant<'speech'> = allModels[671]
-export const TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32: ModelConstant<'speech'> =
-  allModels[672]
-export const TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32: ModelConstant<'speech'> =
-  allModels[673]
-export const TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE: ModelConstant<'speech'> = allModels[674]
-export const TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32: ModelConstant<'speech'> =
-  allModels[675]
-export const TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32: ModelConstant<'speech'> =
-  allModels[676]
-export const TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32: ModelConstant<'speech'> =
-  allModels[677]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE: ModelConstant<'speech'> =
-  allModels[678]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1: ModelConstant<'speech'> =
-  allModels[679]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_2: ModelConstant<'speech'> =
-  allModels[680]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3: ModelConstant<'speech'> =
-  allModels[681]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4: ModelConstant<'speech'> =
-  allModels[682]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5: ModelConstant<'speech'> =
-  allModels[683]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6: ModelConstant<'speech'> =
-  allModels[684]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7: ModelConstant<'speech'> =
-  allModels[685]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8: ModelConstant<'speech'> =
-  allModels[686]
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9: ModelConstant<'speech'> =
-  allModels[687]
-export const TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32: ModelConstant<'speech'> =
-  allModels[688]
-export const TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32: ModelConstant<'speech'> =
-  allModels[689]
-export const TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE: ModelConstant<'speech'> = allModels[690]
-export const TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE: ModelConstant<'speech'> =
-  allModels[691]
-export const TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32: ModelConstant<'speech'> =
-  allModels[692]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE: ModelConstant<'speech'> = allModels[693]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1: ModelConstant<'speech'> =
-  allModels[694]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2: ModelConstant<'speech'> =
-  allModels[695]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3: ModelConstant<'speech'> =
-  allModels[696]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4: ModelConstant<'speech'> =
-  allModels[697]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5: ModelConstant<'speech'> =
-  allModels[698]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6: ModelConstant<'speech'> =
-  allModels[699]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7: ModelConstant<'speech'> =
-  allModels[700]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8: ModelConstant<'speech'> =
-  allModels[701]
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9: ModelConstant<'speech'> =
-  allModels[702]
-export const WHISPER_BASE_Q8_0: ModelConstant<'transcription'> = allModels[703]
-export const WHISPER_BASE_Q0F16: ModelConstant<'transcription'> = allModels[704]
-export const WHISPER_EN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[705]
-export const WHISPER_EN_BASE_Q0F16: ModelConstant<'transcription'> = allModels[706]
-export const WHISPER_LARGE_V3_TURBO: ModelConstant<'transcription'> = allModels[707]
-export const WHISPER_SMALL_Q8_0: ModelConstant<'transcription'> = allModels[708]
-export const WHISPER_SMALL_Q0F16: ModelConstant<'transcription'> = allModels[709]
-export const WHISPER_EN_SMALL_Q8_0: ModelConstant<'transcription'> = allModels[710]
-export const WHISPER_EN_SMALL_Q0F16: ModelConstant<'transcription'> = allModels[711]
-export const WHISPER_TINY_Q8_0: ModelConstant<'transcription'> = allModels[712]
-export const WHISPER_TINY: ModelConstant<'transcription'> = allModels[713]
-export const WHISPER_EN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[714]
-export const WHISPER_EN_TINY_Q0F16: ModelConstant<'transcription'> = allModels[715]
-export const VAD_SILERO_5_1_2: ModelConstant<'transcription'> = allModels[716]
-export const WHISPER_FRENCH_BASE_F16: ModelConstant<'transcription'> = allModels[717]
-export const WHISPER_FRENCH_BASE_Q8_0: ModelConstant<'transcription'> = allModels[718]
-export const WHISPER_FRENCH_TINY_F16: ModelConstant<'transcription'> = allModels[719]
-export const WHISPER_FRENCH_TINY_Q8_0: ModelConstant<'transcription'> = allModels[720]
-export const WHISPER_GERMAN_BASE_F16: ModelConstant<'transcription'> = allModels[721]
-export const WHISPER_GERMAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[722]
-export const WHISPER_GERMAN_TINY_F16: ModelConstant<'transcription'> = allModels[723]
-export const WHISPER_GERMAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[724]
-export const WHISPER_ITALIAN_BASE_F16: ModelConstant<'transcription'> = allModels[725]
-export const WHISPER_ITALIAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[726]
-export const WHISPER_ITALIAN_TINY_F16: ModelConstant<'transcription'> = allModels[727]
-export const WHISPER_ITALIAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[728]
-export const WHISPER_JAPANESE_BASE_F16: ModelConstant<'transcription'> = allModels[729]
-export const WHISPER_JAPANESE_BASE_Q8_0: ModelConstant<'transcription'> = allModels[730]
-export const WHISPER_JAPANESE_TINY_F16: ModelConstant<'transcription'> = allModels[731]
-export const WHISPER_JAPANESE_TINY_Q8_0: ModelConstant<'transcription'> = allModels[732]
-export const WHISPER_NORWEGIAN_TINY: ModelConstant<'transcription'> = allModels[733]
-export const WHISPER_PORTUGUESE_BASE_F16: ModelConstant<'transcription'> = allModels[734]
-export const WHISPER_PORTUGUESE_BASE_Q8_0: ModelConstant<'transcription'> = allModels[735]
-export const WHISPER_PORTUGUESE_TINY_F16: ModelConstant<'transcription'> = allModels[736]
-export const WHISPER_PORTUGUESE_TINY_Q8_0: ModelConstant<'transcription'> = allModels[737]
-export const WHISPER_RUSSIAN_BASE_F16: ModelConstant<'transcription'> = allModels[738]
-export const WHISPER_RUSSIAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[739]
-export const WHISPER_RUSSIAN_TINY_F16: ModelConstant<'transcription'> = allModels[740]
-export const WHISPER_RUSSIAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[741]
-export const WHISPER_SPANISH_TINY_F16: ModelConstant<'transcription'> = allModels[742]
-export const WHISPER_SPANISH_TINY_Q8_0: ModelConstant<'transcription'> = allModels[743]
-export const WHISPER_Q8_0: ModelConstant<'transcription'> = allModels[744]
-export const WHISPER_Q8_0_1: ModelConstant<'transcription'> = allModels[745]
+  allModels[602]
+export const PARAKEET_TDT_Q4_0_1: ModelConstant<'transcription'> = allModels[603]
+export const PARAKEET_TDT_PARAKEET_CTC_0_6B_F16_F16: ModelConstant<'transcription'> = allModels[604]
+export const PARAKEET_TDT_PARAKEET_CTC_0_6B_Q4_0_Q4_0: ModelConstant<'transcription'> =
+  allModels[605]
+export const PARAKEET_TDT_PARAKEET_EOU_120M_V1_F16_F16: ModelConstant<'transcription'> =
+  allModels[606]
+export const PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_F16_F16: ModelConstant<'transcription'> =
+  allModels[607]
+export const PARAKEET_TDT_F16_1: ModelConstant<'transcription'> = allModels[608]
+export const PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_F16_F16: ModelConstant<'transcription'> =
+  allModels[609]
+export const PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_Q4_0_Q4_0: ModelConstant<'transcription'> =
+  allModels[610]
+export const PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_Q8_0_Q8_0: ModelConstant<'transcription'> =
+  allModels[611]
+export const PARAKEET_TDT_PREPROCESSOR_F16: ModelConstant<'transcription'> = allModels[612]
+export const PARAKEET_TDT_PREPROCESSOR_Q4_0: ModelConstant<'transcription'> = allModels[613]
+export const PARAKEET_TDT_PREPROCESSOR_Q8_0: ModelConstant<'transcription'> = allModels[614]
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX: ModelConstant<'speech'> = allModels[615]
+export const TTS_S3GEN_EN_CHATTERBOX: ModelConstant<'speech'> = allModels[616]
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[617]
+export const TTS_T3_TURBO_EN_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[618]
+export const TTS_MECAB_IPADIC_CHATTERBOX: ModelConstant<'speech'> = allModels[619]
+export const TTS_MECAB_IPADIC_CHATTERBOX_1: ModelConstant<'speech'> = allModels[620]
+export const TTS_MECAB_IPADIC_CHATTERBOX_2: ModelConstant<'speech'> = allModels[621]
+export const TTS_MECAB_IPADIC_CHATTERBOX_3: ModelConstant<'speech'> = allModels[622]
+export const TTS_MECAB_IPADIC_CHATTERBOX_4: ModelConstant<'speech'> = allModels[623]
+export const TTS_MECAB_IPADIC_CHATTERBOX_5: ModelConstant<'speech'> = allModels[624]
+export const TTS_CODEC_DECODER_AUDIO8_FP16: ModelConstant<'speech'> = allModels[625]
+export const TTS_CODEC_DECODER_AUDIO8_Q8_0: ModelConstant<'speech'> = allModels[626]
+export const TTS_CODEC_ENCODER_AUDIO8_FP16: ModelConstant<'speech'> = allModels[627]
+export const TTS_CODEC_ENCODER_AUDIO8_Q8_0: ModelConstant<'speech'> = allModels[628]
+export const TTS_LM_MULTILINGUAL_AUDIO8_FP16: ModelConstant<'speech'> = allModels[629]
+export const TTS_LM_MULTILINGUAL_AUDIO8_Q8_0: ModelConstant<'speech'> = allModels[630]
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<'speech'> = allModels[631]
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<'speech'> = allModels[632]
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0: ModelConstant<'speech'> = allModels[633]
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0: ModelConstant<'speech'> = allModels[634]
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<'speech'> = allModels[635]
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<'speech'> = allModels[636]
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<'speech'> = allModels[637]
+export const TTS_S3GEN_EN_CHATTERBOX_Q4_0: ModelConstant<'speech'> = allModels[638]
+export const TTS_S3GEN_EN_CHATTERBOX_Q5_0: ModelConstant<'speech'> = allModels[639]
+export const TTS_S3GEN_EN_CHATTERBOX_Q8_0: ModelConstant<'speech'> = allModels[640]
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<'speech'> = allModels[641]
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0: ModelConstant<'speech'> = allModels[642]
+export const TTS_CANGJIE_ZH_CHATTERBOX: ModelConstant<'speech'> = allModels[643]
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP32: ModelConstant<'speech'> = allModels[644]
+export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP32: ModelConstant<'speech'> = allModels[645]
+export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0: ModelConstant<'speech'> = allModels[646]
+export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE: ModelConstant<'speech'> = allModels[647]
+export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1: ModelConstant<'speech'> = allModels[648]
+export const TTS_COSYVOICE3_VOICE_COSYVOICE: ModelConstant<'speech'> = allModels[649]
+export const TTS_COSYVOICE3_VOICE_COSYVOICE_1: ModelConstant<'speech'> = allModels[650]
+export const TTS_COSYVOICE3_VOICE_COSYVOICE_2: ModelConstant<'speech'> = allModels[651]
+export const TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32: ModelConstant<'speech'> = allModels[652]
+export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16: ModelConstant<'speech'> = allModels[653]
+export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32: ModelConstant<'speech'> = allModels[654]
+export const TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0: ModelConstant<'speech'> = allModels[655]
+export const TTS_ENHANCER_LAVASR_FP16: ModelConstant<'speech'> = allModels[656]
+export const TTS_ENHANCER_LAVASR_FP32: ModelConstant<'speech'> = allModels[657]
+export const TTS_DENOISER_LAVASR_FP16: ModelConstant<'speech'> = allModels[658]
+export const TTS_DENOISER_LAVASR_FP32: ModelConstant<'speech'> = allModels[659]
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16: ModelConstant<'speech'> = allModels[660]
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32: ModelConstant<'speech'> = allModels[661]
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0: ModelConstant<'speech'> = allModels[662]
+export const TTS_LARGE_V1_EN_PARLER_TTS_FP16: ModelConstant<'speech'> = allModels[663]
+export const TTS_LARGE_V1_EN_PARLER_TTS_FP32: ModelConstant<'speech'> = allModels[664]
+export const TTS_LARGE_V1_EN_PARLER_TTS_Q8_0: ModelConstant<'speech'> = allModels[665]
+export const TTS_MINI_V1_EN_PARLER_TTS_FP16: ModelConstant<'speech'> = allModels[666]
+export const TTS_MINI_V1_EN_PARLER_TTS_FP32: ModelConstant<'speech'> = allModels[667]
+export const TTS_MINI_V1_EN_PARLER_TTS_Q8_0: ModelConstant<'speech'> = allModels[668]
+export const TTS_EN_SUPERTONIC_Q4_0: ModelConstant<'speech'> = allModels[669]
+export const TTS_EN_SUPERTONIC_Q8_0: ModelConstant<'speech'> = allModels[670]
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0: ModelConstant<'speech'> = allModels[671]
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0: ModelConstant<'speech'> = allModels[672]
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP16: ModelConstant<'speech'> = allModels[673]
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP32: ModelConstant<'speech'> = allModels[674]
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0: ModelConstant<'speech'> = allModels[675]
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0: ModelConstant<'speech'> = allModels[676]
+export const WHISPER_BASE_Q8_0: ModelConstant<'transcription'> = allModels[677]
+export const WHISPER_BASE_Q0F16: ModelConstant<'transcription'> = allModels[678]
+export const WHISPER_EN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[679]
+export const WHISPER_EN_BASE_Q0F16: ModelConstant<'transcription'> = allModels[680]
+export const WHISPER_LARGE_V3_TURBO: ModelConstant<'transcription'> = allModels[681]
+export const WHISPER_SMALL_Q8_0: ModelConstant<'transcription'> = allModels[682]
+export const WHISPER_SMALL_Q0F16: ModelConstant<'transcription'> = allModels[683]
+export const WHISPER_EN_SMALL_Q8_0: ModelConstant<'transcription'> = allModels[684]
+export const WHISPER_EN_SMALL_Q0F16: ModelConstant<'transcription'> = allModels[685]
+export const WHISPER_TINY_Q8_0: ModelConstant<'transcription'> = allModels[686]
+export const WHISPER_TINY: ModelConstant<'transcription'> = allModels[687]
+export const WHISPER_EN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[688]
+export const WHISPER_EN_TINY_Q0F16: ModelConstant<'transcription'> = allModels[689]
+export const VAD_SILERO_5_1_2: ModelConstant<'transcription'> = allModels[690]
+export const WHISPER_FRENCH_BASE_F16: ModelConstant<'transcription'> = allModels[691]
+export const WHISPER_FRENCH_BASE_Q8_0: ModelConstant<'transcription'> = allModels[692]
+export const WHISPER_FRENCH_TINY_F16: ModelConstant<'transcription'> = allModels[693]
+export const WHISPER_FRENCH_TINY_Q8_0: ModelConstant<'transcription'> = allModels[694]
+export const WHISPER_GERMAN_BASE_F16: ModelConstant<'transcription'> = allModels[695]
+export const WHISPER_GERMAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[696]
+export const WHISPER_GERMAN_TINY_F16: ModelConstant<'transcription'> = allModels[697]
+export const WHISPER_GERMAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[698]
+export const WHISPER_ITALIAN_BASE_F16: ModelConstant<'transcription'> = allModels[699]
+export const WHISPER_ITALIAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[700]
+export const WHISPER_ITALIAN_TINY_F16: ModelConstant<'transcription'> = allModels[701]
+export const WHISPER_ITALIAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[702]
+export const WHISPER_JAPANESE_BASE_F16: ModelConstant<'transcription'> = allModels[703]
+export const WHISPER_JAPANESE_BASE_Q8_0: ModelConstant<'transcription'> = allModels[704]
+export const WHISPER_JAPANESE_TINY_F16: ModelConstant<'transcription'> = allModels[705]
+export const WHISPER_JAPANESE_TINY_Q8_0: ModelConstant<'transcription'> = allModels[706]
+export const WHISPER_NORWEGIAN_TINY: ModelConstant<'transcription'> = allModels[707]
+export const WHISPER_PORTUGUESE_BASE_F16: ModelConstant<'transcription'> = allModels[708]
+export const WHISPER_PORTUGUESE_BASE_Q8_0: ModelConstant<'transcription'> = allModels[709]
+export const WHISPER_PORTUGUESE_TINY_F16: ModelConstant<'transcription'> = allModels[710]
+export const WHISPER_PORTUGUESE_TINY_Q8_0: ModelConstant<'transcription'> = allModels[711]
+export const WHISPER_RUSSIAN_BASE_F16: ModelConstant<'transcription'> = allModels[712]
+export const WHISPER_RUSSIAN_BASE_Q8_0: ModelConstant<'transcription'> = allModels[713]
+export const WHISPER_RUSSIAN_TINY_F16: ModelConstant<'transcription'> = allModels[714]
+export const WHISPER_RUSSIAN_TINY_Q8_0: ModelConstant<'transcription'> = allModels[715]
+export const WHISPER_SPANISH_TINY_F16: ModelConstant<'transcription'> = allModels[716]
+export const WHISPER_SPANISH_TINY_Q8_0: ModelConstant<'transcription'> = allModels[717]
+export const WHISPER_Q8_0: ModelConstant<'transcription'> = allModels[718]
+export const WHISPER_Q8_0_1: ModelConstant<'transcription'> = allModels[719]
