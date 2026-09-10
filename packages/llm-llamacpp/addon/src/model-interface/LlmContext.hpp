@@ -577,7 +577,7 @@ protected:
   // `params.speculative.draft.n_max` to this at init so fabric's own draft loop
   // is bounded, and runSpeculativeGeneration reuses it to bound the
   // `specBatch(nMax + 1)` allocation and the `uint16_t` accepted-count cast.
-  static constexpr int kMaxSpecDraft = 128;
+  static constexpr int K_MAX_SPEC_DRAFT = 128;
   // common_speculative_get_draft_params requires a non-null .prompt; the MTP
   // impl never reads its contents (only id_last/n_past/n_max).
   std::vector<llama_token> specPromptDummy_;
@@ -761,10 +761,10 @@ protected:
     // nothing and bounds both the `LlamaBatch(nMax + 1, ...)` allocation below
     // and the `uint16_t` accepted-count cast at accept time. NOTE this only
     // bounds the LOCAL nMax; the derived contexts also clamp
-    // params.speculative.draft.n_max to kMaxSpecDraft at init so fabric's own
+    // params.speculative.draft.n_max to K_MAX_SPEC_DRAFT at init so fabric's own
     // draft loop (which ignores the per-round dp.n_max hint) is bounded too.
-    if (nMax > kMaxSpecDraft) {
-      nMax = kMaxSpecDraft;
+    if (nMax > K_MAX_SPEC_DRAFT) {
+      nMax = K_MAX_SPEC_DRAFT;
     }
     // Keep the whole verify batch (id_last + nMax drafts = nMax + 1 tokens)
     // within the decode batch: cap at n_batch - 1 when n_batch is sane.
