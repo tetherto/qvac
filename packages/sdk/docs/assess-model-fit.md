@@ -84,9 +84,9 @@ What "total" and "in use" mean depends on the result's `basis`:
 - **`process-memory`** — the app's own ceiling. iOS jetsam terminates an app
   on its per-process footprint against a limit well below device RAM, so a
   system budget there would defend verdicts the OS does not honor. The budget
-  comes from `os_proc_available_memory()` plus the current footprint; until
-  that per-process metric is available on a build, iOS assessments return
-  `unknown` rather than a confidently wrong `likely-fits`.
+  is the per-process allowance the OS reports plus the current footprint. A
+  build that cannot state that allowance assesses as `unknown` rather than
+  returning a confidently wrong `likely-fits`.
 
 - **`device-memory`** — a discrete GPU's own memory, used when the model will
   execute there. Only for a GPU whose readings the collector established are
