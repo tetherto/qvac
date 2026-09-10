@@ -32,6 +32,13 @@ const ESTIMATORS = {
 
 const MOBILE_PLATFORMS: readonly ModelFitPlatform[] = ['android-arm64', 'ios-arm64']
 
+// Every allocation, GPU included, is system RAM: the system budget always bounds the load.
+const UNIFIED_MEMORY_PLATFORMS: readonly ModelFitPlatform[] = [
+  'darwin-arm64',
+  'android-arm64',
+  'ios-arm64'
+]
+
 /**
  * Platforms whose fixture describes CPU-resident execution (`device: 'cpu'`),
  * so a reported GPU sends the host through `resolveGpuPlacement` instead.
@@ -228,11 +235,16 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   const combined = anyUnknown || anyFloor ? undefined : aggregate(estimates, execution)
   const combinedFloor = anyUnknown ? undefined : aggregateFloor(results, execution)
 
-  const evidence: ModelFitEvidence | undefined = anyFloor
-    ? 'computed-only'
-    : estimates.length > 0
-      ? 'calibration'
-      : undefined
+  // Absent when a candidate rests on nothing: the set then has no single kind
+  // of evidence to name, and an `unknown` with `evidence` present stays a
+  // near-miss or an uncalibrated floor rather than a missing model.
+  const evidence: ModelFitEvidence | undefined = anyUnknown
+    ? undefined
+    : anyFloor
+      ? 'computed-only'
+      : estimates.length > 0
+        ? 'calibration'
+        : undefined
 
   if (anyUnknown) {
     reasons.push('at least one model could not be estimated, so the combined verdict is unknown')
@@ -264,6 +276,12 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
         ? 'all models counted as resident with every working peak added'
         : 'all models counted as resident with only the largest working peak added'
     )
+  } else if (budget && combinedFloor !== undefined) {
+    reasons.push(
+      execution === 'concurrent'
+        ? 'all models counted as resident with their floors summed and every calibrated working peak added'
+        : 'all models counted as resident with their floors summed and only the largest calibrated working peak added'
+    )
   }
 
   if (anyFloor) {
@@ -293,17 +311,17 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
  * process) budget measures — the precondition for the computed floor to be
  * compared against that budget.
  *
- * True on unified-memory platforms whatever the collector reports, and on a
- * CPU-calibrated platform when no usable GPU is present or every usable GPU
- * allocates out of system RAM. A card with its own memory, or a device whose
- * class cannot be told (an AMD APU on linux), fails it: the weights may live
- * where the budget cannot see them.
+ * True on unified-memory platforms whatever the collector reports, and
+ * elsewhere when no usable GPU is present or every usable GPU allocates out of
+ * system RAM. A card with its own memory, or a device whose class cannot be
+ * told (an AMD APU on linux), fails it: the weights may live where the budget
+ * cannot see them.
  */
 function boundBySystemMemory(
   resources: SystemResources,
   platform: ModelFitPlatform | undefined
 ): boolean {
-  if (platform !== undefined && !CPU_CALIBRATED_PLATFORMS.includes(platform)) return true
+  if (platform !== undefined && UNIFIED_MEMORY_PLATFORMS.includes(platform)) return true
 
   const gpus = usableGpus(resources)
   if (gpus.length === 0) return true

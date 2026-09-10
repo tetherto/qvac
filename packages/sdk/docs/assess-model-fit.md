@@ -48,7 +48,10 @@ estimator refuses (audio, today). A set of candidates rests on its weakest
 evidence: one `computed-only` model makes the combined `evidence`
 `computed-only`, and the combined verdict can then refuse the set but not
 confirm it. Under `computed-only` there is no `estimate`; `floorBytes` carries
-the bound instead, aggregated under `execution` for the combined result.
+the bound instead, aggregated under `execution` for the combined result. When a
+candidate could not be assessed at all — no catalog profile, a workload its
+engine does not take — the combined `evidence` is absent: the set rests on
+nothing it can name, and its `unknown` says so in `reasons`.
 
 Branch on `evidence`, not on the verdict alone: an `unknown` under
 `computed-only` for a small model is "no calibration here", not "too close to

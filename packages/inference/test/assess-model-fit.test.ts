@@ -805,6 +805,41 @@ test('assess: one unknown model makes the combined verdict unknown', (t) => {
   t.is(result.models[0]!.verdict, 'likely-fits', 'the known model still reports its own verdict')
   t.is(result.models[1]!.verdict, 'unknown')
   t.ok(result.models[1]!.reasons.some((r) => r.includes('no resource profile')))
+  t.absent(result.evidence, 'a set with an unassessable model names no evidence')
+  t.absent(result.floorBytes)
+})
+
+test('assess: floors are aggregated under execution and the reason says so', (t) => {
+  // Two 3 GiB models on an 8 GiB phone with a 5 GiB budget: each fits its
+  // floor alone, together they do not.
+  const phone = resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB })
+  const models = [
+    candidate({ model: { name: 'A', sha256Checksum: 'a'.repeat(64) } }),
+    candidate({ model: { name: 'B', sha256Checksum: 'b'.repeat(64) } })
+  ]
+  const assess = (execution: 'sequential' | 'concurrent') =>
+    assessModelFitFromResources({
+      models,
+      execution,
+      resources: phone,
+      platform: 'android-arm64',
+      calibration: undefined,
+      resolveProfile: () => profile({ artifactBytes: 3 * GIB, ggufFacts: undefined })
+    })
+
+  const sequential = assess('sequential')
+  t.is(sequential.models[0]!.verdict, 'unknown')
+  t.is(sequential.models[1]!.verdict, 'unknown')
+  t.is(sequential.verdict, 'likely-too-large', 'the summed floors exceed the budget')
+  t.is(sequential.evidence, 'computed-only')
+  t.is(sequential.floorBytes, 6 * GIB)
+  t.ok(
+    sequential.reasons.some((r) => r.includes('floors summed and only the largest')),
+    'the aggregation is explained under computed-only evidence too'
+  )
+
+  const concurrent = assess('concurrent')
+  t.ok(concurrent.reasons.some((r) => r.includes('floors summed and every')))
 })
 
 test('assess: an uncalibrated platform yields unknown, never likely-fits, for a model inside the budget', (t) => {

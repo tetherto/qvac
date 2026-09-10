@@ -1,6 +1,10 @@
 import type { ModelFitWorkload } from '@/schemas/assess-model-fit'
 import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
-import { kvCacheBytesForWidth, kvElementBytes } from '@/resources/model-fit/estimators/llm'
+import {
+  LLAMA_WEIGHTS_ASSUMPTION,
+  kvCacheBytesForWidth,
+  kvElementBytes
+} from '@/resources/model-fit/estimators/llm'
 
 export const FLOOR_VERSION = 'floor-v1'
 
@@ -45,7 +49,9 @@ export function computeFloor(input: FloorInput): FloorResult {
 
   const reasons: string[] = []
   const assumptions: string[] = [
-    'weights are counted at full artifact size; whatever the engine maps or copies, the file has to be resident to run',
+    KV_CACHE_ENGINES.has(profile.engine)
+      ? LLAMA_WEIGHTS_ASSUMPTION
+      : 'weights are counted at full artifact size; whatever the engine maps or copies, the file has to be resident to run',
     'the floor omits engine overhead, compute buffers and working memory, all of which are non-negative, so it cannot overstate the cost — and says nothing about how much more the load needs'
   ]
 
