@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -95,7 +95,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/fabric": "^0.10.0",
+    "@qvac/fabric": "^0.13.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
