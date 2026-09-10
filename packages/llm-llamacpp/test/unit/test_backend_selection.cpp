@@ -422,6 +422,27 @@ TEST_F(BackendSelectionTest, FamilyDeviceNameWorksWithForeignRegistry) {
   expectChosen(mockBackend, BackendType::GPU, "cuda0");
 }
 
+// The OpenCL bucket is keyed on the backend family (registry or device name),
+// the same predicate that admits the device. A device the OpenCL registry names
+// after the GPU must still land in that bucket, or the Adreno rules that clear
+// it would miss the device.
+TEST_F(BackendSelectionTest, OpenClRegistryDeviceLandsInOpenClBucket) {
+  mockBackend.addDevice(MockDevice(
+      ADRENO_DESC, "Adreno0", GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL"));
+  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "adreno0");
+  EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.second == "Chosen GPU OpenCL";
+  }));
+}
+
+TEST_F(BackendSelectionTest, OpenClRegistryDeviceIsConsideredUnderMainGpuType) {
+  mockBackend.addDevice(MockDevice(
+      ADRENO_DESC, "Adreno0", GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL"));
+  MainGpu mainGpu = MainGpuType::Integrated;
+  expectChosen(mockBackend, BackendType::GPU, "adreno0", mainGpu);
+}
+
 // Multiple Adreno OpenCL/Vulkan backends - chooses opencl
 TEST_F(BackendSelectionTest, MultipleAdrenoOpenCLChoosesFirst) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
@@ -1418,19 +1439,41 @@ TEST_F(BackendSelectionTest, SplitDevices_RpcIsPrepended) {
       getSplitDeviceNames(bckI), (std::vector<std::string>{"rpc0", "vulkan0"}));
 }
 
-TEST_F(BackendSelectionTest, SplitDevices_DedupesCudaMpsAndVulkanAlias) {
+// One physical card registered by both CUDA and Vulkan reports the same PCI
+// bus id from each, so it is kept once; the CUDA entry wins by registry order.
+TEST_F(BackendSelectionTest, SplitDevices_DedupesCudaAndVulkanAlias) {
   mockBackend.addDevice(withDeviceId(
       MockDevice(
           "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
-      "0000:01:00.0-v0"));
+      "0000:01:00.0"));
   mockBackend.addDevice(withDeviceId(
       createGPUDevice("NVIDIA RTX 4090", "vulkan0"), "0000:01:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
 }
 
+// ggml-cuda suffixes the PCI bus id with -v<N> for virtual (MPS/MIG) devices
+// and fabric compares device_id verbatim, so two such entries are two devices.
+TEST_F(BackendSelectionTest, SplitDevices_KeepsVirtualCudaDevices) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0-v0"));
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA1", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0-v1"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0", "CUDA1"}));
+}
+
+// sourceGpuIndex is the ordinal among GPU/IGPU devices, not the registry
+// index: CPU and ACCEL entries interleaved with the GPUs must not shift it.
 TEST_F(BackendSelectionTest, SplitDevices_TracksRawGpuIndices) {
+  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
   mockBackend.addDevice(createGPUDevice("NVIDIA GPU", "vulkan0"));
+  mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
   mockBackend.addDevice(
       MockDevice("AMD Radeon", "ROCm0", GGML_BACKEND_DEVICE_TYPE_GPU, "HIP"));
   mockBackend.addDevice(createGPUDevice("NVIDIA GPU", "vulkan1"));

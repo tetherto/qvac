@@ -683,14 +683,6 @@ void remapTensorSplit(
   if (value == config.end()) {
     return;
   }
-  bool mappingChanged = selection.devices.size() != selection.sourceGpuCount;
-  for (size_t index = 0; !mappingChanged && index < selection.devices.size();
-       ++index) {
-    mappingChanged = selection.devices[index].sourceGpuIndex != index;
-  }
-  if (!mappingChanged) {
-    return;
-  }
   std::string normalized = value->second;
   std::ranges::replace(normalized, '/', ',');
   const std::vector<std::string> proportions = split(normalized, ',');
@@ -883,15 +875,30 @@ NormalizedLoad normalizeLoadForFit(
         splitMode != LLAMA_SPLIT_MODE_NONE) {
       splitSelection = dependencies.splitDevices();
       if (!splitSelection.devices.empty()) {
+        // KV-cache traits apply when any participant has them. The projector
+        // device and Adreno tier come from the first local device: RPC devices
+        // are prepended and can host neither.
+        const auto& devices = splitSelection.devices;
+        const auto local = std::ranges::find_if(
+            devices, [](const backend_selection::SplitDevice& device) {
+              return !device.isRpc;
+            });
         const backend_selection::SplitDevice& primary =
-            splitSelection.devices.front();
+            local != devices.end() ? *local : devices.front();
+        const auto anyDevice =
+            [&devices](bool backend_selection::SplitDevice::* trait) {
+              return std::ranges::any_of(
+                  devices, [trait](const backend_selection::SplitDevice& d) {
+                    return d.*trait;
+                  });
+            };
         selected = {
             .type = BackendType::GPU,
             .name = primary.name,
             .adrenoVersion = primary.adrenoVersion,
             .isMaliGpu = primary.isMaliGpu,
-            .isOpenCl = primary.isOpenCl,
-            .isMetal = primary.isMetal};
+            .isOpenCl = anyDevice(&backend_selection::SplitDevice::isOpenCl),
+            .isMetal = anyDevice(&backend_selection::SplitDevice::isMetal)};
       } else if (!splitSelection.rejectedDevices.empty()) {
         std::string rejected;
         for (const std::string& device : splitSelection.rejectedDevices) {
@@ -1048,6 +1055,7 @@ NormalizedLoad normalizeLoadForFit(
             "back to CPU\n");
         splitMode = LLAMA_SPLIT_MODE_NONE;
         configFilemap.erase("tensor-split");
+        configFilemap.erase("tensor_split");
       }
     } else {
       throw qvac_errors::StatusError(

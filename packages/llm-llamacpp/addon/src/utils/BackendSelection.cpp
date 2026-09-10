@@ -147,26 +147,14 @@ bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
       "rpc");
 }
 
-std::string normalizedDeviceId(
-    std::string deviceId, const BackendInterface& bckI,
-    const ggml_backend_dev_t dev) {
+bool isOpenClDevice(
+    const BackendInterface& bckI, const ggml_backend_dev_t dev,
+    const DeviceDescription& devDescr) {
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
-  const bool isCuda = hasBackendFamily(
-      lowerCopy(bckI.ggml_backend_dev_name(dev)),
+  return hasBackendFamily(
+      devDescr.gpuBackend,
       lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
-      "cuda");
-  if (!isCuda) {
-    return deviceId;
-  }
-  const size_t suffix = deviceId.rfind("-v");
-  if (suffix == std::string::npos || suffix + 2 == deviceId.size() ||
-      !std::ranges::all_of(deviceId.substr(suffix + 2), [](unsigned char chr) {
-        return std::isdigit(chr) != 0;
-      })) {
-    return deviceId;
-  }
-  deviceId.erase(suffix);
-  return deviceId;
+      "opencl");
 }
 
 std::string
@@ -210,8 +198,8 @@ void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
-    std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu,
-    const ggml_backend_dev_t dev, const DeviceDescription& devDescr,
+    std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu, const bool isOpenCl,
+    const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
@@ -221,7 +209,6 @@ void emplaceIfValidDevice(
 #endif
   };
 
-  const bool isOpenCl = devDescr.gpuBackend.find("opencl") != std::string::npos;
   const bool isAdreno =
       devDescr.gpuDescription.find("dreno") != std::string::npos;
   // QVAC-21867: track Mali GPUs (description is lowercased by
@@ -251,8 +238,7 @@ void emplaceIfValidDevice(
 }
 
 bool shouldProcessDevice(
-    const enum ggml_backend_dev_type backendTypeEnum,
-    const DeviceDescription& devDescr,
+    const enum ggml_backend_dev_type backendTypeEnum, const bool isOpenCl,
     const std::optional<MainGpuType> mainGpuType) {
   const bool anyGpu = !mainGpuType.has_value() &&
                       (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
@@ -263,7 +249,6 @@ bool shouldProcessDevice(
   const bool dedicatedGpu = mainGpuType.has_value() &&
                             mainGpuType.value() == MainGpuType::Dedicated &&
                             backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU;
-  const bool isOpenCl = devDescr.gpuBackend.find("opencl") != std::string::npos;
   return anyGpu || integratedGpu || dedicatedGpu || isOpenCl;
 }
 
@@ -279,7 +264,8 @@ void tryEmplaceDevice(
   const enum ggml_backend_dev_type backendTypeEnum =
       bckI.ggml_backend_dev_type(dev);
   const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
-  if (shouldProcessDevice(backendTypeEnum, devDescr, mainGpuType)) {
+  const bool isOpenCl = isOpenClDevice(bckI, dev, devDescr);
+  if (shouldProcessDevice(backendTypeEnum, isOpenCl, mainGpuType)) {
 #ifndef NDEBUG
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "New GPU device", nullptr);
 #endif
@@ -297,7 +283,7 @@ void tryEmplaceDevice(
         openClBackends,
         maxAdrenoVersion,
         sawMaliGpu,
-        dev,
+        isOpenCl,
         devDescr,
         backendTypeEnum);
   } else {
@@ -581,14 +567,12 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
     // std::string members copy in declaration order.
     ggml_backend_dev_props props{};
     bckI.ggml_backend_dev_get_props(dev, &props);
-    const std::string deviceId = normalizedDeviceId(
-        props.device_id != nullptr ? std::string(props.device_id)
-                                   : std::string(),
-        bckI,
-        dev);
+    const std::string deviceId = props.device_id != nullptr
+                                     ? std::string(props.device_id)
+                                     : std::string();
     const char* namePtr = bckI.ggml_backend_dev_name(dev);
-    // An empty name would join into a leading or trailing comma and make the
-    // whole --device list unparseable, so it is skipped like a null one.
+    // The name identifies the device in the pinned-device log and, for the
+    // primary, becomes mmproj_backend, so an empty one is rejected like null.
     if (namePtr == nullptr || *namePtr == '\0') {
       result.rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
       continue;
@@ -603,6 +587,7 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
         .name = namePtr,
         .handle = dev,
         .sourceGpuIndex = sourceGpuIndex,
+        .isRpc = isRpcDevice(bckI, dev),
         .adrenoVersion = parseAdrenoVersion(description),
         .isMaliGpu = description.find("mali") != std::string::npos,
         .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
@@ -611,7 +596,7 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
             reg != nullptr &&
             bckI.ggml_backend_reg_get_proc_address(
                 reg, "ggml_backend_split_buffer_type") != nullptr};
-    if (isRpcDevice(bckI, dev)) {
+    if (selected.isRpc) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
@@ -662,21 +647,6 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
     names.push_back(device.name);
   }
   return names;
-}
-
-std::vector<std::string> backend_selection::getSplitDeviceNames() {
-  BackendInterface bckI{
-      ggml_backend_dev_count,
-      ggml_backend_dev_backend_reg,
-      ggml_backend_dev_get,
-      ggml_backend_reg_name,
-      ggml_backend_dev_description,
-      ggml_backend_dev_name,
-      ggml_backend_dev_type,
-      ggml_backend_reg_get_proc_address,
-      ggml_backend_dev_get_props,
-      nullptr};
-  return getSplitDeviceNames(bckI);
 }
 
 bool backend_selection::gpuBackendSupportsRowSplit(

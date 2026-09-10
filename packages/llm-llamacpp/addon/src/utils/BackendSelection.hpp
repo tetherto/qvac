@@ -88,6 +88,7 @@ struct SplitDevice {
   std::string name;
   ggml_backend_dev_t handle = nullptr;
   size_t sourceGpuIndex = 0;
+  bool isRpc = false;
   std::optional<int> adrenoVersion;
   bool isMaliGpu = false;
   bool isOpenCl = false;
@@ -107,8 +108,7 @@ SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
 /// @brief `getSplitDeviceSelection()` against the real ggml registry.
 SplitDeviceSelection getSplitDeviceSelection();
 
-/// @brief The ordered eligible device names to hand to `--device` for
-/// multi-GPU split modes.
+/// @brief The names of `getSplitDeviceSelection()`'s devices, in order.
 ///
 /// Selection mirrors qvac-fabric's filtered branch (`src/llama.cpp`) while
 /// applying this addon's supported-backend allowlist:
@@ -123,9 +123,6 @@ SplitDeviceSelection getSplitDeviceSelection();
 ///
 /// Returns an empty vector when callers must fall back to CPU.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
-
-/// @brief `getSplitDeviceNames()` against the real ggml backend registry.
-std::vector<std::string> getSplitDeviceNames();
 
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
 /// True only when at least one eligible GPU device is present AND every
