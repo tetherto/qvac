@@ -18,6 +18,31 @@ static SdCtxConfig applyOne(const std::string& key, const std::string& value) {
   return cfg;
 }
 
+static void expectRemovedBackendOption(
+    const std::string& key, const std::string& replacement) {
+  for (const auto* value : {"true", "1"}) {
+    try {
+      applyOne(key, value);
+      FAIL() << key << " should be rejected when set to " << value;
+    } catch (const StatusError& error) {
+      EXPECT_EQ(
+          std::string(error.what()),
+          key + " is no longer supported. Use " + replacement + ".");
+    }
+  }
+  for (const auto* value : {"false", "0"}) {
+    try {
+      applyOne(key, value);
+      FAIL() << key << " should be rejected when set to " << value;
+    } catch (const StatusError& error) {
+      EXPECT_EQ(
+          std::string(error.what()),
+          key + " is no longer supported. Remove it; no replacement is needed "
+                "when it is false.");
+    }
+  }
+}
+
 } // namespace
 
 TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
@@ -149,8 +174,12 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
   EXPECT_TRUE(applyOne("stream_layers", "true").streamLayers);
   EXPECT_FALSE(SdCtxConfig{}.streamLayers);
   EXPECT_THROW(applyOne("stream_layers", "maybe"), StatusError);
-  EXPECT_FALSE(applyOne("clip_on_cpu", "false").keepClipOnCpu);
-  EXPECT_TRUE(applyOne("vae_on_cpu", "true").keepVaeOnCpu);
+  EXPECT_EQ(SD_CTX_HANDLERS.count("control_net_cpu"), 0U);
+  EXPECT_EQ(SD_CTX_HANDLERS.count("clip_on_cpu"), 0U);
+  EXPECT_EQ(SD_CTX_HANDLERS.count("vae_on_cpu"), 0U);
+  expectRemovedBackendOption("control_net_cpu", "backend=controlnet=cpu");
+  expectRemovedBackendOption("clip_on_cpu", "backend=te=cpu");
+  expectRemovedBackendOption("vae_on_cpu", "backend=vae=cpu");
   EXPECT_TRUE(applyOne("vae_auto_cpu_fallback", "true").vaeAutoCpuFallback);
   EXPECT_FLOAT_EQ(
       applyOne("vae_auto_cpu_fallback_memory_ratio", "0.75")
@@ -173,6 +202,41 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
           std::unordered_map<std::string, std::string>{
               {"vae_decode_only", "maybe"}}),
       StatusError);
+}
+
+TEST(SdCtxHandlers_MemoryFlags, DetectsDiskParameterAssignments) {
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("diffusion=disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("te=cpu, diffusion = DISK"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("vae=cpu, default=disk"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk(""));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("cpu"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("diffusion=cpu,vae=vulkan0"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("diffusion=diskette"));
+}
+
+TEST(SdCtxHandlers_MemoryFlags, ComposesOffloadDefaultWithExplicitAssignments) {
+  EXPECT_EQ(effectiveParamsBackendSpec("", false), "");
+  EXPECT_EQ(
+      effectiveParamsBackendSpec("diffusion=disk", false), "diffusion=disk");
+  EXPECT_EQ(effectiveParamsBackendSpec("", true), "*=cpu");
+  EXPECT_EQ(effectiveParamsBackendSpec("te=disk", true), "*=cpu,te=disk");
+}
+
+TEST(SdCtxHandlers_MemoryFlags, ReportsRemovedOptionsInStableOrder) {
+  SdCtxConfig cfg;
+  try {
+    applySdCtxHandlers(
+        cfg,
+        std::unordered_map<std::string, std::string>{
+            {"vae_on_cpu", "true"}, {"control_net_cpu", "true"}});
+    FAIL() << "removed options should be rejected";
+  } catch (const StatusError& error) {
+    EXPECT_EQ(
+        std::string(error.what()),
+        "control_net_cpu is no longer supported. Use "
+        "backend=controlnet=cpu.");
+  }
 }
 
 TEST(SdCtxHandlers_Upscaler, DefaultsAndConfigValuesMapCorrectly) {

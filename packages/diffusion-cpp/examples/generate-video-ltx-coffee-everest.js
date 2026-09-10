@@ -170,7 +170,7 @@ async function main() {
       offload_to_cpu: envFlag('LTX_OFFLOAD_TO_CPU', true),
       // An explicit CPU override remains available. Otherwise preflight each
       // VAE graph and route only oversized graphs to CPU; DiT remains on Vulkan.
-      vae_on_cpu: envFlag('LTX_VAE_ON_CPU', false),
+      backend: envFlag('LTX_VAE_ON_CPU', false) ? 'vae=cpu' : undefined,
       vae_auto_cpu_fallback: envFlag('LTX_VAE_AUTO_CPU_FALLBACK', true),
       vae_auto_cpu_fallback_memory_ratio: Number(
         process.env.LTX_VAE_AUTO_CPU_FALLBACK_MEMORY_RATIO || 0.9

@@ -368,14 +368,10 @@ void SdModel::load() {
   params.flash_attn = config_.flashAttn;
   params.diffusion_flash_attn = config_.diffusionFlashAttn;
   // The engine defaults to lazy weight loading (eager_load = false), which
-  // moves per-module weight loads INSIDE generate_*(): the model loader then
-  // emits progress ticks (total = tensor count) that reach JS consumers
-  // indistinguishably from sampler ticks, and the first job's conditionerMs
-  // absorbs weight-load time. On desktop, load eagerly at new_sd_ctx()
-  // instead — the cost lands in modelLoadMs where this addon already
-  // accounts for it, and generate_*() emits only sampler and VAE-tiling
-  // sequences. (The engine auto-downgrades eager_load when graph-cut layer
-  // splitting is active; this addon does not enable that mode.)
+  // moves per-module weight loads inside generate_*(). On desktop, load
+  // eagerly so the cost lands in modelLoadMs and generation progress excludes
+  // loader ticks. Disk-backed parameters are the exception: eager loading
+  // defeats their on-demand residency and can exhaust the runtime backend.
   //
   // Mobile stays lazy: eager loading front-loads every module's full weight
   // prep into load(), which pushed the Device Farm API-behavior and
@@ -387,7 +383,8 @@ void SdModel::load() {
 #if defined(__ANDROID__) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
   params.eager_load = false;
 #else
-  params.eager_load = true;
+  params.eager_load = !qvac_lib_inference_addon_sd::paramsBackendSpecUsesDisk(
+      config_.paramsBackendSpec);
 #endif
 
   // Load DL GPU backend modules before probing devices / creating the SD
@@ -404,24 +401,19 @@ void SdModel::load() {
   params.max_vram =
       config_.maxVramSpec.empty() ? nullptr : config_.maxVramSpec.c_str();
   params.stream_layers = config_.streamLayers;
-
-  // An explicit assignment takes priority; otherwise retain the supported
-  // compatibility mappings for the legacy CPU-placement flags.
-  std::string paramsBackend = config_.paramsBackendSpec;
-  if (paramsBackend.empty()) {
-    if (config_.offloadToCpu) {
-      paramsBackend = "cpu";
-    } else {
-      if (config_.keepClipOnCpu)
-        paramsBackend = "clip=cpu";
-      if (config_.keepVaeOnCpu)
-        paramsBackend += paramsBackend.empty() ? "vae=cpu" : ",vae=cpu";
-    }
-  } else if (
-      config_.offloadToCpu || config_.keepClipOnCpu || config_.keepVaeOnCpu) {
+  if (!config_.maxVramSpec.empty()) {
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        "params_backend overrides legacy CPU placement flags");
+        "Effective stable-diffusion max_vram '" + config_.maxVramSpec + "'");
+  }
+
+  std::string paramsBackend =
+      qvac_lib_inference_addon_sd::effectiveParamsBackendSpec(
+          config_.paramsBackendSpec, config_.offloadToCpu);
+  if (!paramsBackend.empty()) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "Effective stable-diffusion params backend '" + paramsBackend + "'");
   }
   params.params_backend =
       paramsBackend.empty() ? nullptr : paramsBackend.c_str();
@@ -444,6 +436,11 @@ void SdModel::load() {
   std::string mainGpuBackend;
   if (!config_.backendSpec.empty()) {
     params.backend = config_.backendSpec.c_str();
+    if (!config_.mainGpu.empty()) {
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "main-gpu ignored because an explicit backend assignment is set");
+    }
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "Explicit stable-diffusion backend assignment '" + config_.backendSpec +

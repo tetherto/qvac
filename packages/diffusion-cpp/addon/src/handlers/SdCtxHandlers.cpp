@@ -1,6 +1,11 @@
 #include "SdCtxHandlers.hpp"
 
+#include <algorithm>
+#include <array>
+#include <cctype>
 #include <cstddef>
+#include <string_view>
+#include <utility>
 
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -14,6 +19,60 @@
 namespace qvac_lib_inference_addon_sd {
 
 using namespace qvac_errors;
+
+namespace {
+
+std::string_view trim(std::string_view value) {
+  const auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
+  while (!value.empty() && isSpace(value.front())) {
+    value.remove_prefix(1);
+  }
+  while (!value.empty() && isSpace(value.back())) {
+    value.remove_suffix(1);
+  }
+  return value;
+}
+
+bool equalsIgnoreCase(std::string_view lhs, std::string_view rhs) {
+  return lhs.size() == rhs.size() &&
+         std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) {
+           return std::tolower(static_cast<unsigned char>(a)) ==
+                  std::tolower(static_cast<unsigned char>(b));
+         });
+}
+
+} // namespace
+
+bool paramsBackendSpecUsesDisk(const std::string& spec) {
+  std::string_view remaining = spec;
+  while (!remaining.empty()) {
+    const std::size_t comma = remaining.find(',');
+    std::string_view assignment = trim(remaining.substr(0, comma));
+    if (const std::size_t equals = assignment.find('=');
+        equals != std::string_view::npos) {
+      assignment = trim(assignment.substr(equals + 1));
+    }
+    if (equalsIgnoreCase(assignment, "disk")) {
+      return true;
+    }
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    remaining.remove_prefix(comma + 1);
+  }
+  return false;
+}
+
+std::string
+effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu) {
+  if (!offloadToCpu) {
+    return explicitSpec;
+  }
+  if (explicitSpec.empty()) {
+    return "*=cpu";
+  }
+  return "*=cpu," + explicitSpec;
+}
 
 // -- Parse helpers
 // -------------------------------------------------------------
@@ -127,14 +186,6 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        c.streamLayers = parseBool(v, "stream_layers");
      }},
     {"device", [](SdCtxConfig& c, const std::string& v) { c.device = v; }},
-    {"clip_on_cpu",
-     [](SdCtxConfig& c, const std::string& v) {
-       c.keepClipOnCpu = parseBool(v, "clip_on_cpu");
-     }},
-    {"vae_on_cpu",
-     [](SdCtxConfig& c, const std::string& v) {
-       c.keepVaeOnCpu = parseBool(v, "vae_on_cpu");
-     }},
     {"vae_auto_cpu_fallback",
      [](SdCtxConfig& c, const std::string& v) {
        c.vaeAutoCpuFallback = parseBool(v, "vae_auto_cpu_fallback");
@@ -390,6 +441,25 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 void applySdCtxHandlers(
     SdCtxConfig& config,
     const std::unordered_map<std::string, std::string>& configMap) {
+  static const std::array<std::pair<const char*, const char*>, 3>
+      deprecatedBackendOptions{{
+          {"control_net_cpu", "backend=controlnet=cpu"},
+          {"clip_on_cpu", "backend=te=cpu"},
+          {"vae_on_cpu", "backend=vae=cpu"},
+      }};
+  for (const auto& [key, replacement] : deprecatedBackendOptions) {
+    const auto option = configMap.find(key);
+    if (option == configMap.end()) {
+      continue;
+    }
+    const bool enabled = parseBool(option->second, key);
+    std::string message = std::string(key) + " is no longer supported.";
+    message += enabled
+                   ? " Use " + std::string(replacement) + "."
+                   : " Remove it; no replacement is needed when it is false.";
+    throw StatusError(general_error::InvalidArgument, message);
+  }
+
   if (auto mainGpu = sd_backend_selection::mainGpuFromMap(configMap);
       mainGpu.has_value()) {
 #if defined(__ANDROID__) ||                                                    \
