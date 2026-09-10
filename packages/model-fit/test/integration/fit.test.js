@@ -663,16 +663,16 @@ test('mainGpu is validated only when llama uses it', async function (t) {
   )
 
   // Outside NONE the field is inert, so the same index is accepted and the
-  // real model projects a plan — the guard stays scoped rather than becoming a
-  // blanket bound.
-  for (const splitMode of [1, 2]) {
-    const res = fitParams({ modelPath, splitMode, mainGpu: outOfRange })
-    t.not(
-      res.status,
-      FIT_STATUS.ERROR,
-      `an inert mainGpu under split mode ${splitMode} does not fail the fit`
-    )
-  }
+  // real model projects a plan: the guard stays scoped rather than becoming a
+  // blanket bound. Only LAYER is asserted here. ROW is also inert for mainGpu,
+  // but on a GPU host fabric rejects the load itself ("does not support split
+  // buffers" for every shipped backend), so its status is not a mainGpu signal.
+  const layerRes = fitParams({ modelPath, splitMode: 1, mainGpu: outOfRange })
+  t.not(
+    layerRes.status,
+    FIT_STATUS.ERROR,
+    'an inert mainGpu under split mode 1 does not fail the fit'
+  )
 
   // Every in-range index is a placement, never an ERROR: a supported GPU is
   // projected on, and anything else — the CPU registry entry is always one of
