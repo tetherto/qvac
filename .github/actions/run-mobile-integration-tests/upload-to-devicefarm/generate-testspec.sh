@@ -166,13 +166,9 @@ if [ "$PLATFORM" = "iOS" ]; then
   cat <<'EOF'
       - |
         set +e
-        node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js
-        WDIO_RC=$?
         export PATH="$HOME/.local/bin:$PATH"
         # Under sudo these make pymobiledevice3 chown its config and fail EPERM.
         unset SUDO_UID SUDO_GID
-        CRASH_DIR="$DEVICEFARM_LOG_DIR/crash-reports"
-        mkdir -p "$CRASH_DIR"
         # Installed already by the model pre-stage step; install it otherwise.
         if ! command -v pymobiledevice3 >/dev/null 2>&1; then
           python3 -m pip install --quiet pymobiledevice3==10.3.1 >/dev/null 2>&1 \
@@ -180,15 +176,37 @@ if [ "$PLATFORM" = "iOS" ]; then
             || python3 -m pip install --quiet --break-system-packages pymobiledevice3==10.3.1 >/dev/null 2>&1 \
             || true
         fi
+        # Snapshot the reports already on the phone. Device Farm reuses devices
+        # and every addon shard is the same bundle id, so a leftover .ips from
+        # an earlier job would otherwise be reported as this run's crash. Names
+        # carry the crash time and are unique, so comparing names is exact —
+        # unlike an mtime window, which cannot tell the two apart.
+        BEFORE_DIR=$(mktemp -d)
+        BEFORE_LIST=$(mktemp)
+        pymobiledevice3 crash pull "$BEFORE_DIR" >/dev/null 2>&1
+        find "$BEFORE_DIR" -type f -exec basename {} \; > "$BEFORE_LIST" 2>/dev/null
+        rm -rf "$BEFORE_DIR"
+
+        node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js
+        WDIO_RC=$?
+
+        CRASH_DIR="$DEVICEFARM_LOG_DIR/crash-reports"
+        mkdir -p "$CRASH_DIR"
         if command -v pymobiledevice3 >/dev/null 2>&1; then
-          pymobiledevice3 crash pull "$CRASH_DIR" >/dev/null 2>&1 || true
+          pymobiledevice3 crash pull "$CRASH_DIR" >/dev/null 2>&1
         else
           echo "[crash] pymobiledevice3 unavailable - skipping crash-report pull"
         fi
-        # This app only, this session only — Device Farm reuses devices.
-        find "$CRASH_DIR" -type f ! -name 'QvacAddonTester*' -delete 2>/dev/null || true
-        find "$CRASH_DIR" -type f -name 'QvacAddonTester*' ! -mmin -120 -delete 2>/dev/null || true
-        find "$CRASH_DIR" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+        # Keep this app's reports that were not already there before wdio ran.
+        find "$CRASH_DIR" -type f | while IFS= read -r f; do
+          case "$(basename "$f")" in
+            QvacAddonTester*) ;;
+            *) rm -f "$f"; continue ;;
+          esac
+          if grep -Fxq "$(basename "$f")" "$BEFORE_LIST" 2>/dev/null; then rm -f "$f"; fi
+        done
+        rm -f "$BEFORE_LIST"
+        find "$CRASH_DIR" -mindepth 1 -type d -empty -delete 2>/dev/null
         # Echo it inline too: Customer_Artifacts can be missed, this output can't.
         NEWEST=$(ls -t "$CRASH_DIR"/QvacAddonTester* 2>/dev/null | head -1)
         if [ -n "$NEWEST" ]; then
@@ -197,7 +215,7 @@ if [ "$PLATFORM" = "iOS" ]; then
           echo ""
           echo "[CRASH_REPORT_END]"
         else
-          echo "[crash] no QvacAddonTester crash report from this session"
+          echo "[crash] no new QvacAddonTester crash report from this run"
         fi
         exit $WDIO_RC
 EOF

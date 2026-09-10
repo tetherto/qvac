@@ -6,6 +6,7 @@ const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const ASRGgml = require('../../index.js')
 const { roundTo } = require('./memory-usage.js')
+const { linkOrCopySync } = require('./_link-or-copy.js')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -360,30 +361,6 @@ function readPrestagedModel(modelName) {
 function prestagedModelPath(modelName) {
   const staged = readPrestagedModel(modelName)
   return staged ? staged.src : null
-}
-
-// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
-// file already sits in the app's own writable Documents dir — so copying it
-// into the model dir spends that whole budget for nothing. Hardlink instead:
-// same inode, zero bytes. On Android the staging dir is a different filesystem,
-// so link() fails EXDEV and we fall back to the copy that has always run there.
-// `link`/`copy` are injectable so that fallback is unit-testable.
-function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
-  try {
-    fs.unlinkSync(dest)
-  } catch (_) {}
-
-  try {
-    link(src, dest)
-    return 'link'
-  } catch (err) {
-    console.log(
-      `[prestage] hardlink failed on ${platform} (${err.message}); falling back to a byte copy`
-    )
-  }
-
-  copy(src, dest)
-  return 'copy'
 }
 
 // Require the exact host-recorded byte count on both sides of the staging step

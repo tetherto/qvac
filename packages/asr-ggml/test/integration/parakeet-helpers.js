@@ -6,6 +6,7 @@ const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const { roundTo } = require('./parakeet-memory-usage.js')
+const { linkOrCopySync } = require('./_link-or-copy.js')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -678,27 +679,6 @@ function prestagedModelDir(modelName) {
     if (fs.existsSync(p) && fs.statSync(p).size > 0) return stagedDir
   } catch (_) {}
   return null
-}
-
-// Hardlink the staged model instead of copying it: iOS kills an app that
-// dirties more than 4 GiB in 24h, and there the staged file already sits in the
-// app's own writable Documents dir. On Android link() fails EXDEV and the copy
-// takes over. Duplicated from helpers.js rather than imported — that module
-// pulls in the native addon, which the Parakeet mobile package doesn't bundle.
-function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
-  try {
-    fs.unlinkSync(dest)
-  } catch (_) {}
-
-  try {
-    link(src, dest)
-    return 'link'
-  } catch (err) {
-    console.log(`  hardlink failed on ${platform} (${err.message}); falling back to a byte copy`)
-  }
-
-  copy(src, dest)
-  return 'copy'
 }
 
 function loadMobileModelManifest() {
