@@ -238,6 +238,20 @@ test('every fabric-consumer package has an on-pr workflow that detects the stack
   )
 })
 
+// Everything substantive below is generated inside a loop, behind a `continue`
+// that depends on two regexes matching real YAML: jobUses() anchored on
+// `^ {4}uses:`, and declaresOverlayInput() anchored on `^ {6}<input>:` in the
+// CALLEE. If either stops matching — a reformat, a folded scalar, a reindent of
+// cpp-lint.yaml's inputs block — the assertions simply stop being emitted and
+// the suite passes having checked nothing. Reindenting the callee would switch
+// off all five callers at once while the cpp-lint-specific tests below still
+// went green.
+//
+// So count what the loop emits and assert a floor. Same guard the discovery
+// test above applies to the workflow and package lists.
+let emittedJobAssertions = 0
+const cppLintCovered = new Set()
+
 for (const relativePath of FABRIC_WORKFLOWS) {
   const source = read(relativePath)
   const slug = relativePath.replace(/.*on-pr-|\.ya?ml$/g, '')
@@ -246,6 +260,9 @@ for (const relativePath of FABRIC_WORKFLOWS) {
     const jobText = jobBlock(source, jobName)
     const target = localWorkflowPath(jobUses(jobText))
     if (!target || !declaresOverlayInput(target)) continue
+
+    emittedJobAssertions++
+    if (jobName === 'cpp-lint') cppLintCovered.add(relativePath)
 
     test(`${slug}: ${jobName} passes ${OVERLAY_INPUT} to ${target.replace('.github/workflows/', '')}`, () => {
       const passed = withBlock(jobText)
@@ -306,6 +323,24 @@ test('cpp-lint overlays fabric after npm install and before generating the build
   assert.ok(
     installAt < downloadAt && downloadAt < overlayAt && overlayAt < generateAt,
     'cpp-lint.yaml step order must be: npm install -> download fabric-prebuilds -> overlay -> generate'
+  )
+})
+
+// The loop above runs at module load, so the counters are final by the time
+// node:test executes this.
+test('per-job overlay assertions were actually generated', () => {
+  assert.ok(
+    emittedJobAssertions >= FABRIC_WORKFLOWS.length,
+    `only ${emittedJobAssertions} per-job overlay assertions emitted across ${FABRIC_WORKFLOWS.length} fabric workflows — the discovery regexes have stopped matching and this suite is passing vacuously`,
+  )
+
+  // cpp-lint specifically, because it is the lane QVAC-24913 was about and the
+  // one a callee reindent would silently drop everywhere at once.
+  const missing = FABRIC_WORKFLOWS.filter((p) => !cppLintCovered.has(p))
+  assert.deepEqual(
+    missing,
+    [],
+    `no cpp-lint overlay assertion was generated for: ${missing.join(', ')}`,
   )
 })
 
