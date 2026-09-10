@@ -64,7 +64,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "dependencies": {
-    "@qvac/fabric": "^0.12.0",
+    "@qvac/fabric": "^0.13.0",
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
@@ -83,7 +83,13 @@
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.2",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.63.0",
+    "cmake-npm": "^1.1.0",
+    "bare-process": "^4.2.2",
+    "bare-https": "^3.0.0",
+    "bare-crypto": "^1.15.3",
+    "bare-os": "^3.6.2",
+    "bare-url": "^2.1.6"
   },
   "exports": {
     "./package": "./package.json",

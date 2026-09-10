@@ -62,8 +62,7 @@ export function isSdkPackage(packagePath) {
 
 export function isSdkE2eTestPath(filePath) {
   return (
-    filePath.startsWith("packages/sdk/e2e/tests/") &&
-    filePath.endsWith(".ts")
+    filePath.startsWith("packages/sdk/e2e/tests/") && filePath.endsWith(".ts")
   );
 }
 
@@ -170,7 +169,9 @@ export function exampleTraits(absPath) {
 function changedExampleGroups(packagePath, changedExamples) {
   return new Set(
     changedExamples
-      .map((path) => path.slice(`${packagePath}/examples/`.length).split("/")[0])
+      .map(
+        (path) => path.slice(`${packagePath}/examples/`.length).split("/")[0],
+      )
       .filter(Boolean),
   );
 }
@@ -247,22 +248,27 @@ export function relatedSdkTests({
       };
     })
     .filter((entry) => entry.score > 0)
-    .sort(
-      (a, b) => b.score - a.score || a.path.localeCompare(b.path),
-    );
+    .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
   return candidates.slice(0, 5);
 }
 
+// Both branches resolve to install:build:full on purpose: CI always builds
+// packages/inference from branch too (on-pr-test-sdk.yml), so an SDK-only PR
+// still needs it to avoid testing against a different inference than CI does.
 export function sdkE2eSetup(touchedPaths) {
+  const touchesInference = touchedPaths.some((path) =>
+    path.startsWith("packages/inference/"),
+  );
   const touchesSdkOutsideE2e = touchedPaths.some(
     (path) =>
-      path.startsWith("packages/sdk/") &&
-      !path.startsWith("packages/sdk/e2e/"),
+      path.startsWith("packages/sdk/") && !path.startsWith("packages/sdk/e2e/"),
   );
-  if (touchesSdkOutsideE2e) {
+  if (touchesInference || touchesSdkOutsideE2e) {
     return {
       command: "npm run install:build:full",
-      reason: "Committed PR files touch packages/sdk outside e2e",
+      reason: touchesInference
+        ? "Committed PR files touch packages/inference"
+        : "Committed PR files touch packages/sdk outside e2e",
     };
   }
   return {

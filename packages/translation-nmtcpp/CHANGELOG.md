@@ -11,9 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `@qvac/fabric` dependency floor raised `^0.10.0` -> `^0.12.0`. Nothing this package calls changed: 0.11.0 bumped the `qvac-fabric` port to `10297.1.2` (mtmd temporal merge became opt-in per bitmap) and 0.12.0 added the ggml vector-index API, which only `@qvac/embed-llamacpp` uses.
+- `@qvac/fabric` dependency floor raised `^0.10.0` -> `^0.13.0`. Nothing this package calls changed: 0.11.0 bumped the `qvac-fabric` port to `10297.1.2` (mtmd temporal merge became opt-in per bitmap), 0.12.0 added the ggml vector-index API (only `@qvac/embed-llamacpp` uses it), and 0.13.0 moved the port to `10549.0.0` with the Darwin/iOS vector-index export fix.
 
-  The bump exists to keep every npm-runtime consumer on a single resolvable `@qvac/fabric`. Caret on a `0.x` version pins the minor, so `^0.10.0` (`>=0.10.0 <0.11.0`) and the `^0.12.0` that `@qvac/embed-llamacpp` now requires are disjoint ranges — an application depending on both would install two copies of the shared runtime and load two llama.cpp/ggml instances, which is the exact duplication `@qvac/fabric` exists to remove.
+  The bump exists to keep every npm-runtime consumer on a single resolvable `@qvac/fabric`. Caret on a `0.x` version pins the minor, so `^0.10.0` (`>=0.10.0 <0.11.0`) and the `^0.13.0` that `@qvac/embed-llamacpp` now requires are disjoint ranges — an application depending on both would install two copies of the shared runtime and load two llama.cpp/ggml instances, which is the exact duplication `@qvac/fabric` exists to remove.
 
   Released as a minor bump so dependents on `^0.14.x` adopt the new floor deliberately rather than automatically.
 

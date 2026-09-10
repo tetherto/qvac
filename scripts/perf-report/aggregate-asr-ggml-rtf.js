@@ -279,6 +279,15 @@ function reportQuant (report, sourceFile) {
     ''
 }
 
+// whisper stamps its internal per-call encode/decode timers into the summary;
+// parakeet reports have no equivalent, so their rows render n/a.
+function whisperPhaseTimings (summary) {
+  return {
+    encodeMs: Number((summary.whisperEncodeMs || {}).mean),
+    decodeMsPerCall: Number((summary.whisperDecodeMs || {}).mean)
+  }
+}
+
 /**
  * One normalizer for both engines' desktop-shaped reports (`summary.rtf` etc.).
  * whisper reports do not carry `addonVersion` or a probed GPU name yet, so those
@@ -322,6 +331,7 @@ function normalizeReport (report, sourceFile, source) {
     p50: Number(rtf.p50),
     p95: Number(rtf.p95),
     wallMs: Number(wallMs.mean),
+    ...whisperPhaseTimings(summary),
     avgRssMb: numberOrNaN(memory.avgRssMb),
     peakRssMb: numberOrNaN(memory.peakRssMb),
     reclaimedMb: numberOrNaN(memory.reclaimedMb),
@@ -364,6 +374,8 @@ function normalizeManualRecord (record, sourceFile) {
     p50: Number(record.p50),
     p95: Number(record.p95),
     wallMs: Number(record.wallMs),
+    encodeMs: Number(record.encodeMs),
+    decodeMsPerCall: Number(record.decodeMsPerCall),
     avgRssMb: numberOrNaN(record.avgRssMb),
     peakRssMb: numberOrNaN(record.peakRssMb),
     reclaimedMb: numberOrNaN(record.reclaimedMb),
@@ -706,12 +718,12 @@ function renderMarkdown (records, expectedDevices = []) {
 
   lines.push('## ASR GGML Performance Findings')
   lines.push('')
-  lines.push('| Source | Engine | Device | Platform | Model | Quant | GPU | Backend | GPU Model | Version | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Notes |')
-  lines.push('|--------|--------|--------|----------|-------|-------|-----|---------|-----------|---------|----------|----------|-----|-----|----------------|--------------|---------------|----------------|-------|')
+  lines.push('| Source | Engine | Device | Platform | Model | Quant | GPU | Backend | GPU Model | Version | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Enc (ms/call) | Dec (ms/call) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Notes |')
+  lines.push('|--------|--------|--------|----------|-------|-------|-----|---------|-----------|---------|----------|----------|-----|-----|----------------|---------------|---------------|--------------|---------------|----------------|-------|')
 
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.engine} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${record.gpuModel || '-'} | ${record.version || '-'} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddevRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${formatMaybeInteger(record.avgRssMb)} | ${formatMaybeInteger(record.peakRssMb)} | ${formatMaybeInteger(record.reclaimedMb)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.engine} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${record.gpuModel || '-'} | ${record.version || '-'} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddevRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${formatNumber(record.encodeMs, 1)} | ${formatNumber(record.decodeMsPerCall, 2)} | ${formatMaybeInteger(record.avgRssMb)} | ${formatMaybeInteger(record.peakRssMb)} | ${formatMaybeInteger(record.reclaimedMb)} | ${record.notes || ''} |`
     )
   }
 
@@ -769,6 +781,8 @@ function renderHtml (records, expectedDevices = []) {
       formatNumber(record.p50),
       formatNumber(record.p95),
       formatMaybeInteger(record.wallMs),
+      formatNumber(record.encodeMs, 1),
+      formatNumber(record.decodeMsPerCall, 2),
       formatMaybeInteger(record.avgRssMb),
       formatMaybeInteger(record.peakRssMb),
       formatMaybeInteger(record.reclaimedMb),
@@ -842,6 +856,8 @@ function renderHtml (records, expectedDevices = []) {
     '        <th>P50</th>',
     '        <th>P95</th>',
     '        <th>Mean Wall (ms)</th>',
+    '        <th>Enc (ms/call)</th>',
+    '        <th>Dec (ms/call)</th>',
     '        <th>Avg RSS (MB)</th>',
     '        <th>Peak RSS (MB)</th>',
     '        <th>Reclaimed (MB)</th>',
