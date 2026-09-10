@@ -64,3 +64,7 @@ Release dependency order for multi-layer changes:
 5. docs / models.dev as appropriate
 
 If a fix is transitive through caret ranges, verify with a fresh install before deciding whether upper packages need re-release.
+
+## First-class products
+
+`qvac serve` and `qvac configure` are first-class SDK products. A user-facing SDK capability belongs in the same PR as its CLI mapping unless the PR says library-only. Native addon PRs stay native. See `.cursor/rules/sdk/first-class-product-parity.mdc`.

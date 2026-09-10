@@ -556,7 +556,7 @@ host's policy:
 | Platform                | Default backend when `useGPU: true`          |
 |-------------------------|----------------------------------------------|
 | macOS / iOS             | Metal                                        |
-| Linux x64 — NVIDIA      | Vulkan (CUDA is opt-in at build via `ENABLE_CUDA`; CUDA then wins the cascade) |
+| Linux / Windows — NVIDIA | Vulkan (CUDA is opt-in at build via `ENABLE_CUDA` on linux-x64, linux-arm64 and win32-x64; CUDA then wins the cascade) |
 | Linux — other / Windows | Vulkan                                       |
 | Android — Adreno 700+   | OpenCL                                       |
 | Android — Mali / others | Vulkan                                       |
@@ -567,20 +567,23 @@ On hosts where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
 and fails loudly when that backend cannot be resolved; unset (or empty)
 keeps the automatic preference above.
 
-When the addon is built with `ENABLE_CUDA`, the CUDA backend ships as a
-runtime-loaded module: engaging it requires the NVIDIA driver plus the CUDA
-13 runtime libraries (cudart and cuBLAS, from a CUDA toolkit install)
-resolvable at load time. On hosts without them — including CPU-only and
-non-NVIDIA machines — the module is skipped and the addon behaves exactly as
-before (Vulkan or CPU).
+When the addon is built with `ENABLE_CUDA` — supported on linux-x64,
+linux-arm64 and win32-x64 — the CUDA backend ships as a runtime-loaded module
+(`.so` on Linux, `.dll` on Windows): engaging it requires the NVIDIA driver
+plus the CUDA 13 runtime libraries (cudart and cuBLAS, from a CUDA toolkit
+install) resolvable at load time. On hosts without them — including CPU-only
+and non-NVIDIA machines — the module is skipped and the addon behaves exactly
+as before (Vulkan or CPU).
 
-The module targets **compute capability 7.5 and newer**: native code for
-Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6), Ada (8.9), Hopper
-(9.0) and Blackwell (12.0, 12.1), and a JIT compile from the bundled 8.0 PTX
-for anything newer that the driver caches after first use. Volta and Pascal
-fall outside CUDA 13's support entirely, so they have no code path here: the
-backend skips such devices at registration and the addon falls back to Vulkan
-or CPU.
+On x64 the module targets **compute capability 7.5 and newer**: native code
+for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6), Ada (8.9),
+Hopper (9.0) and Blackwell (12.0, 12.1), and a JIT compile from the bundled
+8.0 PTX for anything newer that the driver caches after first use. On
+linux-arm64 the native set is Jetson Orin (8.7), Grace-Hopper (9.0) and
+GB10 / DGX Spark (12.1), with discrete Ampere+ cards and newer parts covered
+through the bundled 8.0 PTX. Volta and Pascal fall outside CUDA 13's support
+entirely, so they have no code path here: the backend skips such devices at
+registration and the addon falls back to Vulkan or CPU.
 
 > Both Chatterbox and Supertonic run on ARM Mali via Vulkan: `tts-cpp` sets
 > `allow_arm_mali=true` for both graphs. (Earlier `tts-cpp` builds declined

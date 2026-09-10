@@ -1,5 +1,15 @@
-from typing import List
+from statistics import mean, median
+from typing import List, Optional
 from evaluate import load
+
+
+def summarize_first_partial_latency(latencies_ms: List[float]) -> Optional[dict]:
+    """
+    Summarize per-sample time-to-first-partial latencies (streaming runs only).
+    """
+    if not latencies_ms:
+        return None
+    return {"avg_ms": mean(latencies_ms), "median_ms": median(latencies_ms)}
 
 
 def calculate_cer(
