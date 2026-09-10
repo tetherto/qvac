@@ -7,14 +7,18 @@ import type { PlatformCalibration } from '@/resources/model-fit/types'
  * to this file for how the numbers are derived and validated.
  */
 export const DARWIN_ARM64_CALIBRATION: PlatformCalibration = {
-  weightUpperCoeff: 1,
+  weightUpperCoeff: 1.01,
+  workingPeakBytes: {
+    lower: 0,
+    upper: 2870477
+  },
   fixedOverheadBytes: {
-    lower: 5202537,
-    upper: 68736841
+    lower: 5703296,
+    upper: 85542755
   },
   computeBufferBytesPerToken: {
-    lower: 0,
-    upper: 0
+    lower: 92,
+    upper: 138
   },
   audioWindowBytes: {
     lower: 0,
@@ -25,10 +29,10 @@ export const DARWIN_ARM64_CALIBRATION: PlatformCalibration = {
     upper: 0
   },
   validated: true,
-  measuredAt: '2026-08-31',
+  measuredAt: '2026-09-03',
   measuredOn: {
     backend: 'metal',
-    device: 'Apple M4 Pro',
+    device: 'Apple M4 Max',
     kvElementBytes: 1.0625
   }
 }

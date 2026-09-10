@@ -65,23 +65,26 @@ takes precedence. Use `require('@qvac/audiogen-ggml').resolveBackendsDir()`
 to locate the directory holding the host's prebuilt binaries and dynamically
 loaded ggml backends.
 
-The published linux-x64 prebuild ships Vulkan. CUDA is opt-in at build time
-via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host).
-When CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend
-mode: the CPU-variant, Vulkan, and CUDA backends ship as `.so` modules beside
-the addon, and only the CUDA module depends on the CUDA runtime. Engaging
-CUDA needs the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
-cuBLAS) resolvable at load time; hosts that cannot resolve them skip the
-module and fall back to Vulkan or CPU. The engine prefers CUDA when both GPU
-backends are usable.
+The published Linux and Windows prebuilds ship Vulkan. CUDA is opt-in at build
+time on linux-x64, linux-arm64, and win32-x64 via
+`bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host). When
+CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend mode: the
+CPU-variant, Vulkan, and CUDA backends ship as runtime-loaded modules (`.so` on
+Linux, `.dll` on Windows) beside the addon, and only the CUDA module depends on
+the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the CUDA 13 runtime
+libraries (cudart and cuBLAS) resolvable at load time; hosts that cannot resolve
+them skip the module and fall back to Vulkan or CPU. The engine prefers CUDA
+when both GPU backends are usable.
 
-A CUDA build's module targets **compute capability 7.5 and newer**, with
-native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
-Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
-from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
-Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
-path here: the backend skips such devices at registration and the addon falls
-back to Vulkan or CPU.
+On x64 a CUDA build's module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6), Ada
+(8.9), Hopper (9.0), and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches. On
+linux-arm64 the native set is Jetson Orin (8.7), Grace-Hopper (9.0), and
+GB10 / DGX Spark (12.1), with discrete Ampere+ cards and newer parts covered
+through the bundled 8.0 PTX. Volta and Pascal fall outside CUDA 13's support
+entirely, so they have no code path here: the backend skips such devices at
+registration and the addon falls back to Vulkan or CPU.
 
 To build the native addon from source in a repository checkout:
 
@@ -165,6 +168,7 @@ const stats = await response.await()
 // backendDevice:     0 = CPU, 1 = GPU
 // backendId:         0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
+// lyricsScore + lrc: alignment confidence and LRC text, only with generateLrc
 // qualityScore:      [0, 1], present only when the run set computeQualityScore
 
 await gen.destroy()
@@ -316,6 +320,59 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:simple
 ```
 
+### LRC generation: karaoke-style synchronized lyrics
+
+With `generateLrc: true` the engine aligns the lyrics with the generated
+audio (a DiT cross-attention probe plus DTW over the validated lyric heads)
+and delivers standard LRC text — one `[mm:ss.xx]` timestamp per lyric line —
+in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`:
+
+```js
+const response = await gen.run(caption, {
+  generateLrc: true,
+  lyrics: '[verse]\nDancing with you under the moonlight'
+})
+// ...collect the PCM...
+const stats = await response.await()
+fs.writeFileSync('song.lrc', stats.lrc)
+```
+
+It requires lyrics to align — pass them explicitly or let Simple Mode write
+them; instrumental requests are rejected — and `taskType: 'text2music'`.
+End to end from the repo (writes `audiogen-lrc.wav` + `audiogen-lrc.lrc`):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:lrc
+```
+
+### Query Rewriting: keep your lyrics, upgrade your caption
+
+With `rewriteQuery: true` the LM FORMAT pass reworks a full request before
+synthesis: your caption is rewritten into a detailed musical description and
+the lyric content is preserved, with any unset metadata filled the same way
+Simple Mode does. Unlike Simple Mode — which expands a bare query and writes
+lyrics from scratch — Query Rewriting takes caption AND lyrics as input, so
+real `lyrics` are required (`'[Instrumental]'` belongs to Simple Mode) and the
+two options are mutually exclusive:
+
+```js
+const response = await gen.run('a short salsa idea', {
+  rewriteQuery: true,
+  lyrics: '[verse]\nsuena el tambor y el barrio se enciende',
+  seed: 4242
+})
+```
+
+Faithful rewriting (lyrics back verbatim, caption on-genre) needs the 1.7B LM
+(`acestep-5Hz-lm-1.7B`); the 0.6B drifts genre, voice, and language. End to
+end from the repo:
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:rewrite
+```
+
 ### Quality scoring: rank a batch of takes
 
 With `computeQualityScore: true` the engine teacher-forces the generated audio
@@ -337,6 +394,32 @@ code path (`taskType: 'text2music'`). End to end from the repo:
 ```bash
 AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:best-of
+```
+
+### Audio understanding: the pipeline in reverse
+
+`understand()` describes an audio clip instead of generating one: the engine
+encodes the PCM, recovers the FSQ semantic codes, and the LM reports metadata
+and a caption. The input is interleaved stereo float PCM at 48 kHz — the same
+layout `sourceAudio` uses:
+
+```js
+const response = await gen.understand(pcm, { seed: 42 })
+const stats = await response.await()
+const heard = stats.understand
+// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes }
+```
+
+The description streams as an `understand` output item (progress ticks report
+the `source`, `tok`, and `understand` stages) and is repeated on the terminal
+stats. `audioCodes` are the recovered semantic codes — pass them back as a
+generation's `audioCodes` to re-synthesize or remix the clip. A
+`vocalLanguage` hint forces the language field instead of the LM's guess.
+End to end from the repo (generates a clip, then describes it):
+
+```bash
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  npm run example:understand
 ```
 
 ### Ordered audio editing
@@ -503,7 +586,9 @@ wrapped by a level-gated `QvacLogger`.
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
 | `simpleMode` | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis. |
+| `rewriteQuery` | LM FORMAT pass: rewrite the caption into a detailed description, preserving the lyric content. Requires real `lyrics` and `taskType: 'text2music'`; mutually exclusive with `simpleMode`. |
 | `normalizeLoudness` | Percentile loudness normalization of generated audio (default `true`); edits are never normalized. |
+| `generateLrc` | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`. |
 | `computeQualityScore` | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`. |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
 | `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |

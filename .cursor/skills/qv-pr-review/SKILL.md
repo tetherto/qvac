@@ -255,8 +255,10 @@ When verifying a suspected bug, attempt to construct a concrete reproduction (in
 If the PR touches SDK plugin paths, also run the SDK plugin integration checklist. Trigger when any touched path (`files[].path` in `/tmp/pr-<num>.json`) matches:
 
 - `packages/sdk/server/bare/plugins/**`
+- `packages/sdk/client/api/**`
 - `packages/sdk/schemas/plugin.ts` or `packages/sdk/schemas/load-model.ts`
 - a new `packages/sdk/schemas/*-config.ts`
+- `packages/sdk/schemas/completion-stream.ts` or `packages/sdk/schemas/batch-completion-stream.ts`
 - `packages/sdk/server/worker.ts`
 - `packages/sdk/commands/bundle/**`
 
@@ -449,6 +451,7 @@ https://github.com/tetherto/qvac/pull/<num>#pullrequestreview-<review_id>
 ## References
 
 - SDK plugin integration checklist (conditional, step 6b): [`references/sdk-plugin-checklist.md`](./references/sdk-plugin-checklist.md)
+- First-class product parity (CLI serve / configure): `.cursor/rules/sdk/first-class-product-parity.mdc`
 - Per-pod team metadata + ownedPaths: `.github/teams/<pod>.json`
 - Per-pod cursor rules: `.cursor/rules/<pod>/`
 - PR templates: `.github/PULL_REQUEST_TEMPLATE/`

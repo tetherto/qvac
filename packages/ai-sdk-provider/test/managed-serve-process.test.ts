@@ -13,7 +13,12 @@ import {
   stopServe,
   writeApiKeyFile
 } from '../src/managed/serve-process.js'
-import { fakeServeSkip as skip, makeFakeServe, setBehavior } from './helpers/fake-serve.js'
+import {
+  fakeServeSkip as skip,
+  makeFakeServe,
+  setArgvFile,
+  setBehavior
+} from './helpers/fake-serve.js'
 
 const API_KEY = 'managed-test-key'
 
@@ -55,6 +60,40 @@ test(
     }
   }
 )
+
+test('spawnServe launches the serve with --openai --no-default', { skip }, async () => {
+  const fake = await makeFakeServe()
+  const dir = await mkdtemp(join(tmpdir(), 'qvac-argv-'))
+  const argvFile = join(dir, 'argv.json')
+  setBehavior('healthy')
+  setArgvFile(argvFile)
+  try {
+    const port = await allocateFreePort('127.0.0.1')
+    const serve = await spawnServe({
+      apiKey: API_KEY,
+      configPath: 'unused.json',
+      port,
+      serveBinPath: fake.binPath,
+      startTimeoutMs: 10_000
+    })
+
+    const argv = JSON.parse(await readFile(argvFile, 'utf8')) as string[]
+
+    // Bare `--openai` would also mount the QVAC surface; this provider only
+    // speaks /v1/*, so the pair has to stay together.
+    assert.equal(argv[0], 'serve')
+    assert.equal(argv[1], '--openai')
+    assert.equal(argv[2], '--no-default')
+    assert.equal(argv.includes('openai'), false)
+
+    await stopServe(serve.child)
+  } finally {
+    setArgvFile(undefined)
+    setBehavior(undefined)
+    await fake.cleanup()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
 
 test(
   'spawnServe throws ServeStartTimeoutError when the serve never gets healthy',

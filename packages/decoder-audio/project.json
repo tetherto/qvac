@@ -1,0 +1,68 @@
+{
+  "name": "@qvac/decoder-audio",
+  "root": "packages/decoder-audio",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/decoder-audio",
+        "ci": {}
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/decoder-audio"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/decoder-audio",
+        "ci": {
+          "envVarName": "QASE_API_TOKEN",
+          "envSecretName": "QASE_API_TOKEN",
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
+            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64" },
+            { "os": "macos-15-large", "platform": "darwin", "arch": "x64" },
+            { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
+          ]
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/decoder-audio"
+      }
+    },
+    "test:dts": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:dts",
+        "cwd": "packages/decoder-audio"
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/decoder-audio",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "none",
+          "repoName": "decoder-audio",
+          "testGateMode": "pre-publish-integration"
+        }
+      }
+    }
+  }
+}
