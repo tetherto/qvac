@@ -680,6 +680,35 @@ function prestagedModelDir(modelName) {
   return null
 }
 
+// Materialise a staged model at `dest` without spending disk-write budget when
+// we don't have to. Deliberately duplicated from helpers.js rather than
+// imported: that module pulls in the native addon, which the Parakeet mobile
+// test package does not bundle.
+//
+// iOS kills any app that dirties more than 4 GiB in a rolling 24h window
+// (jetsam "excessive I/O"). On iOS the staged file already lives in the app's
+// OWN writable Documents dir, so a byte copy spends that budget for nothing; a
+// hardlink is the same inode and writes zero bytes. On Android the staging dir
+// is a different filesystem, so linkSync fails EXDEV and the copy that has
+// always run there takes over.
+//
+// `link`/`copy` are injectable so the EXDEV fallback is unit-testable.
+function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    console.log(`  hardlink failed on ${platform} (${err.message}); falling back to a byte copy`)
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
 function loadMobileModelManifest() {
   if (_mobileModelManifest !== null) return _mobileModelManifest
   _mobileModelManifest = {}
@@ -1267,8 +1296,11 @@ async function ensureGgufForType(modelType, override = null, options = {}) {
   const staged = prestagedModelDir(preferred.file)
   if (staged) {
     fs.mkdirSync(modelsDir, { recursive: true })
-    console.log(`  Using pre-staged GGUF ${preferred.file} (copying into writable models dir)`)
-    fs.copyFileSync(path.join(staged, preferred.file), cachePath)
+    const how = linkOrCopySync({ src: path.join(staged, preferred.file), dest: cachePath })
+    console.log(
+      `  Using pre-staged GGUF ${preferred.file} ` +
+        `(${how === 'link' ? 'hardlinked' : 'copied'} into writable models dir)`
+    )
     if (fs.existsSync(cachePath) && fs.statSync(cachePath).size >= (cfg.minSize || 0)) {
       return cachePath
     }
@@ -1443,6 +1475,7 @@ module.exports = {
   ensureModel,
   ensureModelForType,
   ensureGgufForType,
+  linkOrCopySync,
   quantFromGgufName,
   loadGgufOrSkip,
   readFileChunked,

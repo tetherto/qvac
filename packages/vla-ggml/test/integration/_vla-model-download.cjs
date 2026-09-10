@@ -32,9 +32,45 @@ function iosPrestagedModelDir() {
   return typeof dir === 'string' && dir.length > 0 ? dir : null
 }
 
-// Returns true when a non-empty copy landed; the caller re-verifies it against
-// urls.json (size + sha256) before trusting it, so a truncated push falls back
-// to the network download. No-op off mobile pre-stage platforms.
+// Materialise a staged model at `dest` without spending disk-write budget when
+// we don't have to.
+//
+// iOS kills any app that dirties more than 4 GiB in a rolling 24h window
+// (jetsam "excessive I/O": "dirtied N bytes over M sec, violating a disk writes
+// limit of 4294967296 bytes over 86400 seconds"). On iOS the staged file
+// already lives in the app's OWN writable Documents dir, so a byte copy spends
+// that budget for nothing. A hardlink is the same inode: zero bytes written.
+//
+// On Android /data/local/tmp and the app's data dir are separate filesystems,
+// so linkSync fails EXDEV and we fall back to the copy that has always run
+// there — Android has no equivalent write cap, and the copy is required because
+// the staging dir is not app-writable.
+//
+// `link`/`copy` are injectable so the EXDEV fallback is unit-testable.
+function linkOrCopySync({ src, dest, platform = '', link = fs.linkSync, copy = fs.copyFileSync }) {
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    // Loud on purpose: a silent fallback on iOS is exactly how the 4 GiB kill
+    // reached CI as an unexplained "0 tests executed".
+    console.log(
+      `[vla-model] hardlink failed on ${platform} (${err && err.message}); ` +
+        'falling back to a byte copy'
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
+// Returns true when a non-empty staged file landed; the caller re-verifies it
+// against urls.json (size + sha256) before trusting it, so a truncated push
+// falls back to the network download. No-op off mobile pre-stage platforms.
 function copyPrestagedModel(modelFilename, destPath) {
   let os
   try {
@@ -52,10 +88,10 @@ function copyPrestagedModel(modelFilename, destPath) {
     if (!fs.existsSync(src) || fs.statSync(src).size === 0) return false
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(src, destPath)
+    linkOrCopySync({ src, dest: destPath, platform })
     return fs.statSync(destPath).size > 0
   } catch (err) {
-    console.log(`[vla-model] pre-stage copy of ${modelFilename} failed: ${err && err.message}`)
+    console.log(`[vla-model] pre-staging of ${modelFilename} failed: ${err && err.message}`)
     return false
   }
 }
@@ -249,6 +285,7 @@ async function verifyCachedModel(filePath, urlConfig) {
 module.exports = {
   loadUrlsConfig,
   copyPrestagedModel,
+  linkOrCopySync,
   streamDownload,
   downloadFile,
   sha256File,

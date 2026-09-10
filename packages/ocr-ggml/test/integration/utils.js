@@ -690,23 +690,60 @@ function prestagedModelPath(modelName) {
   return staged ? staged.src : null
 }
 
+// Materialise a staged model at `dest` without spending disk-write budget when
+// we don't have to.
+//
+// iOS kills any app that dirties more than 4 GiB in a rolling 24h window
+// (jetsam "excessive I/O": "dirtied N bytes over M sec, violating a disk writes
+// limit of 4294967296 bytes over 86400 seconds"). On iOS the staged file
+// already lives in the app's OWN writable Documents dir, so a byte copy spends
+// that budget for nothing. A hardlink is the same inode: zero bytes written.
+//
+// On Android /data/local/tmp and the app's data dir are separate filesystems,
+// so linkSync fails EXDEV and we fall back to the copy that has always run
+// there — Android has no equivalent write cap, and the copy is required because
+// the staging dir is not app-writable.
+//
+// `link`/`copy` are injectable so the EXDEV fallback is unit-testable.
+function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    // Loud on purpose: a silent fallback on iOS is exactly how the 4 GiB kill
+    // reached CI as an unexplained "0 tests executed".
+    console.log(
+      `[prestage] hardlink failed on ${platform} (${err.message}); falling back to a byte copy`
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
 // The host pushes an exact byte-count sidecar with each model. Require both the
-// staged source and copied destination to match it so truncated adb/app copies
-// fall through to the network download.
+// staged source and the materialised destination to match it so truncated
+// adb/app transfers fall through to the network download.
 function copyPrestagedModel(modelName, destPath, minBytes = 1024 * 1024) {
   const staged = readPrestagedModel(modelName)
   if (!staged || staged.expectedSize < minBytes) return false
   try {
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(staged.src, destPath)
+    const how = linkOrCopySync({ src: staged.src, dest: destPath })
     if (fs.statSync(destPath).size === staged.expectedSize) {
-      console.log(`[prestage] Using pre-staged model ${modelName}`)
+      console.log(
+        `[prestage] Using pre-staged model ${modelName} (${how === 'link' ? 'hardlinked' : 'copied'})`
+      )
       return true
     }
     fs.unlinkSync(destPath)
   } catch (err) {
-    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+    console.log(`[prestage] staging of ${modelName} failed: ${err.message}`)
     try {
       fs.unlinkSync(destPath)
     } catch (_) {}
@@ -1418,6 +1455,7 @@ module.exports = {
   ensureModelPath,
   ensureDoctrModels,
   copyPrestagedModel,
+  linkOrCopySync,
   prestagedModelPath,
   GGML_MODELS_DIR,
   formatOCRPerformanceMetrics,
