@@ -279,7 +279,7 @@ class AssessModelFitResponse(GeneratedBaseModel):
     evidence: Annotated[
         AssessModelFitResponseEvidence | None,
         Field(
-            description="The weakest evidence any candidate rests on: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent when no candidate could be assessed at all.",
+            description="The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or an uncalibrated floor, never a missing model.",
             title="AssessModelFitResponseEvidence",
         ),
     ] = None
