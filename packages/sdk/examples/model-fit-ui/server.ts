@@ -43,8 +43,7 @@ const PORT = 8712
 
 // A ladder ending past what a laptop has, so one screen shows every verdict.
 // The 31B is here to be refused: 18 GiB against a 24 GiB machine leaves the OS
-// no way to satisfy it without paging. Every entry is one that is already
-// cached locally, so a Run costs no download.
+// no way to satisfy it without paging.
 const CATALOG = [
   QWEN3_600M_INST_Q4,
   QWEN3_1_7B_INST_Q4,
@@ -217,15 +216,15 @@ const server = createServer((request, response) => {
   }
 
   if (request.method === 'GET' && url === '/api/models') {
+    const sizes = cachedSizes()
     sendJson(
       response,
       200,
-      ((sizes) =>
-        CATALOG.map((model) => ({
-          name: model.name,
-          expectedSize: model.expectedSize,
-          cached: sizes.has(model.expectedSize)
-        })))(cachedSizes())
+      CATALOG.map((model) => ({
+        name: model.name,
+        expectedSize: model.expectedSize,
+        cached: sizes.has(model.expectedSize)
+      }))
     )
     return
   }

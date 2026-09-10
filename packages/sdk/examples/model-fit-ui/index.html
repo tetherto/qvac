@@ -240,20 +240,6 @@
         return model.cached ? 'Run' : `Run · downloads ${gib(model.expectedSize)}`
       }
 
-      // The engine's own report on the run. Every field is optional, so build
-      // from what came back rather than assuming a shape.
-      function statsLine(stats) {
-        if (!stats) return ''
-        const bits = []
-        if (stats.tokensPerSecond) bits.push(`${stats.tokensPerSecond.toFixed(1)} tok/s`)
-        if (stats.timeToFirstToken)
-          bits.push(`${stats.timeToFirstToken.toFixed(0)} ms to first token`)
-        if (stats.generatedTokens) bits.push(`${stats.generatedTokens} generated`)
-        if (stats.promptTokens) bits.push(`${stats.promptTokens} prompt`)
-        if (stats.cacheTokens) bits.push(`${stats.cacheTokens} cached`)
-        return bits.join(' · ')
-      }
-
       function range(estimate) {
         const { lowerBoundBytes: lower, upperBoundBytes: upper } = estimate
         return lower === upper ? gib(upper) : `${gib(lower)} – ${gib(upper)}`
@@ -556,11 +542,25 @@
         button.disabled = false
       }
 
-      // A new context invalidates every verdict on screen: the estimate is a
-      // function of it, so re-judge each row instead of leaving stale verdicts
-      // next to the new number. Sequential, so the status line stays coherent.
+      // A run was compared against the context it ran under, so a new context
+      // retires its panel and Reality cell along with the verdicts.
+      function clearRun(model) {
+        const panel = rows.querySelector(`tr[data-run-detail="${model.name}"]`)
+        if (panel) {
+          panel.hidden = true
+          panel.querySelector('.detail').replaceChildren()
+        }
+        cell(model.name, 'reality').innerHTML =
+          `<button data-run="${model.name}">${runLabel(model)}</button>`
+      }
+
+      // A new context invalidates every verdict on screen, so re-judge each row.
+      // Sequential, so the status line stays coherent.
       ctx.addEventListener('change', async () => {
-        for (const model of models) await estimate(model.name)
+        for (const model of models) {
+          clearRun(model)
+          await estimate(model.name)
+        }
       })
 
       rows.addEventListener('click', (event) => {
