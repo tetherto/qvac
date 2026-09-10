@@ -4,7 +4,9 @@ name: On PR Trigger (nx)
 on:
   # Fork-safe: matrix loads the action + options.ci from the trusted default branch
   # (never PR head); code-running jobs gate on fork-approval + authorize.
-  pull_request_target:
+  # TEMP on this probe branch only: pull_request_target does not fire while the
+  # workflow is absent from the default branch, so probes run under pull_request.
+  pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
