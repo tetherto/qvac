@@ -45,6 +45,7 @@
     "verify:licenses": "node scripts/verify-model-licenses.js",
     "sync:models": "node scripts/sync-models.js",
     "smoke-test": "node scripts/smoke-test-client.js",
+    "check:blob-cores": "node scripts/check-blob-cores.js",
     "test:unit": "brittle-node tests/unit/*.test.js",
     "test:integration": "brittle-node tests/integration/*.test.js",
     "test:gguf": "node scripts/test-gguf-extraction.js",
