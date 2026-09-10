@@ -26,6 +26,10 @@ function disablesFlashAttention(architecture: string): boolean {
   return architecture.startsWith('bitnet')
 }
 
+// Shared with the computed floor so a mixed set carries one weights assumption, not two.
+export const LLAMA_WEIGHTS_ASSUMPTION =
+  'weights are counted at full artifact size; llama.cpp maps them by default, so those pages are file-backed and evictable rather than anonymous RAM'
+
 /**
  * Estimates memory for a llama.cpp completion or embedding model from catalog
  * metadata alone.
@@ -36,10 +40,6 @@ function disablesFlashAttention(architecture: string): boolean {
  * backend the engine will pick (which sets the default KV-cache type) and, for
  * some architectures, which blocks hold a full cache.
  */
-// Shared with the computed floor so a mixed set carries one weights assumption, not two.
-export const LLAMA_WEIGHTS_ASSUMPTION =
-  'weights are counted at full artifact size; llama.cpp maps them by default, so those pages are file-backed and evictable rather than anonymous RAM'
-
 export function estimateLlm(input: EstimatorInput): EstimatorResult {
   const { profile, workload, calibration, extraArtifactBytes, hasGpu } = input
 
