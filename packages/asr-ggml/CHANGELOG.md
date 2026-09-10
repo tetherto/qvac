@@ -52,6 +52,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Raise the `speech-cpp` floor to 2026-09-10. Nemotron 3.5 ASR streaming is
+  now validated on Vulkan and CUDA: the encoder and the fused transducer
+  decode run on the GPU at all five cache-aware operating points, with
+  engine parity tests against NeMo references at each of them. The window
+  also extends the Parakeet Core ML offline-encoder path used by the
+  `coreml` build on Apple platforms.
+
 - Raise the `speech-cpp` floor to 2026-09-09 (ggml-speech 2026-09-09#1).
   Parakeet CPU transcription is 2.2 to 2.6x faster on x86 desktops: the TDT
   decoder runs as ggml graphs instead of a host loop, positional projections
