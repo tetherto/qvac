@@ -103,8 +103,9 @@ void MtmdLlmContext::initializeCommonState() {
           COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_.speculative.types.end();
   // MTP self-speculation only runs on the single-prompt generateResponse path;
   // under continuous batching (n_parallel > 1) the scheduler never calls
-  // runSpeculativeGeneration, so a per-slot draft context is pure waste. Gate on
-  // single-context and warn on the unsupported combo (mirrors TextLlmContext).
+  // runSpeculativeGeneration, so a per-slot draft context is pure waste. Gate
+  // on single-context and warn on the unsupported combo (mirrors
+  // TextLlmContext).
   if (mtpDraftRequested_ && params_.n_parallel > 1) {
     QLOG_IF(
         Priority::WARNING,
@@ -601,15 +602,15 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
 
   // Hoisted out of the per-chunk loop: on the MTP spec path a prompt with
   // interleaved media produces several text chunks, so building a fresh
-  // llama_batch per text chunk is needless per-prefill heap churn. Allocate once
-  // (sized to the sub-batch cap) and reuse via common_batch_clear, matching the
-  // hoisting pattern in TextLlmContext::evalMessageWithTools and
+  // llama_batch per text chunk is needless per-prefill heap churn. Allocate
+  // once (sized to the sub-batch cap) and reuse via common_batch_clear,
+  // matching the hoisting pattern in TextLlmContext::evalMessageWithTools and
   // runSpeculativeGeneration. Left empty (unallocated) when MTP is inactive.
   LlamaBatch specTextBatch;
   if (spec_) {
     // Size from the context's validated batch size, not the raw (untrusted)
-    // params_.n_batch: the pre-hoist per-chunk sizing was incidentally bounded by
-    // nTextTokens, and a negative/huge n_batch would wrap to a bad
+    // params_.n_batch: the pre-hoist per-chunk sizing was incidentally bounded
+    // by nTextTokens, and a negative/huge n_batch would wrap to a bad
     // llama_batch_init size. llama_n_batch() is the effective, validated value.
     const int nBatchCap = static_cast<int>(llama_n_batch(getCtx()));
     specTextBatch = LlamaBatch((nBatchCap > 0 ? nBatchCap : 1) + 1, 0, 1);
@@ -719,9 +720,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       const llama_token* textTokens =
           mtmd_input_chunk_get_tokens_text(chunk, &nTextTokens);
       res = 0;
-      // Step by the batch's OWN capacity, not the raw params_.n_batch: llama may
-      // clamp the effective batch below params_.n_batch, so specTextBatch (sized
-      // from the validated llama_n_batch) can be smaller — stepping by
+      // Step by the batch's OWN capacity, not the raw params_.n_batch: llama
+      // may clamp the effective batch below params_.n_batch, so specTextBatch
+      // (sized from the validated llama_n_batch) can be smaller — stepping by
       // params_.n_batch would then add more tokens than fit and overflow
       // common_batch_add. Deriving the step from capacity keeps
       // tokens-per-iteration <= capacity by construction.
@@ -1103,8 +1104,8 @@ void MtmdLlmContext::specBeginGeneration(
   reasoningState_.recent_output_buffer.clear();
   compactor_.reset();
   generationStopReason_ = GenerationStopReason::None;
-  // Never carry a reasoning-recovery EOG ban across generations (armed + consumed
-  // within one generation on the spec path).
+  // Never carry a reasoning-recovery EOG ban across generations (armed +
+  // consumed within one generation on the spec path).
   banEogAfterReasoningRecovery_ = false;
 
   if (thinkingForcedOpen_) {
@@ -1239,9 +1240,10 @@ void MtmdLlmContext::specRecoverReasoning(
   ++current_.pos;
   ++current_.cacheTokens;
   ++lastGeneratedTokenCount_;
-  // Arm the one-shot EOG ban so the next speculative sample (specSampleAndAccept)
-  // is forced to produce a content token instead of immediately re-emitting EOS
-  // after the reasoning block was force-closed. Consumed once, then disarmed.
+  // Arm the one-shot EOG ban so the next speculative sample
+  // (specSampleAndAccept) is forced to produce a content token instead of
+  // immediately re-emitting EOS after the reasoning block was force-closed.
+  // Consumed once, then disarmed.
   banEogAfterReasoningRecovery_ = true;
   capturePendingThinkClose();
 }
@@ -1673,8 +1675,9 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
   }
 
   clearSequenceMemory(modelCtx_.lctx, current_.pos - tokensToRemove, -1);
-  // Mirror the tail removal onto the MTP draft context (pre-decrement cursor) so
-  // it drops the same tokens the target just did. No-op when MTP is inactive.
+  // Mirror the tail removal onto the MTP draft context (pre-decrement cursor)
+  // so it drops the same tokens the target just did. No-op when MTP is
+  // inactive.
   rollbackDraftContext(current_.pos - tokensToRemove);
 
   current_.pos -= tokensToRemove;
@@ -1994,9 +1997,9 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
       forcedTokens_.push_back(reasoningState_.cached_newline_token);
       forcedTokens_.push_back(reasoningState_.cached_newline_token);
     }
-    // Ban EOG on the next content sample so the forced </think> + newlines can't
-    // be immediately followed by another EOS -> empty answer (parity with the
-    // Text non-spec path and the speculative reasoning-recovery).
+    // Ban EOG on the next content sample so the forced </think> + newlines
+    // can't be immediately followed by another EOS -> empty answer (parity with
+    // the Text non-spec path and the speculative reasoning-recovery).
     banEogAfterReasoningRecovery_ = true;
     const std::string closeChars = utf8Buffer_.addToken(tokenStr);
     if (!closeChars.empty() && outputCallback) {
@@ -2211,8 +2214,9 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
 
   llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
   // The MTP draft context is not persisted in the cache; clear it so the next
-  // generation re-seeds it via decodeAndSpecProcess rather than drafting against
-  // a stale cache that diverges from the restored target. No-op off-MTP.
+  // generation re-seeds it via decodeAndSpecProcess rather than drafting
+  // against a stale cache that diverges from the restored target. No-op
+  // off-MTP.
   rollbackDraftContext();
   restoredKvGuard.dismiss();
   return true;

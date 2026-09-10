@@ -599,9 +599,9 @@ protected:
   // inactive (ctxDraft_ null). Best-effort and non-throwing: a failed partial
   // seq_rm on a recurrent draft cache is not fatal — common_speculative_begin()
   // detects the lag on the next generation and degrades drafts gracefully.
-  // Skipping this after cancel / resetState / loadCache is exactly what lets the
-  // draft and target contexts diverge (orphaned draft KV -> degraded drafts, or
-  // MTP silently disabling itself mid-session).
+  // Skipping this after cancel / resetState / loadCache is exactly what lets
+  // the draft and target contexts diverge (orphaned draft KV -> degraded
+  // drafts, or MTP silently disabling itself mid-session).
   void rollbackDraftContext(llama_pos startPos = -1) noexcept {
     if (!ctxDraft_) {
       return;
@@ -635,12 +635,12 @@ protected:
     // (Do not confuse this with the regular `embd` extraction just above it,
     // which IS gated on `n_outputs > 0` — that buffer is not what MTP reads.)
     //
-    // Every caller already marks exactly the rows it needs anyway: prefill marks
-    // only the last token, the speculative verify batch marks every row at its
-    // call site, and the inline reasoning-recovery decodes mark their single
-    // token. Blanket-marking would force the full-vocab lm_head projection plus
-    // an N*vocab logits copy over the WHOLE prompt on prefill (a TTFT / OOM
-    // hazard on long prompts) for no functional gain.
+    // Every caller already marks exactly the rows it needs anyway: prefill
+    // marks only the last token, the speculative verify batch marks every row
+    // at its call site, and the inline reasoning-recovery decodes mark their
+    // single token. Blanket-marking would force the full-vocab lm_head
+    // projection plus an N*vocab logits copy over the WHOLE prompt on prefill
+    // (a TTFT / OOM hazard on long prompts) for no functional gain.
     const int ret = llama_decode(getCtx(), batch);
     if (ret != 0) {
       return ret;
@@ -726,8 +726,7 @@ protected:
           specGenerationMs_ = std::max(
               0.0,
               (postTargetPerf.t_eval_ms - preGenerationPerf.t_eval_ms) +
-                  (postTargetPerf.t_p_eval_ms -
-                   preGenerationPerf.t_p_eval_ms));
+                  (postTargetPerf.t_p_eval_ms - preGenerationPerf.t_p_eval_ms));
           // The MTP head executes in a second llama context. Its decode work is
           // part of native generation cost even though it never appears in the
           // target context's counters.
@@ -736,8 +735,7 @@ protected:
             specGenerationMs_ += std::max(
                 0.0,
                 (postDraftPerf.t_eval_ms - preDraftPerf->t_eval_ms) +
-                    (postDraftPerf.t_p_eval_ms -
-                     preDraftPerf->t_p_eval_ms));
+                    (postDraftPerf.t_p_eval_ms - preDraftPerf->t_p_eval_ms));
           }
           return result;
         };
@@ -754,14 +752,15 @@ protected:
     if (nMax < 1) {
       nMax = 1;
     }
-    // Fixed, code-defined ceiling, independent of config. Both `--spec-draft-n-max`
-    // and `--batch-size` reach us via unvalidated config passthrough, so neither
-    // can be trusted as a bound: a negative `n_batch` wraps to a huge uint32 that
-    // `static_cast<int>` turns back into <= 0, silently no-opping a batchCap-only
-    // guard and leaving `nMax` attacker-controlled. Drafts are ~n_mtp_layers, so a
-    // small hard cap costs nothing and bounds both the `LlamaBatch(nMax + 1, ...)`
-    // allocation below and the `uint16_t` accepted-count cast at accept time. NOTE
-    // this only bounds the LOCAL nMax; the derived contexts also clamp
+    // Fixed, code-defined ceiling, independent of config. Both
+    // `--spec-draft-n-max` and `--batch-size` reach us via unvalidated config
+    // passthrough, so neither can be trusted as a bound: a negative `n_batch`
+    // wraps to a huge uint32 that `static_cast<int>` turns back into <= 0,
+    // silently no-opping a batchCap-only guard and leaving `nMax`
+    // attacker-controlled. Drafts are ~n_mtp_layers, so a small hard cap costs
+    // nothing and bounds both the `LlamaBatch(nMax + 1, ...)` allocation below
+    // and the `uint16_t` accepted-count cast at accept time. NOTE this only
+    // bounds the LOCAL nMax; the derived contexts also clamp
     // params.speculative.draft.n_max to kMaxSpecDraft at init so fabric's own
     // draft loop (which ignores the per-round dp.n_max hint) is bounded too.
     if (nMax > kMaxSpecDraft) {
@@ -791,12 +790,13 @@ protected:
     bool sampled = false;
     llama_token idLast = specSampleFirstToken(sampled);
     if (specShouldRecoverReasoning(idLast)) {
-      // First generated token is EOS inside <think>: recover inline (close marker
-      // decoded via specBatch, then sample the answer), mirroring the in-loop
-      // recovery below. The plain specProcessToken(..., nullptr) path used for a
-      // normal first token would take processToken's forcedTokens_ branch, whose
-      // recovery newlines the speculative sampler never consumes — dropping them
-      // (Text) or skipping recovery entirely (Mtmd) on this edge.
+      // First generated token is EOS inside <think>: recover inline (close
+      // marker decoded via specBatch, then sample the answer), mirroring the
+      // in-loop recovery below. The plain specProcessToken(..., nullptr) path
+      // used for a normal first token would take processToken's forcedTokens_
+      // branch, whose recovery newlines the speculative sampler never consumes
+      // — dropping them (Text) or skipping recovery entirely (Mtmd) on this
+      // edge.
       clearSequenceMemory(getCtx(), specPos(), -1);
       if (ctxDraft_) {
         clearSequenceMemory(ctxDraft_.get(), specPos(), -1);
@@ -834,9 +834,10 @@ protected:
         return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
       }
     } else {
-      // The first token is normally decoded as id_last in the first verify batch
-      // below. If a one-token prediction budget ends the generation here, commit
-      // it directly before returning so the visible output and KV cache agree.
+      // The first token is normally decoded as id_last in the first verify
+      // batch below. If a one-token prediction budget ends the generation here,
+      // commit it directly before returning so the visible output and KV cache
+      // agree.
       if (!specEnsurePendingTokenHeadroom()) {
         return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
       }
@@ -880,8 +881,8 @@ protected:
       // above only proves there is room for id_last (1 slot). To avoid decoding
       // past specCtxCeiling() (which llama_decode rejects -> a hard
       // FailedToDecode at the boundary instead of a graceful stop), the draft
-      // length must be <= headroom. headroom >= 0 here (guaranteed by the guard);
-      // 0 means "no draft this round, just re-decode id_last".
+      // length must be <= headroom. headroom >= 0 here (guaranteed by the
+      // guard); 0 means "no draft this round, just re-decode id_last".
       const llama_pos headroom = specCtxCeiling() - specPos() - 1;
       const int roundNMax = headroom < static_cast<llama_pos>(nMax)
                                 ? static_cast<int>(headroom)
@@ -895,31 +896,34 @@ protected:
         dp.drafting = true;
         // dp.n_max is a per-round hint. Some fabric drafters honor it, but the
         // MTP drafter (fabric v9840, common/speculative.cpp) bounds the draft
-        // only by its own construction-time params.n_max (= min(spec-draft-n-max,
-        // n_mtp_layers)) and ignores dp.n_max. Set it for drafters that read it,
-        // but do NOT rely on it — the hard headroom guarantee is the explicit
-        // truncation below.
+        // only by its own construction-time params.n_max (=
+        // min(spec-draft-n-max, n_mtp_layers)) and ignores dp.n_max. Set it for
+        // drafters that read it, but do NOT rely on it — the hard headroom
+        // guarantee is the explicit truncation below.
         dp.n_max = roundNMax;
         dp.n_past = specPos();
         dp.id_last = idLast;
         dp.prompt = &specPromptDummy_;
         dp.result = &draft;
         common_speculative_draft(spec_.get());
-        // Bound the returned draft by BOTH limits regardless of drafter behavior
-        // (the MTP drafter ignores the dp.n_max hint):
+        // Bound the returned draft by BOTH limits regardless of drafter
+        // behavior (the MTP drafter ignores the dp.n_max hint):
         //  - `headroom`: keeps the max verify-batch position at
-        //    specPos() + headroom = specCtxCeiling() - 1, so the decode can never
-        //    run past the context ceiling; and
-        //  - `nMax`: the capacity specBatch(nMax + 1) was allocated with. Fabric
-        //    only clamps its params.n_max to n_mtp_layers for chain_heads archs,
-        //    so for others draft.size() can exceed nMax (e.g. large
+        //    specPos() + headroom = specCtxCeiling() - 1, so the decode can
+        //    never run past the context ceiling; and
+        //  - `nMax`: the capacity specBatch(nMax + 1) was allocated with.
+        //  Fabric
+        //    only clamps its params.n_max to n_mtp_layers for chain_heads
+        //    archs, so for others draft.size() can exceed nMax (e.g. large
         //    spec-draft-n-max, or nMax lowered by the batchCap/RS clamps) and
         //    overflow common_batch_add — so this bound is required, not just
         //    defensive. Dropped tail tokens are simply not verified this round
         //    (equivalent to a rejected draft; reconciled by the accept below).
-        const size_t maxDraft = headroom < 0
-            ? 0
-            : std::min(static_cast<size_t>(nMax), static_cast<size_t>(headroom));
+        const size_t maxDraft =
+            headroom < 0
+                ? 0
+                : std::min(
+                      static_cast<size_t>(nMax), static_cast<size_t>(headroom));
         if (draft.size() > maxDraft) {
           draft.resize(maxDraft);
         }

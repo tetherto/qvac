@@ -1188,8 +1188,8 @@ NormalizedLoad normalizeLoadForFit(
   // tuning flags (for example --spec-draft-n-max) are accepted. The COMMON
   // profile filters those spec options out entirely, while SERVER changes
   // defaults such as n_parallel.
-  auto ctxArg = common_params_parser_init(
-      params, LLAMA_EXAMPLE_CLI, [](int, char**) {});
+  auto ctxArg =
+      common_params_parser_init(params, LLAMA_EXAMPLE_CLI, [](int, char**) {});
 
   // disable warmup run
   params.warmup = false;
