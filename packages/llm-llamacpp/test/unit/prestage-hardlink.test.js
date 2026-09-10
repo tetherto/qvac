@@ -1,19 +1,9 @@
 'use strict'
 
-// Regression proof for the iOS pre-stage write-budget failure.
-//
-// iOS kills any app that dirties more than 4 GiB in a rolling 24h window
-// ("dirtied N bytes over M sec, violating a disk writes limit of 4294967296
-// bytes over 86400 seconds"). The mobile pre-stage path used to byte-copy each
-// staged model into modelDir; on iOS the staged file is ALREADY in the app's
-// own writable Documents dir, so that copy was pure waste. The gemma shard
-// stages 4.45 GB, blew the 4 GiB cap mid-copy, and the run surfaced only as
-// "0 tests executed".
-//
-// These tests pin the fix: when source and destination share a filesystem the
-// staged model is hardlinked (same inode => zero bytes written), and when it
-// cannot be (Android: /data/local/tmp is a different filesystem from the app
-// data dir) we still fall back to a correct byte copy.
+// Pre-staged models must be hardlinked, never byte-copied: iOS kills an app
+// that dirties more than 4 GiB in 24h, and the gemma shard's 4.45 GB of copying
+// tripped it mid-test ("0 tests executed"). nlink/ino are the direct proof that
+// no bytes were written; the EXDEV case pins Android's fallback copy.
 
 const test = require('brittle')
 const fs = require('bare-fs')

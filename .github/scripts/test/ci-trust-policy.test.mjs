@@ -1777,11 +1777,8 @@ test('mobile shards pass grep explicitly and retain host-phase failure logs', ()
   assert.match(collectLogs, /Host phase log:/)
 })
 
-// A native abort() on iOS kills the app before Bare flushes its console
-// buffer, so bare_console.log stops mid-test and the reason is lost (the
-// gemma4 multimodal SIGABRT produced no [C++][ERROR] line at all). The .ips
-// crash report is the only artifact carrying the faulting thread and the
-// termination reason, and Device Farm does not surface it on its own.
+// A native abort() kills the app before Bare flushes its console buffer, so the
+// .ips crash report is the only place the faulting stack survives.
 test('iOS mobile runs collect on-device crash reports', () => {
   const generateTestspec = read(
     '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
@@ -1790,9 +1787,8 @@ test('iOS mobile runs collect on-device crash reports', () => {
     '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
   )
 
-  // The pull MUST run in the test phase, not post_test: Device Farm skips
-  // post_test entirely when the test phase exits non-zero, i.e. exactly when a
-  // crash report is the thing we need.
+  // Must run in the test phase: Device Farm skips post_test when the test phase
+  // exits non-zero, i.e. exactly when a crash report is what we need.
   const iosCrashPull = generateTestspec.indexOf('pymobiledevice3 crash pull')
   const androidLogcat = generateTestspec.indexOf('adb logcat -d -b all')
   // Anchor on the emitted YAML key, not the word — prose above mentions it too.
@@ -1804,34 +1800,27 @@ test('iOS mobile runs collect on-device crash reports', () => {
     'crash pull must be emitted in the test phase — post_test never runs on a failed test',
   )
 
-  // It runs after wdio and re-exits with wdio's own code, so wrapping the test
-  // command cannot change a run's verdict.
+  // Re-exits with wdio's own code, so wrapping cannot change a run's verdict.
   const wrapper = generateTestspec.slice(iosCrashPull - 2000, iosCrashPull)
   assert.match(wrapper, /WDIO_RC=\$\?/, 'wdio exit code must be captured')
   assert.match(wrapper, /if \[ "\$PLATFORM" = "iOS" \]/, 'wrapper must be iOS-only')
   assert.match(generateTestspec.slice(iosCrashPull), /exit \$WDIO_RC/)
-  // `set +e` stays on for the whole block: a failure inside log collection must
-  // not rewrite the verdict.
   assert.doesNotMatch(
     generateTestspec.slice(iosCrashPull - 2000, generateTestspec.indexOf('exit $WDIO_RC')),
     /^\s+set -e$/m,
     'set -e must not be re-enabled around log collection',
   )
 
-  // Reports are echoed inline as well: Customer_Artifacts can be missed, the
-  // spec output never is.
   assert.match(generateTestspec, /\[CRASH_REPORT_START\]/)
   assert.match(generateTestspec, /\[CRASH_REPORT_END\]/)
 
-  // Device Farm reuses phones, so a stale report from an earlier session must
-  // not be reported as a crash in this run.
+  // Device Farm reuses phones — a stale report must not read as this run's.
   assert.match(generateTestspec, /! -mmin -120 -delete/)
   assert.match(generateTestspec, /! -name 'QvacAddonTester\*' -delete/)
 
-  // Log collection must never fail the phase.
   assert.match(generateTestspec, /pymobiledevice3 crash pull "\$CRASH_DIR" >\/dev\/null 2>&1 \|\| true/)
 
-  // ...and the pulled reports have to reach the uploaded artifact.
+  // ...and they have to reach the uploaded artifact.
   assert.match(collectLogs, /-type d -name "crash-reports"/)
   assert.match(collectLogs, /Extracted iOS crash report/)
 })

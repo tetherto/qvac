@@ -1,22 +1,11 @@
 'use strict'
 
-// Regression proof for the iOS pre-stage write-budget failure.
-//
-// iOS kills any app that dirties more than 4 GiB in a rolling 24h window
-// ("dirtied N bytes over M sec, violating a disk writes limit of 4294967296
-// bytes over 86400 seconds"). The mobile pre-stage path used to byte-copy each
-// staged model into the writable model dir; on iOS the staged file is ALREADY
-// in the app's own writable Documents dir, so that copy was pure waste — on
-// llm's gemma shard (4.45 GB staged) it killed the app before a single test
-// ran.
-//
-// asr-ggml has two independent pickup paths (Whisper helpers and Parakeet
-// helpers, deliberately not sharing a module because the Parakeet mobile
-// package does not bundle the addon), so both are pinned here: when source and
-// destination share a filesystem the staged model is hardlinked (same inode =>
-// zero bytes written), and when it cannot be (Android: /data/local/tmp is a
-// different filesystem from the app data dir) we still fall back to a correct
-// byte copy.
+// Pre-staged models must be hardlinked, never byte-copied: iOS kills an app
+// that dirties more than 4 GiB in 24h, and the gemma shard's 4.45 GB of copying
+// tripped it mid-test ("0 tests executed"). nlink/ino are the direct proof that
+// no bytes were written; the EXDEV case pins Android's fallback copy.
+// asr-ggml has two independent pickup paths (Whisper and Parakeet), which
+// deliberately don't share a module, so both are covered here.
 
 const test = require('brittle')
 const fs = require('bare-fs')

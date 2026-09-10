@@ -155,21 +155,13 @@ cat <<EOF
 EOF
 
 # --- Test invocation ---
-# iOS wraps wdio so the on-device crash reports (.ips) are pulled inside the
-# SAME phase, then re-exits with wdio's own code.
-#
-# This cannot live in post_test: Device Farm skips that phase entirely when the
-# test phase exits non-zero (proven — "Test completed" appears in passing runs
-# and in none of the failing ones), which is exactly when a crash report
-# matters. An abort() in the native addon kills the app before Bare flushes its
-# console buffer, so bare_console.log stops mid-test — the gemma4 multimodal
-# SIGABRT left no [C++][ERROR] line anywhere, only the OS's "abort() called" —
-# and Device Farm surfaces no iOS crash report of its own.
-#
-# The verdict is unchanged: wdio's exit code is captured and propagated
-# verbatim, and `set +e` stays on so a failure inside log collection can never
-# rewrite it. Android keeps the plain invocation; logcat already carries its
-# native crashes.
+# iOS wraps wdio so the on-device crash reports (.ips) are pulled in the SAME
+# phase, then re-exits with wdio's own code. This cannot live in post_test:
+# Device Farm skips that phase when the test phase exits non-zero, i.e. exactly
+# when a crash report is what we need. An abort() in the addon kills the app
+# before Bare flushes its console buffer, so bare_console.log stops mid-test and
+# Device Farm surfaces no iOS crash report of its own.
+# `set +e` stays on so log collection can never rewrite a run's verdict.
 if [ "$PLATFORM" = "iOS" ]; then
   cat <<'EOF'
       - |
@@ -177,13 +169,11 @@ if [ "$PLATFORM" = "iOS" ]; then
         node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js
         WDIO_RC=$?
         export PATH="$HOME/.local/bin:$PATH"
-        # Same quirk the pre-stage step documents: under sudo, SUDO_UID/SUDO_GID
-        # make pymobiledevice3 chown ~/.pymobiledevice3 and abort with EPERM.
+        # Under sudo these make pymobiledevice3 chown its config and fail EPERM.
         unset SUDO_UID SUDO_GID
         CRASH_DIR="$DEVICEFARM_LOG_DIR/crash-reports"
         mkdir -p "$CRASH_DIR"
-        # Already installed by the model pre-stage step on every addon that
-        # pre-stages; install it for the ones that don't, and skip if that fails.
+        # Installed already by the model pre-stage step; install it otherwise.
         if ! command -v pymobiledevice3 >/dev/null 2>&1; then
           python3 -m pip install --quiet pymobiledevice3==10.3.1 >/dev/null 2>&1 \
             || pip3 install --quiet pymobiledevice3==10.3.1 >/dev/null 2>&1 \
@@ -195,14 +185,11 @@ if [ "$PLATFORM" = "iOS" ]; then
         else
           echo "[crash] pymobiledevice3 unavailable - skipping crash-report pull"
         fi
-        # Keep only this app's reports, and only ones from THIS session: Device
-        # Farm reuses devices, so an older QvacAddonTester report left on the
-        # phone would otherwise read as a crash in this run.
+        # This app only, this session only — Device Farm reuses devices.
         find "$CRASH_DIR" -type f ! -name 'QvacAddonTester*' -delete 2>/dev/null || true
         find "$CRASH_DIR" -type f -name 'QvacAddonTester*' ! -mmin -120 -delete 2>/dev/null || true
         find "$CRASH_DIR" -mindepth 1 -type d -empty -delete 2>/dev/null || true
-        # Echo the newest one inline as well: Customer_Artifacts can be missed,
-        # but this phase's output is always collected.
+        # Echo it inline too: Customer_Artifacts can be missed, this output can't.
         NEWEST=$(ls -t "$CRASH_DIR"/QvacAddonTester* 2>/dev/null | head -1)
         if [ -n "$NEWEST" ]; then
           echo "[CRASH_REPORT_START] $(basename "$NEWEST")"

@@ -680,19 +680,11 @@ function prestagedModelDir(modelName) {
   return null
 }
 
-// Materialise a staged model at `dest` without spending disk-write budget when
-// we don't have to. Deliberately duplicated from helpers.js rather than
-// imported: that module pulls in the native addon, which the Parakeet mobile
-// test package does not bundle.
-//
-// iOS kills any app that dirties more than 4 GiB in a rolling 24h window
-// (jetsam "excessive I/O"). On iOS the staged file already lives in the app's
-// OWN writable Documents dir, so a byte copy spends that budget for nothing; a
-// hardlink is the same inode and writes zero bytes. On Android the staging dir
-// is a different filesystem, so linkSync fails EXDEV and the copy that has
-// always run there takes over.
-//
-// `link`/`copy` are injectable so the EXDEV fallback is unit-testable.
+// Hardlink the staged model instead of copying it: iOS kills an app that
+// dirties more than 4 GiB in 24h, and there the staged file already sits in the
+// app's own writable Documents dir. On Android link() fails EXDEV and the copy
+// takes over. Duplicated from helpers.js rather than imported — that module
+// pulls in the native addon, which the Parakeet mobile package doesn't bundle.
 function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
   try {
     fs.unlinkSync(dest)

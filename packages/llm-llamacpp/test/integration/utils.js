@@ -443,24 +443,13 @@ function prestagedModelDir(modelName) {
   return null
 }
 
-// Materialise a staged model at `dest` without spending disk-write budget when
-// we don't have to.
-//
-// iOS kills any app that dirties more than 4 GiB in a rolling 24h window
-// (jetsam "excessive I/O": "dirtied N bytes over M sec, violating a disk writes
-// limit of 4294967296 bytes over 86400 seconds"). On iOS the staged file
-// already lives in the app's OWN writable Documents dir, so a byte copy spends
-// that budget for nothing — the gemma shard alone stages 4.45 GB and was killed
-// mid-copy before inference ever started. A hardlink is the same inode: zero
-// bytes written, and modelDir stays writable for the sibling files tests create
-// next to the model.
-//
-// On Android /data/local/tmp and the app's data dir are separate filesystems,
-// so linkSync fails EXDEV and we fall back to the copy that has always run
-// there — Android has no equivalent write cap, and the copy is required because
-// the staging dir is not app-writable.
-//
-// `link`/`copy` are injectable so the EXDEV fallback is unit-testable.
+// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
+// file already sits in the app's own writable Documents dir — so copying it
+// into modelDir spends that whole budget for nothing (the gemma shard stages
+// 4.45 GB and was killed mid-copy). Hardlink instead: same inode, zero bytes.
+// On Android the staging dir is a different filesystem, so link() fails EXDEV
+// and we fall back to the copy that has always run there.
+// `link`/`copy` are injectable so that fallback is unit-testable.
 function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
   try {
     fs.unlinkSync(dest)
@@ -470,8 +459,6 @@ function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync 
     link(src, dest)
     return 'link'
   } catch (err) {
-    // Loud on purpose: a silent fallback on iOS is exactly how the 4 GiB kill
-    // reached CI as an unexplained "0 tests executed".
     console.log(
       `[prestage] hardlink failed on ${os.platform()} (${err.message}); ` +
         'falling back to a byte copy'
@@ -529,8 +516,7 @@ async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, do
   // writable dir is essential: tests write sibling files next to the model
   // (session caches, finetuning checkpoints via path.join(modelDir, ...)),
   // which would fail if we returned Android's read-only /data/local/tmp
-  // staging dir directly. See linkOrCopySync for why iOS hardlinks instead of
-  // copying (the 4 GiB/24h app write cap).
+  // staging dir directly.
   const staged = prestagedModelDir(modelName)
   if (staged) {
     fs.mkdirSync(dir, { recursive: true })
