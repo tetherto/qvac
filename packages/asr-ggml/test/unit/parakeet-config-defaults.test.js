@@ -22,6 +22,15 @@ test('AOSC numeric fields stay undefined so the native config owns the defaults'
   t.is(params.streamingSpkCacheUpdatePeriod, undefined)
 })
 
+test('streaming chunk stays undefined so native model detection owns the default', (t) => {
+  t.is(buildParams().streamingChunkMs, undefined)
+})
+
+test('explicit streaming chunk is forwarded verbatim', (t) => {
+  t.is(buildParams({ streamingChunkMs: 160 }).streamingChunkMs, 160)
+  t.is(buildParams({ streamingChunkMs: 2000 }).streamingChunkMs, 2000)
+})
+
 test('AOSC numeric fields are forwarded verbatim when the caller sets them', (t) => {
   const params = buildParams({
     streamingSpkCacheLen: 200,

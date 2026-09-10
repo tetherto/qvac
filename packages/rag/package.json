@@ -1,6 +1,6 @@
 {
   "name": "@qvac/rag",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -80,6 +80,7 @@
     "bare": "*",
     "bare-abort-controller": "^1.1.2",
     "bare-console": "*",
+    "bare-url": "^2.4.7",
     "brittle": "^3.14.0",
     "corestore": "^7.4.7",
     "lunte": "^1.8.1",
@@ -90,6 +91,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
+    "@qvac/response": "^0.1.2",
     "@qvac/logging": "^0.1.1",
     "bare-crypto": "^1.13.4",
     "bare-fetch": "^3.0.1",

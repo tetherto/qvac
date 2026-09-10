@@ -76,6 +76,18 @@ on:
         required: false
         default: "packages/asr-ggml"
         type: string
+    outputs:
+      # One entry per run-integration-tests matrix row, resolved through the
+      # same runner_names outputs the matrix rows use (matrix.runner ||
+      # matrix.os), so a runner-label rename cannot desynchronize the two.
+      # benchmark-performance-asr-ggml.yml feeds this to the aggregator's
+      # --expect-devices gate so a lane that loses its rtf-results artifact
+      # fails the summarize job instead of silently shrinking the report.
+      # Keep in step with the matrix `include` list below — the arity is
+      # asserted by scripts/perf-report/__tests__/rtf-expected-devices-guard.test.js.
+      rtf_expected_devices:
+        description: "Comma-separated device labels every RTF benchmark matrix row reports as"
+        value: ${{ format('{0},{1},{2},{3},{4},{5},{6},{7}', jobs.runner_names.outputs.linux_ubuntu2204_x64, jobs.runner_names.outputs.linux_ubuntu2204_x64_gpu, jobs.runner_names.outputs.linux_ubuntu2404_x64_gpu, jobs.runner_names.outputs.ubuntu_2604, jobs.runner_names.outputs.ubuntu_2404_arm, jobs.runner_names.outputs.macos_arm64_gpu, jobs.runner_names.outputs.macos_15_large, jobs.runner_names.outputs.win_2025_x64_gpu) }}
 
 jobs:
   runner_names:
@@ -214,7 +226,7 @@ jobs:
             platform: darwin
             arch: arm64
             benchmark_matrix_json: >-
-              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"metal"}]
+              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"coreml":true,"backendHint":"coreml"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"coreml":true,"backendHint":"coreml"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"coreml":true,"backendHint":"coreml"}]
           # darwin-x64 is the union of both parents' settings, NOT parakeet's
           # alone: the whisper parent ran this row with Metal enabled (no
           # no_gpu key, six useGPU:true metal benchmark entries) and it is the
@@ -448,6 +460,21 @@ jobs:
           node scripts/stage-integration-models.mjs
           ls -lh models/
 
+      # Core ML encoder sidecars for the darwin RTF benchmark lanes. Staged in
+      # their own always-run step, NOT behind the cache-hit gate above: the
+      # model cache key carries no OS, so a cache populated by a non-darwin
+      # runner (which stages no sidecars) would otherwise satisfy the gate and
+      # leave models/coreml/ empty, silently skipping every Core ML lane.
+      # Idempotent and cheap — it re-downloads only when the pinned sha changes,
+      # and is a no-op while no sidecar is pinned.
+      - name: Stage Core ML encoder sidecars (darwin)
+        if: matrix.platform == 'darwin' && inputs.run_rtf_benchmarks
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: node scripts/stage-integration-models.mjs --coreml-only
+
       - name: Run integration test (Unix)
         if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
@@ -579,7 +606,19 @@ jobs:
       # Runner-qualified artifact name: two same-platform runners (e.g.
       # qvac-ubuntu2204-x64 cpu-only and qvac-ubuntu2204-x64-gpu) would
       # otherwise collide on one artifact name.
+      #
+      # Two attempts. The retry exists for DATA RECOVERY: a transient upload
+      # failure (run 34062003154, CreateArtifact ETIMEDOUT on the darwin-arm64
+      # runner) silently dropped all 48 of that lane's rows from the
+      # consolidated report, and a second attempt keeps the report COMPLETE
+      # rather than merely flagged. Losing both attempts does not by itself
+      # turn the run red — this job runs with job-level continue-on-error —
+      # the summarize job's --expect-devices gate is what fails the run on a
+      # missing device. `if-no-files-found: error` instead of `warn` so a
+      # zero-file upload is loud; the verify step above already guarantees
+      # files exist on the happy path.
       - name: Upload RTF benchmark results
+        id: upload-rtf-results
         if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
         continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
@@ -587,7 +626,17 @@ jobs:
           name: rtf-results-asr-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
           path: packages/asr-ggml/benchmarks/results/rtf-benchmark-*.json
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
+
+      - name: Upload RTF benchmark results (retry)
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks && steps.upload-rtf-results.outcome == 'failure' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-asr-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
+          path: packages/asr-ggml/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: error
+          overwrite: true
 
       - name: Print run state (Unix)
         if: ${{ matrix.platform != 'win32' }}

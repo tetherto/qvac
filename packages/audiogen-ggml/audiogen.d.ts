@@ -62,7 +62,9 @@ export interface AudioGenJobData {
     lmCfgScale?: number;
     lmPhase1?: boolean;
     simpleMode?: boolean;
+    rewriteQuery?: boolean;
     normalizeLoudness?: boolean;
+    generateLrc?: boolean;
     computeQualityScore?: boolean;
     dcwEnabled?: boolean;
     dcwScaler?: number;
