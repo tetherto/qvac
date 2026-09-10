@@ -229,14 +229,17 @@ jobs:
       - changes
       - sanity-checks
       - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     if: |-
-      always() && !cancelled() && needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+      always() && !cancelled() && needs.detect-fabric-stack.result == 'success' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/translation-nmtcpp
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   cpp-tests:
     needs:

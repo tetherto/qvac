@@ -87,6 +87,7 @@ jobs:
         run: >-
           node --test
           .github/scripts/test/ci-trust-policy.test.mjs
+          .github/scripts/test/fabric-overlay-policy.test.mjs
           .github/scripts/test/prebuild-status.test.mjs
           .github/scripts/test/publish-gate-policy.test.mjs
           .github/scripts/test/publish-gpr-skip-policy.test.mjs

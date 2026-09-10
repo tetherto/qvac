@@ -160,17 +160,31 @@ jobs:
           workdir: packages/vla-ggml
 
   cpp-lint:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true' && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch')
+    # resolve-fabric-prebuilds is skipped on every non-fabric-stack PR, and an
+    # if: without a status-check function carries an implicit success() over all
+    # of needs — which would skip this job there. always() suppresses it; the
+    # gates it also suppresses are restored explicitly below.
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.detect-fabric-stack.result == 'success' &&
+      needs.ci-router.outputs.run_verified_checks == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch') &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     needs:
       - fork-approval
       - authorize
       - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/vla-ggml
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   cpp-tests:
     permissions:
