@@ -36,11 +36,15 @@ var __importStar = (this && this.__importStar) || (function () {
 const bareOs = require("bare-os");
 const path = require("bare-path");
 const fs = require("bare-fs");
-const QvacLogger = require("@qvac/logging");
+const loggingModule = require("@qvac/logging");
+// Published logging releases expose a CJS constructor; the workspace exposes
+// an ESM default. Bare require(ESM) returns a namespace without __esModule.
+const QvacLogger = typeof loggingModule === "function" ? loggingModule : loggingModule.default;
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const tts_1 = require("./tts");
 const errorModule = __importStar(require("./lib/error"));
+const pocketConfig_1 = require("./lib/pocketConfig");
 const textChunker_1 = require("./lib/textChunker");
 const textStreamAccumulator_1 = require("./lib/textStreamAccumulator");
 const { platform } = bareOs;
@@ -54,6 +58,7 @@ const ENGINE_SUPERTONIC = "supertonic";
 const ENGINE_COSYVOICE3 = "cosyvoice3";
 const ENGINE_PARLER = "parler";
 const ENGINE_AUDIO8 = "audio8";
+const ENGINE_POCKET = "pocket";
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
 const CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
@@ -247,6 +252,7 @@ const ENGINE_EMOTIONS = {
     [ENGINE_COSYVOICE3]: ["anger", "happy", "neutral", "sad"],
     [ENGINE_SUPERTONIC]: [],
     [ENGINE_CHATTERBOX]: [],
+    [ENGINE_POCKET]: [],
     [ENGINE_AUDIO8]: [],
 };
 const ENGINE_PACES = {
@@ -254,6 +260,7 @@ const ENGINE_PACES = {
     [ENGINE_COSYVOICE3]: PACES, // slow/fast -> instruct; moderate -> none
     [ENGINE_SUPERTONIC]: PACES, // mapped onto the duration multiplier
     [ENGINE_CHATTERBOX]: [], // time-stretch only; use `speed`
+    [ENGINE_POCKET]: [],
     [ENGINE_AUDIO8]: [], // no rate control at all
 };
 // Which channels an engine can change per call. Supertonic takes its pace
@@ -264,6 +271,7 @@ const ENGINE_PER_CALL_CONDITIONING = {
     [ENGINE_COSYVOICE3]: CONDITIONING_KEYS,
     [ENGINE_SUPERTONIC]: [],
     [ENGINE_CHATTERBOX]: [],
+    [ENGINE_POCKET]: [],
     [ENGINE_AUDIO8]: [],
 };
 function normalizeError(error) {
@@ -565,6 +573,10 @@ function normalizeGgmlFiles(files) {
         return {};
     return {
         modelDir: firstNonEmpty(files.modelDir),
+        pocketFlowModel: firstNonEmpty(files.pocketFlowModel),
+        pocketMimiModel: firstNonEmpty(files.pocketMimiModel),
+        pocketFrontend: firstNonEmpty(files.pocketFrontend),
+        pocketVoice: firstNonEmpty(files.pocketVoice),
         t3Model: firstNonEmpty(files.t3Model, files.t3ModelPath, files.t3),
         s3genModel: firstNonEmpty(files.s3genModel, files.s3genModelPath, files.s3gen),
         supertonicModel: firstNonEmpty(files.supertonicModel, files.supertonicModelPath, files.supertonic),
@@ -592,13 +604,16 @@ function detectEngineType(engine, files) {
         engine === ENGINE_SUPERTONIC ||
         engine === ENGINE_COSYVOICE3 ||
         engine === ENGINE_PARLER ||
-        engine === ENGINE_AUDIO8) {
+        engine === ENGINE_AUDIO8 ||
+        engine === ENGINE_POCKET) {
         return engine;
     }
     if (engine != null && engine !== "") {
         throw new Error("tts-ggml: 'engine' option must be 'chatterbox', 'supertonic', " +
-            `'cosyvoice3', 'parler' or 'audio8' (got '${String(engine)}')`);
+            `'cosyvoice3', 'parler', 'audio8' or 'pocket' (got '${String(engine)}')`);
     }
+    if (files.pocketFlowModel || files.pocketMimiModel)
+        return ENGINE_POCKET;
     // Explicit CosyVoice3 files/dir take precedence over shared-modelDir sniffing.
     if (files.cosyvoiceModelDir || files.cosyvoiceLlmModel) {
         return ENGINE_COSYVOICE3;
@@ -627,6 +642,8 @@ function detectEngineType(engine, files) {
             return ENGINE_PARLER;
         if (findAudio8InDir(files.modelDir, AUDIO8_LM_RE))
             return ENGINE_AUDIO8;
+        if (fileExistsSafe(path.join(files.modelDir, "flow-lm.gguf")))
+            return ENGINE_POCKET;
     }
     return ENGINE_CHATTERBOX;
 }
@@ -839,6 +856,7 @@ class TTSGgml {
     static ENGINE_COSYVOICE3 = ENGINE_COSYVOICE3;
     static ENGINE_PARLER = ENGINE_PARLER;
     static ENGINE_AUDIO8 = ENGINE_AUDIO8;
+    static ENGINE_POCKET = ENGINE_POCKET;
     opts;
     exclusiveRun;
     logger;
@@ -849,6 +867,12 @@ class TTSGgml {
     _ttsInferenceQueueWaiter;
     _sentenceStreamCtx;
     _config;
+    _pocketJobPending = null;
+    _pocketCancelPromise = null;
+    _pocketLifecycleInProgress = false;
+    _pocketParams = null;
+    _pocketOptions = {};
+    _pocketFiles = {};
     _lazySessionLoading;
     _outputSampleRate;
     _engineType;
@@ -920,7 +944,7 @@ class TTSGgml {
         this._sentenceStreamCtx = null;
         this._ttsInferenceQueueWaiter = Promise.resolve();
         this._job = (0, infer_base_1.createJobHandler)({
-            cancel: () => this._optionalAddon()?.cancel(),
+            cancel: () => this._engineType === ENGINE_POCKET ? this.cancel() : this._optionalAddon()?.cancel(),
         });
         this._runExclusive = this.exclusiveRun
             ? (0, infer_base_1.exclusiveRunQueue)()
@@ -932,6 +956,14 @@ class TTSGgml {
         this._lazySessionLoading = resolveDefaultLazySessionLoading(options.lazySessionLoading);
         this._outputSampleRate = validateOutputSampleRate(this._config.outputSampleRate);
         this._engineType = detectEngineType(options.engine, normalizedFiles);
+        if (this._engineType === ENGINE_POCKET) {
+            if (normalizedFiles.lavasrEnhancer || normalizedFiles.lavasrDenoiser) {
+                throw new Error("Pocket does not support LavaSR enhancement or denoising");
+            }
+            this._pocketFiles = normalizedFiles;
+            this._pocketOptions = { ...options };
+            this._pocketParams = (0, pocketConfig_1.buildPocketParams)(normalizedFiles, options, this._config);
+        }
         this._resolveEngineAndModelPaths(normalizedFiles);
         this._mecabDictPath = firstNonEmpty(options.mecabDictPath, options.mecabDictDir, normalizedFiles.mecabDictDir);
         this._cangjieTsvPath = firstNonEmpty(options.cangjieTsvPath, normalizedFiles.cangjieTsvPath);
@@ -950,6 +982,8 @@ class TTSGgml {
     }
     _resolveEngineAndModelPaths(files) {
         this._voicesDir = files.voicesDir;
+        if (this._engineType === ENGINE_POCKET)
+            return;
         if (this._engineType === ENGINE_COSYVOICE3) {
             // CosyVoice3 discovers its sub-model GGUFs from a model directory; the
             // native engine resolves the individual components. Explicit
@@ -1110,7 +1144,7 @@ class TTSGgml {
         this._assertSamplerOptionSupport();
     }
     _assertSamplerOptionSupport() {
-        if (SAMPLING_ENGINES.includes(this._engineType))
+        if (this._engineType === ENGINE_POCKET || SAMPLING_ENGINES.includes(this._engineType))
             return;
         const sampling = setOptionNames({
             temperature: this._temperature,
@@ -1320,6 +1354,9 @@ class TTSGgml {
     }
     async load(..._args) {
         void _args;
+        return this._withPocketLifecycle(() => this._loadModel());
+    }
+    async _loadModel() {
         if (this.state.destroyed) {
             throw new QvacErrorAddonTTSGgml({
                 code: ERR_CODES.FAILED_TO_LOAD,
@@ -1328,14 +1365,16 @@ class TTSGgml {
         }
         if (this.state.configLoaded || this.state.weightsLoaded) {
             this._getLogger().info("Reload requested - unloading existing model first");
-            await this.unload();
+            await this._unloadModel();
         }
         await this._load();
         this.state.configLoaded = true;
         this.state.weightsLoaded = true;
     }
     async run(input) {
-        if (input?.streamOutput === true) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        if (input?.streamOutput === true && this._engineType !== ENGINE_POCKET) {
             if (typeof input.input !== "string" ||
                 input.input.trim().length === 0) {
                 throw new QvacErrorAddonTTSGgml({
@@ -1359,7 +1398,13 @@ class TTSGgml {
      * `run({ input: text, streamOutput: true, ...options })`.
      */
     async runStream(text, options = {}) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
         const normalized = options == null || typeof options !== "object" ? {} : options;
+        if (this._engineType === ENGINE_POCKET) {
+            const run = () => this._runStreamOrchestrator(text, normalized, this._resolveJobFields(normalized, "runStream"));
+            return this.exclusiveRun ? this._enqueueExclusiveTtsResponse(run) : run();
+        }
         return this.run({
             input: text,
             streamOutput: true,
@@ -1377,6 +1422,8 @@ class TTSGgml {
      * small streamed fragments are coalesced.
      */
     async runStreaming(textStream, options = {}) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
         const jobFields = this._resolveJobFields(options, "runStreaming");
         const streamOptions = this._resolveRunStreamingOptions(textStream, options);
         let normalized = this._normalizeTextStream(textStream);
@@ -1467,6 +1514,7 @@ class TTSGgml {
         });
     }
     _runTextStreamOrchestrator(source, jobFields) {
+        this._checkPocketRequest();
         const response = this._job.start();
         this._sentenceStreamCtx = {
             textStreamMode: true,
@@ -1477,7 +1525,10 @@ class TTSGgml {
             chunkResolver: null,
             jobFields,
         };
+        const context = this._sentenceStreamCtx;
         void this._sentenceStreamTextIterableDrive().catch((error) => {
+            if (context !== this._sentenceStreamCtx)
+                return;
             this._rejectActiveChunk(error);
             this._sentenceStreamCtx = null;
             this._job.fail(normalizeError(error));
@@ -1493,6 +1544,8 @@ class TTSGgml {
         }
         try {
             for await (const piece of context.asyncTextSource) {
+                if (context !== this._sentenceStreamCtx)
+                    return;
                 const text = String(piece).trim();
                 if (text.length === 0)
                     continue;
@@ -1501,7 +1554,9 @@ class TTSGgml {
                 const done = new Promise((resolve, reject) => {
                     context.chunkResolver = { resolve, reject };
                 });
-                await this._requireAddon().runJob({
+                // Dispatch may fail before the completion promise is awaited.
+                void done.catch(() => { });
+                await this._dispatchJob({
                     type: "text",
                     input: text,
                     ...(context.jobFields ?? {}),
@@ -1510,11 +1565,15 @@ class TTSGgml {
             }
         }
         catch (error) {
+            if (context !== this._sentenceStreamCtx)
+                return;
             this._rejectActiveChunk(error);
             this._sentenceStreamCtx = null;
             this._job.fail(normalizeError(error));
             return;
         }
+        if (context !== this._sentenceStreamCtx)
+            return;
         const current = this._sentenceStreamCtx;
         const chunks = current?.chunks || [];
         const accumulator = current?.acc || emptyStreamAccumulator();
@@ -1537,6 +1596,7 @@ class TTSGgml {
         return this._engineType === ENGINE_AUDIO8;
     }
     _runStreamOrchestrator(text, options, jobFields) {
+        this._checkPocketRequest();
         const chunks = (0, textChunker_1.splitTtsText)(String(text), {
             language: this._config.language,
             locale: options.locale,
@@ -1548,6 +1608,7 @@ class TTSGgml {
                 adds: "chunked synthesis: text produced no chunks after split",
             });
         }
+        this._checkPocketRequest();
         const response = this._job.start();
         this._sentenceStreamCtx = {
             chunks,
@@ -1556,7 +1617,10 @@ class TTSGgml {
             chunkResolver: null,
             jobFields,
         };
+        const context = this._sentenceStreamCtx;
         void this._sentenceStreamDriveBody().catch((error) => {
+            if (context !== this._sentenceStreamCtx)
+                return;
             this._rejectActiveChunk(error);
             this._sentenceStreamCtx = null;
             this._job.fail(normalizeError(error));
@@ -1568,17 +1632,23 @@ class TTSGgml {
         if (!context || context.textStreamMode)
             return;
         for (let index = 0; index < context.chunks.length; index++) {
+            if (context !== this._sentenceStreamCtx)
+                return;
             context.chunkIdx = index;
             const done = new Promise((resolve, reject) => {
                 context.chunkResolver = { resolve, reject };
             });
-            await this._requireAddon().runJob({
+            // Dispatch may fail before the completion promise is awaited.
+            void done.catch(() => { });
+            await this._dispatchJob({
                 type: "text",
                 input: context.chunks[index],
                 ...(context.jobFields ?? {}),
             });
             await done;
         }
+        if (context !== this._sentenceStreamCtx)
+            return;
         this._sentenceStreamCtx = null;
     }
     async _load() {
@@ -1599,6 +1669,8 @@ class TTSGgml {
         }
     }
     _buildTtsParams() {
+        if (this._pocketParams)
+            return { ...this._pocketParams };
         if (this._engineType === ENGINE_SUPERTONIC) {
             return this._buildSupertonicParams();
         }
@@ -1891,27 +1963,62 @@ class TTSGgml {
         return new tts_1.TTSInterface(binding, configuration, outputCallback);
     }
     async unload() {
+        return this._withPocketLifecycle(() => this._unloadModel());
+    }
+    async _unloadModel() {
         await this.cancel();
         this._failAndClearActiveResponse("Model was unloaded");
         const addon = this._optionalAddon();
-        if (addon)
-            await addon.destroyInstance();
-        this.state.configLoaded = false;
-        this.state.weightsLoaded = false;
+        try {
+            if (addon)
+                await addon.destroyInstance();
+        }
+        finally {
+            if (this.addon === addon) {
+                this.addon = null;
+                this.state.configLoaded = false;
+                this.state.weightsLoaded = false;
+            }
+        }
     }
     async destroy() {
-        await this.unload();
-        this.state.destroyed = true;
+        return this._withPocketLifecycle(async () => {
+            await this._unloadModel();
+            this.state.destroyed = true;
+        });
     }
     async _runInternal(input) {
+        await this._waitPocketCancel();
+        this._checkPocketRequest();
         const jobFields = this._resolveJobFields(input, "run");
+        const signal = input?.signal;
+        const pocketSignal = this._engineType === ENGINE_POCKET && signal && !signal.aborted ? signal : undefined;
         const response = this._job.start({
-            signal: input?.signal,
+            signal: pocketSignal ? undefined : signal,
         });
-        if (input?.signal?.aborted)
+        if (signal?.aborted)
             return response;
+        if (pocketSignal) {
+            const onAbort = () => {
+                if (this._job.active !== response)
+                    return;
+                const reason = pocketSignal.reason;
+                const error = reason instanceof Error ? reason : new Error(typeof reason === "string" ? `Aborted: ${reason}` : "Aborted");
+                // Preserve the caller's reason while stopping native work. Cancellation
+                // retains the completion barrier until its terminal callback arrives.
+                try {
+                    response.failed(error);
+                }
+                finally {
+                    void this.cancel().catch((error) => this._getLogger().error("Pocket abort cancellation failed", error));
+                }
+            };
+            pocketSignal.addEventListener("abort", onAbort, { once: true });
+            const detach = () => pocketSignal.removeEventListener("abort", onAbort);
+            void response.await().then(detach, detach);
+        }
         try {
-            await this._requireAddon().runJob({
+            await this._dispatchJob({
                 type: input.type || "text",
                 input: input.input,
                 ...(jobFields ?? {}),
@@ -1949,6 +2056,11 @@ class TTSGgml {
             this._job.end();
     }
     _addonOutputCallback(_addon, event, data, error) {
+        if (this._pocketJobPending && ((typeof error === "string" && error.length > 0) || isStatsEvent(data))) {
+            const pending = this._pocketJobPending;
+            this._pocketJobPending = null;
+            pending.resolve();
+        }
         if (typeof error === "string" && error.length > 0) {
             this._handleAddonError(error);
         }
@@ -1998,7 +2110,7 @@ class TTSGgml {
             enriched.sampleRate = data.sampleRate;
         }
         if (!context.textStreamMode) {
-            enriched.isLast = index >= context.chunks.length - 1;
+            enriched.isLast = index >= context.chunks.length - 1 && data.isLast !== false;
         }
         return enriched;
     }
@@ -2019,10 +2131,83 @@ class TTSGgml {
             this._endJobWithStats(computeSentenceStreamStats(context.chunks, context.acc, this._pacesOnFrames()));
         }
     }
+    async _waitPocketCancel() {
+        if (this._engineType === ENGINE_POCKET && this._pocketCancelPromise)
+            await this._pocketCancelPromise;
+    }
+    async _withPocketLifecycle(action) {
+        if (this._engineType !== ENGINE_POCKET)
+            return action();
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        this._pocketLifecycleInProgress = true;
+        try {
+            await action();
+        }
+        finally {
+            this._pocketLifecycleInProgress = false;
+        }
+    }
+    _checkPocketReload() {
+        if (this._pocketLifecycleInProgress)
+            throw new Error("Pocket lifecycle operation is already in progress");
+    }
+    _checkPocketRequest() {
+        if (this._engineType === ENGINE_POCKET) {
+            if (this.state.destroyed)
+                throw new Error("Pocket instance was destroyed");
+            if (!this.state.weightsLoaded || !this._optionalAddon())
+                throw new Error("Pocket model is not loaded");
+        }
+        if (this._engineType === ENGINE_POCKET && (this._job.active || this._pocketJobPending)) {
+            throw new Error("Pocket synthesis is already in progress");
+        }
+        this._checkPocketReload();
+    }
+    async _dispatchJob(input) {
+        const addon = this._requireAddon();
+        if (this._engineType !== ENGINE_POCKET)
+            return addon.runJob(input);
+        if (this._pocketJobPending)
+            throw new Error("Pocket native job is already in progress");
+        let resolve = () => { };
+        const promise = new Promise((done) => { resolve = done; });
+        const pending = { promise, resolve };
+        this._pocketJobPending = pending;
+        try {
+            await addon.runJob(input);
+        }
+        catch (error) {
+            if (this._pocketJobPending === pending)
+                this._pocketJobPending = null;
+            resolve();
+            throw error;
+        }
+    }
     async cancel() {
         const addon = this._optionalAddon();
-        if (addon?.cancel)
-            await addon.cancel();
+        if (this._engineType !== ENGINE_POCKET) {
+            if (addon?.cancel)
+                await addon.cancel();
+            return;
+        }
+        if (this._pocketCancelPromise)
+            return this._pocketCancelPromise;
+        const pending = this._pocketJobPending;
+        this._pocketCancelPromise = (async () => {
+            this._failAndClearActiveResponse("Synthesis cancelled");
+            if (addon?.cancel)
+                await addon.cancel();
+            // Joining the worker can precede delivery of its terminal callback.
+            if (pending)
+                await pending.promise;
+        })();
+        try {
+            await this._pocketCancelPromise;
+        }
+        finally {
+            this._pocketCancelPromise = null;
+        }
     }
     _failAndClearActiveResponse(reason) {
         this._rejectActiveChunk(reason instanceof Error ? reason : new Error(reason));
@@ -2172,8 +2357,50 @@ class TTSGgml {
             throw error;
         }
     }
+    async _reloadPocket(newConfig) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        if (this.state.destroyed)
+            throw new Error("Pocket instance was destroyed");
+        const options = { ...this._pocketOptions, ...newConfig };
+        const config = { ...this._config, ...newConfig };
+        const params = (0, pocketConfig_1.buildPocketParams)(this._pocketFiles, options, config);
+        this._pocketLifecycleInProgress = true;
+        let replacement = null;
+        try {
+            replacement = this._createAddon(params, this._addonOutputCallback.bind(this));
+            await replacement.activate();
+            const previous = this._optionalAddon();
+            if (previous)
+                await this.cancel();
+            this._failAndClearActiveResponse("Model was reloaded");
+            this.addon = replacement;
+            replacement = null;
+            this._pocketParams = params;
+            this._pocketOptions = options;
+            this._config.language = "en";
+            this._config.useGPU = false;
+            this._outputSampleRate = typeof params.outputSampleRate === "number" ? params.outputSampleRate : null;
+            this._config.outputSampleRate = this._outputSampleRate ?? undefined;
+            this.state.configLoaded = true;
+            this.state.weightsLoaded = true;
+            if (previous)
+                await previous.destroyInstance();
+        }
+        finally {
+            try {
+                if (replacement)
+                    await replacement.destroyInstance();
+            }
+            finally {
+                this._pocketLifecycleInProgress = false;
+            }
+        }
+    }
     async reload(newConfig = {}) {
         this._getLogger().debug("Reloading addon with new configuration", newConfig);
+        if (this._engineType === ENGINE_POCKET)
+            return this._reloadPocket(newConfig);
         const parameters = this._applyReloadableConfig(newConfig);
         await this.cancel();
         this._failAndClearActiveResponse("Model was reloaded");

@@ -155,7 +155,8 @@
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
     "test:bare": "npm run test",
     "check-models": "bare ./dist/models/update-models/index.js --check",
-    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts"
+    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts",
+    "test:pocket": "tsc -p test/pocket/tsconfig.json && tsc-alias -p test/pocket/tsconfig.json --resolve-full-paths && brittle-bare test/pocket-dist/test/pocket/*.test.js"
   },
   "engines": {
     "bare": "^1.30.3"
@@ -273,6 +274,7 @@
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
     "tsc-alias": "^1.8.17",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@types/node": "^24.2.1"
   }
 }

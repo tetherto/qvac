@@ -103,7 +103,8 @@ function buildRunStreamingOptions(
 
 export async function* textToSpeechStream(
   params: TextToSpeechStreamRequest,
-  inputStream: AsyncIterable<Buffer>
+  inputStream: AsyncIterable<Buffer>,
+  ensureActive?: () => Promise<void>
 ): AsyncGenerator<TtsOpYield, { modelExecutionMs: number; stats?: TtsStats }, unknown> {
   const request = textToSpeechStreamRequestSchema.parse(params)
 
@@ -124,6 +125,8 @@ export async function* textToSpeechStream(
     textSource,
     Object.keys(streamOpts).length > 0 ? streamOpts : undefined
   )
+
+  await ensureActive?.()
 
   for await (const data of response.iterate()) {
     // lunte-disable-next-line eqeqeq -- `== null` intentionally matches null and undefined

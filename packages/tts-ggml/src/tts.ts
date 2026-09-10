@@ -48,7 +48,7 @@ export interface TTSBinding {
     outputCallback: TTSOutputCallback | null,
   ): object;
   activate(handle: object | null): Promise<void>;
-  runJob(handle: object | null, data: TTSJobData): void;
+  runJob(handle: object | null, data: TTSJobData): boolean | void | Promise<boolean | void>;
   loadWeights(
     handle: object | null,
     weightsData: TTSWeightData,
@@ -100,10 +100,11 @@ export class TTSInterface {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await -- preserves the established promise-returning wrapper API.
   async runJob(data: TTSJobData): Promise<void> {
     try {
-      this._binding.runJob(this._handle, data);
+      if (await this._binding.runJob(this._handle, data) === false) {
+        throw new Error("Native addon rejected the job");
+      }
     } catch (error) {
       throw new QvacErrorAddonTTSGgml({
         code: ERR_CODES.FAILED_TO_APPEND,

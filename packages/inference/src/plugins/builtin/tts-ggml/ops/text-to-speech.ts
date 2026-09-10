@@ -36,7 +36,8 @@ function hasRunStream(model: unknown): model is RunStreamModel {
 }
 
 export async function* textToSpeech(
-  params: TtsRequest
+  params: TtsRequest,
+  ensureActive?: () => Promise<void>
 ): AsyncGenerator<TtsOpYield, { modelExecutionMs: number; stats?: TtsStats }> {
   const request = ttsRequestSchema.parse(params)
   const {
@@ -73,6 +74,7 @@ export async function* textToSpeech(
         : undefined
 
     const response = await model.runStream(text, streamOpts)
+    await ensureActive?.()
 
     if (!stream) {
       let completeBuffer: number[] = []
@@ -113,6 +115,7 @@ export async function* textToSpeech(
     ...(stream ? { streamOutput: true } : {}),
     ...parlerJobOptions
   })) as unknown as TtsResponse
+  await ensureActive?.()
 
   if (!stream) {
     let completeBuffer: number[] = []

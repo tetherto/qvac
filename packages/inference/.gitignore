@@ -1,2 +1,4 @@
 dist
 bun.lock
+
+/test/pocket-dist/

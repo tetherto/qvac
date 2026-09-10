@@ -10,12 +10,12 @@
     },
     {
       "name": "ggml-speech",
-      "version>=": "2026-09-04#2",
+      "version>=": "2026-09-09#1",
       "default-features": false
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-04#1",
+      "version>=": "2026-09-10#1",
       "default-features": false,
       "features": [
         "tts",
@@ -25,7 +25,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-04#1",
+      "version>=": "2026-09-10#1",
       "default-features": false,
       "features": [
         "tts",
@@ -36,7 +36,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-04#1",
+      "version>=": "2026-09-10#1",
       "default-features": false,
       "features": [
         "tts",
@@ -51,7 +51,7 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-09-04#1",
+          "version>=": "2026-09-10#1",
           "default-features": false,
           "features": [
             "cuda"
@@ -71,7 +71,7 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-09-04#1",
+          "version>=": "2026-09-10#1",
           "default-features": false,
           "features": [
             "vulkan"

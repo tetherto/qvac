@@ -1048,3 +1048,7 @@ OpenCL; Xclipse and Mali use Vulkan).
 ## License
 
 Apache-2.0.  See [LICENSE](./LICENSE).
+
+## Pocket TTS
+
+See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.

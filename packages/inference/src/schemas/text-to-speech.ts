@@ -527,12 +527,31 @@ const ttsAudio8RuntimeConfigShape = {
 
 export const ttsAudio8RuntimeConfigSchema = z.object(ttsAudio8RuntimeConfigShape)
 
+// Pocket English 2026-04 uses a CPU FlowLM + Mimi pipeline. The main
+// modelSrc is flow-lm.gguf; companion artifacts are resolved before activation.
+export const ttsPocketRuntimeConfigSchema = z.object({
+  ttsEngine: z.literal('pocket'),
+  language: z.literal('en').default('en'),
+  useGPU: z.literal(false).optional(),
+  threads: z.number().int().min(1).max(1024).optional(),
+  nCtx: z.number().int().min(1).max(8192).optional(),
+  maxTokens: z.number().int().min(1).max(1024).optional(),
+  steps: z.number().int().min(1).max(64).optional(),
+  seed: z.number().int().min(0).max(4294967295).optional(),
+  temperature: z.number().finite().min(0).max(10).optional(),
+  noiseClamp: z.number().finite().min(0).max(3.402823466e38).optional(),
+  eosThreshold: z.number().finite().min(-3.402823466e38).max(3.402823466e38).optional(),
+  framesAfterEos: z.number().int().min(-1).max(100).optional(),
+  outputSampleRate: z.number().int().min(8000).max(192000).optional()
+})
+
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsChatterboxRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
   ttsParlerRuntimeConfigSchema,
   ttsCosyvoice3RuntimeConfigSchema,
-  ttsAudio8RuntimeConfigSchema
+  ttsAudio8RuntimeConfigSchema,
+  ttsPocketRuntimeConfigSchema
 ])
 
 // Optional LavaSR post-processing model sources, shared across engines. Supply
@@ -699,15 +718,44 @@ function refineChatterboxTokenizerAssets(
   }
 }
 
+export const ttsPocketLoadConfigSchema = ttsPocketRuntimeConfigSchema.extend({
+  mimiModelSrc: modelSrcInputSchema,
+  frontendSrc: modelSrcInputSchema,
+  voiceSrc: modelSrcInputSchema.optional(),
+  referenceAudioSrc: modelSrcInputSchema.optional()
+})
+
+function validatePocketVoice(
+  config: {
+    ttsEngine?: unknown
+    voiceSrc?: unknown
+    referenceAudioSrc?: unknown
+  },
+  ctx: z.RefinementCtx
+) {
+  if (
+    config.ttsEngine === 'pocket' &&
+    (config.voiceSrc === undefined) === (config.referenceAudioSrc === undefined)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['voiceSrc'],
+      message: 'Pocket requires exactly one voiceSrc or referenceAudioSrc'
+    })
+  }
+}
+
 export const ttsLoadConfigSchema = z
   .discriminatedUnion('ttsEngine', [
     ttsChatterboxLoadConfigSchema,
     ttsSupertonicLoadConfigSchema,
     ttsParlerLoadConfigSchema,
     ttsCosyvoice3LoadConfigSchema,
-    ttsAudio8LoadConfigSchema
+    ttsAudio8LoadConfigSchema,
+    ttsPocketLoadConfigSchema
   ])
   .superRefine(refineChatterboxTokenizerAssets)
+  .superRefine(validatePocketVoice)
 
 // === Legacy ONNX modelConfig fields (deprecated) ===
 //
@@ -749,9 +797,11 @@ export const ttsConfigSchema = z
     ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
     ttsParlerLoadConfigSchema.strict(),
     ttsCosyvoice3LoadConfigSchema.strict(),
-    ttsAudio8LoadConfigSchema.strict()
+    ttsAudio8LoadConfigSchema.strict(),
+    ttsPocketLoadConfigSchema.strict()
   ])
   .superRefine(refineChatterboxTokenizerAssets)
+  .superRefine(validatePocketVoice)
 
 const ttsClientParamsShape = {
   modelId: z.string(),
@@ -880,3 +930,6 @@ export interface TextToSpeechStreamSession {
   destroy(): void
   [Symbol.asyncIterator](): AsyncIterator<TextToSpeechStreamResponse>
 }
+
+export type TtsPocketLoadConfig = z.infer<typeof ttsPocketLoadConfigSchema>
+export type TtsPocketRuntimeConfig = z.infer<typeof ttsPocketRuntimeConfigSchema>

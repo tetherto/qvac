@@ -870,7 +870,7 @@ importers:
         specifier: ^0.8.0
         version: 0.8.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       '@qvac/rag':
-        specifier: ^0.8.0
+        specifier: ^0.8.1
         version: link:../rag
       '@qvac/registry-client':
         specifier: ^0.6.1
@@ -993,6 +993,9 @@ importers:
       '@types/brittle':
         specifier: ^3.5.0
         version: 3.5.0
+      '@types/node':
+        specifier: ^24.2.1
+        version: 24.13.3
       bare:
         specifier: '*'
         version: 1.31.2(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@1.6.0)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)

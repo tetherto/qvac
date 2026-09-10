@@ -1,7 +1,7 @@
 {
   "name": "@qvac/tts-ggml",
   "version": "0.8.1",
-  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 engines from tts-cpp)",
+  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 + Pocket engines from tts-cpp)",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
@@ -57,7 +57,9 @@
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-models": "bash scripts/convert-models.sh",
     "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh",
-    "download-models:registry": "node scripts/download-tts-ggml-models.js"
+    "download-models:registry": "node scripts/download-tts-ggml-models.js",
+    "example:pocket": "bare examples/pocket-tts.js",
+    "test:pocket": "npm run build:ts && brittle-bare test/integration/pocket.integration.test.js"
   },
   "files": [
     "addonLogging.js",
@@ -86,7 +88,8 @@
     "test/utils/textMetrics.js",
     "test/data/sentences-medium.js",
     "test/data/sentences-long.js",
-    "LICENSE"
+    "LICENSE",
+    "docs"
   ],
   "exports": {
     "./package": "./package.json",

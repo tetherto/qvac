@@ -209,7 +209,8 @@
     "contract:export": "tsx ./scripts/export-contract.ts",
     "contract:check": "tsx ./scripts/export-contract.ts --check",
     "check:resource-collectors": "tsx ./scripts/check-resource-collectors-packaging.ts",
-    "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
+    "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog",
+    "test:pocket:node": "node scripts/run-pocket-node-test.js"
   },
   "dependencies": {
     "@qvac/audiogen-ggml": "^0.3.2",
