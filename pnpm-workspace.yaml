@@ -1,0 +1,32 @@
+packages:
+  - "packages/*"
+  - "packages/registry-server/client"
+  - "packages/registry-server/shared"
+  - "plugins/*"
+
+# Plain semver everywhere, no workspace:. Falls back to registry when local
+# version doesn't satisfy the range.
+linkWorkspacePackages: true
+
+# Large binary tarballs (e.g. react-native-bare-kit) need more than pnpm's
+# default 60s fetch timeout.
+fetchTimeout: 300000
+fetchRetries: 5
+fetchRetryMaxtimeout: 120000
+
+# hyper-instrument's own lockfile points bare-v8 at a local link: path that
+# doesn't exist in this workspace; pin it to a real registry version instead.
+overrides:
+  hyper-instrument>bare-v8: "^1.0.1"
+  # @electron/rebuild pins @electron/node-gyp to a git URL (exotic subdep);
+  # pin it to the electron fork's published registry build so blockExoticSubdeps
+  # stays on. Introduced when main's @electron-forge deps (sdk) merged in.
+  "@electron/rebuild>@electron/node-gyp": "10.2.0-electron.2"
+
+blockExoticSubdeps: true
+
+allowBuilds:
+  cld: true
+  esbuild: true
+  nx: true
+  unrs-resolver: true
