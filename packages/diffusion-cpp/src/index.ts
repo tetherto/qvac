@@ -84,7 +84,7 @@ export type ScheduleType =
   | 'bong_tangent'
   | 'ltx2'
 
-export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux_flow' | 'flux2_flow'
+export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux2_flow'
 
 export type LoraApplyMode = 'auto' | 'immediately' | 'at_runtime'
 
@@ -608,7 +608,7 @@ export class ImgStableDiffusion {
     }
 
     if (params.init_image && this._files.llm) {
-      if (prediction !== 'flux2_flow' && prediction !== 'flux_flow') {
+      if (prediction !== 'flux2_flow') {
         throw new Error(
           'FLUX img2img requires an explicit prediction type in config. ' +
             "Set prediction: 'flux2_flow' (FLUX.2). " +
@@ -868,7 +868,7 @@ export function applyFluxImg2ImgDimDefaults(
   hasInitImages: boolean
 ): GenerationParams {
   void hasInitImages
-  const isFlux = prediction === 'flux_flow' || prediction === 'flux2_flow'
+  const isFlux = prediction === 'flux2_flow'
   if (!isFlux) {
     return params
   }
