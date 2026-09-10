@@ -24,15 +24,19 @@
   one, and it is decided from the prompt that was produced rather than from
   what the template is capable of: it covers both a template with no tools
   branch at all and one whose tool block is guarded on a conversation shape
-  this request did not have. Where a tool name also occurs in the conversation
-  — which the ordinary multi-turn tool loop guarantees, since it replays the
-  call by name — the render is repeated with the tools removed and the drop is
-  decided by whether that changed the prompt, so conversation text cannot mask
-  an omission. The counter reads in one direction: non-zero means the
-  definitions were dropped, while 0 is **not** a promise that the model saw all
-  of them, because a template that renders only some of the tools still changes
-  the render. It is a per-request figure: a job reports what happened to its own
-  render, not what happened across whatever else was in flight beside it.
+  this request did not have. Every such drop is decided by rendering the same
+  inputs again with the tools removed and comparing: only a byte-identical
+  prompt counts as an omission. That is what makes conversation text unable to
+  mask a drop — the ordinary multi-turn tool loop replays the call by name, so
+  a tool name in the prompt proves nothing — and equally what stops a
+  definition the template emitted in some transformed form from being reported
+  as dropped. A template that cannot render at all without its tools leaves the
+  question unanswerable, and is reported as not dropped. The counter reads in
+  one direction: non-zero means the definitions were dropped, while 0 is
+  **not** a promise that the model saw all of them, because a template that
+  renders only some of the tools still changes the render. It is a per-request
+  figure: a job reports what happened to its own render, not what happened
+  across whatever else was in flight beside it.
 - `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
   function name) controls whether a tool call is forced, allowed or disabled for
   a request that declares tools; a function name restricts the call to it.

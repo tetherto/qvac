@@ -406,6 +406,16 @@ common_chat_tool makeWeatherTool() {
   return tool;
 }
 
+common_chat_tool makeTimeTool() {
+  common_chat_tool tool;
+  tool.name = "get_time";
+  tool.description = "Get the current time in a city";
+  tool.parameters =
+      R"({"type":"object","properties":{"city":{"type":"string"}},)"
+      R"("required":["city"]})";
+  return tool;
+}
+
 // Renders any conversation but raises as soon as tools are present, so
 // getPrompt() must take its tools-stripped retry path.
 constexpr const char* TOOL_REJECTING_TEMPLATE =
@@ -959,6 +969,146 @@ TEST_F(ChatTemplateUtilsTest, GetPromptDoesNotFlagAToolsAwareTemplate) {
   EXPECT_NE(rendered.prompt.find("get_weather"), std::string::npos)
       << "the tool must be in the prompt: " << rendered.prompt;
   EXPECT_EQ(inputs.tools.size(), 1u) << "tools must not be stripped";
+}
+
+// A rendered definition the name scan cannot see. The template emits every
+// tool it was given, upper-cased — a stand-in for the transforms a real
+// template applies: a case fold, `\uXXXX`-escaped JSON from `tojson` on a
+// non-ASCII name, a serialiser that splits the name across tokens.
+//
+// `resolveToolChoice` accepts unusual names (see
+// `ResolveToolChoiceAllowsUnusualToolNames`), so this is reachable rather
+// than theoretical. The consequence of getting it wrong is the worst the flag
+// has: a reported drop strips the caller's tool list, disarms the grammar,
+// and turns an explicit `tool_choice: "required"` into a thrown error — for a
+// render that showed the model every definition it asked for.
+TEST_F(ChatTemplateUtilsTest, GetPromptDoesNotFlagATransformedToolName) {
+  constexpr const char* kUpperCasingTemplate =
+      "{%- if tools %}{%- for t in tools %}"
+      "<def>{{ t.function.name | upper }}</def>{%- endfor %}{%- endif %}"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, kUpperCasingTemplate);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  ASSERT_NE(rendered.prompt.find("GET_WEATHER"), std::string::npos)
+      << "precondition: the definition was rendered: " << rendered.prompt;
+  ASSERT_EQ(rendered.prompt.find("get_weather"), std::string::npos)
+      << "precondition: a substring scan cannot see it: " << rendered.prompt;
+  EXPECT_FALSE(rendered.toolDefinitionsDropped)
+      << "removing the tools changes this prompt, so nothing was dropped; a "
+         "name scan reports a drop here and strips a tool list the template "
+         "rendered in full";
+  EXPECT_EQ(inputs.tools.size(), 1u)
+      << "a rendered tool list must survive for the grammar to constrain";
+}
+
+// The documented residual, pinned so it cannot widen unnoticed. Two tools
+// supplied, one rendered: the render changed, so the flag reports no drop —
+// which is what the contract on `toolDefinitionsDropped` says `false` means
+// and does not mean. Closing this needs the renderer to say what it consumed.
+//
+// The consequence is worth seeing in one place: the tools are *not* stripped,
+// so the grammar still admits `get_time`, and the model can be constrained to
+// call a tool whose definition it was never shown.
+TEST_F(ChatTemplateUtilsTest, GetPromptDoesNotFlagAPartialToolRender) {
+  constexpr const char* kFirstToolOnlyTemplate =
+      "{%- if tools %}<def>{{ tools[0].function.name }}</def>{%- endif %}"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, kFirstToolOnlyTemplate);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool(), makeTimeTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  ASSERT_NE(rendered.prompt.find("get_weather"), std::string::npos)
+      << "precondition: the first definition was rendered: " << rendered.prompt;
+  ASSERT_EQ(rendered.prompt.find("get_time"), std::string::npos)
+      << "precondition: the second was not: " << rendered.prompt;
+  EXPECT_FALSE(rendered.toolDefinitionsDropped)
+      << "a partial render is not an omission under the documented contract; "
+         "`false` never promised the model saw every definition";
+  EXPECT_EQ(inputs.tools.size(), 2u)
+      << "the caller keeps both tools, so the grammar admits a call to the "
+         "definition the prompt never carried — the residual this pins";
+}
+
+// The probe's failure path, which the contract has to state rather than
+// leave to chance. A template that cannot render without tools raises when
+// `renderIsUnchangedWithoutTools` clears them, and an exception is not
+// evidence either way.
+//
+// It resolves to "not dropped" for one reason: the flag *strips the caller's
+// tool list*, so the conservative answer is the one that leaves the request
+// alone. It is also the better guess — a template that raises once `tools` is
+// gone is one that dereferences `tools` unconditionally.
+TEST_F(ChatTemplateUtilsTest, GetPromptDoesNotFlagADropWhenTheProbeRaises) {
+  // Needs tools to render at all, yet names none of them in the output, so
+  // the name scan cannot settle it and the probe is what runs.
+  constexpr const char* kToolsRequiredTemplate =
+      "{%- if not tools %}{{ raise_exception('tools are required') }}"
+      "{%- endif %}<count>{{ tools | length }}</count>"
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, kToolsRequiredTemplate);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  ASSERT_TRUE(rendered.renderedByJinja)
+      << "precondition: the with-tools render succeeded";
+  ASSERT_EQ(rendered.prompt.find("get_weather"), std::string::npos)
+      << "precondition: no name in the prompt, so the probe decides: "
+      << rendered.prompt;
+  EXPECT_FALSE(rendered.toolDefinitionsDropped)
+      << "a raising probe is not proof of omission, and this flag strips the "
+         "caller's tools, so it must not fire on one";
+  EXPECT_EQ(inputs.tools.size(), 1u)
+      << "an unprovable case must leave the caller's tools alone";
+}
+
+// What a reported drop leaves in `rendered.grammar`, asserted rather than
+// assumed. Two reviewers disagreed on it: the tool-grammar gate reads the
+// post-render tool list, so if fabric returns a tool grammar for a template
+// that rendered no definitions, the strip is load-bearing; if the grammar is
+// always empty here, the strip is belt-and-braces. Either way the gate must
+// read the stripped list, and this records which world we are in.
+//
+// `GetPromptFlagsToolDefinitionsDropped` asserts an empty grammar only for
+// the tools-*rejecting* retry path, which is a different branch: there the
+// prompt is re-rendered with no tools at all.
+TEST_F(ChatTemplateUtilsTest, GetPromptDropOnASilentTemplateExportsNoGrammar) {
+  constexpr const char* kToolsIgnoringTemplate =
+      "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+      "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, kToolsIgnoringTemplate);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  ASSERT_TRUE(rendered.toolDefinitionsDropped)
+      << "precondition: the silent-omission path: " << rendered.prompt;
+  ASSERT_TRUE(inputs.tools.empty()) << "precondition: the tools were stripped";
+  EXPECT_TRUE(rendered.grammar.empty())
+      << "a template that rendered no definitions must not also hand back a "
+         "tool grammar; if this ever fails, the stripped list gating "
+         "configureTemplateDerivedSampling is the only thing preventing a "
+         "grammar for tools the model never read: "
+      << rendered.grammar;
 }
 
 TEST_F(ChatTemplateUtilsTest, GetPromptLegacyFallbackMarksProvenance) {

@@ -293,26 +293,19 @@ namespace {
 
 /// Whether a rendered prompt actually names any of the tools it was given.
 ///
-/// This is deliberately a property of *this render* rather than of the
-/// template. `common_chat_templates_get_caps()` cannot answer the question:
-/// `jinja::caps_get` decides `supports_tools` by executing the template
-/// against fabric's own synthetic probe conversation and checking whether the
-/// probe touched `tools[0].function.name` (common/jinja/caps.cpp:242-247). The
-/// probe leads with a user turn, so a template that guards its tool block on
-/// the conversation shape reports "capable" from the probe and can still omit
-/// the block for a request shaped differently — the same shape-sensitivity
-/// QVAC-23251 hit, where the Qwen3.5 template rejected a prefix primed without
-/// a user turn. A capability answer would report no drop for a render that
-/// dropped everything.
+/// Only ever an optimisation now. A name in the prompt that the conversation
+/// cannot have supplied proves the template put it there, which lets the
+/// healthy path answer "not dropped" without a second render. It is not used
+/// to prove the converse: a name being *absent* is not a drop, because the
+/// template may have emitted it in a form this scan cannot see — a case fold,
+/// `\uXXXX`-escaped JSON, a serialiser that splits the name. Those go to
+/// `renderIsUnchangedWithoutTools` like every other unproven case. See
+/// `jinjaRenderOmittedTools`, the entry point.
 ///
-/// Substring, not parse: a template that emitted the definitions cannot have
-/// done so without their names, so a name that is absent was not rendered.
-/// Any name is enough — a partial render still put tools in front of the
-/// model, and reporting a drop for that would be a false positive.
-///
-/// A name present in the prompt is only evidence of a render when the
-/// conversation could not have supplied it; `messagesNameAnyTool` below is
-/// what decides that, and `jinjaRenderOmittedTools` is the entry point.
+/// Substring, not parse: a template that emitted the definitions verbatim
+/// cannot have done so without their names. Any name is enough — a partial
+/// render still put tools in front of the model, and reporting a drop for
+/// that would be a false positive.
 bool promptNamesAnyTool(
     const std::string& prompt, const std::vector<common_chat_tool>& tools) {
   for (const common_chat_tool& tool : tools) {
@@ -401,8 +394,13 @@ bool renderIsUnchangedWithoutTools(
 
 /// Whether a successful Jinja render left the tool definitions out.
 ///
-/// Sound in the direction it is used: every drop reported here is a drop that
-/// happened. It does not claim the converse — see the note on
+/// Every drop reported here is decided by the render itself, never by a name
+/// scan: the answer is always "removing the tools left this prompt
+/// byte-identical". That is what makes a reported drop a proof rather than a
+/// guess, which matters because the caller acts on it by stripping the tool
+/// list and by refusing an explicit `tool_choice: "required"`.
+///
+/// It still does not claim the converse — see the note on
 /// `PromptRenderResult::toolDefinitionsDropped` for the partial-render
 /// residual that no prompt-side check can close.
 ///
@@ -417,19 +415,18 @@ bool renderIsUnchangedWithoutTools(
 bool jinjaRenderOmittedTools(
     const struct common_chat_templates* tmpls,
     const common_chat_templates_inputs& inputs, const std::string& prompt) {
-  // No name reached the prompt at all. The definitions cannot have been
-  // rendered without their names, so this is a drop, and no probe is needed.
-  if (!promptNamesAnyTool(prompt, inputs.tools)) {
-    return true;
-  }
-  // A name is in the prompt and the conversation does not contain it, so the
-  // template is the only thing that can have put it there. Also a drop-free
-  // answer without a second render, which keeps the probe off the common path.
-  if (!messagesNameAnyTool(inputs.messages, inputs.tools)) {
+  // The one case a scan can settle, and it is the healthy one: a tool name is
+  // in the prompt and nowhere in the conversation, so the template is the only
+  // thing that can have put it there. Keeps the second render off the path
+  // every well-behaved tools request takes.
+  if (promptNamesAnyTool(prompt, inputs.tools) &&
+      !messagesNameAnyTool(inputs.messages, inputs.tools)) {
     return false;
   }
-  // Ambiguous: the name is in the prompt and also in the conversation. Only a
-  // differential render can say which one put it there.
+  // Everything else is decided by rendering again without the tools. Both
+  // remaining shapes are unproven for the same reason — the prompt text does
+  // not say who put a name there, or whether an absent name was emitted in a
+  // form the scan cannot match — and the differential render answers both.
   return renderIsUnchangedWithoutTools(tmpls, inputs, prompt);
 }
 

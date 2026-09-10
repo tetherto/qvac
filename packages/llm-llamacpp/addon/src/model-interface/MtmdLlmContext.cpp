@@ -430,8 +430,14 @@ void MtmdLlmContext::tokenizeChat(
   // unparseable grammar, so the sampling block must roll back rather than
   // stay poisoned for the life of the loaded model.
   common_params_sampling savedSampling = params_.sampling;
+  // See TextLlmContext::tokenizeChat: `inputs.tools` is the list `getPrompt`
+  // clears on a drop, so it is the one that gates the tool grammar.
   if (configureTemplateDerivedSampling(
-          params_, tokenize, rendered, !tools.empty(), fallbackReasoningTags)) {
+          params_,
+          tokenize,
+          rendered,
+          !inputs.tools.empty(),
+          fallbackReasoningTags)) {
     try {
       CommonSamplerPtr nextSmpl(
           common_sampler_init(modelCtx_.model, params_.sampling));

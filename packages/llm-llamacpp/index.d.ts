@@ -510,8 +510,7 @@ declare namespace LlmLlamacpp {
          * Read this in one direction only. Non-zero means definitions were dropped
          * and the model did not see them. **0 is not a guarantee that the model saw
          * every definition**: a template that renders only some of the supplied
-         * tools, or names them in a form the prompt does not carry verbatim,
-         * changes the render and so reports no drop. Answering that needs the
+         * tools changes the render and so reports no drop. Closing that needs the
          * renderer to report what it consumed.
          *
          * Per-inference for single requests; summed across completed slots for

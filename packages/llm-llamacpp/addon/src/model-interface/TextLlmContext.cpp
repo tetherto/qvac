@@ -441,8 +441,16 @@ void TextLlmContext::tokenizeChat(
   // build stays resident in `params_` for the life of the loaded model, so
   // every later request rebuilding the sampler fails too.
   common_params_sampling savedSampling = params_.sampling;
+  // `inputs.tools`, not the caller's `tools`: `getPrompt` clears the former on
+  // a drop, and that strip is what must stop a tool grammar being armed for
+  // definitions the model never read. Reading the caller's list here left that
+  // contract documented and unenforced.
   if (configureTemplateDerivedSampling(
-          params_, tokenize, rendered, !tools.empty(), fallbackReasoningTags)) {
+          params_,
+          tokenize,
+          rendered,
+          !inputs.tools.empty(),
+          fallbackReasoningTags)) {
     try {
       CommonSamplerPtr nextSmpl(
           common_sampler_init(modelCtx_.model, params_.sampling));

@@ -218,16 +218,17 @@ struct PromptRenderResult {
   bool renderedByJinja = true;
 
   /// True when this render provably left the tool definitions out: either the
-  /// template raised on them and the tools-stripped retry produced the prompt,
-  /// or supplying the tools demonstrably did not change what was rendered.
+  /// template raised on them and the tools-stripped retry produced the
+  /// prompt, or rendering the same inputs without the tools produced a
+  /// byte-identical prompt.
   ///
-  /// Read it in one direction only. `true` is a proof of omission — the flag
-  /// also clears `inputs.tools`, so it never fires on a guess. `false` is
-  /// *not* a promise that the model saw every definition: a template that
-  /// renders one of three tools, or names them in a form the prompt does not
-  /// carry verbatim, changes the render and so reports no drop. Answering that
-  /// needs the renderer to report what it consumed, which fabric does not
-  /// currently expose.
+  /// Read it in one direction only. `true` is a proof of omission and never a
+  /// guess: it also clears `inputs.tools`, which is what gates the tool
+  /// grammar downstream, so a false positive would disarm a legitimate tools
+  /// request. `false` is *not* a promise that the model saw every definition
+  /// — a template that renders one of three tools changes the render and so
+  /// reports no drop. Closing that residual needs the renderer to report what
+  /// it consumed, which fabric does not currently expose.
   bool toolDefinitionsDropped = false;
 };
 
@@ -263,6 +264,12 @@ using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
  *
  * Returns true when `params.sampling` changed and the caller must rebuild
  * the common_sampler.
+ *
+ * @p toolsRequested must be read from the `common_chat_templates_inputs`
+ * *after* `getPrompt` returned, not from the caller's original tool list.
+ * `getPrompt` clears that list when the render dropped the definitions, and
+ * this flag is the only thing standing between a dropped render and a tool
+ * grammar armed for definitions the model never read.
  *
  * @p fallbackReasoningTags is the model-family reasoning channel
  * (`selectReasoningTagsForModel`), or `std::nullopt` when the family has
