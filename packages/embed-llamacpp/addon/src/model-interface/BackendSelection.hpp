@@ -72,8 +72,16 @@ std::pair<BackendType, std::string> chooseBackend(
 /// @brief Count devices in the final Fabric-compatible split set.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-/// @brief Select the Fabric-compatible split list, with RPC first, local
-/// discrete GPUs preferred over the first iGPU, and duplicate devices removed.
+/// @brief Select the Fabric-compatible split list for layer/row split modes.
+/// Mirrors qvac-fabric's filtered device branch under this addon's allowlist:
+///   - RPC devices are prepended and never suppress a local GPU.
+///   - Local discrete GPUs when any are eligible, otherwise one integrated GPU.
+///   - Discrete duplicates are dropped by the raw
+///     `ggml_backend_dev_props::device_id`, compared byte for byte as fabric
+///     does, so CUDA virtual (`-vN`) devices stay distinct; a device with a
+///     null id is kept.
+/// `sourceGpuIndex` keeps each device's position in the raw GPU registry so
+/// positional tensor shares can be remapped onto the final list.
 SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
 
 /// @brief `getSplitDeviceSelection()` against the real ggml registry.
@@ -82,16 +90,16 @@ SplitDeviceSelection getSplitDeviceSelection();
 /// @brief Eligible split devices, preferring discrete and deduplicating by id.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 
-/// @brief `getSplitDeviceNames()` against the real ggml backend registry.
-std::vector<std::string> getSplitDeviceNames();
-
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
-/// True only when at least one eligible GPU device is present AND every
-/// eligible GPU/iGPU device's backend provides split buffers, because fabric
-/// requires split buffers from each device it distributes over and throws on
-/// the first one that lacks them. Callers should degrade row -> layer when this
-/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
-/// this is false in every shipped configuration.
+/// True only when the final split set is non-empty AND every device in the
+/// final split set provides split buffers, because fabric requires split
+/// buffers from each device it distributes over and throws on the first one
+/// that lacks them. Callers should degrade row -> layer when this returns
+/// false. As of qvac-fabric v10069 only SYCL provides split buffers, so this is
+/// false in every shipped configuration.
+bool gpuBackendSupportsRowSplit(const SplitDeviceSelection& selection);
+
+/// @brief `gpuBackendSupportsRowSplit()` over `getSplitDeviceSelection(bckI)`.
 bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 
 /// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend

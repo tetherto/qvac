@@ -240,6 +240,35 @@ void logTokenizationIfVerbose(
   }
 }
 
+// Trim each token and drop empties so "1,,2" and "1, 2" both count two shares,
+// matching how fabric's --tensor-split handler tokenizes on `[,/]+`.
+std::vector<std::string> split(const std::string& str, char delimiter) {
+  auto trim = [](const std::string& value) -> std::string {
+    auto start = std::ranges::find_if(value, [](unsigned char character) {
+      return std::isspace(character) == 0;
+    });
+    if (start == value.end()) {
+      return "";
+    }
+    auto end =
+        std::find_if(value.rbegin(), value.rend(), [](unsigned char character) {
+          return std::isspace(character) == 0;
+        }).base();
+    return {start, end};
+  };
+
+  std::vector<std::string> tokens;
+  std::istringstream stream(str);
+  std::string token;
+  while (std::getline(stream, token, delimiter)) {
+    auto trimmed = trim(token);
+    if (!trimmed.empty()) {
+      tokens.push_back(std::move(trimmed));
+    }
+  }
+  return tokens;
+}
+
 bool hasContextSizeConfig(
     const std::unordered_map<std::string, std::string>& configFilemap) {
   return configFilemap.contains("ctx_size") ||
@@ -356,11 +385,7 @@ bool applySplitDeviceSelection(
   if (mappingChanged && tensorSplit != config.end()) {
     std::string normalized = tensorSplit->second;
     std::ranges::replace(normalized, '/', ',');
-    std::vector<std::string> proportions;
-    std::istringstream values(normalized);
-    for (std::string value; std::getline(values, value, ',');) {
-      proportions.emplace_back(std::move(value));
-    }
+    const std::vector<std::string> proportions = split(normalized, ',');
     const bool finalOrderIsStable = std::ranges::is_sorted(
         selection.devices,
         {},
@@ -522,10 +547,7 @@ BertModelSetup setupParams(
       // rejects the load outright on backends without it. Degrade row -> layer
       // to keep the model loadable.
       if (splitMode == LLAMA_SPLIT_MODE_ROW &&
-          !std::ranges::all_of(
-              splitSelection.devices, [](const SplitDevice& device) {
-                return device.supportsSplitBuffer;
-              })) {
+          !gpuBackendSupportsRowSplit(splitSelection)) {
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_WARN,
             "[BertModel] split-mode 'row' is not supported by this GPU "
@@ -545,6 +567,22 @@ BertModelSetup setupParams(
       }
       if (splitMode != LLAMA_SPLIT_MODE_NONE) {
         applySplitDeviceSelection(params, configFilemap, splitSelection);
+        std::string deviceList;
+        for (const SplitDevice& device : splitSelection.devices) {
+          if (!deviceList.empty()) {
+            deviceList += ",";
+          }
+          deviceList += device.name;
+        }
+        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+            GGML_LOG_LEVEL_INFO,
+            string_format(
+                "[BertModel] split mode: pinning to %zu eligible device(s): "
+                "%s\n",
+                splitSelection.devices.size(),
+                deviceList.c_str())
+                .c_str(),
+            nullptr);
       }
     } else if (
         chosenBackend.first == BackendType::CPU ||

@@ -396,6 +396,28 @@ TEST_F(BackendSelectionTest, MainGpuIndexTargetingRocmFallsBackToCpu) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
 }
 
+TEST_F(BackendSelectionTest, MainGpuIntegratedWarnsAboutRefusedDiscreteGpu) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  MainGpu mainGpu = MainGpuType::Integrated;
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+  EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& entry) {
+    return entry.first == GGML_LOG_LEVEL_WARN &&
+           entry.second.find("ROCm0 (standard)") != std::string::npos;
+  }));
+}
+
+TEST_F(BackendSelectionTest, MainGpuDedicatedWarnsAboutRefusedIntegratedGpu) {
+  mockBackend.addDevice(createIGPUDevice("AMD Radeon", "ROCm0"));
+  MainGpu mainGpu = MainGpuType::Dedicated;
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+  EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& entry) {
+    return entry.first == GGML_LOG_LEVEL_WARN &&
+           entry.second.find("ROCm0 (standard)") != std::string::npos;
+  }));
+}
+
 TEST_F(BackendSelectionTest, RegistryFamilyNamesRequireExactIdentity) {
   mockBackend.addDevice(MockDevice(
       "Future GPU", "Future0", GGML_BACKEND_DEVICE_TYPE_GPU, "NotVulkan"));
@@ -711,15 +733,33 @@ TEST_F(BackendSelectionTest, RpcDoesNotSuppressLocalIntegratedGpu) {
       getSplitDeviceNames(bckI), (std::vector<std::string>{"RPC0", "MTL0"}));
 }
 
-TEST_F(BackendSelectionTest, CudaMpsSuffixDedupesAgainstVulkanPciId) {
+// The same card reported by two backends carries one PCI id byte for byte, so
+// the registry-order first entry wins, as in fabric.
+TEST_F(BackendSelectionTest, CudaAndVulkanSamePciIdKeepsRegistryFirst) {
   mockBackend.addDevice(withDeviceId(
       MockDevice(
           "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
-      "pci:1-v0"));
-  mockBackend.addDevice(
-      withDeviceId(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK), "pci:1"));
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK), "0000:01:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
+}
+
+// Fabric compares raw ids with strcmp, so CUDA virtual (MPS/MIG) devices are
+// distinct devices and both stay in the split set.
+TEST_F(BackendSelectionTest, CudaVirtualDeviceIdsAreKeptDistinct) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0-v0"));
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA1", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0-v1"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0", "CUDA1"}));
 }
 
 TEST_F(BackendSelectionTest, SplitDeviceSelectionPreservesSourceGpuIndices) {
@@ -746,10 +786,10 @@ TEST_F(BackendSelectionTest, SplitDevicesExcludeUnsupportedBackends) {
 
 TEST_F(BackendSelectionTest, SplitDevicesPreferDiscreteAndDedupeByDeviceId) {
   mockBackend.addDevice(createIGPUDevice("Apple M3", "MTL0"));
-  mockBackend.addDevice(
-      withDeviceId(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK), "pci:1"));
-  mockBackend.addDevice(
-      withDeviceId(createGPUDevice("NVIDIA RTX 4090", VULKAN1_BACK), "pci:1"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK), "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA RTX 4090", VULKAN1_BACK), "0000:01:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));
 }
@@ -837,4 +877,33 @@ TEST_F(BackendSelectionTest, RowSplit_UnsupportedGpuIsIgnored) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
+}
+
+// The overload setupParams calls: it judges the final split set it is handed.
+TEST_F(BackendSelectionTest, RowSplit_EmptySelection_ReturnsFalse) {
+  EXPECT_FALSE(gpuBackendSupportsRowSplit(SplitDeviceSelection{}));
+}
+
+TEST_F(BackendSelectionTest, RowSplit_SelectionRequiresEveryFinalDevice) {
+  const SplitDeviceSelection allSupported{
+      .devices =
+          {{.name = "Vulkan0",
+            .sourceGpuIndex = 0,
+            .supportsSplitBuffer = true},
+           {.name = "Vulkan1",
+            .sourceGpuIndex = 1,
+            .supportsSplitBuffer = true}},
+      .sourceGpuCount = 2};
+  EXPECT_TRUE(gpuBackendSupportsRowSplit(allSupported));
+
+  const SplitDeviceSelection oneMissing{
+      .devices =
+          {{.name = "Vulkan0",
+            .sourceGpuIndex = 0,
+            .supportsSplitBuffer = true},
+           {.name = "Vulkan1",
+            .sourceGpuIndex = 1,
+            .supportsSplitBuffer = false}},
+      .sourceGpuCount = 2};
+  EXPECT_FALSE(gpuBackendSupportsRowSplit(oneMissing));
 }

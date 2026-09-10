@@ -97,28 +97,6 @@ bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
       "rpc");
 }
 
-std::string normalizedDeviceId(
-    std::string deviceId, const BackendInterface& bckI,
-    const ggml_backend_dev_t dev) {
-  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
-  const bool isCuda = hasBackendFamily(
-      lowerCopy(bckI.ggml_backend_dev_name(dev)),
-      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
-      "cuda");
-  if (!isCuda) {
-    return deviceId;
-  }
-  const size_t suffix = deviceId.rfind("-v");
-  if (suffix == std::string::npos || suffix + 2 == deviceId.size() ||
-      !std::ranges::all_of(deviceId.substr(suffix + 2), [](unsigned char chr) {
-        return std::isdigit(chr) != 0;
-      })) {
-    return deviceId;
-  }
-  deviceId.erase(suffix);
-  return deviceId;
-}
-
 std::string
 deviceIdentity(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
@@ -214,15 +192,19 @@ void tryEmplaceDevice(
   const enum ggml_backend_dev_type backendTypeEnum =
       bckI.ggml_backend_dev_type(dev);
   const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
+  const bool isGpuType = backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
+                         backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
+  // Record a refused GPU before the main-gpu type filter so the CPU-fallback
+  // warning names it even when `integrated`/`dedicated` skips its type.
+  if (isGpuType && !isEligibleGpuDevice(bckI, dev)) {
+    rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+    return;
+  }
   if (shouldProcessDevice(backendTypeEnum, devDescr, mainGpuType)) {
 #ifndef NDEBUG
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "New GPU device", nullptr);
 #endif
     if (!isEligibleGpuDevice(bckI, dev)) {
-      if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
-          backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU) {
-        rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
-      }
       return;
     }
     ::emplaceIfValidDevice(
@@ -441,11 +423,11 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
     // std::string members copy in declaration order.
     ggml_backend_dev_props props{};
     bckI.ggml_backend_dev_get_props(dev, &props);
-    const std::string deviceId = normalizedDeviceId(
-        props.device_id != nullptr ? std::string(props.device_id)
-                                   : std::string(),
-        bckI,
-        dev);
+    // Raw id, compared byte for byte like fabric's strcmp: a CUDA virtual
+    // device keeps its `-vN` suffix and stays distinct from its parent.
+    const std::string deviceId = props.device_id != nullptr
+                                     ? std::string(props.device_id)
+                                     : std::string();
     const char* name = bckI.ggml_backend_dev_name(dev);
     // An empty name would join into a leading or trailing comma and make the
     // whole --device list unparseable, so it is skipped like a null one.
@@ -516,38 +498,26 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
   return names;
 }
 
-std::vector<std::string> backend_selection::getSplitDeviceNames() {
-  BackendInterface bckI{
-      .ggml_backend_dev_count = ggml_backend_dev_count,
-      .ggml_backend_dev_backend_reg = ggml_backend_dev_backend_reg,
-      .ggml_backend_dev_get = ggml_backend_dev_get,
-      .ggml_backend_reg_name = ggml_backend_reg_name,
-      .ggml_backend_dev_description = ggml_backend_dev_description,
-      .ggml_backend_dev_name = ggml_backend_dev_name,
-      .ggml_backend_dev_type = ggml_backend_dev_type,
-      .ggml_backend_reg_get_proc_address = ggml_backend_reg_get_proc_address,
-      .ggml_backend_dev_get_props = ggml_backend_dev_get_props,
-      .llamaLogCallback = nullptr};
-  return getSplitDeviceNames(bckI);
-}
-
 bool backend_selection::gpuBackendSupportsRowSplit(
-    const BackendInterface& bckI) {
+    const SplitDeviceSelection& selection) {
   // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
   // make_gpu_buft_list() for EVERY device it was given and throws "device %s
   // does not support split buffers" on the first one whose backend registry
-  // lacks `ggml_backend_split_buffer_type`. Split mode now pins `--device` to
-  // the eligible list, so that set is every eligible GPU device — a single
-  // eligible backend without split buffers is enough to fail the load. So
-  // require all of them, not any one, and treat an empty eligible list as
-  // unsupported.
-  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+  // lacks `ggml_backend_split_buffer_type`. Split mode pins `params.devices`
+  // to the final split set, so a single device in that set without split
+  // buffers is enough to fail the load. Require all of them, not any one, and
+  // treat an empty set as unsupported.
   for (const SplitDevice& device : selection.devices) {
     if (!device.supportsSplitBuffer) {
       return false;
     }
   }
   return !selection.devices.empty();
+}
+
+bool backend_selection::gpuBackendSupportsRowSplit(
+    const BackendInterface& bckI) {
+  return gpuBackendSupportsRowSplit(getSplitDeviceSelection(bckI));
 }
 
 bool backend_selection::gpuBackendSupportsRowSplit() {
