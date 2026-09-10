@@ -51,6 +51,12 @@ struct NormalizedLlamaLoad {
   bool supported = true;
   std::string unsupportedDetail;
   common_params params;
+  /// Whether the caller wrote `split-mode`; a pinned mode is reported as is on
+  /// a CPU-only plan instead of being normalized to NONE.
+  bool pinsSplitMode = false;
+  /// Whether the caller wrote a `gpu-layers` other than llama's -1 default; a
+  /// pinned count is reported as is on a CPU-only plan.
+  bool pinsGpuLayers = false;
 };
 
 struct LlamaLoadFitRequest {
@@ -78,7 +84,9 @@ struct LlamaFitExecution {
 std::vector<BackendDevice> discoverBackendDevices();
 std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind);
-std::optional<size_t> eligibleBackendDeviceOrdinal(
+/// Whether the raw registry entry at `mainGpuIndex` is a supported GPU. The
+/// one-device list built for it always places it at ordinal 0.
+bool isSupportedGpuOrdinal(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
     size_t mainGpuIndex);
 bool applyBackendDeviceAllowlist(

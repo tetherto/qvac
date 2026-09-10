@@ -202,6 +202,22 @@ bool isGpu(const BackendDevice& device) {
          device.type == BackendDeviceType::IntegratedGpu;
 }
 
+// Family predicates, matching llm-llamacpp's BackendSelection.cpp. Every site
+// that classifies a device goes through these two so eligibility and the
+// traits derived later cannot disagree on what counts as OpenCL or Metal.
+bool isOpenClDevice(const BackendDevice& device) {
+  const std::string name = lower(device.name);
+  return name == "gpuopencl" || name.starts_with("opencl") ||
+         lower(device.registryName) == "opencl";
+}
+
+bool isMetalDevice(const BackendDevice& device) {
+  const std::string name = lower(device.name);
+  const std::string registry = lower(device.registryName);
+  return name.starts_with("mtl") || name.starts_with("metal") ||
+         registry == "mtl" || registry == "metal";
+}
+
 bool isEligibleGpu(const BackendDevice& device, bool isEmbedding) {
   if (!isGpu(device)) {
     return false;
@@ -213,41 +229,19 @@ bool isEligibleGpu(const BackendDevice& device, bool isEmbedding) {
   if (isCuda || isRpc) {
     return true;
   }
-  const bool isOpenCl =
-      name == "gpuopencl" || name.starts_with("opencl") || registry == "opencl";
-  if (isOpenCl) {
+  if (isOpenClDevice(device)) {
     // Completion intentionally mirrors llm-llamacpp's historical "dreno"
     // token; embedding uses its stricter "adreno" spelling.
     const std::string adrenoToken = isEmbedding ? "adreno" : "dreno";
     return lower(device.description).find(adrenoToken) != std::string::npos;
   }
   const bool isVulkan = name.starts_with("vulkan") || registry == "vulkan";
-  const bool isMetal = name.starts_with("mtl") || name.starts_with("metal") ||
-                       registry == "mtl" || registry == "metal";
-  return isVulkan || isMetal;
+  return isVulkan || isMetalDevice(device);
 }
 
 bool isRpc(const BackendDevice& device) {
   return lower(device.name).starts_with("rpc") ||
          lower(device.registryName) == "rpc";
-}
-
-std::string normalizedDeviceId(const BackendDevice& device) {
-  std::string id = device.deviceId;
-  const bool isCuda = lower(device.name).starts_with("cuda") ||
-                      lower(device.registryName) == "cuda";
-  if (!isCuda) {
-    return id;
-  }
-  const size_t suffix = id.rfind("-v");
-  if (suffix == std::string::npos || suffix + 2 == id.size() ||
-      !std::ranges::all_of(id.substr(suffix + 2), [](unsigned char chr) {
-        return std::isdigit(chr) != 0;
-      })) {
-    return id;
-  }
-  id.erase(suffix);
-  return id;
 }
 
 struct SplitDeviceRef {
@@ -283,7 +277,11 @@ SplitDeviceSelection selectSplitDevices(
         integrated.push_back(selected);
       }
     } else {
-      const std::string id = normalizedDeviceId(device);
+      // Dedup on the raw `device_id`, as fabric does (strcmp in
+      // llama_prepare_model_devices): a CUDA and a Vulkan view of one card
+      // share the id, while virtual MPS/MIG devices carry their own and stay
+      // distinct. A null id cannot be deduped against and is kept.
+      const std::string& id = device.deviceId;
       if (id.empty() || seenDiscrete.insert(id).second) {
         discrete.push_back(selected);
       }
@@ -332,6 +330,16 @@ std::optional<std::string> remapTensorSplit(
   return remapped;
 }
 
+// Row split needs split buffers on every participating device: fabric throws
+// on the first one without them. Empty is not "all support it" — with no device
+// to split across there is nothing row mode can be honoured on.
+bool allSupportSplitBuffer(const std::vector<SplitDeviceRef>& devices) {
+  return !devices.empty() &&
+         std::ranges::all_of(devices, [](const SplitDeviceRef& device) {
+           return device.device->supportsSplitBuffer;
+         });
+}
+
 int adrenoVersion(const BackendDevice& device) {
   const std::string description = lower(device.description);
   const size_t adreno = description.find("adreno");
@@ -378,10 +386,8 @@ BackendSelection selectGpu(
     if (!isEligibleGpu(device, isEmbedding)) {
       continue;
     }
-    const std::string name = lower(device.name);
-    const bool isOpenCl = name.find("opencl") != std::string::npos;
     maxAdrenoVersion = std::max(maxAdrenoVersion, adrenoVersion(device));
-    if (isOpenCl) {
+    if (isOpenClDevice(device)) {
       if (openCl == nullptr) {
         openCl = &device;
       }
@@ -606,18 +612,15 @@ std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
   return selected;
 }
 
-std::optional<size_t> eligibleBackendDeviceOrdinal(
+bool isSupportedGpuOrdinal(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
     size_t mainGpuIndex) {
   if (mainGpuIndex >= devices.size()) {
-    return std::nullopt;
+    return false;
   }
   const BackendDevice& selected = devices[mainGpuIndex];
   const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;
-  if (selected.handle == nullptr || !isEligibleGpu(selected, isEmbedding)) {
-    return std::nullopt;
-  }
-  return 0;
+  return selected.handle != nullptr && isEligibleGpu(selected, isEmbedding);
 }
 
 bool applyBackendDeviceAllowlist(
@@ -629,14 +632,12 @@ bool applyBackendDeviceAllowlist(
   if (!mainGpuIndex.has_value()) {
     return true;
   }
-  const std::optional<size_t> mapped =
-      eligibleBackendDeviceOrdinal(devices, loadKind, mainGpuIndex.value());
-  if (!mapped.has_value()) {
+  if (!isSupportedGpuOrdinal(devices, loadKind, mainGpuIndex.value())) {
     return false;
   }
   storage = {devices[mainGpuIndex.value()].handle, nullptr};
   params.devices = storage.data();
-  params.main_gpu = static_cast<int>(mapped.value());
+  params.main_gpu = 0;
   return true;
 }
 
@@ -735,7 +736,9 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
   }
 
   llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
+  bool pinsSplitMode = false;
   if (const auto splitIt = config.find("split-mode"); splitIt != config.end()) {
+    pinsSplitMode = true;
     const std::string value = lower(splitIt->second);
     if (value == "layer") {
       splitMode = LLAMA_SPLIT_MODE_LAYER;
@@ -774,10 +777,17 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     } else {
       splitSelection = selectSplitDevices(devices, isEmbedding);
       if (!splitSelection.devices.empty()) {
+        // The Adreno rule is about the local GPU the layers land on; an RPC
+        // device is first in the list but says nothing about it.
+        const auto local = std::ranges::find_if(
+            splitSelection.devices, [](const SplitDeviceRef& device) {
+              return !isRpc(*device.device);
+            });
         selection = {
             .selected = splitSelection.devices.front().device,
-            .adrenoVersion =
-                adrenoVersion(*splitSelection.devices.front().device)};
+            .adrenoVersion = local == splitSelection.devices.end()
+                                 ? 0
+                                 : adrenoVersion(*local->device)};
       }
     }
   }
@@ -795,10 +805,7 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     config.erase("tensor-split");
   } else if (
       splitMode == LLAMA_SPLIT_MODE_ROW &&
-      !std::ranges::all_of(
-          splitSelection.devices, [](const SplitDeviceRef& device) {
-            return device.device->supportsSplitBuffer;
-          })) {
+      !allSupportSplitBuffer(splitSelection.devices)) {
     splitMode = LLAMA_SPLIT_MODE_LAYER;
   }
 
@@ -816,15 +823,21 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     }
   }
 
-  const std::string backendName =
-      selected == nullptr ? "" : lower(selected->name);
-  const std::string registryName =
-      selected == nullptr ? "" : lower(selected->registryName);
-  const bool isOpenCl = backendName.find("opencl") != std::string::npos ||
-                        registryName == "opencl";
-  const bool isMetal = backendName.starts_with("metal") ||
-                       backendName.starts_with("mtl") ||
-                       registryName == "metal" || registryName == "mtl";
+  // Traits come from the whole set the load will run on. Under a split mode
+  // that is every device in the final list, since a KV type or flash setting
+  // one participating backend cannot run fails the load whichever device is
+  // listed first; under NONE it is the one selected device.
+  const bool splitAcrossSet = useGpu && splitMode != LLAMA_SPLIT_MODE_NONE;
+  const auto anySplitDevice = [&](bool (*predicate)(const BackendDevice&)) {
+    return std::ranges::any_of(
+        splitSelection.devices, [&](const SplitDeviceRef& device) {
+          return predicate(*device.device);
+        });
+  };
+  const bool isOpenCl = splitAcrossSet ? anySplitDevice(isOpenClDevice)
+                                       : useGpu && isOpenClDevice(*selected);
+  const bool isMetal = splitAcrossSet ? anySplitDevice(isMetalDevice)
+                                      : useGpu && isMetalDevice(*selected);
   const bool isBitnet =
       traits.architecture == "bitnet" && traits.hasOneBitQuantization;
   const bool isAdrenoVulkan =
@@ -905,10 +918,15 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     config["ubatch-size"] = std::to_string(ubatch);
   }
 
+  const bool hasGpuLayers =
+      config.contains("gpu-layers") || config.contains("n-gpu-layers");
   NormalizedLlamaLoad out = parseGenericConfig(loadKind, modelPath, config);
   if (!out.supported) {
     return out;
   }
+  out.pinsSplitMode = pinsSplitMode;
+  // -1 is llama's default, so writing it pins nothing — see FitConfig.
+  out.pinsGpuLayers = hasGpuLayers && out.params.n_gpu_layers != -1;
 
   if (loadMode.has_value()) {
     out.params.load_mode = loadMode.value();

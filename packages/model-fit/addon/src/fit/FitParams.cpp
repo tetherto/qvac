@@ -255,22 +255,29 @@ FitResult runFit(const FitRequest& req) {
   // under which the fitter is free to rewrite it. If it lands on NONE, the raw
   // registry target is converted to a one-device supported list below, so the
   // identity has to be valid up front. The extra no-GPU placement check further
-  // down still applies only to an explicit NONE.
+  // down still applies only to an explicit NONE or TENSOR.
   const bool mainGpuIsUsed =
       req.hasMainGpu && req.mainGpu >= 0 &&
       (!req.hasSplitMode || req.splitMode == LLAMA_SPLIT_MODE_NONE);
 
-  const bool mainGpuInRange =
-      mainGpuIsUsed &&
-      static_cast<size_t>(req.mainGpu) < discoveredDevices.size();
+  // Past the end of the registry there is no device to select or to reject to
+  // CPU, so the index is an argument error, not a placement. The bound is only
+  // known once the backends are registered, which is why binding.cpp cannot
+  // report it.
+  if (mainGpuIsUsed &&
+      static_cast<size_t>(req.mainGpu) >= discoveredDevices.size()) {
+    throw std::invalid_argument(
+        "model-fit: mainGpu " + std::to_string(req.mainGpu) +
+        " is out of range: " + std::to_string(discoveredDevices.size()) +
+        " devices are registered");
+  }
   const bool rejectedMainGpu =
-      mainGpuInRange && !eligibleBackendDeviceOrdinal(
-                             discoveredDevices,
-                             LlamaLoadKind::Completion,
-                             static_cast<size_t>(req.mainGpu))
-                             .has_value();
+      mainGpuIsUsed && !isSupportedGpuOrdinal(
+                           discoveredDevices,
+                           LlamaLoadKind::Completion,
+                           static_cast<size_t>(req.mainGpu));
   const std::optional<size_t> selectedMainGpu =
-      mainGpuInRange && !rejectedMainGpu
+      mainGpuIsUsed && !rejectedMainGpu
           ? std::optional<size_t>(static_cast<size_t>(req.mainGpu))
           : std::nullopt;
 
@@ -288,21 +295,19 @@ FitResult runFit(const FitRequest& req) {
   // about arguments. binding.cpp cannot do it, since the valid range is unknown
   // until the backends are registered.
   //
-  // Only NONE needs the extra no-GPU placement check after identity validation.
-  if (req.hasSplitMode && req.splitMode == LLAMA_SPLIT_MODE_NONE) {
-    const bool explicitCpuPlacement = req.hasNGpuLayers &&
-                                      req.nGpuLayers == 0 && req.hasMainGpu &&
-                                      req.mainGpu == -1;
-
-    // NONE means "put the whole model on one GPU". With no supported GPU
-    // registered there is no such device, and llama rejects every index
-    // including the default 0, except for the exact CPU-only sentinel
-    // configuration.
-    if (!explicitCpuPlacement && !rejectedMainGpu && eligibleGpuDevices == 0) {
-      throw std::invalid_argument(
-          "model-fit: splitMode NONE places the whole model on one GPU, but no "
-          "supported GPU device is registered");
-    }
+  // NONE and TENSOR need the extra no-GPU placement check after identity
+  // validation — see requiresSupportedGpu. NONE means "put the whole model on
+  // one GPU": with no supported GPU registered there is no such device, and
+  // llama rejects every index including the default 0, except for the exact
+  // CPU-only sentinel configuration. TENSOR refuses an empty device list
+  // outright.
+  if (requiresSupportedGpu(req, rejectedMainGpu) && eligibleGpuDevices == 0) {
+    throw std::invalid_argument(
+        req.splitMode == LLAMA_SPLIT_MODE_TENSOR
+            ? "model-fit: splitMode TENSOR needs at least one GPU, but no "
+              "supported GPU device is registered"
+            : "model-fit: splitMode NONE places the whole model on one GPU, "
+              "but no supported GPU device is registered");
   }
 
   // `common_fit_params` segfaults on a path it cannot open: gguf_init_from_file
@@ -380,28 +385,22 @@ FitResult runFit(const FitRequest& req) {
   // `common_fit_params` only rewrites fields that still hold their default
   // value, so pin a field only when the caller explicitly requested one.
   applyFitRequest(req, mparams, cparams);
-  const bool explicitCpuPlacement = req.hasNGpuLayers && req.nGpuLayers == 0 &&
-                                    req.hasMainGpu && req.mainGpu == -1;
-  if (explicitCpuPlacement || rejectedMainGpu) {
+  // `devices` is never left NULL: that is llama's "default device selection"
+  // branch, which enumerates every GPU the allowlist excluded. The CPU-only
+  // list is the bare terminator.
+  if (isExplicitCpuPlacement(req) || rejectedMainGpu) {
     eligibleDevices = {nullptr};
-  }
-  if (!explicitCpuPlacement && !rejectedMainGpu) {
-    const bool applied = applyBackendDeviceAllowlist(
+    mparams.devices = eligibleDevices.data();
+    mparams.main_gpu = -1;
+  } else {
+    // `selectedMainGpu` was validated against the same allowlist above, so the
+    // apply cannot fail.
+    static_cast<void>(applyBackendDeviceAllowlist(
         mparams,
         eligibleDevices,
         discoveredDevices,
         LlamaLoadKind::Completion,
-        selectedMainGpu);
-    if (!applied) {
-      throw std::invalid_argument(
-          "model-fit: mainGpu identity changed while preparing fit inputs");
-    }
-    if (mainGpuIsUsed && !mainGpuInRange) {
-      mparams.main_gpu = 0;
-    }
-  } else {
-    mparams.devices = eligibleDevices.data();
-    mparams.main_gpu = -1;
+        selectedMainGpu));
   }
 
   // Writable scratch buffers the fit API requires. Sizes are dictated by the
@@ -449,16 +448,14 @@ FitResult runFit(const FitRequest& req) {
   out.typeV = static_cast<int32_t>(cparams.type_v);
   out.flashAttnType = static_cast<int32_t>(cparams.flash_attn_type);
 
-  // With no supported GPU the projection is host-only: unless the caller pinned
-  // a layer count, the plan reports the CPU sentinels (0 layers, NONE, -1)
-  // whatever split mode or mainGpu was pinned. The raw device counts above
-  // stay untouched.
-  if ((rejectedMainGpu || eligibleGpuDevices == 0) &&
-      (!req.hasNGpuLayers || req.nGpuLayers == -1)) {
-    out.nGpuLayers = 0;
-    out.splitMode = static_cast<int32_t>(LLAMA_SPLIT_MODE_NONE);
-    out.mainGpu = -1;
-  }
+  // Placement is decided from the plan the fitter returned, not from the host
+  // inventory — see normalizePlanPlacement. -1 for nGpuLayers is llama's
+  // default and does not pin. The raw device counts above stay untouched.
+  normalizePlanPlacement(
+      out,
+      mparams.devices,
+      req.hasSplitMode,
+      req.hasNGpuLayers && req.nGpuLayers != -1);
 
   // Surface the placement the projection depended on. The array is terminated
   // by a null pattern; anything before that is an override the real load has to
@@ -525,8 +522,6 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
       req.params,
       readModelTraits(req.modelPath),
       discoverBackendDevices());
-  const bool cpuPlacement = normalized.params.devices.size() == 1 &&
-                            normalized.params.devices.front() == nullptr;
   LlamaFitExecution execution;
   const bool supported =
       withSupportedLlamaLoad(normalized, [&](common_params& params) {
@@ -597,11 +592,11 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
   out.typeK = static_cast<int32_t>(contextParams.type_k);
   out.typeV = static_cast<int32_t>(contextParams.type_v);
   out.flashAttnType = static_cast<int32_t>(contextParams.flash_attn_type);
-  if (cpuPlacement) {
-    out.nGpuLayers = 0;
-    out.splitMode = static_cast<int32_t>(LLAMA_SPLIT_MODE_NONE);
-    out.mainGpu = -1;
-  }
+  normalizePlanPlacement(
+      out,
+      modelParams.devices,
+      normalized.pinsSplitMode,
+      normalized.pinsGpuLayers);
 
   for (const auto& override : execution.buftOverrides) {
     if (override.pattern == nullptr) {

@@ -68,7 +68,14 @@ export interface FitConfig {
      * `enum llama_split_mode`: how the model splits across multiple GPUs.
      */
     splitMode?: number;
-    /** Ordinal in the supported GPU list, or -1 for CPU-only NONE placement. */
+    /**
+     * Raw ggml registry index of the device a NONE placement goes on, or -1 for
+     * the CPU sentinel (requires `nGpuLayers` 0 and `splitMode` 0). llama reads
+     * it only under split mode NONE; LAYER and ROW leave it inert. Validated when
+     * `splitMode` is NONE or omitted: an index at or past `nDevices` throws, and
+     * an in-range index that is not a supported GPU — the CPU entry, or a backend
+     * outside the allowlist — yields a CPU-only projection instead.
+     */
     mainGpu?: number;
     /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
     typeK?: number;
@@ -130,7 +137,13 @@ export interface FitPlan {
      * projected to fit.
      */
     splitMode: number;
-    /** Supported-GPU ordinal for GPU placement, or -1 for any CPU-only plan. */
+    /**
+     * 0 for a GPU plan — the ordinal of the one-device list under NONE, inert
+     * under LAYER and ROW — or -1 for any CPU-only plan: one whose device list is
+     * empty or that offloads no layer. Never an echo of the raw input index. A
+     * CPU-only plan also reports `nGpuLayers` 0 and `splitMode` NONE unless the
+     * caller pinned those fields.
+     */
     mainGpu: number;
     /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
     typeK: number;

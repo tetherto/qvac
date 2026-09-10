@@ -42,7 +42,7 @@ const plan = fitParams({
 //   nCtx,         // fitted context size
 //   nBatch, nUbatch,
 //   splitMode,    // llama_split_mode — how the model splits across GPUs
-//   mainGpu,      // supported-GPU ordinal, or -1 for a CPU-only plan
+//   mainGpu,      // 0 for a GPU plan, -1 for any CPU-only plan
 //   typeK, typeV, // ggml_type of the K/V cache — changes KV memory
 //   flashAttnType,// llama_flash_attn_type — changes KV/compute memory
 //   maxDevices,   // llama_max_devices() — a build-time bound, NOT a detection
@@ -141,6 +141,23 @@ valid input — `-1` is the llama default and what upstream's `llama-fit-params`
 prints back. In a successful result, `nGpuLayers: 0` means the plan uses no GPU
 offload. `nGpuDevices` is raw diagnostic inventory and may include unsupported
 backend families, so it must not be used to interpret the plan.
+
+`mainGpu` is a **raw ggml registry index** — the order `ggml_backend_dev_get`
+enumerates, not a position in llama's GPU list — or `-1` for the CPU sentinel,
+which requires `nGpuLayers: 0` and `splitMode: 0`. llama reads it only under
+split mode NONE; LAYER and ROW leave it inert. It is validated when `splitMode`
+is NONE or omitted: an index at or past `nDevices` **throws** (the bound is only
+known once the backends are registered, so the native side reports it), and an
+in-range index that is not a supported GPU — the CPU entry, or a backend outside
+the allowlist — is **projected CPU-only** rather than rejected. A pinned
+`splitMode` of NONE or TENSOR throws on a host with no supported GPU unless the
+request is the CPU sentinel or its `mainGpu` target was projected CPU-only.
+
+In the plan, `mainGpu` is `0` for a GPU plan (the ordinal of the one-device
+list under NONE; inert under LAYER and ROW) and `-1` for **any CPU-only plan** —
+one whose device list is empty or that offloads no layer. It never echoes the
+raw input index. A CPU-only plan also reports `nGpuLayers: 0` and `splitMode`
+NONE unless the caller pinned those fields.
 
 These checks are enforced **in the native binding as well as the JS wrapper**,
 because `./binding.js` is a public export and can be called without passing
