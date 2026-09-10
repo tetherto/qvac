@@ -342,7 +342,7 @@ protected:
   }
 
   static lfn::NormalizationDependencies backend(
-      lfn::SelectedBackend selected, bool supportsRowSplit = false,
+      lfn::SelectedBackend selected,
       std::vector<std::string> splitDevices = {"mock-device"}) {
     const auto devices = splitSelection(splitDevices);
     return {
@@ -351,8 +351,6 @@ protected:
                               const std::optional<backend_selection::MainGpu>&,
                               const ModelMetaData&,
                               bool) { return selected; },
-        .gpuBackendSupportsRowSplit =
-            [supportsRowSplit]() { return supportsRowSplit; },
         .splitDevices = [devices]() { return devices; }};
   }
 
@@ -374,7 +372,7 @@ TEST_F(LoadFitNormalizationTest, ExplicitContextAndMinimumClampAreCanonical) {
       std::move(config),
       metadata_,
       {},
-      backend({.type = backend_selection::GPU, .name = "none"}, true));
+      backend({.type = backend_selection::GPU, .name = "none"}));
   EXPECT_EQ(result.params.n_ctx, 8);
   EXPECT_EQ(result.fitSnapshot.nCtx, 8U);
 }
@@ -386,7 +384,7 @@ TEST_F(
       baseConfig(),
       metadata_,
       {},
-      backend({.type = backend_selection::GPU, .name = "none"}, true));
+      backend({.type = backend_selection::GPU, .name = "none"}));
   EXPECT_EQ(result.params.n_ctx, 0);
   EXPECT_EQ(result.fitSnapshot.nCtx, 0U);
 }
@@ -401,7 +399,7 @@ TEST_F(LoadFitNormalizationTest, CpuFallbackClearsGpuPlacement) {
       std::move(config),
       metadata_,
       {},
-      backend({.type = backend_selection::CPU, .name = "none"}, false, {}));
+      backend({.type = backend_selection::CPU, .name = "none"}, {}));
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.params.main_gpu, -1);
   EXPECT_EQ(result.runtimeBackendDevice, 0);
@@ -414,7 +412,7 @@ TEST_F(
   config["split-mode"] = "layer";
   config["main-gpu"] = "0";
   auto dependencies =
-      backend({.type = backend_selection::CPU, .name = "none"}, false, {});
+      backend({.type = backend_selection::CPU, .name = "none"}, {});
   auto selection = splitSelection({"vulkan0"});
   selection.sourceGpuCount = 2;
   selection.devices.front().sourceGpuIndex = 1;
@@ -457,7 +455,7 @@ TEST_F(LoadFitNormalizationTest, SplitModePrimarySkipsPrependedRpcDevice) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
   auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "rpc0"}, false, {});
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
   auto selection = splitSelection({"rpc0", "vulkan0"});
   selection.devices[0].isRpc = true;
   selection.devices[0].adrenoVersion = 830;
@@ -476,7 +474,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeFallsBackToRpcPrimaryWhenAllRpc) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
   auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "rpc0"}, false, {});
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
   auto selection = splitSelection({"rpc0", "rpc1"});
   selection.devices[0].isRpc = true;
   selection.devices[1].isRpc = true;
@@ -495,7 +493,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeKvTraitsComeFromAnyDevice) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
   auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {});
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
   auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
   selection.devices[1].isOpenCl = true;
   selection.devices[1].adrenoVersion = 830;
@@ -515,7 +513,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeOpenClDeviceRejectsQuantizedKv) {
   config["split-mode"] = "layer";
   config["cache-type-k"] = "q8_0";
   auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {});
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
   auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
   selection.devices[1].isOpenCl = true;
   selection.devices[1].adrenoVersion = 830;
@@ -532,7 +530,7 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFollowsFilteredDeviceMapping) {
   config["split-mode"] = "layer";
   config["tensor-split"] = "1,2,3";
   auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {});
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
   auto selection = splitSelection({"vulkan0", "vulkan1"});
   selection.sourceGpuCount = 3;
   selection.devices[0].sourceGpuIndex = 0;
@@ -554,7 +552,7 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRejectsAmbiguousCardinality) {
   config["split-mode"] = "layer";
   config["tensor-split"] = "1,3";
   auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {});
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
   auto selection = splitSelection({"vulkan1", "vulkan0"});
   selection.sourceGpuCount = 3;
   selection.devices[0].sourceGpuIndex = 2;
@@ -581,7 +579,6 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRejectsWrongCountWithoutRemap) {
           {},
           backend(
               {.type = backend_selection::GPU, .name = "vulkan0"},
-              false,
               {"vulkan0", "vulkan1"}))),
       qvac_errors::StatusError);
 }
@@ -602,7 +599,6 @@ TEST_F(LoadFitNormalizationTest, TensorSplitCountsTokensLikeFabric) {
         {},
         backend(
             {.type = backend_selection::GPU, .name = "vulkan0"},
-            false,
             {"vulkan0", "vulkan1"}));
     EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F) << value;
     EXPECT_FLOAT_EQ(result.params.tensor_split[1], 2.0F) << value;
@@ -614,7 +610,7 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRemapUsesFabricTokenization) {
   config["split-mode"] = "layer";
   config["tensor-split"] = "1,, 2";
   auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "rpc0"}, false, {});
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
   auto selection = splitSelection({"rpc0", "vulkan0"});
   selection.devices[0].sourceGpuIndex = 1;
   selection.devices[1].sourceGpuIndex = 0;
@@ -639,7 +635,7 @@ TEST_F(LoadFitNormalizationTest, CpuFallbackErasesBothTensorSplitSpellings) {
         std::move(config),
         metadata_,
         {},
-        backend({.type = backend_selection::CPU, .name = "none"}, false, {}));
+        backend({.type = backend_selection::CPU, .name = "none"}, {}));
     EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE) << key;
     EXPECT_FLOAT_EQ(result.params.tensor_split[0], 0.0F) << key;
     EXPECT_FLOAT_EQ(result.params.tensor_split[1], 0.0F) << key;
@@ -651,7 +647,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeWarnsWhenEveryGpuIsRejected) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
   auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {});
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
   backend_selection::SplitDeviceSelection selection;
   selection.sourceGpuCount = 1;
   selection.rejectedDevices = {"ROCm0 (HIP)"};
@@ -675,51 +671,29 @@ TEST_F(LoadFitNormalizationTest, SplitModeWarnsWhenEveryGpuIsRejected) {
           "ROCm0 (HIP); falling back to CPU"));
 }
 
-TEST_F(LoadFitNormalizationTest, RowSplitDegradesOnlyWhenUnsupported) {
+// LLAMA_SPLIT_MODE_ROW needs split buffers, which only SYCL provides and SYCL
+// is outside the allowlist — so 'row' could never take effect here and used to
+// be silently mapped to 'layer'. It is rejected up front now, and the message
+// must direct callers to the two modes that do work.
+TEST_F(LoadFitNormalizationTest, SplitModeRowIsRejected) {
   auto config = baseConfig();
   config["split-mode"] = "row";
-  const auto degraded = lfn::normalizeLoadForFit(
-      "/tmp/model.gguf",
-      config,
-      metadata_,
-      {},
-      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false));
-  const auto retained = lfn::normalizeLoadForFit(
-      "/tmp/model.gguf",
-      std::move(config),
-      metadata_,
-      {},
-      backend({.type = backend_selection::GPU, .name = "sycl0"}, true));
-  EXPECT_EQ(degraded.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
-  EXPECT_EQ(retained.params.split_mode, LLAMA_SPLIT_MODE_ROW);
-}
-
-TEST_F(LoadFitNormalizationTest, RowSplitProbeRunsOnlyForSelectedGpuRowMode) {
-  int probeCalls = 0;
-  auto dependencies =
-      backend({.type = backend_selection::CPU, .name = "none"}, false, {});
-  dependencies.gpuBackendSupportsRowSplit = [&probeCalls]() {
-    ++probeCalls;
-    return false;
-  };
-
-  auto cpuRowConfig = baseConfig();
-  cpuRowConfig["split-mode"] = "row";
-  static_cast<void>(lfn::normalizeLoadForFit(
-      "/tmp/model.gguf", std::move(cpuRowConfig), metadata_, {}, dependencies));
-  EXPECT_EQ(probeCalls, 0);
-
-  static_cast<void>(lfn::normalizeLoadForFit(
-      "/tmp/model.gguf", baseConfig(), metadata_, {}, dependencies));
-  EXPECT_EQ(probeCalls, 0);
-
-  const auto devices = splitSelection({"mock-device"});
-  dependencies.splitDevices = [devices]() { return devices; };
-  auto gpuRowConfig = baseConfig();
-  gpuRowConfig["split-mode"] = "row";
-  static_cast<void>(lfn::normalizeLoadForFit(
-      "/tmp/model.gguf", std::move(gpuRowConfig), metadata_, {}, dependencies));
-  EXPECT_EQ(probeCalls, 1);
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+    FAIL() << "split-mode 'row' must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "commonParamsParse: split-mode 'row' is no longer accepted; it "
+            "never took effect on any shipped backend. Use 'layer' or "
+            "'tensor' (accepted values: 'none', 'layer', 'tensor')."));
+  }
 }
 
 // QVAC-24253: split-mode 'tensor' (LLAMA_SPLIT_MODE_TENSOR).
@@ -746,24 +720,22 @@ TEST_F(LoadFitNormalizationTest, TensorSplitParsesAndDisablesFit) {
 }
 
 TEST_F(LoadFitNormalizationTest, TensorSplitLeavesFitEnabledForOtherModes) {
-  // Only the split modes are exercised with a GPU name here. 'none' is covered
+  // Only 'layer' is exercised with a GPU name here. 'none' is covered
   // separately below with the CPU backend. Every mode forwards `--device`:
   // NONE forwards the single chosen name, and the split modes forward the
   // eligible list. The fixture default {"none"} keeps the split modes
   // host-independent, since llama.cpp's parser rejects a device that does not
   // exist on the host running the test.
-  for (const char* mode : {"layer", "row"}) {
-    auto config = baseConfig();
-    config["split-mode"] = mode;
-    const auto result = lfn::normalizeLoadForFit(
-        "/tmp/model.gguf",
-        std::move(config),
-        metadata_,
-        {},
-        backend({.type = backend_selection::GPU, .name = "vulkan0"}));
-    EXPECT_TRUE(result.params.fit_params) << "mode: " << mode;
-    EXPECT_TRUE(result.fitSnapshot.fitParams) << "mode: " << mode;
-  }
+  auto layerConfig = baseConfig();
+  layerConfig["split-mode"] = "layer";
+  const auto layer = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(layerConfig),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_TRUE(layer.params.fit_params);
+  EXPECT_TRUE(layer.fitSnapshot.fitParams);
 
   auto noneConfig = baseConfig();
   noneConfig["split-mode"] = "none";
@@ -800,7 +772,7 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFitOverrideBeatsExplicitFitOn) {
 }
 
 TEST_F(LoadFitNormalizationTest, SplitModesPinEligibleDeviceHandles) {
-  for (const char* mode : {"layer", "row", "tensor"}) {
+  for (const char* mode : {"layer", "tensor"}) {
     auto config = baseConfig();
     config["split-mode"] = mode;
     const auto result = lfn::normalizeLoadForFit(
@@ -810,7 +782,6 @@ TEST_F(LoadFitNormalizationTest, SplitModesPinEligibleDeviceHandles) {
         {},
         backend(
             {.type = backend_selection::GPU, .name = "vulkan0"},
-            true,
             {"mock-device-0", "mock-device-1"}));
     ASSERT_EQ(result.params.devices.size(), 3U) << "mode: " << mode;
     EXPECT_NE(result.params.devices[0], nullptr) << "mode: " << mode;
@@ -827,7 +798,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeWithNoEnumerableDevicesUsesCpu) {
       std::move(config),
       metadata_,
       {},
-      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false, {}));
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {}));
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.params.main_gpu, -1);
   EXPECT_EQ(result.params.n_gpu_layers, 23);
@@ -862,37 +833,6 @@ TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsUnderscoreKeyAndUppercase) {
       metadata_,
       {},
       backend({.type = backend_selection::GPU, .name = "vulkan0"}));
-  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
-}
-
-TEST_F(LoadFitNormalizationTest, TensorSplitDoesNotInvokeRowProbe) {
-  int probeCalls = 0;
-  auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "vulkan0"});
-  dependencies.gpuBackendSupportsRowSplit = [&probeCalls]() {
-    ++probeCalls;
-    return false;
-  };
-
-  auto config = baseConfig();
-  config["split-mode"] = "tensor";
-  static_cast<void>(lfn::normalizeLoadForFit(
-      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
-  // The split-buffer probe is ROW-only: SPLIT_MODE_TENSOR goes through the meta
-  // device and needs no split buffers.
-  EXPECT_EQ(probeCalls, 0);
-}
-
-TEST_F(LoadFitNormalizationTest, TensorSplitIsNeverDegraded) {
-  auto config = baseConfig();
-  config["split-mode"] = "tensor";
-  // Same unsupported-split-buffer backend that degrades 'row' to 'layer'.
-  const auto result = lfn::normalizeLoadForFit(
-      "/tmp/model.gguf",
-      std::move(config),
-      metadata_,
-      {},
-      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false));
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
 }
 
@@ -1211,7 +1151,7 @@ TEST_F(LoadFitNormalizationTest, TensorSplitCpuFallbackClearsToNone) {
       std::move(config),
       metadata_,
       {},
-      backend({.type = backend_selection::CPU, .name = "none"}, false, {}));
+      backend({.type = backend_selection::CPU, .name = "none"}, {}));
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.params.main_gpu, -1);
   EXPECT_EQ(result.runtimeBackendDevice, 0);
@@ -1331,7 +1271,6 @@ TEST_F(
       {},
       backend(
           {.type = backend_selection::GPU, .name = "vulkan0"},
-          true,
           {"vulkan0", "vulkan1"}));
   EXPECT_EQ(result.runtimeBackendDevice, 1);
   EXPECT_EQ(result.fitSnapshot.nGpuLayers, 23);

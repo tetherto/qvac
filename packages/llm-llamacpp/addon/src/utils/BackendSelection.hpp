@@ -44,8 +44,6 @@ struct BackendInterface {
   const char* (*ggml_backend_dev_name)(ggml_backend_dev_t device);
   enum ggml_backend_dev_type (*ggml_backend_dev_type)(
       ggml_backend_dev_t device);
-  void* (*ggml_backend_reg_get_proc_address)(
-      ggml_backend_reg_t reg, const char* name);
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
@@ -93,7 +91,6 @@ struct SplitDevice {
   bool isMaliGpu = false;
   bool isOpenCl = false;
   bool isMetal = false;
-  bool supportsSplitBuffer = false;
 };
 
 struct SplitDeviceSelection {
@@ -123,16 +120,4 @@ SplitDeviceSelection getSplitDeviceSelection();
 ///
 /// Returns an empty vector when callers must fall back to CPU.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
-
-/// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
-/// True only when at least one eligible GPU device is present AND every
-/// device in the final split set provides split buffers, because fabric throws
-/// on the first participating device that lacks them. Callers should degrade
-/// row -> layer when this returns false. As of qvac-fabric v10069 only SYCL
-/// provides split buffers, so this is false in every shipped configuration.
-bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
-
-/// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
-/// registry.
-bool gpuBackendSupportsRowSplit();
 } // namespace backend_selection

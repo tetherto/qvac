@@ -662,8 +662,6 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .isOpenCl = isOpenCl,
                 .isMetal = isMetal};
           },
-      .gpuBackendSupportsRowSplit =
-          []() { return backend_selection::gpuBackendSupportsRowSplit(); },
       .splitDevices =
           []() { return backend_selection::getSplitDeviceSelection(); }};
 }
@@ -820,15 +818,27 @@ NormalizedLoad normalizeLoadForFit(
     const std::string val = toLowerAscii(it->second);
     if (val == "layer") {
       splitMode = LLAMA_SPLIT_MODE_LAYER;
-    } else if (val == "row") {
-      splitMode = LLAMA_SPLIT_MODE_ROW;
     } else if (val == "tensor") {
       splitMode = LLAMA_SPLIT_MODE_TENSOR;
+    } else if (val == "row") {
+      // LLAMA_SPLIT_MODE_ROW needs split buffers, which only the SYCL backend
+      // provides, and SYCL is outside this addon's device allowlist — so the
+      // mode could never take effect here and qvac-fabric marks it deprecated.
+      // Rejected rather than mapped to 'layer', so callers are not left
+      // believing they got tensor parallelism.
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: split-mode 'row' is no longer accepted; it never took "
+              "effect "
+              "on any shipped backend. Use 'layer' or 'tensor' (accepted "
+              "values: 'none', 'layer', 'tensor').\n",
+              K_LEGACY_PARSER_NAME.data()));
     } else if (val != "none") {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
-              "%s: invalid split-mode '%s', must be 'none', 'layer', 'row', or "
+              "%s: invalid split-mode '%s', must be 'none', 'layer', or "
               "'tensor'.\n",
               K_LEGACY_PARSER_NAME.data(),
               it->second.c_str()));
@@ -1004,23 +1014,6 @@ NormalizedLoad normalizeLoadForFit(
               mmprojUseGpuOverride.has_value() ? "mmproj-use-gpu override"
                                                : mmprojDefaultReason));
       params.mmproj_use_gpu = mmprojUseGpu;
-
-      // Row-split needs a backend that provides split buffers.
-      // Degrade row -> layer to keep the model loadable. This is ROW-only by
-      // design: qvac-fabric only demands split buffers under
-      // LLAMA_SPLIT_MODE_ROW (src/llama-model.cpp make_gpu_buft_list), while
-      // LLAMA_SPLIT_MODE_TENSOR goes through the meta device and needs none.
-      // Routing tensor mode through this probe would silently degrade it to
-      // 'layer' on every backend this package ships.
-      if (splitMode == LLAMA_SPLIT_MODE_ROW &&
-          !dependencies.gpuBackendSupportsRowSplit()) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[LlamaModel] split-mode 'row' is not supported by this GPU "
-            "backend (no split-buffer support), falling back to split-mode "
-            "'layer'\n");
-        splitMode = LLAMA_SPLIT_MODE_LAYER;
-      }
 
       params.split_mode = splitMode;
       result.runtimeBackendDevice = 1;

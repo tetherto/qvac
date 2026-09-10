@@ -85,7 +85,6 @@ using BackendResolver = std::function<SelectedBackend(
 
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
-  std::function<bool()> gpuBackendSupportsRowSplit;
   /// Authoritative eligible device set for every multi-GPU split mode.
   std::function<backend_selection::SplitDeviceSelection()> splitDevices;
 };

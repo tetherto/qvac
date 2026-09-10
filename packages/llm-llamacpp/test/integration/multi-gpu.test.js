@@ -108,21 +108,6 @@ function assertSingleDevice(t, devices) {
   )
 }
 
-// Row-split needs split buffers from every GPU device the model is distributed
-// over. As of qvac-fabric v10069 only SYCL provides them, and qvac-fabric now
-// throws on load instead of silently behaving like layer-split, so the addon
-// degrades 'row' -> 'layer' and warns. Asserting the warning is what makes this
-// test row-specific: without it, it only re-checks the layer-split case above.
-function assertRowDegradedToLayer(t, devices, logs) {
-  const warned = logs.some(
-    (line) =>
-      line.includes("split-mode 'row' is not supported") &&
-      line.includes("falling back to split-mode 'layer'")
-  )
-  t.ok(warned, "should warn that split-mode 'row' degraded to 'layer'")
-  assertMultiDevice('layers')(t, devices)
-}
-
 safeTest(
   'multi-gpu: split-mode=layer distributes layers across GPUs',
   { timeout: 600_000, skip },
@@ -131,13 +116,41 @@ safeTest(
   }
 )
 
-safeTest(
-  'multi-gpu: split-mode=row degrades to layer and still distributes across GPUs',
-  { timeout: 600_000, skip },
-  async (t) => {
-    await runMultiGpuTest(t, { 'split-mode': 'row' }, assertRowDegradedToLayer)
+// 'row' needs split buffers, which only SYCL provides and SYCL is outside the
+// addon's allowlist, so the mode never took effect here; it is rejected rather
+// than silently run as 'layer'.
+safeTest('multi-gpu: split-mode=row is rejected', { timeout: 600_000, skip }, async (t) => {
+  if (!hasMultiGpu) {
+    t.comment('Skipping: QVAC_HAS_MULTI_GPU is not set')
+    return
   }
-)
+
+  let addon = null
+  try {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: MODEL.name,
+      downloadUrl: MODEL.url
+    })
+
+    addon = new LlmLlamacpp({
+      files: { model: [path.join(dirPath, modelName)] },
+      config: { ...BASE_CONFIG, 'split-mode': 'row' },
+      logger: null,
+      opts: { stats: true }
+    })
+
+    await addon.load()
+    t.fail("load should reject split-mode 'row'")
+  } catch (error) {
+    t.ok(
+      /split-mode 'row' is no longer accepted/.test(error.message) &&
+        /'layer' or 'tensor'/.test(error.message),
+      "error should reject 'row' and point at 'layer' or 'tensor', got: " + error.message
+    )
+  } finally {
+    if (addon) await addon.unload().catch(() => {})
+  }
+})
 
 safeTest(
   'multi-gpu: default (no split-mode) pins layers to a single device',

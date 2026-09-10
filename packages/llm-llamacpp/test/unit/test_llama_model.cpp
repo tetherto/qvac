@@ -1320,52 +1320,9 @@ TEST_F(LlamaModelTest, CommonParamsParseSplitModeLayer) {
   }
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseSplitModeRow) {
-  if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
-  }
-
-  std::unordered_map<std::string, std::string> config;
-  config["device"] = test_common::getTestDevice();
-  config["ctx_size"] = "2048";
-  config["gpu_layers"] = test_common::getTestGpuLayers();
-  config["n_predict"] = "10";
-  config["split-mode"] = "row";
-
-  fs::path backendDir;
-#ifdef TEST_BINARY_DIR
-  backendDir = fs::path(TEST_BINARY_DIR);
-#else
-  backendDir = fs::current_path() / "build" / "test" / "unit";
-#endif
-  config["backendsDir"] = backendDir.string();
-
-  LlamaModel model(
-      getValidModelPath(),
-      std::string(test_projection_path),
-      std::unordered_map<std::string, std::string>(config));
-  model.waitForLoadInitialization();
-  ASSERT_TRUE(model.isLoaded());
-
-  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
-  if (backendDevice == 0.0) {
-    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
-  } else {
-    // Row-split requires split buffers from every GPU device the model is
-    // distributed over, and as of qvac-fabric v10069 only the SYCL backend
-    // provides them (CUDA moved tensor parallelism to LLAMA_SPLIT_MODE_TENSOR).
-    // None of the backends this addon ships qualify, so a requested 'row' is
-    // always degraded to 'layer'. Asserted unconditionally on purpose: this is
-    // the pin on the degrade itself, so it fails if the degrade stops working.
-    // If a split-buffer-capable backend is ever shipped, that failure is the
-    // intended signal to revisit this expectation.
-    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
-  }
-}
-
-// QVAC-24253: unlike 'row', a requested 'tensor' is never degraded — it goes
-// through qvac-fabric's meta device and needs no split buffers. It also
-// disables auto-fit, which fabric does not implement for this mode.
+// QVAC-24253: a requested 'tensor' goes through qvac-fabric's meta device and
+// needs no split buffers. It also disables auto-fit, which fabric does not
+// implement for this mode.
 TEST_F(LlamaModelTest, CommonParamsParseSplitModeTensor) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

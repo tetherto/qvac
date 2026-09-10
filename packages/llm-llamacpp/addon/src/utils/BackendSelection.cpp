@@ -520,7 +520,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_description,
       ggml_backend_dev_name,
       ggml_backend_dev_type,
-      ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
       llamaLogcallback};
   return backend_selection::chooseBackend(
@@ -591,11 +590,7 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
         .adrenoVersion = parseAdrenoVersion(description),
         .isMaliGpu = description.find("mali") != std::string::npos,
         .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
-        .isMetal = hasMetalFamily(deviceName, registryName),
-        .supportsSplitBuffer =
-            reg != nullptr &&
-            bckI.ggml_backend_reg_get_proc_address(
-                reg, "ggml_backend_split_buffer_type") != nullptr};
+        .isMetal = hasMetalFamily(deviceName, registryName)};
     if (selected.isRpc) {
       rpc.emplace_back(std::move(selected));
       continue;
@@ -632,7 +627,6 @@ backend_selection::getSplitDeviceSelection() {
       ggml_backend_dev_description,
       ggml_backend_dev_name,
       ggml_backend_dev_type,
-      ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
       nullptr};
   return getSplitDeviceSelection(bckI);
@@ -647,37 +641,4 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
     names.push_back(device.name);
   }
   return names;
-}
-
-bool backend_selection::gpuBackendSupportsRowSplit(
-    const BackendInterface& bckI) {
-  // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
-  // make_gpu_buft_list() for EVERY device it was given and throws "device %s
-  // does not support split buffers" on the first one whose backend registry
-  // lacks `ggml_backend_split_buffer_type`. Split mode pins the authoritative
-  // allowlisted set, so one participating backend without split buffers is
-  // enough to fail the load. Require all of them, not any one, and treat an
-  // empty set as unsupported.
-  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
-  for (const SplitDevice& device : selection.devices) {
-    if (!device.supportsSplitBuffer) {
-      return false;
-    }
-  }
-  return !selection.devices.empty();
-}
-
-bool backend_selection::gpuBackendSupportsRowSplit() {
-  BackendInterface bckI{
-      ggml_backend_dev_count,
-      ggml_backend_dev_backend_reg,
-      ggml_backend_dev_get,
-      ggml_backend_reg_name,
-      ggml_backend_dev_description,
-      ggml_backend_dev_name,
-      ggml_backend_dev_type,
-      ggml_backend_reg_get_proc_address,
-      ggml_backend_dev_get_props,
-      nullptr};
-  return backend_selection::gpuBackendSupportsRowSplit(bckI);
 }
