@@ -1790,15 +1790,32 @@ test('iOS mobile runs collect on-device crash reports', () => {
     '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
   )
 
-  // The pull is iOS-only and lives in post_test, after the Android logcat dump.
+  // The pull MUST run in the test phase, not post_test: Device Farm skips
+  // post_test entirely when the test phase exits non-zero, i.e. exactly when a
+  // crash report is the thing we need.
+  const iosCrashPull = generateTestspec.indexOf('pymobiledevice3 crash pull')
   const androidLogcat = generateTestspec.indexOf('adb logcat -d -b all')
-  const iosCrashBranch = generateTestspec.indexOf('pymobiledevice3 crash pull')
+  // Anchor on the emitted YAML key, not the word — prose above mentions it too.
+  const postTestPhase = generateTestspec.indexOf('  post_test:\n    commands:')
+  assert.ok(iosCrashPull > 0, 'iOS crash-report pull must exist')
   assert.ok(androidLogcat > 0, 'Android logcat collection must stay in post_test')
-  assert.ok(iosCrashBranch > androidLogcat, 'iOS crash pull belongs in post_test')
-  assert.match(
-    generateTestspec.slice(androidLogcat),
-    /if \[ "\$PLATFORM" = "iOS" \]/,
-    'crash pull must be guarded by an iOS platform branch',
+  assert.ok(
+    iosCrashPull < postTestPhase,
+    'crash pull must be emitted in the test phase — post_test never runs on a failed test',
+  )
+
+  // It runs after wdio and re-exits with wdio's own code, so wrapping the test
+  // command cannot change a run's verdict.
+  const wrapper = generateTestspec.slice(iosCrashPull - 2000, iosCrashPull)
+  assert.match(wrapper, /WDIO_RC=\$\?/, 'wdio exit code must be captured')
+  assert.match(wrapper, /if \[ "\$PLATFORM" = "iOS" \]/, 'wrapper must be iOS-only')
+  assert.match(generateTestspec.slice(iosCrashPull), /exit \$WDIO_RC/)
+  // `set +e` stays on for the whole block: a failure inside log collection must
+  // not rewrite the verdict.
+  assert.doesNotMatch(
+    generateTestspec.slice(iosCrashPull - 2000, generateTestspec.indexOf('exit $WDIO_RC')),
+    /^\s+set -e$/m,
+    'set -e must not be re-enabled around log collection',
   )
 
   // Reports are echoed inline as well: Customer_Artifacts can be missed, the
