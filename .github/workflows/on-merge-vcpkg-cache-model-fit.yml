@@ -2,8 +2,19 @@ name: On Merge vcpkg Cache (Model Fit)
 
 # cpp-tests-model-fit.yml only writes its vcpkg cache on a trusted event, and its
 # only other caller is pull_request_target -- so without this, nothing populates
-# the cache but a manual dispatch. Paths mirror the cache key's inputs; the
+# the cache and every PR leg stays cold. Paths mirror the cache key's inputs; the
 # cron recovers from eviction.
+#
+# This dispatches cpp-tests-model-fit.yml rather than calling it with `uses:`. A
+# `uses:` call fails at startup with no jobs and no error text, because the
+# callee's test job declares `environment: release` and the release environment
+# has custom_branch_policies with no policies defined -- which blocks a job in a
+# CALLED workflow when the caller was triggered by push or schedule. The same job
+# runs fine as a top-level workflow_dispatch, which is what this does. Dropping
+# `environment:` is not an option: the job's secrets come from it.
+#
+# Consequence: this workflow reports success once the dispatch is accepted, not
+# once the cache is warm. Check the dispatched run for that.
 
 on:
   push:
@@ -18,19 +29,29 @@ on:
     - cron: "47 5 * * 1"
   workflow_dispatch:
 
-# Never cancel: a cancelled job cannot save the build it did not finish.
+# Never cancel: a cancelled dispatch leaves the cache unrefreshed.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: on-merge-vcpkg-cache-model-fit-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
-  refresh:
-    uses: ./.github/workflows/cpp-tests-model-fit.yml
-    secrets: inherit
-    with:
-      workdir: packages/model-fit
-      # Pinned: the callee defaults to github.ref, which floats to main's tip.
-      ref: ${{ github.sha }}
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch cpp-tests-model-fit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh workflow run "cpp-tests-model-fit.yml" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$TARGET_REF" \
+            -f "workdir=packages/model-fit"
+          echo "dispatched cpp-tests-model-fit.yml on $TARGET_REF"
