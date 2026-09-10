@@ -11,6 +11,7 @@
 #include "model-interface/LlamaFinetuner.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/MtmdLlmContext.hpp"
+#include "model-interface/TextLlmContext.hpp"
 
 // Friend test peers grant unit tests direct access to internals that are not
 // part of the production public API. The production classes befriend these
@@ -178,6 +179,37 @@ public:
 
   static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
     return context.rollbackState_.reasoningBoundaryNPast();
+  }
+};
+
+class TextLlmContextTestPeer {
+public:
+  static void armPendingThinkClose(TextLlmContext& ctx) {
+    ctx.compactor_.setRemoveThinkingFromContext(true);
+    ctx.compactor_.setReasoningEnabled(true);
+    ctx.compactor_.setNeedsRecurrentSnapshot(false);
+    ctx.compactor_.snapshotAtReasoningBoundary(
+        ctx.modelCtx_.lctx, ctx.seqId_, 0, "[TextLlmTest]");
+    ctx.compactor_.setOpenSpan(0);
+    ctx.compactor_.requestCloseCapture();
+    ctx.nPast_ = 1;
+  }
+
+  static bool pendingThinkClose(const TextLlmContext& ctx) {
+    return ctx.compactor_.hasPendingCloseCapture();
+  }
+
+  static bool capturedThinkClose(const TextLlmContext& ctx) {
+    return ctx.compactor_.hasCapturedCloseSpanForTesting();
+  }
+
+  static llama_token ordinaryToken(const TextLlmContext& ctx) {
+    const auto tokens = common_tokenize(ctx.modelCtx_.lctx, "x", false, true);
+    return tokens.empty() ? LLAMA_TOKEN_NULL : tokens.front();
+  }
+
+  static void processSpecToken(TextLlmContext& ctx, llama_token token) {
+    static_cast<void>(ctx.specProcessToken(token, false, 1, {}, nullptr));
   }
 };
 

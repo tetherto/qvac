@@ -27,6 +27,8 @@
 /// (`getNPast`) appear on both
 /// bases; a single override below satisfies both vtables.
 class TextLlmContext : public LlmContext, public SequenceDriver {
+  friend class TextLlmContextTestPeer;
+
 public:
   TextLlmContext(const TextLlmContext&) = delete;
   TextLlmContext& operator=(const TextLlmContext&) = delete;

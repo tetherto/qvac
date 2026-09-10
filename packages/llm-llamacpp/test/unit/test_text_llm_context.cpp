@@ -95,6 +95,29 @@ TEST_F(TextLlmContextTest, Constructor) {
   EXPECT_TRUE(model->isLoaded());
 }
 
+TEST_F(TextLlmContextTest, SpecProcessTokenCommitsPendingThinkClose) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  ASSERT_NE(model, nullptr) << "Model failed to load";
+
+  auto* ctx =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(ctx, nullptr);
+
+  TextLlmContextTestPeer::armPendingThinkClose(*ctx);
+  ASSERT_TRUE(TextLlmContextTestPeer::pendingThinkClose(*ctx));
+  const llama_token token = TextLlmContextTestPeer::ordinaryToken(*ctx);
+  ASSERT_NE(token, LLAMA_TOKEN_NULL);
+
+  TextLlmContextTestPeer::processSpecToken(*ctx, token);
+
+  EXPECT_FALSE(TextLlmContextTestPeer::pendingThinkClose(*ctx));
+  EXPECT_TRUE(TextLlmContextTestPeer::capturedThinkClose(*ctx));
+}
+
 TEST_F(TextLlmContextTest, LoadCacheReportsMissForEmptyKey) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
