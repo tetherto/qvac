@@ -1,0 +1,37 @@
+name: On Merge vcpkg Cache (Embed)
+
+# cpp-tests-embed.yml only writes its vcpkg cache on a trusted event, and its
+# only other caller is pull_request_target -- so without this, nothing populates
+# the cache but a manual dispatch. Paths mirror the cache key's inputs; the
+# cron recovers from eviction.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/embed-llamacpp/vcpkg.json"
+      - "packages/embed-llamacpp/vcpkg-configuration.json"
+      - "packages/embed-llamacpp/vcpkg/ports/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+  schedule:
+    - cron: "47 4 * * 1"
+  workflow_dispatch:
+
+# Never cancel: a cancelled job cannot save the build it did not finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    uses: ./.github/workflows/cpp-tests-embed.yml
+    secrets: inherit
+    with:
+      workdir: packages/embed-llamacpp
+      # Pinned: the callee defaults to github.ref, which floats to main's tip.
+      ref: ${{ github.sha }}

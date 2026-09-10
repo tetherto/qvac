@@ -28,11 +28,14 @@ on:
         required: false
         default: "packages/embed-llamacpp"
 
-# Not keyed on github.ref alone: the pull_request_target caller sets it to the
-# base branch, so every in-flight PR would share one group. PR number keeps them
-# independent; github.ref serialises the events that write the cache.
+# The group is spelled out rather than using github.workflow, which in a called
+# workflow resolves to the CALLER's name -- that would collide with the caller's
+# own group and with the on-merge cache workflow's. Not keyed on github.ref alone
+# either: under pull_request_target that is the base branch, so every in-flight PR
+# would share one group. PR number keeps them independent; github.ref serialises
+# the events that write the cache.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: cpp-tests-embed-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -137,6 +140,13 @@ jobs:
         if: ${{ matrix.os != 'windows-2025' }}
         shell: bash
         run: |
+          set -euo pipefail
+          # $WORKDIR reaches $GITHUB_ENV unescaped, so a newline in it would
+          # inject further variables. setup-vcpkg guards its own inputs the same way.
+          if [[ ! "$WORKDIR" =~ ^packages/[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::unexpected workdir: $WORKDIR"
+            exit 1
+          fi
           echo "VCPKG_BINARY_SOURCES=clear;files,$GITHUB_WORKSPACE/$WORKDIR/vcpkg/cache,readwrite" >> "$GITHUB_ENV"
 
       # Native path required: a mixed-separator path resolves elsewhere and
@@ -145,6 +155,10 @@ jobs:
         if: ${{ matrix.os == 'windows-2025' }}
         shell: powershell
         run: |
+          if ($env:WORKDIR -notmatch '^packages/[A-Za-z0-9._-]+$') {
+            Write-Output "::error::unexpected workdir: $env:WORKDIR"
+            exit 1
+          }
           $cacheDir = [IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE (Join-Path $env:WORKDIR 'vcpkg/cache')))
           echo "VCPKG_BINARY_SOURCES=clear;files,$cacheDir,readwrite" >> $env:GITHUB_ENV
 

@@ -1,0 +1,36 @@
+name: On Merge vcpkg Cache (VLA)
+
+# cpp-tests-vla.yml only writes its vcpkg cache on a trusted event, and its
+# only other caller is pull_request_target -- so without this, nothing populates
+# the cache but a manual dispatch. Paths mirror the cache key's inputs; the
+# cron recovers from eviction.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/vla-ggml/vcpkg.json"
+      - "packages/vla-ggml/vcpkg-configuration.json"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+# Never cancel: a cancelled job cannot save the build it did not finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    uses: ./.github/workflows/cpp-tests-vla.yml
+    secrets: inherit
+    with:
+      workdir: packages/vla-ggml
+      # Pinned: the callee defaults to github.ref, which floats to main's tip.
+      ref: ${{ github.sha }}
