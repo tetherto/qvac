@@ -1099,6 +1099,42 @@ TEST_F(BertModelTest, TensorSplitTrimsShareWhitespace) {
   EXPECT_EQ(config.at("tensor-split"), "2,1");
 }
 
+TEST_F(BertModelTest, SplitTraitsFlagOpenClFromAnyDevice) {
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0", .sourceGpuIndex = 0, .isOpenCl = false},
+           {.name = "GPUOpenCL", .sourceGpuIndex = 1, .isOpenCl = true}},
+      .sourceGpuCount = 2};
+
+  const SplitBackendTraits traits = splitBackendTraits(selection);
+  EXPECT_TRUE(traits.isOpenCl);
+  EXPECT_EQ(traits.backendName, "Vulkan0");
+}
+
+TEST_F(BertModelTest, SplitTraitsReportFirstLocalDeviceOverRpc) {
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "RPC0", .sourceGpuIndex = 1, .isRpc = true},
+           {.name = "Vulkan0", .sourceGpuIndex = 0, .isOpenCl = false}},
+      .sourceGpuCount = 2};
+
+  const SplitBackendTraits traits = splitBackendTraits(selection);
+  EXPECT_FALSE(traits.isOpenCl);
+  EXPECT_EQ(traits.backendName, "Vulkan0");
+}
+
+TEST_F(BertModelTest, SplitTraitsFallBackToRpcWhenOnlyRpc) {
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "RPC0", .sourceGpuIndex = 0, .isRpc = true},
+           {.name = "RPC1", .sourceGpuIndex = 1, .isRpc = true}},
+      .sourceGpuCount = 2};
+
+  const SplitBackendTraits traits = splitBackendTraits(selection);
+  EXPECT_FALSE(traits.isOpenCl);
+  EXPECT_EQ(traits.backendName, "RPC0");
+}
+
 TEST_F(BertModelTest, EmptySplitDeviceSelectionLeavesParamsUntouched) {
   common_params params;
   std::unordered_map<std::string, std::string> config;

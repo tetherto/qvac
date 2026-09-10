@@ -425,6 +425,22 @@ bool applySplitDeviceSelection(
   return true;
 }
 
+SplitBackendTraits
+splitBackendTraits(const backend_selection::SplitDeviceSelection& selection) {
+  const auto local = std::ranges::find_if(
+      selection.devices, [](const backend_selection::SplitDevice& device) {
+        return !device.isRpc;
+      });
+  const backend_selection::SplitDevice& reported =
+      local != selection.devices.end() ? *local : selection.devices.front();
+  return {
+      .backendName = reported.name,
+      .isOpenCl = std::ranges::any_of(
+          selection.devices, [](const backend_selection::SplitDevice& device) {
+            return device.isOpenCl;
+          })};
+}
+
 namespace {
 llama_split_mode
 parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
@@ -517,8 +533,9 @@ BertModelSetup setupParams(
         splitMode != LLAMA_SPLIT_MODE_NONE) {
       splitSelection = getSplitDeviceSelection();
       if (!splitSelection.devices.empty()) {
-        chosenBackend = {BackendType::GPU, splitSelection.devices.front().name};
-        isOpenCl = splitSelection.devices.front().isOpenCl;
+        const SplitBackendTraits traits = splitBackendTraits(splitSelection);
+        chosenBackend = {BackendType::GPU, traits.backendName};
+        isOpenCl = traits.isOpenCl;
       } else if (!splitSelection.rejectedDevices.empty()) {
         std::string message =
             "[BertModel] no eligible GPU backend found; rejected ";

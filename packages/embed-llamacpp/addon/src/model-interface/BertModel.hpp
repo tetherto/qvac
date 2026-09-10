@@ -75,6 +75,17 @@ bool applySplitDeviceSelection(
     common_params& params, std::unordered_map<std::string, std::string>& config,
     const backend_selection::SplitDeviceSelection& selection);
 
+/// Local policy traits of the whole split set: OpenCL when any device in the
+/// set is OpenCL, and the reported backend is the first non-RPC device (the
+/// first device only when the whole set is RPC). Requires a non-empty set.
+struct SplitBackendTraits {
+  std::string backendName;
+  bool isOpenCl = false;
+};
+
+SplitBackendTraits
+splitBackendTraits(const backend_selection::SplitDeviceSelection& selection);
+
 /// @brief Instantiates a BERT language model. An open source architecture
 /// designed to help machines understand context in sentences and used for
 /// natural language processing (NLP) and understanding (NLU).

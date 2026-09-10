@@ -776,6 +776,19 @@ TEST_F(BackendSelectionTest, SplitDeviceSelectionPreservesSourceGpuIndices) {
   EXPECT_EQ(selection.devices[1].sourceGpuIndex, 2U);
 }
 
+TEST_F(BackendSelectionTest, SplitDeviceSelectionMarksRpcDevices) {
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  mockBackend.addDevice(
+      MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+  ASSERT_EQ(selection.devices.size(), 2U);
+  EXPECT_EQ(selection.devices[0].name, "RPC0");
+  EXPECT_TRUE(selection.devices[0].isRpc);
+  EXPECT_EQ(selection.devices[1].name, "Vulkan0");
+  EXPECT_FALSE(selection.devices[1].isRpc);
+}
+
 TEST_F(BackendSelectionTest, SplitDevicesExcludeUnsupportedBackends) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
   mockBackend.addDevice(createGPUDevice("Intel Arc", "SYCL0"));
