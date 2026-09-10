@@ -1,6 +1,6 @@
 {
   "name": "@qvac/fabric",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Shared bare addon hosting the qvac-fabric (forked llama.cpp + ggml) runtime for QVAC inference addons",
   "addon": true,
   "engines": {
@@ -41,6 +41,7 @@
   "devDependencies": {
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "standard": "^17.0.0"
+    "standard": "^17.0.0",
+    "cmake-npm": "^1.1.0"
   }
 }

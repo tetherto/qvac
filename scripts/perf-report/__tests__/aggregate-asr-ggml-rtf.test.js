@@ -48,6 +48,8 @@ function whisperDesktopReport (useGPU) {
     summary: {
       rtf: { mean: 0.1, stddev: 0.01, p50: 0.1, p95: 0.12 },
       wallMs: { mean: 500 },
+      whisperEncodeMs: { mean: 390.75 },
+      whisperDecodeMs: { mean: 9.614 },
       memory: {
         avgRssMb: 320.5,
         peakRssMb: 410.25,
@@ -126,6 +128,24 @@ test('whisper desktop record leaves the parakeet-only columns empty', () => {
   const record = normalizeDesktopRecord(whisperDesktopReport(true), 'rtf-benchmark-linux-x64-ggml-tiny-q5_1-gpu.json')
   assert.equal(record.gpuModel, null)
   assert.equal(record.version, '')
+})
+
+test('whisper desktop record surfaces the per-call encode and decode phase timings', () => {
+  const record = normalizeDesktopRecord(whisperDesktopReport(false), 'rtf-benchmark-linux-x64-ggml-tiny-q5_1-cpu.json')
+  assert.equal(record.encodeMs, 390.75)
+  assert.equal(record.decodeMsPerCall, 9.614)
+})
+
+test('phase timings are NaN when the report does not carry the whisper timers', () => {
+  const report = whisperDesktopReport(false)
+  delete report.summary.whisperEncodeMs
+  delete report.summary.whisperDecodeMs
+  const record = normalizeDesktopRecord(report, 'rtf-benchmark-linux-x64-ggml-tiny-q5_1-cpu.json')
+  assert.ok(Number.isNaN(record.encodeMs))
+  assert.ok(Number.isNaN(record.decodeMsPerCall))
+  const parakeet = normalizeDesktopRecord(parakeetDesktopReport(false), 'rtf-benchmark-win32-x64-tdt-q8_0-cpu.json')
+  assert.ok(Number.isNaN(parakeet.encodeMs))
+  assert.ok(Number.isNaN(parakeet.decodeMsPerCall))
 })
 
 // --- parakeet desktop --------------------------------------------------------
@@ -652,6 +672,17 @@ test('markdown table carries the Engine column, memory columns and per-engine co
   assert.ok(markdown.includes('- parakeet: 1 row(s)'))
 })
 
+test('markdown table carries the whisper phase columns and n/a for parakeet rows', () => {
+  const records = [
+    normalizeDesktopRecord(whisperDesktopReport(true), 'rtf-benchmark-linux-x64-ggml-tiny-q5_1-gpu.json'),
+    normalizeDesktopRecord(parakeetDesktopReport(true), 'rtf-benchmark-win32-x64-tdt-q8_0-gpu.json')
+  ]
+  const markdown = renderMarkdown(records)
+  assert.ok(markdown.includes('| Enc (ms/call) | Dec (ms/call) |'))
+  assert.ok(markdown.includes('| 390.8 | 9.61 |'), 'whisper row should carry the formatted phase timings')
+  assert.ok(markdown.includes('| n/a | n/a |'), 'parakeet row should render n/a for the whisper-only timers')
+})
+
 test('html table includes the Engine header, memory columns and rounded values', () => {
   const record = normalizeDesktopRecord(parakeetDesktopReport(true), 'rtf-benchmark-win32-x64-tdt-q8_0-gpu.json')
   const html = renderHtml([record])
@@ -709,4 +740,32 @@ test('a fully reporting device list renders without the missing-devices warning'
   const markdown = renderMarkdown(records, ['qvac-ubuntu2404-x64-gpu'])
   assert.ok(markdown.includes('- Expected desktop devices reporting: 1/1'))
   assert.ok(!markdown.includes('MISSING desktop devices'))
+})
+
+test('html table carries the whisper phase columns with formatted values', () => {
+  const html = renderHtml([
+    normalizeDesktopRecord(whisperDesktopReport(false), 'rtf-benchmark-linux-x64-ggml-tiny-q5_1-cpu.json')
+  ])
+  assert.ok(html.includes('<th>Enc (ms/call)</th>'))
+  assert.ok(html.includes('<th>Dec (ms/call)</th>'))
+  assert.ok(html.includes('<td>390.8</td>'))
+  assert.ok(html.includes('<td>9.61</td>'))
+})
+
+test('flattened manual rows keep their phase timings', () => {
+  const record = normalizeManualRecord({
+    engine: 'whisper',
+    device: 'Apple M1 Pro (macOS 15.1.1)',
+    platform: 'darwin-arm64',
+    model: 'ggml-base-q5_1',
+    quant: 'q5_1',
+    gpu: 'cpu',
+    backend: 'cpu',
+    meanRtf: 0.02,
+    stddevRtf: 0.001,
+    encodeMs: 210.4,
+    decodeMsPerCall: 2.31
+  }, 'manual-results/whisper/row.json')
+  assert.equal(record.encodeMs, 210.4)
+  assert.equal(record.decodeMsPerCall, 2.31)
 })

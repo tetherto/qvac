@@ -1,0 +1,103 @@
+{
+  "name": "@qvac/classification-ggml",
+  "root": "packages/classification-ggml",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'carved out of on-pr-nx.yml; orchestrated by on-pr-classification-ggml.yml (fabric overlay needs fabric built before its consumers, which one flat prebuild matrix cannot express)'",
+        "cwd": "packages/classification-ggml",
+        "ci": {
+          "carveOut": true,
+          "hasCppLint": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts"
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/classification-ggml",
+        "ci": {
+          "artifactNamePrefix": "classification-ggml-",
+          "includeVulkanSdk": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/classification-ggml"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/classification-ggml",
+        "ci": {
+          "timeoutMinutes": 30,
+          "modelEnv": { "QVAC_CLASSIFICATION_TRACE": "1" },
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64" },
+            { "os": "mac-mini-m4", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
+          ]
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/classification-ggml"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/classification-ggml",
+        "ci": {
+          "mode": "standard",
+          "vulkan": { "os": "ubuntu-24.04", "shell": "bash", "path": "/opt/vulkansdk/x86_64" },
+          "platforms": [
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "macos-15", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
+          ]
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/classification-ggml",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "none",
+          "repoName": "classification-ggml",
+          "testGateMode": "none"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}
