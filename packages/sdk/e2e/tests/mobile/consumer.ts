@@ -696,7 +696,7 @@ export const executor = createExecutor({
     new MobileDownloadResilienceExecutor(resolveBakedMqttHost()),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
-    new SystemResourcesExecutor(),
+    new SystemResourcesExecutor(Platform.OS),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),
     new PluginExecutor(resources)

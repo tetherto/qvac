@@ -99,6 +99,11 @@ function resolveCollision(
   while (usedNames.has(finalName)) {
     finalName = `${exportName}_${counter++}`
   }
+  if (counter > 1) {
+    console.warn(
+      `⚠️  Name collision: ${exportName} → ${finalName} (positional counter; the source entries need distinguishing tags)`
+    )
+  }
 
   usedNames.add(finalName)
   return finalName
@@ -377,8 +382,16 @@ function generateDiffusionName({
   tags
 }: BaseNameInput): string {
   if (tags.includes('vae')) {
-    const name = modelName || 'SD'
-    return `${cleanPart(name)}_VAE`
+    const name = cleanPart(modelName || 'SD')
+    // Related VAEs can share a model name (LTX ships audio + video VAEs), so
+    // splice in a type tag. Tag order is a convention, not a contract, so take
+    // the first non-'vae' tag that isn't included in the family name.
+    for (const tag of tags) {
+      const type = cleanPart(tag)
+      if (!type || type === 'VAE' || `_${name}_`.includes(`_${type}_`)) continue
+      return `${name}_${type}_VAE`
+    }
+    return `${name}_VAE`
   }
 
   let family = filename

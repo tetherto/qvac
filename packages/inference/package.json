@@ -163,6 +163,7 @@
   "dependencies": {
     "@qvac/error": "^0.1.1",
     "@qvac/logging": "^0.1.1",
+    "@qvac/model-fit": "^0.8.0",
     "@qvac/rag": "^0.8.0",
     "@qvac/registry-client": "^0.6.1",
     "bare-abort-controller": "^1.1.2",
@@ -177,6 +178,7 @@
     "bare-os": "^3.9.3",
     "bare-path": "^3.1.1",
     "bare-rpc": "^1.3.8",
+    "bare-runtime": "^1.24.2",
     "bare-stream": "^2.13.3",
     "bare-url": "^2.4.5",
     "bare-zlib": "^1.4.0",
@@ -187,6 +189,7 @@
     "hyperswarm": "^4.17.0",
     "semver": "^7.8.5",
     "tar-stream": "^3.2.0",
+    "which-runtime": "^1.2.1",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
