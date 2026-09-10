@@ -1,4 +1,6 @@
 #include <iostream>
+#include <stdexcept>
+#include <string>
 
 #include <llama.h>
 
@@ -80,8 +82,8 @@ int main() {
   }
 
   {
-    // NONE and TENSOR cannot be honoured without a GPU; LAYER, ROW and an
-    // unpinned mode load on the host when handed no device.
+    // NONE and TENSOR cannot be honoured without a GPU; LAYER and an unpinned
+    // mode load on the host when handed no device.
     expect(
         model_fit::requiresSupportedGpu(splitRequest(0), false),
         "NONE must require a supported GPU");
@@ -98,11 +100,24 @@ int main() {
         !model_fit::requiresSupportedGpu(splitRequest(1), false),
         "LAYER must not require a GPU");
     expect(
-        !model_fit::requiresSupportedGpu(splitRequest(2), false),
-        "ROW must not require a GPU");
-    expect(
         !model_fit::requiresSupportedGpu(model_fit::FitRequest{}, false),
         "an unpinned split mode must not require a GPU");
+
+    // ROW is deprecated by fabric and no supported backend provides split
+    // buffers, so applying it is an argument error rather than a placement.
+    bool rejectedRow = false;
+    try {
+      model_fit::applyFitRequest(splitRequest(2), modelParams, contextParams);
+    } catch (const std::invalid_argument& error) {
+      rejectedRow =
+          std::string(error.what()) ==
+          "model-fit: splitMode 2 (ROW) is not accepted; use 1 (LAYER) or 3 "
+          "(TENSOR)";
+    }
+    expect(rejectedRow, "ROW must be rejected with the LAYER/TENSOR redirect");
+    expect(
+        modelParams.split_mode != LLAMA_SPLIT_MODE_ROW,
+        "a rejected ROW must not be written to the model params");
 
     model_fit::FitRequest sentinel = splitRequest(0);
     sentinel.nGpuLayers = 0;

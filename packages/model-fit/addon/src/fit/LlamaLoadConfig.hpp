@@ -36,7 +36,6 @@ struct BackendDevice {
   std::string name;
   std::string description;
   BackendDeviceType type = BackendDeviceType::Cpu;
-  bool supportsSplitBuffer = false;
   ggml_backend_dev_t handle = nullptr;
   std::string registryName;
   std::string deviceId;

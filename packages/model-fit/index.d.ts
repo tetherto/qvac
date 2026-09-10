@@ -65,16 +65,19 @@ export interface FitConfig {
      * measured against llama's defaults does not describe a load that uses
      * something else.
      *
-     * `enum llama_split_mode`: how the model splits across multiple GPUs.
+     * `enum llama_split_mode`: how the model splits across multiple GPUs. 0
+     * (NONE), 1 (LAYER) and 3 (TENSOR) are accepted; 2 (ROW) throws — fabric
+     * deprecates it, no supported backend provides the split buffers it needs,
+     * and the llm/embed addons reject it too.
      */
     splitMode?: number;
     /**
      * Raw ggml registry index of the device a NONE placement goes on, or -1 for
      * the CPU sentinel (requires `nGpuLayers` 0 and `splitMode` 0). llama reads
-     * it only under split mode NONE; LAYER and ROW leave it inert. Validated when
-     * `splitMode` is NONE or omitted: an index at or past `nDevices` throws, and
-     * an in-range index that is not a supported GPU — the CPU entry, or a backend
-     * outside the allowlist — yields a CPU-only projection instead.
+     * it only under split mode NONE; LAYER and TENSOR leave it inert. Validated
+     * when `splitMode` is NONE or omitted: an index at or past `nDevices` throws,
+     * and an in-range index that is not a supported GPU — the CPU entry, or a
+     * backend outside the allowlist — yields a CPU-only projection instead.
      */
     mainGpu?: number;
     /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
@@ -139,8 +142,8 @@ export interface FitPlan {
     splitMode: number;
     /**
      * 0 for a GPU plan — the ordinal of the one-device list under NONE, inert
-     * under LAYER and ROW — or -1 for any CPU-only plan: one whose device list is
-     * empty or that offloads no layer. Never an echo of the raw input index. A
+     * under LAYER and TENSOR — or -1 for any CPU-only plan: one whose device list
+     * is empty or that offloads no layer. Never an echo of the raw input index. A
      * CPU-only plan also reports `nGpuLayers` 0 and `splitMode` NONE unless the
      * caller pinned those fields.
      */

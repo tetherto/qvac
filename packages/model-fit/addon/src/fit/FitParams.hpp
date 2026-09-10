@@ -68,12 +68,14 @@ struct FitRequest {
   // field's range is legitimate — including 0, which is a valid split mode,
   // device index and ggml type.
 
-  /// `enum llama_split_mode`: how the model splits across multiple GPUs.
+  /// `enum llama_split_mode`: how the model splits across multiple GPUs. NONE,
+  /// LAYER and TENSOR are accepted; ROW throws — fabric deprecates it and no
+  /// supported backend provides the split buffers it needs.
   int32_t splitMode = 0;
   bool hasSplitMode = false;
 
   /// Raw ggml registry index of the device a NONE placement goes on. llama
-  /// reads it only under `LLAMA_SPLIT_MODE_NONE`; LAYER and ROW leave it
+  /// reads it only under `LLAMA_SPLIT_MODE_NONE`; LAYER and TENSOR leave it
   /// inert. Validated when `splitMode` is NONE or unpinned: out of range
   /// throws, in range but outside the supported GPU list projects CPU-only.
   /// -1 is the CPU sentinel and requires `nGpuLayers` 0 and `splitMode` NONE.
@@ -113,8 +115,8 @@ bool isExplicitCpuPlacement(const FitRequest& request);
 /// the whole model on one GPU and TENSOR refuses an empty device list outright
 /// (`llama_prepare_model_devices`), so both are argument errors on a host that
 /// registers none — unless the request is the CPU sentinel, or its raw
-/// `mainGpu` target was rejected to CPU. LAYER and ROW load on the host when
-/// handed no device, and an unpinned mode stays at llama's LAYER default:
+/// `mainGpu` target was rejected to CPU. LAYER loads on the host when handed
+/// no device, and an unpinned mode stays at llama's LAYER default:
 /// `common_fit_params` never rewrites `split_mode`.
 bool requiresSupportedGpu(const FitRequest& request, bool mainGpuRejectedToCpu);
 
@@ -172,7 +174,7 @@ struct FitResult {
   /// `enum llama_split_mode` — how the model is split across multiple GPUs.
   int32_t splitMode = 0;
   /// 0 for a GPU plan (the ordinal of the one-device list under NONE; inert
-  /// under LAYER and ROW), -1 for any CPU-only plan. Set by
+  /// under LAYER and TENSOR), -1 for any CPU-only plan. Set by
   /// `normalizePlanPlacement`, so a SUCCESS never echoes a raw input index.
   int32_t mainGpu = -1;
   /// `enum ggml_type` for the K cache. Changes KV memory, so it changes the
@@ -226,6 +228,7 @@ void normalizePlanPlacement(
 ///  - a `mainGpu` at or past `nDevices` when `splitMode` is NONE or unpinned
 ///    (in range but outside the supported GPU list is not an error: the
 ///    projection is CPU-only instead);
+///  - a pinned `splitMode` of ROW — see `applyFitRequest`;
 ///  - a pinned `splitMode` of NONE or TENSOR on a host with no supported GPU,
 ///    unless the request is the CPU sentinel or its raw `mainGpu` target is
 ///    rejected to CPU — see `requiresSupportedGpu`;

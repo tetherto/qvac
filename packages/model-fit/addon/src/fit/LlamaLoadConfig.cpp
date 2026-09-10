@@ -330,14 +330,18 @@ std::optional<std::string> remapTensorSplit(
   return remapped;
 }
 
-// Row split needs split buffers on every participating device: fabric throws
-// on the first one without them. Empty is not "all support it" — with no device
-// to split across there is nothing row mode can be honoured on.
-bool allSupportSplitBuffer(const std::vector<SplitDeviceRef>& devices) {
-  return !devices.empty() &&
-         std::ranges::all_of(devices, [](const SplitDeviceRef& device) {
-           return device.device->supportsSplitBuffer;
-         });
+// `row` is rejected rather than parsed: fabric deprecates it, no eligible
+// backend provides the split buffers it needs, and the llm/embed addons refuse
+// the load instead of degrading it to `layer`.
+std::optional<std::string> unsupportedSplitMode(const std::string& value) {
+  if (value == "row") {
+    return "split-mode row is not accepted: no supported backend provides "
+           "split buffers; use layer";
+  }
+  if (value != "none" && value != "layer") {
+    return "split-mode must be none or layer";
+  }
+  return std::nullopt;
 }
 
 int adrenoVersion(const BackendDevice& device) {
@@ -451,9 +455,9 @@ preBackendUnsupportedDetail(const LlamaConfigMap& config) {
 
   const auto splitMode = config.find("split-mode");
   if (splitMode != config.end()) {
-    const std::string value = lower(splitMode->second);
-    if (value != "none" && value != "layer" && value != "row") {
-      return "split-mode must be none, layer, or row";
+    if (const auto detail = unsupportedSplitMode(lower(splitMode->second));
+        detail.has_value()) {
+      return detail;
     }
   }
 
@@ -582,10 +586,6 @@ std::vector<BackendDevice> discoverBackendDevices() {
         {.name = ggml_backend_dev_name(handle),
          .description = ggml_backend_dev_description(handle),
          .type = mapped,
-         .supportsSplitBuffer =
-             registry != nullptr &&
-             ggml_backend_reg_get_proc_address(
-                 registry, "ggml_backend_split_buffer_type") != nullptr,
          .handle = handle,
          .registryName =
              registry == nullptr ? "" : ggml_backend_reg_name(registry),
@@ -740,12 +740,11 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
   if (const auto splitIt = config.find("split-mode"); splitIt != config.end()) {
     pinsSplitMode = true;
     const std::string value = lower(splitIt->second);
+    if (const auto detail = unsupportedSplitMode(value); detail.has_value()) {
+      return unsupported(detail.value());
+    }
     if (value == "layer") {
       splitMode = LLAMA_SPLIT_MODE_LAYER;
-    } else if (value == "row") {
-      splitMode = LLAMA_SPLIT_MODE_ROW;
-    } else if (value != "none") {
-      return unsupported("split-mode must be none, layer, or row");
     }
     config.erase(splitIt);
   }
@@ -803,10 +802,6 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     // what keeps the weights off the GPU.
     splitMode = LLAMA_SPLIT_MODE_NONE;
     config.erase("tensor-split");
-  } else if (
-      splitMode == LLAMA_SPLIT_MODE_ROW &&
-      !allSupportSplitBuffer(splitSelection.devices)) {
-    splitMode = LLAMA_SPLIT_MODE_LAYER;
   }
 
   if (useGpu && splitMode != LLAMA_SPLIT_MODE_NONE) {

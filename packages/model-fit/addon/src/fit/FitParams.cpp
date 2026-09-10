@@ -249,8 +249,8 @@ FitResult runFit(const FitRequest& req) {
           discoveredDevices, LlamaLoadKind::Completion);
   const size_t eligibleGpuDevices = eligibleDevices.size() - 1;
 
-  // llama reads main_gpu only under LLAMA_SPLIT_MODE_NONE. LAYER and ROW leave
-  // it inert, so it is not validated there. An unpinned split mode is
+  // llama reads main_gpu only under LLAMA_SPLIT_MODE_NONE. LAYER and TENSOR
+  // leave it inert, so it is not validated there. An unpinned split mode is
   // validated: it goes in at llama's default, which is precisely the condition
   // under which the fitter is free to rewrite it. If it lands on NONE, the raw
   // registry target is converted to a one-device supported list below, so the

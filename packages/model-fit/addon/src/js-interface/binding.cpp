@@ -32,6 +32,7 @@ constexpr double UINT32_LIMIT = 4294967295.0;
 constexpr double INT32_LIMIT = 2147483647.0;
 constexpr double INT32_MIN_LIMIT = -2147483648.0;
 constexpr int32_t SPLIT_MODE_NONE = 0;
+constexpr int32_t SPLIT_MODE_ROW = 2;
 
 void requireAllowedProperties(
     js_env_t* env, jsu::Object object,
@@ -246,6 +247,15 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "splitMode")) {
     req.splitMode = static_cast<int32_t>(
         requireBoundedSignedInteger(v->as<double>(env), 0.0, 3.0, "splitMode"));
+    // In the enum domain but not accepted: fabric deprecates ROW and no
+    // supported backend provides the split buffers it needs. Rejected here so
+    // it never pays for backend registration.
+    if (req.splitMode == SPLIT_MODE_ROW) {
+      throw StatusError(
+          InvalidArgument,
+          "model-fit: 'splitMode' 2 (ROW) is not accepted; use 1 (LAYER) or 3 "
+          "(TENSOR)");
+    }
     req.hasSplitMode = true;
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "mainGpu")) {

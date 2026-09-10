@@ -26,11 +26,7 @@ void expect(bool condition, const char* message) {
 }
 
 BackendDevice cpu() {
-  return {
-      .name = "CPU",
-      .description = "host",
-      .type = BackendDeviceType::Cpu,
-      .supportsSplitBuffer = false};
+  return {.name = "CPU", .description = "host", .type = BackendDeviceType::Cpu};
 }
 
 BackendDevice metal() {
@@ -38,7 +34,6 @@ BackendDevice metal() {
       .name = "Metal0",
       .description = "Apple GPU",
       .type = BackendDeviceType::Gpu,
-      .supportsSplitBuffer = false,
       .handle = reinterpret_cast<ggml_backend_dev_t>(1)};
 }
 
@@ -47,7 +42,6 @@ BackendDevice adreno() {
       .name = "Vulkan0",
       .description = "Adreno 830",
       .type = BackendDeviceType::Gpu,
-      .supportsSplitBuffer = false,
       .handle = reinterpret_cast<ggml_backend_dev_t>(2)};
 }
 
@@ -58,7 +52,6 @@ BackendDevice device(
       .name = name,
       .description = description,
       .type = type,
-      .supportsSplitBuffer = false,
       .handle = reinterpret_cast<ggml_backend_dev_t>(handle),
       .registryName = registryName};
 }
@@ -258,7 +251,7 @@ int main() {
         LlamaConfigMap{
             {"device", "gpu"},
             {"ctx_size", "4096"},
-            {"split-mode", "row"},
+            {"split-mode", "layer"},
             {"tensor-split", "0.25,0.75"}},
         ModelTraits{},
         {metal(), cpu()});
@@ -266,7 +259,7 @@ int main() {
     expect(normalized.supported, "ordinary GPU config must be supported");
     expect(
         normalized.params.split_mode == LLAMA_SPLIT_MODE_LAYER,
-        "row split must fall back to layer without split buffers");
+        "layer split must be kept as written");
     expect(
         normalized.params.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_ENABLED,
         "ordinary GPU config must default flash attention on");
@@ -600,31 +593,27 @@ int main() {
     expect(
         isCpuPlacement(acceleratorFirst.params),
         "main-gpu zero must preserve the raw accelerator registry identity");
+  }
 
-    BackendDevice splitCapable =
+  {
+    const BackendDevice vulkan =
         device("Vulkan0", "local GPU", BackendDeviceType::Gpu, 34, "Vulkan");
-    splitCapable.supportsSplitBuffer = true;
-    const BackendDevice rpcWithoutSplit =
-        device("RPC0", "remote GPU", BackendDeviceType::Gpu, 35, "RPC");
-    const auto rpcRow = model_fit::normalizeLlamaLoadConfig(
+    const auto row = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{{"device", "gpu"}, {"split-mode", "row"}},
         ModelTraits{},
-        {splitCapable, rpcWithoutSplit, cpu()});
+        {vulkan, cpu()});
     expect(
-        rpcRow.params.split_mode == LLAMA_SPLIT_MODE_LAYER,
-        "eligible RPC GPU without split buffers must force row fallback");
-
-    const BackendDevice openClWithoutSplit =
-        device("OpenCL0", "Mali GPU", BackendDeviceType::Gpu, 36, "OpenCL");
-    const auto openClRow = model_fit::normalizeLlamaLoadConfig(
-        "/model.gguf",
-        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "row"}},
-        ModelTraits{},
-        {splitCapable, openClWithoutSplit, cpu()});
+        !row.supported &&
+            row.unsupportedDetail ==
+                "split-mode row is not accepted: no supported backend "
+                "provides split buffers; use layer",
+        "split-mode row must be rejected and redirected to layer");
     expect(
-        openClRow.params.split_mode == LLAMA_SPLIT_MODE_ROW,
-        "unsupported OpenCL GPU must not participate in row-split checks");
+        model_fit::preBackendUnsupportedLlamaLoad(
+            LlamaConfigMap{{"device", "gpu"}, {"split-mode", "row"}},
+            model_fit::LlamaFitPlatform::Desktop) == row.unsupportedDetail,
+        "split-mode row must be rejected before backend discovery");
   }
 
   {
@@ -744,21 +733,6 @@ int main() {
     expect(
         isCpuPlacement(cpuFirstMainGpu.params),
         "main-gpu targeting a raw CPU registry entry must fall back to CPU");
-
-    const BackendDevice splitVulkan =
-        device("Vulkan0", "NVIDIA GPU", BackendDeviceType::Gpu, 47, "Vulkan");
-    BackendDevice splitCapableVulkan = splitVulkan;
-    splitCapableVulkan.supportsSplitBuffer = true;
-    const auto rowMixed = model_fit::normalizeLlamaLoadConfig(
-        "/model.gguf",
-        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "row"}},
-        ModelTraits{},
-        {rocm, splitCapableVulkan, cpu()});
-    expect(
-        rowMixed.params.split_mode == LLAMA_SPLIT_MODE_ROW &&
-            rowMixed.params.devices.size() == 2 &&
-            rowMixed.params.devices.front() == splitCapableVulkan.handle,
-        "row split must receive only its eligible null-terminated list");
 
     const auto handles = model_fit::eligibleBackendDeviceHandles(
         {rocm, vulkan, cpu()}, model_fit::LlamaLoadKind::Completion);

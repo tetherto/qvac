@@ -83,6 +83,12 @@ test('intended-load fields are bounded to their enum domains', async function (t
   // wrong bound: an out-of-range value would reach llama as a garbage enum.
   await t.exception.all(() => fitParams({ ...base, splitMode: 4 }), /splitMode must be between/)
   await t.exception.all(() => fitParams({ ...base, splitMode: -1 }), /splitMode must be between/)
+  // In the enum domain but not accepted: fabric deprecates ROW and no supported
+  // backend provides the split buffers it needs.
+  await t.exception.all(
+    () => fitParams({ ...base, splitMode: 2 }),
+    /splitMode 2 \(ROW\) is not accepted; use 1 \(LAYER\) or 3 \(TENSOR\)/
+  )
   await t.exception.all(
     () => fitParams({ ...base, flashAttnType: 2 }),
     /flashAttnType must be between/
@@ -118,6 +124,10 @@ test('intended-load fields are bounded to their enum domains', async function (t
   await t.exception.all(
     () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, splitMode: 4 }),
     /out of range/
+  )
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, splitMode: 2 }),
+    /'splitMode' 2 \(ROW\) is not accepted; use 1 \(LAYER\) or 3 \(TENSOR\)/
   )
   t.is(
     binding.paramsFit({
@@ -641,7 +651,7 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
 // The fitter ignores main_gpu entirely, so a bad placement used to surface only
 // as llama failing the internal load — a bare ERROR indistinguishable from a
 // genuine "does not fit". Validation applies to SPLIT_MODE_NONE and to an
-// unpinned split mode; LAYER and ROW are exempt. mainGpu is a raw registry
+// unpinned split mode; LAYER and TENSOR are exempt. mainGpu is a raw registry
 // index: past the registry it throws, in range but not a supported GPU it is
 // projected on the CPU.
 test('mainGpu is validated only when llama uses it', async function (t) {
@@ -664,9 +674,9 @@ test('mainGpu is validated only when llama uses it', async function (t) {
 
   // Outside NONE the field is inert, so the same index is accepted and the
   // real model projects a plan: the guard stays scoped rather than becoming a
-  // blanket bound. Only LAYER is asserted here. ROW is also inert for mainGpu,
-  // but on a GPU host fabric rejects the load itself ("does not support split
-  // buffers" for every shipped backend), so its status is not a mainGpu signal.
+  // blanket bound. Only LAYER is asserted here. TENSOR is also inert for
+  // mainGpu, but it throws on a host with no supported GPU (asserted below), so
+  // its status is not a mainGpu signal on every host class.
   const layerRes = fitParams({ modelPath, splitMode: 1, mainGpu: outOfRange })
   t.not(
     layerRes.status,

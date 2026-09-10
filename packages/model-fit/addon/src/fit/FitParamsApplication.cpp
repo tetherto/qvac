@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include <common/fit.h>
 #include <llama.h>
 
@@ -8,6 +10,15 @@ namespace model_fit {
 void applyFitRequest(
     const FitRequest& request, llama_model_params& modelParams,
     llama_context_params& contextParams) {
+  // ROW is rejected before it can reach the fitter: fabric deprecates it, no
+  // supported backend provides the split buffers it needs, and the llm/embed
+  // addons refuse it too. binding.cpp reports it first; this guards direct
+  // callers of `runFit`.
+  if (request.hasSplitMode && request.splitMode == LLAMA_SPLIT_MODE_ROW) {
+    throw std::invalid_argument(
+        "model-fit: splitMode 2 (ROW) is not accepted; use 1 (LAYER) or 3 "
+        "(TENSOR)");
+  }
   if (request.hasNGpuLayers) {
     modelParams.n_gpu_layers = request.nGpuLayers;
   }
