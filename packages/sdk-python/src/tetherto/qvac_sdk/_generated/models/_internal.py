@@ -117,7 +117,7 @@ class AssessModelFitRequest(GeneratedBaseModel):
     policy: Annotated[
         Literal["interactive-v1"],
         Field(
-            description="Headroom policy. `interactive-v1` leaves the larger of 2 GiB or 15% of total RAM on desktop, 1 GiB or 20% on mobile."
+            description="Headroom policy. `interactive-v1` withholds 20% of the memory available right now, capped at 2 GiB on desktop and 1 GiB on mobile."
         ),
     ] = "interactive-v1"
     type: Literal["assessModelFit"] = "assessModelFit"
@@ -132,6 +132,8 @@ class AssessModelFitResponseVerdict(Enum):
 class AssessModelFitResponseBasis(Enum):
     system_memory = "system-memory"
     process_memory = "process-memory"
+    device_memory = "device-memory"
+    device_budget = "device-budget"
 
 
 class AssessModelFitResponseExecution(Enum):
@@ -157,6 +159,13 @@ class AssessModelFitResponseBudget(GeneratedBaseModel):
             description="Memory in use at sample time under the same basis (system-wide, or this process).",
         ),
     ]
+    available_bytes: Annotated[
+        float,
+        Field(
+            alias="availableBytes",
+            description="Headroom before the policy applies: total − used, or the process allowance under process-memory. The reserve is a share of this.",
+        ),
+    ]
     reserved_bytes: Annotated[
         float,
         Field(alias="reservedBytes", description="Headroom withheld by the policy."),
@@ -165,7 +174,7 @@ class AssessModelFitResponseBudget(GeneratedBaseModel):
         float,
         Field(
             alias="availableAfterReserveBytes",
-            description="Budget the estimate is compared against: total − used − reserved.",
+            description="Budget the estimate is compared against: available − reserved.",
         ),
     ]
 
@@ -232,7 +241,7 @@ class AssessModelFitResponse(GeneratedBaseModel):
     basis: Annotated[
         AssessModelFitResponseBasis,
         Field(
-            description="The evidence the budget was derived from — system RAM, or the per-process ceiling on iOS. GPU/VRAM metrics are deliberately excluded either way; they are `unverified`-scoped by design.",
+            description="The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.",
             title="AssessModelFitResponseBasis",
         ),
     ]
@@ -464,7 +473,14 @@ class AudioGenStreamResponseProgress(GeneratedBaseModel):
     )
     stage: str
     step: Annotated[int, Field(ge=0, le=9007199254740991)]
-    total: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[
+        int,
+        Field(
+            description="Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
 
 
 class AudioGenStreamResponseStopReason(Enum):
@@ -1052,6 +1068,9 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -1181,6 +1200,9 @@ class BatchCompletionStreamResponseStats(GeneratedBaseModel):
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -1922,6 +1944,9 @@ class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseM
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -2446,6 +2471,9 @@ class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel)
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -2657,6 +2685,11 @@ class Verbosity(Enum):
 class DeleteCacheAllRequest(GeneratedBaseModel):
     type: Literal["deleteCache"] = "deleteCache"
     all: Literal[True] = True
+
+
+class DeleteCacheAutoRequest(GeneratedBaseModel):
+    type: Literal["deleteCache"] = "deleteCache"
+    auto: Literal[True] = True
 
 
 class DeleteCacheKvEntryRequest(GeneratedBaseModel):
@@ -18371,9 +18404,13 @@ class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
     ]
 
 
-class Request_2(RootModel[DeleteCacheAllRequest | DeleteCacheKvEntryRequest]):
+class Request_2(
+    RootModel[
+        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest
+    ]
+):
     root: Annotated[
-        DeleteCacheAllRequest | DeleteCacheKvEntryRequest,
+        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest,
         Field(title="DeleteCacheRequest"),
     ]
 

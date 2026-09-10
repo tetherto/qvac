@@ -29,7 +29,12 @@ function createFixture(options?: {
   cpuArchitectures?: readonly number[]
   gpuTypes?: readonly number[]
   gpuMemory?: number
+  gpuUnifiedMemory?: boolean
+  gpuSampleMemoryTotal?: number
   emptyGPUInventory?: boolean
+  platform?: string
+  processAvailableBytes?: number
+  failProcessMemorySample?: boolean
 }) {
   const calls = {
     createCPU: 0,
@@ -90,7 +95,7 @@ function createFixture(options?: {
           deviceId: 456,
           subsystemId: 789,
           revision: 3,
-          unifiedMemory: true,
+          unifiedMemory: options?.gpuUnifiedMemory ?? true,
           memory: options?.gpuMemory ?? 8_000
         }
       ]
@@ -103,7 +108,7 @@ function createFixture(options?: {
         encode: undefined,
         decode: undefined,
         memoryUsed: 0,
-        memoryTotal: 8_000,
+        memoryTotal: options?.gpuSampleMemoryTotal ?? 8_000,
         power: undefined,
         temperature: 42
       }
@@ -116,6 +121,7 @@ function createFixture(options?: {
   const dependencies = {
     cpuArchitectures: options?.cpuArchitectures ?? [1, 2, 3, 4],
     gpuTypes: options?.gpuTypes ?? [1, 2, 3, 4],
+    platform: options?.platform ?? 'linux',
     createCPUInfo() {
       calls.createCPU++
       if (options?.missingCPUCollector) return undefined
@@ -136,7 +142,8 @@ function createFixture(options?: {
       return `opaque-${calls.gpuIds}`
     },
     sampleProcessMemory() {
-      return { usedBytes: 2048, availableBytes: undefined }
+      if (options?.failProcessMemorySample) throw new Error('process memory sample failed')
+      return { usedBytes: 2048, availableBytes: options?.processAvailableBytes }
     }
   }
 
@@ -179,6 +186,33 @@ test('samples live values only when requested', (t) => {
   }
   t.is(calls.cpuSample, 1)
   t.is(calls.gpuSample, 1)
+})
+
+test('grades the per-process memory sample under the process scope', (t) => {
+  const withoutAllowance = createSystemResourceCollector(createFixture().dependencies).sample()
+  const withAllowance = createSystemResourceCollector(
+    createFixture({ processAvailableBytes: 512 }).dependencies
+  ).sample()
+  const failed = createSystemResourceCollector(
+    createFixture({ failProcessMemorySample: true }).dependencies
+  ).sample()
+
+  t.alike(withAllowance.memory.processUsedBytes, {
+    status: 'supported',
+    value: 2048,
+    provenance: { source: 'bare-os', scope: 'process' }
+  })
+  t.alike(withAllowance.memory.processAvailableBytes, {
+    status: 'supported',
+    value: 512,
+    provenance: { source: 'bare-os', scope: 'process' }
+  })
+
+  t.is(withoutAllowance.memory.processUsedBytes.status, 'supported')
+  t.is(withoutAllowance.memory.processAvailableBytes.status, 'unavailable')
+
+  t.is(failed.memory.processUsedBytes.status, 'failed')
+  t.is(failed.memory.processAvailableBytes.status, 'failed')
 })
 
 test('contains CPU and GPU initialization failures independently', (t) => {
@@ -265,12 +299,113 @@ test('distinguishes malformed GPU memory from ambiguous memory scope', (t) => {
   if (valid.gpus.status === 'supported' && malformed.gpus.status === 'supported') {
     t.alike(valid.gpus.value[0]?.memoryTotalBytes, {
       status: 'unverified',
-      reason: 'GPU memory scope is unverified'
+      reason: 'GPU shares system memory, so its reading is not a separate device pool'
     })
     t.alike(malformed.gpus.value[0]?.memoryTotalBytes, {
       status: 'unverified',
       reason: 'Metric value could not be verified'
     })
+  }
+})
+
+test('trusts the declared memory of a GPU that does not share system RAM', (t) => {
+  const capabilities = createSystemResourceCollector(
+    createFixture({ gpuUnifiedMemory: false }).dependencies
+  ).getCapabilities()
+
+  t.is(capabilities.gpus.status, 'supported')
+  if (capabilities.gpus.status === 'supported') {
+    t.alike(capabilities.gpus.value[0]?.memoryTotalBytes, {
+      status: 'supported',
+      value: 8_000,
+      provenance: { source: 'bare-gpu-info', scope: 'device' }
+    })
+  }
+})
+
+test('trusts sampled GPU memory when it agrees with the declared memory', (t) => {
+  const collector = createSystemResourceCollector(
+    createFixture({ gpuUnifiedMemory: false, gpuSampleMemoryTotal: 7_800 }).dependencies
+  )
+  const { gpus } = collector.sample()
+
+  t.is(gpus.status, 'supported')
+  if (gpus.status === 'supported') {
+    t.is(gpus.value[0]?.memoryTotalBytes.status, 'supported')
+    t.is(gpus.value[0]?.memoryUsedBytes.status, 'supported')
+  }
+})
+
+// An Intel iGPU declares 128 MiB and samples half of system RAM: the sample is
+// the shared pool, not the device's own.
+test('rejects sampled GPU memory that disagrees with the declared memory', (t) => {
+  const collector = createSystemResourceCollector(
+    createFixture({
+      gpuUnifiedMemory: false,
+      gpuMemory: 128,
+      gpuSampleMemoryTotal: 31_891
+    }).dependencies
+  )
+  const { gpus } = collector.sample()
+
+  t.is(gpus.status, 'supported')
+  if (gpus.status === 'supported') {
+    t.alike(gpus.value[0]?.memoryTotalBytes, {
+      status: 'unverified',
+      reason: 'GPU memory scope is unverified'
+    })
+    t.alike(gpus.value[0]?.memoryUsedBytes, {
+      status: 'unverified',
+      reason: 'GPU memory usage scope is unverified'
+    })
+  }
+})
+
+// DXGI reports what this process uses and may use, so the readings are real
+// but describe a budget rather than the device. Reported under that scope
+// instead of discarded — the agreement check cannot separate them, because on
+// an idle machine Budget looks exactly like VRAM.
+test('scopes sampled GPU memory as a budget on windows', (t) => {
+  const collector = createSystemResourceCollector(
+    createFixture({
+      platform: 'win32',
+      gpuUnifiedMemory: false,
+      gpuSampleMemoryTotal: 8_000
+    }).dependencies
+  )
+  const { gpus } = collector.sample()
+
+  t.is(gpus.status, 'supported')
+  if (gpus.status === 'supported') {
+    t.alike(gpus.value[0]?.memoryTotalBytes, {
+      status: 'supported',
+      value: 8_000,
+      provenance: { source: 'bare-gpu-info', scope: 'budget' }
+    })
+    t.is(gpus.value[0]?.memoryUsedBytes.status, 'supported')
+  }
+})
+
+test('keeps windows unified-memory GPUs unverified', (t) => {
+  const collector = createSystemResourceCollector(
+    createFixture({ platform: 'win32', gpuUnifiedMemory: true }).dependencies
+  )
+  const { gpus } = collector.sample()
+
+  t.is(gpus.status, 'supported')
+  if (gpus.status === 'supported') {
+    t.is(gpus.value[0]?.memoryTotalBytes.status, 'unverified')
+  }
+})
+
+test('rejects sampled GPU memory on a unified-memory device', (t) => {
+  const collector = createSystemResourceCollector(createFixture().dependencies)
+  const { gpus } = collector.sample()
+
+  t.is(gpus.status, 'supported')
+  if (gpus.status === 'supported') {
+    t.is(gpus.value[0]?.memoryTotalBytes.status, 'unverified')
+    t.is(gpus.value[0]?.memoryUsedBytes.status, 'unverified')
   }
 })
 

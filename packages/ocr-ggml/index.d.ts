@@ -58,7 +58,11 @@ export interface OcrGgmlParams {
      *   - `< 0`: leave GGML's CPU backend default unchanged
      */
     nThreads?: number;
-    /** Directory holding ggml backend shared libraries. Default: `<package>/prebuilds`. */
+    /**
+     * Directory holding ggml backend shared libraries. Default: `@qvac/fabric`'s
+     * `prebuilds/` (desktop), falling back to this package's `prebuilds/` on
+     * mobile where the package tree isn't resolvable from the packed worklet.
+     */
     backendsDir?: string;
     /**
      * Requested ggml backend device. Default: `'cpu'`.

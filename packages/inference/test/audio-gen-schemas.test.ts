@@ -4,6 +4,7 @@ import {
   AUDIOGEN_ENGINES,
   audioGenClientParamsSchema,
   audioGenConfigSchema,
+  audioGenProgressSchema,
   audioGenRuntimeConfigSchema,
   audioGenStreamRequestSchema,
   audioGenStreamResponseSchema
@@ -150,6 +151,14 @@ test('audioGen client params validate generation controls', (t) => {
     }).success,
     false
   )
+})
+
+test('audioGen progress accepts indeterminate integer totals', (t) => {
+  t.ok(audioGenProgressSchema.safeParse({ stage: 'lm', step: 1, total: -1 }).success)
+  t.ok(audioGenProgressSchema.safeParse({ stage: 'lm', step: 0, total: 0 }).success)
+  t.is(audioGenProgressSchema.safeParse({ stage: 'lm', step: -1, total: -1 }).success, false)
+  t.is(audioGenProgressSchema.safeParse({ stage: 'lm', step: 0.5, total: -1 }).success, false)
+  t.is(audioGenProgressSchema.safeParse({ stage: 'lm', step: 1, total: -1.5 }).success, false)
 })
 
 test('audioGen client params validate MiniMax frame and flow controls', (t) => {

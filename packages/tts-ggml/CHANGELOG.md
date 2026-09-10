@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in CUDA builds (`ENABLE_CUDA=ON`) now work on win32-x64 and linux-arm64
+  in addition to linux-x64. The CUDA backend ships as a runtime-loaded module
+  (`.dll` on Windows, `.so` on Linux) next to the addon, so a CUDA-enabled
+  build still loads on hosts without an NVIDIA stack and falls back to Vulkan
+  or CPU. linux-arm64 targets Jetson Orin (8.7), Grace-Hopper (9.0) and
+  GB10 / DGX Spark (12.1) natively, with 8.0 PTX for discrete Ampere+ cards.
+  Published prebuilds are unchanged (Vulkan on Linux/Windows).
+
 ### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-04#1 and floor `ggml-speech` at
+  2026-09-04#2: fixes a Windows CUDA crash on engine unload and a stale
+  backend-capability cache that could abort GPU synthesis after backend
+  reloads, and brings in the fused speech ops and CUDA-graphs decode path.
 
 - **Per-platform prebuild packages.** `@qvac/tts-ggml` is now a meta package
   that ships the JavaScript wrapper only; native prebuilds install through

@@ -28,9 +28,13 @@ const gpuTypes =
       )
     : []
 
+// `availableMemory()` reports the constrained memory on iOS.
+const reportsProcessAllowance = os.platform() === 'ios'
+
 export const nativeResourceCollectorDependencies: ResourceCollectorDependencies = {
   cpuArchitectures,
   gpuTypes,
+  platform: os.platform(),
   createCPUInfo() {
     if (cpuModule.status !== 'fulfilled') return undefined
     return new cpuModule.value.default()
@@ -49,12 +53,11 @@ export const nativeResourceCollectorDependencies: ResourceCollectorDependencies 
     // A throw here is a sampling failure, not a platform gap: let it reach the
     // collector so the metric reports `failed` rather than `unavailable`.
     const usage = os.memoryUsage()
-    // No platform exposes the per-process allowance yet. On iOS this is
-    // `os_proc_available_memory()` — the limit jetsam actually enforces — and
-    // it needs a native source before the metric can report a value.
+    const available = reportsProcessAllowance ? os.availableMemory() : 0
     return {
       usedBytes: usage && usage.rss > 0 ? usage.rss : undefined,
-      availableBytes: undefined
+      // Zero states no headroom, which is not a budget.
+      availableBytes: available > 0 ? available : undefined
     }
   }
 }

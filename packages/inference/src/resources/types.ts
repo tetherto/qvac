@@ -78,9 +78,7 @@ export interface GPUInfoContext {
  *
  * @property usedBytes - The process's resident footprint (RSS).
  * @property availableBytes - How much more this process may allocate before
- *   the OS intervenes. Only some platforms can state this — on iOS it is
- *   `os_proc_available_memory()`, the number jetsam actually enforces.
- *   `undefined` where no such per-process limit is exposed.
+ *   the OS intervenes. `undefined` where the platform states no such limit.
  */
 export interface ProcessMemorySample {
   usedBytes: number | undefined
@@ -90,6 +88,8 @@ export interface ProcessMemorySample {
 export interface ResourceCollectorDependencies {
   cpuArchitectures: readonly number[]
   gpuTypes: readonly number[]
+  /** Runtime platform, used to grade what a GPU memory reading can mean. */
+  platform: string
   createCPUInfo(): CPUInfoContext | undefined
   createGPUInfo(): GPUInfoContext | undefined
   createGPUId(): string
