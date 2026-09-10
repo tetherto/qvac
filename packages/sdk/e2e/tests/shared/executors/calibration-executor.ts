@@ -3,14 +3,8 @@ import { calibrate, type CalibrationRunSummary } from 'custom-calibration-plugin
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { calibrationTests, calibrationModelFit } from '../../calibration-tests.js'
 
-/**
- * Drives `custom-calibration-plugin` (`fixtures/calibration-plugin/`), which
- * runs the @qvac/inference model-fit harness inside the worker. Progress is
- * relayed to the console as it streams; the run itself becomes the test
- * output, so the producer's results JSON carries the fixture off the device.
- * The fixture is also echoed between markers for anyone reading the device
- * log directly.
- */
+// The run becomes the test output, so the producer's results JSON carries the
+// fixture off the device; it is also echoed between markers for the device log.
 export class CalibrationExecutor extends AbstractModelExecutor<typeof calibrationTests> {
   pattern = /^calibration-/
 
@@ -49,8 +43,7 @@ export class CalibrationExecutor extends AbstractModelExecutor<typeof calibratio
         console.log(`[calibration] warning: ${warning}`)
       }
 
-      // A failed held-out check still returns the run: coefficients that did
-      // not validate are worth auditing even though they must not ship.
+      // A failed held-out check still returns the run so it can be audited.
       return { passed: run.calibration.validated, output: JSON.stringify(run) }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)

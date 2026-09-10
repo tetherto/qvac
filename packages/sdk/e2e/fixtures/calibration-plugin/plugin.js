@@ -2,10 +2,8 @@ import { z } from 'zod'
 import { definePlugin, defineHandler } from '@qvac/sdk'
 import { CalibrationAbortedError, runModelFitCalibration } from '@qvac/sdk/model-fit-calibration'
 
-// Runs the model-fit calibration harness where the engine lives — inside the
-// worker — and streams its progress out so the consumer can log it while the
-// run is in flight. The final chunk carries the whole run: the e2e test
-// returns it as its output, which is how the fixture leaves a phone.
+// Runs the calibration harness inside the worker and streams progress out; the
+// final chunk carries the whole run, which is how the fixture leaves a phone.
 
 const requestSchema = z.object({}).passthrough()
 
@@ -15,8 +13,7 @@ const chunkSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('result'), run: z.object({}).passthrough() })
 ])
 
-// Measurements carry the GGUF facts of every load; the fixture does not need
-// them and the test output should stay readable.
+// Drops the GGUF facts from each measurement to keep the test output readable.
 function summarize(run) {
   return {
     platform: run.platform,
@@ -67,8 +64,7 @@ const calibrationPlugin = definePlugin({
       responseSchema: chunkSchema,
       streaming: true,
       async *handler() {
-        // The harness reports through a callback; bridge it into this
-        // generator so every line is yielded as soon as it is logged.
+        // Bridge the harness's log callback into this generator.
         const queue = []
         let wake = null
         let settled = false

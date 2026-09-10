@@ -373,10 +373,7 @@ export const tests = [
 
   // Local hardware capabilities and on-demand usage sampling
   ...systemResourcesTests,
-  // Model-fit calibration harness. Always defined — this list is what the
-  // consumer resolves incoming testIds against, so a definition missing there
-  // fails the test on the device. Ordinary runs drop it producer-side with
-  // `--exclude-suite calibration` (see the `calibration` suite it declares).
+  // Always defined; ordinary runs drop it producer-side with `--exclude-suite calibration`.
   ...calibrationTests,
 
   // Additional model tests

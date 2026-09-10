@@ -1,25 +1,13 @@
-// Calibration harness for assessModelFit — desktop entry point.
+// Desktop entry point for the calibration harness in
+// `src/resources/model-fit/calibration/harness.ts`. Run from the package root
+// after `npm run build`:
 //
-// The procedure lives in `src/resources/model-fit/calibration/harness.ts`
-// (exported as `@qvac/inference/model-fit-calibration`); this script registers
-// the LLM plugin, runs it on the current host, and writes the fixture. On a
-// phone the same procedure runs inside the SDK e2e consumer's calibration
-// plugin instead — see METHODOLOGY.md, "Mobile".
-//
-// Run from the package root, on the platform being calibrated, with bare ≥ 1.30
-// (which runs TypeScript directly via type-stripping — the version the
-// `engines` field already requires):
-//
-//   npm run build
 //   bare scripts/calibrate-model-fit.ts            # measure and print
 //   bare scripts/calibrate-model-fit.ts --write    # also rewrite the fixture
 //   bare scripts/calibrate-model-fit.ts --gpu      # model resident on a discrete GPU
 //   bare scripts/calibrate-model-fit.ts --igpu     # model on an integrated GPU
 //
-// Models are downloaded on first run and cached, so the first pass is slow and
-// needs registry access. See calibration/METHODOLOGY.md for what the numbers
-// mean and how the held-out check works, and "Windows" there for why that
-// platform loads weights with `load_mode: 'none'`.
+// First run downloads the models and needs registry access. See METHODOLOGY.md.
 
 import os from 'bare-os'
 import fs from 'bare-fs'
@@ -36,10 +24,7 @@ declare const Bare: { argv: string[]; exit(code?: number): never }
 
 async function main() {
   const write = Bare.argv.includes('--write')
-  // `--gpu` calibrates the same models resident on a discrete GPU: no device
-  // override, the SDK's own load mode, and device memory as the counter.
-  // `--igpu` pins the integrated GPU instead and keeps RSS as the counter,
-  // because an integrated device allocates out of system RAM.
+  // `--gpu` reads device memory; `--igpu` pins the integrated GPU and keeps RSS.
   const pass: CalibrationPass = Bare.argv.includes('--gpu')
     ? 'gpu'
     : Bare.argv.includes('--igpu') || Bare.argv.includes('--shared')
@@ -75,10 +60,8 @@ async function main() {
     console.log('re-run with --write to update the fixture in place')
   }
 
-  // Exit explicitly either way. The registry client keeps handles open, so a
-  // returning main() leaves the process alive until the job times out — and the
-  // fixture, already written, never reaches the upload step. Non-zero on a
-  // failed gate so the CI job cannot rot green.
+  // The registry client keeps handles open, so exit explicitly. Non-zero on a
+  // failed gate so the CI job cannot go green.
   Bare.exit(run.heldOut.holds ? 0 : 1)
 }
 

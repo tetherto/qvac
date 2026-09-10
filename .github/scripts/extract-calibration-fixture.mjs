@@ -1,13 +1,8 @@
-// Pulls the model-fit calibration run out of a producer results report and
-// writes the fixture the way it should be committed:
+// node extract-calibration-fixture.mjs <reports-dir> <out-dir>
 //
-//   node extract-calibration-fixture.mjs <reports-dir> <out-dir>
-//
-// The e2e test `calibration-model-fit` returns the whole run as its output, so
-// the results JSON is the channel off the device — no logcat parsing. Exits
-// non-zero when there is no run to extract or the held-out check failed, so
-// the job cannot go green on a fixture that must not ship; the fixture is still
-// written in the second case because a failed gate is worth auditing.
+// Writes the fixture from the `calibration-model-fit` test output. Exits non-zero
+// when there is no run or the held-out check failed; the fixture is still written
+// in the second case so a failed gate can be audited.
 
 import fs from "node:fs";
 import path from "node:path";
