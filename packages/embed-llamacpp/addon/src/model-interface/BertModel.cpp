@@ -464,13 +464,21 @@ parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
   if (val == "layer") {
     splitMode = LLAMA_SPLIT_MODE_LAYER;
   } else if (val == "row") {
-    splitMode = LLAMA_SPLIT_MODE_ROW;
+    // Row split needs split buffers from every device in the split set and
+    // no backend this addon admits provides them, so it never took effect;
+    // fabric marks the mode deprecated. Reject it instead of silently
+    // loading as 'layer'.
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: split-mode 'row' is not supported, must be 'none' or "
+            "'layer'; use 'layer'.\n",
+            __func__));
   } else if (val != "none") {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         string_format(
-            "%s: invalid split-mode '%s', must be 'none', 'layer', or "
-            "'row'.\n",
+            "%s: invalid split-mode '%s', must be 'none' or 'layer'.\n",
             __func__,
             splitModeIt->second.c_str()));
   }
@@ -559,21 +567,6 @@ BertModelSetup setupParams(
 
     if (useGpu) {
       result.resolvedBackendDevice = 1;
-
-      // Row-split needs a backend that provides split buffers, llama.cpp now
-      // rejects the load outright on backends without it. Degrade row -> layer
-      // to keep the model loadable.
-      if (splitMode == LLAMA_SPLIT_MODE_ROW &&
-          !gpuBackendSupportsRowSplit(splitSelection)) {
-        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
-            GGML_LOG_LEVEL_WARN,
-            "[BertModel] split-mode 'row' is not supported by this GPU "
-            "backend (no split-buffer support), falling back to split-mode "
-            "'layer'\n",
-            nullptr);
-        splitMode = LLAMA_SPLIT_MODE_LAYER;
-      }
-
       params.split_mode = splitMode;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {

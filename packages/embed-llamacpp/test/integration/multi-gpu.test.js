@@ -89,14 +89,6 @@ safeTest(
 )
 
 safeTest(
-  'multi-gpu: split-mode=row distributes tensors across GPUs',
-  { timeout: 600_000 },
-  async (t) => {
-    await runMultiGpuTest(t, { 'split-mode': 'row' }, assertMultiDevice('tensors'))
-  }
-)
-
-safeTest(
   'multi-gpu: default (no split-mode) pins layers to a single device',
   { timeout: 600_000 },
   async (t) => {

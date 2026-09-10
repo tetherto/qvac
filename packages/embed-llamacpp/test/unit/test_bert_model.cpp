@@ -962,7 +962,9 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeLayer) {
   }
 }
 
-TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
+// 'row' never took effect on any backend this addon admits, so it is rejected
+// outright rather than silently loaded as 'layer'.
+TEST_F(BertModelTest, CommonParamsParseSplitModeRowRejected) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -971,24 +973,16 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
   config["device"] = test_common::getTestDevice();
   config["split-mode"] = "row";
 
-  BertModel model(getValidModelPath(), config);
-  model.initializeBackend(test_backends_dir);
-  model.waitForLoadInitialization();
-  ASSERT_TRUE(model.isLoaded());
-
-  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
-  if (backendDevice == 0.0) {
-    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
-  } else {
-    // Row-split requires split buffers from every GPU device the model is
-    // distributed over, and as of qvac-fabric v10069 only the SYCL backend
-    // provides them (CUDA moved tensor parallelism to LLAMA_SPLIT_MODE_TENSOR).
-    // None of the backends this addon ships qualify, so a requested 'row' is
-    // always degraded to 'layer'. Asserted unconditionally on purpose: this is
-    // the pin on the degrade itself, so it fails if the degrade stops working.
-    // If a split-buffer-capable backend is ever shipped, that failure is the
-    // intended signal to revisit this expectation.
-    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
+  try {
+    BertModel model(getValidModelPath(), config);
+    model.initializeBackend(test_backends_dir);
+    model.waitForLoadInitialization();
+    FAIL() << "split-mode 'row' must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_EQ(
+        std::string(error.what()),
+        "parseSplitMode: split-mode 'row' is not supported, must be 'none' "
+        "or 'layer'; use 'layer'.\n");
   }
 }
 

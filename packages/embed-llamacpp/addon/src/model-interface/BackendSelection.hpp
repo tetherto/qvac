@@ -37,8 +37,6 @@ struct BackendInterface {
   const char* (*ggml_backend_dev_name)(ggml_backend_dev_t device);
   enum ggml_backend_dev_type (*ggml_backend_dev_type)(
       ggml_backend_dev_t device);
-  void* (*ggml_backend_reg_get_proc_address)(
-      ggml_backend_reg_t reg, const char* name);
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
@@ -49,7 +47,6 @@ struct SplitDevice {
   ggml_backend_dev_t handle;
   size_t sourceGpuIndex;
   bool isOpenCl;
-  bool supportsSplitBuffer;
   bool isRpc = false;
 };
 
@@ -73,7 +70,7 @@ std::pair<BackendType, std::string> chooseBackend(
 /// @brief Count devices in the final Fabric-compatible split set.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-/// @brief Select the Fabric-compatible split list for layer/row split modes.
+/// @brief Select the Fabric-compatible split list for layer split mode.
 /// Mirrors qvac-fabric's filtered device branch under this addon's allowlist:
 ///   - RPC devices are prepended and never suppress a local GPU.
 ///   - Local discrete GPUs when any are eligible, otherwise one integrated GPU.
@@ -90,20 +87,4 @@ SplitDeviceSelection getSplitDeviceSelection();
 
 /// @brief Eligible split devices, preferring discrete and deduplicating by id.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
-
-/// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
-/// True only when the final split set is non-empty AND every device in the
-/// final split set provides split buffers, because fabric requires split
-/// buffers from each device it distributes over and throws on the first one
-/// that lacks them. Callers should degrade row -> layer when this returns
-/// false. As of qvac-fabric v10069 only SYCL provides split buffers, so this is
-/// false in every shipped configuration.
-bool gpuBackendSupportsRowSplit(const SplitDeviceSelection& selection);
-
-/// @brief `gpuBackendSupportsRowSplit()` over `getSplitDeviceSelection(bckI)`.
-bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
-
-/// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
-/// registry.
-bool gpuBackendSupportsRowSplit();
 } // namespace backend_selection
