@@ -1,6 +1,6 @@
 import fs from 'bare-fs'
 import path from 'bare-path'
-import { FFmpegDecoder, type DecoderOutput } from '@qvac/decoder-audio'
+import type { DecoderOutput } from '@qvac/decoder-audio'
 import { FORMATS_NEEDING_DECODE } from '@/constants/audio'
 import { Readable } from 'bare-stream'
 import Buffer from 'bare-buffer'
@@ -8,6 +8,10 @@ import { getEngineLogger } from '@/logging/index'
 import { type AudioFormat } from '@/schemas/index'
 
 const logger = getEngineLogger()
+// Keep this as a literal dynamic import. It lets bare-pack either include the
+// decoder (the safe default) or resolve it as an explicitly deferred module
+// for a mobile app that has opted out of encoded-file support. Hiding the
+// specifier behind a variable makes the packaged worker unable to resolve it.
 
 export function needsDecoding(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase()
@@ -53,6 +57,7 @@ export async function decodeAudioToStream(
   options: DecodeAudioOptions = {}
 ): Promise<Readable> {
   const { sampleRate, inactivityTimeoutMs = DECODER_INACTIVITY_TIMEOUT_MS } = options
+  const { FFmpegDecoder } = await import('@qvac/decoder-audio')
   const decoder = new FFmpegDecoder({
     config: { audioFormat, ...(sampleRate !== undefined && { sampleRate }) },
     logger

@@ -412,11 +412,12 @@ If no config file is found, the CLI bundles all built-in plugins.
 
 > **Note:** `qvac.config.ts` is supported via `tsx` internally (no user setup required).
 
-This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads this **bundler-only** key (ignored by the SDK at runtime):
+This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads these **bundler-only** keys (ignored by the SDK at runtime):
 
-| Key       | Type       | Required | Description                                                                      |
-| --------- | ---------- | -------- | -------------------------------------------------------------------------------- |
-| `plugins` | `string[]` | No       | Module specifiers, each ending with `/plugin` (defaults to all built-in plugins) |
+| Key                   | Type       | Required | Description                                                                                                                                        |
+| --------------------- | ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugins`             | `string[]` | No       | Module specifiers, each ending with `/plugin` (defaults to all built-in plugins)                                                                   |
+| `includeAudioDecoder` | `boolean`  | No       | Include the optional FFmpeg audio decoder in generated worker bundles (defaults to `true`; set `false` only for raw PCM input, as files or base64) |
 
 > **Custom plugin contract:** custom `*/plugin` modules must **default-export** the plugin object.
 

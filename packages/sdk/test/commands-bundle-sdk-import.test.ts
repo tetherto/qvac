@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { bundleSdk } from '@/commands/bundle'
+import { bundleSdk, resolveDeferredModules } from '@/commands/bundle'
 import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import { generateWorkerEntries, generateWorkerEntry } from '@/commands/bundle/entry-gen'
 
@@ -93,6 +93,27 @@ describe('selectExportTarget', () => {
   it('returns null for missing or unknown-only conditions', () => {
     assert.equal(selectExportTarget(undefined), null)
     assert.equal(selectExportTarget({ types: './dist/x.d.ts' }), null)
+  })
+})
+
+describe('resolveDeferredModules', () => {
+  it('keeps the decoder bundled by default', () => {
+    assert.deepEqual(resolveDeferredModules({}, ['react-native-bare-kit']), [
+      'react-native-bare-kit'
+    ])
+  })
+
+  it('defers the decoder only for an explicit raw-only opt-out', () => {
+    assert.deepEqual(resolveDeferredModules({ includeAudioDecoder: false }, []), [
+      '@qvac/decoder-audio'
+    ])
+  })
+
+  it('does not duplicate an explicitly deferred decoder', () => {
+    assert.deepEqual(
+      resolveDeferredModules({ includeAudioDecoder: false }, ['@qvac/decoder-audio']),
+      ['@qvac/decoder-audio']
+    )
   })
 })
 
