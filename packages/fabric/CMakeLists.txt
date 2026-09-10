@@ -320,3 +320,5 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
   target_compile_options(${qvac-fabric} PRIVATE "/utf-8")
 endif()
+
+# nx-ci probe: exercise detect-fabric-stack (revert before merge)
