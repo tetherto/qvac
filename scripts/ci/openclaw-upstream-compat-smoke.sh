@@ -8,58 +8,28 @@ VERIFY_PROMPT_SURFACE="$SCRIPT_DIR/verify-openclaw-prompt-surface.cjs"
 SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
 QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
-# Keep under OPENCLAW_AGENT_TIMEOUT_SECONDS below: readiness is awaited inside
-# the agent run, so a longer value here is unreachable. Observed readiness,
-# including the model download on a cold runner, is ~20-30s.
+# Must stay under OPENCLAW_AGENT_TIMEOUT_SECONDS: readiness is awaited inside
+# the agent run, so a longer value here is unreachable.
 QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-180000}"
 
-# One knob for the agent-turn deadline, in seconds, passed to `openclaw agent
-# --timeout`. OpenClaw then reports the deadline in its own JSON envelope, so a
-# timed-out attempt still leaves a parseable artifact. The shell `timeout` below
-# is only a backstop for a process that ignores its own deadline -- upstream
-# recommends exactly that shape ("keep a hard-kill backstop such as
-# `timeout -k 60 600 openclaw agent ...`", docs/cli/agent.md).
-#
-# Previously these two raced: the script's `timeout 10m` and OpenClaw's own
-# 600s default were the same number, so the shell won and every deadline
-# arrived as an opaque SIGTERM with empty stdout -- which is what runs
-# 33952858599 through 34200142844 recorded instead of a diagnosis.
-#
-# 240s is sized to the bounded surface, not the old one. A whole healthy
-# attempt measured ~80s wall on run 34373947615 (model load plus a 9s ttft on a
-# 715-token prompt), so this is 3x headroom. It also has to be small enough
-# that the full attempt budget fits the job timeout: see the arithmetic in
-# .github/workflows/openclaw-upstream-compat.yml.
+# Passed to `openclaw agent --timeout` so a deadline arrives as a JSON envelope
+# rather than a signal; the shell `timeout` below is only a backstop. Keep the
+# two different -- when both were 600s the shell won every time and deadlines
+# arrived as an opaque SIGTERM. The attempt budget multiplies this, and the
+# product has to fit the job timeout in openclaw-upstream-compat.yml.
 OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-240}"
 OPENCLAW_AGENT_BACKSTOP_SECONDS="$((OPENCLAW_AGENT_TIMEOUT_SECONDS + 60))"
 
-# OpenClaw's tool catalog is upstream-controlled and it sets the prompt size,
-# which on a 2-core CPU runner sets the per-turn cost. Measured on this smoke:
-# 35 advertised tools inflate the prompt to ~11.3k tokens and cost ~190s per
-# turn to prefill (run 33881468610, openclaw 2026.9.1); the same run's one
-# no-tools request prefilled 540 tokens in 4.9s. Three turns at ~190s cannot
-# fit any sane deadline, so the tripwire could not pass for behavioural
-# reasons at all.
-#
-# The count is not ours to control. Across three consecutive upstream releases,
-# with nothing changing on the QVAC side: 2026.9.1 advertised 35, 2026.9.2
-# advertised 36 (run 34200142844, failed), 2026.9.3 advertised 12 (run
-# 34324684069, passed first try). Pin it instead: `tools.profile` is OpenClaw's
-# stable tool-policy knob and `minimal` is a documented profile
-# (openclaw docs/gateway/config-tools.md).
-#
-# `tools: true` stays on in the plugin config below, so tool schemas are still
-# rendered through the Jinja path a real agent host uses. This bounds the
-# surface; it does not switch tool support off. Note that the plugin's
-# `tools: false` would not be the same thing -- serve forwards the client's
-# tool array either way and the non-Jinja renderer then discards it, so
-# `tools: false` asserts a path no agent host actually runs.
+# OpenClaw's advertised tool count sets the prompt size, which on a 2-core
+# runner sets the per-turn cost -- and the count is upstream's, having moved
+# between 35, 36 and 12 across three releases. Pin it so this tripwire's cost
+# does not track upstream's catalog. `tools: true` stays on below, so schemas
+# still render through the Jinja path; this bounds the surface rather than
+# switching tool support off.
 OPENCLAW_TOOL_PROFILE="${OPENCLAW_TOOL_PROFILE:-minimal}"
 
-# A bounded surface is the fix, so an unbounded one has to be a visible failure
-# rather than a slow pass. If upstream widens what `tools.profile` admits, this
-# reports the drift directly instead of leaving a future reader to infer it
-# from a timeout.
+# A widened surface is compatibility drift, so it has to fail rather than pass
+# more slowly.
 OPENCLAW_MAX_ADVERTISED_TOOLS="${OPENCLAW_MAX_ADVERTISED_TOOLS:-8}"
 OPENCLAW_PACKAGE_SPEC="${OPENCLAW_PACKAGE_SPEC:-openclaw@latest}"
 QVAC_OPENCLAW_PLUGIN_SPEC="${QVAC_OPENCLAW_PLUGIN_SPEC:-@qvac/openclaw-plugin@latest}"
@@ -293,13 +263,19 @@ npx openclaw onboard \
   > "$ARTIFACT_DIR/openclaw-onboard.stdout" \
   2> "$ARTIFACT_DIR/openclaw-onboard.stderr"
 
-# Set after `onboard`, which defaults a fresh config to `tools.profile: coding`
-# (the full 35-tool surface). Onboarding preserves an explicit profile, so the
-# order is not load-bearing -- setting it here just makes that independent of
-# upstream's preserve-or-overwrite behaviour.
+# After `onboard`, which defaults a fresh config to `tools.profile: coding`.
 npx openclaw config set tools.profile "$OPENCLAW_TOOL_PROFILE" \
   > "$ARTIFACT_DIR/openclaw-config-tool-profile.stdout" \
   2> "$ARTIFACT_DIR/openclaw-config-tool-profile.stderr"
+
+# OpenClaw applies Tool Search to local routes regardless of profile, and its
+# `tool_search`/`tool_describe`/`tool_call` trio is enough on its own to pull
+# the model into tool round-trips instead of answering: run 34453332533 spent
+# two attempts on failed Tool Search calls and timed out on both. Tool-call
+# plumbing is not what this tripwire proves, so opt out.
+npx openclaw config set tools.toolSearch false --strict-json \
+  > "$ARTIFACT_DIR/openclaw-config-tool-search.stdout" \
+  2> "$ARTIFACT_DIR/openclaw-config-tool-search.stderr"
 
 npx openclaw config validate \
   > "$ARTIFACT_DIR/openclaw-config-validate.stdout" \
@@ -351,33 +327,12 @@ if [[ "${SKIP_OPENCLAW_AGENT:-0}" == "1" ]]; then
   exit 0
 fi
 
-# The prompt has to be answerable in chat and not performable as a task, and it
-# must not mention tools at all. Two measured failures shaped this wording:
-#
-#   "Reply with exactly this text and nothing else: qvac-ok" -- read as a
-#   file-write instruction. Run 33881468610 called `write` with
-#   content=qvac-ok against the workspace directory, hit EISDIR, retried the
-#   same call, then asked which path to use. "this text" is the problem.
-#
-#   "Answer in chat with the single word qvac-ok. Do not call any tools and do
-#   not write any files." -- naming tools primed them. Run 34373081345 replied
-#   with a literal empty `<tool_call></tool_call>` block as its visible text.
-#   Negation does not restrain a 0.8b model; it just puts tool syntax in front
-#   of it.
-#
-#   "Reply with one short sentence that includes qvac-ok." -- asks for prose,
-#   which makes a compliant answer indistinguishable from a mention. Run
-#   34375067376 reported green on "The qvac-ok command is already executed
-#   successfully.", a sentence containing the token and answering nothing.
-#
-# So: ask for the word, not for text and not for a sentence, and say nothing
-# about tools. The prompt has to match what the verifier asserts -- asking for
-# prose while requiring the bare token is how false greens and false reds both
-# get in. Every compliant reply observed so far has been the bare token
-# regardless of which wording asked for it.
-#
-# Keeping this in step with the OpenCode sibling smoke is deliberate
-# (QVAC-24621); a divergent prompt there reintroduces the same gap.
+# Three wordings failed here, each for a different reason: "exactly this text"
+# was read as a file-write instruction, naming tools ("do not call any tools")
+# primed tool syntax, and asking for a sentence made a compliant answer
+# indistinguishable from a mention. So ask for the word, and say nothing about
+# tools. Must match what the verifier asserts, and stay in step with the
+# OpenCode sibling smoke.
 AGENT_PROMPT="${AGENT_PROMPT:-Reply with only the word qvac-ok.}"
 
 # Each attempt gets a fresh session id. Retrying into the same session would
@@ -410,24 +365,10 @@ run_agent_attempt() {
   fi
 }
 
-# This model does not reliably answer the prompt, and that is variance rather
-# than integration breakage. Replaying the verifier over the 13 most recent
-# scheduled runs that produced agent output, 6 did not answer -- a ~46%
-# per-attempt rate, every one of them reported green at the time (bare
-# `[[reply_to_current]]` routing tokens x4, and unrelated replies like
-# "Hello."). Run 34373947615 on the bounded surface went 3-for-3 the same way:
-# two generic greetings ("Hello! I'm qvac, ready to help with your work.") then
-# `qvac-ok` on the last attempt.
-#
-# So the attempt budget carries the variance, and it just got much cheaper to
-# raise. Attempts used to cost up to the full 600s deadline, which is why three
-# was the ceiling; on the bounded surface a whole attempt is ~80s wall
-# (ttft ~9s, one turn), measured across all three attempts of run 34373947615.
-# Six attempts is ~8m, well inside the job budget, and takes a 46% per-attempt
-# miss rate to ~1%.
-#
-# Every attempt is kept as an artifact, so a real break stays legible and the
-# miss rate stays measurable rather than assumed.
+# The budget carries model variance, measured at a ~46% per-attempt miss rate.
+# Six is affordable only because the bounded surface made an attempt ~80s wall
+# instead of the old 600s deadline. Every attempt is kept as an artifact so the
+# rate stays measurable rather than assumed.
 OPENCLAW_AGENT_MAX_ATTEMPTS="${OPENCLAW_AGENT_MAX_ATTEMPTS:-6}"
 agent_ok=0
 agent_failure=""
@@ -445,12 +386,10 @@ for (( attempt = 1; attempt <= OPENCLAW_AGENT_MAX_ATTEMPTS; attempt++ )); do
 
   if (( agent_status != 0 )); then
     case "$agent_status" in
-      # 124/137 mean the shell backstop had to kill a process that blew past
-      # its own deadline, and they arrive with empty stdout -- that is what
-      # every failure between runs 33952858599 and 34200142844 looked like.
-      # Any other non-zero status is OpenClaw exiting on its own terms, so its
-      # stdout should hold a JSON envelope worth reading; 2 is the status
-      # upstream documents for a deadline (openclaw docs/cli/agent.md).
+      # 124/137 are the shell backstop killing a process that blew past its own
+      # deadline, and arrive with empty stdout. Any other status is OpenClaw
+      # exiting on its own terms, so its stdout holds a readable envelope; 2 is
+      # the status upstream documents for a deadline.
       124 | 137) agent_failure="attempt ${attempt}: agent ignored its ${OPENCLAW_AGENT_TIMEOUT_SECONDS}s deadline and was killed by the ${OPENCLAW_AGENT_BACKSTOP_SECONDS}s backstop" ;;
       2) agent_failure="attempt ${attempt}: agent exited 2, upstream's documented deadline status (limit ${OPENCLAW_AGENT_TIMEOUT_SECONDS}s); see openclaw-agent.attempt-${attempt}.stdout" ;;
       *) agent_failure="attempt ${attempt}: agent exited ${agent_status}; see openclaw-agent.attempt-${attempt}.stdout" ;;
@@ -470,10 +409,8 @@ for (( attempt = 1; attempt <= OPENCLAW_AGENT_MAX_ATTEMPTS; attempt++ )); do
   echo "$agent_failure" >&2
 done
 
-# The advertised tool count and prompt size are what explain a slow turn, and
-# neither was surfaced anywhere a reader would look -- the numbers behind #4112
-# had to be dug out of the raw artifact. Report them next to the result, on the
-# failure path too, and fail a run whose surface drifted past the ceiling.
+# Tool count and prompt size explain a slow turn, so report them next to the
+# result -- on the failure path too.
 surface_status=0
 node "$VERIFY_PROMPT_SURFACE" \
   "$ARTIFACT_DIR/qvac-serve.stdout" \
@@ -509,9 +446,8 @@ if (( surface_status != 0 && surface_status != 1 )); then
   surface_status=0
 fi
 
-# Deliberately after the turn passed: a widened surface is real compatibility
-# drift and should be reported as such, not hidden behind a green run that only
-# got slower.
+# After the turn verdict, so a widened surface is reported as drift rather than
+# hidden behind a green run that only got slower.
 if (( surface_status != 0 )); then
   {
     echo

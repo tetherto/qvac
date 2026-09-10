@@ -1,19 +1,10 @@
 'use strict'
 
 /**
- * Reports the prompt surface a smoke run actually drove, and fails when the
- * advertised tool count exceeds the ceiling.
- *
- * The numbers behind tetherto/qvac#4112 were only ever in the raw artifact:
- * 35 advertised tools inflated the prompt to ~11.3k tokens, which cost ~190s
- * per turn to prefill on a 2-core runner, which is why three turns could not
- * fit any deadline. Nothing reported that, so five consecutive failures read
- * as "agent timed out" with no cause attached.
- *
- * The count is upstream's to change -- openclaw 2026.9.2 advertised 35 and
- * 2026.9.3 advertised 12 with no QVAC-side change -- so the smoke pins
- * `tools.profile` and this check reports drift past the ceiling as a failure
- * rather than as a slower pass.
+ * Reports the prompt surface a smoke run drove, and fails when the advertised
+ * tool count exceeds the ceiling. The tool count sets the prompt size, which
+ * sets the per-turn prefill cost, and upstream changes it between releases --
+ * so the smoke pins `tools.profile` and this reports drift past the ceiling.
  *
  * Run locally:
  *   node scripts/ci/verify-openclaw-prompt-surface.cjs <qvac-serve.stdout> <profile> <maxTools> <out.md>
@@ -21,9 +12,8 @@
  */
 
 /**
- * `qvac serve` logs one `chat ... tools=N ...` line per request and one
- * `streaming done ... prompt=N ...` line per completion. A run makes several
- * requests and the worst one sets the deadline, so take the maximum.
+ * `qvac serve` logs `tools=N` per request and `prompt=N` per completion. A run
+ * makes several requests and the worst one sets the deadline, so take the max.
  * @returns {number | undefined} undefined when the log carries no such metric
  */
 function maxMetric (log, name) {
@@ -59,10 +49,8 @@ function inspectPromptSurface (log, profile, ceiling) {
   const promptTokens = maxMetric(log, 'prompt')
   const report = renderReport({ profile, maxTools, promptTokens, ceiling })
 
-  // An absent count is not a pass and not a failure: the wrapper may simply
-  // never have written a log (a skipped agent turn, or a serve that died
-  // before its first request). Reporting it as 0 would claim a bounded surface
-  // that was never measured.
+  // Unmeasured, not bounded: reporting 0 would claim a ceiling was respected
+  // when no request was ever logged.
   if (maxTools === undefined) {
     return { ok: true, maxTools, promptTokens, report }
   }

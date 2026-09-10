@@ -4,44 +4,27 @@
  * Verifies the `openclaw agent --json` output produced by
  * scripts/ci/openclaw-upstream-compat-smoke.sh.
  *
- * Every field this reads lives under `meta`. An earlier version of these
- * checks read them off the top level, where none of them exist, so each one
- * silently fell through to a `JSON.stringify` of the whole payload -- a blob
- * that always contains "qvac-ok" (echoed back as meta.finalPromptText),
- * "qvac", and the model id. The result was a verifier that could not fail:
- * runs where the model refused outright, or replied with nothing but a routing
- * token, were reported green for weeks. Assert against the assistant text and
- * the structured metadata only, never the serialized blob.
+ * Every field read here lives under `meta`. Assert against the assistant text
+ * and the structured metadata only -- never a `JSON.stringify` of the payload,
+ * which always contains the token, "qvac" and the model id, and so cannot fail.
  *
  * Run locally:
  *   node scripts/ci/verify-openclaw-agent-output.cjs <agent-stdout.json> <model>
  *   node --test scripts/ci/__tests__/verify-openclaw-agent-output.test.cjs
  */
 
-// A compliant reply *is* the token. Not "contains" it: a length-capped
-// substring check accepted every short non-answer that mentioned it, which is
-// how run 34375067376 reported green on "The qvac-ok command is already
-// executed successfully." -- 53 characters, well under the old 120 cap, and
-// not an answer to anything. Short refusals ("I cannot reply with qvac-ok.")
-// sailed through the same way; the cap only ever caught the long refusals.
-//
-// So normalize and compare for equality. Formatting is tolerated because it is
-// not content -- wrapping quotes, backticks, markdown emphasis, a trailing
-// period -- but surrounding prose is not.
+// A compliant reply *is* the token, not one that contains it: a length-capped
+// substring rule accepted every short non-answer that mentioned it, including
+// refusals and a sentence claiming a "qvac-ok command" had run.
 const EXPECTED_TOKEN = 'qvac-ok'
 
-// OpenClaw reply-routing directives are control tokens, not content. A small
-// model parrots them out of the system prompt, historically as a bare
-// directive with no answer behind it.
+// OpenClaw reply-routing directives are control tokens, not content; a small
+// model parrots them out of the system prompt with no answer behind them.
 const ROUTING_TOKEN = /\[\[[^\]]*\]\]/g
 
-// Tool-call markup that leaked into visible assistant text is a malformed tool
-// call, not an answer. Run 34373081345 replied with a literal empty
-// `<tool_call></tool_call>` block and nothing else. The whole block goes,
-// contents included: a token emitted *inside* tool-call markup was never
-// spoken to the user, so counting it as the answer would be the same kind of
-// can't-fail check this verifier exists to remove. An unclosed opener is
-// stripped to end-of-text, because a truncated block is markup too.
+// Leaked tool-call markup is a malformed tool call, not an answer. Contents go
+// with the block: a token emitted inside it was never spoken to the user. An
+// unclosed opener strips to end of text, since a truncated block is markup too.
 const TOOL_CALL_MARKUP = /<tool_call\b[\s\S]*?(?:<\/tool_call>|$)/gi
 
 function parseJsonOutput (value) {
@@ -60,11 +43,8 @@ function parseJsonOutput (value) {
   }
 }
 
-/**
- * Reduces a reply to the content the model actually committed to, so it can be
- * compared against the expected token. Strips markup and the formatting a
- * model wraps a bare answer in; deliberately does not strip words.
- */
+// Strips markup and the formatting a model wraps a bare answer in. Never
+// strips words -- surrounding prose is what separates an answer from a mention.
 function normalizeReply (text) {
   return String(text)
     .replace(TOOL_CALL_MARKUP, '')

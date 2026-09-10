@@ -6,18 +6,10 @@ const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { inspectPromptSurface, maxMetric } = require('../verify-openclaw-prompt-surface.cjs')
 
-// Both fixtures are unmodified `qvac serve` request lines from real scheduled
-// runs, trimmed to the lines this verifier reads.
-//
-// 2026-09-02 (run 34200142844, openclaw 2026.9.2): 36 advertised tools, prompt
-// up to 11781 tokens, ttft ~175-195s per turn, finish=tool_calls throughout.
-// Failed after three attempts.
-//
-// 2026-09-09 (run 34324684069, openclaw 2026.9.3): 12 advertised tools, prompt
-// 2499 tokens, ttft 37s, finish=stop. Passed on the first attempt.
-//
-// Nothing changed on the QVAC side between them, which is the case for pinning
-// the surface rather than trusting whatever upstream advertises.
+// Unmodified `qvac serve` request lines from two real scheduled runs, trimmed
+// to the lines this verifier reads: run 34200142844 (openclaw 2026.9.2) drove
+// 36 tools, run 34324684069 (2026.9.3) drove 12, with no QVAC-side change
+// between them.
 const unbounded = readFileSync(join(__dirname, 'fixtures/qvac-serve-openclaw-2026-9-2.stdout'), 'utf8')
 const bounded = readFileSync(join(__dirname, 'fixtures/qvac-serve-openclaw-2026-9-3.stdout'), 'utf8')
 
@@ -53,9 +45,7 @@ test('a count exactly at the ceiling passes', () => {
   assert.equal(result.ok, true)
 })
 
-// An absent measurement is not a bounded surface. Reporting 0 here would claim
-// a ceiling was respected when nothing was ever measured -- the same shape of
-// false green that #4128 removed from the agent verifier.
+// Reporting 0 would claim a ceiling was respected when nothing was measured.
 test('an unmeasured surface is reported as unknown, not as zero', () => {
   const result = inspectPromptSurface('', 'minimal', 8)
   assert.equal(result.ok, true)
@@ -90,8 +80,8 @@ test('takes the maximum across requests, not the first or last', () => {
   assert.equal(maxMetric('tools=4\ntools=31\ntools=9', 'tools'), 31)
 })
 
-// The smoke script branches on this exit code and uploads the report file, so
-// both are part of the contract, not implementation detail.
+// The smoke script branches on the exit code and uploads the report file, so
+// both are contract.
 const { spawnSync } = require('node:child_process')
 const { mkdtempSync, rmSync, existsSync } = require('node:fs')
 const { tmpdir } = require('node:os')
@@ -123,8 +113,7 @@ test('the CLI exits 0 and writes the report when the surface is bounded', (t) =>
   assert.match(readFileSync(out, 'utf8'), /Advertised tools \(max observed\) \| 12/)
 })
 
-// A serve log is diagnostic. Losing it must not fail the smoke -- the agent
-// verdict is the signal.
+// The serve log is diagnostic; losing it must not fail the smoke.
 test('a missing serve log warns and still writes an unknown report', (t) => {
   const { result, out } = runCli(t, 'does-not-exist.stdout', 8)
   assert.equal(result.status, 0)
