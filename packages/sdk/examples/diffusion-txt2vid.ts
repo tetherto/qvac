@@ -36,7 +36,7 @@ try {
       vaeModelSrc,
       diffusion_fa: true,
       offload_to_cpu: true,
-      vae_on_cpu: true,
+      params_backend: 'vae=cpu',
       vae_tiling: true
     },
     onProgress: (p) => {
