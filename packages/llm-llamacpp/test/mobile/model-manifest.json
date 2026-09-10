@@ -117,6 +117,12 @@
     {
       "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
       "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
+    }
+  ],
+  "runGemma4MultimodalTest": [
+    {
+      "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
       "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
