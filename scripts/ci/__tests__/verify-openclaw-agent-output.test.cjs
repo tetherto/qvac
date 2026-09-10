@@ -151,6 +151,17 @@ test('rejects a short non-answer that mentions the token', () => {
   assertRejects(fixture('short-non-answer-quoting-token'), /did not answer with qvac-ok/)
 })
 
+// The third false green, and the one that matters most: this is the reply that
+// made the 2026-09-09 scheduled run on `main` (34324684069) report the smoke
+// as passing. The model emitted tool-call *parameter* markup rather than
+// answering in chat. Distinct shape from `<tool_call>` markup, so it is kept
+// as its own fixture -- stripping known markup by name would not have caught
+// it, which is why the rule is equality against the token rather than a
+// growing list of things to strip.
+test('rejects tool-call parameter markup wrapping the token', () => {
+  assertRejects(fixture('parameter-markup-not-an-answer'), /did not answer with qvac-ok/)
+})
+
 // Formatting a bare answer is not a non-answer. These all normalize to the
 // token, and rejecting them would trade the old false greens for false reds.
 for (const reply of ['qvac-ok', 'qvac-ok.', 'qvac-ok!', '`qvac-ok`', '"qvac-ok"', '  qvac-ok  ', '**qvac-ok**', 'QVAC-OK']) {
