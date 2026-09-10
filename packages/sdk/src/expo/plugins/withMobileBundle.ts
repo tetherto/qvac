@@ -16,6 +16,14 @@ const { withDangerousMod } = configPlugins
 /** Modules to defer from mobile bundles (not available at bundle time) */
 const DEFERRED_MODULES = ['expo-file-system', 'react-native-bare-kit']
 
+/**
+ * Desktop-only modules deferred so bare-pack stops walking into them. They back
+ * the advisory fit check, which mobile refuses at runtime, but the imports are
+ * static and pull in `bare-process` -> `bare-posix`, which ships no
+ * `android-arm64` prebuild and fails bundle verification.
+ */
+const MOBILE_UNSUPPORTED_MODULES = ['bare-runtime/spawn', '@qvac/model-fit/process']
+
 const MOBILE_HOSTS = ['android-arm64', 'ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
 
 type BareKitLinkerPaths = {
@@ -42,7 +50,11 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
       console.log('🕚 QVAC: No config found, generating default bundle (all plugins)...')
     }
 
-    const deferredModules = [...DEFERRED_MODULES, `${sdkPackage.name}/worker.mobile.bundle`]
+    const deferredModules = [
+      ...DEFERRED_MODULES,
+      ...MOBILE_UNSUPPORTED_MODULES,
+      `${sdkPackage.name}/worker.mobile.bundle`
+    ]
     const linkerPaths = await runBundler(projectRoot, sdkPackage.dir, configPath, deferredModules)
 
     const generatedBundle = path.join(projectRoot, 'qvac', 'worker.bundle.js')
@@ -201,7 +213,7 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string): BareKitL
   return { android: androidLinkerPath, ios: iosLinkerPath }
 }
 
-export { MOBILE_HOSTS, patchBareKitLinkers, runIOSAddonLinker }
+export { MOBILE_HOSTS, MOBILE_UNSUPPORTED_MODULES, patchBareKitLinkers, runIOSAddonLinker }
 export type { BareKitLinkerPaths }
 
 export default withMobileBundle

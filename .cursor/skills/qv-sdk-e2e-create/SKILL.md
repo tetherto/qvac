@@ -185,15 +185,19 @@ complete until the user confirms those tests pass locally.
 ```bash
 cd packages/sdk/e2e
 
-# If SDK source changed
+# If packages/sdk (outside e2e) or packages/inference changed
 npm run install:build:full
 
-# Otherwise (only test code changed, SDK already built)
+# Otherwise (only test code in packages/sdk/e2e changed)
 npm run install:build
 
 npx qvac-test run:local:desktop --filter <feature>-
 npx qvac-test run:local:electron --filter <feature>- # verifies the handler or intentional skip
 ```
+
+Always use `install:build:full` once `packages/sdk` itself changed, even if `packages/inference` has no
+diff lines of its own — `install:build:sdk` trusts the published `@qvac/inference` range, which can already
+be behind the checked-out `packages/inference` source from unrelated merged work.
 
 For mobile verification of a smoke candidate (required before tagging `suites: ["smoke"]`):
 

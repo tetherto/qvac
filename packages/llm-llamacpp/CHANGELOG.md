@@ -116,6 +116,12 @@
   could previously forge log lines or, for a large template, write one very
   large record per failing request.
 
+## [0.52.0] - 2026-09-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549; no API change for this package).
+
 ## [0.51.0] - 2026-09-08
 
 ### Fixed

@@ -32,6 +32,7 @@ TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
   EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, PREDICTION_COUNT);
   EXPECT_TRUE(applyOne("prediction", "flux2_flow").flux2Requested);
   EXPECT_FALSE(applyOne("prediction", "auto").flux2Requested);
+  EXPECT_THROW(applyOne("prediction", "flux_flow"), StatusError);
 
   SdCtxConfig cfg;
   EXPECT_THROW(

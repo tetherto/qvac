@@ -881,6 +881,9 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
     if (stopGeneration_.load()) {
       // Route through the post-loop `onCancel` instead of injecting
       // EOT — EOT would advance `nPast_` past the rollback target.
+      //
+      // `onLogitsReady` already streamed this token, so the caller saw it.
+      ++lastGeneratedTokenCount_;
       break;
     }
     common_batch_add(*batch, step.token, nPast_, {seqId_}, true);

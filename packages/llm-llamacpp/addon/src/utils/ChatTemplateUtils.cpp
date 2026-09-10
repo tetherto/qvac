@@ -408,7 +408,7 @@ bool renderIsUnchangedWithoutTools(
 /// `common_chat_templates_get_caps()` decides `supports_tools` by executing the
 /// template against fabric's own synthetic probe conversation and checking
 /// whether the probe touched `tools[0].function.name`
-/// (common/jinja/caps.cpp:242-247). That probe leads with a user turn, so a
+/// (common/jinja/caps.cpp:255-256). That probe leads with a user turn, so a
 /// template guarding its tool block on the conversation shape reports
 /// "capable" and can still omit the block for a request shaped differently —
 /// the shape-sensitivity QVAC-23251 hit.
