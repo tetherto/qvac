@@ -1777,6 +1777,48 @@ test('mobile shards pass grep explicitly and retain host-phase failure logs', ()
   assert.match(collectLogs, /Host phase log:/)
 })
 
+// A native abort() on iOS kills the app before Bare flushes its console
+// buffer, so bare_console.log stops mid-test and the reason is lost (the
+// gemma4 multimodal SIGABRT produced no [C++][ERROR] line at all). The .ips
+// crash report is the only artifact carrying the faulting thread and the
+// termination reason, and Device Farm does not surface it on its own.
+test('iOS mobile runs collect on-device crash reports', () => {
+  const generateTestspec = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
+  )
+  const collectLogs = read(
+    '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
+  )
+
+  // The pull is iOS-only and lives in post_test, after the Android logcat dump.
+  const androidLogcat = generateTestspec.indexOf('adb logcat -d -b all')
+  const iosCrashBranch = generateTestspec.indexOf('pymobiledevice3 crash pull')
+  assert.ok(androidLogcat > 0, 'Android logcat collection must stay in post_test')
+  assert.ok(iosCrashBranch > androidLogcat, 'iOS crash pull belongs in post_test')
+  assert.match(
+    generateTestspec.slice(androidLogcat),
+    /if \[ "\$PLATFORM" = "iOS" \]/,
+    'crash pull must be guarded by an iOS platform branch',
+  )
+
+  // Reports are echoed inline as well: Customer_Artifacts can be missed, the
+  // spec output never is.
+  assert.match(generateTestspec, /\[CRASH_REPORT_START\]/)
+  assert.match(generateTestspec, /\[CRASH_REPORT_END\]/)
+
+  // Device Farm reuses phones, so a stale report from an earlier session must
+  // not be reported as a crash in this run.
+  assert.match(generateTestspec, /! -mmin -120 -delete/)
+  assert.match(generateTestspec, /! -name 'QvacAddonTester\*' -delete/)
+
+  // Log collection must never fail the phase.
+  assert.match(generateTestspec, /pymobiledevice3 crash pull "\$CRASH_DIR" >\/dev\/null 2>&1 \|\| true/)
+
+  // ...and the pulled reports have to reach the uploaded artifact.
+  assert.match(collectLogs, /-type d -name "crash-reports"/)
+  assert.match(collectLogs, /Extracted iOS crash report/)
+})
+
 test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {
   const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
   // The workflow_call branch (benchmark || functional) is unchanged; it is now

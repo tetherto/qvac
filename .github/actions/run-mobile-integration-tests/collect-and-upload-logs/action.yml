@@ -209,6 +209,16 @@ runs:
                 cp "$logcat_full" "$CONSOLE_DIR/${device}_logcat_full.txt"
                 echo "  Extracted: ${device}_logcat_full.txt"
               fi
+              # iOS crash reports pulled in post_test (see generate-testspec.sh).
+              # A native abort() kills the app before its console buffer flushes,
+              # so bare_console.log stops mid-test — the .ips is the only place
+              # the faulting thread and termination reason survive.
+              find "$tmpdir" -type d -name "crash-reports" 2>/dev/null | while read -r cdir; do
+                find "$cdir" -type f -name "QvacAddonTester*" 2>/dev/null | while read -r crash; do
+                  cp "$crash" "$CONSOLE_DIR/${device}_crash_$(basename "$crash")"
+                  echo "  Extracted iOS crash report: ${device}_crash_$(basename "$crash")"
+                done
+              done
             fi
             rm -rf "$tmpdir"
           fi
