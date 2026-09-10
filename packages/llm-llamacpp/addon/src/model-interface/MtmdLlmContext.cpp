@@ -916,6 +916,9 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     if (stopGeneration_.load()) {
       // Route through the post-loop `cancelGenerationCleanup` instead
       // of injecting EOT — EOT would advance the cursor past rollback.
+      // The token was already streamed, so count it (see the same branch in
+      // `TextLlmContext::generateResponse`).
+      ++lastGeneratedTokenCount_;
       break;
     }
     common_batch_add(*batch, tokenId, current_.pos, {seqId_}, true);
