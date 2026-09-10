@@ -40,23 +40,26 @@ Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
 [Models](#models)); point the addon at the folder that holds them.
 MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
 
-The published linux-x64 prebuild ships Vulkan. CUDA is opt-in at build time
-via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host).
-When CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend
-mode: the CPU-variant, Vulkan, and CUDA backends ship as `.so` modules beside
-the addon, and only the CUDA module depends on the CUDA runtime. Engaging
-CUDA needs the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
-cuBLAS) resolvable at load time; hosts that cannot resolve them skip the
-module and fall back to Vulkan or CPU. The engine prefers CUDA when both GPU
-backends are usable.
+The published Linux and Windows prebuilds ship Vulkan. CUDA is opt-in at build
+time on linux-x64, linux-arm64, and win32-x64 via
+`bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host). When
+CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend mode: the
+CPU-variant, Vulkan, and CUDA backends ship as runtime-loaded modules (`.so` on
+Linux, `.dll` on Windows) beside the addon, and only the CUDA module depends on
+the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the CUDA 13 runtime
+libraries (cudart and cuBLAS) resolvable at load time; hosts that cannot resolve
+them skip the module and fall back to Vulkan or CPU. The engine prefers CUDA
+when both GPU backends are usable.
 
-A CUDA build's module targets **compute capability 7.5 and newer**, with
-native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
-Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
-from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
-Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
-path here: the backend skips such devices at registration and the addon falls
-back to Vulkan or CPU.
+On x64 a CUDA build's module targets **compute capability 7.5 and newer**, with
+native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6), Ada
+(8.9), Hopper (9.0), and Blackwell (12.0, 12.1). Anything newer JIT-compiles
+from the bundled 8.0 PTX on first use, a one-off compile the driver caches. On
+linux-arm64 the native set is Jetson Orin (8.7), Grace-Hopper (9.0), and
+GB10 / DGX Spark (12.1), with discrete Ampere+ cards and newer parts covered
+through the bundled 8.0 PTX. Volta and Pascal fall outside CUDA 13's support
+entirely, so they have no code path here: the backend skips such devices at
+registration and the addon falls back to Vulkan or CPU.
 
 To build the native addon from source in a repository checkout:
 
