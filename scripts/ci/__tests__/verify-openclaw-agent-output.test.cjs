@@ -56,7 +56,7 @@ test('accepts a reply prefixed with an OpenClaw routing token', () => {
 // The regression that motivated this file: the model refused, quoted the token
 // back while refusing, and the old verifier reported success.
 test('rejects a refusal that quotes qvac-ok back', () => {
-  assertRejects(fixture('refusal-quoting-token'), /did not answer the prompt \(\d+ chars/)
+  assertRejects(fixture('refusal-quoting-token'), /did not answer with qvac-ok/)
 })
 
 test('rejects a bare routing token with no content behind it', () => {
@@ -64,7 +64,7 @@ test('rejects a bare routing token with no content behind it', () => {
 })
 
 test('rejects a reply that ignores the instruction', () => {
-  assertRejects(fixture('unrelated-reply'), /did not include qvac-ok/)
+  assertRejects(fixture('unrelated-reply'), /did not answer with qvac-ok/)
 })
 
 test('rejects empty stdout', () => {
@@ -140,8 +140,51 @@ test('does not satisfy the content check from the echoed prompt alone', () => {
     d.payloads = [{ text: 'Hello.', mediaUrl: null }]
   })
   assert.match(text, /qvac-ok/, 'fixture must still echo the prompt in meta.finalPromptText')
-  assertRejects(text, /did not include qvac-ok/)
+  assertRejects(text, /did not answer with qvac-ok/)
 })
+
+// The second false green, from run 34375067376's attempt 1. It reported the
+// smoke as passed. 53 characters, mentions the token, answers nothing -- the
+// old length cap could only ever catch long refusals, so every short
+// non-answer that named the token was accepted.
+test('rejects a short non-answer that mentions the token', () => {
+  assertRejects(fixture('short-non-answer-quoting-token'), /did not answer with qvac-ok/)
+})
+
+// Formatting a bare answer is not a non-answer. These all normalize to the
+// token, and rejecting them would trade the old false greens for false reds.
+for (const reply of ['qvac-ok', 'qvac-ok.', 'qvac-ok!', '`qvac-ok`', '"qvac-ok"', '  qvac-ok  ', '**qvac-ok**', 'QVAC-OK']) {
+  test(`accepts a bare answer formatted as ${JSON.stringify(reply)}`, () => {
+    verifyAgentOutput(
+      mutated('pass-qvac-ok', (d) => {
+        d.meta.finalAssistantVisibleText = reply
+        d.payloads = [{ text: reply, mediaUrl: null }]
+      }),
+      MODEL
+    )
+  })
+}
+
+// Surrounding prose is what separates an answer from a mention, so these must
+// stay rejected however short they are.
+for (const reply of [
+  'I cannot reply with qvac-ok.',
+  'I am unable to say qvac-ok here.',
+  'Sorry, qvac-ok is not something I can output.',
+  'Here you go: qvac-ok.',
+  'The answer is qvac-ok',
+  'qvac-ok is the token'
+]) {
+  test(`rejects prose around the token: ${JSON.stringify(reply)}`, () => {
+    assertRejects(
+      mutated('pass-qvac-ok', (d) => {
+        d.meta.finalAssistantVisibleText = reply
+        d.payloads = [{ text: reply, mediaUrl: null }]
+      }),
+      /did not answer with qvac-ok/
+    )
+  })
+}
 
 // Real payload from run 34373081345: with the Tool Search trio advertised and
 // a prompt that told it not to call tools, the model emitted an empty

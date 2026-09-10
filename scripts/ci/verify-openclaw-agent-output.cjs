@@ -18,12 +18,17 @@
  *   node --test scripts/ci/__tests__/verify-openclaw-agent-output.test.cjs
  */
 
-// A compliant reply is the token and little else. The cap is deliberately
-// loose -- observed passes are under 50 characters and observed refusals run
-// past 300 -- so it rejects non-answers without policing phrasing. It exists
-// because a refusal quotes the token back while declining ("...your specific
-// query about \"qvac-ok\"..."), which a bare substring check would accept.
-const MAX_COMPLIANT_REPLY_CHARS = 120
+// A compliant reply *is* the token. Not "contains" it: a length-capped
+// substring check accepted every short non-answer that mentioned it, which is
+// how run 34375067376 reported green on "The qvac-ok command is already
+// executed successfully." -- 53 characters, well under the old 120 cap, and
+// not an answer to anything. Short refusals ("I cannot reply with qvac-ok.")
+// sailed through the same way; the cap only ever caught the long refusals.
+//
+// So normalize and compare for equality. Formatting is tolerated because it is
+// not content -- wrapping quotes, backticks, markdown emphasis, a trailing
+// period -- but surrounding prose is not.
+const EXPECTED_TOKEN = 'qvac-ok'
 
 // OpenClaw reply-routing directives are control tokens, not content. A small
 // model parrots them out of the system prompt, historically as a bare
@@ -53,6 +58,21 @@ function parseJsonOutput (value) {
     }
     throw new Error('OpenClaw agent stdout did not contain JSON output')
   }
+}
+
+/**
+ * Reduces a reply to the content the model actually committed to, so it can be
+ * compared against the expected token. Strips markup and the formatting a
+ * model wraps a bare answer in; deliberately does not strip words.
+ */
+function normalizeReply (text) {
+  return String(text)
+    .replace(TOOL_CALL_MARKUP, '')
+    .replace(ROUTING_TOKEN, '')
+    .trim()
+    .replace(/^[\s"'`*_]+/, '')
+    .replace(/[\s"'`*_.!]+$/, '')
+    .toLowerCase()
 }
 
 function assistantTextOf (result) {
@@ -85,12 +105,9 @@ function verifyAgentOutput (text, model) {
   if (!compact) {
     throw new Error(`OpenClaw agent replied with no content: ${finalText.trim().slice(0, 300)}`)
   }
-  if (!/qvac-ok/i.test(compact)) {
-    throw new Error(`OpenClaw agent response did not include qvac-ok: ${compact.slice(0, 300)}`)
-  }
-  if (compact.length > MAX_COMPLIANT_REPLY_CHARS) {
+  if (normalizeReply(compact) !== EXPECTED_TOKEN) {
     throw new Error(
-      `OpenClaw agent did not answer the prompt (${compact.length} chars, expected <= ${MAX_COMPLIANT_REPLY_CHARS}): ${compact.slice(0, 300)}`
+      `OpenClaw agent did not answer with ${EXPECTED_TOKEN}: ${compact.slice(0, 300)}`
     )
   }
   if (meta.aborted === true) {
@@ -112,7 +129,7 @@ function verifyAgentOutput (text, model) {
   }
 }
 
-module.exports = { verifyAgentOutput, parseJsonOutput, assistantTextOf, MAX_COMPLIANT_REPLY_CHARS }
+module.exports = { verifyAgentOutput, parseJsonOutput, assistantTextOf, normalizeReply, EXPECTED_TOKEN }
 
 if (require.main === module) {
   const { readFileSync } = require('node:fs')

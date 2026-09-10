@@ -365,12 +365,20 @@ fi
 #   Negation does not restrain a 0.8b model; it just puts tool syntax in front
 #   of it.
 #
-# So: ask for a sentence, not for text, and say nothing about tools. This is
-# also the OpenCode sibling smoke's prompt, which has answered correctly on
-# this same model through this same serve across every scheduled run since
-# 2026-08-31 -- the only wording here with a track record. Keeping the two
-# tripwires on one prompt is deliberate (QVAC-24621).
-AGENT_PROMPT="${AGENT_PROMPT:-Reply with one short sentence that includes qvac-ok.}"
+#   "Reply with one short sentence that includes qvac-ok." -- asks for prose,
+#   which makes a compliant answer indistinguishable from a mention. Run
+#   34375067376 reported green on "The qvac-ok command is already executed
+#   successfully.", a sentence containing the token and answering nothing.
+#
+# So: ask for the word, not for text and not for a sentence, and say nothing
+# about tools. The prompt has to match what the verifier asserts -- asking for
+# prose while requiring the bare token is how false greens and false reds both
+# get in. Every compliant reply observed so far has been the bare token
+# regardless of which wording asked for it.
+#
+# Keeping this in step with the OpenCode sibling smoke is deliberate
+# (QVAC-24621); a divergent prompt there reintroduces the same gap.
+AGENT_PROMPT="${AGENT_PROMPT:-Reply with only the word qvac-ok.}"
 
 # Each attempt gets a fresh session id. Retrying into the same session would
 # replay the poisoned transcript that caused the first failure -- the 2026-08-27
