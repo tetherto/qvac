@@ -55,6 +55,8 @@ TextLlmContext::TextLlmContext(
   initializeOwnedThreadpools();
 }
 
+TextLlmContext::~TextLlmContext() { teardownSpeculative(); }
+
 TextLlmContext::TextLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
     llama_seq_id seqId, llama_pos perSeqCtxCeiling)
@@ -219,7 +221,7 @@ void TextLlmContext::initializeCommonState() {
         // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
         // draft loop is bounded: it uses its own construction-time params.n_max
         // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
-        // per-round dp.n_max hint. kMaxSpecDraft matches
+        // per-round dp.n_max hint. K_MAX_SPEC_DRAFT matches
         // runSpeculativeGeneration.
         params_.speculative.draft.n_max =
             std::clamp(params_.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
@@ -237,8 +239,8 @@ void TextLlmContext::initializeCommonState() {
               "[TextLlm] MTP draft setup failed (%s); continuing without "
               "speculative decoding\n",
               e.what()));
-      ctxDraft_.reset();
       spec_.reset();
+      ctxDraft_.reset();
     }
   }
 
@@ -792,9 +794,6 @@ void TextLlmContext::emitOutputPiece(
 LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
-  // Per-request speculative stats.
-  resetSpeculativeRuntimeStats();
-
   // MTP speculative decoding takes a dedicated draft/verify/accept loop.
   if (spec_) {
     return runSpeculativeGeneration(outputCallback);
@@ -915,10 +914,6 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
-  // Finalise the previous iteration's deferred close-position capture;
-  // the close-marker token has been committed by now.
-  capturePendingThinkClose();
-
   if (stopGeneration_.load()) {
     // Leave `stopGeneration_` set so the post-loop `onCancel` runs;
     // do NOT emit EOT since the rollback drops all sampled tokens.
@@ -995,6 +990,7 @@ SequenceStepResult TextLlmContext::processToken(
     llama_token tokenId, bool sampled, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
+  capturePendingThinkClose();
   std::string tokenStr =
       common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
   const std::string completeChars = utf8Buffer_.addToken(tokenStr);

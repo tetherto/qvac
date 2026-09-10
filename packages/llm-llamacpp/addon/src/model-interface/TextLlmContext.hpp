@@ -39,7 +39,7 @@ public:
       llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);
 
   // Destructor
-  ~TextLlmContext() override = default;
+  ~TextLlmContext() override;
 
   /**
    * The eval message method. It evaluates the message and updates the context.

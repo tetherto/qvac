@@ -1386,18 +1386,18 @@ LlamaModel::singleRuntimeStatsLocked() const {
                         ? state_->llmContext_->getSpecGeneratedTokens()
                         : static_cast<int64_t>(
                               state_->llmContext_->lastGeneratedTokenCount()));
-  const int64_t promptTokens =
-      wasPrefill ? 0
-                 : (wasSpeculative ? state_->llmContext_->getSpecPromptTokens()
-                                   : static_cast<int64_t>(perfData.n_p_eval));
+  const int64_t promptEvalTokens =
+      wasSpeculative ? state_->llmContext_->getSpecPromptTokens()
+                     : static_cast<int64_t>(perfData.n_p_eval);
+  const int64_t promptTokens = wasPrefill ? 0 : promptEvalTokens;
   const double tokensPerSecond = (!wasPrefill && generationMs > 0)
                                      ? kMillisInSecond / generationMs *
                                            static_cast<double>(generatedTokens)
                                      : 0.0;
   const double promptProcessingTPS =
-      promptEvalMs > 0
-          ? kMillisInSecond / promptEvalMs * static_cast<double>(promptTokens)
-          : 0.0;
+      promptEvalMs > 0 ? kMillisInSecond / promptEvalMs *
+                             static_cast<double>(promptEvalTokens)
+                       : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
   return {
       {"TTFT", timeToFirstToken},

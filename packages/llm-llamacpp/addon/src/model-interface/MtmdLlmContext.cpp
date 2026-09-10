@@ -50,6 +50,8 @@ MtmdLlmContext::MtmdLlmContext(
   initializeCommonState();
 }
 
+MtmdLlmContext::~MtmdLlmContext() { teardownSpeculative(); }
+
 MtmdLlmContext::MtmdLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
     mtmd_context* sharedVision, llama_seq_id seqId, llama_pos perSeqCtxCeiling)
@@ -268,8 +270,8 @@ void MtmdLlmContext::initializeMtpDraftContext() {
             "[MtmdLlm] MTP draft setup failed (%s); continuing without "
             "speculative decoding\n",
             e.what()));
-    ctxDraft_.reset();
     spec_.reset();
+    ctxDraft_.reset();
   }
 }
 
@@ -859,9 +861,6 @@ void MtmdLlmContext::refreshCurrentCacheTokensFromMemory() {
 LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
-  // Per-request speculative stats.
-  resetSpeculativeRuntimeStats();
-
   if (spec_) {
     return runSpeculativeGeneration(outputCallback);
   }
@@ -1124,16 +1123,23 @@ void MtmdLlmContext::specBeginGeneration(
 
 // Per-token processing for the speculative loop.
 SequenceStepResult MtmdLlmContext::specProcessToken(
-    llama_token tokenId, bool /*sampled*/, unsigned generated,
+    llama_token tokenId, bool sampled, unsigned generated,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
+  return processToken(
+      tokenId, sampled, generated, outputCallback, inlineDecodeBatch);
+}
+
+SequenceStepResult MtmdLlmContext::processToken(
+    llama_token tokenId, bool sampled, unsigned generated,
+    const std::function<void(const std::string&)>& outputCallback,
+    LlamaBatch* inlineDecodeBatch) {
+  capturePendingThinkClose();
   const std::string tokenStr =
       common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
-  if (outputCallback) {
-    const std::string completeChars = utf8Buffer_.addToken(tokenStr);
-    if (!completeChars.empty()) {
-      outputCallback(completeChars);
-    }
+  const std::string completeChars = utf8Buffer_.addToken(tokenStr);
+  if (!completeChars.empty() && outputCallback) {
+    outputCallback(completeChars);
   }
   recordPostReasoningTokenIfActive(tokenId);
 
@@ -1151,13 +1157,34 @@ SequenceStepResult MtmdLlmContext::specProcessToken(
           static_cast<llama_pos>(reasoningState_.openTokenCount - 1));
     }
     if (wasInside && !nowInside) {
-      compactor_.requestCloseCapture();
       compactor_.recordCloseMarkerForReplay(
-          reasoningState_.cached_close_tag_token);
+          reasoningState_.cached_close_tag_tokens);
+      compactor_.requestCloseCapture();
     }
   }
 
   const bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tokenId);
+  if (sampled && isEos && isQwen3ReasoningFamily_ &&
+      reasoningState_.inside_reasoning &&
+      reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
+    tokenId = reasoningState_.cached_close_tag_token;
+    const std::string closeStr =
+        common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+    reasoningState_.inside_reasoning = false;
+    compactor_.recordCloseMarkerForReplay(
+        reasoningState_.cached_close_tag_tokens);
+    compactor_.requestCloseCapture();
+    if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
+      forcedTokens_.push_back(reasoningState_.cached_newline_token);
+      forcedTokens_.push_back(reasoningState_.cached_newline_token);
+    }
+    banEogAfterReasoningRecovery_ = true;
+    const std::string closeChars = utf8Buffer_.addToken(closeStr);
+    if (!closeChars.empty() && outputCallback) {
+      outputCallback(closeChars);
+    }
+    return {.token = tokenId, .finished = false};
+  }
   if (isEos && isHarmonyModel_ && params_.use_jinja &&
       tokenId == harmonyCallToken_) {
     if (outputCallback) {
@@ -1190,8 +1217,6 @@ SequenceStepResult MtmdLlmContext::specProcessToken(
   if (finished) {
     generationStopReason_ = stopReason;
     flushPendingUtf8ToCallback(outputCallback);
-  } else {
-    capturePendingThinkClose();
   }
   return {.token = tokenId, .finished = finished, .stopReason = stopReason};
 }
@@ -1898,10 +1923,6 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
-  // Finalise the previous scheduler iteration's deferred close-position
-  // capture; the close-marker token has been committed by now.
-  capturePendingThinkClose();
-
   if (stopGeneration_.load()) {
     // Leave `stopGeneration_` set so the post-loop `cancelGenerationCleanup`
     // in `generateResponse` runs; do NOT emit EOT since the rollback drops
@@ -1946,109 +1967,12 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     forcedTokens_.erase(forcedTokens_.begin());
   }
 
-  std::string tokenStr =
-      common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
-  const std::string completeChars = utf8Buffer_.addToken(tokenStr);
-  if (!completeChars.empty() && outputCallback) {
-    outputCallback(completeChars);
-  }
-
-  // Record post-reasoning tokens for the replay. Capture starts after
-  // the close marker is committed, so the first token after the close lands
-  // here on the next scheduler iteration.
-  recordPostReasoningTokenIfActive(tokenId);
-
-  if (reasoningEnabled_) {
-    const bool wasInside = reasoningState_.inside_reasoning;
-    // Seed pre-reasoning tokens for the replay path, see the earlier
-    // MtmdLlmContext detection site and TextLlmContext::onLogitsReady
-    // for the full rationale.
-    if (!wasInside) {
-      compactor_.recordPreReasoningToken(tokenId);
-    }
-    qvac_lib_inference_addon_llama::utils::updateReasoningBuffer(
-        tokenStr, reasoningState_);
-    const bool nowInside = reasoningState_.inside_reasoning;
-    if (!wasInside && nowInside) {
-      setOpenThinkSpan(
-          current_.pos -
-          static_cast<llama_pos>(reasoningState_.openTokenCount - 1));
-    }
-    if (wasInside && !nowInside) {
-      compactor_.recordCloseMarkerForReplay(
-          reasoningState_.cached_close_tag_tokens);
-      compactor_.requestCloseCapture();
-    }
-  }
-
-  const bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tokenId);
-  if (sampledToken && isEos && isQwen3ReasoningFamily_ &&
-      reasoningState_.inside_reasoning &&
-      reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
-    tokenId = reasoningState_.cached_close_tag_token;
-    tokenStr = common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
-    reasoningState_.inside_reasoning = false;
-    // EOS substitution skips the `updateReasoningBuffer` handshake, so the
-    // substituted close never reaches the capture site on its own. Seed it
-    // first, as the six sibling close sites do, or the replay restores an
-    // end-of-prefill prefix that opens a `<think>` nothing closes.
-    compactor_.recordCloseMarkerForReplay(tokenId);
-    compactor_.requestCloseCapture();
-    if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
-      forcedTokens_.push_back(reasoningState_.cached_newline_token);
-      forcedTokens_.push_back(reasoningState_.cached_newline_token);
-    }
-    // Ban EOG on the next content sample so the forced </think> + newlines
-    // can't be immediately followed by another EOS -> empty answer (parity with
-    // the Text non-spec path and the speculative reasoning-recovery).
-    banEogAfterReasoningRecovery_ = true;
-    const std::string closeChars = utf8Buffer_.addToken(tokenStr);
-    if (!closeChars.empty() && outputCallback) {
-      outputCallback(closeChars);
-    }
-    return {.token = tokenId, .finished = false};
-  }
-
-  if (isEos && isHarmonyModel_ && params_.use_jinja &&
-      tokenId == harmonyCallToken_) {
-    QLOG_IF(
-        Priority::DEBUG,
-        string_format(
-            "[MtmdLlm] Harmony <|call|> stop: tokenId=%d\n", tokenId));
-    if (outputCallback) {
-      const std::string callMarker =
-          common_token_to_piece(modelCtx_.lctx, tokenId, true);
-      if (!callMarker.empty()) {
-        outputCallback(callMarker);
-      }
-    }
-    flushPendingUtf8ToCallback(outputCallback);
-    generationStopReason_ = GenerationStopReason::Eos;
-    return {
-        .token = tokenId,
-        .finished = true,
-        .stopReason = GenerationStopReason::Eos};
-  }
-
-  // Batch path only: scheduler stops solely on `finished` (see
-  // TextLlmContext::onLogitsReady for the single-prompt rationale).
-  const bool reachedBudget =
-      inlineDecodeBatch == nullptr && params_.n_predict > 0 &&
-      generatedAfterAccept >= static_cast<unsigned>(params_.n_predict);
-  GenerationStopReason stopReason = GenerationStopReason::None;
-  if (isEos) {
-    stopReason = GenerationStopReason::Eos;
-  } else if (reachedBudget) {
-    stopReason = GenerationStopReason::PredictionLimit;
-  } else if (checkAntiprompt()) {
-    stopReason = GenerationStopReason::Antiprompt;
-  }
-  const bool finished = stopReason != GenerationStopReason::None;
-  if (finished) {
-    generationStopReason_ = stopReason;
-    flushPendingUtf8ToCallback(outputCallback);
-  }
-  return {.token = tokenId, .finished = finished, .stopReason = stopReason};
+  return processToken(
+      tokenId,
+      sampledToken,
+      generatedAfterAccept,
+      outputCallback,
+      inlineDecodeBatch);
 }
 
 void MtmdLlmContext::onSequenceEnd(

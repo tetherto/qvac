@@ -63,7 +63,7 @@ public:
   /**
    * The destructor.
    */
-  ~MtmdLlmContext() override = default;
+  ~MtmdLlmContext() override;
   MtmdLlmContext(const MtmdLlmContext&) = delete;
   MtmdLlmContext& operator=(const MtmdLlmContext&) = delete;
   MtmdLlmContext(MtmdLlmContext&&) = delete;
@@ -309,9 +309,8 @@ private:
       const std::function<void(const std::string&)>& outputCallback) override;
   [[nodiscard]] llama_pos specPos() const override { return current_.pos; }
   void specSetPos(llama_pos pos) override {
-    // Media never reaches the speculative path, so one KV cell per position.
+    current_.cacheTokens += pos - current_.pos;
     current_.pos = pos;
-    current_.cacheTokens = pos;
   }
   [[nodiscard]] llama_pos specCtxCeiling() const override {
     return ctxCeiling();
@@ -339,6 +338,10 @@ private:
       llama_token tokenId, bool sampled, unsigned generated,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch) override;
+  SequenceStepResult processToken(
+      llama_token tokenId, bool sampled, unsigned generated,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch);
   bool specShouldRecoverReasoning(llama_token tok) override {
     return llama_vocab_is_eog(modelCtx_.vocab, tok) &&
            isQwen3ReasoningFamily_ && reasoningState_.inside_reasoning &&

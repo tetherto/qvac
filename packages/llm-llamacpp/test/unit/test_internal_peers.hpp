@@ -150,6 +150,20 @@ public:
     return llama_get_logits_ith(ctx.modelCtx_.lctx, logitIdx);
   }
 
+  /// Produce one live logits row. Newer fabric releases discard prefill
+  /// outputs after processPrompt returns, so this test seam decodes one token
+  /// before exercising the EOG mask directly.
+  static bool decodeTokenForLogits(MtmdLlmContext& ctx) {
+    const auto tokens = common_tokenize(ctx.modelCtx_.lctx, "x", false, true);
+    if (tokens.empty()) {
+      return false;
+    }
+    LlamaBatch batch(1, 0, 1);
+    common_batch_add(
+        *batch.get(), tokens.front(), ctx.current_.pos, {ctx.seqId_}, true);
+    return llama_decode(ctx.modelCtx_.lctx, *batch.get()) == 0;
+  }
+
   static bool removeThinkingFromContext(const MtmdLlmContext& context) {
     return context.removeThinkingFromContext_;
   }

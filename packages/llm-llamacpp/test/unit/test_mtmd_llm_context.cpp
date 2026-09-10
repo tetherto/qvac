@@ -505,7 +505,9 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
     GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
   }
 
-  config_files["n_predict"] = "64";
+  // A one-token budget deterministically stops after the template's forced
+  // reasoning opener, before the model can emit its close marker.
+  config_files["n_predict"] = "1";
   config_files["temp"] = "0";
 
   auto model = createQwen35Model();
@@ -569,7 +571,7 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
       << "small-budget MTMD run must enter reasoning before n_predict cutoff";
   EXPECT_EQ(cutoffOutput.find("</think>"), std::string::npos)
       << "test must stop inside reasoning to exercise rollback, not compaction";
-  EXPECT_GE(generatedTokens, 64.0)
+  EXPECT_GE(generatedTokens, 1.0)
       << "small-budget MTMD run should reach n_predict";
   EXPECT_EQ(ctx->getCacheTokens(), primerCacheTokens)
       << "MTMD rollback must restore cache-token bookkeeping to primer state";
@@ -1382,9 +1384,10 @@ TEST_F(MtmdLlmContextTest, PendingEogBanMasksEveryEogTokenAndIsConsumedOnce) {
   auto model = createQwen35Model();
   ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
 
-  // Decode once so the context owns a live logits row for the ban to write to.
+  // Seed a valid sequence position before the peer decodes a live logits row.
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "user", "content": "Hi"}])";
+  prompt.prefill = true;
   ASSERT_NO_THROW({ (void)model->processPrompt(prompt); });
 
   LlmContext* base = LlamaModelTestPeer::llmContext(*model);
@@ -1401,6 +1404,8 @@ TEST_F(MtmdLlmContextTest, PendingEogBanMasksEveryEogTokenAndIsConsumedOnce) {
   ASSERT_FALSE(eogTokens.empty())
       << "EOG set must be precomputed for a qwen35 arch";
 
+  ASSERT_TRUE(Peer::decodeTokenForLogits(*ctx))
+      << "failed to decode a logits row for the EOG-ban test";
   float* logits = Peer::logits(*ctx, -1);
   ASSERT_NE(logits, nullptr) << "expected a decoded logits row";
 

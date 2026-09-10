@@ -597,8 +597,7 @@ protected:
   // stay aligned. `startPos` is the first position to drop (matching the
   // target's seq_rm); -1 clears the whole draft sequence. No-op when MTP is
   // inactive (ctxDraft_ null). Best-effort and non-throwing: a failed partial
-  // seq_rm on a recurrent draft cache is not fatal — common_speculative_begin()
-  // detects the lag on the next generation and degrades drafts gracefully.
+  // seq_rm on a recurrent draft cache is not fatal.
   // Skipping this after cancel / resetState / loadCache is exactly what lets
   // the draft and target contexts diverge (orphaned draft KV -> degraded
   // drafts, or MTP silently disabling itself mid-session).
@@ -616,6 +615,13 @@ protected:
           "[LlmContext] MTP draft-context rollback failed; drafts may degrade "
           "until the draft cache re-syncs\n");
     }
+  }
+
+  // Derived contexts own the model used by the draft context. Their destructor
+  // bodies call this before their model-owning members are destroyed.
+  void teardownSpeculative() noexcept {
+    spec_.reset();
+    ctxDraft_.reset();
   }
 
   // Wraps llama_decode(target, batch). When MTP is active, also feeds the
@@ -719,30 +725,36 @@ protected:
     if (ctxDraft_) {
       preDraftPerf = llama_perf_context(ctxDraft_.get());
     }
-    auto finishRuntimeStats =
-        [this, preGenerationPerf, preDraftPerf](GenerateResponseResult result) {
-          specGeneratedTokens_ = lastGeneratedTokenCount_;
-          const auto postTargetPerf = llama_perf_context(getCtx());
-          specGenerationMs_ = std::max(
-              0.0,
-              (postTargetPerf.t_eval_ms - preGenerationPerf.t_eval_ms) +
-                  (postTargetPerf.t_p_eval_ms - preGenerationPerf.t_p_eval_ms));
-          // The MTP head executes in a second llama context. Its decode work is
-          // part of native generation cost even though it never appears in the
-          // target context's counters.
-          if (preDraftPerf && ctxDraft_) {
-            const auto postDraftPerf = llama_perf_context(ctxDraft_.get());
-            specGenerationMs_ += std::max(
-                0.0,
-                (postDraftPerf.t_eval_ms - preDraftPerf->t_eval_ms) +
-                    (postDraftPerf.t_p_eval_ms - preDraftPerf->t_p_eval_ms));
-          }
-          return result;
-        };
+    auto finishRuntimeStats = [this, preGenerationPerf, preDraftPerf]() {
+      specGeneratedTokens_ = lastGeneratedTokenCount_;
+      const auto postTargetPerf = llama_perf_context(getCtx());
+      specGenerationMs_ = std::max(
+          0.0,
+          (postTargetPerf.t_eval_ms - preGenerationPerf.t_eval_ms) +
+              (postTargetPerf.t_p_eval_ms - preGenerationPerf.t_p_eval_ms));
+      // The MTP head executes in a second llama context. Its decode work is
+      // part of native generation cost even though it never appears in the
+      // target context's counters.
+      if (preDraftPerf && ctxDraft_) {
+        const auto postDraftPerf = llama_perf_context(ctxDraft_.get());
+        specGenerationMs_ += std::max(
+            0.0,
+            (postDraftPerf.t_eval_ms - preDraftPerf->t_eval_ms) +
+                (postDraftPerf.t_p_eval_ms - preDraftPerf->t_p_eval_ms));
+      }
+    };
+    auto finishSpec = [&](bool ok) {
+      finishRuntimeStats();
+      return specFinish(outputCallback, ok);
+    };
+    auto cancelSpec = [&]() {
+      finishRuntimeStats();
+      return specCancel(outputCallback);
+    };
 
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
-      return finishRuntimeStats(specCancel(outputCallback));
+      return cancelSpec();
     }
 
     common_params& params = getParams();
@@ -753,11 +765,11 @@ protected:
       nMax = 1;
     }
     // Fixed, code-defined ceiling, independent of config. Both
-    // `--spec-draft-n-max` and `--batch-size` reach us via unvalidated config
+    // `--spec-draft-n-max` and `--batch-size` reach us via config
     // passthrough, so neither can be trusted as a bound: a negative `n_batch`
     // wraps to a huge uint32 that `static_cast<int>` turns back into <= 0,
     // silently no-opping a batchCap-only guard and leaving `nMax`
-    // attacker-controlled. Drafts are ~n_mtp_layers, so a small hard cap costs
+    // caller-controlled. Drafts are ~n_mtp_layers, so a small hard cap costs
     // nothing and bounds both the `LlamaBatch(nMax + 1, ...)` allocation below
     // and the `uint16_t` accepted-count cast at accept time. NOTE this only
     // bounds the LOCAL nMax; the derived contexts also clamp
@@ -781,9 +793,6 @@ protected:
     }
     LlamaBatch specBatch(nMax + 1, 0, 1);
 
-    // Reset the speculative draft state at the start of each generation.
-    common_speculative_begin(spec_.get(), seqId_, {});
-
     unsigned generated = 0;
 
     // The prompt is already decoded + speculative-processed, so its logits sit
@@ -804,15 +813,15 @@ protected:
       }
       // Same inline-decode headroom requirement as the in-loop recovery below.
       if (!specEnsureRecoveryHeadroom()) {
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+        return finishSpec(/*ok=*/false);
       }
       specRecoverReasoning(idLast, specBatch, outputCallback);
       if (stopGeneration_.load()) {
         stopGeneration_.store(false);
-        return finishRuntimeStats(specCancel(outputCallback));
+        return cancelSpec();
       }
       if (!specEnsurePendingTokenHeadroom()) {
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+        return finishSpec(/*ok=*/false);
       }
       const llama_token next = specSampleAndAccept(-1);
       const SequenceStepResult step = specProcessToken(
@@ -820,7 +829,7 @@ protected:
       idLast = step.token;
       if (stopGeneration_.load()) {
         stopGeneration_.store(false);
-        return finishRuntimeStats(specCancel(outputCallback));
+        return cancelSpec();
       }
       if (!step.finished && !step.decodedInline && params.n_predict > 0 &&
           generated >= static_cast<unsigned>(params.n_predict)) {
@@ -829,10 +838,10 @@ protected:
             specBatch,
             "[LlmContext] failed to decode speculative final token after "
             "reasoning recovery\n");
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
+        return finishSpec(/*ok=*/true);
       }
       if (step.finished) {
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
+        return finishSpec(/*ok=*/true);
       }
     } else {
       // The first token is normally decoded as id_last in the first verify
@@ -840,14 +849,14 @@ protected:
       // commit it directly before returning so the visible output and KV cache
       // agree.
       if (!specEnsurePendingTokenHeadroom()) {
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+        return finishSpec(/*ok=*/false);
       }
       const SequenceStepResult step = specProcessToken(
           idLast, sampled, ++generated, outputCallback, nullptr);
       idLast = step.token;
       if (stopGeneration_.load()) {
         stopGeneration_.store(false);
-        return finishRuntimeStats(specCancel(outputCallback));
+        return cancelSpec();
       }
       if (params.n_predict > 0 &&
           generated >= static_cast<unsigned>(params.n_predict) &&
@@ -856,10 +865,10 @@ protected:
             idLast,
             specBatch,
             "[LlmContext] failed to decode speculative final token\n");
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
+        return finishSpec(/*ok=*/true);
       }
       if (step.finished) {
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
+        return finishSpec(/*ok=*/true);
       }
     }
 
@@ -870,11 +879,11 @@ protected:
            generated < static_cast<unsigned>(params.n_predict)) {
       if (stopGeneration_.load()) {
         stopGeneration_.store(false);
-        return finishRuntimeStats(specCancel(outputCallback));
+        return cancelSpec();
       }
 
       if (specPos() + 1 > specCtxCeiling()) {
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+        return finishSpec(/*ok=*/false);
       }
 
       // Remaining context headroom for THIS round. The verify batch below spans
@@ -932,6 +941,7 @@ protected:
       if (ctxDraft_) {
         clearSequenceMemory(ctxDraft_.get(), specPos(), -1);
       }
+      draftTotal_ += static_cast<int64_t>(draft.size());
 
       // 2. Verify: decode [id_last, draft0, ..., draftN-1] in one batch.
       const llama_pos posBase = specPos();
@@ -963,7 +973,7 @@ protected:
       for (size_t j = 0; j <= draft.size(); ++j) {
         if (stopGeneration_.load()) {
           stopGeneration_.store(false);
-          return finishRuntimeStats(specCancel(outputCallback));
+          return cancelSpec();
         }
         if (params.n_predict > 0 &&
             generated >= static_cast<unsigned>(params.n_predict)) {
@@ -995,15 +1005,15 @@ protected:
           // Recovery decodes inline (outside the clamped verify batch), so make
           // room for it or stop gracefully instead of hitting FailedToDecode.
           if (!specEnsureRecoveryHeadroom()) {
-            return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+            return finishSpec(/*ok=*/false);
           }
           specRecoverReasoning(tok, specBatch, outputCallback);
           if (stopGeneration_.load()) {
             stopGeneration_.store(false);
-            return finishRuntimeStats(specCancel(outputCallback));
+            return cancelSpec();
           }
           if (!specEnsurePendingTokenHeadroom()) {
-            return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+            return finishSpec(/*ok=*/false);
           }
           const llama_token next = specSampleAndAccept(-1);
           const SequenceStepResult nstep = specProcessToken(
@@ -1012,7 +1022,7 @@ protected:
           idLastCommitted = false;
           if (stopGeneration_.load()) {
             stopGeneration_.store(false);
-            return finishRuntimeStats(specCancel(outputCallback));
+            return cancelSpec();
           }
           if (!nstep.finished && !nstep.decodedInline && params.n_predict > 0 &&
               generated >= static_cast<unsigned>(params.n_predict)) {
@@ -1036,7 +1046,7 @@ protected:
         idLastCommitted = false;
         if (stopGeneration_.load()) {
           stopGeneration_.store(false);
-          return finishRuntimeStats(specCancel(outputCallback));
+          return cancelSpec();
         }
         if (step.finished) {
           finished = true;
@@ -1044,6 +1054,7 @@ protected:
         }
         if (j < draft.size() && tok == draft[j]) {
           ++nAccepted;
+          ++draftAccepted_;
           ++lastGeneratedTokenCount_;
           idLastCommitted = true;
           continue;
@@ -1066,10 +1077,8 @@ protected:
               spec_.get(), seqId_, static_cast<uint16_t>(nAccepted));
         }
       }
-      draftAccepted_ += static_cast<int64_t>(nAccepted);
-      draftTotal_ += static_cast<int64_t>(draft.size());
       if (stoppedAtContextCeiling) {
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+        return finishSpec(/*ok=*/false);
       }
       if (finished) {
         break;
@@ -1084,7 +1093,7 @@ protected:
         generated >= static_cast<unsigned>(params.n_predict) &&
         !idLastCommitted) {
       if (!specEnsurePendingTokenHeadroom()) {
-        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+        return finishSpec(/*ok=*/false);
       }
       specCommitPendingToken(
           idLast,
@@ -1092,7 +1101,7 @@ protected:
           "[LlmContext] failed to decode speculative final token\n");
     }
 
-    return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
+    return finishSpec(/*ok=*/true);
   }
 
   // Context-specific pieces of the MTP loop. The cursor is `nPast_` on

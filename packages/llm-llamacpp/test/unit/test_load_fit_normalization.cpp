@@ -1148,7 +1148,13 @@ TEST_F(LoadFitNormalizationTest, RetiredDiscardKeyIsRejectedAsUnknownArgument) {
 }
 
 TEST_F(LoadFitNormalizationTest, RetiredContextShiftKeysAreRejected) {
-  for (const std::string& key : {"ctx-shift", "ctx_shift"}) {
+  for (const std::string& key :
+       {"context-shift",
+        "context_shift",
+        "no-context-shift",
+        "no_context_shift",
+        "ctx-shift",
+        "ctx_shift"}) {
     auto config = baseConfig();
     config[key] = "true";
     try {
@@ -1163,6 +1169,28 @@ TEST_F(LoadFitNormalizationTest, RetiredContextShiftKeysAreRejected) {
       EXPECT_THAT(
           error.what(),
           ::testing::HasSubstr("context shifting has been removed"));
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, CliOnlyFileOptionsRemainRejected) {
+  for (const std::string& key :
+       {"chat-template-file",
+        "system-prompt-file",
+        "log-prompts-dir",
+        "spec-draft-model"}) {
+    auto config = baseConfig();
+    config[key] = "/tmp/untrusted";
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"})));
+      FAIL() << key << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"));
     }
   }
 }

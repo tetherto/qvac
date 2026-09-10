@@ -1129,7 +1129,13 @@ NormalizedLoad normalizeLoadForFit(
   // Context shifting was removed from the addon. Reject both spellings here
   // rather than forwarding the fabric flag and silently claiming to enable a
   // feature neither context implements.
-  for (const std::string& key : {"ctx-shift", "ctx_shift"}) {
+  for (const std::string& key :
+       {"context-shift",
+        "context_shift",
+        "no-context-shift",
+        "no_context_shift",
+        "ctx-shift",
+        "ctx_shift"}) {
     if (configFilemap.contains(key)) {
       throw qvac_errors::StatusError(
           ADDON_ID,
@@ -1201,7 +1207,28 @@ NormalizedLoad normalizeLoadForFit(
 
   std::unordered_map<std::string, common_arg*> argToOptions;
   std::unordered_map<std::string, bool> argBoolValues;
+  static const std::unordered_set<std::string_view> allowedSpecArgs = {
+      "--spec-draft-n-max",
+      "--spec-draft-n-min",
+      "--spec-draft-p-min",
+      "--spec-draft-backend-sampling",
+      "--no-spec-draft-backend-sampling",
+      "--spec-draft-device",
+      "--spec-draft-ngl"};
   for (auto& opt : ctxArg.options) {
+    // The CLI profile is needed to obtain fabric's speculative options, but
+    // unrelated CLI-only options include local file readers and directory
+    // writers. Preserve the addon's former COMMON surface and add only the MTP
+    // tuning options exposed by this addon.
+    const auto allowedSpecArg = [&](const char* arg) {
+      return allowedSpecArgs.contains(arg);
+    };
+    const bool allowSpecOption =
+        std::ranges::any_of(opt.args, allowedSpecArg) ||
+        std::ranges::any_of(opt.args_neg, allowedSpecArg);
+    if (!opt.in_example(LLAMA_EXAMPLE_COMMON) && !allowSpecOption) {
+      continue;
+    }
     for (const auto& arg : opt.args) {
       argToOptions[arg] = &opt;
       if (opt.handler_bool != nullptr) {
@@ -1285,7 +1312,11 @@ NormalizedLoad normalizeLoadForFit(
       checkArg(argIndex);
       const std::string& val = configVector[++argIndex];
       if (opt.handler_int != nullptr) {
-        opt.handler_int(params, std::stoi(val));
+        const int parsedValue = std::stoi(val);
+        if (arg == "--spec-draft-n-max" && parsedValue < 1) {
+          throw std::invalid_argument("spec-draft-n-max must be at least 1");
+        }
+        opt.handler_int(params, parsedValue);
         continue;
       }
       if (opt.handler_string != nullptr) {

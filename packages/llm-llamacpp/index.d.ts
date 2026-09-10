@@ -187,6 +187,8 @@ declare namespace LlmLlamacpp {
          * and which one wins is unspecified.
          */
         "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
+        /** Enable MTP self-speculative decoding for models with a next-n head. */
+        "spec-type"?: "draft-mtp";
         /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
         "tensor-split"?: string;
         "cache-type-k"?: string;
