@@ -17294,7 +17294,7 @@ export const allModels = [
     endpointCategory: 'ocr'
   } as const,
   {
-    name: 'PARAKEET_INDIC_CONFORMER_CTC_F16_F16',
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_F16',
     src: `registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf',
@@ -17313,7 +17313,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q4_0_Q4_0',
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf',
@@ -17332,7 +17332,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q8_0_Q8_0',
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf',
@@ -17351,7 +17351,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_CTC_0_6B_Q8_0_Q8_0',
+    name: 'PARAKEET_CTC_0_6B_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf',
     registrySource: 's3',
@@ -17369,7 +17369,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q8_0_Q8_0',
+    name: 'PARAKEET_EOU_120M_V1_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf',
     registrySource: 's3',
@@ -17387,7 +17387,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q8_0_Q8_0',
+    name: 'PARAKEET_TDT_0_6B_V3_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf',
     registrySource: 's3',
@@ -17405,7 +17405,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_Q8_0',
+    name: 'PARAKEET_SORTFORMER_4SPK_V1_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-11/sortformer-4spk-v1.q8_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-05-11/sortformer-4spk-v1.q8_0.gguf',
     registrySource: 's3',
@@ -17423,7 +17423,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_F16',
+    name: 'PARAKEET_SORTFORMER_4SPK_V2_1_F16',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.f16.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.f16.gguf',
@@ -17442,7 +17442,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_Q4_0',
+    name: 'PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf',
@@ -17461,7 +17461,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_Q8_0_1',
+    name: 'PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
@@ -17480,7 +17480,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q4_0_Q4_0',
+    name: 'PARAKEET_EOU_120M_V1_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf',
     registrySource: 's3',
@@ -17498,7 +17498,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q4_0_Q4_0',
+    name: 'PARAKEET_TDT_0_6B_V3_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf',
     registrySource: 's3',
@@ -17516,7 +17516,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_Q4_0_1',
+    name: 'PARAKEET_SORTFORMER_4SPK_V1_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf',
     registrySource: 's3',
@@ -17534,7 +17534,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_CTC_0_6B_F16_F16',
+    name: 'PARAKEET_CTC_0_6B_F16',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf',
     registrySource: 's3',
@@ -17552,7 +17552,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_CTC_0_6B_Q4_0_Q4_0',
+    name: 'PARAKEET_CTC_0_6B_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf',
     registrySource: 's3',
@@ -17570,7 +17570,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_EOU_120M_V1_F16_F16',
+    name: 'PARAKEET_EOU_120M_V1_F16',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf',
     registrySource: 's3',
@@ -17588,7 +17588,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_F16_F16',
+    name: 'PARAKEET_TDT_0_6B_V3_F16',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf',
     registrySource: 's3',
@@ -17606,7 +17606,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_F16_1',
+    name: 'PARAKEET_SORTFORMER_4SPK_V1_F16',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf',
     registrySource: 's3',
@@ -17624,7 +17624,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_F16_F16',
+    name: 'PARAKEET_UNIFIED_0_6B_F16',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf`,
     registryPath: 'qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf',
     registrySource: 's3',
@@ -17642,7 +17642,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_Q4_0_Q4_0',
+    name: 'PARAKEET_UNIFIED_0_6B_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf',
@@ -17661,7 +17661,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_Q8_0_Q8_0',
+    name: 'PARAKEET_UNIFIED_0_6B_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf',
@@ -17680,7 +17680,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PREPROCESSOR_F16',
+    name: 'PARAKEET_0_6B_F16',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf',
@@ -17699,7 +17699,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PREPROCESSOR_Q4_0',
+    name: 'PARAKEET_0_6B_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf',
@@ -17718,7 +17718,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_TDT_PREPROCESSOR_Q8_0',
+    name: 'PARAKEET_0_6B_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf',
@@ -19939,41 +19939,30 @@ export const OCR_DOCTR: ModelConstant<'ocr'> = allModels[587]
 export const OCR_DOCTR_1: ModelConstant<'ocr'> = allModels[588]
 export const OCR_CRAFT: ModelConstant<'ocr'> = allModels[589]
 export const OCR_LATIN: ModelConstant<'ocr'> = allModels[590]
-export const PARAKEET_INDIC_CONFORMER_CTC_F16_F16: ModelConstant<'transcription'> = allModels[591]
-export const PARAKEET_INDIC_CONFORMER_CTC_Q4_0_Q4_0: ModelConstant<'transcription'> = allModels[592]
-export const PARAKEET_INDIC_CONFORMER_CTC_Q8_0_Q8_0: ModelConstant<'transcription'> = allModels[593]
-export const PARAKEET_TDT_PARAKEET_CTC_0_6B_Q8_0_Q8_0: ModelConstant<'transcription'> =
-  allModels[594]
-export const PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q8_0_Q8_0: ModelConstant<'transcription'> =
-  allModels[595]
-export const PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q8_0_Q8_0: ModelConstant<'transcription'> =
-  allModels[596]
-export const PARAKEET_TDT_Q8_0: ModelConstant<'transcription'> = allModels[597]
-export const PARAKEET_TDT_F16: ModelConstant<'transcription'> = allModels[598]
-export const PARAKEET_TDT_Q4_0: ModelConstant<'transcription'> = allModels[599]
-export const PARAKEET_TDT_Q8_0_1: ModelConstant<'transcription'> = allModels[600]
-export const PARAKEET_TDT_PARAKEET_EOU_120M_V1_Q4_0_Q4_0: ModelConstant<'transcription'> =
-  allModels[601]
-export const PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_Q4_0_Q4_0: ModelConstant<'transcription'> =
-  allModels[602]
-export const PARAKEET_TDT_Q4_0_1: ModelConstant<'transcription'> = allModels[603]
-export const PARAKEET_TDT_PARAKEET_CTC_0_6B_F16_F16: ModelConstant<'transcription'> = allModels[604]
-export const PARAKEET_TDT_PARAKEET_CTC_0_6B_Q4_0_Q4_0: ModelConstant<'transcription'> =
-  allModels[605]
-export const PARAKEET_TDT_PARAKEET_EOU_120M_V1_F16_F16: ModelConstant<'transcription'> =
-  allModels[606]
-export const PARAKEET_TDT_PARAKEET_TDT_0_6B_V3_F16_F16: ModelConstant<'transcription'> =
-  allModels[607]
-export const PARAKEET_TDT_F16_1: ModelConstant<'transcription'> = allModels[608]
-export const PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_F16_F16: ModelConstant<'transcription'> =
-  allModels[609]
-export const PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_Q4_0_Q4_0: ModelConstant<'transcription'> =
-  allModels[610]
-export const PARAKEET_TDT_PARAKEET_UNIFIED_EN_0_6B_Q8_0_Q8_0: ModelConstant<'transcription'> =
-  allModels[611]
-export const PARAKEET_TDT_PREPROCESSOR_F16: ModelConstant<'transcription'> = allModels[612]
-export const PARAKEET_TDT_PREPROCESSOR_Q4_0: ModelConstant<'transcription'> = allModels[613]
-export const PARAKEET_TDT_PREPROCESSOR_Q8_0: ModelConstant<'transcription'> = allModels[614]
+export const PARAKEET_INDIC_CONFORMER_CTC_F16: ModelConstant<'transcription'> = allModels[591]
+export const PARAKEET_INDIC_CONFORMER_CTC_Q4_0: ModelConstant<'transcription'> = allModels[592]
+export const PARAKEET_INDIC_CONFORMER_CTC_Q8_0: ModelConstant<'transcription'> = allModels[593]
+export const PARAKEET_CTC_0_6B_Q8_0: ModelConstant<'transcription'> = allModels[594]
+export const PARAKEET_EOU_120M_V1_Q8_0: ModelConstant<'transcription'> = allModels[595]
+export const PARAKEET_TDT_0_6B_V3_Q8_0: ModelConstant<'transcription'> = allModels[596]
+export const PARAKEET_SORTFORMER_4SPK_V1_Q8_0: ModelConstant<'transcription'> = allModels[597]
+export const PARAKEET_SORTFORMER_4SPK_V2_1_F16: ModelConstant<'transcription'> = allModels[598]
+export const PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0: ModelConstant<'transcription'> = allModels[599]
+export const PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0: ModelConstant<'transcription'> = allModels[600]
+export const PARAKEET_EOU_120M_V1_Q4_0: ModelConstant<'transcription'> = allModels[601]
+export const PARAKEET_TDT_0_6B_V3_Q4_0: ModelConstant<'transcription'> = allModels[602]
+export const PARAKEET_SORTFORMER_4SPK_V1_Q4_0: ModelConstant<'transcription'> = allModels[603]
+export const PARAKEET_CTC_0_6B_F16: ModelConstant<'transcription'> = allModels[604]
+export const PARAKEET_CTC_0_6B_Q4_0: ModelConstant<'transcription'> = allModels[605]
+export const PARAKEET_EOU_120M_V1_F16: ModelConstant<'transcription'> = allModels[606]
+export const PARAKEET_TDT_0_6B_V3_F16: ModelConstant<'transcription'> = allModels[607]
+export const PARAKEET_SORTFORMER_4SPK_V1_F16: ModelConstant<'transcription'> = allModels[608]
+export const PARAKEET_UNIFIED_0_6B_F16: ModelConstant<'transcription'> = allModels[609]
+export const PARAKEET_UNIFIED_0_6B_Q4_0: ModelConstant<'transcription'> = allModels[610]
+export const PARAKEET_UNIFIED_0_6B_Q8_0: ModelConstant<'transcription'> = allModels[611]
+export const PARAKEET_0_6B_F16: ModelConstant<'transcription'> = allModels[612]
+export const PARAKEET_0_6B_Q4_0: ModelConstant<'transcription'> = allModels[613]
+export const PARAKEET_0_6B_Q8_0: ModelConstant<'transcription'> = allModels[614]
 export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX: ModelConstant<'speech'> = allModels[615]
 export const TTS_S3GEN_EN_CHATTERBOX: ModelConstant<'speech'> = allModels[616]
 export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[617]
