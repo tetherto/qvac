@@ -761,8 +761,9 @@ protected:
     // nothing and bounds both the `LlamaBatch(nMax + 1, ...)` allocation below
     // and the `uint16_t` accepted-count cast at accept time. NOTE this only
     // bounds the LOCAL nMax; the derived contexts also clamp
-    // params.speculative.draft.n_max to K_MAX_SPEC_DRAFT at init so fabric's own
-    // draft loop (which ignores the per-round dp.n_max hint) is bounded too.
+    // params.speculative.draft.n_max to K_MAX_SPEC_DRAFT at init so fabric's
+    // own draft loop (which ignores the per-round dp.n_max hint) is bounded
+    // too.
     if (nMax > K_MAX_SPEC_DRAFT) {
       nMax = K_MAX_SPEC_DRAFT;
     }

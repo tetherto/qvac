@@ -250,7 +250,8 @@ void MtmdLlmContext::initializeMtpDraftContext() {
     // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
     // draft loop is bounded: it uses its own construction-time params.n_max
     // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
-    // per-round dp.n_max hint. K_MAX_SPEC_DRAFT matches runSpeculativeGeneration.
+    // per-round dp.n_max hint. K_MAX_SPEC_DRAFT matches
+    // runSpeculativeGeneration.
     params_.speculative.draft.n_max =
         std::clamp(params_.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
     spec_.reset(common_speculative_init(

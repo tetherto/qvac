@@ -222,7 +222,7 @@ void TextLlmContext::initializeCommonState() {
         // per-round dp.n_max hint. kMaxSpecDraft matches
         // runSpeculativeGeneration.
         params_.speculative.draft.n_max =
-        std::clamp(params_.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
+            std::clamp(params_.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
         spec_.reset(common_speculative_init(
             params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
         ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
