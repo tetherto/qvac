@@ -34,6 +34,13 @@ on:
         required: false
         default: "packages/vla-ggml"
 
+# Not keyed on github.ref alone: the pull_request_target caller sets it to the
+# base branch, so every in-flight PR would share one group. PR number keeps them
+# independent; github.ref serialises the events that write the cache.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   runner_names:
     permissions:
@@ -77,7 +84,6 @@ jobs:
     env:
       WORKDIR: ${{ inputs.workdir }}
       # Keep vcpkg cache under the package directory in a monorepo
-      VCPKG_BINARY_SOURCES: ${{ format('clear;files,{0}/{1}/vcpkg/cache,readwrite', github.workspace, inputs.workdir) }}
       GIT_TERMINAL_PROMPT: "0"
 
     steps:
@@ -174,6 +180,24 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
+      # Must come after setup-vcpkg, which writes this same variable to
+      # $GITHUB_ENV and would otherwise win. `clear;` drops its S3 source, which
+      # this job has no credentials for.
+      - name: Point vcpkg at the cached binary directory
+        if: ${{ matrix.os != 'windows-2025' }}
+        shell: bash
+        run: |
+          echo "VCPKG_BINARY_SOURCES=clear;files,$GITHUB_WORKSPACE/$WORKDIR/vcpkg/cache,readwrite" >> "$GITHUB_ENV"
+
+      # Native path required: a mixed-separator path resolves elsewhere and
+      # vcpkg silently finds nothing.
+      - name: Point vcpkg at the cached binary directory (Windows)
+        if: ${{ matrix.os == 'windows-2025' }}
+        shell: powershell
+        run: |
+          $cacheDir = [IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE (Join-Path $env:WORKDIR 'vcpkg/cache')))
+          echo "VCPKG_BINARY_SOURCES=clear;files,$cacheDir,readwrite" >> $env:GITHUB_ENV
+
       - name: Cleanup vcpkg
         shell: bash
         run: |
@@ -191,27 +215,67 @@ jobs:
         shell: bash
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
-      - name: Get vcpkg cache (package-local)
+      # This job runs PR-head code, so only trusted events may write the shared
+      # cache (.cursor/rules/devops/github-actions.mdc:82). No restore-keys: a
+      # prefix match would re-save the previous entry's archives and grow without
+      # bound. The key cannot cover the runner image's compiler: a toolchain bump
+      # there gives an exact hit whose contents all miss, and actions/cache skips
+      # the save on an exact hit -- bump `v6` to recover.
+      - name: Get vcpkg cache (restore + save, trusted contexts)
+        if: >-
+          github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch' ||
+          github.event_name == 'merge_group' ||
+          github.event_name == 'schedule'
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          # NOTE: don't include workspace-root 'vcpkg/ports/**' here — the
+          # NOTE: don't include workspace-root 'vcpkg/ports/**' here -- the
           # microsoft/vcpkg clone (pinned to 2025.12.12 above) drops ~4000
           # port directories into the workspace root, and hashing them on
           # NTFS exceeds the 120s template-eval cap on qvac-win25-x64.
           # The pinned microsoft/vcpkg branch is effectively a constant,
           # so it doesn't need to participate in the cache key.
           key: >-
-            cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
+            cpp-tests-v6-vla-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
               hashFiles(
                 format('{0}/vcpkg.json', inputs.workdir),
                 format('{0}/vcpkg-configuration.json', inputs.workdir),
                 format('{0}/vcpkg/ports/**', inputs.workdir),
                 'vcpkg.json',
-                'vcpkg-configuration.json'
+                'vcpkg-configuration.json',
+                'vcpkg-overlays/triplets/**',
+                'vcpkg-overlays/toolchains/**'
               )
             }}
-          path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
-          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+          path: ${{ env.WORKDIR }}/vcpkg/cache
+
+      - name: Get vcpkg cache (restore-only, untrusted contexts)
+        if: >-
+          github.event_name != 'push' &&
+          github.event_name != 'workflow_dispatch' &&
+          github.event_name != 'merge_group' &&
+          github.event_name != 'schedule'
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          # NOTE: don't include workspace-root 'vcpkg/ports/**' here -- the
+          # microsoft/vcpkg clone (pinned to 2025.12.12 above) drops ~4000
+          # port directories into the workspace root, and hashing them on
+          # NTFS exceeds the 120s template-eval cap on qvac-win25-x64.
+          # The pinned microsoft/vcpkg branch is effectively a constant,
+          # so it doesn't need to participate in the cache key.
+          key: >-
+            cpp-tests-v6-vla-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
+              hashFiles(
+                format('{0}/vcpkg.json', inputs.workdir),
+                format('{0}/vcpkg-configuration.json', inputs.workdir),
+                format('{0}/vcpkg/ports/**', inputs.workdir),
+                'vcpkg.json',
+                'vcpkg-configuration.json',
+                'vcpkg-overlays/triplets/**',
+                'vcpkg-overlays/toolchains/**'
+              )
+            }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
