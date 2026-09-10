@@ -1,8 +1,8 @@
 #pragma once
 
 #include <algorithm>
-#include <atomic>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -464,10 +464,18 @@ public:
   [[nodiscard]] int64_t getSpecGeneratedTokens() const {
     return specGeneratedTokens_;
   }
+  [[nodiscard]] int64_t getSpecPromptTokens() const {
+    return specPromptTokens_;
+  }
+  [[nodiscard]] double getSpecPromptEvalMs() const { return specPromptEvalMs_; }
+  [[nodiscard]] double getSpecGenerationMs() const { return specGenerationMs_; }
   void resetSpeculativeRuntimeStats() {
     draftAccepted_ = 0;
     draftTotal_ = 0;
     specGeneratedTokens_ = 0;
+    specPromptTokens_ = 0;
+    specPromptEvalMs_ = 0.0;
+    specGenerationMs_ = 0.0;
     lastGenerationUsedSpec_ = false;
   }
 
@@ -579,6 +587,9 @@ protected:
   int64_t draftAccepted_ = 0;
   int64_t draftTotal_ = 0;
   int64_t specGeneratedTokens_ = 0;
+  int64_t specPromptTokens_ = 0;
+  double specPromptEvalMs_ = 0.0;
+  double specGenerationMs_ = 0.0;
   bool lastGenerationUsedSpec_ = false;
   std::atomic<bool> stopGeneration_ = false;
 
@@ -656,29 +667,11 @@ protected:
   // needs.
   [[nodiscard]] virtual llama_pos specRecoveryPositions() const { return 3; }
 
-  // Make room for an inline reasoning-recovery before it decodes. Recovery
-  // decodes `specRecoveryPositions()` tokens directly, while specSetPos() can
-  // legitimately leave the cursor at specCtxCeiling() (worst case
-  // j == draft.size() == headroom). Without this, an EOS-inside-<think> within
-  // a few tokens of the ceiling would throw FailedToDecode — the same failure
-  // class the per-round draft clamp removes for the verify batch. Slides first
-  // and reports whether recovery can safely proceed.
-  //
-  // KNOWN LIMIT: the fallback discard bottoms out in
-  // ContextShifter::trySlideGeneration, which only slides once nPast + 1
-  // exceeds the ceiling. So when the cursor sits 1-2 positions below the
-  // ceiling and a context needing 3 (Text) cannot fit, the discard no-ops and
-  // generation stops gracefully with ContextOverflow even though a slide budget
-  // may exist. Making the slider honour a multi-position request means
-  // threading a `needed` count through shared non-speculative slide code, so it
-  // is deliberately left out of this MTP change — the current behavior is a
-  // safe stop, not a hard failure.
+  // Check room for an inline reasoning recovery before it decodes. Sliding
+  // context support has been removed from the addon, so insufficient headroom
+  // is a graceful ContextOverflow stop rather than an attempted discard.
   [[nodiscard]] bool specEnsureRecoveryHeadroom() {
     const llama_pos needed = specRecoveryPositions();
-    if (specPos() + needed <= specCtxCeiling()) {
-      return true;
-    }
-    specApplyContextDiscard();
     return specPos() + needed <= specCtxCeiling();
   }
 
@@ -696,13 +689,10 @@ protected:
           ADDON_ID, toString(FailedToDecode), errorMessage);
     }
     specSetPos(pos + 1);
+    ++lastGeneratedTokenCount_;
   }
 
   [[nodiscard]] bool specEnsurePendingTokenHeadroom() {
-    if (specPos() + 1 <= specCtxCeiling()) {
-      return true;
-    }
-    specApplyContextDiscard();
     return specPos() + 1 <= specCtxCeiling();
   }
 
@@ -715,9 +705,46 @@ protected:
     specGeneratedTokens_ = 0;
     specBeginGeneration(outputCallback);
 
+    // llama.cpp classifies every decode with more than one queued token as a
+    // prompt eval. Speculative verify batches therefore make its live
+    // n_p_eval/t_p_eval counters unsuitable for user-visible stats. Preserve
+    // the real prefill counters before the first verify batch, then compute
+    // generation time from the target + draft contexts' native perf deltas.
+    // This keeps TPS comparable with the non-speculative path, which is also
+    // decode-time based and excludes output-callback wall time.
+    const auto preGenerationPerf = llama_perf_context(getCtx());
+    specPromptTokens_ = preGenerationPerf.n_p_eval;
+    specPromptEvalMs_ = preGenerationPerf.t_p_eval_ms;
+    std::optional<llama_perf_context_data> preDraftPerf;
+    if (ctxDraft_) {
+      preDraftPerf = llama_perf_context(ctxDraft_.get());
+    }
+    auto finishRuntimeStats =
+        [this, preGenerationPerf, preDraftPerf](GenerateResponseResult result) {
+          specGeneratedTokens_ = lastGeneratedTokenCount_;
+          const auto postTargetPerf = llama_perf_context(getCtx());
+          specGenerationMs_ = std::max(
+              0.0,
+              (postTargetPerf.t_eval_ms - preGenerationPerf.t_eval_ms) +
+                  (postTargetPerf.t_p_eval_ms -
+                   preGenerationPerf.t_p_eval_ms));
+          // The MTP head executes in a second llama context. Its decode work is
+          // part of native generation cost even though it never appears in the
+          // target context's counters.
+          if (preDraftPerf && ctxDraft_) {
+            const auto postDraftPerf = llama_perf_context(ctxDraft_.get());
+            specGenerationMs_ += std::max(
+                0.0,
+                (postDraftPerf.t_eval_ms - preDraftPerf->t_eval_ms) +
+                    (postDraftPerf.t_p_eval_ms -
+                     preDraftPerf->t_p_eval_ms));
+          }
+          return result;
+        };
+
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
-      return specCancel(outputCallback);
+      return finishRuntimeStats(specCancel(outputCallback));
     }
 
     common_params& params = getParams();
@@ -776,17 +803,24 @@ protected:
       }
       // Same inline-decode headroom requirement as the in-loop recovery below.
       if (!specEnsureRecoveryHeadroom()) {
-        return specFinish(outputCallback, /*ok=*/false);
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
       }
       specRecoverReasoning(idLast, specBatch, outputCallback);
+      if (stopGeneration_.load()) {
+        stopGeneration_.store(false);
+        return finishRuntimeStats(specCancel(outputCallback));
+      }
       if (!specEnsurePendingTokenHeadroom()) {
-        return specFinish(outputCallback, /*ok=*/false);
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
       }
       const llama_token next = specSampleAndAccept(-1);
       const SequenceStepResult step = specProcessToken(
           next, /*sampled=*/true, ++generated, outputCallback, &specBatch);
-      specGeneratedTokens_ = generated;
       idLast = step.token;
+      if (stopGeneration_.load()) {
+        stopGeneration_.store(false);
+        return finishRuntimeStats(specCancel(outputCallback));
+      }
       if (!step.finished && !step.decodedInline && params.n_predict > 0 &&
           generated >= static_cast<unsigned>(params.n_predict)) {
         specCommitPendingToken(
@@ -794,22 +828,25 @@ protected:
             specBatch,
             "[LlmContext] failed to decode speculative final token after "
             "reasoning recovery\n");
-        return specFinish(outputCallback, /*ok=*/true);
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
       }
       if (step.finished) {
-        return specFinish(outputCallback, /*ok=*/true);
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
       }
     } else {
       // The first token is normally decoded as id_last in the first verify batch
       // below. If a one-token prediction budget ends the generation here, commit
       // it directly before returning so the visible output and KV cache agree.
       if (!specEnsurePendingTokenHeadroom()) {
-        return specFinish(outputCallback, /*ok=*/false);
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
       }
       const SequenceStepResult step = specProcessToken(
           idLast, sampled, ++generated, outputCallback, nullptr);
-      specGeneratedTokens_ = generated;
       idLast = step.token;
+      if (stopGeneration_.load()) {
+        stopGeneration_.store(false);
+        return finishRuntimeStats(specCancel(outputCallback));
+      }
       if (params.n_predict > 0 &&
           generated >= static_cast<unsigned>(params.n_predict) &&
           step.stopReason == GenerationStopReason::PredictionLimit) {
@@ -817,34 +854,25 @@ protected:
             idLast,
             specBatch,
             "[LlmContext] failed to decode speculative final token\n");
-        return specFinish(outputCallback, /*ok=*/true);
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
       }
       if (step.finished) {
-        return specFinish(outputCallback, /*ok=*/true);
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
       }
     }
 
     std::vector<llama_token> draft;
+    bool idLastCommitted = false;
+    bool stoppedAtContextCeiling = false;
     while (params.n_predict <= 0 ||
            generated < static_cast<unsigned>(params.n_predict)) {
       if (stopGeneration_.load()) {
         stopGeneration_.store(false);
-        return specCancel(outputCallback);
+        return finishRuntimeStats(specCancel(outputCallback));
       }
 
       if (specPos() + 1 > specCtxCeiling()) {
-        // Accepted graceful degradation: a successful slide here (and the
-        // end-of-generation reasoning-block compaction) shifts the TARGET KV
-        // without mirroring onto ctxDraft_, so the draft context lags until it
-        // re-syncs via decodeAndSpecProcess. Output stays correct regardless
-        // (the target verifies every draft token); only draft acceptance quality
-        // dips briefly. Not mirrored on purpose — a position-shift mirror is not
-        // a plain seq_rm, and clearing the draft mid-loop is riskier than the
-        // benign lag fabric's begin() already handles.
-        specApplyContextDiscard();
-        if (specPos() + 1 > specCtxCeiling()) {
-          return specFinish(outputCallback, /*ok=*/false);
-        }
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
       }
 
       // Remaining context headroom for THIS round. The verify batch below spans
@@ -918,14 +946,34 @@ protected:
             toString(FailedToDecode),
             "[LlmContext] failed to decode speculative batch\n");
       }
+      // idLast was the one pending generated token from the preceding sample;
+      // the successful verify decode has now committed it to target KV.
+      ++lastGeneratedTokenCount_;
+      idLastCommitted = true;
 
       // 3. Sample + accept the longest matching prefix.
       size_t nAccepted = 0;
       bool finished = false;
       bool reasoningRecovered = false;
       for (size_t j = 0; j <= draft.size(); ++j) {
+        if (stopGeneration_.load()) {
+          stopGeneration_.store(false);
+          return finishRuntimeStats(specCancel(outputCallback));
+        }
         if (params.n_predict > 0 &&
             generated >= static_cast<unsigned>(params.n_predict)) {
+          break;
+        }
+
+        // The final logits row predicts a token immediately after the verify
+        // batch. When that batch already ends at the context ceiling, there is
+        // nowhere to commit the prediction. Stop before sampling/streaming it;
+        // otherwise the visible output gains a token that is absent from KV and
+        // generatedTokens, and the following round reports an avoidable error.
+        if (j == draft.size() &&
+            posBase + 1 + static_cast<llama_pos>(j) >= specCtxCeiling()) {
+          stoppedAtContextCeiling = true;
+          finished = true;
           break;
         }
 
@@ -942,17 +990,25 @@ protected:
           // Recovery decodes inline (outside the clamped verify batch), so make
           // room for it or stop gracefully instead of hitting FailedToDecode.
           if (!specEnsureRecoveryHeadroom()) {
-            return specFinish(outputCallback, /*ok=*/false);
+            return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
           }
           specRecoverReasoning(tok, specBatch, outputCallback);
+          if (stopGeneration_.load()) {
+            stopGeneration_.store(false);
+            return finishRuntimeStats(specCancel(outputCallback));
+          }
           if (!specEnsurePendingTokenHeadroom()) {
-            return specFinish(outputCallback, /*ok=*/false);
+            return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
           }
           const llama_token next = specSampleAndAccept(-1);
           const SequenceStepResult nstep = specProcessToken(
               next, /*sampled=*/true, ++generated, outputCallback, &specBatch);
-          specGeneratedTokens_ = generated;
           idLast = nstep.token;
+          idLastCommitted = false;
+          if (stopGeneration_.load()) {
+            stopGeneration_.store(false);
+            return finishRuntimeStats(specCancel(outputCallback));
+          }
           if (!nstep.finished && !nstep.decodedInline && params.n_predict > 0 &&
               generated >= static_cast<unsigned>(params.n_predict)) {
             specCommitPendingToken(
@@ -960,6 +1016,7 @@ protected:
                 specBatch,
                 "[LlmContext] failed to decode speculative final token after "
                 "reasoning recovery\n");
+            idLastCommitted = true;
             finished = true;
           } else {
             finished = nstep.finished;
@@ -970,14 +1027,20 @@ protected:
 
         const SequenceStepResult step = specProcessToken(
             tok, /*sampled=*/true, ++generated, outputCallback, &specBatch);
-        specGeneratedTokens_ = generated;
         idLast = step.token;
+        idLastCommitted = false;
+        if (stopGeneration_.load()) {
+          stopGeneration_.store(false);
+          return finishRuntimeStats(specCancel(outputCallback));
+        }
         if (step.finished) {
           finished = true;
           break;
         }
         if (j < draft.size() && tok == draft[j]) {
           ++nAccepted;
+          ++lastGeneratedTokenCount_;
+          idLastCommitted = true;
           continue;
         }
         break; // mismatch
@@ -1000,12 +1063,31 @@ protected:
       }
       draftAccepted_ += static_cast<int64_t>(nAccepted);
       draftTotal_ += static_cast<int64_t>(draft.size());
+      if (stoppedAtContextCeiling) {
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+      }
       if (finished) {
         break;
       }
     }
 
-    return specFinish(outputCallback, /*ok=*/true);
+    // A mismatch sampled as the last budgeted token is not part of the verify
+    // batch that preceded it. Commit it explicitly so visible output, KV state,
+    // and generatedTokens agree at a prediction-limit boundary.
+    if (getGenerationStopReason() == GenerationStopReason::None &&
+        params.n_predict > 0 &&
+        generated >= static_cast<unsigned>(params.n_predict) &&
+        !idLastCommitted) {
+      if (!specEnsurePendingTokenHeadroom()) {
+        return finishRuntimeStats(specFinish(outputCallback, /*ok=*/false));
+      }
+      specCommitPendingToken(
+          idLast,
+          specBatch,
+          "[LlmContext] failed to decode speculative final token\n");
+    }
+
+    return finishRuntimeStats(specFinish(outputCallback, /*ok=*/true));
   }
 
   // Context-specific pieces of the MTP loop. The cursor is `nPast_` on
@@ -1015,7 +1097,6 @@ protected:
   [[nodiscard]] virtual llama_pos specPos() const = 0;
   virtual void specSetPos(llama_pos pos) = 0;
   [[nodiscard]] virtual llama_pos specCtxCeiling() const = 0;
-  virtual void specApplyContextDiscard() = 0;
   virtual llama_token specSampleFirstToken(bool& sampled) = 0;
   virtual llama_token specSampleAndAccept(int logitIdx) = 0;
   virtual SequenceStepResult specProcessToken(

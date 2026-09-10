@@ -289,7 +289,6 @@ private:
   [[nodiscard]] llama_pos specCtxCeiling() const override {
     return ctxCeiling();
   }
-  void specApplyContextDiscard() override {}
   llama_token specSampleFirstToken(bool& sampled) override {
     return sampleToken(-1, sampled);
   }
@@ -345,7 +344,11 @@ private:
     }
     const bool rollbackOk =
         onGenerationFinished(outputCallback, generationStopReason_);
-    return {.ok = ok, .rollbackOk = rollbackOk};
+    // Like the non-speculative loop, filling the context during generation is
+    // a successful terminal outcome. `ok=false` here classifies that outcome;
+    // it must not turn it into the prompt-admission exception handled by
+    // LlamaModel::processPromptImpl.
+    return {.ok = true, .rollbackOk = rollbackOk};
   }
   GenerateResponseResult specCancel(
       const std::function<void(const std::string&)>& outputCallback) override {

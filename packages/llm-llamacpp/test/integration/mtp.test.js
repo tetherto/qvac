@@ -258,24 +258,17 @@ safeTest('Qwen3.5-0.8B MTP commits a one-token generation', { timeout: 600_000 }
 })
 
 safeTest(
-  'Qwen3.5-0.8B MTP slides past the context ceiling without FailedToDecode',
+  'Qwen3.5-0.8B MTP stops cleanly at the context ceiling',
   { timeout: 600_000 },
   async (t) => {
-    // Tiny ctx_size + a prompt that greedily generates far more tokens than fit
-    // (counting won't EOS early) + context shifting enabled forces the
-    // generation to repeatedly SLIDE at the context ceiling. This is the exact
-    // scenario the feedback doc flagged: the spec path "hard-errors at the
-    // boundary instead of gracefully sliding". A boundary round where headroom <
-    // draft length would build a verify batch past specCtxCeiling() and
-    // llama_decode would hard-fail (FailedToDecode) — the MTP drafter ignores
-    // the per-round dp.n_max hint, so only the explicit draft-truncation-to-
-    // headroom prevents it. With the fix the run slides and completes (safeTest
-    // turns any throw into a t.fail). Without a slide budget the ceiling is a
-    // designed ContextOverflow throw, so ctx_shift is required to hit the
-    // slide path rather than the overflow path.
+    // Sliding-context support was removed from the addon. A boundary round where
+    // headroom is shorter than the configured draft must therefore truncate the
+    // verify batch and stop with ContextOverflow, rather than running past the
+    // ceiling and throwing FailedToDecode. safeTest turns any native throw into
+    // a test failure.
     const addon = await loadAddon(t, {
       withSpec: true,
-      overrides: { ctx_size: '512', n_predict: '400', ctx_shift: 'true' }
+      overrides: { ctx_size: '512', n_predict: '512' }
     })
     const longPrompt = [
       { role: 'system', content: 'You are a helpful assistant.' },
@@ -287,20 +280,16 @@ safeTest(
     const response = await addon.run(longPrompt)
     const output = await collectResponse(response)
     const stats = response.stats
-    t.ok(output.length > 0, `slide run completed with output (${output.length} chars)`)
+    t.ok(output.length > 0, `near-ceiling run produced output (${output.length} chars)`)
     console.log(
-      `  near-ceiling slide: ${output.length} chars, generatedTokens=${stats.generatedTokens}, ` +
+      `  near-ceiling stop: ${output.length} chars, generatedTokens=${stats.generatedTokens}, ` +
         `cacheTokens=${stats.CacheTokens}, draftTotal=${stats.draftTotal}, ` +
         `stopReason=${stats.stopReason}`
     )
-    t.ok(stats.draftTotal > 0, 'MTP still drafted while sliding at the ceiling')
-    // The real regression signal: the generation crossed the ceiling and slid
-    // (>=1 slide) instead of throwing FailedToDecode at a boundary round.
-    t.ok(
-      stats.generatedTokens >= 400 && stats.CacheTokens <= 512,
-      'generation slid past the context ceiling and stayed within the cache window ' +
-        `(generatedTokens=${stats.generatedTokens}, CacheTokens=${stats.CacheTokens})`
-    )
+    t.ok(stats.draftTotal > 0, 'MTP drafted before reaching the ceiling')
+    t.is(stats.stopReason, 'contextOverflow', 'the ceiling is reported as contextOverflow')
+    t.ok(stats.generatedTokens > 0, 'committed generated-token count remains available')
+    t.ok(stats.CacheTokens <= 512, `cache stayed within its window (${stats.CacheTokens} <= 512)`)
   }
 )
 

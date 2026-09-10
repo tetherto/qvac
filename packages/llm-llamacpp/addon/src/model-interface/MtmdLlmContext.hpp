@@ -316,7 +316,6 @@ private:
   [[nodiscard]] llama_pos specCtxCeiling() const override {
     return ctxCeiling();
   }
-  void specApplyContextDiscard() override {}
   // `specRecoverReasoning` commits only the substituted close marker (one
   // position) — unlike TextLlmContext, it queues no recovery newlines — so the
   // base class's conservative 3 would refuse recoveries that actually fit.
@@ -360,7 +359,9 @@ private:
     }
     const bool rollbackOk =
         onGenerationFinished(outputCallback, generationStopReason_);
-    return {.ok = ok, .rollbackOk = rollbackOk};
+    // Generation-time context exhaustion is reported through stopReason and is
+    // not a prompt-admission failure.
+    return {.ok = true, .rollbackOk = rollbackOk};
   }
   GenerateResponseResult specCancel(
       const std::function<void(const std::string&)>& outputCallback) override {

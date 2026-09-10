@@ -18,46 +18,107 @@ const DEFAULT_MODEL_PATH = path.resolve(__dirname, '../../test/model/Qwen3.5-0.8
 
 const PROMPTS = {
   short: [
-    { role: 'system', content: 'You are a concise technical assistant.' },
     {
-      role: 'user',
+      role: 'system',
       content:
-        'Explain why speculative decoding can improve token generation speed in one paragraph.'
-    }
-  ],
-  medium: [
-    { role: 'system', content: 'You are a careful performance engineer.' },
+        'You are a senior engineer. Give direct, actionable answers grounded in the provided details.'
+    },
     {
       role: 'user',
       content: [
-        'Create a practical checklist for validating a local inference optimization.',
-        'Include what to measure, how to keep comparisons fair, and what failure signals to watch.',
-        'Keep the answer structured and specific.'
-      ].join(' ')
+        'Triage this production log excerpt and identify the most likely cause, the immediate',
+        'mitigation, and one follow-up fix. Keep the answer concise.',
+        '',
+        'Logs:',
+        '10:14:02 api-7 warn request_id=5fc9 route=/v1/chat duration_ms=3120 retries=0',
+        '10:14:03 api-7 error request_id=5fc9 upstream=llm-worker-2 error=deadline_exceeded',
+        '10:14:03 queue info pending_jobs=184 oldest_job_age_ms=9120 workers_busy=16 workers_total=16',
+        '10:14:04 llm-worker-2 warn gpu_mem_free_mb=310 kv_cache_mb=18420 active_sessions=48',
+        '10:14:05 llm-worker-2 info admitted_session=91 ctx_tokens=8128 max_ctx=8192'
+      ].join('\n')
+    }
+  ],
+  medium: [
+    {
+      role: 'system',
+      content:
+        'You are a senior backend engineer reviewing an implementation plan. Be specific and practical.'
+    },
+    {
+      role: 'user',
+      content: [
+        'We are adding a new speculative decoding mode to a local LLM runtime. Review the plan below',
+        'and produce a concise implementation checklist with risks and validation steps.',
+        '',
+        'Plan:',
+        '- The runtime can load GGUF models that include bundled next-token prediction heads.',
+        '- Users enable the mode with config spec-type=draft-mtp.',
+        '- The same model file is used for the target context and the draft context.',
+        '- The target context verifies proposed tokens before committing them to the KV cache.',
+        '- Runtime stats should expose draftAccepted and draftTotal.',
+        '- The existing API must keep working when the model has no MTP head.',
+        '- CPU-only mode, Metal, and Vulkan should be tested separately.',
+        '- Benchmarks should compare baseline decoding against MTP with identical prompts and generation lengths.',
+        '',
+        'Please include:',
+        '1. Critical code paths to inspect.',
+        '2. Failure modes that tests should catch.',
+        '3. Benchmark fairness rules.',
+        '4. What result would justify enabling this mode on a backend.'
+      ].join('\n')
     }
   ],
   long: [
-    { role: 'system', content: 'You are a careful performance engineer.' },
+    {
+      role: 'system',
+      content:
+        'You are a principal engineer writing a clear post-incident technical analysis for an engineering team.'
+    },
     {
       role: 'user',
-      content: makeLongPrompt()
+      content: makeIncidentAnalysisPrompt()
     }
   ]
 }
 
-function makeLongPrompt() {
-  const notes = [
-    'A team added multi-token prediction support to a llama.cpp-backed inference addon.',
-    'The implementation uses the same model file when the GGUF includes next-token heads.',
-    'The benchmark must compare normal decoding and MTP decoding on identical prompts.',
-    'Measurements should separate model load time from generation time.',
-    'The report should include throughput, latency, generated tokens, and draft acceptance.',
-    'Short, medium, and long prompts can expose different prefill and decode behavior.'
+function makeIncidentAnalysisPrompt() {
+  const events = [
+    '09:00 deploy started for llm-runtime 0.51.0 on the canary pool.',
+    '09:04 p50 latency unchanged, p95 latency improved by 6%, p99 latency regressed by 18%.',
+    '09:08 dashboard showed GPU utilization at 92% and queue depth rising from 18 to 147.',
+    '09:11 worker logs showed speculative draft acceptance near 0.41 on long prompts.',
+    '09:13 short prompts with n_predict <= 64 had no measurable throughput improvement.',
+    '09:15 long-form generation improved when spec-draft-n-max was lowered from 3 to 1.',
+    '09:18 CPU fallback jobs were 8x slower with speculative decoding enabled.',
+    '09:21 one model without bundled MTP heads produced zero draft tokens and fell back to normal decoding.',
+    '09:24 runtime stats were missing draftAccepted in one API path, which made dashboards misleading.',
+    '09:28 after disabling backend draft sampling on Metal, medium prompts improved but one Vulkan row regressed.',
+    '09:32 rollback completed for CPU-only workers; GPU canary remained active with draft window set to 1.',
+    '09:40 follow-up task created to expand the benchmark prompt set and add per-backend defaults.'
+  ]
+  const requirements = [
+    'Explain what likely happened and separate symptoms from causes.',
+    'Identify which observations support keeping MTP enabled on GPU.',
+    'Identify which observations support disabling MTP on CPU.',
+    'Describe what metrics should be added before a wider rollout.',
+    'List concrete next actions for code, tests, benchmarks, and operations.',
+    'Keep the tone factual and avoid overstating the result.'
   ]
   return [
-    'Using the notes below, write an engineering assessment of the optimization.',
-    'Discuss expected performance behavior, risks, and how to interpret benchmark results.',
-    Array.from({ length: 32 }, (_, i) => `Note ${i + 1}: ${notes[i % notes.length]}`).join('\n')
+    'Write a technical incident and performance analysis from the timeline below.',
+    '',
+    'Timeline:',
+    events.map((event) => `- ${event}`).join('\n'),
+    '',
+    'Requirements:',
+    requirements.map((requirement) => `- ${requirement}`).join('\n'),
+    '',
+    'Output format:',
+    '- Summary',
+    '- Evidence',
+    '- Root cause analysis',
+    '- Backend-specific conclusion',
+    '- Follow-up actions'
   ].join('\n\n')
 }
 

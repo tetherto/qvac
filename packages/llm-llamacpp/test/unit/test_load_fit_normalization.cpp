@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -1143,6 +1144,69 @@ TEST_F(LoadFitNormalizationTest, RetiredDiscardKeyIsRejectedAsUnknownArgument) {
     EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
     EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"));
     EXPECT_THAT(error.what(), ::testing::HasSubstr("n-discarded"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, RetiredContextShiftKeysAreRejected) {
+  for (const std::string& key : {"ctx-shift", "ctx_shift"}) {
+    auto config = baseConfig();
+    config[key] = "true";
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"})));
+      FAIL() << key << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(
+          error.what(),
+          ::testing::HasSubstr("context shifting has been removed"));
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, UnsupportedSpecTypesAreActuallyFiltered) {
+  auto config = baseConfig();
+  config["spec-type"] = "ngram-simple,draft-mtp";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+
+  EXPECT_NE(
+      std::find(
+          result.params.speculative.types.begin(),
+          result.params.speculative.types.end(),
+          COMMON_SPECULATIVE_TYPE_DRAFT_MTP),
+      result.params.speculative.types.end());
+  EXPECT_EQ(
+      std::find(
+          result.params.speculative.types.begin(),
+          result.params.speculative.types.end(),
+          COMMON_SPECULATIVE_TYPE_NGRAM_SIMPLE),
+      result.params.speculative.types.end());
+}
+
+TEST_F(LoadFitNormalizationTest, NonPositiveSpecDraftMaximumIsRejected) {
+  for (const std::string value : {"0", "-2"}) {
+    auto config = baseConfig();
+    config["spec-type"] = "draft-mtp";
+    config["spec-draft-n-max"] = value;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"})));
+      FAIL() << "spec-draft-n-max=" << value << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("must be at least 1"));
+    }
   }
 }
 

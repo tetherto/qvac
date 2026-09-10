@@ -220,8 +220,8 @@ void TextLlmContext::initializeCommonState() {
         // draft loop is bounded: it uses its own construction-time params.n_max
         // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
         // per-round dp.n_max hint. kMaxSpecDraft matches runSpeculativeGeneration.
-        params_.speculative.draft.n_max =
-            std::min(params_.speculative.draft.n_max, kMaxSpecDraft);
+        params_.speculative.draft.n_max = std::clamp(
+            params_.speculative.draft.n_max, 1, kMaxSpecDraft);
         spec_.reset(common_speculative_init(
             params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
         ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
@@ -792,10 +792,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
   // Per-request speculative stats.
-  draftAccepted_ = 0;
-  draftTotal_ = 0;
-  specGeneratedTokens_ = 0;
-  lastGenerationUsedSpec_ = false;
+  resetSpeculativeRuntimeStats();
 
   // MTP speculative decoding takes a dedicated draft/verify/accept loop.
   if (spec_) {

@@ -251,7 +251,7 @@ void MtmdLlmContext::initializeMtpDraftContext() {
     // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
     // per-round dp.n_max hint. kMaxSpecDraft matches runSpeculativeGeneration.
     params_.speculative.draft.n_max =
-        std::min(params_.speculative.draft.n_max, kMaxSpecDraft);
+        std::clamp(params_.speculative.draft.n_max, 1, kMaxSpecDraft);
     spec_.reset(common_speculative_init(
         params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
     ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
@@ -858,10 +858,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
   // Per-request speculative stats.
-  draftAccepted_ = 0;
-  draftTotal_ = 0;
-  specGeneratedTokens_ = 0;
-  lastGenerationUsedSpec_ = false;
+  resetSpeculativeRuntimeStats();
 
   if (spec_) {
     return runSpeculativeGeneration(outputCallback);
@@ -1241,6 +1238,7 @@ void MtmdLlmContext::specRecoverReasoning(
   }
   ++current_.pos;
   ++current_.cacheTokens;
+  ++lastGeneratedTokenCount_;
   // Arm the one-shot EOG ban so the next speculative sample (specSampleAndAccept)
   // is forced to produce a content token instead of immediately re-emitting EOS
   // after the reasoning block was force-closed. Consumed once, then disarmed.

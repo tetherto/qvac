@@ -1126,6 +1126,22 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
+  // Context shifting was removed from the addon. Reject both spellings here
+  // rather than forwarding the fabric flag and silently claiming to enable a
+  // feature neither context implements.
+  for (const std::string& key : {"ctx-shift", "ctx_shift"}) {
+    if (configFilemap.contains(key)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "%s: %s is not supported; context shifting has been removed\n",
+              K_LEGACY_PARSER_NAME.data(),
+              key.c_str()));
+    }
+  }
+
   for (const std::string& key : {"spec-type", "spec_type"}) {
     if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
       auto types =
@@ -1144,8 +1160,18 @@ NormalizedLoad normalizeLoadForFit(
                   common_speculative_type_to_str(specType).c_str()));
         }
       }
-      params.speculative.types.insert(
-          params.speculative.types.end(), types.begin(), types.end());
+      // Do not leave warned-about values in the fabric configuration. Fabric
+      // selects the first available implementation by type priority, so a
+      // mixed value such as `ngram,draft-mtp` could otherwise run n-gram
+      // speculation even though the addon said that value was ignored.
+      std::copy_if(
+          types.begin(),
+          types.end(),
+          std::back_inserter(params.speculative.types),
+          [](const auto specType) {
+            return specType == COMMON_SPECULATIVE_TYPE_DRAFT_MTP ||
+                   specType == COMMON_SPECULATIVE_TYPE_NONE;
+          });
       configFilemap.erase(iter);
     }
   }
@@ -1286,6 +1312,20 @@ NormalizedLoad normalizeLoadForFit(
               qvac_errors::general_error::InvalidArgument),
           errorMsg);
     }
+  }
+
+  // Fabric's MTP constructor uses (n_max + 1) in a size_t allocation. Reject
+  // zero/negative values here, before any context can construct a speculator;
+  // merely applying the upper safety cap in the context would let a negative
+  // signed value wrap into an enormous allocation request first.
+  if (params.speculative.draft.n_max < 1) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s: spec-draft-n-max must be at least 1\n",
+            K_LEGACY_PARSER_NAME.data()));
   }
 
   // QVAC-24253: auto-fit is disabled for tensor mode HERE, after the generic

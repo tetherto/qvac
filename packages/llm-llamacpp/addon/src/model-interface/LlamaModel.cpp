@@ -1369,24 +1369,34 @@ LlamaModel::singleRuntimeStatsLocked() const {
   constexpr double kMillisInSecond = 1000.0;
   const bool wasPrefill =
       state_->lastRun_.load(std::memory_order_relaxed).wasPrefill;
-  const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
+  const bool wasSpeculative =
+      state_->llmContext_->wasLastGenerationSpeculative();
+  const double promptEvalMs = wasSpeculative
+                                  ? state_->llmContext_->getSpecPromptEvalMs()
+                                  : perfData.t_p_eval_ms;
+  const double generationMs = wasSpeculative
+                                  ? state_->llmContext_->getSpecGenerationMs()
+                                  : perfData.t_eval_ms;
+  const double timeToFirstToken = wasPrefill ? 0.0 : promptEvalMs;
   // Counted where the tokens are produced, not inferred from `n_eval`.
   // See `LlmContext::lastGeneratedTokenCount`.
   const int64_t generatedTokens =
       wasPrefill ? 0
-                 : (state_->llmContext_->wasLastGenerationSpeculative()
+                 : (wasSpeculative
                         ? state_->llmContext_->getSpecGeneratedTokens()
                         : static_cast<int64_t>(
                               state_->llmContext_->lastGeneratedTokenCount()));
   const int64_t promptTokens =
-      static_cast<int64_t>(wasPrefill ? 0 : perfData.n_p_eval);
-  const double tokensPerSecond = (!wasPrefill && perfData.t_eval_ms > 0)
-                                     ? kMillisInSecond / perfData.t_eval_ms *
+      wasPrefill ? 0
+                 : (wasSpeculative ? state_->llmContext_->getSpecPromptTokens()
+                                   : static_cast<int64_t>(perfData.n_p_eval));
+  const double tokensPerSecond = (!wasPrefill && generationMs > 0)
+                                     ? kMillisInSecond / generationMs *
                                            static_cast<double>(generatedTokens)
                                      : 0.0;
   const double promptProcessingTPS =
-      perfData.t_p_eval_ms > 0
-          ? kMillisInSecond / perfData.t_p_eval_ms * perfData.n_p_eval
+      promptEvalMs > 0
+          ? kMillisInSecond / promptEvalMs * static_cast<double>(promptTokens)
           : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
   return {
