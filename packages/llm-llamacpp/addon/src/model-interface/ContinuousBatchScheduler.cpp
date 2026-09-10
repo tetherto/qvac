@@ -856,7 +856,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   serviceNextMediaSegmentLocked(lock);
 
   const auto fillResult = batcher_.fillBatch(batch_);
-  if (fillResult.chunkSize == 0) {
+  if (fillResult.totalTokens == 0) {
     // A media segment serviced above can finish a slot (prefill-only
     // request or per-sequence cap) without leaving tokens to feed; drain
     // here or the worker would spin on the occupied slot forever.
@@ -897,18 +897,15 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
     return false;
   }
-  const unsigned numGenerating =
-      fillResult.numActiveSequences - fillResult.numPrefillingSequences;
-  const unsigned prefillTokens =
-      fillResult.chunkSize * fillResult.numPrefillingSequences;
-  const unsigned decodeTokens = fillResult.chunkSize * numGenerating;
+  // Slots are budgeted individually, so the split comes back as exact sums
+  // rather than one chunk size times a sequence count.
   stats_.recordDecodeStep(
       fillResult.numActiveSequences,
-      prefillTokens,
-      decodeTokens,
+      fillResult.prefillTokens,
+      fillResult.decodeTokens,
       std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
 
-  batcher_.advance(fillResult.chunkSize, prefillCompleteFn());
+  batcher_.advance(prefillCompleteFn());
 
   if (!cancelRequested_.load()) {
     batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {

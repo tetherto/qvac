@@ -103,7 +103,7 @@ public:
       unsigned maxChunkSize, unsigned maxTokensPerSequence, size_t batchSize)
       : maxChunkSize_(maxChunkSize),
         maxTokensPerSequence_(maxTokensPerSequence), slots_(batchSize),
-        lastLogitIndices_(batchSize, -1) {}
+        lastLogitIndices_(batchSize, -1), chunkSizes_(batchSize, 0) {}
 
   enum class AddStatus : int8_t {
     Ok,
@@ -160,23 +160,32 @@ public:
       uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount)>;
 
   struct FillResult {
-    unsigned chunkSize;
-    unsigned numActiveSequences;
+    /// Tokens placed in the batch across every slot. 0 means nothing was
+    /// fed and the batch is empty.
+    unsigned totalTokens = 0;
+    unsigned numActiveSequences = 0;
     /// Active slots still feeding prompt tokens this step. The remaining
     /// `numActiveSequences - numPrefillingSequences` slots are generating.
-    /// Lets callers split a step's `chunkSize` tokens into prompt vs decode.
     unsigned numPrefillingSequences = 0;
+    /// Exact split of `totalTokens` into prompt vs decode work. Slots get
+    /// individual chunk sizes, so these are sums, not a chunk times a count.
+    unsigned prefillTokens = 0;
+    unsigned decodeTokens = 0;
   };
 
   /// Fill batch with tokens from active slots. Never writes past
   /// `batch.capacity()`; if the batch cannot hold at least one token per
-  /// active sequence, returns `chunkSize == 0` and leaves the batch empty.
-  /// Side effect: refreshes the per-slot logit-index bookkeeping consumed
-  /// by the next sampleAndAppendIdle() call.
+  /// active sequence, returns `totalTokens == 0` and leaves the batch empty.
+  /// Side effect: refreshes the per-slot chunk budgets consumed by advance()
+  /// and the logit-index bookkeeping consumed by sampleAndAppendIdle().
   [[nodiscard]] FillResult fillBatch(LlamaBatch& batch);
 
-  void
-  advance(unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete = {});
+  /// Tokens fed to `seqId` by the most recent fillBatch(); 0 if none.
+  [[nodiscard]] unsigned chunkSizeFor(uint32_t seqId) const noexcept;
+
+  /// Commit the most recent fillBatch(): advances each slot by the chunk it
+  /// was actually given. Must follow a fillBatch() + llama_decode().
+  void advance(const PrefillCompleteFn& onPrefillComplete = {});
 
   /// A slot blocked on its head media barrier, ready for the scheduler
   /// to run `SequenceDriver::evalMediaSegment(mediaIndex, currentPos)`.
@@ -228,8 +237,13 @@ private:
   /// recent fillBatch(). Reset to -1 at the top of every fillBatch().
   std::vector<int> lastLogitIndices_;
 
-  [[nodiscard]] FillResult
-  getChunkSizeForActiveSeqs(const LlamaBatch& batch) const;
+  /// Tokens granted to each slot by the most recent fillBatch(), indexed by
+  /// seqId. Zeroed at the top of every planChunksForActiveSeqs().
+  std::vector<unsigned> chunkSizes_;
+
+  /// Assign each active slot its own chunk for this step and report the
+  /// totals. Writes `chunkSizes_`.
+  [[nodiscard]] FillResult planChunksForActiveSeqs(const LlamaBatch& batch);
 };
 
 } // namespace qvac_lib_inference_addon_llama::batching

@@ -192,8 +192,11 @@ std::optional<uint32_t> MultiRequestBatcher::firstFreeSeqId() const {
 }
 
 MultiRequestBatcher::FillResult
-MultiRequestBatcher::getChunkSizeForActiveSeqs(const LlamaBatch& batch) const {
-  unsigned chunkSize = maxChunkSize_;
+MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
+  std::ranges::fill(chunkSizes_, 0u);
+
+  std::vector<uint32_t> unbudgeted;
+  unbudgeted.reserve(slots_.size());
   unsigned numActive = 0;
   unsigned numPrefilling = 0;
   for (const auto& slot :
@@ -202,26 +205,70 @@ MultiRequestBatcher::getChunkSizeForActiveSeqs(const LlamaBatch& batch) const {
     if (slot->isPrefillPending()) {
       numPrefilling++;
     }
-    // Global min: a generating slot (remainingToFeed()==1) throttles
-    // concurrent prefills to 1 token/step. Deliberate tradeoff: keeps the
-    // chunk global and fillBatch/advance simple, while all active slots
-    // still advance in parallel every step (continuous batching).
-    chunkSize = std::min(chunkSize, slot->remainingToFeed());
+    unbudgeted.push_back(slot->seqId);
   }
   if (numActive == 0) {
-    return {.chunkSize = 0, .numActiveSequences = 0};
+    return {};
   }
 
-  // LlamaBatch has a total capacity (for all sequences),
-  // make sure we do not exceed it and cause a crash.
-  const unsigned perSeqCap =
-      static_cast<unsigned>(batch.capacity()) / numActive;
-  chunkSize = std::min(chunkSize, perSeqCap);
+  // LlamaBatch has a total capacity (for all sequences), make sure we do not
+  // exceed it and cause a crash. Every active slot must get at least one
+  // token or none does: a partial step would starve an arbitrary subset.
+  const auto capacity = static_cast<unsigned>(batch.capacity());
+  if (capacity < numActive) {
+    return {
+        .numActiveSequences = numActive,
+        .numPrefillingSequences = numPrefilling};
+  }
 
-  return {
-      .chunkSize = chunkSize,
-      .numActiveSequences = numActive,
-      .numPrefillingSequences = numPrefilling};
+  // Per-slot budgets, water-filled. Each slot wants
+  // min(maxChunkSize_, remainingToFeed()) — exactly 1 for a generating slot,
+  // up to a full micro-batch for one still feeding its prompt. Slots whose
+  // want fits the current equal share are granted it outright and their
+  // surplus is redistributed; once every survivor wants more than the share,
+  // the rest is split evenly. Budgeting per slot rather than taking a global
+  // min is what keeps a generating slot (want == 1) from throttling a
+  // concurrent prefill to one token per decode step.
+  unsigned remaining = capacity;
+  while (!unbudgeted.empty()) {
+    // `remaining >= unbudgeted.size()` is an invariant of this loop, so the
+    // share is always at least one token and every slot makes progress.
+    const unsigned share = remaining / static_cast<unsigned>(unbudgeted.size());
+    bool grantedAny = false;
+    for (auto it = unbudgeted.begin(); it != unbudgeted.end();) {
+      const unsigned want =
+          std::min(maxChunkSize_, slots_[*it]->remainingToFeed());
+      if (want > share) {
+        ++it;
+        continue;
+      }
+      chunkSizes_[*it] = want;
+      remaining -= want;
+      it = unbudgeted.erase(it);
+      grantedAny = true;
+    }
+    if (!grantedAny) {
+      for (const uint32_t seqId : unbudgeted) {
+        chunkSizes_[seqId] = share;
+        remaining -= share;
+      }
+      unbudgeted.clear();
+    }
+  }
+
+  FillResult result{
+      .numActiveSequences = numActive, .numPrefillingSequences = numPrefilling};
+  for (const auto& slot :
+       slots_ | views::filter(Request::isOptHasTokensToFeed)) {
+    const unsigned granted = chunkSizes_[slot->seqId];
+    result.totalTokens += granted;
+    if (slot->isPrefillPending()) {
+      result.prefillTokens += granted;
+    } else {
+      result.decodeTokens += granted;
+    }
+  }
+  return result;
 }
 
 MultiRequestBatcher::FillResult
@@ -231,17 +278,18 @@ MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
 
   std::ranges::fill(lastLogitIndices_, -1);
 
-  const FillResult bState = getChunkSizeForActiveSeqs(batch);
-  if (bState.chunkSize == 0) {
+  const FillResult bState = planChunksForActiveSeqs(batch);
+  if (bState.totalTokens == 0) {
     return bState;
   }
 
   unsigned batchIdx = 0;
-  const llama_pos chunk = static_cast<llama_pos>(bState.chunkSize);
 
   for (auto& slot : slots_ | views::filter(Request::isOptHasTokensToFeed)) {
     Request& req = *slot;
-    const bool wantLogitsOnLast = req.chunkConsumesAllUnfed(bState.chunkSize);
+    const unsigned granted = chunkSizes_[req.seqId];
+    const auto chunk = static_cast<llama_pos>(granted);
+    const bool wantLogitsOnLast = req.chunkConsumesAllUnfed(granted);
 
     for (llama_pos i = 0; i < chunk; i++) {
       const int idx = static_cast<int>(batchIdx);
@@ -290,11 +338,15 @@ void advanceReqPrefill(
 }
 } // namespace
 
-void MultiRequestBatcher::advance(
-    unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete) {
-  const llama_pos chunk = static_cast<llama_pos>(chunkSize);
+void MultiRequestBatcher::advance(const PrefillCompleteFn& onPrefillComplete) {
   for (auto& slot : slots_ | views::filter(Request::isOptHasTokensToFeed)) {
     Request& req = *slot;
+    // Exactly what the last fillBatch() fed this slot. A slot that was
+    // granted nothing (batch too small for the active set) is skipped.
+    const auto chunk = static_cast<llama_pos>(chunkSizes_[req.seqId]);
+    if (chunk == 0) {
+      continue;
+    }
     req.currentPos += chunk;
     if (req.exceededLimit() && req.stopReason == StopReason::None) {
       req.stopReason = StopReason::ContextOverflow;
@@ -389,6 +441,10 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
     // has.
     slot->lastTokenAt = now;
   }
+}
+
+unsigned MultiRequestBatcher::chunkSizeFor(uint32_t seqId) const noexcept {
+  return seqId < chunkSizes_.size() ? chunkSizes_[seqId] : 0u;
 }
 
 bool MultiRequestBatcher::isValid(uint32_t seqId) const noexcept {
