@@ -1018,7 +1018,7 @@ namespace LlmLlamacpp {
     top_k?: NumericLike;
     predict?: NumericLike;
     seed?: NumericLike;
-    load_mode?: "none" | "mmap" | "mlock" | "mmap+mlock" | "dio";
+    load_mode?: "auto" | "none" | "mmap" | "mlock" | "mmap+mlock" | "dio";
     reverse_prompt?: string;
     repeat_penalty?: NumericLike;
     presence_penalty?: NumericLike;
