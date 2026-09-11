@@ -4,6 +4,7 @@ import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
 export interface LlmStats {
   TTFT?: number
   TPS?: number
+  ppTPS?: number
   CacheTokens?: number
   promptTokens?: number
   generatedTokens?: number

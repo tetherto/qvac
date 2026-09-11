@@ -6,7 +6,6 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "10297.1.1#2",
       "features": [
         {
           "name": "cuda-backend",
@@ -15,8 +14,10 @@
         {
           "name": "hip-backend",
           "platform": "linux & x64"
-        }
-      ]
+        },
+        "vector-index"
+      ],
+      "version>=": "10549.0.0#1"
     },
     {
       "name": "qvac-lint-cpp",

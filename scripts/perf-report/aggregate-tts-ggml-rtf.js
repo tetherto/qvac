@@ -35,7 +35,8 @@ function parseArgs (argv) {
     input: '',
     output: '',
     jsonOutput: '',
-    manualDir: path.resolve('packages/tts-ggml/benchmarks/manual-results')
+    manualDir: path.resolve('packages/tts-ggml/benchmarks/manual-results'),
+    expectDevices: []
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -52,6 +53,9 @@ function parseArgs (argv) {
       i++
     } else if (arg === '--manual-dir' && next) {
       args.manualDir = next
+      i++
+    } else if (arg === '--expect-devices' && next) {
+      args.expectDevices = next.split(',').map(device => device.trim()).filter(Boolean)
       i++
     }
   }
@@ -709,13 +713,26 @@ function formatEnhancerCell (enhancer, enhancerVariant) {
   return `${name}/${variant}`
 }
 
-function renderMarkdown (records, streamingRecords) {
+// Same silent-loss guard as aggregate-asr-ggml-rtf.js: the desktop matrix jobs
+// tolerate step failures, so a lane can lose its rtf-results artifact without
+// failing the run. The summarize workflow passes the matrix's device list via
+// --expect-devices; a device with zero desktop rows makes the report loudly
+// incomplete. Mobile and manual rows never satisfy the expectation.
+function missingExpectedDevices (records, expectedDevices) {
+  const reporting = new Set(
+    records.filter(r => r.source === 'desktop-ci').map(r => r.device)
+  )
+  return expectedDevices.filter(device => !reporting.has(device))
+}
+
+function renderMarkdown (records, streamingRecords, expectedDevices = []) {
   const lines = []
   const gpuCoverage = new Set(
     records.filter(r => r.gpu === 'gpu').map(r => r.backend).filter(Boolean)
   )
   const missingBackends = SUPPORTED_GPU_BACKENDS.filter(b => !gpuCoverage.has(b))
   const noisyCount = records.filter(r => r.noisy === true).length
+  const missingDevices = missingExpectedDevices(records, expectedDevices)
 
   lines.push('## GGML TTS Performance Findings')
   lines.push('')
@@ -800,6 +817,12 @@ function renderMarkdown (records, streamingRecords) {
   lines.push('### Coverage')
   lines.push('')
   lines.push(`- Rows aggregated: ${records.length}` + (streamingRecords && streamingRecords.length > 0 ? ` (+ ${streamingRecords.length} streaming row(s))` : ''))
+  if (expectedDevices.length > 0) {
+    lines.push(`- Expected desktop devices reporting: ${expectedDevices.length - missingDevices.length}/${expectedDevices.length}`)
+    if (missingDevices.length > 0) {
+      lines.push(`- MISSING desktop devices (lane ran without an rtf-results artifact, or never ran): ${missingDevices.join(', ')} — this report is INCOMPLETE`)
+    }
+  }
   lines.push(`- GPU backends covered: ${Array.from(gpuCoverage).sort().join(', ') || 'none'}`)
   lines.push(`- GPU backends still missing: ${missingBackends.join(', ') || 'none'}`)
   if (noisyCount > 0) {
@@ -826,7 +849,7 @@ function main () {
 
   const records = sortRecords(dedupeRecords(fromArtifacts.records.concat(fromManual.records)))
   const streaming = sortRecords(dedupeRecords(fromArtifacts.streaming.concat(fromManual.streaming)))
-  const markdown = renderMarkdown(records, streaming)
+  const markdown = renderMarkdown(records, streaming, args.expectDevices)
 
   if (args.output) {
     const outputPath = path.resolve(args.output)
@@ -841,6 +864,14 @@ function main () {
   }
 
   process.stdout.write(markdown)
+
+  // Fail only after every output is written: the incomplete report must stay
+  // inspectable (later workflow steps upload it with `if: !cancelled()`).
+  const missing = missingExpectedDevices(records, args.expectDevices)
+  if (missing.length > 0) {
+    console.error(`::error title=TTS report is missing benchmark device(s)::No desktop rows from: ${missing.join(', ')}. The lane lost its rtf-results artifact, its runner label changed, or it never ran — the consolidated report is incomplete.`)
+    process.exitCode = 1
+  }
 }
 
 if (require.main === module) {
@@ -856,5 +887,6 @@ module.exports = {
   expandCanonicalReport,
   memoryFromSummary,
   dedupeRecords,
-  renderMarkdown
+  renderMarkdown,
+  missingExpectedDevices
 }

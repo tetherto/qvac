@@ -29,8 +29,8 @@ class ModelConstant:
     params: str
 
 
-ABOT_WORLD_0_5B_LF_VAE = ModelConstant(
-    name="ABOT_WORLD_0_5B_LF_VAE",
+ABOT_WORLD_0_5B_LF_TAEHV_VAE = ModelConstant(
+    name="ABOT_WORLD_0_5B_LF_TAEHV_VAE",
     src="registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf",
     registry_path="qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf",
     registry_source="s3",
@@ -47,8 +47,8 @@ ABOT_WORLD_0_5B_LF_VAE = ModelConstant(
     params="",
 )
 
-ABOT_WORLD_0_5B_LF_VAE_F16 = ModelConstant(
-    name="ABOT_WORLD_0_5B_LF_VAE_F16",
+ABOT_WORLD_0_5B_LF_WAN_VAE = ModelConstant(
+    name="ABOT_WORLD_0_5B_LF_WAN_VAE",
     src="registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf",
     registry_path="qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf",
     registry_source="s3",
@@ -3125,8 +3125,8 @@ LTX_2_3_22B_Q5_K_M = ModelConstant(
     params="22B",
 )
 
-LTX_2_3_VAE = ModelConstant(
-    name="LTX_2_3_VAE",
+LTX_2_3_AUDIO_VAE = ModelConstant(
+    name="LTX_2_3_AUDIO_VAE",
     src="registry://hf/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors",
     registry_path="unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors",
     registry_source="hf",
@@ -3143,8 +3143,8 @@ LTX_2_3_VAE = ModelConstant(
     params="",
 )
 
-LTX_2_3_VAE_1 = ModelConstant(
-    name="LTX_2_3_VAE_1",
+LTX_2_3_VIDEO_VAE = ModelConstant(
+    name="LTX_2_3_VIDEO_VAE",
     src="registry://hf/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors",
     registry_path="unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors",
     registry_source="hf",
@@ -4203,6 +4203,60 @@ OCR_LATIN = ModelConstant(
     engine="ggml-ocr",
     quantization="",
     params="",
+)
+
+PARAKEET_0_6B_F16 = ModelConstant(
+    name="PARAKEET_0_6B_F16",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3527630,
+    blob_block_length=21818,
+    blob_byte_offset=231169009638,
+    model_id="nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    expected_size=1429807168,
+    sha256_checksum="af090772797632dcea0546985b112f86a9a10e0d87d10a2b74bd6ae57464aded",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="f16",
+    params="0.6B",
+)
+
+PARAKEET_0_6B_Q4_0 = ModelConstant(
+    name="PARAKEET_0_6B_Q4_0",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3549448,
+    blob_block_length=6184,
+    blob_byte_offset=232598816806,
+    model_id="nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    expected_size=405212736,
+    sha256_checksum="fee699b3257ce0cfd249f490ab9f9791d9e0f6f8781e4354db2aa5584e594c82",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q4_0",
+    params="0.6B",
+)
+
+PARAKEET_0_6B_Q8_0 = ModelConstant(
+    name="PARAKEET_0_6B_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3555632,
+    blob_block_length=11621,
+    blob_byte_offset=233004029542,
+    model_id="nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    expected_size=761593408,
+    sha256_checksum="f6ad1b9912c03c95b3377eaf0fc2fee635a4e4904409d8efac1944343d9f3360",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="0.6B",
 )
 
 PARAKEET_CTC_0_6B_F16 = ModelConstant(
@@ -5391,6 +5445,114 @@ SMOLVLM2_500M_MULTIMODAL_Q8_0 = ModelConstant(
     engine="llamacpp-completion",
     quantization="q8_0",
     params="500M",
+)
+
+TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q4_K_M = ModelConstant(
+    name="TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q4_K_M",
+    src="registry://hf/qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF/resolve/14d6fd1e24c9f94a5e40c2e91c066241aede0dce/TranslatePsy-AfriSLM-0.8B-Q4_K_M-imat.gguf",
+    registry_path="qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF/resolve/14d6fd1e24c9f94a5e40c2e91c066241aede0dce/TranslatePsy-AfriSLM-0.8B-Q4_K_M-imat.gguf",
+    registry_source="hf",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3312610,
+    blob_block_length=10259,
+    blob_byte_offset=217077626726,
+    model_id="TranslatePsy-AfriSLM-0.8B-Q4_K_M-imat.gguf",
+    expected_size=672329792,
+    sha256_checksum="4af8ee1df3ec9008f763ebe95e6f21df3acd8d42c541feeb13314ca22e560afc",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="Q4_K_M",
+    params="0.8B",
+)
+
+TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q8_0 = ModelConstant(
+    name="TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q8_0",
+    src="registry://hf/qvac/TranslatePsy-AfriSLM-0.8B-Q8-GGUF/resolve/55220bcc74bed219ad9db9ab378f6aae31850974/TranslatePsy-AfriSLM-0.8B-Q8_0-imat.gguf",
+    registry_path="qvac/TranslatePsy-AfriSLM-0.8B-Q8-GGUF/resolve/55220bcc74bed219ad9db9ab378f6aae31850974/TranslatePsy-AfriSLM-0.8B-Q8_0-imat.gguf",
+    registry_source="hf",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3322869,
+    blob_block_length=16511,
+    blob_byte_offset=217749956518,
+    model_id="TranslatePsy-AfriSLM-0.8B-Q8_0-imat.gguf",
+    expected_size=1082015808,
+    sha256_checksum="b5056635be0c9bb832f0c964dc063bd4b4462e253f9f9d94eebf0aa0960b7798",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="Q8_0",
+    params="0.8B",
+)
+
+TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q4_K_M = ModelConstant(
+    name="TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q4_K_M",
+    src="registry://hf/qvac/TranslatePsy-AfriSLM-2B-Q4-GGUF/resolve/9bcceadebbcc5d36bba9f7f02141300a95ae8d04/TranslatePsy-AfriSLM-2B-Q4_K_M-imat.gguf",
+    registry_path="qvac/TranslatePsy-AfriSLM-2B-Q4-GGUF/resolve/9bcceadebbcc5d36bba9f7f02141300a95ae8d04/TranslatePsy-AfriSLM-2B-Q4_K_M-imat.gguf",
+    registry_source="hf",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3339380,
+    blob_block_length=23811,
+    blob_byte_offset=218831972326,
+    model_id="TranslatePsy-AfriSLM-2B-Q4_K_M-imat.gguf",
+    expected_size=1560461376,
+    sha256_checksum="fc2a80532e58e0655efd9e68c5b7cb2c4373222e736bcc88de648502a4e30361",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="Q4_K_M",
+    params="2B",
+)
+
+TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q8_0 = ModelConstant(
+    name="TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q8_0",
+    src="registry://hf/qvac/TranslatePsy-AfriSLM-2B-Q8-GGUF/resolve/d2394ae5e3052740ac4af7f60d41fb2432cbd7ac/TranslatePsy-AfriSLM-2B-Q8_0-imat.gguf",
+    registry_path="qvac/TranslatePsy-AfriSLM-2B-Q8-GGUF/resolve/d2394ae5e3052740ac4af7f60d41fb2432cbd7ac/TranslatePsy-AfriSLM-2B-Q8_0-imat.gguf",
+    registry_source="hf",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3363191,
+    blob_block_length=38946,
+    blob_byte_offset=220392433702,
+    model_id="TranslatePsy-AfriSLM-2B-Q8_0-imat.gguf",
+    expected_size=2552356928,
+    sha256_checksum="940436f99196c1183d0a38addbbb2c643cb5edfcb939003dacc8c4bd68079f85",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="Q8_0",
+    params="2B",
+)
+
+TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q4_K_M = ModelConstant(
+    name="TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q4_K_M",
+    src="registry://hf/qvac/TranslatePsy-AfriSLM-4B-Q4-GGUF/resolve/82df4b20772a4a46f38b421a569a90d53a93f657/TranslatePsy-AfriSLM-4B-Q4_K_M-imat.gguf",
+    registry_path="qvac/TranslatePsy-AfriSLM-4B-Q4-GGUF/resolve/82df4b20772a4a46f38b421a569a90d53a93f657/TranslatePsy-AfriSLM-4B-Q4_K_M-imat.gguf",
+    registry_source="hf",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3402137,
+    blob_block_length=46790,
+    blob_byte_offset=222944790630,
+    model_id="TranslatePsy-AfriSLM-4B-Q4_K_M-imat.gguf",
+    expected_size=3066385344,
+    sha256_checksum="166226feb6144f6e416e4936706eb5f9183526a05141410156c578c48b4bd4f1",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="Q4_K_M",
+    params="4B",
+)
+
+TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q8_0 = ModelConstant(
+    name="TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q8_0",
+    src="registry://hf/qvac/TranslatePsy-AfriSLM-4B-Q8-GGUF/resolve/523cdfa7d4b056c2b64f4ee32f95175a99d53663/TranslatePsy-AfriSLM-4B-Q8_0-imat.gguf",
+    registry_path="qvac/TranslatePsy-AfriSLM-4B-Q8-GGUF/resolve/523cdfa7d4b056c2b64f4ee32f95175a99d53663/TranslatePsy-AfriSLM-4B-Q8_0-imat.gguf",
+    registry_source="hf",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3448927,
+    blob_block_length=78703,
+    blob_byte_offset=226011175974,
+    model_id="TranslatePsy-AfriSLM-4B-Q8_0-imat.gguf",
+    expected_size=5157833664,
+    sha256_checksum="296d6426b922a09c6615a81dee6e0aaae6f1f608fd2c320316f1e6ce09314aac",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="Q8_0",
+    params="4B",
 )
 
 TTS_CANGJIE_ZH_CHATTERBOX = ModelConstant(
@@ -7429,8 +7591,8 @@ WHISPER_TINY_Q8_0 = ModelConstant(
 
 __all__ = [
     "ModelConstant",
-    "ABOT_WORLD_0_5B_LF_VAE",
-    "ABOT_WORLD_0_5B_LF_VAE_F16",
+    "ABOT_WORLD_0_5B_LF_TAEHV_VAE",
+    "ABOT_WORLD_0_5B_LF_WAN_VAE",
     "ABOT_WORLD_0_5B_Q8_0",
     "AFRICAN_4B_TRANSLATION_Q4_K_M",
     "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0",
@@ -7601,8 +7763,8 @@ __all__ = [
     "LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS",
     "LTX_2_3_22B_Q2_K",
     "LTX_2_3_22B_Q5_K_M",
-    "LTX_2_3_VAE",
-    "LTX_2_3_VAE_1",
+    "LTX_2_3_AUDIO_VAE",
+    "LTX_2_3_VIDEO_VAE",
     "MARIAN_EN_HI_INDIC_1B_F16",
     "MARIAN_EN_HI_INDIC_1B_Q4_0",
     "MARIAN_EN_HI_INDIC_200M_F16",
@@ -7661,6 +7823,9 @@ __all__ = [
     "OCR_DOCTR",
     "OCR_DOCTR_1",
     "OCR_LATIN",
+    "PARAKEET_0_6B_F16",
+    "PARAKEET_0_6B_Q4_0",
+    "PARAKEET_0_6B_Q8_0",
     "PARAKEET_CTC_0_6B_F16",
     "PARAKEET_CTC_0_6B_Q4_0",
     "PARAKEET_CTC_0_6B_Q8_0",
@@ -7727,6 +7892,12 @@ __all__ = [
     "SMOLVLA_LIBERO_VISION_Q8",
     "SMOLVLM2_500M_MULTIMODAL_F16",
     "SMOLVLM2_500M_MULTIMODAL_Q8_0",
+    "TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q4_K_M",
+    "TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q8_0",
+    "TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q4_K_M",
+    "TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q8_0",
+    "TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q4_K_M",
+    "TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q8_0",
     "TTS_CANGJIE_ZH_CHATTERBOX",
     "TTS_CODEC_DECODER_AUDIO8_FP16",
     "TTS_CODEC_DECODER_AUDIO8_Q8_0",
