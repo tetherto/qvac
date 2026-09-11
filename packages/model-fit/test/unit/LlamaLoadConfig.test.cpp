@@ -1305,9 +1305,18 @@ int main() {
             {"cache-type-k", "q8_0"}},
         ModelTraits{},
         {discreteVulkan, adrenoOpenClDiscrete, cpu()});
+    // The exact detail matters: the OpenCL participant sits SECOND, so a
+    // regression from `anySplitDevice(isOpenClDevice)` to a first-device-only
+    // read would flip `isAdrenoVulkan` true and reject this load by the
+    // Adreno-800+ flash-attention rule instead. Only the message separates the
+    // two.
     expect(
-        !quantizedOnOpenClSet.supported,
-        "an OpenCL participant must reject quantized KV for the whole set");
+        !quantizedOnOpenClSet.supported &&
+            quantizedOnOpenClSet.unsupportedDetail ==
+                "only f32, f16, and bf16 KV cache are supported on Adreno "
+                "OpenCL",
+        "an OpenCL participant must reject quantized KV for the whole set by "
+        "the OpenCL rule");
   }
 
   {
@@ -1348,6 +1357,42 @@ int main() {
           isCpuPlacement(completion.params),
           "BitNet completion Adreno policy must remain CPU fallback");
     }
+
+    // Mesa's Turnip driver types an Adreno as an INTEGRATED Vulkan adapter, so
+    // a linux-arm64 host can present 800+ with no discrete GPU at all. The
+    // addon (BackendSelection.cpp chooseBackend) drops only the OpenCL
+    // candidates at that tier and then falls through to its iGPU list, so the
+    // projection has to keep the iGPU too — returning CPU here would describe a
+    // different load than the one that runs.
+    const BackendDevice integratedAdreno = device(
+        "Vulkan0", "Adreno 830", BackendDeviceType::IntegratedGpu, 9, "Vulkan");
+    const auto bitnetIntegratedOnly = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {integratedAdreno, cpu()});
+    expect(
+        bitnetIntegratedOnly.supported &&
+            isPinnedGpu(bitnetIntegratedOnly.params, integratedAdreno),
+        "one-bit BitNet on an integrated-only Adreno 800+ host must keep the "
+        "iGPU, not fall back to CPU");
+
+    // The OpenCL candidate is still dropped at 800+, and with nothing else
+    // eligible that leaves CPU.
+    const auto bitnetIntegratedOpenClOnly = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {device(
+             "OpenCL0",
+             "Adreno 830",
+             BackendDeviceType::IntegratedGpu,
+             10,
+             "OpenCL"),
+         cpu()});
+    expect(
+        isCpuPlacement(bitnetIntegratedOpenClOnly.params),
+        "an OpenCL-only Adreno 800+ host must still project CPU");
   }
 
   {

@@ -459,6 +459,12 @@ BackendSelection selectGpu(
   const BackendDevice* openCl = nullptr;
   const BackendDevice* discrete = nullptr;
   const BackendDevice* integrated = nullptr;
+  // This maximum spans RPC devices too, whose description is the endpoint
+  // string rather than a GPU name — the contamination `maxLocalAdrenoVersion`
+  // above excludes on the split path. It is deliberate here: the addon's
+  // `chooseBackend` takes its host-wide maximum over the same unfiltered
+  // inventory, so narrowing it would make the NONE projection disagree with the
+  // load. Do not re-raise.
   int maxAdrenoVersion = 0;
   for (const BackendDevice& device : devices) {
     if (!isEligibleGpu(device, isEmbedding)) {
@@ -483,10 +489,15 @@ BackendSelection selectGpu(
     if (maxAdrenoVersion < ADRENO_UBATCH_THRESHOLD) {
       return {.selected = nullptr, .adrenoVersion = maxAdrenoVersion};
     }
-    if (discrete != nullptr) {
-      return {.selected = discrete, .adrenoVersion = maxAdrenoVersion};
-    }
-    return {.selected = nullptr, .adrenoVersion = maxAdrenoVersion};
+    // 800+ prefers Vulkan over OpenCL: the addon clears only its OpenCL list
+    // here and then falls through to `gpuBackends.front()` and, failing that,
+    // `igpuBackends.front()` (BackendSelection.cpp chooseBackend). Dropping the
+    // integrated candidate as well would project CPU for a load the addon runs
+    // on the iGPU — reachable wherever an Adreno is exposed as an INTEGRATED
+    // Vulkan adapter, as Mesa's Turnip driver does on linux-arm64.
+    return {
+        .selected = discrete != nullptr ? discrete : integrated,
+        .adrenoVersion = maxAdrenoVersion};
   }
   if (openCl != nullptr) {
     return {.selected = openCl, .adrenoVersion = maxAdrenoVersion};
@@ -703,12 +714,16 @@ void applyBackendDeviceAllowlist(
     const std::vector<BackendDevice>& devices,
     std::optional<size_t> mainGpuIndex) {
   params.devices = storage.data();
+  // Ordinal 0 of the pinned list on every GPU path, matching
+  // `normalizeLlamaLoadConfig`. Without it the raw caller value survived into
+  // the params fabric reads under NONE, so the two entry points handed fabric
+  // different `main_gpu` for the same placement.
+  params.main_gpu = 0;
   if (!mainGpuIndex.has_value()) {
     return;
   }
   storage = {devices[mainGpuIndex.value()].handle, nullptr};
   params.devices = storage.data();
-  params.main_gpu = 0;
 }
 
 ModelTraits readModelTraits(const std::string& modelPath) {
@@ -872,8 +887,12 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
         }
       }
       if (!splitSelection.devices.empty()) {
-        // `selected` is the first device because that is what names the
-        // backend. The Adreno tier is the MAX across LOCAL participants of the
+        // `selected` is only a liveness sentinel on this path — it says the
+        // filtered set is non-empty, and `useGpu` below is the one thing read
+        // off it. The whole set is what the load runs on, so which member is
+        // taken does not matter; `front()` is simply the cheapest to name (with
+        // RPC present it is the RPC device). The Adreno tier is the MAX across
+        // LOCAL participants of the
         // FILTERED set, mirroring selectGpu above and the addon
         // (LoadFitNormalization.cpp): it gates the quantized-KV +
         // flash-attention rejection, which replaces a native abort with a clean

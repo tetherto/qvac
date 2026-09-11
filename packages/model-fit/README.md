@@ -154,14 +154,17 @@ registered, so the native side reports it), and an in-range index that is not a
 supported GPU — the CPU entry, or a backend outside the allowlist — is
 **projected CPU-only** rather than rejected. With `splitMode` omitted the whole
 eligible device list is kept whatever `mainGpu` says. A pinned `splitMode` of
-NONE or TENSOR throws on a host with no supported GPU unless the request is the
-CPU sentinel or its `mainGpu` target was projected CPU-only.
+NONE or TENSOR throws on a host with no supported GPU; under NONE only, the CPU
+sentinel and a `mainGpu` target projected CPU-only are exempt. TENSOR has no CPU
+form, so it throws on such a host either way.
 
 `splitMode` accepts `0` (NONE), `1` (LAYER) and `3` (TENSOR). `2` (ROW)
 **throws**: fabric deprecates row split, no supported backend provides the
 split buffers it needs, and the llm/embed addons reject it rather than degrade
 it to `layer`. The raw load path (`split-mode` in a v2 process request) reports
-the same for `row` as `ERROR` / `unsupported-config`; pass `layer` instead.
+the same for `row` as `ERROR` / `unsupported-config`; pass `layer` instead. That
+path also rejects `split-mode: tensor` as `unsupported-config` — it accepts only
+`none` and `layer` — while the `FitConfig` path accepts `splitMode: 3`.
 
 In the plan, `mainGpu` is `0` for a GPU plan (the ordinal of the one-device
 list under NONE; inert under LAYER and TENSOR) and `-1` for **any CPU-only

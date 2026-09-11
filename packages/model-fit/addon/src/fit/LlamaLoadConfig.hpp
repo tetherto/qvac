@@ -94,8 +94,9 @@ bool isSupportedGpuOrdinal(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
     size_t mainGpuIndex);
 /// Pins `storage` — the eligible list the caller already built — as the load's
-/// device list. With a `mainGpuIndex`, narrows it to that raw registry entry at
-/// ordinal 0; the caller validates the index with `isSupportedGpuOrdinal`.
+/// device list and `main_gpu` to ordinal 0 of it. With a `mainGpuIndex`,
+/// narrows the list to that raw registry entry, which then occupies ordinal 0;
+/// the caller validates the index with `isSupportedGpuOrdinal`.
 void applyBackendDeviceAllowlist(
     llama_model_params& params, std::vector<ggml_backend_dev_t>& storage,
     const std::vector<BackendDevice>& devices,

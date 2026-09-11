@@ -193,12 +193,15 @@ int main() {
             failure.nGpuLayers == -1,
         "a FAILURE must be left as the fitter returned it");
 
-    model_fit::FitResult error = successPlan(0, 0, 0);
+    // A non-zero `mainGpu`, like the FAILURE case above: 0 is the value a
+    // normalized GPU plan carries, so it cannot tell "left alone" from
+    // "normalized".
+    model_fit::FitResult error = successPlan(0, 0, 3);
     error.status = 2;
     error.fits = false;
     model_fit::normalizePlanPlacement(error, nullptr, false, false);
     expect(
-        error.mainGpu == 0, "an ERROR must be left as the fitter returned it");
+        error.mainGpu == 3, "an ERROR must be left as the fitter returned it");
 
     expect(
         model_fit::FitResult{}.mainGpu == -1,

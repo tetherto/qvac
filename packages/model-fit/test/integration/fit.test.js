@@ -25,9 +25,26 @@ const UNREACHABLE_MODEL = path.join(
 // existence check the test is aiming at.
 const UNREACHABLE_BACKENDS_DIR = path.join(process.cwd(), 'model-fit-no-such-backends-dir')
 
+// Deliberately NOT read off `result.mainGpu`: that field is precisely what
+// `normalizePlanPlacement` writes, so a placement bug that inverted it would
+// make this report "no GPU" on every host and the CPU-only branches it guards
+// below would pass vacuously.
+//
+// `nGpuDevices` is raw inventory that may count unsupported backend families,
+// so it is only a cheap pre-filter. The decision comes from a pinned TENSOR
+// probe: the native side rejects it with a distinct argument error when no
+// *supported* GPU is registered, which is a statement about the host rather
+// than about any plan this package computes.
 function hasSupportedGpu(modelPath) {
-  const result = fitParams({ modelPath, marginMiB: 0 })
-  return result.status === FIT_STATUS.SUCCESS && result.mainGpu >= 0
+  const inventory = fitParams({ modelPath, marginMiB: 0 })
+  if (inventory.nDevices === 0 || inventory.nGpuDevices === 0) return false
+  try {
+    fitParams({ modelPath, splitMode: 3, marginMiB: 0 })
+    return true
+  } catch (err) {
+    if (/no supported GPU device is registered/.test(err.message)) return false
+    throw err
+  }
 }
 
 test('fitParams rejects invalid config', async function (t) {

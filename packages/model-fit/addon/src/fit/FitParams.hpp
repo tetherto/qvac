@@ -119,9 +119,10 @@ bool isExplicitCpuPlacement(const FitRequest& request);
 /// Whether `request` cannot be honoured without a supported GPU. NONE places
 /// the whole model on one GPU and TENSOR refuses an empty device list outright
 /// (`llama_prepare_model_devices`), so both are argument errors on a host that
-/// registers none — unless the request is the CPU sentinel, or its raw
-/// `mainGpu` target was rejected to CPU. LAYER loads on the host when handed
-/// no device, and an unpinned mode stays at llama's LAYER default:
+/// registers none. NONE alone is exempt when the request is the CPU sentinel or
+/// its raw `mainGpu` target was rejected to CPU; TENSOR has no CPU form, so it
+/// requires a GPU unconditionally. LAYER loads on the host when handed no
+/// device, and an unpinned mode stays at llama's LAYER default:
 /// `common_fit_params` never rewrites `split_mode`.
 bool requiresSupportedGpu(const FitRequest& request, bool mainGpuRejectedToCpu);
 
@@ -235,9 +236,9 @@ void normalizePlanPlacement(
 ///    is CPU-only instead; an unpinned mode makes `mainGpu` inert, so nothing
 ///    is validated and nothing is narrowed);
 ///  - a pinned `splitMode` of ROW — see `applyFitRequest`;
-///  - a pinned `splitMode` of NONE or TENSOR on a host with no supported GPU,
-///    unless the request is the CPU sentinel or its raw `mainGpu` target is
-///    rejected to CPU — see `requiresSupportedGpu`;
+///  - a pinned `splitMode` of NONE or TENSOR on a host with no supported GPU;
+///    under NONE only, the CPU sentinel and a raw `mainGpu` target rejected to
+///    CPU are exempt — see `requiresSupportedGpu`;
 ///  - an `nCtx`, or an explicitly requested `nCtxMin`, above the context
 ///    length the model declares.
 FitResult runFit(const FitRequest& req);
