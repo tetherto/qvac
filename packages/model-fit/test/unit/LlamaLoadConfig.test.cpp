@@ -991,6 +991,36 @@ int main() {
                 .front() == adrenoIntegrated.handle,
         "unsupported discrete GPUs must not hide an eligible integrated GPU");
 
+    // Pins the pre-10549 first-iGPU rule that llm, embed and model-fit all
+    // share. Fabric 10549 keeps the first iGPU plus every later one from the
+    // same backend registry; two distinct iGPUs under one registry with no
+    // eligible discrete GPU is the only shape the rules disagree on, and no
+    // shipped backend configuration reaches it. Changing this assertion means
+    // overriding a recorded decision, not fixing a bug: the reasoning is at
+    // the retention site in LlamaLoadConfig.cpp.
+    BackendDevice firstIntegrated = device(
+        "Vulkan0",
+        "Integrated GPU 0",
+        BackendDeviceType::IntegratedGpu,
+        60,
+        "Vulkan");
+    BackendDevice secondIntegrated = device(
+        "Vulkan1",
+        "Integrated GPU 1",
+        BackendDeviceType::IntegratedGpu,
+        61,
+        "Vulkan");
+    firstIntegrated.deviceId = "igpu-0";
+    secondIntegrated.deviceId = "igpu-1";
+    const auto twoIntegrated = model_fit::eligibleBackendDeviceHandles(
+        {firstIntegrated, secondIntegrated, cpu()},
+        model_fit::LlamaLoadKind::Completion);
+    expect(
+        twoIntegrated.size() == 2 &&
+            twoIntegrated.front() == firstIntegrated.handle,
+        "only the first integrated GPU must survive, even for distinct iGPUs "
+        "sharing one registry that fabric 10549 would both keep");
+
     const BackendDevice legacyDreno = device(
         "OpenCL0",
         "Qualcomm dreno-compatible",

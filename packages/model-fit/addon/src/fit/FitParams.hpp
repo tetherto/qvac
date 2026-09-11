@@ -108,7 +108,10 @@ void applyFitRequest(
     const FitRequest& request, llama_model_params& modelParams,
     llama_context_params& contextParams);
 
-/// The exact CPU-only sentinel configuration: 0 layers, NONE, mainGpu -1.
+/// The CPU-only sentinel: 0 layers and mainGpu -1. Split mode is NOT checked
+/// here because the only caller, `requiresSupportedGpu`, has already
+/// established NONE before it asks; the JS entry point and binding.cpp both
+/// validate the full relationship before `runFit`.
 bool isExplicitCpuPlacement(const FitRequest& request);
 
 /// Whether `request` cannot be honoured without a supported GPU. NONE places
