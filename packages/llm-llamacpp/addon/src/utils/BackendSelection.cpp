@@ -28,6 +28,17 @@ bool isSupportedFinetuneArchitecture(std::string_view arch) {
          SUPPORTED_FINETUNE_ARCHITECTURES.end();
 }
 
+// Adreno tier at and above which the restricted workloads below run on the GPU
+// (Vulkan) instead of the CPU. Shared by chooseBackend and
+// applyAdrenoRestrictions so the single-device and split paths cannot drift.
+constexpr int kAdreno800Threshold = 800;
+
+// TQ1_0/TQ2_0 BitNet. Also shared by both paths, for the same reason.
+bool isBitnetOneBitModel(const ModelMetaData* metadata) {
+  return metadata != nullptr && metadata->hasOneBitQuantization() &&
+         metadata->tryGetString("general.architecture") == "bitnet";
+}
+
 } // namespace
 
 std::optional<std::string> backend_selection::getUnknownFinetuneArchitecture(
@@ -421,8 +432,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     igpuBackends.clear();
   };
 
-  constexpr int kAdreno800Threshold = 800;
-
   const bool noMainGpuOverride = !mainGpu.has_value();
   const bool isAdreno = maxAdrenoVersion.has_value();
   const bool hadEligibleGpu =
@@ -435,9 +444,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
         "Finetuning is not supported for architecture: " + unsupported.value());
   }
 
-  const bool isBitnetOneBit =
-      metadata != nullptr && metadata->hasOneBitQuantization() &&
-      metadata->tryGetString("general.architecture") == "bitnet";
+  const bool isBitnetOneBit = isBitnetOneBitModel(metadata);
 
   if (noMainGpuOverride && isAdreno && isFinetuning) {
     if (maxAdrenoVersion.value() >= kAdreno800Threshold) {
@@ -595,6 +602,36 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
+    // At most ONE integrated GPU, which is fabric's pre-10549 rule. A
+    // deliberate decision, not an oversight, and NOT parity with the fabric
+    // that main now pins: 10549 changed llama_prepare_model_devices
+    // (src/llama.cpp:265-273) to keep the first iGPU plus every further one
+    // registered by the SAME backend registry, so an iGPU seen twice by one
+    // backend is kept twice while cross-backend duplicates are still dropped.
+    //
+    // Not adopted, for three reasons:
+    //   - One rule across the packages in this change set, which all carry
+    //     the pre-10549 behaviour. ocr-ggml and vla-ggml never face the
+    //     question: both resolve to a single device and build no device list
+    //     at all (OcrBackendSelection trySelectGpu / vla pickBestGpuDevice).
+    //   - It NARROWS this addon's own prior behaviour. The
+    //     getTensorSplitDeviceNames deleted in this change kept every iGPU,
+    //     deduplicated by device_id, which was arguably closer to 10549's
+    //     intent. One shared rule was judged worth more than each package
+    //     approximating fabric differently.
+    //   - The narrowing is unobservable on shipped configurations, so it
+    //     costs nothing today. A host would need two IGPU-typed devices from
+    //     one registry: Metal and OpenCL both report type GPU, never IGPU
+    //     (ggml-metal.cpp:685-689, ggml-opencl.cpp:11459-11463), and Vulkan
+    //     already dedupes physical devices by UUID/LUID before registering
+    //     them (ggml-vulkan.cpp:8843-8872, comparison at 8861-8865). That
+    //     dedup is not unconditional — it is skipped when both drivers are
+    //     MoltenVK (8866-8868), since MoltenVK reports one UUID for distinct
+    //     GPUs on multi-GPU Apple cards — so the honest claim is "no shipped
+    //     configuration other than a multi-GPU Apple card under MoltenVK".
+    //
+    // Revisit with a deliberate fleet-wide 10549 decision, not here. Pinned
+    // by BackendSelectionTest.SplitSelectionKeepsSingleIntegratedGpu.
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
       if (integrated.empty()) {
         integrated.emplace_back(std::move(selected));
@@ -630,6 +667,55 @@ backend_selection::getSplitDeviceSelection() {
       ggml_backend_dev_get_props,
       nullptr};
   return getSplitDeviceSelection(bckI);
+}
+
+void backend_selection::applyAdrenoRestrictions(
+    SplitDeviceSelection& selection, const ModelMetaData& metadata,
+    const bool isFinetuning) {
+  const bool isBitnetOneBit = isBitnetOneBitModel(&metadata);
+  if ((!isFinetuning && !isBitnetOneBit) || selection.devices.empty()) {
+    return;
+  }
+
+  // The MAX tier across participants, matching chooseBackend's host-wide
+  // maxAdrenoVersion rather than a per-device test, so a mixed-Adreno host
+  // resolves the same way on both paths. A device with no tier is not an
+  // Adreno and never triggers the rule on its own.
+  std::optional<int> maxAdrenoVersion;
+  for (const SplitDevice& device : selection.devices) {
+    if (device.adrenoVersion.has_value() &&
+        (!maxAdrenoVersion.has_value() ||
+         device.adrenoVersion.value() > maxAdrenoVersion.value())) {
+      maxAdrenoVersion = device.adrenoVersion;
+    }
+  }
+  if (!maxAdrenoVersion.has_value()) {
+    return;
+  }
+
+  const char* workload = isFinetuning ? "Finetuning" : "BitNet TQ";
+  if (maxAdrenoVersion.value() < kAdreno800Threshold) {
+    LOG_WRN(
+        "%s on Adreno <800 (%d): only CPU supported; dropping all %zu split "
+        "device(s) and falling back to CPU\n",
+        workload,
+        maxAdrenoVersion.value(),
+        selection.devices.size());
+    selection.devices.clear();
+    return;
+  }
+  const size_t before = selection.devices.size();
+  std::erase_if(selection.devices, [](const SplitDevice& device) {
+    return device.isOpenCl;
+  });
+  if (selection.devices.size() != before) {
+    LOG_WRN(
+        "%s on Adreno 800+ (%d): preferring Vulkan over OpenCL; dropped %zu "
+        "OpenCL split device(s)\n",
+        workload,
+        maxAdrenoVersion.value(),
+        before - selection.devices.size());
+  }
 }
 
 std::vector<std::string>

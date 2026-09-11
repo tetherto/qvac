@@ -105,6 +105,25 @@ SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
 /// @brief `getSplitDeviceSelection()` against the real ggml registry.
 SplitDeviceSelection getSplitDeviceSelection();
 
+/// @brief Apply the Adreno workload restrictions to a split device set.
+///
+/// Mirrors the policy `chooseBackend` applies to its single-device pick, for
+/// one-bit (TQ1_0/TQ2_0) BitNet and for finetuning:
+///   - Adreno <800: CPU only  -> clears @p selection.devices
+///   - Adreno 800+: prefer Vulkan over OpenCL -> drops the OpenCL devices
+/// The tier is the MAX across participants, as in `chooseBackend`; a device
+/// with no Adreno tier never triggers the rule on its own, and a non-Adreno
+/// set is left untouched.
+///
+/// This FILTERS the one authoritative device list from
+/// `getSplitDeviceSelection()`; it does not make a second, independent device
+/// decision. An emptied list falls through the caller's existing CPU-fallback
+/// path. Re-running `chooseBackend` alongside the split list would reintroduce
+/// exactly the second decision that is not wanted here.
+void applyAdrenoRestrictions(
+    SplitDeviceSelection& selection, const ModelMetaData& metadata,
+    bool isFinetuning);
+
 /// @brief The names of `getSplitDeviceSelection()`'s devices, in order.
 ///
 /// Selection mirrors qvac-fabric's filtered branch (`src/llama.cpp`) while

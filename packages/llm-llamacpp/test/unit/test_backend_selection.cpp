@@ -1312,6 +1312,41 @@ TEST_F(BackendSelectionTest, SplitDevices_ExcludesIgpuWhenDiscretePresent) {
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
+// Pins the deliberate single-iGPU decision documented at the iGPU branch in
+// getSplitDeviceSelection: at most one integrated GPU survives, which is
+// fabric's PRE-10549 rule. 10549 keeps the first iGPU plus every further one
+// from the same backend registry (src/llama.cpp:265-273); that is knowingly
+// not adopted here, so this test is expected to fail if someone adopts it and
+// should be updated together with that decision rather than worked around.
+//
+// Both devices carry the same registry name to model the 10549 "same backend"
+// case, the only one where the two rules disagree. (The mock derives its reg
+// handle from the device pointer, so the registry NAME is shared while the
+// handles differ; the rule under test compares neither, but a future 10549
+// adoption test would need a mock that can express shared reg identity.)
+// Distinct device_ids keep device_id dedup from being an alternative
+// explanation for the single survivor.
+TEST_F(BackendSelectionTest, SplitSelectionKeepsSingleIntegratedGpu) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "Intel UHD 770", "vulkan0", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"),
+      "0000:00:02.0"));
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "Intel Iris Xe", "vulkan1", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"),
+      "0000:00:02.1"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+
+  // Both were eligible and counted, but only the first is kept.
+  EXPECT_EQ(selection.sourceGpuCount, 2U);
+  EXPECT_TRUE(selection.rejectedDevices.empty());
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].sourceGpuIndex, 0U);
+}
+
 // An iGPU-only host still gets tensor mode rather than nothing.
 TEST_F(BackendSelectionTest, SplitDevices_FallsBackToIgpuWhenNoDiscrete) {
   mockBackend.addDevice(createIGPUDevice("Intel UHD 770", "vulkan0"));

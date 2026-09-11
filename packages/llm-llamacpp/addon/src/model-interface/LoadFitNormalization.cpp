@@ -908,10 +908,25 @@ NormalizedLoad normalizeLoadForFit(
     if (preferredBackend == BackendType::GPU &&
         splitMode != LLAMA_SPLIT_MODE_NONE) {
       splitSelection = dependencies.splitDevices();
+      // chooseBackend owns the Adreno restrictions for one-bit BitNet and for
+      // finetuning; this path never calls it, so apply the same policy to the
+      // split set. It FILTERS the one authoritative device list — it makes no
+      // second, independent device decision — and an emptied list falls
+      // through to the CPU branch below with no extra branch here.
+      backend_selection::applyAdrenoRestrictions(
+          splitSelection, metadata, finetuneOverrides.active);
       if (!splitSelection.devices.empty()) {
         // KV-cache traits apply when any participant has them. The projector
         // device and Adreno tier come from the first local device: RPC devices
         // are prepended and can host neither.
+        //
+        // The tier REPORTED here (first local device) and the tier the Adreno
+        // RESTRICTION above uses (max across participants) differ on purpose.
+        // The restriction reproduces chooseBackend's host-wide policy, which
+        // is keyed on the max. This value instead feeds per-load traits
+        // (projector default, ubatch and KV-quant thresholds), where the
+        // participant actually hosting the projector is the right input and
+        // where model-fit mirrors the same choice.
         const auto& devices = splitSelection.devices;
         const auto local = std::ranges::find_if(
             devices, [](const backend_selection::SplitDevice& device) {

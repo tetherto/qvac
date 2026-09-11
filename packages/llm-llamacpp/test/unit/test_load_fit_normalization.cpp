@@ -787,6 +787,158 @@ TEST_F(LoadFitNormalizationTest, SplitModeRowIsRejected) {
   }
 }
 
+// QVAC-24205: chooseBackend's Adreno restrictions (one-bit BitNet, finetuning)
+// must also govern the split device set, which never calls chooseBackend. The
+// fixture's resolveBackend is a pass-through that applies no policy of its
+// own, so every placement these cases observe comes from
+// applyAdrenoRestrictions filtering the split list.
+
+TEST_F(LoadFitNormalizationTest, SplitModeOneBitBitnetBelowAdreno800UsesCpu) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,1";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 740;
+  selection.devices[1].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_EQ(result.params.main_gpu, -1);
+  EXPECT_FALSE(result.params.mmproj_use_gpu);
+  // '--device none' parses to the bare terminator: no device is pinned.
+  ASSERT_EQ(result.params.devices.size(), 1U);
+  EXPECT_EQ(result.params.devices.front(), nullptr);
+}
+
+TEST_F(
+    LoadFitNormalizationTest, SplitModeOneBitBitnetOnAdreno800PlusDropsOpenCl) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
+  selection.devices[0].adrenoVersion = 830;
+  selection.devices[1].adrenoVersion = 830;
+  selection.devices[1].isOpenCl = true;
+  const ggml_backend_dev_t vulkanHandle = selection.devices[0].handle;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_EQ(result.adrenoVersion, 830);
+  // The Vulkan device plus the null terminator: the OpenCL one is gone.
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_EQ(result.params.devices.front(), vulkanHandle);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeFinetuningBelowAdreno800UsesCpu) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 740;
+  selection.devices[1].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {.active = true},
+      dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  ASSERT_EQ(result.params.devices.size(), 1U);
+  EXPECT_EQ(result.params.devices.front(), nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeFinetuningOnAdreno800PlusKeepsGpu) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 830;
+  selection.devices[1].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {.active = true},
+      dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  ASSERT_EQ(result.params.devices.size(), 3U);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+// A device with no Adreno tier is not an Adreno, so neither restriction may
+// fire off it — asserted with BOTH triggers active at once.
+TEST_F(LoadFitNormalizationTest, SplitModeNonAdrenoSetIsNotRestricted) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
+  selection.devices[1].isOpenCl = true;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      bitnet,
+      {.active = true},
+      dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  ASSERT_EQ(result.params.devices.size(), 3U);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+// split-mode 'none' still resolves through chooseBackend, which owns the same
+// policy there. The pass-through resolveBackend applies none, so a GPU result
+// on an Adreno-<800 one-bit BitNet load proves the split filter did not run.
+TEST_F(
+    LoadFitNormalizationTest, SplitModeNoneLeavesAdrenoPolicyToChooseBackend) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "none";
+  auto dependencies = backend(
+      {.type = backend_selection::GPU, .name = "vulkan0", .adrenoVersion = 740},
+      {});
+  auto selection = splitSelection({"vulkan0"});
+  selection.devices[0].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_EQ(result.adrenoVersion, 740);
+}
+
 // QVAC-24253: split-mode 'tensor' (LLAMA_SPLIT_MODE_TENSOR).
 //
 // The fixture's metadata_ is MockModelMetaData{false, "llama"}, and "llama" is
