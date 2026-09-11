@@ -296,8 +296,8 @@ importers:
   packages/classification-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.10.0
-        version: 0.10.0
+        specifier: ^0.13.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -870,7 +870,7 @@ importers:
         specifier: ^0.8.0
         version: 0.8.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       '@qvac/rag':
-        specifier: ^0.8.0
+        specifier: ^0.8.1
         version: link:../rag
       '@qvac/registry-client':
         specifier: ^0.6.1
@@ -952,14 +952,14 @@ importers:
         version: 4.4.3
     devDependencies:
       '@qvac/asr-ggml':
-        specifier: ^0.3.1
-        version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.5.0
+        version: link:../asr-ggml
       '@qvac/audiogen-ggml':
-        specifier: ^0.3.2
+        specifier: ^0.4.0
         version: link:../audiogen-ggml
       '@qvac/bci-whispercpp':
-        specifier: ^0.8.0
-        version: 0.8.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.9.1
+        version: link:../bci-whispercpp
       '@qvac/classification-ggml':
         specifier: ^0.23.0
         version: 0.23.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -985,7 +985,7 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/tts-ggml':
-        specifier: ^0.8.0
+        specifier: ^0.9.0
         version: link:../tts-ggml
       '@qvac/vla-ggml':
         specifier: ^0.24.0
@@ -1153,8 +1153,8 @@ importers:
   packages/model-fit:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.10.0
-        version: 0.10.0
+        specifier: ^0.13.0
+        version: link:../fabric
       bare-fs:
         specifier: ^4.5.1
         version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1217,8 +1217,8 @@ importers:
         specifier: ^0.1.0
         version: link:../error
       '@qvac/fabric':
-        specifier: ^0.10.0
-        version: 0.10.0
+        specifier: ^0.13.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -1603,14 +1603,14 @@ importers:
   packages/sdk:
     dependencies:
       '@qvac/asr-ggml':
-        specifier: ^0.3.1
-        version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.5.0
+        version: link:../asr-ggml
       '@qvac/audiogen-ggml':
-        specifier: ^0.3.2
+        specifier: ^0.4.0
         version: link:../audiogen-ggml
       '@qvac/bci-whispercpp':
-        specifier: ^0.8.0
-        version: 0.8.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.9.1
+        version: link:../bci-whispercpp
       '@qvac/classification-ggml':
         specifier: ^0.23.0
         version: 0.23.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -1648,7 +1648,7 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/tts-ggml':
-        specifier: ^0.8.0
+        specifier: ^0.9.0
         version: link:../tts-ggml
       '@qvac/vla-ggml':
         specifier: ^0.24.0
@@ -1896,8 +1896,8 @@ importers:
         specifier: ^0.1.0
         version: link:../error
       '@qvac/fabric':
-        specifier: ^0.10.0
-        version: 0.10.0
+        specifier: ^0.13.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -2060,8 +2060,8 @@ importers:
         specifier: ^0.1.0
         version: link:../error
       '@qvac/fabric':
-        specifier: ^0.10.0
-        version: 0.10.0
+        specifier: ^0.13.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -4169,10 +4169,6 @@ packages:
   '@qvac/asr-ggml@0.3.3':
     resolution: {integrity: sha512-Ywgx3+y4DgxOz8wQe35/QMxt4eUND8cqdWKRhrD3ag5Nf5cBwV1eQSN9uXZlA75J4InJyi5sI7sAC4pXlnYmKQ==}
     engines: {bare: '>=1.20.0'}
-
-  '@qvac/bci-whispercpp@0.8.2':
-    resolution: {integrity: sha512-vCgsFsICaK+U/MUsBYA0Tga2lN+MnQ3Rmi/bWoWjWhv/J9i1SnmhvdKb4RGYAb7AZREbDMoxO+7IzN7uKMFcDQ==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/classification-ggml@0.23.0':
     resolution: {integrity: sha512-TxQmvpeYWK5ewmNB9uy8yMnpA+ylVpdTClXJeEHIqQ9Dv91+svgslnJgduEWbEVF+gXOpjxNCZiGE4YYRf/RwQ==}
@@ -13241,18 +13237,6 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/bci-whispercpp@0.8.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
   '@qvac/classification-ggml@0.23.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
     dependencies:
       '@qvac/fabric': 0.10.0
@@ -14792,12 +14776,12 @@ snapshots:
   bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)):
     dependencies:
       bare-form-data: 1.2.2(bare-abort-controller@1.1.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-http1: 4.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
-      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-http1: 4.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
+      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-mime: 1.0.0
       bare-performance: 2.1.1(bare-abort-controller@1.1.2)
       bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-url: 2.4.6
+      bare-url: 2.5.4
       bare-zlib: 1.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
     optionalDependencies:
       bare-abort-controller: 1.1.2
@@ -14862,6 +14846,20 @@ snapshots:
       - bare-pipe
       - react-native-b4a
 
+  bare-http1@4.5.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4):
+    dependencies:
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      bare-http-parser: 1.1.5
+      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-url: 2.5.4
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-pipe
+      - react-native-b4a
+
   bare-http1@4.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6):
     dependencies:
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
@@ -14872,6 +14870,21 @@ snapshots:
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-url: 2.4.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-pipe
+      - react-native-b4a
+
+  bare-http1@4.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4):
+    dependencies:
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      bare-hrtime: 2.1.1
+      bare-http-parser: 2.1.4
+      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-url: 2.5.4
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-pipe
@@ -14893,6 +14906,19 @@ snapshots:
   bare-https@3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6):
     dependencies:
       bare-http1: 4.5.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+      bare-tls: 3.1.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-events
+      - bare-pipe
+      - bare-url
+      - react-native-b4a
+
+  bare-https@3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4):
+    dependencies:
+      bare-http1: 4.5.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       bare-tls: 3.1.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
     transitivePeerDependencies:
@@ -15436,7 +15462,7 @@ snapshots:
     dependencies:
       bare-buffer: 3.6.2
       bare-type: 1.1.0
-      bare-url: 2.4.6
+      bare-url: 2.5.4
       compact-encoding: 3.3.0
     transitivePeerDependencies:
       - react-native-b4a
