@@ -198,10 +198,10 @@ ContinuousBatchScheduler::processBatch():
 Worker thread loop:
   admitPendingIntoFreeSlotsLocked()   // move pending -> active slots
   stepLocked():
-    batcher_.fillBatch(batch_)         // fill llama_batch from active slots
+    batcher_.fillBatch(batch_)         // plan per-slot chunks, fill llama_batch
     llama_decode(ctx, batch_)
+    batcher_.advance()                 // commit the planned chunks, check budget
     batcher_.sampleAndAppendIdle()     // sample one token per active slot
-    batcher_.advance()                 // advance position, check budget
     finalizeFinishedSequences()        // fire lifecycle hooks, free slots
     admitPendingIntoFreeSlotsLocked()  // refill freed slots
 ```
@@ -262,15 +262,19 @@ Handles the lower-level mechanics of turning per-slot state into a `llama_batch`
 The batcher keeps a fixed-size `vector<optional<Request>>` indexed by `seqId`. A free slot is one where the optional is empty. When a request is admitted, `addRequestAt(seqId, tokens)` places it at that index.
 
 **fillBatch** — called once per step:
-- Iterates active slots.
-- For each slot, feeds up to `maxChunkSize` tokens into the shared `llama_batch` (prompt tokens during prefill, the last sampled token during generation).
-- Returns `FillResult { chunkSize, numActiveSequences, numPrefillingSequences }`. The prefill count lets the scheduler split a step's tokens into prompt vs decode for TPS/ppTPS measurement.
+- Plans a chunk **per slot**, then iterates active slots and feeds each its own chunk into the shared `llama_batch` (prompt tokens during prefill, the last sampled token during generation).
+- Each slot wants `min(maxChunkSize, remainingToFeed())` — exactly 1 for a generating slot, up to a full micro-batch for one still feeding its prompt. Those wants are water-filled against `batch.capacity()`: a slot whose want fits the current equal share is granted it outright and its surplus is redistributed to the rest; once every survivor wants more than the share, the remainder is split evenly. The sum of the grants never exceeds `batch.capacity()`, and every active slot is granted at least one token or none is (`totalTokens == 0`, batch left empty).
+- Budgeting per slot rather than taking a global minimum is what stops a generating slot (want 1) throttling a concurrent prefill to one prompt token per decode step. The tradeoff: a step taken while a large prefill is co-resident carries more tokens than it used to, so an already-generating sequence sees a larger spread in per-token latency.
+- Returns `FillResult { totalTokens, numActiveSequences, numPrefillingSequences, prefillTokens, decodeTokens }`. `prefillTokens`/`decodeTokens` are exact sums — slots get individual chunk sizes, so the split is no longer one chunk times a sequence count — and let the scheduler attribute a step's tokens to prompt vs decode for TPS/ppTPS measurement.
+- `chunkSizeFor(seqId)` reports what a given slot was granted, until the next `fillBatch()` or until that slot is freed.
 
-**sampleAndAppendIdle** — called after `llama_decode`:
+**advance** — called after `llama_decode`, before the next `fillBatch()`:
+- Commits the chunks the preceding `fillBatch()` planned: advances `currentPos` for each slot by the chunk it was actually given, and notifies the driver via `PrefillCompleteFn` when prefill finishes.
+- Committing is one-shot. A second `advance()` with no `fillBatch()` between is a no-op, so a slot's position cannot run ahead of the KV cache by replaying a budget. Freeing a slot (`cancel`, `clear`, `extractFinished`) drops its budget, so a budget can never be committed against a later occupant of the same seqId.
+
+**sampleAndAppendIdle** — called after `advance`:
 - Fires the caller-supplied `SamplerFn(seqId, logitIdx)` for each slot whose chunk consumed all its pending tokens.
 - The sampled token is appended to the slot's `generatedTokens` and staged for the next step.
-
-**advance** — advances `currentPos` for each slot, notifies the driver via `PrefillCompleteFn` when prefill finishes.
 
 **extractFinished** — moves finished `Request` objects out and returns them; the scheduler then fires terminal lifecycle hooks and frees the KV cache entries before making the slot available again.
 
