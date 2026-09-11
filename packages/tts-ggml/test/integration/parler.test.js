@@ -444,8 +444,8 @@ test(
     const streamed = flatten(chunks)
 
     // Batch reference (same seed/text, no streaming = whole-utterance decode).
-    // The engine proves the streamed float PCM is bit-identical to batch, so the
-    // int16 the addon emits must match sample-for-sample end to end.
+    // The engine keeps the streamed float PCM equal to batch up to accumulation
+    // order, so the int16 the addon emits must match end to end within an LSB.
     const batch = await synth({})
     const batchOut = flatten(batch)
 
@@ -455,9 +455,12 @@ test(
       const d = Math.abs(streamed[i] - batchOut[i])
       if (d > maxDiff) maxDiff = d
     }
-    // CPU decode is bit-identical (0); on Metal a last-ULP float diff can flip an
-    // int16 LSB, so allow a tiny tolerance there (the engine test pins the bound).
-    const tol = useGPU ? 32 : 0
+    // CPU decode matches batch up to an int16 LSB: since ggml-speech
+    // 2026-09-09#1 the x86-Linux and Apple-silicon GEMMs go through tinyBLAS,
+    // whose accumulation order differs between the streamed and batch graph
+    // shapes (observed max diff 1 on the linux-x64 CI lanes). On Metal a
+    // last-ULP float diff can flip more; the engine test pins that bound.
+    const tol = useGPU ? 32 : 2
     t.ok(maxDiff <= tol, `streamed int16 matches batch within ${tol} (max diff ${maxDiff})`)
   }
 )

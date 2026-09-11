@@ -714,6 +714,7 @@ NormalizedLoad normalizeLoadForFit(
   }
   if (loadMode.has_value()) {
     static const std::unordered_map<std::string, llama_load_mode> kLoadModes = {
+        {"auto", LLAMA_LOAD_MODE_AUTO},
         {"none", LLAMA_LOAD_MODE_NONE},
         {"mmap", LLAMA_LOAD_MODE_MMAP},
         {"mlock", LLAMA_LOAD_MODE_MLOCK},
@@ -726,7 +727,7 @@ NormalizedLoad normalizeLoadForFit(
           qvac_errors::general_error::toString(
               qvac_errors::general_error::InvalidArgument),
           string_format(
-              "load-mode must be one of 'none', 'mmap', 'mlock', "
+              "load-mode must be one of 'auto', 'none', 'mmap', 'mlock', "
               "'mmap+mlock' or 'dio', got: %s",
               loadMode->c_str()));
     }

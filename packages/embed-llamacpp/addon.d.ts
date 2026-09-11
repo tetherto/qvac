@@ -20,6 +20,12 @@ export interface GGMLConfig {
 export interface AddonConfigurationParams {
     path: string;
     config: GGMLConfig;
+    /**
+     * Root the native side searches for ggml compute backends, with
+     * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the
+     * `@qvac/fabric` package's `prebuilds/` on desktop, falling back to this
+     * addon's own `prebuilds/` on mobile.
+     */
     backendsDir?: string;
 }
 export interface BertJobInput {

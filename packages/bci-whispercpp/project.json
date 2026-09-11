@@ -1,0 +1,219 @@
+{
+  "name": "@qvac/bci-whispercpp",
+  "root": "packages/bci-whispercpp",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/bci-whispercpp",
+        "ci": {
+          "hasCppLint": true
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/bci-whispercpp",
+        "ci": {
+          "artifactNamePrefix": "bci-whispercpp-",
+          "linuxExtraPackages": "libopenblas-dev liblapack-dev libfftw3-dev",
+          "macBrewPackages": "openblas lapack fftw",
+          "includeVulkanSdk": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/bci-whispercpp"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/bci-whispercpp",
+        "ci": {
+          "timeoutMinutes": 60,
+          "envVarName": "GITHUB_TOKEN",
+          "envSecretName": "GITHUB_TOKEN",
+          "runIntegrationTests": true,
+          "windowsVulkan": { "setSdk": true, "addPath": true, "copyLoaderDll": true },
+          "modelDownloadScript": "download-models",
+          "modelDownloadContinueOnError": true,
+          "runRtfBenchmarks": false,
+          "rtfBenchmark": {
+            "command": "node scripts/run-rtf-benchmark-matrix.js",
+            "matrixEnvVar": "QVAC_BCI_BENCHMARK_MATRIX_JSON"
+          },
+          "platforms": [
+            {
+              "os": "ubuntu-22.04",
+              "platform": "linux",
+              "arch": "x64",
+              "runner": "qvac-ubuntu2204-x64-gpu",
+              "benchmarkMatrixJson": [
+                {
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                }
+              ]
+            },
+            {
+              "os": "ubuntu-24.04",
+              "platform": "linux",
+              "arch": "x64",
+              "runner": "qvac-ubuntu2404-x64-gpu",
+              "benchmarkMatrixJson": [
+                {
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                }
+              ]
+            },
+            {
+              "os": "ubuntu-26.04",
+              "platform": "linux",
+              "arch": "x64",
+              "noGpu": true,
+              "benchmarkMatrixJson": [
+                {
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                }
+              ]
+            },
+            {
+              "os": "ubuntu-24.04-arm",
+              "platform": "linux",
+              "arch": "arm64",
+              "noGpu": true,
+              "benchmarkMatrixJson": [
+                {
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                }
+              ]
+            },
+            {
+              "os": "macos-26",
+              "platform": "darwin",
+              "arch": "arm64",
+              "runner": "qvac-macos26-arm64-gpu",
+              "benchmarkMatrixJson": [
+                {
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "useGPU": true,
+                  "backendHint": "metal"
+                }
+              ]
+            },
+            {
+              "os": "macos-15-large",
+              "platform": "darwin",
+              "arch": "x64",
+              "noGpu": true,
+              "benchmarkMatrixJson": [
+                {
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                }
+              ]
+            },
+            {
+              "os": "windows-2025",
+              "platform": "win32",
+              "arch": "x64",
+              "runner": "qvac-win25-x64-gpu",
+              "benchmarkMatrixJson": [
+                {
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/bci-whispercpp",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-bci-rtf.js",
+          "manualDir": "packages/bci-whispercpp/benchmarks/manual-results"
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/bci-whispercpp"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/bci-whispercpp",
+        "ci": {
+          "mode": "coverage",
+          "continueOnError": true,
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
+          ],
+          "hasCcache": false,
+          "buildOutputDir": "build/addon/tests",
+          "testEnvVars": []
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/bci-whispercpp",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "rename-prefix",
+          "repoName": "bci-whispercpp",
+          "testGateMode": "post-publish-integration"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}
