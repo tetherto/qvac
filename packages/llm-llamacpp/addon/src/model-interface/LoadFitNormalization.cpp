@@ -13,6 +13,7 @@
 #include <common/arg.h>
 #include <common/chat.h>
 #include <common/log.h>
+#include <common/speculative.h>
 #include <inference-addon-cpp/Errors.hpp>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -1125,6 +1126,62 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
+  // Context shifting was removed from the addon. Reject both spellings here
+  // rather than forwarding the fabric flag and silently claiming to enable a
+  // feature neither context implements.
+  for (const std::string& key :
+       {"context-shift",
+        "context_shift",
+        "no-context-shift",
+        "no_context_shift",
+        "ctx-shift",
+        "ctx_shift"}) {
+    if (configFilemap.contains(key)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "%s: %s is not supported; context shifting has been removed\n",
+              K_LEGACY_PARSER_NAME.data(),
+              key.c_str()));
+    }
+  }
+
+  for (const std::string& key : {"spec-type", "spec_type"}) {
+    if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
+      auto types =
+          common_speculative_types_from_names(split(iter->second, ','));
+      // Only `draft-mtp` self-speculation is wired in this addon. `spec-type`
+      // accepts a comma list, so warn (don't fail) on any other parsed type so
+      // a silently-inert drafter is visible in the logs.
+      for (const auto specType : types) {
+        if (specType != COMMON_SPECULATIVE_TYPE_DRAFT_MTP &&
+            specType != COMMON_SPECULATIVE_TYPE_NONE) {
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[LlamaModel] spec-type '%s' is not supported (only "
+                  "'draft-mtp' is wired); it will be ignored\n",
+                  common_speculative_type_to_str(specType).c_str()));
+        }
+      }
+      // Do not leave warned-about values in the fabric configuration. Fabric
+      // selects the first available implementation by type priority, so a
+      // mixed value such as `ngram,draft-mtp` could otherwise run n-gram
+      // speculation even though the addon said that value was ignored.
+      std::copy_if(
+          types.begin(),
+          types.end(),
+          std::back_inserter(params.speculative.types),
+          [](const auto specType) {
+            return specType == COMMON_SPECULATIVE_TYPE_DRAFT_MTP ||
+                   specType == COMMON_SPECULATIVE_TYPE_NONE;
+          });
+      configFilemap.erase(iter);
+    }
+  }
+
   // transform json config into the format required by llama.cpp
   for (auto& keyValuePair : configFilemap) {
     configVector.push_back(std::string("--") + keyValuePair.first);
@@ -1133,8 +1190,12 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
-  auto ctxArg = common_params_parser_init(
-      params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
+  // Use the CLI parser profile so common llama.cpp options plus speculative
+  // tuning flags (for example --spec-draft-n-max) are accepted. The COMMON
+  // profile filters those spec options out entirely, while SERVER changes
+  // defaults such as n_parallel.
+  auto ctxArg =
+      common_params_parser_init(params, LLAMA_EXAMPLE_CLI, [](int, char**) {});
 
   // disable warmup run
   params.warmup = false;
@@ -1145,9 +1206,45 @@ NormalizedLoad normalizeLoadForFit(
   int size = static_cast<int>(configVector.size());
 
   std::unordered_map<std::string, common_arg*> argToOptions;
+  std::unordered_map<std::string, bool> argBoolValues;
+  static const std::unordered_set<std::string_view> allowedSpecArgs = {
+      "--spec-draft-n-max",
+      "--spec-draft-n-min",
+      "--spec-draft-p-min",
+      "--spec-draft-backend-sampling",
+      "--no-spec-draft-backend-sampling",
+      "--spec-draft-device",
+      "--spec-draft-ngl",
+      // Draft KV cache types. `benchmarks/performance/mtp-benchmark.js`
+      // documents and forwards both, and without them here the parser rejects
+      // the documented invocation as an invalid argument.
+      "--spec-draft-type-k",
+      "--spec-draft-type-v"};
   for (auto& opt : ctxArg.options) {
+    // The CLI profile is needed to obtain fabric's speculative options, but
+    // unrelated CLI-only options include local file readers and directory
+    // writers. Preserve the addon's former COMMON surface and add only the MTP
+    // tuning options exposed by this addon.
+    const auto allowedSpecArg = [&](const char* arg) {
+      return allowedSpecArgs.contains(arg);
+    };
+    const bool allowSpecOption =
+        std::ranges::any_of(opt.args, allowedSpecArg) ||
+        std::ranges::any_of(opt.args_neg, allowedSpecArg);
+    if (!opt.in_example(LLAMA_EXAMPLE_COMMON) && !allowSpecOption) {
+      continue;
+    }
     for (const auto& arg : opt.args) {
       argToOptions[arg] = &opt;
+      if (opt.handler_bool != nullptr) {
+        argBoolValues[arg] = true;
+      }
+    }
+    for (const auto& arg : opt.args_neg) {
+      argToOptions[arg] = &opt;
+      if (opt.handler_bool != nullptr) {
+        argBoolValues[arg] = false;
+      }
     }
   }
 
@@ -1196,12 +1293,35 @@ NormalizedLoad normalizeLoadForFit(
         opt.handler_void(params);
         continue;
       }
+      if (opt.handler_bool != nullptr) {
+        bool value = argBoolValues.at(arg);
+        if (argIndex + 1 < size) {
+          const std::string& next = configVector.at(argIndex + 1);
+          if (!next.starts_with(argPrefix)) {
+            if (common_arg_utils::is_truthy(next)) {
+              argIndex++;
+            } else if (common_arg_utils::is_falsey(next)) {
+              value = !value;
+              argIndex++;
+            } else {
+              throw std::invalid_argument(
+                  "expected boolean value: true/false, on/off, or 1/0");
+            }
+          }
+        }
+        opt.handler_bool(params, value);
+        continue;
+      }
 
       // arg with single value
       checkArg(argIndex);
       const std::string& val = configVector[++argIndex];
       if (opt.handler_int != nullptr) {
-        opt.handler_int(params, std::stoi(val));
+        const int parsedValue = std::stoi(val);
+        if (arg == "--spec-draft-n-max" && parsedValue < 1) {
+          throw std::invalid_argument("spec-draft-n-max must be at least 1");
+        }
+        opt.handler_int(params, parsedValue);
         continue;
       }
       if (opt.handler_string != nullptr) {
@@ -1228,6 +1348,42 @@ NormalizedLoad normalizeLoadForFit(
               qvac_errors::general_error::InvalidArgument),
           errorMsg);
     }
+  }
+
+  // Fabric's MTP constructor uses (n_max + 1) in a size_t allocation. Reject
+  // zero/negative values here, before any context can construct a speculator;
+  // merely applying the upper safety cap in the context would let a negative
+  // signed value wrap into an enormous allocation request first.
+  if (params.speculative.draft.n_max < 1) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s: spec-draft-n-max must be at least 1\n",
+            K_LEGACY_PARSER_NAME.data()));
+  }
+
+  // The upper cap has to bind HERE, not in the context constructor. Fabric's
+  // `common_context_params_to_llama` sets `cparams.n_rs_seq` from
+  // `params.speculative.need_n_rs_seq()`, which returns the raw
+  // `speculative.draft.n_max` whenever an MTP/EAGLE3/DFLASH/DSPARK draft type
+  // is requested, and recurrent memory allocation scales with `1 + n_rs_seq`.
+  // `common_init_from_params` builds the target context before any
+  // `LlmContext` exists, so a cap applied in the constructor runs after that
+  // sizing: `spec-draft-n-max=1000000` would request a million recurrent
+  // snapshots on a hybrid model first. Clamping rather than rejecting keeps
+  // the existing behaviour for the values fabric's own loop already bounds.
+  if (params.speculative.draft.n_max > K_MAX_SPEC_DRAFT) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "%s: spec-draft-n-max %d exceeds the supported maximum; clamping "
+            "to %d\n",
+            K_LEGACY_PARSER_NAME.data(),
+            params.speculative.draft.n_max,
+            K_MAX_SPEC_DRAFT));
+    params.speculative.draft.n_max = K_MAX_SPEC_DRAFT;
   }
 
   // QVAC-24253: auto-fit is disabled for tensor mode HERE, after the generic

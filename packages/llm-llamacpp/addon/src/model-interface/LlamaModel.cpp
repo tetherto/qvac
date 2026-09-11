@@ -891,6 +891,18 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       // per-context accumulator, so a per-job value would be misattributed.
       // Unlike the two above, those have no per-slot source to move to.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      // Always 0 here, and present rather than omitted. `index.d.ts` declares
+      // both non-optional, so leaving them out hands a consumer `undefined`
+      // where the types promise a number. 0 is honest rather than a
+      // placeholder: MTP runs only in `runSpeculativeGeneration`, reached from
+      // the sequential `generateResponse`, and every caller of jobTerminalStats
+      // comes through the scheduler instead -- which never speculates. Matches
+      // batchRuntimeStatsLocked, which hardcodes the same pair for the same
+      // reason. Deliberately not read off llmContext_: a peer job may be
+      // mid-decode on the shared context, which is why this whole function
+      // composes from the returned snapshot and takes no live model read.
+      {"draftAccepted", static_cast<int64_t>(0)},
+      {"draftTotal", static_cast<int64_t>(0)},
       {"backendDevice", runtimeBackendDevice_}};
   // Unlike the vision counters, the stop reason IS per-sequence, so a job can
   // report its own without misattribution — a single concurrent prompt would
@@ -1007,6 +1019,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   state_->llmContext_->resetThinkingBlockDiscards();
   state_->llmContext_->resetToolDefinitionsDropped();
   state_->llmContext_->resetVisionEncodeMs();
+  state_->llmContext_->resetSpeculativeRuntimeStats();
 
   // Prompt media (both hoisted byte buffers and inline paths) is loaded by
   // resolveChatAndTools in prompt-marker order; see computeMediaLoadOrder.
@@ -1410,6 +1423,8 @@ LlamaModel::batchRuntimeStatsLocked() const {
       // prompts share the one per-context accumulator (reset per prompt), so a
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      {"draftAccepted", static_cast<int64_t>(0)},
+      {"draftTotal", static_cast<int64_t>(0)},
       {"backendDevice", runtimeBackendDevice_}};
 }
 
@@ -1437,23 +1452,35 @@ LlamaModel::singleRuntimeStatsLocked() const {
   constexpr double kMillisInSecond = 1000.0;
   const bool wasPrefill =
       state_->lastRun_.load(std::memory_order_relaxed).wasPrefill;
-  const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
+  const bool wasSpeculative =
+      state_->llmContext_->wasLastGenerationSpeculative();
+  const double promptEvalMs = wasSpeculative
+                                  ? state_->llmContext_->getSpecPromptEvalMs()
+                                  : perfData.t_p_eval_ms;
+  const double generationMs = wasSpeculative
+                                  ? state_->llmContext_->getSpecGenerationMs()
+                                  : perfData.t_eval_ms;
+  const double timeToFirstToken = wasPrefill ? 0.0 : promptEvalMs;
   // Counted where the tokens are produced, not inferred from `n_eval`.
   // See `LlmContext::lastGeneratedTokenCount`.
   const int64_t generatedTokens =
       wasPrefill ? 0
-                 : static_cast<int64_t>(
-                       state_->llmContext_->lastGeneratedTokenCount());
-  const int64_t promptTokens =
-      static_cast<int64_t>(wasPrefill ? 0 : perfData.n_p_eval);
-  const double tokensPerSecond = (!wasPrefill && perfData.t_eval_ms > 0)
-                                     ? kMillisInSecond / perfData.t_eval_ms *
+                 : (wasSpeculative
+                        ? state_->llmContext_->getSpecGeneratedTokens()
+                        : static_cast<int64_t>(
+                              state_->llmContext_->lastGeneratedTokenCount()));
+  const int64_t promptEvalTokens =
+      wasSpeculative ? state_->llmContext_->getSpecPromptTokens()
+                     : static_cast<int64_t>(perfData.n_p_eval);
+  const int64_t promptTokens = wasPrefill ? 0 : promptEvalTokens;
+  const double tokensPerSecond = (!wasPrefill && generationMs > 0)
+                                     ? kMillisInSecond / generationMs *
                                            static_cast<double>(generatedTokens)
                                      : 0.0;
   const double promptProcessingTPS =
-      perfData.t_p_eval_ms > 0
-          ? kMillisInSecond / perfData.t_p_eval_ms * perfData.n_p_eval
-          : 0.0;
+      promptEvalMs > 0 ? kMillisInSecond / promptEvalMs *
+                             static_cast<double>(promptEvalTokens)
+                       : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
   return {
       {"TTFT", timeToFirstToken},
@@ -1487,6 +1514,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"visionEncodeTiles",
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
+      {"draftAccepted", state_->llmContext_->getDraftAccepted()},
+      {"draftTotal", state_->llmContext_->getDraftTotal()},
       {"backendDevice", runtimeBackendDevice_}};
 }
 

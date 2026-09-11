@@ -2,18 +2,25 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
 
+#include <llama-cpp.h>
+
 #include "RenderOverrides.hpp"
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
 #include "common/sampling.h"
+#include "common/speculative.h"
 #include "llama.h"
+#include "model-interface/LoadFitNormalization.hpp"
+#include "utils/LoggingMacros.hpp"
+#include "utils/ScopeGuard.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 
@@ -477,6 +484,34 @@ public:
   virtual void resetVisionEncodeMs() {}
 
   /**
+   * Speculative-decoding counters for the most recent generation. Zero for
+   * contexts that never ran a speculative generation; maintained by the shared
+   * `runSpeculativeGeneration` loop and surfaced via RuntimeStats.
+   */
+  [[nodiscard]] int64_t getDraftAccepted() const { return draftAccepted_; }
+  [[nodiscard]] int64_t getDraftTotal() const { return draftTotal_; }
+  [[nodiscard]] bool wasLastGenerationSpeculative() const {
+    return lastGenerationUsedSpec_;
+  }
+  [[nodiscard]] int64_t getSpecGeneratedTokens() const {
+    return specGeneratedTokens_;
+  }
+  [[nodiscard]] int64_t getSpecPromptTokens() const {
+    return specPromptTokens_;
+  }
+  [[nodiscard]] double getSpecPromptEvalMs() const { return specPromptEvalMs_; }
+  [[nodiscard]] double getSpecGenerationMs() const { return specGenerationMs_; }
+  void resetSpeculativeRuntimeStats() {
+    draftAccepted_ = 0;
+    draftTotal_ = 0;
+    specGeneratedTokens_ = 0;
+    specPromptTokens_ = 0;
+    specPromptEvalMs_ = 0.0;
+    specGenerationMs_ = 0.0;
+    lastGenerationUsedSpec_ = false;
+  }
+
+  /**
    * The load media method. It loads the media from memory buffer.
    * Default implementation does nothing (for text-only contexts).
    * Override in multimodal contexts to provide media loading functionality.
@@ -564,6 +599,644 @@ protected:
   /// instances under `ContinuousBatchScheduler` set this to their
   /// scheduler-assigned slot id at construction.
   llama_seq_id seqId_ = 0;
+
+  // MTP speculative decoding state, shared by TextLlmContext + MtmdLlmContext.
+  // The derived contexts populate these during their own initialization.
+  llama_context_ptr ctxDraft_;
+  common_speculative_ptr spec_;
+  // Hard ceiling on the MTP draft length, independent of the unvalidated
+  // `spec-draft-n-max` / `n_batch` config. The derived contexts clamp
+  // `params.speculative.draft.n_max` to this at init so fabric's own draft loop
+  // is bounded, and runSpeculativeGeneration reuses it to bound the
+  // `specBatch(nMax + 1)` allocation and the `uint16_t` accepted-count cast.
+  //
+  // Aliases the normalization-owned constant: the binding cap is applied there,
+  // before the target context is built, because `n_rs_seq` is sized from the
+  // raw value. These two must never disagree, so there is one definition.
+  static constexpr int K_MAX_SPEC_DRAFT =
+      load_fit_normalization::K_MAX_SPEC_DRAFT;
+  // common_speculative_get_draft_params requires a non-null .prompt; the MTP
+  // impl never reads its contents (only id_last/n_past/n_max).
+  std::vector<llama_token> specPromptDummy_;
+  // Drafts are capped to the target's bounded partial-seq_rm capacity so a
+  // rejected draft is always a plain seq_rm.
+  common_context_seq_rm_type ctxTgtSeqRmType_ = COMMON_CONTEXT_SEQ_RM_TYPE_PART;
+  bool ctxTgtSeqRmProbed_ = false;
+  int64_t draftAccepted_ = 0;
+  int64_t draftTotal_ = 0;
+  int64_t specGeneratedTokens_ = 0;
+  int64_t specPromptTokens_ = 0;
+  double specPromptEvalMs_ = 0.0;
+  double specGenerationMs_ = 0.0;
+  bool lastGenerationUsedSpec_ = false;
+  std::atomic<bool> stopGeneration_ = false;
+
+  // Mirror a target-context KV rollback onto the MTP draft context so the two
+  // stay aligned. `startPos` is the first position to drop (matching the
+  // target's seq_rm); -1 clears the whole draft sequence. No-op when MTP is
+  // inactive (ctxDraft_ null). Best-effort and non-throwing: a failed partial
+  // seq_rm on a recurrent draft cache is not fatal.
+  // Skipping this after cancel / resetState / loadCache is exactly what lets
+  // the draft and target contexts diverge (orphaned draft KV -> degraded
+  // drafts, or MTP silently disabling itself mid-session).
+  // `common_context_can_seq_rm` is not a cheap query: it clears the target's
+  // memory, decodes 2 dummy tokens, then clears and synchronizes
+  // (common/common.cpp). llama bills any decode of more than one token as a
+  // PROMPT eval -- `n_p_eval += n_queued_tokens` -- so re-running it inflates
+  // the next request's reported promptTokens and ppTPS by 2. The Mtmd
+  // draft-context rebuild runs once per media turn and lands AFTER
+  // `llama_perf_context_reset`, which is exactly where that showed up.
+  //
+  // The answer describes the TARGET context, which no rebuild replaces, so
+  // probe it once and reuse the result forever after.
+  void probeTargetSeqRmTypeOnce() {
+    if (ctxTgtSeqRmProbed_) {
+      return;
+    }
+    ctxTgtSeqRmType_ = common_context_can_seq_rm(getCtx());
+    ctxTgtSeqRmProbed_ = true;
+  }
+
+  void rollbackDraftContext(llama_pos startPos = -1) noexcept {
+    if (!ctxDraft_) {
+      return;
+    }
+    auto* mem = llama_get_memory(ctxDraft_.get());
+    if (mem == nullptr) {
+      return;
+    }
+    if (!llama_memory_seq_rm(mem, seqId_, startPos, -1)) {
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[LlmContext] MTP draft-context rollback failed; drafts may degrade "
+          "until the draft cache re-syncs\n");
+    }
+  }
+
+  // Derived contexts own the model used by the draft context. Their destructor
+  // bodies call this before their model-owning members are destroyed.
+  void teardownSpeculative() noexcept {
+    spec_.reset();
+    ctxDraft_.reset();
+  }
+
+  // Wraps llama_decode(target, batch). When MTP is active, also feeds the
+  // batch into common_speculative_process so the draft context tracks the
+  // target's post-norm hidden states.
+  int decodeAndSpecProcess(const llama_batch& batch) {
+    // Do NOT force-mark logits for every batch position here.
+    //
+    // Why this is safe (verified against fabric v9840): the MTP impl puts the
+    // TARGET context in *unmasked* nextn mode —
+    // `llama_set_embeddings_nextn(ctx_tgt, true, /*masked*/ false)`
+    // (common/speculative.cpp) — and the nextn extraction sizes itself as
+    // `n_rows = masked ? n_outputs : ubatch.n_tokens`, gated on `n_rows > 0`
+    // (src/llama-context.cpp). With masked=false that is `ubatch.n_tokens`, so
+    // every position of every ubatch is captured for
+    // common_speculative_process() *independently of per-row output marks*.
+    // (Do not confuse this with the regular `embd` extraction just above it,
+    // which IS gated on `n_outputs > 0` — that buffer is not what MTP reads.)
+    //
+    // Every caller already marks exactly the rows it needs anyway: prefill
+    // marks only the last token, the speculative verify batch marks every row
+    // at its call site, and the inline reasoning-recovery decodes mark their
+    // single token. Blanket-marking would force the full-vocab lm_head
+    // projection plus an N*vocab logits copy over the WHOLE prompt on prefill
+    // (a TTFT / OOM hazard on long prompts) for no functional gain.
+    const int ret = llama_decode(getCtx(), batch);
+    if (ret != 0) {
+      return ret;
+    }
+    if (spec_) {
+      if (!common_speculative_process(spec_.get(), batch)) {
+        QLOG_IF(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "[LlmContext] common_speculative_process failed; disabling spec "
+            "for the rest of this model lifetime\n");
+        spec_.reset();
+        ctxDraft_.reset();
+      }
+    }
+    return ret;
+  }
+
+  // Positions an inline reasoning-recovery commits directly, outside the
+  // headroom-clamped verify batch. Per-context because the two recoveries
+  // differ: TextLlmContext::handleReasoningEOS commits the close marker plus 2
+  // newlines (3), while MtmdLlmContext::specRecoverReasoning commits only the
+  // close marker (1). Reserving a single worst-case 3 for both would make Mtmd
+  // refuse a recovery that fits, so each context reports what it actually
+  // needs.
+  [[nodiscard]] virtual llama_pos specRecoveryPositions() const { return 3; }
+
+  // Check room for an inline reasoning recovery before it decodes. Sliding
+  // context support has been removed from the addon, so insufficient headroom
+  // is a graceful ContextOverflow stop rather than an attempted discard.
+  //
+  // `+ 1` for the answer token both recovery call sites sample immediately
+  // afterwards. Reserving only the committed positions is checked again by
+  // specEnsurePendingTokenHeadroom(), but by then the close marker has already
+  // been streamed and decoded -- so at the exact boundary the caller would emit
+  // `</think>` and then stop with an empty answer. Reserving the sampled token
+  // up front turns that into a clean pre-recovery stop.
+  [[nodiscard]] bool specEnsureRecoveryHeadroom() {
+    const llama_pos needed = specRecoveryPositions() + 1;
+    return specCellsUsed() + needed <= specCtxCeiling();
+  }
+
+  void specCommitPendingToken(
+      llama_token token, LlamaBatch& batch, const char* errorMessage) {
+    if (!specEnsurePendingTokenHeadroom()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextOverflow), errorMessage);
+    }
+    const llama_pos pos = specPos();
+    common_batch_clear(*batch);
+    common_batch_add(*batch, token, pos, {seqId_}, true);
+    if (decodeAndSpecProcess(*batch) != 0) {
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(FailedToDecode), errorMessage);
+    }
+    specSetPos(pos + 1);
+    ++lastGeneratedTokenCount_;
+  }
+
+  [[nodiscard]] bool specEnsurePendingTokenHeadroom() {
+    return specCellsUsed() + 1 <= specCtxCeiling();
+  }
+
+  // MTP speculative-decoding generation loop: draft from the MTP head, verify
+  // the draft against the target in one batch, accept the longest matching
+  // prefix, and feed each accepted token through specProcessToken.
+  GenerateResponseResult runSpeculativeGeneration(
+      const std::function<void(const std::string&)>& outputCallback) {
+    lastGenerationUsedSpec_ = true;
+    specGeneratedTokens_ = 0;
+    specBeginGeneration(outputCallback);
+
+    // Every cancel check below consumes the flag inline (load, then store
+    // false). The exits that THROW -- the verify-batch FailedToDecode, both
+    // specCommitPendingToken throws, and any clearSequenceMemory -- bypass all
+    // of them and would leave a set flag behind for the next generation's
+    // entry check to consume as a cancellation that never happened. Clearing
+    // unconditionally on the way out is safe: a stop that arrives during
+    // teardown belongs to no live request.
+    ScopeGuard stopFlagGuard(
+        [this]() noexcept { stopGeneration_.store(false); },
+        "LlmContext MTP stop-flag reset on speculative-loop exit");
+
+    // llama.cpp classifies every decode with more than one queued token as a
+    // prompt eval. Speculative verify batches therefore make its live
+    // n_p_eval/t_p_eval counters unsuitable for user-visible stats. Preserve
+    // the real prefill counters before the first verify batch, then compute
+    // generation time from the target + draft contexts' native perf deltas.
+    // This keeps TPS comparable with the non-speculative path, which is also
+    // decode-time based and excludes output-callback wall time.
+    const auto preGenerationPerf = llama_perf_context(getCtx());
+    specPromptTokens_ = preGenerationPerf.n_p_eval;
+    specPromptEvalMs_ = preGenerationPerf.t_p_eval_ms;
+    std::optional<llama_perf_context_data> preDraftPerf;
+    if (ctxDraft_) {
+      preDraftPerf = llama_perf_context(ctxDraft_.get());
+    }
+    auto finishRuntimeStats = [this, preGenerationPerf, preDraftPerf]() {
+      specGeneratedTokens_ = lastGeneratedTokenCount_;
+      const auto postTargetPerf = llama_perf_context(getCtx());
+      specGenerationMs_ = std::max(
+          0.0,
+          (postTargetPerf.t_eval_ms - preGenerationPerf.t_eval_ms) +
+              (postTargetPerf.t_p_eval_ms - preGenerationPerf.t_p_eval_ms));
+      // The MTP head executes in a second llama context. Its decode work is
+      // part of native generation cost even though it never appears in the
+      // target context's counters.
+      if (preDraftPerf && ctxDraft_) {
+        const auto postDraftPerf = llama_perf_context(ctxDraft_.get());
+        specGenerationMs_ += std::max(
+            0.0,
+            (postDraftPerf.t_eval_ms - preDraftPerf->t_eval_ms) +
+                (postDraftPerf.t_p_eval_ms - preDraftPerf->t_p_eval_ms));
+      }
+    };
+    auto finishSpec = [&](bool ok) {
+      finishRuntimeStats();
+      return specFinish(outputCallback, ok);
+    };
+    auto cancelSpec = [&]() {
+      finishRuntimeStats();
+      return specCancel(outputCallback);
+    };
+
+    if (stopGeneration_.load()) {
+      stopGeneration_.store(false);
+      return cancelSpec();
+    }
+
+    common_params& params = getParams();
+    // Cap the draft so a fully-rejected draft never exceeds the target's
+    // bounded partial-seq_rm capacity.
+    int nMax = common_speculative_n_max(&params.speculative);
+    if (nMax < 1) {
+      nMax = 1;
+    }
+    // Fixed, code-defined ceiling, independent of config. Both
+    // `--spec-draft-n-max` and `--batch-size` reach us via config
+    // passthrough, so neither can be trusted as a bound: a negative `n_batch`
+    // wraps to a huge uint32 that `static_cast<int>` turns back into <= 0,
+    // silently no-opping a batchCap-only guard and leaving `nMax`
+    // caller-controlled. Drafts are ~n_mtp_layers, so a small hard cap costs
+    // nothing and bounds both the `LlamaBatch(nMax + 1, ...)` allocation below
+    // and the `uint16_t` accepted-count cast at accept time. NOTE this only
+    // bounds the LOCAL nMax; the derived contexts also clamp
+    // params.speculative.draft.n_max to K_MAX_SPEC_DRAFT at init so fabric's
+    // own draft loop (which ignores the per-round dp.n_max hint) is bounded
+    // too.
+    if (nMax > K_MAX_SPEC_DRAFT) {
+      nMax = K_MAX_SPEC_DRAFT;
+    }
+    // Keep the whole verify batch (id_last + nMax drafts = nMax + 1 tokens)
+    // within the decode batch: cap at n_batch - 1 when n_batch is sane.
+    if (const int batchCap = static_cast<int>(llama_n_batch(getCtx()));
+        batchCap > 1 && nMax > batchCap - 1) {
+      nMax = batchCap - 1;
+    }
+    if (ctxTgtSeqRmType_ == COMMON_CONTEXT_SEQ_RM_TYPE_RS) {
+      const int cap = static_cast<int>(llama_n_rs_seq(getCtx()));
+      if (cap > 0 && nMax > cap) {
+        nMax = cap;
+      }
+    }
+    LlamaBatch specBatch(nMax + 1, 0, 1);
+
+    unsigned generated = 0;
+
+    // The prompt is already decoded + speculative-processed, so its logits sit
+    // at position -1. Sample the first generated token and treat it as id_last.
+    bool sampled = false;
+    llama_token idLast = specSampleFirstToken(sampled);
+    if (specShouldRecoverReasoning(idLast)) {
+      // First generated token is EOS inside <think>: recover inline (close
+      // marker decoded via specBatch, then sample the answer), mirroring the
+      // in-loop recovery below. The plain specProcessToken(..., nullptr) path
+      // used for a normal first token would take processToken's forcedTokens_
+      // branch, whose recovery newlines the speculative sampler never consumes
+      // — dropping them (Text) or skipping recovery entirely (Mtmd) on this
+      // edge.
+      clearSequenceMemory(getCtx(), specPos(), -1);
+      if (ctxDraft_) {
+        clearSequenceMemory(ctxDraft_.get(), specPos(), -1);
+      }
+      // Same inline-decode headroom requirement as the in-loop recovery below.
+      if (!specEnsureRecoveryHeadroom()) {
+        return finishSpec(/*ok=*/false);
+      }
+      // No common_speculative_accept here, unlike the in-loop recovery: no
+      // verify batch has run yet, so `pending_h` still holds the last row of
+      // the prompt prefill, which IS the correct pairing row for this decode.
+      // Charge the recovery's committed tokens against n_predict, as below.
+      const int32_t committedBeforeRecovery = lastGeneratedTokenCount_;
+      specRecoverReasoning(idLast, specBatch, outputCallback);
+      generated += static_cast<unsigned>(std::max<int32_t>(
+          0, lastGeneratedTokenCount_ - committedBeforeRecovery));
+      if (stopGeneration_.load()) {
+        stopGeneration_.store(false);
+        return cancelSpec();
+      }
+      if (!specEnsurePendingTokenHeadroom()) {
+        return finishSpec(/*ok=*/false);
+      }
+      const llama_token next = specSampleAndAccept(-1);
+      const SequenceStepResult step = specProcessToken(
+          next, /*sampled=*/true, ++generated, outputCallback, &specBatch);
+      idLast = step.token;
+      if (stopGeneration_.load()) {
+        stopGeneration_.store(false);
+        return cancelSpec();
+      }
+      if (!step.finished && !step.decodedInline && params.n_predict > 0 &&
+          generated >= static_cast<unsigned>(params.n_predict)) {
+        specCommitPendingToken(
+            idLast,
+            specBatch,
+            "[LlmContext] failed to decode speculative final token after "
+            "reasoning recovery\n");
+        return finishSpec(/*ok=*/true);
+      }
+      if (step.finished) {
+        return finishSpec(/*ok=*/true);
+      }
+    } else {
+      // The first token is normally decoded as id_last in the first verify
+      // batch below. If a one-token prediction budget ends the generation here,
+      // commit it directly before returning so the visible output and KV cache
+      // agree.
+      if (!specEnsurePendingTokenHeadroom()) {
+        return finishSpec(/*ok=*/false);
+      }
+      const SequenceStepResult step = specProcessToken(
+          idLast, sampled, ++generated, outputCallback, nullptr);
+      idLast = step.token;
+      if (stopGeneration_.load()) {
+        stopGeneration_.store(false);
+        return cancelSpec();
+      }
+      if (params.n_predict > 0 &&
+          generated >= static_cast<unsigned>(params.n_predict) &&
+          step.stopReason == GenerationStopReason::PredictionLimit) {
+        specCommitPendingToken(
+            idLast,
+            specBatch,
+            "[LlmContext] failed to decode speculative final token\n");
+        return finishSpec(/*ok=*/true);
+      }
+      if (step.finished) {
+        return finishSpec(/*ok=*/true);
+      }
+    }
+
+    std::vector<llama_token> draft;
+    bool idLastCommitted = false;
+    bool stoppedAtContextCeiling = false;
+    while (params.n_predict <= 0 ||
+           generated < static_cast<unsigned>(params.n_predict)) {
+      if (stopGeneration_.load()) {
+        stopGeneration_.store(false);
+        return cancelSpec();
+      }
+
+      if (specCellsUsed() + 1 > specCtxCeiling()) {
+        return finishSpec(/*ok=*/false);
+      }
+
+      // Remaining context headroom for THIS round. The verify batch below uses
+      // one cell for id_last and one per draft token. The guard above only
+      // proves there is room for id_last. To avoid decoding past
+      // specCtxCeiling() (which llama_decode rejects -> a hard
+      // FailedToDecode at the boundary instead of a graceful stop), the draft
+      // length must be <= headroom. headroom >= 0 here (guaranteed by the
+      // guard); 0 means "no draft this round, just re-decode id_last".
+      const llama_pos cellsBase = specCellsUsed();
+      const llama_pos headroom = specCtxCeiling() - cellsBase - 1;
+      const int roundNMax = headroom < static_cast<llama_pos>(nMax)
+                                ? static_cast<int>(headroom)
+                                : nMax;
+
+      // 1. Draft from the MTP head.
+      draft.clear();
+      if (spec_) {
+        common_speculative_draft_params& dp =
+            common_speculative_get_draft_params(spec_.get(), seqId_);
+        dp.drafting = true;
+        // dp.n_max is a per-round hint. Some fabric drafters honor it, but the
+        // MTP drafter (fabric v9840, common/speculative.cpp) bounds the draft
+        // only by its own construction-time params.n_max (=
+        // min(spec-draft-n-max, n_mtp_layers)) and ignores dp.n_max. Set it for
+        // drafters that read it, but do NOT rely on it — the hard headroom
+        // guarantee is the explicit truncation below.
+        dp.n_max = roundNMax;
+        dp.n_past = specPos();
+        dp.id_last = idLast;
+        dp.prompt = &specPromptDummy_;
+        dp.result = &draft;
+        common_speculative_draft(spec_.get());
+        // Bound the returned draft by BOTH limits regardless of drafter
+        // behavior (the MTP drafter ignores the dp.n_max hint):
+        //  - `headroom`: keeps physical usage at cellsBase + headroom =
+        //    specCtxCeiling() - 1, so the decode cannot exceed the KV budget;
+        //    and
+        //  - `nMax`: the capacity specBatch(nMax + 1) was allocated with.
+        //  Fabric
+        //    only clamps its params.n_max to n_mtp_layers for chain_heads
+        //    archs, so for others draft.size() can exceed nMax (e.g. large
+        //    spec-draft-n-max, or nMax lowered by the batchCap/RS clamps) and
+        //    overflow common_batch_add — so this bound is required, not just
+        //    defensive. Dropped tail tokens are simply not verified this round
+        //    (equivalent to a rejected draft; reconciled by the accept below).
+        const size_t maxDraft =
+            headroom < 0
+                ? 0
+                : std::min(
+                      static_cast<size_t>(nMax), static_cast<size_t>(headroom));
+        if (draft.size() > maxDraft) {
+          draft.resize(maxDraft);
+        }
+      }
+      if (ctxDraft_) {
+        clearSequenceMemory(ctxDraft_.get(), specPos(), -1);
+      }
+      draftTotal_ += static_cast<int64_t>(draft.size());
+
+      // 2. Verify: decode [id_last, draft0, ..., draftN-1] in one batch.
+      const llama_pos posBase = specPos();
+      common_batch_clear(*specBatch);
+      common_batch_add(*specBatch, idLast, posBase, {seqId_}, true);
+      for (size_t i = 0; i < draft.size(); ++i) {
+        common_batch_add(
+            *specBatch,
+            draft[i],
+            posBase + 1 + static_cast<llama_pos>(i),
+            {seqId_},
+            true);
+      }
+      if (decodeAndSpecProcess(*specBatch) != 0) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(FailedToDecode),
+            "[LlmContext] failed to decode speculative batch\n");
+      }
+      // idLast was the one pending generated token from the preceding sample;
+      // the successful verify decode has now committed it to target KV.
+      ++lastGeneratedTokenCount_;
+      idLastCommitted = true;
+
+      // 3. Sample + accept the longest matching prefix.
+      size_t nAccepted = 0;
+      bool finished = false;
+      bool reasoningRecovered = false;
+      for (size_t j = 0; j <= draft.size(); ++j) {
+        if (stopGeneration_.load()) {
+          stopGeneration_.store(false);
+          return cancelSpec();
+        }
+        if (params.n_predict > 0 &&
+            generated >= static_cast<unsigned>(params.n_predict)) {
+          break;
+        }
+
+        // The final logits row predicts a token immediately after the verify
+        // batch. When that batch already ends at the context ceiling, there is
+        // nowhere to commit the prediction. Stop before sampling/streaming it;
+        // otherwise the visible output gains a token that is absent from KV and
+        // generatedTokens, and the following round reports an avoidable error.
+        if (j == draft.size() &&
+            cellsBase + 1 + static_cast<llama_pos>(j) >= specCtxCeiling()) {
+          stoppedAtContextCeiling = true;
+          finished = true;
+          break;
+        }
+
+        const llama_token tok = specSampleAndAccept(static_cast<int>(j));
+        specSetPos(posBase + 1 + static_cast<llama_pos>(j));
+
+        // EOS inside the reasoning channel: drop the rejected tail from both
+        // contexts, commit the close marker, then sample the answer fresh.
+        if (specShouldRecoverReasoning(tok)) {
+          clearSequenceMemory(getCtx(), specPos(), -1);
+          if (ctxDraft_) {
+            clearSequenceMemory(ctxDraft_.get(), specPos(), -1);
+          }
+          // Recovery decodes inline (outside the clamped verify batch), so make
+          // room for it or stop gracefully instead of hitting FailedToDecode.
+          if (!specEnsureRecoveryHeadroom()) {
+            return finishSpec(/*ok=*/false);
+          }
+          // Rewind the MTP head's carry-over hidden state BEFORE the recovery
+          // decode. common_speculative_process() unconditionally leaves
+          // `pending_h` = the h-row of the LAST token in the verify batch, and
+          // accept(n) is the only thing that rewinds it to `verify_h[n]`. The
+          // recovery's own decode runs through decodeAndSpecProcess, i.e. a
+          // fresh process() that consumes `pending_h` and then overwrites
+          // `verify_h` -- so skipping the accept here pairs the close marker
+          // with a REJECTED draft token's hidden state, and every later draft
+          // attends over that cell. Silent: output stays correct because the
+          // target verifies everything, it just depresses the acceptance rate
+          // for the rest of the generation. Reaching index `j` implies every
+          // earlier draft matched, so nAccepted == j selects the last kept
+          // token. The `if (!reasoningRecovered)` block below is skipped on
+          // this path, which is why the accept has to happen here.
+          if (!draft.empty() && spec_) {
+            common_speculative_accept(
+                spec_.get(), seqId_, static_cast<uint16_t>(nAccepted));
+          }
+          // Charge what the recovery itself commits (the close marker, plus up
+          // to two newlines on Text) against n_predict. Both recovery
+          // implementations already count those tokens into
+          // lastGeneratedTokenCount_; without this they are invisible to the
+          // budget and a request can overrun the limit it declared.
+          const int32_t committedBeforeRecovery = lastGeneratedTokenCount_;
+          specRecoverReasoning(tok, specBatch, outputCallback);
+          generated += static_cast<unsigned>(std::max<int32_t>(
+              0, lastGeneratedTokenCount_ - committedBeforeRecovery));
+          if (stopGeneration_.load()) {
+            stopGeneration_.store(false);
+            return cancelSpec();
+          }
+          if (!specEnsurePendingTokenHeadroom()) {
+            return finishSpec(/*ok=*/false);
+          }
+          const llama_token next = specSampleAndAccept(-1);
+          const SequenceStepResult nstep = specProcessToken(
+              next, /*sampled=*/true, ++generated, outputCallback, &specBatch);
+          idLast = nstep.token;
+          idLastCommitted = false;
+          if (stopGeneration_.load()) {
+            stopGeneration_.store(false);
+            return cancelSpec();
+          }
+          if (!nstep.finished && !nstep.decodedInline && params.n_predict > 0 &&
+              generated >= static_cast<unsigned>(params.n_predict)) {
+            specCommitPendingToken(
+                idLast,
+                specBatch,
+                "[LlmContext] failed to decode speculative final token after "
+                "reasoning recovery\n");
+            idLastCommitted = true;
+            finished = true;
+          } else {
+            finished = nstep.finished;
+          }
+          reasoningRecovered = true;
+          break;
+        }
+
+        const SequenceStepResult step = specProcessToken(
+            tok, /*sampled=*/true, ++generated, outputCallback, &specBatch);
+        idLast = step.token;
+        idLastCommitted = false;
+        if (stopGeneration_.load()) {
+          stopGeneration_.store(false);
+          return cancelSpec();
+        }
+        if (step.finished) {
+          finished = true;
+          break;
+        }
+        if (j < draft.size() && tok == draft[j]) {
+          ++nAccepted;
+          ++draftAccepted_;
+          ++lastGeneratedTokenCount_;
+          idLastCommitted = true;
+          continue;
+        }
+        break; // mismatch
+      }
+
+      if (!reasoningRecovered) {
+        // Keep id_last + the accepted drafts, drop the rejected/stop tail from
+        // both contexts and reset the cursor to just past the kept prefix.
+        const llama_pos keepPos =
+            posBase + 1 + static_cast<llama_pos>(nAccepted);
+        clearSequenceMemory(getCtx(), keepPos, -1);
+        if (ctxDraft_) {
+          clearSequenceMemory(ctxDraft_.get(), keepPos, -1);
+        }
+        specSetPos(keepPos);
+        if (!draft.empty() && spec_) {
+          common_speculative_accept(
+              spec_.get(), seqId_, static_cast<uint16_t>(nAccepted));
+        }
+      }
+      if (stoppedAtContextCeiling) {
+        return finishSpec(/*ok=*/false);
+      }
+      if (finished) {
+        break;
+      }
+    }
+
+    // A mismatch sampled as the last budgeted token is not part of the verify
+    // batch that preceded it. Commit it explicitly so visible output, KV state,
+    // and generatedTokens agree at a prediction-limit boundary.
+    if (getGenerationStopReason() == GenerationStopReason::None &&
+        params.n_predict > 0 &&
+        generated >= static_cast<unsigned>(params.n_predict) &&
+        !idLastCommitted) {
+      if (!specEnsurePendingTokenHeadroom()) {
+        return finishSpec(/*ok=*/false);
+      }
+      specCommitPendingToken(
+          idLast,
+          specBatch,
+          "[LlmContext] failed to decode speculative final token\n");
+    }
+
+    return finishSpec(/*ok=*/true);
+  }
+
+  // Context-specific pieces of the MTP loop. The cursor is `nPast_` on
+  // TextLlmContext and `current_.pos` on MtmdLlmContext.
+  virtual void
+  specBeginGeneration(const std::function<void(const std::string&)>&) = 0;
+  [[nodiscard]] virtual llama_pos specPos() const = 0;
+  // Physical KV-cell usage normally matches the logical position. Mtmd
+  // overrides this because M-RoPE media can occupy several cells per position.
+  [[nodiscard]] virtual llama_pos specCellsUsed() const { return specPos(); }
+  virtual void specSetPos(llama_pos pos) = 0;
+  [[nodiscard]] virtual llama_pos specCtxCeiling() const = 0;
+  virtual llama_token specSampleFirstToken(bool& sampled) = 0;
+  virtual llama_token specSampleAndAccept(int logitIdx) = 0;
+  virtual SequenceStepResult specProcessToken(
+      llama_token tokenId, bool sampled, unsigned generated,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch) = 0;
+  virtual bool specShouldRecoverReasoning(llama_token tok) = 0;
+  virtual void specRecoverReasoning(
+      llama_token tok, LlamaBatch& batch,
+      const std::function<void(const std::string&)>& outputCallback) = 0;
+  virtual GenerateResponseResult specFinish(
+      const std::function<void(const std::string&)>& outputCallback,
+      bool ok) = 0;
+  virtual GenerateResponseResult
+  specCancel(const std::function<void(const std::string&)>& outputCallback) = 0;
 };
 
 inline SessionMetadata SessionMetadata::capture(const LlmContext& context) {

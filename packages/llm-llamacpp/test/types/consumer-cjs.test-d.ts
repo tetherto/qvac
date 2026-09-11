@@ -161,6 +161,8 @@ const stats: LlmLlamacpp.RuntimeStats = {
   generatedTokens: 5,
   promptTokens: 6,
   thinkingBlockDiscards: 0,
+  draftAccepted: 0,
+  draftTotal: 0,
   toolDefinitionsDropped: 0,
   avgConcurrentSeq: 1,
   backendDevice: "gpu",

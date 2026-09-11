@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -1144,6 +1145,134 @@ TEST_F(LoadFitNormalizationTest, RetiredDiscardKeyIsRejectedAsUnknownArgument) {
     EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"));
     EXPECT_THAT(error.what(), ::testing::HasSubstr("n-discarded"));
   }
+}
+
+TEST_F(LoadFitNormalizationTest, RetiredContextShiftKeysAreRejected) {
+  for (const std::string& key :
+       {"context-shift",
+        "context_shift",
+        "no-context-shift",
+        "no_context_shift",
+        "ctx-shift",
+        "ctx_shift"}) {
+    auto config = baseConfig();
+    config[key] = "true";
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"})));
+      FAIL() << key << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(
+          error.what(),
+          ::testing::HasSubstr("context shifting has been removed"));
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, CliOnlyFileOptionsRemainRejected) {
+  for (const std::string& key :
+       {"chat-template-file",
+        "system-prompt-file",
+        "log-prompts-dir",
+        "spec-draft-model"}) {
+    auto config = baseConfig();
+    config[key] = "/tmp/untrusted";
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"})));
+      FAIL() << key << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"));
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, UnsupportedSpecTypesAreActuallyFiltered) {
+  auto config = baseConfig();
+  config["spec-type"] = "ngram-simple,draft-mtp";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+
+  EXPECT_NE(
+      std::find(
+          result.params.speculative.types.begin(),
+          result.params.speculative.types.end(),
+          COMMON_SPECULATIVE_TYPE_DRAFT_MTP),
+      result.params.speculative.types.end());
+  EXPECT_EQ(
+      std::find(
+          result.params.speculative.types.begin(),
+          result.params.speculative.types.end(),
+          COMMON_SPECULATIVE_TYPE_NGRAM_SIMPLE),
+      result.params.speculative.types.end());
+}
+
+TEST_F(LoadFitNormalizationTest, NonPositiveSpecDraftMaximumIsRejected) {
+  for (const std::string value : {"0", "-2"}) {
+    auto config = baseConfig();
+    config["spec-type"] = "draft-mtp";
+    config["spec-draft-n-max"] = value;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"})));
+      FAIL() << "spec-draft-n-max=" << value << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("must be at least 1"));
+    }
+  }
+}
+
+// The upper clamp is the one with memory consequences, and nothing pinned it.
+// `common_context_params_to_llama` sizes `cparams.n_rs_seq` from
+// `speculative.need_n_rs_seq()`, which returns the raw `draft.n_max` for MTP,
+// and recurrent memory scales with `1 + n_rs_seq` -- so an unclamped
+// `spec-draft-n-max` is a straight allocation multiplier. The clamp has to bind
+// here, in normalization, because this runs before the target context is built.
+TEST_F(LoadFitNormalizationTest, OversizedSpecDraftMaximumIsClampedToCeiling) {
+  for (const char* value : {"129", "1000000"}) {
+    auto config = baseConfig();
+    config["spec-type"] = "draft-mtp";
+    config["spec-draft-n-max"] = value;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::CPU, .name = "none"}));
+    EXPECT_EQ(result.params.speculative.draft.n_max, lfn::K_MAX_SPEC_DRAFT)
+        << "spec-draft-n-max=" << value << " must clamp to the ceiling";
+  }
+}
+
+// A value inside the range must survive untouched -- a clamp that pinned every
+// input to 128 would pass the test above.
+TEST_F(LoadFitNormalizationTest, InRangeSpecDraftMaximumIsPreserved) {
+  auto config = baseConfig();
+  config["spec-type"] = "draft-mtp";
+  config["spec-draft-n-max"] = "4";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+  EXPECT_EQ(result.params.speculative.draft.n_max, 4);
 }
 
 TEST_F(LoadFitNormalizationTest, DuplicateSplitModeRemainsInvalidArgument) {

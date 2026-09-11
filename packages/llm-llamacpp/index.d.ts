@@ -187,6 +187,8 @@ declare namespace LlmLlamacpp {
          * and which one wins is unspecified.
          */
         "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
+        /** Enable MTP self-speculative decoding for models with a next-n head. */
+        "spec-type"?: "draft-mtp";
         /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
         "tensor-split"?: string;
         "cache-type-k"?: string;
@@ -528,6 +530,14 @@ declare namespace LlmLlamacpp {
          * model-level — never per-job.
          */
         avgConcurrentSeq: number;
+        /**
+         * MTP speculative-decoding counters for the last request: `draftTotal`
+         * is the number of tokens the MTP draft head proposed, `draftAccepted`
+         * is how many the target verified and accepted. Both are 0 when
+         * speculative decoding is inactive.
+         */
+        draftAccepted: number;
+        draftTotal: number;
         backendDevice: "cpu" | "gpu";
         /**
          * Why generation stopped. Per-sequence, so it is reported for a single

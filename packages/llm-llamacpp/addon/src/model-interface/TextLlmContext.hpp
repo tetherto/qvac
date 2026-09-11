@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include <llama-cpp.h>
 #include <llama.h>
 
 #include "../utils/ChatTemplateUtils.hpp"
@@ -16,6 +17,7 @@
 #include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
 #include "common/common.h"
+#include "common/speculative.h"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// Concrete text-only LLM context. Implements both the legacy
@@ -25,6 +27,8 @@
 /// (`getNPast`) appear on both
 /// bases; a single override below satisfies both vtables.
 class TextLlmContext : public LlmContext, public SequenceDriver {
+  friend class TextLlmContextTestPeer;
+
 public:
   TextLlmContext(const TextLlmContext&) = delete;
   TextLlmContext& operator=(const TextLlmContext&) = delete;
@@ -37,7 +41,7 @@ public:
       llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);
 
   // Destructor
-  ~TextLlmContext() override = default;
+  ~TextLlmContext() override;
 
   /**
    * The eval message method. It evaluates the message and updates the context.
@@ -323,6 +327,111 @@ private:
   /// of `snapshotForRecurrentRollback` so the unwind path stays readable.
   void captureReasoningBoundaryAt(llama_pos anchorPos);
 
+  // Hooks for the shared MTP loop in `LlmContext`.
+  void specBeginGeneration(
+      const std::function<void(const std::string&)>& outputCallback) override;
+  [[nodiscard]] llama_pos specPos() const override { return nPast_; }
+  void specSetPos(llama_pos pos) override { nPast_ = pos; }
+  [[nodiscard]] llama_pos specCtxCeiling() const override {
+    return ctxCeiling();
+  }
+  // handleReasoningEOS commits the close marker, and the 2 newlines only when
+  // the vocab actually yielded a single-token newline (ReasoningUtils leaves
+  // `cached_newline_token` null otherwise). Reporting a flat 3 on a model
+  // without one refuses recoveries that would have fit -- the same
+  // over-reservation MtmdLlmContext already overrides away.
+  [[nodiscard]] llama_pos specRecoveryPositions() const override {
+    return reasoningState_.cached_newline_token == LLAMA_TOKEN_NULL ? 1 : 3;
+  }
+  llama_token specSampleFirstToken(bool& sampled) override {
+    return sampleToken(-1, sampled);
+  }
+  llama_token specSampleAndAccept(int logitIdx) override {
+    // Honor a pending post-reasoning-recovery EOG ban on the speculative path.
+    // This sampler bypasses sampleToken() — the normal path's ban consumer — so
+    // without this a Qwen3 reasoning model that emitted EOS *inside* <think>
+    // could immediately sample EOS again here -> empty answer (the ban exists
+    // to prevent exactly that on the non-spec path). The flag is armed by
+    // handleReasoningEOS()/specRecoverReasoning() and is consumed once here.
+    applyPendingEogBan(logitIdx);
+    const llama_token tok =
+        common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
+    common_sampler_accept(smpl_.get(), tok, true);
+    return tok;
+  }
+  SequenceStepResult specProcessToken(
+      llama_token tokenId, bool sampled, unsigned generated,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch) override {
+    return processToken(
+        tokenId, sampled, generated, outputCallback, inlineDecodeBatch);
+  }
+  bool specShouldRecoverReasoning(llama_token tok) override {
+    return llama_vocab_is_eog(modelCtx_.vocab, tok) &&
+           isQwen3ReasoningFamily_ && reasoningState_.inside_reasoning &&
+           reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL;
+  }
+  void specRecoverReasoning(
+      llama_token tok, LlamaBatch& batch,
+      const std::function<void(const std::string&)>& outputCallback) override {
+    llama_token closeTok = tok;
+    std::string closeStr;
+    handleReasoningEOS(closeTok, closeStr, *batch, nPast_, outputCallback);
+  }
+  GenerateResponseResult specFinish(
+      const std::function<void(const std::string&)>& outputCallback,
+      bool ok) override {
+    // A natural (ok) end of the speculative loop is a prediction-limit stop.
+    // This MUST be set before onGenerationFinished: that call feeds
+    // generationStopReason_ into shouldRollbackKnownReasoningCutoff(), which
+    // drops an unbalanced <think> span from the (recurrent/hybrid) KV cache
+    // only when the reason is PredictionLimit/SequenceLimit. Leaving it None
+    // here (the non-spec reset at generateResponse sits after the spec branch,
+    // so it never runs for MTP) would skip that rollback and corrupt later
+    // turns. Mirrors MtmdLlmContext::specFinish. Also propagate rollbackOk
+    // (nodiscard).
+    if (generationStopReason_ == GenerationStopReason::None) {
+      // ok=false is only reached from the context-ceiling bail-outs, so report
+      // ContextOverflow there rather than leaving the reason unset (matches the
+      // non-speculative paths, which set it explicitly).
+      generationStopReason_ = ok ? GenerationStopReason::PredictionLimit
+                                 : GenerationStopReason::ContextOverflow;
+    }
+    const bool rollbackOk =
+        onGenerationFinished(outputCallback, generationStopReason_);
+    // Like the non-speculative loop, filling the context during generation is
+    // a successful terminal outcome. `ok=false` here classifies that outcome;
+    // it must not turn it into the prompt-admission exception handled by
+    // LlamaModel::processPromptImpl.
+    return {.ok = true, .rollbackOk = rollbackOk};
+  }
+  GenerateResponseResult specCancel(
+      const std::function<void(const std::string&)>& outputCallback) override {
+    return {
+        .ok = true, .cancelled = true, .rollbackOk = onCancel(outputCallback)};
+  }
+
+  // Consume a pending post-reasoning-recovery EOG ban: if
+  // `banEogAfterReasoningRecovery_` is armed, mask every end-of-generation
+  // token
+  // (`eogTokens_`) in the logits at `logitIdx` for exactly this one sample,
+  // then disarm. Shared by the normal (`sampleToken`) and speculative
+  // (`specSampleAndAccept`) sampling paths so both honor the ban.
+  void applyPendingEogBan(int logitIdx);
+
+  // Sample token from the logits at logitIdx. Extracted from
+  // onLogitsReady so the speculative path, which obtains its tokens from
+  // common_sampler_sample_and_accept_n, can reuse the per-token post-processing
+  // in processToken without re-sampling.
+  llama_token sampleToken(int logitIdx, bool& sampledOut);
+
+  // Post-process a single already-decided token. Shared by the
+  // normal per-token path and the speculative accept loop.
+  SequenceStepResult processToken(
+      llama_token tokenId, bool sampled, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch);
+
   common_init_result_ptr llamaInit_;
   LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;
@@ -447,6 +556,4 @@ private:
   // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.
   // Reset at the start of each inference and on `resetState`.
   std::optional<llama_perf_context_data> userVisiblePerf_;
-
-  std::atomic<bool> stopGeneration_ = false;
 };

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -135,6 +136,17 @@ protected:
     }
     return model;
   }
+
+  // Shared body for the n_predict-cutoff rollback cases. Two budgets exercise
+  // the same contract: `n_predict = 64` is the original coverage (a real
+  // multi-token reasoning run cut off mid-`<think>`), and `n_predict = 1` is
+  // the deterministic variant that always stops right after the template's
+  // forced reasoning opener. `minGenerated` is the floor the run must reach --
+  // it is the assertion that stops a broken cutoff from passing silently, so
+  // it tracks the budget rather than being pinned at 1. `cacheName` keeps the
+  // two cases on separate cache files.
+  void runNPredictCutoffRollsBackCache(
+      const std::string& nPredict, double minGenerated, const char* cacheName);
 
   std::string qwen35_model_path =
       test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
@@ -499,12 +511,9 @@ TEST_F(
   fs::remove(cachePath);
 }
 
-TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
-  if (!hasValidQwen35Model()) {
-    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
-  }
-
-  config_files["n_predict"] = "64";
+void MtmdLlmContextTest::runNPredictCutoffRollsBackCache(
+    const std::string& nPredict, double minGenerated, const char* cacheName) {
+  config_files["n_predict"] = nPredict;
   config_files["temp"] = "0";
 
   auto model = createQwen35Model();
@@ -514,8 +523,7 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
   auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
   ASSERT_NE(ctx, nullptr) << "Qwen3.5 VLM must use the MTMD context";
 
-  const fs::path cachePath =
-      fs::temp_directory_path() / "qvac-qwen35-mtmd-npredict-rollback.bin";
+  const fs::path cachePath = fs::temp_directory_path() / cacheName;
   fs::remove(cachePath);
 
   const char* systemMsg =
@@ -568,7 +576,7 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
       << "small-budget MTMD run must enter reasoning before n_predict cutoff";
   EXPECT_EQ(cutoffOutput.find("</think>"), std::string::npos)
       << "test must stop inside reasoning to exercise rollback, not compaction";
-  EXPECT_GE(generatedTokens, 64.0)
+  EXPECT_GE(generatedTokens, minGenerated)
       << "small-budget MTMD run should reach n_predict";
   EXPECT_EQ(ctx->getCacheTokens(), primerCacheTokens)
       << "MTMD rollback must restore cache-token bookkeeping to primer state";
@@ -591,6 +599,31 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
       << "follow-up should extend the rolled-back primer cache";
 
   fs::remove(cachePath);
+}
+
+// The original coverage: a real multi-token reasoning run cut off mid-`<think>`
+// by the budget. Kept alongside the 1-token variant below rather than replaced
+// by it -- a floor of 1 is satisfied by any generation at all, so on its own it
+// could not fail if the cutoff stopped working.
+TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+  runNPredictCutoffRollsBackCache(
+      "64", 64.0, "qvac-qwen35-mtmd-npredict-rollback.bin");
+}
+
+// A one-token budget deterministically stops after the template's forced
+// reasoning opener, before the model can emit its close marker -- so this case
+// reaches the rollback path without depending on how long the model reasons.
+TEST_F(
+    MtmdLlmContextTest,
+    Qwen35MtmdSingleTokenNPredictCutoffMidReasoningRollsBackCache) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+  runNPredictCutoffRollsBackCache(
+      "1", 1.0, "qvac-qwen35-mtmd-npredict1-rollback.bin");
 }
 
 // Multimodal hybrid (Qwen3.5) compaction. `MtmdLlmContext` shares the
@@ -1339,6 +1372,8 @@ TEST_F(MtmdLlmContextTest, SyncPositionAdvancesKvCellsForGeneratedTokens) {
 
   LlmContext* ctx = LlamaModelTestPeer::llmContext(*model);
   ASSERT_NE(ctx, nullptr);
+  auto* mtmd = dynamic_cast<MtmdLlmContext*>(ctx);
+  ASSERT_NE(mtmd, nullptr);
   auto* driver = dynamic_cast<SequenceDriver*>(ctx);
   ASSERT_NE(driver, nullptr)
       << "MTMD context must expose the SequenceDriver interface";
@@ -1350,6 +1385,8 @@ TEST_F(MtmdLlmContextTest, SyncPositionAdvancesKvCellsForGeneratedTokens) {
   ctx->setNPast(prefillPos);
   ctx->setCacheTokens(prefillCells);
   ASSERT_EQ(driver->getKvCellsUsed(), prefillCells);
+  EXPECT_EQ(MtmdLlmContextTestPeer::specCellsUsed(*mtmd), prefillCells)
+      << "speculative headroom must use physical KV cells after media";
 
   // The scheduler feeds three generated text tokens, advancing the logical
   // position 10 -> 13. Generated text is one KV cell per position.
@@ -1361,4 +1398,141 @@ TEST_F(MtmdLlmContextTest, SyncPositionAdvancesKvCellsForGeneratedTokens) {
       << "syncPosition advanced the logical position but not physical KV-cell "
          "usage; onLogitsReady's per-slot KV-cell cap would be checked against "
          "a frozen prefill count";
+}
+
+// The post-reasoning-recovery EOG ban stops a forced `</think>` from being
+// immediately followed by another EOS (an empty answer). It is armed only from
+// inside a reasoning recovery — i.e. only when the model emits EOS *inside*
+// `<think>` — which no black-box integration test can force deterministically,
+// so the arm/consume contract is pinned here at the unit level instead.
+//
+// Deliberately not covered: the `logits == nullptr` deferral branch (ban stays
+// armed). Reaching it needs an out-of-range `logitIdx`, and
+// `llama_get_logits_ith` may assert rather than return null depending on the
+// fabric build, which would abort the suite rather than fail a check.
+TEST_F(MtmdLlmContextTest, PendingEogBanMasksEveryEogTokenAndIsConsumedOnce) {
+  if (!hasValidQwen35Model()) {
+    FAIL() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  auto model = createQwen35Model();
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+
+  // Seed a valid sequence position before the peer decodes a live logits row.
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hi"}])";
+  prompt.prefill = true;
+  ASSERT_NO_THROW({ (void)model->processPrompt(prompt); });
+
+  LlmContext* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr) << "model reported loaded but exposes no context";
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr) << "expected the multimodal context implementation";
+
+  using Peer = MtmdLlmContextTestPeer;
+
+  // Qwen3.5 is in the Qwen3 reasoning family, so initializeCommonState()
+  // precomputed the EOG id set. An empty set would silently make the ban a
+  // no-op, so assert it is populated before relying on it.
+  const std::vector<llama_token>& eogTokens = Peer::eogTokens(*ctx);
+  ASSERT_FALSE(eogTokens.empty())
+      << "EOG set must be precomputed for a qwen35 arch";
+
+  ASSERT_TRUE(Peer::decodeTokenForLogits(*ctx))
+      << "failed to decode a logits row for the EOG-ban test";
+  float* logits = Peer::logits(*ctx, -1);
+  ASSERT_NE(logits, nullptr) << "expected a decoded logits row";
+
+  // 1. Disarmed: applying the ban must leave the row untouched.
+  Peer::setBanArmed(*ctx, false);
+  for (const llama_token token : eogTokens) {
+    logits[token] = 1.0F;
+  }
+  Peer::applyPendingEogBan(*ctx, -1);
+  EXPECT_FALSE(Peer::banArmed(*ctx));
+  for (const llama_token token : eogTokens) {
+    EXPECT_FLOAT_EQ(logits[token], 1.0F)
+        << "disarmed ban modified EOG token " << token;
+  }
+
+  // 2. Armed: every EOG id is masked to -inf, and the flag disarms itself.
+  Peer::setBanArmed(*ctx, true);
+  Peer::applyPendingEogBan(*ctx, -1);
+  EXPECT_FALSE(Peer::banArmed(*ctx))
+      << "ban must disarm after a single application";
+  for (const llama_token token : eogTokens) {
+    EXPECT_TRUE(std::isinf(logits[token]) && logits[token] < 0.0F)
+        << "EOG token " << token << " was not banned";
+  }
+
+  // 3. Consume-once: the following sample must be unaffected, otherwise the
+  //    recovery would suppress EOS for the rest of the generation.
+  for (const llama_token token : eogTokens) {
+    logits[token] = 2.0F;
+  }
+  Peer::applyPendingEogBan(*ctx, -1);
+  for (const llama_token token : eogTokens) {
+    EXPECT_FLOAT_EQ(logits[token], 2.0F)
+        << "ban re-applied to EOG token " << token << " after being consumed";
+  }
+}
+
+// The speculative reasoning recovery substitutes and decodes a `</think>` when
+// the model emits EOS inside the block. On a Qwen MTP text turn through the
+// multimodal context, with tools and unlimited reasoning, that token also has
+// to reach fabric's reasoning-budget matcher: skip the accept and the matcher
+// stays in COUNTING, so `grammar_should_apply` keeps a lazy tool grammar
+// disarmed for the rest of the request even though the visible reasoning block
+// has closed. `TextLlmContext::handleReasoningEOS` has always done this; the
+// multimodal twin did not.
+//
+// Reaching the recovery for real needs an EOS sampled inside `<think>` on the
+// MTP path, which is not forceable from a black-box test, so the peer drives
+// `specRecoverReasoning` directly. Both directions are asserted: without the
+// lazy grammar the recovery must NOT feed the sampler, because the accept is
+// only provably safe when the grammar sampler was never given the token.
+TEST_F(MtmdLlmContextTest, SpecReasoningRecoveryAcceptsCloseTagForLazyGrammar) {
+  if (!hasValidQwen35Model()) {
+    FAIL() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  auto model = createQwen35Model();
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+
+  // Seed a valid sequence position: the recovery decodes the substituted tag.
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hi"}])";
+  prompt.prefill = true;
+  ASSERT_NO_THROW({ (void)model->processPrompt(prompt); });
+
+  LlmContext* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr) << "model reported loaded but exposes no context";
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr) << "expected the multimodal context implementation";
+
+  using Peer = MtmdLlmContextTestPeer;
+
+  const llama_token closeTok = Peer::firstTokenOf(*ctx, "</think>");
+  const llama_token sentinel = Peer::firstTokenOf(*ctx, "x");
+  ASSERT_NE(closeTok, LLAMA_TOKEN_NULL);
+  ASSERT_NE(sentinel, LLAMA_TOKEN_NULL);
+  ASSERT_NE(closeTok, sentinel)
+      << "the two probe tokens must differ for the assertions below to mean "
+         "anything";
+
+  // No lazy grammar: `reasoningBudgetSamplerBuilt` is false, so the recovery
+  // must leave the sampler history alone and the sentinel survives.
+  EXPECT_EQ(
+      Peer::recoverReasoningAndReportLastAccepted(
+          *ctx, closeTok, sentinel, /*lazyGrammar=*/false),
+      sentinel)
+      << "recovery fed the sampler with no lazy grammar active";
+
+  // Lazy grammar plus a built budget sampler: the substituted close tag must
+  // be accepted, or the budget matcher never leaves COUNTING.
+  EXPECT_EQ(
+      Peer::recoverReasoningAndReportLastAccepted(
+          *ctx, closeTok, sentinel, /*lazyGrammar=*/true),
+      closeTok)
+      << "substituted close tag never reached the reasoning-budget matcher";
 }
