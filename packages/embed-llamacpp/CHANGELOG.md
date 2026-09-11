@@ -41,6 +41,18 @@
   `@qvac/llm-llamacpp`'s copy of the line was corrected at the time while this
   one was missed.
 
+## [0.40.0] - 2026-09-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). Carries the fix that keeps the `ggml_vec_index_*` C API exportable under hidden visibility — this package is the only consumer of that API — plus metadata-only GGUF loading under `no_alloc`; no API change for this package.
+
+## [0.39.0] - 2026-09-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.1` -> `10297.1.2` (mtmd temporal merge is now opt-in per bitmap; no API change for this package).
+
 ## [0.38.0] - 2026-09-07
 
 ### Changed

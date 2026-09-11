@@ -6,7 +6,8 @@ import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '@/utils/e
  * Deletes KV cache files.
  *
  * @param params - The delete cache parameters
- * @param params.all - If true, deletes all cache files
+ * @param params.all - If true, deletes all cache files, including caller-owned named caches
+ * @param params.auto - If true, reclaims only automatic caches (`completion({ kvCache: true })`) that no request is using. Named caches are untouched. Covers the whole cache directory, which is shared by every QVAC process using the same home directory
  * @param params.kvCacheKey - The cache key to delete
  * @param params.modelId - Optional: specific model ID to delete within the cache key. If not provided, deletes entire cache key.
  * @returns Promise resolving to success status
@@ -16,6 +17,9 @@ import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '@/utils/e
  * // Delete all caches
  * await deleteCache({ all: true });
  *
+ * // Reclaim disk from automatic caches, leaving named caches alone
+ * await deleteCache({ auto: true });
+ *
  * // Delete entire cache key (all models)
  * await deleteCache({ kvCacheKey: "my-session" });
  *
@@ -24,7 +28,7 @@ import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '@/utils/e
  * ```
  */
 export async function deleteCache(
-  params: { all: true } | { kvCacheKey: string; modelId?: string }
+  params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string }
 ) {
   let req: DeleteCacheRequest
 
@@ -32,6 +36,11 @@ export async function deleteCache(
     req = {
       type: 'deleteCache',
       all: true
+    }
+  } else if ('auto' in params && params.auto) {
+    req = {
+      type: 'deleteCache',
+      auto: true
     }
   } else if ('kvCacheKey' in params) {
     req = {

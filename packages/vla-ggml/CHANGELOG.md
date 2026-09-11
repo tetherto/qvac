@@ -23,6 +23,13 @@
   device is missing from that list at all. Rejected with `backend: 'auto'` or
   `'cpu'`, where there is no preference to make binding.
 
+## [0.26.0] - 2026-09-10
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.10.0` -> `^0.13.0`, which carries `qvac-fabric` `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.10.0` would not have resolved `0.13.0` on its own. No API change for this package.
+- Also ships the pnpm+nx monorepo foundation (#3543), which landed after `0.25.0` with no version bump of its own.
+
 ## [0.25.0] - 2026-09-07
 
 ### Changed
