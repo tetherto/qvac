@@ -1,0 +1,132 @@
+{/*
+  Template for a new AI capability page — content/docs/ai-capabilities/<slug>.mdx
+
+  Placeholders are `{like this}`. Resolve every one from the source: TSDoc, the
+  example file, the model registry, tests. If a placeholder cannot be resolved
+  from the source, do not invent it. Emit HUMAN_INPUT_REQUIRED.
+
+  Sentences written out in full below are boilerplate. Copy them verbatim. They
+  are identical across all 18 existing pages.
+
+  Delete this comment block from the generated page.
+*/}
+
+---
+title: {Capability name}
+description: {One sentence, no trailing period, in the voice of the existing 18.}
+schemaType: HowTo
+---
+
+## Overview
+
+{Capability name} uses a **{Engine}** inference engine ([`@qvac/{package}`](https://github.com/tetherto/qvac/tree/main/packages/{package})). Load a model using `modelType: "{modelType}"`.
+
+{Input format: what the user passes, and in what shape.}
+
+`{capabilityFn}()` returns {return shape}. {Any load-time vs per-call override worth one sentence.}
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/reference/api#loadmodel)
+2. [`{capabilityFn}()`](/reference/api#{capabilityfn})
+3. [`unloadModel()`](/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+## Models
+
+Supported model families and their file layouts:
+
+- **{Model family}**: {file layout — single all-in-one `*.gguf`, or the set of files required}.
+
+For models available as constants, see [SDK — Models](/introduction#models).
+
+## Example
+
+The following script {what the script does, in the present tense}:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/{path}.js title="{name}.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/{path}.ts title="{name}.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
+</Callout>
+
+{/*
+  ------------------------------------------------------------------------
+  FILLING NOTES — read before generating. Delete along with this block.
+  ------------------------------------------------------------------------
+
+  ## Functions
+  The sequence is almost always loadModel() -> {capabilityFn}() -> unloadModel().
+  Confirm it against the real example first. A streaming capability may expose
+  both `{fn}()` and `{fn}Stream()`, and some capabilities need an extra call.
+
+  Build the anchor by lowercasing the symbol and stripping the parentheses:
+  `assessModelFit()` -> `/reference/api#assessmodelfit`. Take the symbol from
+  packages/sdk/src/client/api/index.ts, not from the filename. The barrel is
+  the authority, and `completion-stream.ts` exports `completion`.
+
+  ## Python tab
+  Add a third tab only if packages/sdk-python/examples/<snake_case>.py exists:
+
+      <Tab value="python" label="Python">
+      <WrapCode>
+
+      ```python file=<rootDir>/packages/sdk-python/examples/{name}.py title="{name}.py" lineNumbers
+      ```
+      </WrapCode>
+      </Tab>
+
+  Tab order is always js (default) -> ts -> python.
+
+  If there is no Python example, place this callout between </Tabs> and the
+  footer tip, verbatim:
+
+      <Callout type="info">
+      The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/python-sdk) for the API surface.
+      </Callout>
+
+  ## Example vs Examples
+  Use `## Example` for exactly one. Use `## Examples` with one `###` subsection
+  per example when there is more than one. Never `## Examples` with a single
+  example under it.
+
+  ## Optional sections
+  Insert between `## Models` and `## Example(s)`, and only with evidence in the
+  source. Observed: `## Features`, `## Enable the plugin`, `## Audio output`,
+  `## Training`, `## Pipeline`, `## Cancellation`. When in doubt, omit. A
+  missing optional section is invisible, an invented one is wrong.
+
+  `## Models` is near-universal (17 of 18). `rag.mdx` replaces it with
+  `## Pipeline`.
+
+  ## Default-model disclosure
+  If the addon ships a bundled default that works with no `modelSrc`, say so in
+  a `<Callout type="info">` after the `## Models` list, as
+  image-classification.mdx does.
+
+  ## The other three registration points
+  Creating this file is one of FOUR append-only edits. The page alone leaves the
+  capability invisible in navigation and on the home page, and nothing in the
+  build will tell you. See the NEW_CAPABILITY_PAGE subprocedure in SKILL.md.
+  Verify with:
+
+      bun run .cursor/skills/qv-docs-update/scripts/check-capability-parity.ts
+*/}
