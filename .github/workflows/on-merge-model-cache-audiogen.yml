@@ -1,0 +1,97 @@
+name: On Merge Model Cache (AudioGen)
+
+# Seeds the audiogen entries that integration-test-audiogen-ggml.yml restores.
+# That workflow is only reachable from a pull_request_target caller, where
+# cache-models takes its restore-only branch, so nothing writes them.
+#
+# Two entries, not one. The call site sets
+#   cache-key-suffix: ${{ inputs.run_rtf_benchmarks && 'all-dit-variants' || '' }}
+# so the default leg and the RTF benchmark leg use different keys and different
+# download scripts. Seeding only one leaves the other cold.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/audiogen-ggml/scripts/download-audiogen-ggml-models.js"
+  # Longest gap must stay under the cache server's five-day prune window.
+  schedule:
+    - cron: "17 12 * * 1,4"
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed:
+    needs: runner_names
+    # enable-cross-os is 'true' at the call site, so one entry per suffix serves
+    # every platform.
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    timeout-minutes: 120
+    name: seed-model-cache-${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Mirrors the two branches of the call site's ternary.
+          - label: default
+            cache_key_suffix: ""
+            download_script: download-models:registry
+          - label: rtf-benchmarks
+            cache_key_suffix: all-dit-variants
+            download_script: download-models:registry:all
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      # The download script resolves models through @qvac/registry-client, so
+      # dependencies must be installed before it runs.
+      - name: Install NPM dependencies
+        working-directory: ${{ github.workspace }}/packages/audiogen-ggml
+        run: npm install
+
+      # Must match integration-test-audiogen-ggml.yml:222-229 exactly.
+      - name: Cache AudioGen GGML GGUF models
+        id: model-cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: audiogen-ggml
+          paths: packages/audiogen-ggml/models
+          hash-files-glob: packages/audiogen-ggml/scripts/download-audiogen-ggml-models.js
+          cache-key-suffix: ${{ matrix.cache_key_suffix }}
+          enable-cross-os: 'true'
+          seed-probe: 'true'
+
+      - name: Download GGUF models from registry
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/audiogen-ggml
+        env:
+          DOWNLOAD_SCRIPT: ${{ matrix.download_script }}
+        run: npm run "$DOWNLOAD_SCRIPT"

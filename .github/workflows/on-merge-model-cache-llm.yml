@@ -1,0 +1,71 @@
+name: On Merge Model Cache (LLM)
+
+# Seeds `models-llm-llamacpp-v1-*`. The integration workflow's only caller is
+# pull_request_target, where cache-models takes its restore-only branch, so
+# nothing else writes this entry.
+#
+# Does not call integration-test-llm-llamacpp.yml: that needs prebuilds, carries
+# `environment: release`, and fans out to seven legs. cache-models' warm step
+# fills the directory on its own, and warm-models.mjs imports only node
+# builtins, so a checkout plus the action is the whole job.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/llm-llamacpp/test/integration/models.manifest.json"
+  # Longest gap must stay under the cache server's five-day prune window.
+  schedule:
+    - cron: "17 4 * * 1,4"
+  workflow_dispatch:
+  workflow_call:
+
+# A cancelled job cannot save the ~19 GB archive it did not finish uploading.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed:
+    needs: runner_names
+    # Self-hosted: the entry is ~19 GB, over GitHub's per-repo cache limit, and
+    # only these runners reach the cache server holding it. Non-GPU on purpose.
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    timeout-minutes: 300
+    name: seed-model-cache
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      # Inputs must stay identical to integration-test-llm-llamacpp.yml's call.
+      # The key comes from the package name and manifest hash, the cache version
+      # from the resolved path list -- anything extra here writes an entry the
+      # integration legs cannot restore.
+      - name: Seed integration test models
+        uses: ./.github/actions/cache-models
+        with:
+          package: llm-llamacpp
+          seed-probe: 'true'

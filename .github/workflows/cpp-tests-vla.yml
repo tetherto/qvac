@@ -268,33 +268,18 @@ jobs:
           paths: |
             ${{ env.WORKDIR }}/model/vla/groot
             ${{ env.WORKDIR }}/test/groot-oracle
-          hash-files-glob: .github/workflows/cpp-tests-vla.yml
+          # Keyed on the composite that defines the artefact set, not on this
+          # workflow file, so unrelated edits here stop churning the key.
+          hash-files-glob: .github/actions/download-vla-groot-parity/action.yml
 
+      # Shared with on-merge-model-cache-vla.yml so the seeded cache and the
+      # artefacts the C++ tests need cannot drift.
       - name: Download GR00T parity artefacts from S3
         if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && steps.groot-cache.outputs.cache-hit != 'true' }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p model/vla/groot test/groot-oracle
-          S3_ROOT="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla"
-          # TWO GGUFs on purpose, each paired with the oracle dumped from the
-          # SAME checkpoint. Pointing the milestone tests (M4.1-M4.7,
-          # infer-parity) at the multi GGUF while they still read the libero v4
-          # oracle compares one converted checkpoint's weights against another's
-          # recorded activations; that aborted GrootM4_2 inside ggml_mul_mat
-          # (GGML_ASSERT(ggml_can_mul_mat)), and because GGML_ASSERT calls
-          # abort() it took the whole binary down with it, so every test after
-          # M4_2 silently never ran and no results XML was written.
-          #   groot-q8_vf16.gguf       (libero) <-> activations_v4
-          #   groot-multi-q8_vf16.gguf (multi)  <-> activations_sweep
-          # Multi-embodiment parity is the sweep test's job and it has its own
-          # matching oracle, so nothing is lost by keeping the two separate.
-          aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf"           model/vla/groot/groot-q8_vf16.gguf
-          aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors"   test/groot-oracle/activations_v4.safetensors
-          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf"            model/vla/groot/groot-multi-q8_vf16.gguf
-          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-08-04/activations_sweep.safetensors" test/groot-oracle/activations_sweep.safetensors
-          ls -la model/vla/groot/ test/groot-oracle/
+        uses: ./.github/actions/download-vla-groot-parity
+        with:
+          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          workdir: ${{ env.WORKDIR }}
 
       - name: Run C++ tests
         id: cpp-tests

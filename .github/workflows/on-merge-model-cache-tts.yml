@@ -1,0 +1,86 @@
+name: On Merge Model Cache (TTS)
+
+# Seeds `models-tts-ggml-v1-*`. The integration workflow is only reachable from
+# a pull_request_target caller, where cache-models takes its restore-only
+# branch, so nothing writes the entry.
+#
+# tts has no models.manifest.json, so cache-models' warm step cannot fill the
+# directory -- the models come from `npm run download-models:registry`. Hence
+# the step order: cache-models first, download second, so the post-job save
+# picks up what the download wrote.
+
+on:
+  push:
+    branches:
+      - main
+    # The cache key hashes this script, so it is the only file whose change can
+    # invalidate the entry.
+    paths:
+      - "packages/tts-ggml/scripts/download-tts-ggml-models.js"
+  # Longest gap must stay under the cache server's five-day prune window.
+  schedule:
+    - cron: "17 10 * * 1,4"
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed:
+    needs: runner_names
+    # enable-cross-os is 'true' at the call site, so this one entry serves every
+    # platform's integration leg.
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    timeout-minutes: 120
+    name: seed-model-cache
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      # download-tts-ggml-models.js requires @qvac/registry-client, so the
+      # package's dependencies have to be present before it runs. Same command
+      # and working directory as integration-test-tts-ggml.yml:153-156.
+      - name: Install NPM dependencies
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        run: npm install
+
+      # Must match integration-test-tts-ggml.yml:231-239 exactly.
+      - name: Cache TTS GGML GGUF models
+        id: model-cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: tts-ggml
+          paths: packages/tts-ggml/models
+          hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
+          enable-cross-os: 'true'
+          seed-probe: 'true'
+
+      - name: Download GGUF models from registry
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        run: npm run download-models:registry

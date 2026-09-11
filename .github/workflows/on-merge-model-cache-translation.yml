@@ -1,0 +1,92 @@
+name: On Merge Model Cache (Translation)
+
+# Seeds `models-translation-nmtcpp-v1-*`. The integration workflow is only
+# reachable from a pull_request_target caller, where cache-models takes its
+# restore-only branch, so nothing writes the entry.
+#
+# The download lives in .github/actions/download-translation-models, shared with
+# the integration lane, so the seeded set and the set the tests need cannot
+# drift.
+
+on:
+  push:
+    branches:
+      - main
+    # Also the cache key's hash input, so this is the only file whose change can
+    # invalidate the entry.
+    paths:
+      - ".github/actions/download-translation-models/action.yml"
+  # Longest gap must stay under the cache server's five-day prune window.
+  schedule:
+    - cron: "17 16 * * 1,4"
+  # No workflow_call. This job assumes the AWS OIDC role and runs repo-local
+  # composites from `github.sha`, which under a `pull_request` caller resolves
+  # to the merge commit -- PR-head code next to live credentials. Dispatch
+  # already covers on-demand runs.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    # AWS_OIDC_ROLE_ARN's trust policy is scoped to this environment.
+    environment: release
+    timeout-minutes: 120
+    name: seed-model-cache
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      # cache-models shells out to `node` in its path-resolution step even when
+      # there is no manifest to warm.
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # Must match integration-test-translation-nmtcpp.yml:222-233 exactly.
+      - name: Cache NMT models
+        id: model-cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: translation-nmtcpp
+          paths: packages/translation-nmtcpp/model
+          hash-files-glob: .github/actions/download-translation-models/action.yml
+          seed-probe: 'true'
+
+      - name: Download NMT models from S3
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/download-translation-models
+        with:
+          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}

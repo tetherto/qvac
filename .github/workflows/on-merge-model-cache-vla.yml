@@ -1,0 +1,155 @@
+name: On Merge Model Cache (VLA)
+
+# Seeds both vla-ggml entries: the integration set restored by
+# integration-test-vla.yml, and the `cpp-groot` parity set restored by
+# cpp-tests-vla.yml. Both workflows are only reachable from a
+# pull_request_target caller, where cache-models takes its restore-only branch,
+# so nothing writes them.
+#
+# Neither lane runs on darwin/x64 -- the macOS Intel runners cannot host these
+# models -- so the seed does not cover that platform either.
+
+on:
+  push:
+    branches:
+      - main
+    # Both entries' cache keys hash these composites.
+    paths:
+      - ".github/actions/download-vla-models/action.yml"
+      - ".github/actions/download-vla-groot-parity/action.yml"
+  # Longest gap must stay under the cache server's five-day prune window.
+  schedule:
+    - cron: "17 18 * * 1,4"
+  # No workflow_call. This job assumes the AWS OIDC role and runs repo-local
+  # composites from `github.sha`, which under a `pull_request` caller resolves
+  # to the merge commit -- PR-head code next to live credentials. Dispatch
+  # already covers on-demand runs.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed-integration:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    # AWS_OIDC_ROLE_ARN's trust policy is scoped to this environment.
+    environment: release
+    timeout-minutes: 180
+    name: seed-model-cache-integration
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      # cache-models shells out to `node` in its path-resolution step even when
+      # there is no manifest to warm.
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # Must match integration-test-vla.yml's call.
+      - name: Cache VLA models
+        id: model-cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: vla-ggml
+          paths: packages/vla-ggml/model/vla
+          hash-files-glob: .github/actions/download-vla-models/action.yml
+          seed-probe: 'true'
+
+      # Gated as a whole, unlike the integration lane. There the pi05 and GR00T
+      # pulls run unconditionally because the tests also need the oracle dirs
+      # under test/, which the cache does not cover. Here those dirs are thrown
+      # away at job end and actions/cache skips the save on an exact hit, so an
+      # ungated pull would drag ~8 GB from S3 for nothing on every warm cron.
+      - name: Download VLA models from S3
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/download-vla-models
+        with:
+          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          workdir: packages/vla-ggml
+          download-smolvla: 'true'
+
+  seed-cpp-groot:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    environment: release
+    timeout-minutes: 180
+    name: seed-model-cache-cpp-groot
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      # cache-models shells out to `node` in its path-resolution step even when
+      # there is no manifest to warm.
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # Must match cpp-tests-vla.yml's call.
+      - name: Cache GR00T parity artefacts
+        id: groot-cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: vla-ggml
+          cache-key-suffix: cpp-groot
+          paths: |
+            packages/vla-ggml/model/vla/groot
+            packages/vla-ggml/test/groot-oracle
+          hash-files-glob: .github/actions/download-vla-groot-parity/action.yml
+          seed-probe: 'true'
+
+      - name: Download GR00T parity artefacts from S3
+        if: steps.groot-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/download-vla-groot-parity
+        with:
+          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          workdir: packages/vla-ggml

@@ -1,0 +1,12 @@
+{
+  "cacheEpoch": 1,
+  "models": {
+    "stories260K.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/tinyllamas/stories260K.gguf"
+      ],
+      "sha256": "270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d",
+      "bytes": 1185376
+    }
+  }
+}

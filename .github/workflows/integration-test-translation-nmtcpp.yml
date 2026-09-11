@@ -226,33 +226,18 @@ jobs:
         with:
           package: translation-nmtcpp
           paths: packages/translation-nmtcpp/model
-          hash-files-glob: .github/workflows/integration-test-translation-nmtcpp.yml
+          # Keyed on the composite that defines the model set, not on this
+          # workflow file. The old glob rehashed on every unrelated edit here,
+          # churning the key and throwing away a good cache.
+          hash-files-glob: .github/actions/download-translation-models/action.yml
 
-      - name: Download Bergamot models from S3
+      # Shared with on-merge-model-cache-translation.yml so the seeded cache and
+      # the set the tests need cannot drift.
+      - name: Download NMT models from S3
         if: steps.model-cache.outputs.cache-hit != 'true'
-        working-directory: packages/translation-nmtcpp
-        shell: bash
-        run: |
-          echo "Downloading Bergamot models from S3..."
-          mkdir -p model/bergamot
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/" model/bergamot/enit --recursive
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/" model/bergamot/esen --recursive
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/" model/bergamot/fren --recursive
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/" model/bergamot/enes --recursive
-          echo ""
-          echo "Bergamot model directories:"
-          ls -la model/bergamot/
-
-      - name: Download IndicTrans model from S3
-        if: steps.model-cache.outputs.cache-hit != 'true'
-        working-directory: packages/translation-nmtcpp
-        shell: bash
-        run: |
-          echo "Downloading IndicTrans en-indic model from S3..."
-          mkdir -p model/indictrans
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
-          echo "IndicTrans model files:"
-          ls -la model/indictrans/
+        uses: ./.github/actions/download-translation-models
+        with:
+          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}

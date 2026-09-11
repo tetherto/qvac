@@ -1,0 +1,50 @@
+name: Download translation-nmtcpp models
+description: |
+  Pulls the Bergamot and IndicTrans model sets from S3 into `<workdir>/model`.
+  Shared by the integration lane and the on-merge cache seed so the two cannot
+  drift.
+
+  This file is also the cache key's hash input, so editing the S3 paths below
+  invalidates the cache -- which is the intended behaviour.
+
+inputs:
+  model-s3-bucket:
+    description: S3 bucket holding the compiled models.
+    required: true
+  workdir:
+    description: Package directory to download into.
+    required: false
+    default: packages/translation-nmtcpp
+
+runs:
+  using: composite
+  steps:
+    - name: Download Bergamot models from S3
+      working-directory: ${{ inputs.workdir }}
+      shell: bash
+      env:
+        MODEL_S3_BUCKET: ${{ inputs.model-s3-bucket }}
+      run: |
+        set -euo pipefail
+        echo "Downloading Bergamot models from S3..."
+        mkdir -p model/bergamot
+        aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/" model/bergamot/enit --recursive
+        aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/" model/bergamot/esen --recursive
+        aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/" model/bergamot/fren --recursive
+        aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/" model/bergamot/enes --recursive
+        echo ""
+        echo "Bergamot model directories:"
+        ls -la model/bergamot/
+
+    - name: Download IndicTrans model from S3
+      working-directory: ${{ inputs.workdir }}
+      shell: bash
+      env:
+        MODEL_S3_BUCKET: ${{ inputs.model-s3-bucket }}
+      run: |
+        set -euo pipefail
+        echo "Downloading IndicTrans en-indic model from S3..."
+        mkdir -p model/indictrans
+        aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
+        echo "IndicTrans model files:"
+        ls -la model/indictrans/
