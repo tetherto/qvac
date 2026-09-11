@@ -19,6 +19,12 @@ on:
       - "packages/fabric/vcpkg.json"
       - "packages/fabric/vcpkg-configuration.json"
   workflow_dispatch:
+    inputs:
+      fabric_run_id:
+        description: "Completed on-pr-fabric run with fabric-prebuilds for this ref"
+        type: string
+        required: false
+        default: ""
 
   workflow_call:
 
@@ -99,8 +105,8 @@ jobs:
     permissions:
       contents: read
     outputs:
-      fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
-      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && github.event_name == 'pull_request_target' }}
+      fabric_stack: ${{ inputs.fabric_run_id != '' || steps.detect.outputs.fabric_stack == 'true' }}
+      needs_fabric_artifact: ${{ inputs.fabric_run_id != '' || (steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && github.event_name == 'pull_request_target') }}
     steps:
       - name: Checkout repository (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -129,10 +135,28 @@ jobs:
       actions: read
     steps:
       - name: Wait for fabric-prebuilds from on-pr-fabric
+        if: ${{ inputs.fabric_run_id == '' }}
         uses: tetherto/qvac/.github/actions/wait-and-download-fabric-prebuilds@6620d695d3a07cafe3931182e7844dde376a23f8
         with:
           github-token: ${{ github.token }}
           head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Download fabric-prebuilds from the specified run
+        if: ${{ inputs.fabric_run_id != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FABRIC_RUN_ID: ${{ inputs.fabric_run_id }}
+          HEAD_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run_sha=$(gh api "repos/$REPO/actions/runs/$FABRIC_RUN_ID" --jq '.head_sha')
+          run_path=$(gh api "repos/$REPO/actions/runs/$FABRIC_RUN_ID" --jq '.path')
+          if [ "$run_sha" != "$HEAD_SHA" ] || [ "$run_path" != ".github/workflows/on-pr-fabric.yml" ]; then
+            echo "::error::Run $FABRIC_RUN_ID is not an on-pr-fabric run for $HEAD_SHA"
+            exit 1
+          fi
+          gh run download "$FABRIC_RUN_ID" --repo "$REPO" --name fabric-prebuilds --dir fabric-prebuilds-staging
       - name: Re-publish fabric-prebuilds for downstream jobs
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
