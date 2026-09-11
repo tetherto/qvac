@@ -203,6 +203,25 @@ function getAutoCacheMaxBytes(): number {
   return isMobile() ? MOBILE_AUTO_CACHE_MAX_BYTES : DESKTOP_AUTO_CACHE_MAX_BYTES
 }
 
+/**
+ * Deletes planned auto-cache keys and reports how many went.
+ *
+ * Planning and eviction are separate steps, so a turn can take a key in
+ * between: each one is re-checked against the active paths under the
+ * cache-state lock rather than trusted from the plan.
+ */
+async function evictPlannedAutoCaches(cacheKeys: readonly string[]): Promise<number> {
+  let evicted = 0
+  await withCacheStateLock(async () => {
+    for (const cacheKey of cacheKeys) {
+      if (isCacheKeyActive(cacheKey)) continue
+      await deleteKvCacheState({ kvCacheKey: cacheKey })
+      evicted++
+    }
+  })
+  return evicted
+}
+
 async function withCacheStateLock<T>(operation: () => Promise<T>): Promise<T> {
   const previous = cacheStateLockTail
   let releaseLock = () => {}
@@ -239,19 +258,12 @@ async function maybeSweepAutoCaches(
   const sweep = async () => {
     try {
       const cacheKeys = await planAutoCacheEvictions({
-        activeCachePaths: Array.from(activeCachePaths.keys()),
+        activeCachePaths: snapshotActivePaths(),
         maxBytes: overrides?.maxBytes ?? getAutoCacheMaxBytes(),
         maxIdleMs: overrides?.maxIdleMs ?? AUTO_CACHE_MAX_IDLE_MS,
         nowMs
       })
-      let evictionCount = 0
-      await withCacheStateLock(async () => {
-        for (const cacheKey of cacheKeys) {
-          if (isCacheKeyActive(cacheKey)) continue
-          await deleteKvCacheState({ kvCacheKey: cacheKey })
-          evictionCount++
-        }
-      })
+      const evictionCount = await evictPlannedAutoCaches(cacheKeys)
       if (evictionCount > 0) {
         logger.debug(`[kv-cache] Evicted ${evictionCount} inactive auto-cache entries`)
       }
@@ -277,6 +289,32 @@ function scheduleAutoCacheSweep(logger: Logger): void {
       `[kv-cache] Failed to schedule auto-cache retention sweep: ${error instanceof Error ? error.message : String(error)}`
     )
   })
+}
+
+/**
+ * Drops every auto cache no turn is holding, whatever its age or size.
+ *
+ * The on-demand counterpart to `maybeSweepAutoCaches`, which applies the
+ * standing quota and TTL instead. Reusing the planner keeps the "is this an
+ * auto cache" decision in one place: only `.auto-cache-<key>` markers are
+ * considered, so caller-owned named caches stay out of scope.
+ */
+async function deleteInactiveAutoCaches(): Promise<void> {
+  const cacheKeys = await planAutoCacheEvictions({
+    activeCachePaths: snapshotActivePaths(),
+    // The quota pass stops at `retainedBytes <= maxBytes`, and a total reaches
+    // 0 while zero-byte caches remain (an empty `.bin` from a crashed prime).
+    // A negative quota is unreachable, so every inactive entry is selected.
+    maxBytes: -1,
+    // No age threshold: the quota pass above already selects everything.
+    maxIdleMs: 0,
+    nowMs: Date.now()
+  })
+
+  const evicted = await evictPlannedAutoCaches(cacheKeys)
+  if (evicted > 0) {
+    moduleLogger.debug(`[kv-cache] Reclaimed ${evicted} inactive auto-cache entries`)
+  }
 }
 
 // ----- public types -----
@@ -811,9 +849,10 @@ export function createKvCacheSession(
 
 /**
  * Atomically delete every layer of KV-cache state for a
- * `(kvCacheKey, modelId)` pair, or wipe everything. Single entry point
- * — the only mutation point for cross-model state outside of
- * turn-scoped `commitTurn`/`rollback`.
+ * `(kvCacheKey, modelId)` pair, wipe everything, or reclaim the auto
+ * caches no turn is holding. Single entry point — the only mutation
+ * point for cross-model state outside of turn-scoped
+ * `commitTurn`/`rollback`.
  *
  * Why this isn't a method on `KvCacheSession`: deletes are
  * cross-model (`all: true` has no model; the keyed form has
@@ -840,10 +879,14 @@ export function createKvCacheSession(
  * its file splits state: the file stays on disk while its saved-count and
  * init flag are cleared, so the next turn sees the file, skips priming, and
  * reports `savedCount=0`. Callers must not delete a key that is in active use.
+ * The `auto` target is the exception: it skips keys an in-flight turn holds
+ * and clears each one under the cache-state lock.
  */
 export async function deleteKvCacheState(
-  target: { kvCacheKey: string; modelId?: string } | { all: true }
+  target: { kvCacheKey: string; modelId?: string } | { all: true } | { auto: true }
 ): Promise<void> {
+  if ('auto' in target) return deleteInactiveAutoCaches()
+
   if ('all' in target) {
     const removed = await deleteCacheUtil({ all: true })
     cachedPrefixes.clear()

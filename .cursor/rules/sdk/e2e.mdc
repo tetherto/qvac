@@ -10,9 +10,10 @@ alwaysApply: false
 
 - **Evaluate e2e impact before finishing.** Check whether existing definitions or executors under `packages/sdk/e2e/tests/` need updates: new params, changed expectations, new `testId`s, suite tagging. Call it out in the PR description.
 - **On SDK API surface or model constant changes:** rebuild the tests package to catch type breaks and
-  import failures early. If you've already rebuilt the SDK, run `npm run install:build`; otherwise run
-  `npm run install:build:full` (rebuilds SDK and e2e). Adapt existing tests or add new ones as
-  needed. See [e2e/README.md](../../../packages/sdk/e2e/README.md) "Rebuilding after changes"
+  import failures early — run `npm run install:build:full` from `packages/sdk/e2e`. It rebuilds
+  `packages/inference`, the SDK, and e2e, which is what CI validates against; shortcuts that keep
+  `@qvac/inference` on its published range can pass locally and still fail in CI. Adapt existing tests or
+  add new ones as needed. See [e2e/README.md](../../../packages/sdk/e2e/README.md) "Rebuilding after changes"
   for the full decision table including mobile app rebuild rules.
 
 ## Adding new e2e tests
@@ -61,7 +62,7 @@ New assets go under `e2e/assets/`. Update `e2e/qvac-test.config.js` `consumers.m
 
 ```bash
 cd packages/sdk/e2e
-npm run install:build
+npm run install:build # e2e-only changes; use install:build:full if SDK or inference changed
 npx qvac-test run:local:desktop --filter <prefix>
 npx qvac-test run:local:electron --filter <prefix> # verifies the handler or intentional skip
 ```
