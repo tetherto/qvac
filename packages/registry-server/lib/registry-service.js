@@ -118,6 +118,10 @@ class RegistryService extends ReadyResource {
     this.skipStorageCheck = opts.skipStorageCheck ?? false
     this.clearAfterReseed = opts.clearAfterReseed ?? false
     this.compactionIntervalMs = opts.compactionIntervalMs ?? 60 * 60 * 1000
+    this.blobCoreGeneration = this.config.getBlobCoreGeneration(opts.blobCoreGeneration)
+    this.activeBlobCoreLabel = this.blobCoreGeneration
+      ? `${BLOB_CORE_NAME}-${this.blobCoreGeneration}`
+      : BLOB_CORE_NAME
 
     this.view = null
     this.base = null
@@ -348,7 +352,15 @@ class RegistryService extends ReadyResource {
     // because `writable: true` would create a local core with the wrong key.
     if (this.base.isIndexer || this.base.localWriter) {
       try {
-        await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
+        const { core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
+        this.logger.info(
+          {
+            generation: this.blobCoreGeneration,
+            label: this.activeBlobCoreLabel,
+            key: IdEnc.normalize(core.key)
+          },
+          'RegistryService: active blob core ready'
+        )
       } catch (err) {
         this.logger.warn(
           { err: err.message },
@@ -502,7 +514,7 @@ class RegistryService extends ReadyResource {
     const models = await this.view.findModelsByPath({}).toArray()
     if (models.length > 0) {
       try {
-        const { core } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
+        const { core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
         await this._mirrorBlobCore(core)
       } catch (err) {
         this.logger.warn(
@@ -874,7 +886,7 @@ class RegistryService extends ReadyResource {
         )
       }
 
-      const { blobs, core } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
+      const { blobs, core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
       const pointer = await this._uploadFileToHyperblobs(blobs, localPath)
 
       await this._mirrorBlobCore(core)

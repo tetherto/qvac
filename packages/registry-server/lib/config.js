@@ -8,6 +8,8 @@ const { getEnv, updateEnvFile } = require('../utils/env')
 
 const AUTOBASE_ENV_KEY = ENV_KEYS.QVAC_AUTOBASE_KEY || 'QVAC_AUTOBASE_KEY'
 const REGISTRY_CORE_KEY = ENV_KEYS.QVAC_REGISTRY_CORE_KEY || 'QVAC_REGISTRY_CORE_KEY'
+const BLOB_CORE_GENERATION_ENV_KEY = 'QVAC_BLOB_CORE_GENERATION'
+const BLOB_CORE_GENERATION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
 /**
  * Centralized configuration for QVAC Registry
@@ -46,6 +48,33 @@ class RegistryConfig {
     const defaultPath = path.resolve(process.cwd(), './model-drives')
     const result = envPath || defaultPath
     return result
+  }
+
+  /**
+   * Get the generation suffix for the active model blob core.
+   * An unset or empty generation preserves the legacy `models` core.
+   */
+  getBlobCoreGeneration(providedGeneration) {
+    const value =
+      providedGeneration !== undefined && providedGeneration !== null
+        ? providedGeneration
+        : getEnv(BLOB_CORE_GENERATION_ENV_KEY)
+
+    if (value === undefined || value === null) return null
+    if (typeof value !== 'string') {
+      throw new TypeError(`${BLOB_CORE_GENERATION_ENV_KEY} must be a string`)
+    }
+
+    const generation = value.trim()
+    if (!generation) return null
+
+    if (!BLOB_CORE_GENERATION_PATTERN.test(generation)) {
+      throw new TypeError(
+        `${BLOB_CORE_GENERATION_ENV_KEY} must contain only letters, numbers, dots, underscores, and hyphens`
+      )
+    }
+
+    return generation
   }
 
   /**
