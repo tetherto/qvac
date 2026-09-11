@@ -8,9 +8,9 @@ schemaType: HowTo
 
 Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml), with your choice of either [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) as the inference engine. Load a model with `modelType: "audiogen"` and select the engine with `modelConfig.engine` — `"minimax"` for MiniMax-Music3; ACE-Step is the default. Then call `audioGen()` with a caption and any engine-specific inputs.
 
-Pick ACE-Step when you need lyrics, per-song musical controls (BPM, key, time signature, vocal language), reference-audio timbre conditioning, or cover generation. Pick MiniMax-Music3 when you want a lighter API surface — just a caption and a handful of sampling knobs — on desktop hardware with a capable GPU.
+Pick ACE-Step when you need lyrics, per-song musical controls (BPM, key, time signature, vocal language), reference-audio timbre conditioning, cover generation, or [editing of an existing recording](#edit-an-existing-recording) with `audioEdit()`. Pick MiniMax-Music3 when you want a lighter API surface — just a caption and a handful of sampling knobs — on desktop hardware with a capable GPU.
 
-`audioGen()` returns immediately with:
+`audioGen()` (and `audioEdit()`) returns immediately with:
 
 - `requestId` — a synchronous identifier for targeted cancellation.
 - `progressStream` — stage and step updates while generation runs.
@@ -31,7 +31,7 @@ Both engines return through this same shape; only the inputs to `loadModel()` an
 Use the following sequence:
 
 1. [`loadModel()`](/reference/api#loadmodel)
-2. [`audioGen()`](/reference/api#audiogen)
+2. [`audioGen()`](/reference/api#audiogen) — or [`audioEdit()`](/reference/api#audioedit) to edit an existing recording (ACE-Step only)
 3. [`unloadModel()`](/reference/api#unloadmodel)
 
 For complete signatures, see the [SDK API reference](/reference/api/).
@@ -161,7 +161,7 @@ const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all(
 ]);
 ```
 
-Omit `lyrics` or use `"[Instrumental]"` for instrumental output. Omitted musical controls are inferred from the caption.
+Omit `lyrics` or use `"[Instrumental]"` for instrumental output. Omitted musical controls are inferred from the caption. Set `augmentCaptionWithMetadata: true` to also reinforce the BPM, key, and time-signature hints in the engine's internal conditioning caption (the result metadata keeps your original caption); it defaults to `false`.
 
 `duration` is approximate. ACE-Step rounds the requested length to its latent frame grid, so the generated clip can be shorter or longer than requested. Use `stats.audioDurationMs` or calculate the duration from the returned PCM frame count and `sampleRate`; those values describe the actual output.
 
@@ -179,10 +179,11 @@ Advanced per-run controls map 1:1 to the ACE-Step engine and are only needed for
 | `dcwEnabled` | Apply the official Haar DCW correction during DiT sampling (default: true) |
 | `dcwScaler` | DCW low-frequency correction strength (default 0.05) |
 | `dcwHighScaler` | DCW high-frequency correction strength (default 0.02) |
+| `audioCodes` | Frozen semantic codes (an `Int32Array` or `number[]`) to synthesize instead of running the LM — for example the codes of an earlier take. Up to `AUDIOGEN_MAX_AUDIO_CODES` (3000, ten minutes at the LM's 5 Hz) |
 
 ### With MiniMax-Music3
 
-MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical controls (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`), the ACE-Step-only LM and DCW knobs above, and every reference/cover field. Pass the caption and, when useful, any of these MiniMax-only controls:
+MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical controls (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `augmentCaptionWithMetadata`), the ACE-Step-only LM and DCW knobs and `audioCodes` above, every reference/cover field, and `audioEdit()`. Pass the caption and, when useful, any of these MiniMax-only controls:
 
 | Field | When to set it |
 | --- | --- |
@@ -249,6 +250,39 @@ const cover = audioGen({
 
 Both `referenceAudio` and `sourceAudio` accept either a file path (the SDK decodes `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`, and `.aac` server-side; any other extension is read as raw interleaved stereo 48 kHz Float32 LE PCM) or a `Buffer` / `Uint8Array` in that same raw PCM layout (see `AUDIOGEN_INPUT_SAMPLE_RATE` and `AUDIOGEN_INPUT_CHANNELS`). Clips are capped at 600 s.
 
+## Edit an existing recording
+
+`audioEdit()` is **ACE-Step only**. It runs an ordered pipeline of edit operations over one source recording and returns the same run shape as `audioGen()`. Operations execute in array order and may repeat or mix:
+
+- `flow-edit` — re-conditions the whole clip from a `from` prompt (what the source is) to a `to` prompt (what it should become), over an optional `nMin`..`nMax` diffusion window (0..1, defaults 0 and 1) with `nAvg` forward-noise samples per step (default 1). Supported on the turbo DiT variants only (`AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M`, `AUDIOGEN_ACESTEP_V15_TURBO_Q8_0`); the SFT variant rejects it.
+- `repaint` — regenerates the `start`..`end` range (seconds) against a new `caption`, keeping the audio outside the range. Omit `end` to repaint through the end of the source; the range must stay inside the source and span at least one latent frame (1/25 s). `mode` is `"conservative"`, `"balanced"` (default), or `"aggressive"`, and `strength` (0..1, default 0.5) tunes balanced-mode preservation.
+
+```ts
+import { audioEdit } from "@qvac/sdk";
+
+const run = audioEdit({
+  modelId,
+  sourceAudio: "/path/to/song.wav",
+  operations: [
+    {
+      type: "flow-edit",
+      from: { caption: "original pop song", lyrics: originalLyrics },
+      to: { caption: "guitar pop-rock", lyrics: newLyrics },
+    },
+    { type: "repaint", caption: "analog synth solo", lyrics: "[Instrumental]", start: 10, end: 20 },
+    { type: "flow-edit", from: { caption: "guitar pop-rock" }, to: { caption: "dark synthwave" } },
+  ],
+  seed: 22883,
+});
+
+for await (const progress of run.progressStream) {
+  console.log(`${progress.stage}: ${progress.step}/${progress.total}`);
+}
+const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
+```
+
+`sourceAudio` takes the same forms as the generation inputs above — a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM bytes — and every sample must lie in `[-1, 1]`. Prompt `lyrics` default to `"[Instrumental]"`. `seed` seeds the first operation; each following operation uses `seed + index`. The vocabularies are exported as `AUDIOGEN_EDIT_OPERATIONS` and `AUDIOGEN_REPAINT_MODES`.
+
 ## Cancellation
 
 The request ID is available before generation starts, so a stop button can cancel exactly that run:
@@ -266,7 +300,7 @@ try {
 }
 ```
 
-AudioGen supports hard cancellation on both engines: the addon interrupts the active generation. The stream terminates with `stopReason: "cancelled"`, and the `audio` and `stats` promises reject with `InferenceCancelledError`. You can also broad-cancel AudioGen work with `cancel({ modelId, kind: "audiogen" })`.
+AudioGen supports hard cancellation on both engines: the addon interrupts the active generation. The stream terminates with `stopReason: "cancelled"`, and the `audio` and `stats` promises reject with `InferenceCancelledError`. `audioEdit()` runs cancel the same way. You can also broad-cancel AudioGen work — generations and edits alike — with `cancel({ modelId, kind: "audiogen" })`.
 
 See [Runtime — Cancellation](/runtime/cancellation) for cancellation behavior shared across the SDK.
 
@@ -304,6 +338,15 @@ The cover example takes an existing recording (any FFmpeg-decodable file), an op
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-cover.ts title="generate-cover.ts" lineNumbers
+```
+
+</WrapCode>
+
+The edit example takes an existing recording plus a source and a target caption, runs a Flow-Edit followed by a Repaint of seconds 10–20, and writes the result as WAV:
+
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/audiogen/edit-music.ts title="edit-music.ts" lineNumbers
 ```
 
 </WrapCode>

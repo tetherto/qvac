@@ -120,6 +120,21 @@ async function decodeMonoFloat32(filePath: string, name: AudioGenAudioInputName)
   return asFloat32(chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks as Buffer[], total))
 }
 
+/**
+ * The addon's editing API requires every source sample in `[-1, 1]` (the
+ * FFmpeg decode path guarantees it; raw PCM input does not). Checked here so
+ * an out-of-range source fails as `InvalidAudioInputError` before the model
+ * slot is taken, instead of as the addon's own rejection after admission.
+ */
+export function assertNormalizedPcm(pcm: Float32Array, name: AudioGenAudioInputName): void {
+  for (let index = 0; index < pcm.length; index++) {
+    const sample = pcm[index]!
+    if (sample < -1 || sample > 1) {
+      throw new InvalidAudioInputError(`${name} must contain samples in [-1, 1] (got ${sample})`)
+    }
+  }
+}
+
 function monoToStereo(mono: Float32Array, name: AudioGenAudioInputName) {
   if (mono.length === 0) {
     throw new InvalidAudioInputError(`${name} decoded to no usable audio`)

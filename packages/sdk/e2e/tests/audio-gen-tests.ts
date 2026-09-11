@@ -90,6 +90,99 @@ export const audioGenCoverNofsq: TestDefinition = {
   }
 }
 
+/**
+ * ACE-Step caption augmentation: the BPM / key / time-signature hints are
+ * reinforced in the engine's conditioning caption (`augmentCaptionWithMetadata`).
+ */
+export const audioGenAugmentedCaption: TestDefinition = {
+  testId: 'audio-gen-augmented-caption',
+  params: {
+    caption: 'energetic cumbia with brass stabs and live percussion',
+    lyrics: '[Instrumental]',
+    seed: 98,
+    duration: 2,
+    bpm: 98,
+    keyscale: 'A minor',
+    timesignature: '4/4',
+    augmentCaptionWithMetadata: true
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['generated', 'samples', 'progress', 'stats']
+  },
+  metadata: {
+    category: 'audiogen',
+    dependency: 'audiogen-turbo',
+    estimatedDurationMs: 360000
+  }
+}
+
+/**
+ * Frozen semantic codes: the LM stage is skipped and the DiT synthesizes the
+ * 38 five-hertz codes the addon's own integration suite renders, so the
+ * output length is fixed by the codes rather than by `duration`.
+ */
+export const audioGenFrozenCodes: TestDefinition = {
+  testId: 'audio-gen-frozen-codes',
+  params: {
+    caption: 'a short piano note',
+    lyrics: '[Instrumental]',
+    seed: 19,
+    audioCodes: [
+      12095, 63487, 12741, 54319, 52716, 20464, 2469, 515, 22717, 2326, 62840, 61416, 18896, 55746,
+      54256, 12095, 63935, 12741, 54319, 52716, 20464, 2469, 515, 22718, 2455, 10103, 12567, 27863,
+      30367, 30367, 30367, 30367, 30367, 30367, 30367, 30367, 30367, 15206
+    ]
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['generated', 'samples', 'progress', 'stats']
+  },
+  metadata: {
+    category: 'audiogen',
+    dependency: 'audiogen-turbo',
+    estimatedDurationMs: 300000
+  }
+}
+
+/**
+ * Ordered edit pipeline over in-memory source PCM (a short synthesized stereo
+ * tone): a Flow-Edit followed by a Repaint of the middle second. Covers the
+ * `audioEdit()` path end to end, including the turbo-only Flow-Edit branch.
+ */
+export const audioEditPipeline: TestDefinition = {
+  testId: 'audio-edit-pipeline',
+  params: {
+    seed: 22883,
+    sourceTone: { seconds: 2, frequency: 220 },
+    operations: [
+      {
+        type: 'flow-edit',
+        from: { caption: 'sustained sine tone' },
+        to: { caption: 'warm analog synth pad' }
+      },
+      {
+        type: 'repaint',
+        caption: 'analog synth solo',
+        lyrics: '[Instrumental]',
+        start: 0.5,
+        end: 1.5,
+        mode: 'balanced',
+        strength: 0.5
+      }
+    ]
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['edited', 'samples', 'progress', 'stats']
+  },
+  metadata: {
+    category: 'audiogen',
+    dependency: 'audiogen-turbo',
+    estimatedDurationMs: 300000
+  }
+}
+
 export const audioGenEmptyCaptionError: TestDefinition = {
   testId: 'audio-gen-empty-caption-error',
   params: {
@@ -124,11 +217,33 @@ export const audioGenCoverMissingSourceError: TestDefinition = {
   }
 }
 
+/** Client-side validation: an empty edit pipeline never reaches RPC. */
+export const audioEditEmptyPipelineError: TestDefinition = {
+  testId: 'audio-edit-empty-pipeline-error',
+  params: {
+    sourceTone: { seconds: 1, frequency: 220 },
+    operations: []
+  },
+  expectation: {
+    validation: 'throws-error',
+    errorContains: 'operations'
+  },
+  metadata: {
+    category: 'audiogen',
+    dependency: 'none',
+    estimatedDurationMs: 1000
+  }
+}
+
 export const audioGenTests = [
   audioGenHappy,
   audioGenShortDuration,
   audioGenReferenceAudio,
   audioGenCoverNofsq,
+  audioGenAugmentedCaption,
+  audioGenFrozenCodes,
+  audioEditPipeline,
   audioGenEmptyCaptionError,
-  audioGenCoverMissingSourceError
+  audioGenCoverMissingSourceError,
+  audioEditEmptyPipelineError
 ] as const

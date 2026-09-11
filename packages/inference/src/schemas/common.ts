@@ -102,10 +102,16 @@ import {
   stateResponseSchema
 } from '@/schemas/lifecycle'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
-import { audioGenStreamRequestSchema, audioGenStreamResponseSchema } from '@/schemas/audio-gen'
+import {
+  audioEditStreamRequestSchema,
+  audioEditStreamResponseSchema,
+  audioGenStreamRequestSchema,
+  audioGenStreamResponseSchema
+} from '@/schemas/audio-gen'
 
 export const requestSchema = z.union([
   audioGenStreamRequestSchema,
+  audioEditStreamRequestSchema,
   heartbeatRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
@@ -149,6 +155,7 @@ export const requestSchema = z.union([
 
 export const responseSchema = z.discriminatedUnion('type', [
   audioGenStreamResponseSchema,
+  audioEditStreamResponseSchema,
   heartbeatResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,

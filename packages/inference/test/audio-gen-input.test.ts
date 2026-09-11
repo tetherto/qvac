@@ -363,6 +363,57 @@ test('audioGen plugin operation omits unset controls and audio from the addon ca
   t.is(getRequestRegistry().get(requestId), null)
 })
 
+test('audioGen plugin operation forwards caption augmentation and frozen codes as an Int32Array', async (t) => {
+  const modelId = 'audio-gen-operation-frozen-codes'
+  const requestId = 'audio-gen-request-frozen-codes'
+  let capturedOptions: GenerateOptions | undefined
+  const model = new AudioGen({
+    files: {
+      textEncModel: 'text-encoder.gguf',
+      lmModel: 'lm.gguf',
+      ditModel: 'dit.gguf',
+      vaeModel: 'vae.gguf'
+    }
+  })
+  model.run = async function (_caption: string, opts?: GenerateOptions) {
+    capturedOptions = opts
+    return createResponse(
+      [{ outputArray: new Int16Array([1, -1]), sampleRate: 48000, channels: 2 }],
+      {}
+    )
+  }
+  registerModel(modelId, {
+    model: model as unknown as AnyModel,
+    path: '',
+    config: {},
+    modelType: ModelType.audiogenGgml
+  })
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  for await (const _frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId,
+    modelId,
+    caption: 'energetic cumbia with brass stabs',
+    bpm: 98,
+    keyscale: 'A minor',
+    augmentCaptionWithMetadata: true,
+    audioCodes: [12095, 63487, 12741]
+  })) {
+    // drain
+  }
+
+  t.is(capturedOptions?.augmentCaptionWithMetadata, true)
+  t.ok(
+    capturedOptions?.audioCodes instanceof Int32Array,
+    'the wire array reaches the addon as the Int32Array it requires'
+  )
+  t.alike(Array.from(capturedOptions?.audioCodes ?? []), [12095, 63487, 12741])
+  t.is(getRequestRegistry().get(requestId), null)
+})
+
 test('audioGen plugin operation cancelled while decoding audio never starts the native run', async (t) => {
   const modelId = 'audio-gen-operation-cancel-during-decode'
   const requestId = 'audio-gen-request-cancel-during-decode'

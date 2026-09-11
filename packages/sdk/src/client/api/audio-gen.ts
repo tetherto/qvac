@@ -6,6 +6,10 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * Generates PCM audio using a loaded AudioGen model.
  *
  * @param params - Loaded model ID, required caption, and optional lyrics, musical controls, duration, and seed.
+ * @param params.augmentCaptionWithMetadata - ACE-Step only: append BPM/tempo, time signature, and
+ *   key guidance to the internal conditioning caption (default `false`).
+ * @param params.audioCodes - ACE-Step only: frozen semantic codes (`Int32Array` or `number[]`)
+ *   to synthesize instead of running the LM.
  * @param params.maxFrames - MiniMax semantic-frame cap; mutually exclusive with `duration`.
  * @param params.inferenceSteps - MiniMax flow steps for this run.
  * @param params.cfgScale - MiniMax flow classifier-free guidance scale for this run.

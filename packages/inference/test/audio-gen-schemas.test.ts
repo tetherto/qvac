@@ -1,7 +1,18 @@
 import test from 'brittle'
-import { ENGINE_ACESTEP, ENGINE_MINIMAX } from '@qvac/audiogen-ggml'
 import {
+  AudioEditOperationType,
+  ENGINE_ACESTEP,
+  ENGINE_MINIMAX,
+  RepaintMode
+} from '@qvac/audiogen-ggml'
+import {
+  AUDIOGEN_EDIT_OPERATIONS,
   AUDIOGEN_ENGINES,
+  AUDIOGEN_MAX_AUDIO_CODES,
+  AUDIOGEN_REPAINT_MODES,
+  audioEditClientParamsSchema,
+  audioEditStreamRequestSchema,
+  audioEditStreamResponseSchema,
   audioGenClientParamsSchema,
   audioGenConfigSchema,
   audioGenProgressSchema,
@@ -241,6 +252,228 @@ test('audioGen client params validate ACE-Step 0.2.1 sampling, DCW, and cover co
       .success,
     false,
     'the reserved FSQ cover task is not offered'
+  )
+})
+
+test('audioGen client params accept caption augmentation and normalize frozen codes', (t) => {
+  const base = { modelId: 'model-1', caption: 'energetic cumbia with brass stabs' }
+  t.ok(
+    audioGenClientParamsSchema.safeParse({ ...base, bpm: 98, augmentCaptionWithMetadata: true })
+      .success
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({ ...base, augmentCaptionWithMetadata: 'yes' }).success,
+    false
+  )
+
+  const fromTyped = audioGenClientParamsSchema.parse({
+    ...base,
+    audioCodes: new Int32Array([12095, 63487, 12741])
+  })
+  t.alike(fromTyped.audioCodes, [12095, 63487, 12741], 'Int32Array becomes a plain int array')
+  const fromArray = audioGenClientParamsSchema.parse({ ...base, audioCodes: [1, 2, 3] })
+  t.alike(fromArray.audioCodes, [1, 2, 3])
+
+  t.is(audioGenClientParamsSchema.safeParse({ ...base, audioCodes: [] }).success, false)
+  t.is(audioGenClientParamsSchema.safeParse({ ...base, audioCodes: [1.5] }).success, false)
+  t.is(
+    audioGenClientParamsSchema.safeParse({ ...base, audioCodes: [2147483648] }).success,
+    false,
+    'codes are bounded to int32'
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({
+      ...base,
+      audioCodes: new Int32Array(AUDIOGEN_MAX_AUDIO_CODES + 1)
+    }).success,
+    false,
+    'oversized code arrays are rejected'
+  )
+  t.ok(
+    audioGenClientParamsSchema.safeParse({
+      ...base,
+      audioCodes: new Int32Array(AUDIOGEN_MAX_AUDIO_CODES)
+    }).success
+  )
+
+  t.ok(
+    audioGenStreamRequestSchema.safeParse({
+      type: 'audioGenStream',
+      ...base,
+      augmentCaptionWithMetadata: false,
+      audioCodes: [12095, 63487]
+    }).success,
+    'the wire form carries a plain int array'
+  )
+  t.is(
+    audioGenStreamRequestSchema.safeParse({
+      type: 'audioGenStream',
+      ...base,
+      audioCodes: ['12095']
+    }).success,
+    false
+  )
+})
+
+test('audioEdit vocabularies match the addon enums', (t) => {
+  t.alike([...AUDIOGEN_EDIT_OPERATIONS], Object.values(AudioEditOperationType))
+  t.alike([...AUDIOGEN_REPAINT_MODES], Object.values(RepaintMode))
+})
+
+test('audioEdit client params normalize the source and validate the pipeline', (t) => {
+  const pcm = new Float32Array([0.25, -0.25])
+  const parsed = audioEditClientParamsSchema.parse({
+    modelId: 'model-1',
+    sourceAudio: new Uint8Array(pcm.buffer),
+    seed: 7,
+    operations: [
+      {
+        type: 'flow-edit',
+        from: { caption: 'original pop song', lyrics: 'la la' },
+        to: { caption: 'guitar pop-rock' },
+        nMin: 0.1,
+        nMax: 0.9,
+        nAvg: 2
+      },
+      { type: 'repaint', caption: 'analog synth solo', start: 10, end: 20, mode: 'balanced' },
+      { type: 'repaint', caption: 'through the end', start: 30, strength: 0.75 }
+    ]
+  })
+  t.is(parsed.sourceAudio.type, 'base64')
+  t.is(parsed.operations.length, 3)
+  t.is(parsed.seed, 7)
+  t.alike(
+    audioEditClientParamsSchema.parse({
+      modelId: 'model-1',
+      sourceAudio: '/tmp/song.wav',
+      operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }]
+    }).sourceAudio,
+    { type: 'filePath', value: '/tmp/song.wav' }
+  )
+
+  const rejects = (params: Record<string, unknown>, message: string) => {
+    t.is(
+      audioEditClientParamsSchema.safeParse({
+        modelId: 'model-1',
+        sourceAudio: '/tmp/song.wav',
+        ...params
+      }).success,
+      false,
+      message
+    )
+  }
+  rejects({ operations: [] }, 'at least one operation is required')
+  rejects({ operations: [{ type: 'lego', caption: 'x', start: 0 }] }, 'unknown operations')
+  rejects(
+    { operations: [{ type: 'flow-edit', from: { caption: ' ' }, to: { caption: 'b' } }] },
+    'blank prompts'
+  )
+  rejects(
+    {
+      operations: [
+        { type: 'flow-edit', from: { caption: 'a' }, to: { caption: 'b' }, nMin: 0.8, nMax: 0.2 }
+      ]
+    },
+    'nMin must not exceed nMax'
+  )
+  rejects(
+    { operations: [{ type: 'flow-edit', from: { caption: 'a' }, to: { caption: 'b' }, nAvg: 0 }] },
+    'nAvg is at least 1'
+  )
+  rejects(
+    { operations: [{ type: 'repaint', caption: 'x', start: 5, end: 5 }] },
+    'end must exceed start'
+  )
+  rejects({ operations: [{ type: 'repaint', caption: 'x', start: -1 }] }, 'start is non-negative')
+  rejects(
+    { operations: [{ type: 'repaint', caption: 'x', start: 0, mode: 'wild' }] },
+    'mode is one of the repaint modes'
+  )
+  rejects(
+    { operations: [{ type: 'repaint', caption: 'x', start: 0, strength: 1.5 }] },
+    'strength is bounded to [0, 1]'
+  )
+  rejects(
+    { operations: [{ type: 'repaint', caption: 'x', start: 0 }], seed: 1.5 },
+    'seed is an integer'
+  )
+  t.is(
+    audioEditClientParamsSchema.safeParse({
+      modelId: 'model-1',
+      operations: [{ type: 'repaint', caption: 'x', start: 0 }]
+    }).success,
+    false,
+    'sourceAudio is required'
+  )
+})
+
+test('audioEditStreamRequestSchema takes the wire audio form and an optional requestId', (t) => {
+  const request = audioEditStreamRequestSchema.parse({
+    type: 'audioEditStream',
+    requestId: 'audio-edit-request-1',
+    modelId: 'model-1',
+    sourceAudio: { type: 'filePath', value: '/tmp/song.wav' },
+    operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }]
+  })
+  t.is(request.requestId, 'audio-edit-request-1')
+  t.ok(
+    audioEditStreamRequestSchema.safeParse({
+      type: 'audioEditStream',
+      modelId: 'model-1',
+      sourceAudio: { type: 'base64', value: 'AAAAAAAAAAA=' },
+      operations: [{ type: 'flow-edit', from: { caption: 'a' }, to: { caption: 'b' } }]
+    }).success
+  )
+  t.is(
+    audioEditStreamRequestSchema.safeParse({
+      type: 'audioEditStream',
+      modelId: 'model-1',
+      sourceAudio: '/tmp/song.wav',
+      operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }]
+    }).success,
+    false,
+    'the client audio form is not accepted on the wire'
+  )
+  t.is(
+    audioEditStreamRequestSchema.safeParse({
+      type: 'audioEditStream',
+      modelId: 'model-1',
+      sourceAudio: { type: 'filePath', value: '/tmp/song.wav' },
+      operations: [{ type: 'repaint', caption: 'x', start: 2, end: 1 }]
+    }).success,
+    false,
+    'the wire schema enforces the same pipeline rules'
+  )
+})
+
+test('audioEditStreamResponseSchema mirrors the audioGen frames under its own type', (t) => {
+  t.ok(
+    audioEditStreamResponseSchema.safeParse({
+      type: 'audioEditStream',
+      progress: { stage: 'dit', step: 2, total: 8 }
+    }).success
+  )
+  t.ok(
+    audioEditStreamResponseSchema.safeParse({
+      type: 'audioEditStream',
+      data: 'AAECAw==',
+      sampleRate: 48000,
+      channels: 2,
+      bitsPerSample: 16
+    }).success
+  )
+  const terminal = audioEditStreamResponseSchema.parse({
+    type: 'audioEditStream',
+    done: true,
+    stopReason: 'completed',
+    stats: { audioDurationMs: 10000, backendDevice: 0, backendId: 0 },
+    diagnostics: { selectedBackend: 'cpu', selectedDevice: 'cpu' }
+  })
+  t.alike(terminal.stats, { audioDurationMs: 10000, backendDevice: 0, backendId: 0 })
+  t.is(
+    audioEditStreamResponseSchema.safeParse({ type: 'audioGenStream', done: true }).success,
+    false,
+    'the generation type does not parse as an edit frame'
   )
 })
 

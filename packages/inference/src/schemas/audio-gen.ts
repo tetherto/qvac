@@ -26,6 +26,29 @@ export const AUDIOGEN_INPUT_CHANNELS = 2
  * 384 KB per second — so a request cannot exhaust the inference process.
  */
 export const AUDIOGEN_INPUT_MAX_SECONDS = 600
+/**
+ * Semantic codes the ACE-Step LM emits per second of audio (the 5 Hz LM), so
+ * an `audioCodes` payload is bounded the same way PCM inputs are: a request
+ * cannot carry more codes than `AUDIOGEN_INPUT_MAX_SECONDS` of audio needs.
+ */
+const ACESTEP_CODES_PER_SECOND = 5
+/** Longest `audioCodes` array the SDK accepts (600 s at 5 codes per second). */
+export const AUDIOGEN_MAX_AUDIO_CODES = AUDIOGEN_INPUT_MAX_SECONDS * ACESTEP_CODES_PER_SECOND
+const INT32_MIN = -2147483648
+const INT32_MAX = 2147483647
+
+/**
+ * Operations `audioEdit()` chains over a source recording, in the vocabulary
+ * of `@qvac/audiogen-ggml`'s `AudioEditOperationType` (ACE-Step only):
+ * `flow-edit` re-conditions the whole clip from a source prompt to a target
+ * prompt, `repaint` regenerates a time range against a new prompt.
+ */
+export const AUDIOGEN_EDIT_OPERATIONS = ['flow-edit', 'repaint'] as const
+export const audioGenEditOperationTypeSchema = z.enum(AUDIOGEN_EDIT_OPERATIONS)
+
+/** Repaint preservation modes; `balanced` is the default and honours `strength`. */
+export const AUDIOGEN_REPAINT_MODES = ['conservative', 'balanced', 'aggressive'] as const
+export const audioGenRepaintModeSchema = z.enum(AUDIOGEN_REPAINT_MODES)
 
 /**
  * ACE-Step task discriminators reachable through the SDK. `text2music` is the
@@ -182,6 +205,29 @@ function bytesToBase64(bytes: Uint8Array) {
   return encodeBase64(bytes)
 }
 
+/**
+ * Wire form of frozen ACE-Step semantic codes: a plain int32 array, so it
+ * survives JSON transport and reaches non-JS clients as a list of integers.
+ */
+const audioCodesWireSchema = z
+  .array(z.number().int().min(INT32_MIN).max(INT32_MAX))
+  .min(1)
+  .max(AUDIOGEN_MAX_AUDIO_CODES)
+  .describe(
+    'Frozen ACE-Step semantic codes (int32) to synthesize instead of running the LM, e.g. codes recovered from an earlier run. ACE-Step only; rejected by MiniMax.'
+  )
+
+/**
+ * Client form of `audioCodes`: the `Int32Array` the addon works with, or a
+ * plain number array. Normalized to the wire form.
+ */
+export const audioGenClientAudioCodesSchema = z
+  .union([
+    z.instanceof(Int32Array).transform((codes): number[] => Array.from(codes)),
+    z.array(z.number())
+  ])
+  .pipe(audioCodesWireSchema)
+
 const audioGenGenerationShape = {
   modelId: z.string().min(1),
   caption: z.string().trim().min(1, 'caption must not be empty or whitespace-only'),
@@ -191,6 +237,12 @@ const audioGenGenerationShape = {
   bpm: z.number().int().positive().optional(),
   keyscale: z.string().min(1).optional(),
   timesignature: z.string().min(1).optional(),
+  augmentCaptionWithMetadata: z
+    .boolean()
+    .optional()
+    .describe(
+      'Append BPM/tempo, time signature, and key guidance to the internal conditioning caption while the result metadata keeps the original caption (default: false). ACE-Step only; rejected by MiniMax.'
+    ),
   duration: z
     .number()
     .positive()
@@ -277,6 +329,7 @@ const audioGenGenerationShape = {
 
 const audioGenParamsShape = {
   ...audioGenGenerationShape,
+  audioCodes: audioCodesWireSchema.optional(),
   referenceAudio: audioGenAudioInputSchema
     .optional()
     .describe('Optional timbre reference audio; omit to keep the engine default.'),
@@ -338,6 +391,7 @@ function validateAudioGenRequest(
 export const audioGenClientParamsSchema = z
   .object({
     ...audioGenGenerationShape,
+    audioCodes: audioGenClientAudioCodesSchema.optional(),
     referenceAudio: audioGenClientAudioInputSchema.optional(),
     sourceAudio: audioGenClientAudioInputSchema.optional()
   })
@@ -352,6 +406,135 @@ export const audioGenStreamRequestSchema = z
   })
   .strict()
   .superRefine(validateAudioGenRequest)
+
+// ---------------------------------------------------------------------------
+// Source-driven editing (`audioEdit()`): the addon's ordered Flow-Edit /
+// Repaint pipeline over one source recording. ACE-Step only.
+// ---------------------------------------------------------------------------
+
+const audioEditPromptSchema = z
+  .object({
+    caption: z.string().trim().min(1, 'caption must not be empty or whitespace-only'),
+    lyrics: z.string().optional().describe('Lyrics for this prompt; omit for `[Instrumental]`.')
+  })
+  .strict()
+
+export const audioEditFlowEditOperationSchema = z
+  .object({
+    type: z.literal('flow-edit'),
+    from: audioEditPromptSchema.describe('Description of the unedited source audio.'),
+    to: audioEditPromptSchema.describe('Description of the desired audio.'),
+    nMin: unitIntervalSchema
+      .optional()
+      .describe('Start of the Flow-Edit diffusion window (0..1, default 0).'),
+    nMax: unitIntervalSchema
+      .optional()
+      .describe('End of the Flow-Edit diffusion window (0..1, default 1).'),
+    nAvg: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe('Forward-noise samples averaged per active step (default 1).')
+  })
+  .strict()
+
+export const audioEditRepaintOperationSchema = z
+  .object({
+    type: z.literal('repaint'),
+    caption: z.string().trim().min(1, 'caption must not be empty or whitespace-only'),
+    lyrics: z
+      .string()
+      .optional()
+      .describe('Lyrics for the repainted region; omit for `[Instrumental]`.'),
+    start: z
+      .number()
+      .nonnegative()
+      .describe('Region start in seconds; must lie inside the source recording.'),
+    end: z
+      .number()
+      .positive()
+      .optional()
+      .describe(
+        'Region end in seconds; omit to repaint through the end of the source. The range must span at least one latent frame (1/25 s).'
+      ),
+    mode: audioGenRepaintModeSchema
+      .optional()
+      .describe('Preservation mode outside the repainted region (default balanced).'),
+    strength: unitIntervalSchema
+      .optional()
+      .describe('Balanced-mode preservation strength (0..1, default 0.5).')
+  })
+  .strict()
+
+export const audioEditOperationSchema = z.discriminatedUnion('type', [
+  audioEditFlowEditOperationSchema,
+  audioEditRepaintOperationSchema
+])
+
+const audioEditShape = {
+  modelId: z.string().min(1),
+  operations: z
+    .array(audioEditOperationSchema)
+    .min(1)
+    .describe(
+      'Ordered edit pipeline: operations run in array order and may repeat or mix. Flow-Edit is supported on turbo DiT variants only.'
+    ),
+  seed: z
+    .number()
+    .int()
+    .optional()
+    .describe('Seeds the first operation; each following operation uses seed + its index.')
+}
+
+/**
+ * Cross-field rules the addon enforces per operation, checked up front so a
+ * bad pipeline fails before any audio is decoded or the model slot is taken.
+ */
+function validateAudioEditOperations(
+  value: { operations: Array<z.output<typeof audioEditOperationSchema>> },
+  ctx: z.RefinementCtx
+) {
+  value.operations.forEach((operation, index) => {
+    if (operation.type === 'flow-edit') {
+      if ((operation.nMin ?? 0) > (operation.nMax ?? 1)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['operations', index, 'nMin'],
+          message: 'flow-edit requires nMin <= nMax'
+        })
+      }
+      return
+    }
+    if (operation.end !== undefined && operation.end <= operation.start) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['operations', index, 'end'],
+        message: 'repaint requires end > start'
+      })
+    }
+  })
+}
+
+export const audioEditClientParamsSchema = z
+  .object({
+    ...audioEditShape,
+    sourceAudio: audioGenClientAudioInputSchema
+  })
+  .strict()
+  .superRefine(validateAudioEditOperations)
+
+export const audioEditStreamRequestSchema = z
+  .object({
+    ...audioEditShape,
+    sourceAudio: audioGenAudioInputSchema.describe(
+      'Recording to edit: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1].'
+    ),
+    type: z.literal('audioEditStream'),
+    requestId: z.string().min(1).optional()
+  })
+  .strict()
+  .superRefine(validateAudioEditOperations)
 
 export type AudioGenProgress = {
   stage: string
@@ -382,26 +565,48 @@ export const audioGenStatsSchema = z.object({
   backendId: z.number().optional()
 })
 
+// Generation and editing stream the same frames — progress ticks, PCM chunks,
+// one terminal frame — and differ only in the wire `type` that routes them.
+const audioGenStreamFrameShape = {
+  progress: audioGenProgressSchema.optional(),
+  data: base64Schema.optional(),
+  sampleRate: z.number().int().positive().optional(),
+  channels: z.number().int().positive().optional(),
+  bitsPerSample: z.number().int().positive().optional(),
+  done: z.boolean().default(false),
+  stopReason: z.enum(['completed', 'cancelled']).optional(),
+  stats: audioGenStatsSchema.optional(),
+  diagnostics: inferenceBackendDiagnosticsSchema
+    .optional()
+    .describe(
+      'Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
+    )
+}
+
 export const audioGenStreamResponseSchema = z
   .object({
     type: z.literal('audioGenStream'),
-    progress: audioGenProgressSchema.optional(),
-    data: base64Schema.optional(),
-    sampleRate: z.number().int().positive().optional(),
-    channels: z.number().int().positive().optional(),
-    bitsPerSample: z.number().int().positive().optional(),
-    done: z.boolean().default(false),
-    stopReason: z.enum(['completed', 'cancelled']).optional(),
-    stats: audioGenStatsSchema.optional(),
-    diagnostics: inferenceBackendDiagnosticsSchema
-      .optional()
-      .describe(
-        'Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
-      )
+    ...audioGenStreamFrameShape
+  })
+  .strict()
+
+export const audioEditStreamResponseSchema = z
+  .object({
+    type: z.literal('audioEditStream'),
+    ...audioGenStreamFrameShape
   })
   .strict()
 
 export type AudioGenTaskType = z.infer<typeof audioGenTaskTypeSchema>
+export type AudioGenEditOperationType = z.infer<typeof audioGenEditOperationTypeSchema>
+export type AudioGenRepaintMode = z.infer<typeof audioGenRepaintModeSchema>
+export type AudioEditPrompt = z.infer<typeof audioEditPromptSchema>
+export type AudioEditFlowEditOperation = z.infer<typeof audioEditFlowEditOperationSchema>
+export type AudioEditRepaintOperation = z.infer<typeof audioEditRepaintOperationSchema>
+export type AudioEditOperation = z.infer<typeof audioEditOperationSchema>
+export type AudioEditClientParams = z.input<typeof audioEditClientParamsSchema>
+export type AudioEditStreamRequest = z.infer<typeof audioEditStreamRequestSchema>
+export type AudioEditStreamResponse = z.infer<typeof audioEditStreamResponseSchema>
 export type AudioGenEngine = z.infer<typeof audioGenEngineSchema>
 export type AudioGenAudioInput = z.infer<typeof audioGenAudioInputSchema>
 export type AcestepAudioGenRuntimeConfig = z.infer<typeof acestepAudioGenRuntimeConfigSchema>
