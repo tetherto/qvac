@@ -386,6 +386,21 @@ TEST_F(BackendSelectionTest, RpcBackendIsEligible) {
   expectChosen(mockBackend, BackendType::GPU, "rpc0");
 }
 
+// An RPC device's description is its endpoint string, so it never contributes
+// an Adreno tier however it is spelled.
+TEST_F(BackendSelectionTest, RpcEndpointDoesNotRaiseAdrenoVersion) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(MockDevice(
+      "adreno-880-rig:50052", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  std::optional<int> adrenoVersion;
+  auto result = chooseBackend(
+      BackendType::GPU, bckI, nullptr, std::nullopt, &adrenoVersion);
+  EXPECT_EQ(result.first, BackendType::GPU);
+  ASSERT_TRUE(adrenoVersion.has_value());
+  EXPECT_EQ(adrenoVersion.value(), 740);
+}
+
 TEST_F(BackendSelectionTest, CudaBackendIsEligible) {
   mockBackend.addDevice(MockDevice(
       "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));
@@ -1327,10 +1342,10 @@ TEST_F(BackendSelectionTest, SplitDevices_ExcludesIgpuWhenDiscretePresent) {
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
-// llama.cpp #23897: a second iGPU from a different backend registry is the same
-// physical device enumerated twice. The two share a registry NAME but not a
-// handle, and the rule compares handles; their device_ids differ so device_id
-// dedup cannot explain the single survivor.
+// A second iGPU from a different backend registry is the same physical device
+// enumerated twice. These two share a registry NAME but not a handle, and the
+// rule compares handles; their device_ids differ, so device_id dedup cannot
+// explain the single survivor.
 TEST_F(BackendSelectionTest, SplitSelectionKeepsOneIgpuPerDistinctRegistry) {
   mockBackend.addDevice(withDeviceId(
       MockDevice(
@@ -1352,8 +1367,8 @@ TEST_F(BackendSelectionTest, SplitSelectionKeepsOneIgpuPerDistinctRegistry) {
   EXPECT_EQ(selection.devices[0].sourceGpuIndex, 0U);
 }
 
-// llama.cpp #26953: CUDA reports virtual devices as integrated GPUs, so a later
-// iGPU sharing the kept one's registry handle is distinct and must survive.
+// CUDA reports virtual devices as integrated GPUs, so a later iGPU sharing the
+// kept one's registry handle is a distinct device and must survive.
 TEST_F(BackendSelectionTest, SplitSelectionKeepsIgpusSharingOneRegistry) {
   mockBackend.addDevice(withDeviceId(
       MockDevice("NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),

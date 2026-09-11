@@ -159,6 +159,14 @@ bool isOpenClDevice(
       "opencl");
 }
 
+bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  return hasBackendFamily(
+      lowerCopy(bckI.ggml_backend_dev_name(dev)),
+      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
+      "rpc");
+}
+
 std::string
 deviceIdentity(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
@@ -200,7 +208,7 @@ void emplaceIfValidDevice(
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
     std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu, const bool isOpenCl,
-    const DeviceDescription& devDescr,
+    const bool isRpc, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
@@ -218,7 +226,9 @@ void emplaceIfValidDevice(
   if (devDescr.gpuDescription.find("mali") != std::string::npos) {
     sawMaliGpu = true;
   }
-  if (isAdreno) {
+  // RPC is skipped: its description is the endpoint string, so a tier parsed
+  // off one is a hostname.
+  if (isAdreno && !isRpc) {
     auto version = parseAdrenoVersion(devDescr.gpuDescription);
     if (version.has_value() && (!maxAdrenoVersion.has_value() ||
                                 version.value() > maxAdrenoVersion.value())) {
@@ -286,6 +296,7 @@ void tryEmplaceDevice(
         maxAdrenoVersion,
         sawMaliGpu,
         isOpenCl,
+        ::isRpcDevice(bckI, dev),
         devDescr,
         backendTypeEnum);
   } else {
@@ -593,7 +604,9 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       continue;
     }
     // Keep the first integrated GPU plus every later one whose backend registry
-    // HANDLE matches the last kept one's (llama.cpp #23897, #26953).
+    // HANDLE matches the last kept one's, as qvac-fabric does. Identity, not
+    // name: one device seen by two backends is a duplicate, several devices
+    // from one backend are not.
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
       if (integrated.empty() ||
           reg == bckI.ggml_backend_dev_backend_reg(integrated.back().handle)) {
@@ -640,8 +653,8 @@ void backend_selection::applyAdrenoRestrictions(
     return;
   }
 
-  // Max tier across local participants; RPC is skipped because ggml reports an
-  // RPC device's endpoint string as its description (ggml-rpc.cpp:3749).
+  // Max tier across local participants. RPC is skipped: its description is the
+  // endpoint string, so a tier parsed from it is a hostname.
   std::optional<int> maxAdrenoVersion;
   for (const SplitDevice& device : selection.devices) {
     if (!device.isRpc && device.adrenoVersion.has_value() &&

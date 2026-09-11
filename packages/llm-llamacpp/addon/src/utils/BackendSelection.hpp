@@ -116,8 +116,8 @@ void applyAdrenoRestrictions(
 
 /// @brief The names of `getSplitDeviceSelection()`'s devices, in order.
 ///
-/// Selection mirrors qvac-fabric's filtered branch (`src/llama.cpp`) while
-/// applying this addon's supported-backend allowlist:
+/// Selection mirrors qvac-fabric's device ordering while applying this addon's
+/// supported-backend allowlist:
 ///   - CUDA, RPC, Vulkan, Metal and Adreno OpenCL devices are eligible.
 ///   - RPC devices are prepended and do not suppress a local integrated GPU.
 ///   - Local discrete GPUs when any are present, otherwise the first
