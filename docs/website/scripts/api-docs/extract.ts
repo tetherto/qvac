@@ -14,6 +14,12 @@ import type { DeclarationReflection, SignatureReflection } from "typedoc";
 import type { ApiFunction, ApiObject, ApiOverload, ExpandedType, TypeField, ErrorEntry, ApiData, StructuredType } from "./types.js";
 import { auditTsDoc } from "./audit-tsdoc.js";
 import {
+  CURATED_SINGLETONS,
+  CURATED_SINGLETON_NAMES,
+  convertCuratedSingletons,
+  resolveCuratedEntryPoint,
+} from "./curated-singletons.js";
+import {
   readSampleProse,
   readIndexSummaries,
   type SampleFunctionProse,
@@ -77,6 +83,17 @@ async function tryLoadCache(
   // rendering. Missing any of these from the sentinel leaves stale cache
   // hits when contributors change the helpers without touching SDK source.
   const newestSourceMtime = await getNewestMtime(sdkPath, ".ts");
+  // Curated singletons are declared outside the SDK package, so their sources
+  // must feed the sentinel too — otherwise editing `profiler` leaves a stale
+  // cache hit.
+  const curatedMtimes = await Promise.all(
+    CURATED_SINGLETONS.map((s) =>
+      getNewestMtime(
+        path.dirname(resolveCuratedEntryPoint(sdkPath, s)),
+        ".ts",
+      ).catch(() => 0),
+    ),
+  );
   const newestSamplesMtime = samplesDir
     ? await getNewestMtime(samplesDir, ".mdx").catch(() => 0)
     : 0;
@@ -93,6 +110,7 @@ async function tryLoadCache(
     path.join(SCRIPT_DIR, "zod-describe-extractor.ts"),
     path.join(SCRIPT_DIR, "audit-tsdoc.ts"),
     path.join(SCRIPT_DIR, "render.ts"),
+    path.join(SCRIPT_DIR, "curated-singletons.ts"),
   ];
   for (const file of helperFiles) {
     try {
@@ -107,6 +125,7 @@ async function tryLoadCache(
     newestSourceMtime,
     newestSamplesMtime,
     newestTemplatesMtime,
+    ...curatedMtimes,
     ...helperMtimes,
   );
 
@@ -185,8 +204,21 @@ export async function extractApiData(
   await loadZodDescriptions(resolveSdkSchemasDir(sdkPath));
   await loadSampleProse(options?.samplesDir);
 
+  // Curated singletons re-exported from a sibling package are absent from the
+  // SDK project, so convert their owning packages before anything walks the
+  // reflections. Their named types (`ProfilerExport`, …) live in those
+  // projects; `augmentTypeMap` keeps the SDK's own types authoritative.
+  const { variables: curatedVariables, projects: curatedProjects } =
+    await convertCuratedSingletons(sdkPath, project);
+  for (const curated of curatedProjects) augmentTypeMap(curated);
+  if (curatedVariables.length > 0) {
+    console.log(
+      `✓ Converted ${curatedVariables.length} curated singleton(s) from sibling packages`,
+    );
+  }
+
   console.log(`🔍 Auditing TSDoc completeness...`);
-  await auditTsDoc(project, sdkPath);
+  await auditTsDoc(project, sdkPath, { curatedVariables });
 
   const apiFunctions = extractApiFunctions(project);
   console.log(`✓ Extracted ${apiFunctions.length} API functions`);
@@ -215,7 +247,7 @@ export async function extractApiData(
   }
   console.log(`✓ Validation passed for all ${apiFunctions.length} functions`);
 
-  const apiObjects = extractApiObjects(project);
+  const apiObjects = extractApiObjects(project, curatedVariables);
   if (sampleProseCache.size > 0) {
     for (const obj of apiObjects) applySampleProseToObject(obj);
   }
@@ -877,12 +909,29 @@ function extractApiFunctions(project: any): ApiFunction[] {
 // TypeDoc object extraction (exported variables with object-like shapes)
 // ---------------------------------------------------------------------------
 
-function extractApiObjects(project: any): ApiObject[] {
+/**
+ * Build the `## Objects` section from the curated singleton allow-list.
+ *
+ * Candidates are matched by exported name, never by source path: the SDK
+ * re-exports part of its surface from sibling packages, and a path filter
+ * silently drops an object the moment a declaration moves. Every allow-listed
+ * name must produce an entry — otherwise extraction throws.
+ */
+function extractApiObjects(
+  project: any,
+  curatedVariables: DeclarationReflection[] = [],
+): ApiObject[] {
   const objects: ApiObject[] = [];
-  const allVars = project.getReflectionsByKind(ReflectionKind.Variable) as DeclarationReflection[];
+  const allVars = [
+    ...(project.getReflectionsByKind(
+      ReflectionKind.Variable,
+    ) as DeclarationReflection[]),
+    ...curatedVariables,
+  ];
 
   for (const refl of allVars) {
     const decl = refl as DeclarationReflection;
+    if (!CURATED_SINGLETON_NAMES.has(decl.name)) continue;
     const type = (decl as any).type;
     const props = extractTypeProperties(type, new Set<string>());
     if (!props || props.length === 0) continue;
@@ -895,11 +944,6 @@ function extractApiObjects(project: any): ApiObject[] {
     const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
     const normalizedPath = sourcePath.replace(/\\/g, "/");
     if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
-    // Object summary scope: only public, curated singletons. Today this is
-    // just `profiler` from `packages/sdk/profiling/`. Adding more curated
-    // objects here is a deliberate editorial decision — they show up on
-    // the single-page summary, so the bar should be intentional.
-    if (!normalizedPath.includes("/profiling/")) continue;
 
     const comment = decl.comment;
     const summary = comment?.summary;
@@ -941,6 +985,21 @@ function extractApiObjects(project: any): ApiObject[] {
         return readModuleJsDoc(sourcePath)?.examples ?? [];
       })(),
     });
+  }
+
+  const missing = [...CURATED_SINGLETON_NAMES].filter(
+    (name) => !objects.some((o) => o.name === name),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Curated public singleton(s) missing from the extracted API objects: ` +
+        `${missing.join(", ")}.\n\n` +
+        `These are allow-listed in scripts/api-docs/curated-singletons.ts and must ` +
+        `appear in the "## Objects" section. Likely causes:\n` +
+        `  1. The declaration moved — update the entry's packageDir/entryPoint.\n` +
+        `  2. The export was removed from packages/sdk/src/index.ts — drop the entry.\n` +
+        `  3. The value is no longer an object with callable properties.\n`,
+    );
   }
 
   return objects.sort((a, b) =>
@@ -1029,6 +1088,19 @@ function buildTypeMap(project: any): void {
   const interfaces = project.getReflectionsByKind(ReflectionKind.Interface) as DeclarationReflection[];
   for (const r of [...aliases, ...interfaces]) {
     typeMap.set(r.name, r);
+  }
+}
+
+/**
+ * Add a secondary project's named types to the lookup without disturbing the
+ * SDK's own entries. Used for the packages converted on behalf of the curated
+ * singletons: the SDK project stays authoritative on name collisions.
+ */
+function augmentTypeMap(project: any): void {
+  const aliases = project.getReflectionsByKind(ReflectionKind.TypeAlias) as DeclarationReflection[];
+  const interfaces = project.getReflectionsByKind(ReflectionKind.Interface) as DeclarationReflection[];
+  for (const r of [...aliases, ...interfaces]) {
+    if (!typeMap.has(r.name)) typeMap.set(r.name, r);
   }
 }
 
@@ -1374,9 +1446,12 @@ function initTsProgram(tsconfigPath: string): void {
 function readModuleJsDoc(
   fileName: string,
 ): { description: string; examples: string[] } | null {
-  if (!tsProgram) return null;
   const normalizedPath = fileName.replace(/\\/g, "/");
-  const sourceFile = tsProgram.getSourceFile(normalizedPath);
+  // Curated singletons are declared outside the SDK program (see
+  // `curated-singletons.ts`), so parse those files standalone.
+  const sourceFile =
+    tsProgram?.getSourceFile(normalizedPath) ??
+    readStandaloneSourceFile(normalizedPath);
   if (!sourceFile) return null;
 
   const fullText = sourceFile.getFullText();
@@ -1393,6 +1468,19 @@ function readModuleJsDoc(
 
   const raw = fullText.slice(jsdoc.pos, jsdoc.end);
   return parseJsDocBlock(raw);
+}
+
+/**
+ * Parse a single file into a `SourceFile` outside any program. Returns null
+ * when the file cannot be read.
+ */
+function readStandaloneSourceFile(fileName: string): ts.SourceFile | null {
+  try {
+    const text = fsSync.readFileSync(fileName, "utf-8");
+    return ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
+  } catch {
+    return null;
+  }
 }
 
 function parseJsDocBlock(raw: string): { description: string; examples: string[] } {

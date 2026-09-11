@@ -24,7 +24,8 @@
  *   1. Extract: TypeDoc walks the SDK and writes api-data.json (signatures,
  *      top-level descriptions, throws, examples, deprecated, errors). Scope
  *      is restricted to functions re-exported from
- *      `packages/sdk/client/api/index.ts` plus the `profiler` object.
+ *      `packages/sdk/client/api/index.ts` plus the curated public singletons
+ *      allow-listed in `scripts/api-docs/curated-singletons.ts`.
  *   2. Render: writes a single MDX through `single-page.njk`.
  *
  * Title-only mode (`--title-only`) skips extraction and the full render.
