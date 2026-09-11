@@ -283,12 +283,13 @@ config: {
 It does not stream from disk. Use `params_backend: 'diffusion=disk'` for
 on-demand reads from the model file.
 
-The 15-case Linux hardware matrix is available in
+The 16-case Linux hardware matrix is available in
 `scripts/validate-layer-streaming.sh`. It expects the MiniMax-H3 files under
 `/home/shared/models/minimax-h3-q2` by default. Override that location with
-`H3_MODELS_DIR`, then run the script from the package directory. Each case
-requires a non-empty AVI and checks the engine log for the expected graph-cut,
-streaming, CPU RAM, or disk behavior.
+`H3_MODELS_DIR`. The runtime backend defaults to `vulkan0`; override it with
+`BACKEND`, for example `BACKEND=cuda0`. Then run the script from the package
+directory. Each case requires a non-empty AVI and checks the engine log for the
+expected graph-cut, streaming, CPU RAM, or disk behavior.
 
 ### Image Generation Parameters
 

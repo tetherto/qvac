@@ -11,6 +11,7 @@ MACHINE_LABEL="${MACHINE_LABEL:-$(hostname -s)}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%dT%H%M%S)}"
 RESULTS_DIR="${RESULTS_DIR:-$PACKAGE_DIR/validation-results/$MACHINE_LABEL-$RUN_ID}"
 SAMPLE_INTERVAL="${SAMPLE_INTERVAL:-1}"
+BACKEND="${BACKEND:-vulkan0}"
 
 DIFFUSION_FILE="${H3_MODEL:-minimax_h3_fl2va_pruned-Q2_K.gguf}"
 LLM_FILE="${H3_LLM:-qwen3vl_32b_minimax_h3-Q2_K_M.gguf}"
@@ -192,30 +193,33 @@ max_vram_log="Effective stable-diffusion max_vram"
 params_backend_log="Effective stable-diffusion params backend"
 backend_log="Explicit stable-diffusion backend assignment"
 
-run_case baseline vulkan0 "" "" 0 "" "" "" "$graph_cut_log"
-run_case disabled vulkan0 "" 0 0 "$max_vram_log '0'" "" "" "$graph_cut_log"
-run_case fixed-low vulkan0 "" 2 0 "$graph_cut_log" "$max_vram_log '2'"
-run_case fixed-medium vulkan0 "" 6 0 "$graph_cut_log" "$max_vram_log '6'"
-run_case auto vulkan0 "" -1 0 "$graph_cut_log" "$max_vram_log '-1'"
-run_case assigned vulkan0 "" vulkan0=6 0 "$graph_cut_log" \
-  "$max_vram_log 'vulkan0=6'"
-run_case stream-without-cpu vulkan0 "" 6 1 "$graph_cut_log" \
+run_case baseline "$BACKEND" "" "" 0 "" "" "" "$graph_cut_log"
+run_case disabled "$BACKEND" "" 0 0 "$max_vram_log '0'" "" "" "$graph_cut_log"
+run_case fixed-low "$BACKEND" "" 2 0 "$graph_cut_log" "$max_vram_log '2'"
+run_case fixed-medium "$BACKEND" "" 6 0 "$graph_cut_log" "$max_vram_log '6'"
+run_case auto "$BACKEND" "" -1 0 "$graph_cut_log" "$max_vram_log '-1'"
+run_case assigned "$BACKEND" "" "$BACKEND=6" 0 "$graph_cut_log" \
+  "$max_vram_log '$BACKEND=6'"
+run_case stream-without-max-vram "$BACKEND" diffusion=cpu "" 1 \
+  "stream_layers has no effect without max_vram; ignoring" "" "" \
+  "$graph_cut_log"
+run_case stream-without-cpu "$BACKEND" "" 6 1 "$graph_cut_log" \
   "$max_vram_log '6'" "$stream_ignored_log"
-run_case cpu-staged vulkan0 diffusion=cpu 6 0 "$graph_cut_log" \
+run_case cpu-staged "$BACKEND" diffusion=cpu 6 0 "$graph_cut_log" \
   "$max_vram_log '6'" "$params_backend_log 'diffusion=cpu'"
-run_case cpu-streamed vulkan0 diffusion=cpu 6 1 "$graph_cut_log" \
+run_case cpu-streamed "$BACKEND" diffusion=cpu 6 1 "$graph_cut_log" \
   "streaming budget =" "residency=STREAMED"
-run_case disk vulkan0 diffusion=disk 6 0 "$graph_cut_log" \
+run_case disk "$BACKEND" diffusion=disk 6 0 "$graph_cut_log" \
   "$max_vram_log '6'" "$params_backend_log 'diffusion=disk'"
-run_case disk-with-stream vulkan0 diffusion=disk 6 1 "$stream_ignored_log" \
+run_case disk-with-stream "$BACKEND" diffusion=disk 6 1 "$stream_ignored_log" \
   "$max_vram_log '6'" "$params_backend_log 'diffusion=disk'"
-run_case runtime-mix diffusion=vulkan0,te=cpu,vae=cpu "" 6 0 "$graph_cut_log" \
-  "$max_vram_log '6'" "$backend_log 'diffusion=vulkan0,te=cpu,vae=cpu'"
-run_case params-mix vulkan0 diffusion=cpu,te=cpu,vae=cpu 6 0 "$graph_cut_log" \
+run_case runtime-mix "diffusion=$BACKEND,te=cpu,vae=cpu" "" 6 0 "$graph_cut_log" \
+  "$max_vram_log '6'" "$backend_log 'diffusion=$BACKEND,te=cpu,vae=cpu'"
+run_case params-mix "$BACKEND" diffusion=cpu,te=cpu,vae=cpu 6 0 "$graph_cut_log" \
   "$max_vram_log '6'" "$params_backend_log 'diffusion=cpu,te=cpu,vae=cpu'"
-run_case offload-only vulkan0 "" 6 0 "$graph_cut_log" "$max_vram_log '6'" \
+run_case offload-only "$BACKEND" "" 6 0 "$graph_cut_log" "$max_vram_log '6'" \
   "$params_backend_log '*=cpu'" "" 1
-run_case offload-with-params vulkan0 diffusion=disk 6 0 "$graph_cut_log" \
+run_case offload-with-params "$BACKEND" diffusion=disk 6 0 "$graph_cut_log" \
   "$max_vram_log '6'" "$params_backend_log '*=cpu,diffusion=disk'" "" 1
 
 echo "Validation complete: $RESULTS_DIR"

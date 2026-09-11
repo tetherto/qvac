@@ -400,7 +400,12 @@ void SdModel::load() {
 
   params.max_vram =
       config_.maxVramSpec.empty() ? nullptr : config_.maxVramSpec.c_str();
-  params.stream_layers = config_.streamLayers;
+  params.stream_layers = config_.streamLayers && !config_.maxVramSpec.empty();
+  if (config_.streamLayers && config_.maxVramSpec.empty()) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "stream_layers has no effect without max_vram; ignoring");
+  }
   if (!config_.maxVramSpec.empty()) {
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -507,11 +512,19 @@ void SdModel::load() {
     const std::string path = config_.diffusionModelPath.empty()
                                  ? config_.modelPath
                                  : config_.diffusionModelPath;
+    const bool hasExplicitMemoryOrBackendConfig =
+        !config_.backendSpec.empty() || !config_.paramsBackendSpec.empty() ||
+        !config_.maxVramSpec.empty();
+    const std::string guidance =
+        hasExplicitMemoryOrBackendConfig
+            ? "Check backend, params_backend, max_vram, model path, and model "
+              "format: "
+            : "Check model path and format: ";
     throw StatusError(
         general_error::InternalError,
-        "SdModel::load() failed -- could not create stable-diffusion context. "
-        "Check model path and format: " +
-            path);
+        "SdModel::load() failed -- could not create stable-diffusion "
+        "context. " +
+            guidance + path);
   }
 
   sdCtx_.reset(raw);
