@@ -6,7 +6,7 @@
 
 - `flash-attn` is now recognised as enabled on every spelling qvac-fabric
   accepts — `on`, `enabled`, `true` and `1` — matching `@qvac/llm-llamacpp`.
-  This supersedes the 0.8.0 entry below pinning it to `on` only: that pinning
+  This supersedes the 0.6.0 entry below pinning it to `on` only: that pinning
   was correct while the loader also required exact `on`, and became an
   over-estimate of KV memory once the loader widened. Values are matched by
   calling `common_arg_utils::is_truthy` / `is_falsey` / `is_autoy` directly
