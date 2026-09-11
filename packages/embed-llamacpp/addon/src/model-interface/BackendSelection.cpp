@@ -158,7 +158,9 @@ void emplaceIfValidDevice(
     // explicit backend:'opencl' can still reach it, instead of `opencl` being
     // an accepted family that matches nothing on an Intel or AMD host.
     family = DeviceFamily::OpenClOther;
-  } else if (isCuda && backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
+  } else if (
+      isCuda && (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
+                 backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU)) {
     family = DeviceFamily::Cuda;
   } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
     family = DeviceFamily::Gpu;

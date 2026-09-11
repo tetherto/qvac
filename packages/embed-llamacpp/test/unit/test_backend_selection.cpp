@@ -695,6 +695,12 @@ TEST_F(BackendSelectionTest, CudaPreferredOverVulkanRegardlessOfDeviceOrder) {
   expectChosen(mockBackend, BackendType::GPU, "cuda0");
 }
 
+TEST_F(BackendSelectionTest, IntegratedCudaPreferredOverVulkan) {
+  mockBackend.addDevice(createIGPUDevice(NVIDIA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
 // No CUDA module or no NVIDIA driver: the device never registers, so the
 // cascade lands on Vulkan with no special handling.
 TEST_F(BackendSelectionTest, VulkanChosenWhenNoCudaDevice) {

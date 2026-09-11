@@ -142,6 +142,8 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
   EXPECT_EQ(
       applyOne("backend", "diffusion=vulkan0").backendSpec,
       "diffusion=vulkan0");
+  EXPECT_EQ(applyOne("backend", "cuda,vulkan").backend, "cuda,vulkan");
+  EXPECT_THROW(applyOne("backend", "cudaa"), StatusError);
   EXPECT_EQ(
       applyOne("params_backend", "diffusion=cpu").paramsBackendSpec,
       "diffusion=cpu");

@@ -1258,6 +1258,12 @@ TEST_F(BackendSelectionTest, CudaPreferredOverVulkanRegardlessOfDeviceOrder) {
   expectChosen(mockBackend, BackendType::GPU, "cuda0");
 }
 
+TEST_F(BackendSelectionTest, IntegratedCudaPreferredOverVulkan) {
+  mockBackend.addDevice(createIGPUDevice(NVIDIA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
 // No CUDA module or no NVIDIA driver: the device never registers, so the
 // cascade lands on Vulkan with no special handling.
 TEST_F(BackendSelectionTest, VulkanChosenWhenNoCudaDevice) {
@@ -1544,6 +1550,13 @@ TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantThrows) {
     EXPECT_NE(what.find("cuda0"), std::string::npos) << what;
     EXPECT_NE(what.find("tbq4_0"), std::string::npos) << what;
   }
+}
+
+TEST_F(BackendSelectionTest, InactiveOpenClCapabilityMissFallsBackToCpu) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice("Intel Arc A770", OPENCL_BACK)));
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.type, BackendType::CPU);
 }
 
 // ...but a deliberate CPU load must not throw. No devices are enumerated, so

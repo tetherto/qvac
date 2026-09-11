@@ -231,7 +231,9 @@ void emplaceIfValidDevice(
     // explicit backend:'opencl' can still reach it, instead of `opencl` being
     // an accepted family that matches nothing on an Intel or AMD host.
     family = DeviceFamily::OpenClOther;
-  } else if (isCuda && backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
+  } else if (
+      isCuda && (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
+                 backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU)) {
     family = DeviceFamily::Cuda;
   } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
     family = DeviceFamily::Gpu;
@@ -1112,6 +1114,15 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     for (const Candidate& c : enumeration.candidates) {
       if (c.excluded == ExclusionReason::None ||
           kindOf(c.excluded) != ExclusionKind::Incapable) {
+        continue;
+      }
+      bool considered =
+          std::find(K_CASCADE_ORDER.begin(), K_CASCADE_ORDER.end(), c.family) !=
+          K_CASCADE_ORDER.end();
+      for (const std::string& family : request.backendOverride) {
+        considered = considered || backendNameMatchesFamily(c.name, family);
+      }
+      if (!considered) {
         continue;
       }
       if (!incapable.empty()) {
