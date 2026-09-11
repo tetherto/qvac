@@ -1,8 +1,8 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-fabric-llm.cpp
-  REF ca5dc93d07dc5618f4bd5ea7523b0b527dd3cbc9
-  SHA512 fc70edb47b3ab66167fc8490fea8a3adb2e4b6d1001ea67391456d148837138b1f1ddb9e742b2d66f0a38722887dd3fcbfec39362f68ffb49966a973ab48a946
+  REF 10382aea788de225fdf79bc1c43df55e9fa3471e
+  SHA512 4e279f2ee4ee0dd7fcb75a328c8f4bab00c67fd80388ad7e00483f57cc8289b7b0c7757b587a0593fa54f9a2a4cd87f4ce7f8414b182991ef23b8077b3d510fe
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
@@ -188,20 +188,8 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
   # silently shadow the pin. Searching /usr/local/cuda/bin first with
   # NO_DEFAULT_PATH did exactly that.
   #
-  # QVAC-24470: THE TOOLKIT VERSION IS NOT IN THE VCPKG BINARY-CACHE ABI, so
-  # changing it does NOT invalidate a cached build of this port. CUDACXX arrives
-  # through VCPKG_KEEP_ENV_VARS, which is untracked passthrough, and
-  # CMAKE_CUDA_COMPILER is a path that setup-cuda keeps constant across
-  # versions. Proven on 2026-09-03: the 13.2.0 -> 13.0.3 pin change produced a
-  # byte-identical artifact and the same package ABI
-  # 84a16511416c2a7956ed305e7682052f063dfb60415e3de074e4f0787a972eab, because
-  # vcpkg restored the old binary. The run was green and had rebuilt nothing.
-  #
-  # QVAC_FABRIC_CUDA_TOOLKIT below exists to close that hole. It is otherwise
-  # unused, and its only job is to be part of this portfile's content so that
-  # editing it changes the ABI and forces a rebuild. KEEP IT IN STEP WITH
-  # setup-cuda's cuda-version, or a toolkit change ships stale binaries and the
-  # only symptom is a crash on hardware CI does not have.
+  # QVAC-24470: the toolkit version is not in the vcpkg binary-cache ABI.
+  # Keep this value in the portfile so a toolkit change invalidates the cache.
   if(QVAC_CUDA_JETSON)
     set(QVAC_FABRIC_CUDA_TOOLKIT "12.6.3-jetson")
     set(QVAC_FABRIC_CUDA_VERSION_PATTERN "V12\\.6\\.85([^0-9]|$)")
@@ -224,9 +212,6 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
   if(NOT NVCC_EXECUTABLE)
     message(FATAL_ERROR "qvac-fabric: cuda-backend feature requires a CUDA toolkit. Install one providing nvcc (checked CUDACXX, CUDA_PATH/bin, PATH and /usr/local/cuda/bin). Do not request cuda-backend on a host without nvcc.")
   endif()
-  # Log the version, not just the path. The path is identical whichever toolkit
-  # setup-cuda assembled, so a log line carrying only the path cannot tell you
-  # which nvcc a given build actually used.
   execute_process(
     COMMAND "${NVCC_EXECUTABLE}" --version
     RESULT_VARIABLE QVAC_NVCC_RESULT
@@ -367,7 +352,7 @@ vcpkg_cmake_config_fixup(
 
 if(BUILD_CUDA_BACKEND)
   if(VCPKG_TARGET_IS_WINDOWS)
-    set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/lib/qvac-ggml-cuda.dll")
+    set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/bin/qvac-ggml-cuda.dll")
   else()
     set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda.so")
   endif()
@@ -377,9 +362,8 @@ if(BUILD_CUDA_BACKEND)
 endif()
 
 if(BUILD_CUDA_BACKEND AND QVAC_CUDA_JETSON)
-  # Keep both CUDA majors in one prebuild directory. ggml's loader scans every
-  # libqvac-ggml-cuda*.so candidate and skips the one whose runtime major is not
-  # available on the host.
+  # Keep both CUDA majors in one prebuild directory. The loader scans every
+  # CUDA module candidate and skips the one whose runtime is unavailable.
   set(QVAC_CUDA_JETSON_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda-jetson.so")
   file(RENAME "${QVAC_CUDA_MODULE}" "${QVAC_CUDA_JETSON_MODULE}")
 
