@@ -1,4 +1,4 @@
-import EmbedLlamacpp, { IdMapIndex, type GGMLConfig } from '@qvac/embed-llamacpp'
+import EmbedLlamacpp, { IdMapIndex } from '@qvac/embed-llamacpp'
 import embedAddonLogging from '@qvac/embed-llamacpp/addonLogging'
 import type { TurboVecIndexProvider } from '@qvac/rag'
 import {
@@ -19,6 +19,7 @@ import { embed } from '@/plugins/ops/embed'
 import { forwardModelExecution } from '@/profiling/model-execution'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
+import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
 
 const turbovecIndexProvider: TurboVecIndexProvider = {
   create(options) {
@@ -27,53 +28,6 @@ const turbovecIndexProvider: TurboVecIndexProvider = {
   load(snapshotPath) {
     return IdMapIndex.load(snapshotPath)
   }
-}
-
-function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
-  const config: GGMLConfig = {
-    device: embedConfig.device as 'gpu' | 'cpu',
-    gpu_layers: `${embedConfig.gpuLayers}` as `${number}`,
-    batch_size: `${embedConfig.batchSize}` as `${number}`
-  }
-
-  if (embedConfig.flashAttention) {
-    config.flash_attn = embedConfig.flashAttention
-  }
-
-  if (embedConfig.pooling) {
-    config.pooling = embedConfig.pooling
-  }
-
-  if (embedConfig.attention) {
-    config.attention = embedConfig.attention
-  }
-
-  if (typeof embedConfig.embdNormalize === 'number') {
-    config.embd_normalize = `${embedConfig.embdNormalize}`
-  }
-
-  if (embedConfig.mainGpu !== undefined) {
-    config['main-gpu'] =
-      typeof embedConfig.mainGpu === 'number' ? `${embedConfig.mainGpu}` : embedConfig.mainGpu
-  }
-
-  if (embedConfig.splitMode) {
-    config['split-mode'] = embedConfig.splitMode
-  }
-
-  if (embedConfig.tensorSplit) {
-    config['tensor-split'] = embedConfig.tensorSplit
-  }
-
-  if (typeof embedConfig.verbosity === 'number') {
-    config.verbosity = `${embedConfig.verbosity}`
-  }
-
-  if (embedConfig.openclCacheDir) {
-    config.openclCacheDir = embedConfig.openclCacheDir
-  }
-
-  return config
 }
 
 function createEmbeddingsModel(modelId: string, modelPath: string, embedConfig: EmbedConfig) {

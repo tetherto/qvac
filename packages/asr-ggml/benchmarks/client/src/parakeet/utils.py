@@ -20,16 +20,18 @@ def save_benchmark_results(
     wer_score: float,
     cer_score: float,
     results: AddonResults,
+    first_partial: dict = None,
     notes: str = None,
 ):
     """
     Save individual benchmark results to a markdown file under benchmarks/results/<model_name>/
-    
+
     Args:
         cfg: Configuration object
         wer_score: Word Error Rate score
         cer_score: Character Error Rate score
         results: Transcription results from the addon
+        first_partial: Time-to-first-partial summary (streaming runs only)
         notes: Optional notes to include
     """
     results_root = _get_results_root()
@@ -88,6 +90,15 @@ def save_benchmark_results(
         "## Performance",
         f"- **Total load time:** {results.total_load_time_ms:.2f} ms",
         f"- **Total run time:** {results.total_run_time_ms:.2f} ms",
+    ]
+
+    if first_partial:
+        lines += [
+            f"- **Avg time to first partial:** {first_partial['avg_ms']:.2f} ms",
+            f"- **Median time to first partial:** {first_partial['median_ms']:.2f} ms",
+        ]
+
+    lines += [
         "",
         "## Notes",
         f"- {notes}",
@@ -112,8 +123,8 @@ def generate_summary():
         "",
         "This summary consolidates benchmarking results across all model configurations.",
         "",
-        "| Model | Type | Language | Speaker Group | GPU | Mode | WER | CER | Dataset | Notes |",
-        "|-------|------|----------|---------------|-----|------|-----|-----|---------|-------|",
+        "| Model | Type | Language | Speaker Group | GPU | Mode | WER | CER | TTFP (ms) | Dataset | Notes |",
+        "|-------|------|----------|---------------|-----|------|-----|-----|-----------|---------|-------|",
     ]
 
     for model_dir in sorted(model_dirs):
@@ -154,13 +165,17 @@ def generate_summary():
             wer = wer_m.group(1) if wer_m else ""
             cer = cer_m.group(1) if cer_m else ""
 
+            # Time to first partial (streaming runs only)
+            ttfp_m = re.search(r"- \*\*Avg time to first partial:\*\*\s*([\d\.]+)", text)
+            ttfp = ttfp_m.group(1) if ttfp_m else ""
+
             # Notes
             notes_m = re.search(r"## Notes\s*\n- (.+)", text)
             notes = notes_m.group(1).strip() if notes_m else ""
 
             # Append the row
             out.append(
-                f"| {model_name} | {model_type} | {language} | {speaker_group} | {gpu_status} | {stream_status} | {wer} | {cer} | {dataset} | {notes} |"
+                f"| {model_name} | {model_type} | {language} | {speaker_group} | {gpu_status} | {stream_status} | {wer} | {cer} | {ttfp} | {dataset} | {notes} |"
             )
 
     out += [
@@ -192,6 +207,10 @@ def generate_summary():
         "| 2 – 10  | High quality; few character mistakes |",
         "| 10 – 20 | Adequate; visible errors that may need correction |",
         "| > 20    | Low quality; many character errors |",
+        "",
+        "### TTFP (Time To First Partial)",
+        "",
+        "Streaming runs only. Average milliseconds from opening the duplex streaming session to the first emitted transcript segment, measured on the benchmark server. The engine streams finalized per-chunk increments, so this is the first output a streaming consumer would see. Audio is fed as fast as the session accepts it (no real-time pacing), so this captures session-open plus first-chunk decode latency. **Lower = better**",
         "",
         "### Speaker Group",
         "",

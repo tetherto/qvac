@@ -55,6 +55,40 @@ test('RegistryService.getModelByKey validates input', async (t) => {
   await assertThrows({ path: '' })
 })
 
+test('RegistryService reports bytes available to the registry filesystem', async (t) => {
+  const calls = []
+  const service = createServiceWithRpc()
+  service.storagePath = '/registry-storage'
+  // lunte-disable-next-line require-await
+  service._statfs = async (...args) => {
+    calls.push(args)
+    return { bavail: 1234n, bsize: 4096n, bfree: 9999n }
+  }
+
+  const result = await service._getStorageCapacity()
+
+  t.alike(result, { availableBytes: String(1234n * 4096n) })
+  t.alike(calls, [['/registry-storage', { bigint: true }]])
+})
+
+test('RegistryService hides filesystem details when capacity cannot be read', async (t) => {
+  const service = createServiceWithRpc()
+  service.storagePath = '/private/registry-storage'
+  // lunte-disable-next-line require-await
+  service._statfs = async () => {
+    throw new Error('ENOENT: /private/registry-storage')
+  }
+
+  try {
+    await service._getStorageCapacity()
+    t.fail('Expected storage capacity lookup to fail')
+  } catch (err) {
+    t.is(err.code, 'ERR_STORAGE_CAPACITY_UNAVAILABLE')
+    t.is(err.message, 'Registry storage capacity is unavailable')
+    t.absent(err.message.includes('/private/registry-storage'))
+  }
+})
+
 test('isTransientHfDownloadError retries on undici socket errors', (t) => {
   for (const code of [
     'ECONNRESET',
@@ -108,6 +142,6 @@ test('isTransientHfDownloadError fast-fails on unknown / unstructured errors', (
 
 function createServiceWithRpc() {
   const service = Object.create(RegistryService.prototype)
-  service.logger = { warn() {} }
+  service.logger = { error() {}, warn() {} }
   return service
 }

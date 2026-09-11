@@ -58,6 +58,9 @@ runs:
           [ -z "$ref" ] && return 0
           [ "$ref" = "HEAD" ] && return 0
           git rev-parse --verify --quiet "refs/heads/${ref}" >/dev/null 2>&1 && return 0
+          # A SHA (on-merge passes github.sha) is already present after checkout
+          # and is not a branch, so fetching refs/heads/<sha> would hard-fail.
+          git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null 2>&1 && return 0
           git fetch --no-tags --depth=1 origin "+refs/heads/${ref}:refs/heads/${ref}"
         }
         fetch_ref "$BASE_REF"
@@ -161,6 +164,18 @@ runs:
         ROWS=$(jq -c --argjson overrides "$OVERRIDES" '
           map(. as $row | $row * ($overrides[$row.package] // {}))
         ' <<< "$ROWS")
+
+        # envSecretName picks which repo secret the leaf exports into the test
+        # env. Allowlist the two the packages actually use, so a project.json
+        # edit cannot reach an unrelated secret.
+        BAD_SECRETS=$(echo "$ROWS" | jq -r '
+          [.[] | .envSecretName // empty] | unique
+          | map(select(. != "GITHUB_TOKEN" and . != "QASE_API_TOKEN")) | join(", ")
+        ')
+        if [ -n "$BAD_SECRETS" ]; then
+          echo "::error::envSecretName must be GITHUB_TOKEN or QASE_API_TOKEN, got: $BAD_SECRETS"
+          exit 1
+        fi
 
         # Partition: carveOut rows go to the caller's bespoke reusable, so keep
         # them out of the generic matrix and surface just their package names.

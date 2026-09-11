@@ -63,9 +63,10 @@ Consequences for release changelog / metadata PRs:
 5. Generate title: `TICKET prefix[tags]: subject`
 6. Fill template sections based on changes
 7. Validate tag requirements ([bc]/[api]/[mod])
-8. **If diff touches the `version` of `packages/inference` / `packages/sdk`, or sdk's dep blocks**, chain into the `qv-sdk-lockstep-sync` skill (see "SDK Lockstep Client Sync Trigger" below)
-9. Output complete PR description
-10. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
+8. **If the diff exposes or changes a user-facing SDK capability**, apply first-class product parity (see below) before outputting the description
+9. **If diff touches the `version` of `packages/inference` / `packages/sdk`, or sdk's dep blocks**, chain into the `qv-sdk-lockstep-sync` skill (see "SDK Lockstep Client Sync Trigger" below)
+10. Output complete PR description
+11. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
 
 ## Inference Strategy
 
@@ -102,6 +103,17 @@ Infer first, ask only if uncertain:
 - **PR body template**: See `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
 
 Fill template sections based on the diff analysis. Delete sections that don't apply.
+
+## First-class product parity (CLI)
+
+**Trigger:** the diff touches `packages/sdk/server/bare/plugins/**`, `packages/sdk/client/api/**`, a plugin `*-config.ts` schema, or a request/sampling schema used by serve, **and** the change is a user-facing inference capability (new modality, new request field, new load-time `modelConfig` field). Native addon-only diffs skip this.
+
+See `.cursor/rules/sdk/first-class-product-parity.mdc`.
+
+If triggered and `packages/cli` is unchanged:
+
+1. ASK: "CLI not updated. Add CLI in this PR, mark library-only in the body, or skip?"
+2. Add CLI: stop until the CLI diff is present. Library-only: one-line why in the body. Skip: reminder at the end.
 
 ## Output Format
 
@@ -170,7 +182,7 @@ gh pr view --repo tetherto/qvac BRANCH --web
 
 When triggered, prompt the user to run `qv-sdk-lockstep-sync` so the pod stays aligned in the same commit/PR: `@qvac/sdk` stamped to the inference anchor, and `tetherto-qvac-sdk` (generated `SDK_VERSION` / `_generated/`). Letting them drift creates work for the next `release-*` cut.
 
-### Steps (after Step 7 of Workflow above)
+### Steps (after Step 8 of Workflow above)
 
 1. Detect the trigger condition by inspecting the diff:
    - `git diff <base>...<head-remote>/<branch> -- packages/inference/package.json packages/sdk/package.json` (or vs local `HEAD`) shows changes
@@ -248,6 +260,7 @@ Before outputting the PR description, verify:
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
+- [ ] If the diff is a user-facing SDK capability, CLI was updated in this PR, the body says library-only, or the skip reminder was emitted
 - [ ] If diff touches the `version` of inference / sdk (or sdk's deps), `qv-sdk-lockstep-sync` ran (or `--no-sync` was set with a reminder emitted), and sdk-python checks pass
 - [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
@@ -258,6 +271,7 @@ Before outputting the PR description, verify:
 ## References
 
 - SDK pod packages: `.cursor/rules/sdk/sdk-pod-packages.mdc`
+- First-class product parity: `.cursor/rules/sdk/first-class-product-parity.mdc`
 - PR template: `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
 - Format rules: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - Backmerge skill: `.cursor/skills/qv-sdk-backmerge/SKILL.md`
