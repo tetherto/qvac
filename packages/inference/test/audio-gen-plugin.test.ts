@@ -167,6 +167,7 @@ test('audioGen plugin operation yields indeterminate LM progress', async (t) => 
     done: false
   })
   t.is((await stream.next()).value?.done, true)
+  t.ok((await stream.next()).done, 'the stream is exhausted, releasing the request')
 })
 
 test('audioGen terminal diagnostics report a GPU fallback reason, or omit it', async (t) => {

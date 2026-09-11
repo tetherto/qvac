@@ -1,4 +1,5 @@
 import test from 'brittle'
+import os from 'bare-os'
 import { z } from 'zod'
 import { nativeResourceCollectorDependencies } from '@/resources/native'
 import {
@@ -24,6 +25,18 @@ test('collects CPU and system memory in Bare', (t) => {
   t.is(sample.cpu.status, 'supported')
   t.is(sample.memory.usedBytes.status, 'supported')
   t.is(sample.memory.totalBytes.status, 'supported')
+
+  destroyResourceCollector()
+})
+
+test('reports the per-process allowance where the platform states one', (t) => {
+  destroyResourceCollector()
+  const collector = initializeResourceCollector(nativeResourceCollectorDependencies)
+
+  const memory = collector.sample().memory
+
+  t.is(memory.processUsedBytes.status, 'supported')
+  t.is(memory.processAvailableBytes.status, os.platform() === 'ios' ? 'supported' : 'unavailable')
 
   destroyResourceCollector()
 })
