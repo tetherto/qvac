@@ -52,7 +52,7 @@ jobs:
       # QVAC-23763: build CUDA beside Vulkan and HIP. The arm64 job first builds
       # the CUDA 13 server module, then adds the CUDA 12 Jetson module.
       include-cuda: true
-      include-cuda-windows: true
+      include-cuda-win32: true
       include-cuda-arm64: true
       include-cuda-arm64-jetson: true
     secrets: inherit

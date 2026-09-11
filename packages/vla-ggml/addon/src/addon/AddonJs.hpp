@@ -333,7 +333,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   if (backendRequired && backendOverride.empty()) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
-        "backendRequired is set but `backend` names no GPU family; it makes a "
+        "vla_backend_selection: backendRequired is set but `backend` names no "
+        "GPU family; it makes a "
         "backend priority list binding and has no meaning without one.");
   }
 

@@ -117,7 +117,14 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        c.offloadToCpu = parseBool(v, "offload_to_cpu");
      }},
     {"backend",
-     [](SdCtxConfig& c, const std::string& v) { c.backendSpec = v; }},
+     [](SdCtxConfig& c, const std::string& v) {
+       if (v.find('=') != std::string::npos) {
+         c.backendSpec = v;
+         return;
+       }
+       sd_backend_selection::parseBackendOverride(v);
+       c.backend = v;
+     }},
     {"params_backend",
      [](SdCtxConfig& c, const std::string& v) { c.paramsBackendSpec = v; }},
     {"max_vram",
@@ -127,11 +134,6 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        c.streamLayers = parseBool(v, "stream_layers");
      }},
     {"device", [](SdCtxConfig& c, const std::string& v) { c.device = v; }},
-    {"backend",
-     [](SdCtxConfig& c, const std::string& v) {
-       sd_backend_selection::parseBackendOverride(v);
-       c.backend = v;
-     }},
     {"clip_on_cpu",
      [](SdCtxConfig& c, const std::string& v) {
        c.keepClipOnCpu = parseBool(v, "clip_on_cpu");

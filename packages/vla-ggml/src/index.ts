@@ -162,6 +162,7 @@ const NATIVE_ERR_MARKERS = Object.freeze({
   // createInstance before any weight I/O, so it is a config error, not a
   // weights failure. QVAC-23763.
   badBackend: "backend: ",
+  backendSelection: "vla_backend_selection:",
 });
 
 // Map a native throw on the load and setEmbodiment paths onto a public error
@@ -177,7 +178,8 @@ function classifyNativeLoadError(err: Error) {
   if (
     message.includes(NATIVE_ERR_MARKERS.resolve) ||
     message.includes(NATIVE_ERR_MARKERS.archMismatch) ||
-    message.includes(NATIVE_ERR_MARKERS.badBackend)
+    message.includes(NATIVE_ERR_MARKERS.badBackend) ||
+    message.includes(NATIVE_ERR_MARKERS.backendSelection)
   ) {
     return ERR_CODES.INVALID_CONFIG;
   }
