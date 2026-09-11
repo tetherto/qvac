@@ -1,11 +1,11 @@
-name: On Merge vcpkg Cache (LLM)
+name: On Merge vcpkg Cache (Model Fit)
 
-# cpp-tests-llm.yml only writes its vcpkg cache on a trusted event, and its
+# cpp-tests-model-fit.yml only writes its vcpkg cache on a trusted event, and its
 # only other caller is pull_request_target -- so without this, nothing populates
 # the cache and every PR leg stays cold. Paths mirror the cache key's inputs; the
 # cron recovers from eviction.
 #
-# This dispatches cpp-tests-llm.yml rather than calling it with `uses:`. A
+# This dispatches cpp-tests-model-fit.yml rather than calling it with `uses:`. A
 # `uses:` call fails at startup with no jobs and no error text, because the
 # callee's test job declares `environment: release` and the release environment
 # has custom_branch_policies with no policies defined -- which blocks a job in a
@@ -21,17 +21,17 @@ on:
     branches:
       - main
     paths:
-      - "packages/llm-llamacpp/vcpkg.json"
-      - "packages/llm-llamacpp/vcpkg-configuration.json"
+      - "packages/model-fit/vcpkg.json"
+      - "packages/model-fit/vcpkg-configuration.json"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
   schedule:
-    - cron: "17 4 * * 1"
+    - cron: "47 5 * * 1"
   workflow_dispatch:
 
 # Never cancel: a cancelled dispatch leaves the cache unrefreshed.
 concurrency:
-  group: on-merge-vcpkg-cache-llm-${{ github.ref }}
+  group: on-merge-vcpkg-cache-model-fit-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -43,15 +43,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Dispatch cpp-tests-llm
+      - name: Dispatch cpp-tests-model-fit
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          gh workflow run "cpp-tests-llm.yml" \
+          gh workflow run "cpp-tests-model-fit.yml" \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$TARGET_REF" \
-            -f "workdir=packages/llm-llamacpp"
-          echo "dispatched cpp-tests-llm.yml on $TARGET_REF"
+            -f "workdir=packages/model-fit"
+          echo "dispatched cpp-tests-model-fit.yml on $TARGET_REF"

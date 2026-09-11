@@ -1995,3 +1995,41 @@ test('release policy: no workflow cuts a GitHub Release outside the SDK surface'
   }
   assert.deepEqual(offenders, [])
 })
+
+// A cpp-tests workflow runs PR-head code and is reachable from a fork PR once
+// fork-ci is approved, so a cache WRITE (actions/cache, as opposed to
+// actions/cache/restore) must be gated on trusted events only. The split is easy
+// to undo by accident -- the two steps are near-identical and differ by four
+// lines -- so pin it here. See .cursor/rules/devops/github-actions.mdc:82.
+const TRUSTED_CACHE_EVENTS = ['push', 'workflow_dispatch', 'merge_group', 'schedule']
+
+// Known-ungated, tracked on QVAC-24711. Both write a ccache/models cache with no
+// event gate at all; neither has a vcpkg cache step yet, so they were out of
+// scope for QVAC-24711's first pass. Remove each entry as it is fixed -- this
+// list should only ever shrink.
+const TRUSTED_CACHE_EXEMPT = new Set([
+  '.github/workflows/cpp-test-coverage-asr-ggml.yml',
+  '.github/workflows/cpp-test-coverage-tts-ggml.yml',
+])
+
+test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
+  const offenders = []
+  for (const path of workflowPaths()) {
+    if (!/\/cpp-tests?-/.test(path)) continue
+    if (TRUSTED_CACHE_EXEMPT.has(path)) continue
+    const code = withoutComments(read(path))
+    // Each `uses: actions/cache@` step (not .../restore@) and the `if:` block
+    // that precedes it inside the same step.
+    const steps = code.split(/\n      - /)
+    for (const step of steps) {
+      if (!/uses: actions\/cache@/.test(step)) continue
+      if (/uses: actions\/cache\/restore@/.test(step)) continue
+      for (const event of TRUSTED_CACHE_EVENTS) {
+        if (!step.includes(`github.event_name == '${event}'`)) {
+          offenders.push(`${path}: a cache write step does not gate on ${event}`)
+        }
+      }
+    }
+  }
+  assert.deepEqual(offenders, [])
+})
