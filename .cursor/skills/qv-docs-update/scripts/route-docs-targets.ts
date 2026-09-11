@@ -65,6 +65,10 @@ interface Unrouted {
   bucket: string;
   status: string;
   reason: string;
+  /** The symbol this gap is about, set only by R2. Its presence means the
+   *  entry is scoped to one symbol rather than to the whole file, which is
+   *  what keeps it out of the path-keyed suppression below. */
+  symbol?: string;
   /** Set when the source is a new public symbol with no page — the
    *  NEW_CAPABILITY_PAGE signal. */
   newSymbol?: string;
@@ -520,6 +524,7 @@ function runR2(pages: Page[], files: ChangedFile[]) {
         source: file.path,
         bucket: file.bucket,
         status: file.status,
+        symbol,
         newSymbol: isNew && isExported ? symbol : undefined,
         reason:
           isNew && isExported
@@ -841,8 +846,19 @@ function main() {
   // case. Reporting both would make Phase 4 ask which page covers a topic the
   // run just routed. A route is an answer; unrouted is the absence of one, so
   // the candidate wins.
+  //
+  // The path alone is the wrong key for the `api` bucket, though: one module
+  // carries many symbols with independent outcomes, so a linked `ragSearch`
+  // would suppress a brand-new `ragRerank` that no page links — the silent gap
+  // this skill exists to catch. An entry carrying a `symbol` is already proof
+  // scoped to that symbol (R2 pushes it only after finding zero pages for the
+  // anchor, and no other router documents a symbol), so nothing can resolve it
+  // later and it is never suppressed. The path key still holds for the
+  // file-scoped entries from R1, R3 and R4, which is what it was added for.
   const resolvedSources = new Set(candidates.map((c) => c.source));
-  const stillUnrouted = unrouted.filter((u) => !resolvedSources.has(u.source));
+  const stillUnrouted = unrouted.filter(
+    (u) => u.symbol !== undefined || !resolvedSources.has(u.source),
+  );
 
   // Group by page: the unit a reviewer opens.
   const byPage = new Map<string, Candidate[]>();
