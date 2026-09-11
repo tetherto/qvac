@@ -294,12 +294,6 @@ SplitDeviceSelection selectSplitDevices(
       // llm, embed and model-fit all use this pre-10549 first-iGPU rule, so
       // they agree with each other and with ocr-ggml and vla-ggml, which
       // resolve to a single device without building a device list at all.
-      // That narrows llm's previous tensor-split list, which kept every iGPU
-      // deduped by device_id and was closer to 10549's spirit. The narrowing
-      // is deliberate: one rule across the four packages beat three packages
-      // each approximating fabric differently. It costs nothing today, being
-      // unobservable for the reason above, and revisiting it belongs with a
-      // deliberate 10549 decision across the fleet.
       if (integrated.empty()) {
         integrated.push_back(selected);
       }
@@ -320,11 +314,8 @@ SplitDeviceSelection selectSplitDevices(
   return result;
 }
 
-// Tokenize the way fabric's --tensor-split handler does: it splits on the
-// regex [,/]+, so runs of delimiters collapse and '1,,2' is two shares. A
-// plain getline split kept the empty field, which shifted every later share
-// one device to the right and could emit a leading empty token that fabric's
-// std::stof then throws on.
+// Tokenizes like fabric's --tensor-split handler (regex [,/]+), collapsing
+// delimiter runs and dropping empty fields — see remapTensorSplit for why.
 std::vector<std::string> splitTensorShares(const std::string& value) {
   auto trim = [](const std::string& token) -> std::string {
     auto start =
@@ -695,22 +686,17 @@ bool isSupportedGpuOrdinal(
   return selected.handle != nullptr && isEligibleGpu(selected, isEmbedding);
 }
 
-bool applyBackendDeviceAllowlist(
+void applyBackendDeviceAllowlist(
     llama_model_params& params, std::vector<ggml_backend_dev_t>& storage,
-    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
+    const std::vector<BackendDevice>& devices,
     std::optional<size_t> mainGpuIndex) {
-  storage = eligibleBackendDeviceHandles(devices, loadKind);
   params.devices = storage.data();
   if (!mainGpuIndex.has_value()) {
-    return true;
-  }
-  if (!isSupportedGpuOrdinal(devices, loadKind, mainGpuIndex.value())) {
-    return false;
+    return;
   }
   storage = {devices[mainGpuIndex.value()].handle, nullptr};
   params.devices = storage.data();
   params.main_gpu = 0;
-  return true;
 }
 
 ModelTraits readModelTraits(const std::string& modelPath) {

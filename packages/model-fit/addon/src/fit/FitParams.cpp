@@ -393,14 +393,9 @@ FitResult runFit(const FitRequest& req) {
     mparams.devices = eligibleDevices.data();
     mparams.main_gpu = -1;
   } else {
-    // `selectedMainGpu` was validated against the same allowlist above, so the
-    // apply cannot fail.
-    static_cast<void>(applyBackendDeviceAllowlist(
-        mparams,
-        eligibleDevices,
-        discoveredDevices,
-        LlamaLoadKind::Completion,
-        selectedMainGpu));
+    // `selectedMainGpu` was validated against the same allowlist above.
+    applyBackendDeviceAllowlist(
+        mparams, eligibleDevices, discoveredDevices, selectedMainGpu);
   }
 
   // Writable scratch buffers the fit API requires. Sizes are dictated by the

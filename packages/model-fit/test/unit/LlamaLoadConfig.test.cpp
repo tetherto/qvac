@@ -72,13 +72,9 @@ bool isPinnedGpu(const common_params& params, const BackendDevice& expected) {
          params.devices.back() == nullptr && params.main_gpu == 0;
 }
 
-// Checks a two-device `tensor-split` positionally. A malformed value never
-// arrives as an unsupported result: fabric runs `std::stof` per field, and an
-// empty one escapes its handler as `std::invalid_argument` that can terminate
-// the process instead of unwinding ("stof: no conversion", observed while
-// verifying these cases). That is the whole reason the value has to be
-// sanitized before fabric parses it, so these cases assert on a clean parse
-// rather than trying to catch a throw.
+// Checks a two-device `tensor-split` positionally. These cases assert on a
+// clean parse rather than catching a throw — see remapTensorSplit in
+// LlamaLoadConfig.cpp for why a malformed value cannot be caught here.
 bool splitsAcross(
     const std::string& tensorSplit, const std::vector<BackendDevice>& devices,
     float first, float second) {
@@ -865,31 +861,35 @@ int main() {
             model_fit::LlamaLoadKind::Completion,
             4),
         "main-gpu past the registry must be rejected");
+    // The seam trusts the index; rejection is the caller's job and is asserted
+    // through isSupportedGpuOrdinal above.
     llama_model_params fitParams = llama_model_default_params();
-    std::vector<ggml_backend_dev_t> fitDeviceStorage;
-    const bool applied = model_fit::applyBackendDeviceAllowlist(
-        fitParams,
-        fitDeviceStorage,
-        {rocm, vulkan, vulkan1, cpu()},
-        model_fit::LlamaLoadKind::Completion,
-        1);
+    std::vector<ggml_backend_dev_t> fitDeviceStorage =
+        model_fit::eligibleBackendDeviceHandles(
+            {rocm, vulkan, vulkan1, cpu()},
+            model_fit::LlamaLoadKind::Completion);
+    model_fit::applyBackendDeviceAllowlist(
+        fitParams, fitDeviceStorage, {rocm, vulkan, vulkan1, cpu()}, 1);
     expect(
-        applied && fitParams.devices == fitDeviceStorage.data() &&
+        fitParams.devices == fitDeviceStorage.data() &&
             fitParams.devices[0] == vulkan.handle &&
             fitParams.devices[1] == nullptr && fitParams.main_gpu == 0,
         "generic common_fit_params seam must isolate the supported raw "
         "main-gpu target");
-    llama_model_params excludedFitParams = llama_model_default_params();
-    std::vector<ggml_backend_dev_t> excludedFitStorage;
-    expect(
-        !model_fit::applyBackendDeviceAllowlist(
-            excludedFitParams,
-            excludedFitStorage,
+    llama_model_params splitFitParams = llama_model_default_params();
+    std::vector<ggml_backend_dev_t> splitFitStorage =
+        model_fit::eligibleBackendDeviceHandles(
             {rocm, vulkan, vulkan1, cpu()},
-            model_fit::LlamaLoadKind::Completion,
-            0),
-        "generic common_fit_params seam must reject an unsupported raw "
-        "main-gpu target");
+            model_fit::LlamaLoadKind::Completion);
+    model_fit::applyBackendDeviceAllowlist(
+        splitFitParams, splitFitStorage, {rocm, vulkan, vulkan1, cpu()});
+    expect(
+        splitFitParams.devices == splitFitStorage.data() &&
+            splitFitParams.devices[0] == vulkan.handle &&
+            splitFitParams.devices[1] == vulkan1.handle &&
+            splitFitParams.devices[2] == nullptr,
+        "generic common_fit_params seam without a target must pin the whole "
+        "eligible list");
 
     const BackendDevice mtlRegistry = device(
         "Apple GPU", "Apple M3", BackendDeviceType::IntegratedGpu, 48, "MTL");
