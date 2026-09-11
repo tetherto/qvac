@@ -53,8 +53,20 @@ TextLlmContext::TextLlmContext(
       compactor_(rollbackState_) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
+  // ~TextLlmContext's body is what normally runs teardownSpeculative(), and a
+  // destructor body never runs for an object whose constructor threw. Without
+  // this guard, a throw anywhere below -- the EOS/grp_attn validation later in
+  // initializeCommonState(), or thread-pool creation -- unwinds by destroying
+  // the derived members first, so `llamaInit_` frees the model and target
+  // context, and only then does ~LlmContext free the base-owned `ctxDraft_` /
+  // `spec_` that borrow them. Tearing the speculative state down here keeps
+  // the "draft dies before its model" ordering on the unwind path too.
+  ScopeGuard specTeardownGuard(
+      [this]() noexcept { teardownSpeculative(); },
+      "TextLlmContext MTP teardown on constructor unwind");
   initializeCommonState();
   initializeOwnedThreadpools();
+  specTeardownGuard.dismiss();
 }
 
 TextLlmContext::~TextLlmContext() { teardownSpeculative(); }
@@ -201,7 +213,24 @@ void TextLlmContext::initializeCommonState() {
         "[TextLlm] spec-type=draft-mtp is ignored under continuous batching "
         "(n_parallel > 1); running non-speculatively\n");
   }
-  const bool wantMtpDraft = specTypeIsMtp && params_.n_parallel <= 1;
+  // A verify batch is `id_last` plus at least one draft token, so MTP needs
+  // room for two tokens in a single decode. At `n_batch == 1` two separate
+  // sites trip `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` in
+  // llama-context.cpp: the `common_context_can_seq_rm` probe below, which
+  // evals exactly 2 tokens, and later the verify batch itself — the
+  // `batchCap > 1` guard in `runSpeculativeGeneration` does not fire at 1, so
+  // it leaves `nMax` unclamped. GGML_ASSERT aborts the process rather than
+  // throwing, so the `catch` below cannot turn either into a load error.
+  // Refuse the combination up front, as with continuous batching.
+  const bool mtpBatchTooSmall = specTypeIsMtp && params_.n_batch < 2;
+  if (mtpBatchTooSmall) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[TextLlm] spec-type=draft-mtp requires batch-size >= 2 (a verify "
+        "batch is id_last + >=1 draft token); running non-speculatively\n");
+  }
+  const bool wantMtpDraft =
+      specTypeIsMtp && params_.n_parallel <= 1 && !mtpBatchTooSmall;
   if (wantMtpDraft) {
     try {
       auto cparamsMtp = common_context_params_to_llama(params_);

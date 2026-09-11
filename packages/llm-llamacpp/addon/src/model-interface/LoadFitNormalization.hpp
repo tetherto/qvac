@@ -24,6 +24,17 @@ struct FinetuneConfigOverrides {
 
 namespace load_fit_normalization {
 
+/// Hard ceiling on the MTP draft length. Lives here rather than on
+/// `LlmContext` because it has to be enforced during normalization, before
+/// `common_init_from_params` builds the target context: fabric's
+/// `common_context_params_to_llama` sets `cparams.n_rs_seq` from
+/// `params.speculative.need_n_rs_seq()`, which returns the raw
+/// `speculative.draft.n_max` for MTP, and recurrent memory allocation scales
+/// with `1 + n_rs_seq`. A cap applied later, in the context constructor, runs
+/// after that allocation has already been sized from the unbounded value.
+/// `LlmContext::K_MAX_SPEC_DRAFT` aliases this so both agree by construction.
+inline constexpr int K_MAX_SPEC_DRAFT = 128;
+
 using ConfigMap = std::unordered_map<std::string, std::string>;
 
 struct CanonicalTensorBufferOverride {

@@ -49,7 +49,15 @@ MtmdLlmContext::MtmdLlmContext(
       compactor_(rollbackState_) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
+  // See TextLlmContext's constructor: ~MtmdLlmContext never runs if this
+  // constructor throws, so the base-owned draft context would outlive the
+  // derived `llamaInit_` that owns its model. Chat-template and vision
+  // validation in initializeCommonState() both throw after MTP setup.
+  ScopeGuard specTeardownGuard(
+      [this]() noexcept { teardownSpeculative(); },
+      "MtmdLlmContext MTP teardown on constructor unwind");
   initializeCommonState();
+  specTeardownGuard.dismiss();
 }
 
 MtmdLlmContext::~MtmdLlmContext() { teardownSpeculative(); }
@@ -116,7 +124,18 @@ void MtmdLlmContext::initializeCommonState() {
         "[MtmdLlm] spec-type=draft-mtp is ignored under continuous batching "
         "(n_parallel > 1); running non-speculatively\n");
   }
-  if (mtpDraftRequested_ && params_.n_parallel <= 1) {
+  // See TextLlmContext: at `n_batch == 1` both the `common_context_can_seq_rm`
+  // probe (2 tokens) and the verify batch trip
+  // `GGML_ASSERT(n_tokens_all <= cparams.n_batch)`, which aborts rather than
+  // throwing, so no handler can recover it. Refuse the combination up front.
+  const bool mtpBatchTooSmall = mtpDraftRequested_ && params_.n_batch < 2;
+  if (mtpBatchTooSmall) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[MtmdLlm] spec-type=draft-mtp requires batch-size >= 2 (a verify "
+        "batch is id_last + >=1 draft token); running non-speculatively\n");
+  }
+  if (mtpDraftRequested_ && params_.n_parallel <= 1 && !mtpBatchTooSmall) {
     initializeMtpDraftContext();
   }
 
@@ -1355,6 +1374,21 @@ void MtmdLlmContext::specRecoverReasoning(
       outputCallback(completeChars);
     }
   }
+  // Mirrors TextLlmContext::handleReasoningEOS: the substituted close tag has
+  // to reach fabric's reasoning-budget matcher, or it stays in COUNTING and
+  // `grammar_should_apply` keeps a lazy tool grammar disarmed for the rest of
+  // the request. Lazy *and* budget-sampler-built, which is what makes the
+  // grammar sampler provably not fed this token.
+  //
+  // Deliberately BEFORE the decode below, which throws on failure: the close
+  // tag has already been streamed to the caller by then, so on that path the
+  // caller would otherwise see a closed reasoning block while the matcher
+  // still believed it was inside one. The accept needs nothing from the
+  // decode.
+  if (params_.sampling.grammar_lazy &&
+      reasoningBudgetSamplerBuilt(params_.sampling)) {
+    common_sampler_accept(smpl_.get(), closeTok, true);
+  }
   common_batch_clear(*batch);
   common_batch_add(*batch, closeTok, current_.pos, {seqId_}, true);
   if (decodeAndSpecProcess(*batch) != 0) {
@@ -1780,7 +1814,12 @@ void MtmdLlmContext::resetState(bool resetStats) {
   // Reset sampler if available
   common_sampler_reset(smpl_.get());
 
-  if (specDisabledByMedia_ && mtpDraftRequested_ && params_.n_parallel <= 1) {
+  // `params_.n_batch >= 2` repeats the construction-time gate: this path
+  // re-creates the draft context after a media turn disabled it, and would
+  // otherwise re-run the 2-token `common_context_can_seq_rm` probe that
+  // aborts at n_batch == 1.
+  if (specDisabledByMedia_ && mtpDraftRequested_ && params_.n_parallel <= 1 &&
+      params_.n_batch >= 2) {
     initializeMtpDraftContext();
   }
 }

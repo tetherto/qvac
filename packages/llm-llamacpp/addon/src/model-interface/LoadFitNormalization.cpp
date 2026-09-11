@@ -1214,7 +1214,12 @@ NormalizedLoad normalizeLoadForFit(
       "--spec-draft-backend-sampling",
       "--no-spec-draft-backend-sampling",
       "--spec-draft-device",
-      "--spec-draft-ngl"};
+      "--spec-draft-ngl",
+      // Draft KV cache types. `benchmarks/performance/mtp-benchmark.js`
+      // documents and forwards both, and without them here the parser rejects
+      // the documented invocation as an invalid argument.
+      "--spec-draft-type-k",
+      "--spec-draft-type-v"};
   for (auto& opt : ctxArg.options) {
     // The CLI profile is needed to obtain fabric's speculative options, but
     // unrelated CLI-only options include local file readers and directory
@@ -1357,6 +1362,28 @@ NormalizedLoad normalizeLoadForFit(
         string_format(
             "%s: spec-draft-n-max must be at least 1\n",
             K_LEGACY_PARSER_NAME.data()));
+  }
+
+  // The upper cap has to bind HERE, not in the context constructor. Fabric's
+  // `common_context_params_to_llama` sets `cparams.n_rs_seq` from
+  // `params.speculative.need_n_rs_seq()`, which returns the raw
+  // `speculative.draft.n_max` whenever an MTP/EAGLE3/DFLASH/DSPARK draft type
+  // is requested, and recurrent memory allocation scales with `1 + n_rs_seq`.
+  // `common_init_from_params` builds the target context before any
+  // `LlmContext` exists, so a cap applied in the constructor runs after that
+  // sizing: `spec-draft-n-max=1000000` would request a million recurrent
+  // snapshots on a hybrid model first. Clamping rather than rejecting keeps
+  // the existing behaviour for the values fabric's own loop already bounds.
+  if (params.speculative.draft.n_max > K_MAX_SPEC_DRAFT) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "%s: spec-draft-n-max %d exceeds the supported maximum; clamping "
+            "to %d\n",
+            K_LEGACY_PARSER_NAME.data(),
+            params.speculative.draft.n_max,
+            K_MAX_SPEC_DRAFT));
+    params.speculative.draft.n_max = K_MAX_SPEC_DRAFT;
   }
 
   // QVAC-24253: auto-fit is disabled for tensor mode HERE, after the generic

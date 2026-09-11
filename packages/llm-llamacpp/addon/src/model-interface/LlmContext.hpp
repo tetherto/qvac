@@ -14,6 +14,7 @@
 #include "RenderOverrides.hpp"
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
+#include "model-interface/LoadFitNormalization.hpp"
 #include "common/chat.h"
 #include "common/sampling.h"
 #include "common/speculative.h"
@@ -607,7 +608,12 @@ protected:
   // `params.speculative.draft.n_max` to this at init so fabric's own draft loop
   // is bounded, and runSpeculativeGeneration reuses it to bound the
   // `specBatch(nMax + 1)` allocation and the `uint16_t` accepted-count cast.
-  static constexpr int K_MAX_SPEC_DRAFT = 128;
+  //
+  // Aliases the normalization-owned constant: the binding cap is applied there,
+  // before the target context is built, because `n_rs_seq` is sized from the
+  // raw value. These two must never disagree, so there is one definition.
+  static constexpr int K_MAX_SPEC_DRAFT =
+      load_fit_normalization::K_MAX_SPEC_DRAFT;
   // common_speculative_get_draft_params requires a non-null .prompt; the MTP
   // impl never reads its contents (only id_last/n_past/n_max).
   std::vector<llama_token> specPromptDummy_;
