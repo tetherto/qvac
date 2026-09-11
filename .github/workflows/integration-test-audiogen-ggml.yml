@@ -94,11 +94,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux GPU runners exercise the published Vulkan desktop backend.
+          # The linux-x64 prebuild bundles the CUDA and Vulkan backend modules
+          # and the engine prefers CUDA, so the GPU backend is decided by
+          # whether the CUDA module's cudart/cuBLAS DT_NEEDED entries resolve.
+          # cuda_libs points this row's test steps at the runner's CUDA
+          # toolkit (kept outside ldconfig), giving it end-to-end CUDA
+          # coverage; qvac-ubuntu2404-x64-gpu leaves the CUDA module
+          # unresolvable, so ggml skips it and that row keeps dedicated
+          # Vulkan coverage plus the fallback path itself.
           - os: ubuntu-22.04
             platform: linux
             arch: x64
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+            cuda_libs: /usr/local/cuda/lib64
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -172,10 +180,32 @@ jobs:
         if: ${{ inputs.prebuild_package }}
         working-directory: ${{ runner.temp }}/audiogen-ggml
         shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
-          npm pack ${{ inputs.prebuild_package }}
+          npm pack "$PREBUILD_PACKAGE"
           tar -xzf *.tgz
-          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
+          # meta tarball; split releases ship them in the per-host platform
+          # package under addon/prebuilds/.
+          if [ -d ./package/prebuilds ]; then
+            cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+          else
+            SPEC="$PREBUILD_PACKAGE"
+            REST="${SPEC#?}"
+            if [ "${REST#*@}" != "$REST" ]; then
+              VERSION="${SPEC##*@}"
+              NAME="${SPEC%@"$VERSION"}"
+            else
+              VERSION=""
+              NAME="$SPEC"
+            fi
+            HOST_SPEC="${NAME}-${{ matrix.platform }}-${{ matrix.arch }}${VERSION:+@$VERSION}"
+            rm -rf ./package ./*.tgz
+            npm pack "$HOST_SPEC"
+            tar -xzf *.tgz
+            cp -r ./package/addon/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+          fi
 
       - name: Rename prebuilds from tetherto_ to qvac_ prefix
         if: ${{ inputs.prebuild_package }}
@@ -244,7 +274,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '3600' || '1800' }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/audiogen-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          # matrix.cuda_libs additionally resolves the CUDA module's
+          # cudart/cuBLAS dependencies on the CUDA-lane runner.
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/audiogen-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.cuda_libs && format(':{0}', matrix.cuda_libs) || '' }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/audiogen-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       # Benchmark leg (run_rtf_benchmarks=true, set by

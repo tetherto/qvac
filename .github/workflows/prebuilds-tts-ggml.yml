@@ -42,4 +42,10 @@ jobs:
       linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
       setup-python-on-windows: true
       include-vulkan-sdk: true
+      # linux-x64 prebuilds ship the CUDA backend as a runtime-loaded module
+      # next to Vulkan and the CPU variants; hosts without the NVIDIA stack
+      # skip it at load time.
+      include-cuda: true
+      platform-cmake-defines: |
+        linux-x64: -D ENABLE_CUDA=ON
     secrets: inherit

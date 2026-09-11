@@ -297,7 +297,7 @@ forget, and a source of noise. Options to discuss with the team:
    the backmerge is a guaranteed no-op. Already the "preferred" path in
    [gitflow.md](gitflow.md); the cost is up-front coordination. Lowest tooling effort.
 2. **Automated backmerge bot.** Promote the existing
-   [`qv-sdk-backmerge`](../.cursor/skills/qv-sdk-backmerge/SKILL.md) skill logic into a
+   [`qv-sdk-backmerge`](../.agents/skills/qv-sdk-backmerge/SKILL.md) skill logic into a
    CI workflow that opens (or auto-merges, where safe) the `[skiplog]` backmerge PR on
    every release publish. Removes the manual step; cost is conflict-handling and the
    blast radius of an automated merge into `main`.
