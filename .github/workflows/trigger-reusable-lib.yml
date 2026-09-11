@@ -20,7 +20,6 @@ on:
       - "packages/diagnostics/**"
       - "packages/langdetect-text/**"
       - "packages/qvac-ci/**"
-      - ".github/workflows/trigger-reusable-lib.yml"
   workflow_dispatch:
     inputs:
       package:
@@ -34,11 +33,6 @@ on:
           - diagnostics
           - langdetect-text
           - qvac-ci
-      npm_tag:
-        description: "NPM dist-tag (default: latest). e.g. release-1.x"
-        required: false
-        default: ""
-        type: string
 
 permissions:
   contents: read
