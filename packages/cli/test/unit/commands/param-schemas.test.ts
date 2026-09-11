@@ -10,6 +10,24 @@ import {
 import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
+  it('exposes and validates H3 backend and memory controls from the SDK', () => {
+    const schema = configSchemaForAddon('diffusion')
+    assert.ok(schema)
+    const fields = paramFields(schema)
+    for (const name of ['backend', 'params_backend', 'max_vram', 'stream_layers']) {
+      const field = fields.find((field) => field.name === name)
+      assert.ok(field, `${name} is editable`)
+      assert.ok(field.description, `${name} is described`)
+    }
+    const maxVram = fields.find((field) => field.name === 'max_vram')!
+    const streamLayers = fields.find((field) => field.name === 'stream_layers')!
+    assert.equal(validateParam(maxVram, '0'), true)
+    assert.equal(validateParam(maxVram, 'cuda0=6,vulkan0=2'), true)
+    assert.equal(validateParam(streamLayers, 'false'), true)
+    assert.equal(coerceParam('false'), false)
+    assert.notEqual(validateParam(streamLayers, 'yes'), true)
+  })
+
   it('resolves a config schema for every built-in addon', () => {
     // Addon strings are model-type aliases; the SDK resolves each to its schema,
     // so a new addon is documented without wiring anything here.
