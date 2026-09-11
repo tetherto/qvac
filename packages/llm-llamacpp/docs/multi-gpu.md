@@ -61,6 +61,12 @@ nothing to pipeline even when the feature is on.
 To confirm it actually engaged, set `verbosity: '3'` and watch the native log
 for `pipeline parallelism enabled`. Do not infer it from throughput alone.
 
+For non-RDMA or higher-latency links, start with `split-mode: 'layer'` plus
+continuous batching (`parallel >= 2`). Tensor parallelism communicates far more
+often and is much more sensitive to link speed; layer/pipeline mode with
+multiple in-flight requests is usually the better first configuration on
+USB/TCP, Thunderbolt networking, or standard Ethernet.
+
 ### Why `'row'` is never effective
 
 `'row'` requires a "split buffer" that slices each weight tensor across GPUs, exposed by a backend as `ggml_backend_split_buffer_type`. **Only the SYCL backend provides it** — CUDA dropped split buffers and moved tensor parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR`. Vulkan, Metal and OpenCL never provided it.
@@ -150,7 +156,23 @@ const model = new LlmLlamacpp({
 })
 ```
 
-On each worker machine:
+On each worker machine, prefer the managed `@qvac/ggml-rpc-server` package so
+the binary version, readiness check, logs, and shutdown are owned by QVAC:
+
+```js
+const { startRpcServer } = require('@qvac/ggml-rpc-server')
+
+const server = await startRpcServer({
+  host: '10.0.0.1',
+  port: 50052,
+  device: 'MTL0',
+  allowNonLoopbackHost: true
+})
+
+console.log(server.url)
+```
+
+The raw native tool is still useful for local debugging:
 
 ```bash
 ggml-rpc-server -H 0.0.0.0 -p 50052 -d MTL0   # -d takes a ggml device name
@@ -186,11 +208,19 @@ CPU. Set `devices` in that case (e.g. `'RPC0,RPC1'`).
   loads. An unreachable one fails the load naming that endpoint rather than
   being skipped — connection attempts time out after ~5s.
 - **Unauthenticated.** The channel has no authentication or encryption. Use it
-  only on a trusted private network.
+  only on a trusted private network. The managed server defaults to loopback and
+  requires `allowNonLoopbackHost: true` before binding a LAN-reachable host.
 - **One server per pipeline stage.** A server handles one client connection
   serially, so devices behind the same server process are not pipelined against
   each other.
-- **Not supported on mobile.** Rejected at load on Android and iOS.
+- **Mobile clients require explicit RPC placement.** Android and iOS builds
+  still reject local multi-GPU-style config without `rpc-servers`, because a
+  phone is a single-GPU device. With `rpc-servers`, mobile clients must set
+  `devices` explicitly (`'RPC0'`, `'RPC0,RPC1'`, etc.) so the load cannot
+  silently fall back to the local mobile GPU; `main-gpu` remains unsupported
+  on that path. Mobile devices can also run the managed `@qvac/ggml-rpc-server`
+  TCP worker when that package is built for Android or iOS; keep those workers
+  on a controlled wired or trusted private transport.
 
 ### Verifying it actually distributed
 

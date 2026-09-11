@@ -718,3 +718,64 @@ TEST_F(
   }
   EXPECT_TRUE(registrations.empty());
 }
+
+TEST(MobileMultiDeviceConfigTest, AllowsRpcWithExplicitDevices) {
+  lfn::ConfigMap config{
+      {"rpc-servers", "127.0.0.1:50052,127.0.0.1:50053"},
+      {"devices", "RPC0,RPC1"},
+      {"tensor-split", "1,1"}};
+
+  EXPECT_NO_THROW(lfn::validateMobileMultiDeviceConfig(
+      config, LLAMA_SPLIT_MODE_LAYER));
+}
+
+TEST(MobileMultiDeviceConfigTest, RejectsRpcWithoutExplicitDevices) {
+  lfn::ConfigMap config{{"rpc-servers", "127.0.0.1:50052"}};
+
+  try {
+    lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_LAYER);
+    FAIL() << "mobile RPC without devices must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("requires an explicit"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("devices"));
+  }
+}
+
+TEST(MobileMultiDeviceConfigTest, RejectsDevicesWithoutRpc) {
+  lfn::ConfigMap config{{"devices", "RPC0"}};
+
+  try {
+    lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_NONE);
+    FAIL() << "mobile devices without rpc-servers must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("only supported on mobile"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("rpc-servers"));
+  }
+}
+
+TEST(MobileMultiDeviceConfigTest, RejectsLocalOnlySplitMode) {
+  lfn::ConfigMap config{{"tensor-split", "1,1"}};
+
+  try {
+    lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_LAYER);
+    FAIL() << "mobile local-only split config must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("without rpc-servers"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("single-GPU device"));
+  }
+}
+
+TEST(MobileMultiDeviceConfigTest, RejectsMainGpuWithRpc) {
+  lfn::ConfigMap config{
+      {"rpc-servers", "127.0.0.1:50052"},
+      {"devices", "RPC0"},
+      {"main-gpu", "0"}};
+
+  try {
+    lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_LAYER);
+    FAIL() << "mobile RPC with main-gpu must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("main-gpu"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("set devices"));
+  }
+}

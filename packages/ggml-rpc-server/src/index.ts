@@ -11,8 +11,20 @@ export const DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS: number = 2000
 export const RPC_SERVER_HEALTH_POLL_INTERVAL_MS: number = 100
 
 const PREBUILD_MODULE_DIR = 'qvac__ggml-rpc-server'
-const SUPPORTED_PREBUILD_TARGETS = new Set(['darwin-arm64', 'linux-x64', 'linux-arm64'])
+const SUPPORTED_PREBUILD_TARGETS = new Set([
+  'android-arm',
+  'android-arm64',
+  'android-ia32',
+  'android-x64',
+  'darwin-arm64',
+  'ios-arm64',
+  'ios-arm64-simulator',
+  'ios-x64-simulator',
+  'linux-x64',
+  'linux-arm64',
+])
 const RDMA_SUPPORT_MARKER = 'RDMA auto-negotiate enabled'
+const TRUSTED_LAN_WARNING_CODE = 'QVAC_GGML_RPC_SERVER_TRUSTED_LAN'
 
 export class RpcServerBinaryNotFoundError extends Error {
   constructor(path: string) {
@@ -133,6 +145,16 @@ function prebuildTarget(runtimePlatform = platform, runtimeArch = arch): string 
     case 'win32':
       if (runtimeArch === 'x64') target = 'win32-x64'
       break
+    case 'android':
+      if (runtimeArch === 'arm') target = 'android-arm'
+      if (runtimeArch === 'arm64') target = 'android-arm64'
+      if (runtimeArch === 'ia32') target = 'android-ia32'
+      if (runtimeArch === 'x64') target = 'android-x64'
+      break
+    case 'ios':
+      if (runtimeArch === 'arm64') target = 'ios-arm64'
+      if (runtimeArch === 'x64') target = 'ios-x64-simulator'
+      break
   }
   if (target !== undefined && SUPPORTED_PREBUILD_TARGETS.has(target)) {
     return target
@@ -214,13 +236,30 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function isLoopbackHost(host: string): boolean {
+  if (host === 'localhost' || host === '::1') return true
+  return isIP(host) === 4 && host.startsWith('127.')
+}
+
 function assertLoopbackHost(host: string, allowNonLoopbackHost = false): void {
   if (allowNonLoopbackHost) {
     return
   }
-  if (host === 'localhost' || host === '::1') return
-  if (isIP(host) === 4 && host.startsWith('127.')) return
+  if (isLoopbackHost(host)) return
   throw new RpcServerNonLoopbackHostError(host)
+}
+
+function warnForTrustedLanHost(host: string, allowNonLoopbackHost = false): void {
+  if (!allowNonLoopbackHost || isLoopbackHost(host)) {
+    return
+  }
+  process.emitWarning(
+    `ggml-rpc-server is binding to non-loopback host ${host}. The ggml RPC transport has no authentication or encryption; use this only on a trusted private network with external access controls.`,
+    {
+      code: TRUSTED_LAN_WARNING_CODE,
+      type: 'Warning'
+    }
+  )
 }
 
 function attachOutputTail(child: ChildProcess, maxChars = 65536): () => string {
@@ -355,6 +394,7 @@ function attachExitCleanup(child: ChildProcess): () => void {
 export async function startRpcServer(options: StartRpcServerOptions = {}): Promise<RpcServerProcess> {
   const host = options.host ?? DEFAULT_RPC_SERVER_HOST
   assertLoopbackHost(host, options.allowNonLoopbackHost)
+  warnForTrustedLanHost(host, options.allowNonLoopbackHost)
   const port =
     options.port ??
     (await allocateFreePort(host, {

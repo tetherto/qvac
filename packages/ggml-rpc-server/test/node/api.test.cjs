@@ -54,6 +54,18 @@ setInterval(() => {}, 1000)
   };
 }
 
+function waitForWarning(code) {
+  return new Promise((resolve) => {
+    function onWarning(warning) {
+      if (warning && warning.code === code) {
+        process.removeListener("warning", onWarning);
+        resolve(warning);
+      }
+    }
+    process.on("warning", onWarning);
+  });
+}
+
 test("exports conservative lifecycle defaults", () => {
   assert.equal(DEFAULT_RPC_SERVER_HOST, "127.0.0.1");
   assert.equal(DEFAULT_RPC_SERVER_START_TIMEOUT_MS, 10000);
@@ -83,6 +95,25 @@ test("allows non-loopback hosts only with explicit opt-in", async () => {
 
   assert.equal(typeof port, "number");
   assert.ok(port > 0);
+});
+
+test("warns when starting on a non-loopback host", async () => {
+  const fixture = createFakeRpcServerBinary();
+  const warningPromise = waitForWarning("QVAC_GGML_RPC_SERVER_TRUSTED_LAN");
+
+  try {
+    const server = await startRpcServer({
+      binaryPath: fixture.binaryPath,
+      host: "0.0.0.0",
+      allowNonLoopbackHost: true,
+      startTimeoutMs: 5000,
+    });
+    const warning = await warningPromise;
+    assert.match(warning.message, /no authentication or encryption/);
+    await server.stop();
+  } finally {
+    fixture.cleanup();
+  }
 });
 
 test("starts and stops a managed server process", async () => {

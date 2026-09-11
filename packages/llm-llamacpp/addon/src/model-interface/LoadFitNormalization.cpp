@@ -664,6 +664,51 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
           [](const std::string& servers) { ::registerRpcDevices(servers); }};
 }
 
+void validateMobileMultiDeviceConfig(
+    const ConfigMap& configFilemap, llama_split_mode splitMode) {
+  const bool hasRpcConfig = configFilemap.count("rpc-servers") > 0 ||
+                            configFilemap.count("rpc_servers") > 0 ||
+                            configFilemap.count("rpc") > 0;
+  const bool hasExplicitDeviceList = configFilemap.count("devices") > 0 ||
+                                     configFilemap.count("device-list") > 0;
+  const bool hasMainGpu = configFilemap.count("main-gpu") > 0 ||
+                          configFilemap.count("main_gpu") > 0;
+  const bool hasTensorSplit = configFilemap.count("tensor-split") > 0 ||
+                              configFilemap.count("tensor_split") > 0;
+
+  if (hasRpcConfig) {
+    if (!hasExplicitDeviceList) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Distributed inference (rpc-servers) on mobile requires an explicit "
+          "devices list, e.g. 'RPC0' or 'RPC0,RPC1'.");
+    }
+    if (hasMainGpu) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "main-gpu is not supported with rpc-servers on mobile; set devices "
+          "explicitly instead.");
+    }
+    return;
+  }
+
+  if (splitMode != LLAMA_SPLIT_MODE_NONE || hasMainGpu || hasTensorSplit) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Multi-GPU parameters (split-mode, main-gpu, tensor-split) are not "
+        "supported on mobile without rpc-servers (single-GPU device).");
+  }
+  // An explicit device list overrides the mobile backend selection and the
+  // tuning derived from it. Keep it reserved for RPC placement, where the
+  // caller must name the remote devices explicitly.
+  if (hasExplicitDeviceList) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Explicit device lists (devices) are only supported on mobile when "
+        "rpc-servers is set.");
+  }
+}
+
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,
     const ModelMetaData& metadata,
@@ -833,38 +878,7 @@ NormalizedLoad normalizeLoadForFit(
 
 #if defined(__ANDROID__) ||                                                    \
     (defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS)
-  if (splitMode != LLAMA_SPLIT_MODE_NONE ||
-      configFilemap.count("main-gpu") > 0 ||
-      configFilemap.count("main_gpu") > 0 ||
-      configFilemap.count("tensor-split") > 0 ||
-      configFilemap.count("tensor_split") > 0) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        "Multi-GPU parameters (split-mode, main-gpu, tensor-split) are not "
-        "supported on mobile (single-GPU device).");
-  }
-  // Reject RPC here rather than letting it through: registration opens
-  // blocking sockets during model load, and the path is untested on mobile.
-  // Failing loudly beats a load that stalls on an unreachable peer.
-  //
-  // 'rpc' is llama.cpp's own spelling. It is matched here too, otherwise the
-  // passthrough loop forwards it as --rpc and qvac-fabric registers the
-  // endpoints itself, bypassing this guard entirely.
-  if (configFilemap.count("rpc-servers") > 0 ||
-      configFilemap.count("rpc_servers") > 0 ||
-      configFilemap.count("rpc") > 0) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        "Distributed inference (rpc-servers) is not supported on mobile.");
-  }
-  // Same reasoning as the multi-GPU keys: an explicit device list overrides
-  // the mobile backend selection and the tuning derived from it.
-  if (configFilemap.count("devices") > 0 ||
-      configFilemap.count("device-list") > 0) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        "Explicit device lists (devices) are not supported on mobile.");
-  }
+  validateMobileMultiDeviceConfig(configFilemap, splitMode);
 #endif
 
   // Set when this load registered RPC devices, so the CPU-fallback branch
@@ -889,7 +903,8 @@ NormalizedLoad normalizeLoadForFit(
   // device:'cpu' can reject RPC before opening sockets, but *before*
   // resolveBackend() below, because RPC devices only exist in the ggml registry
   // once they are added here. It must also run after the mobile guard above,
-  // which rejects the multi-device config keys outright.
+  // which rejects local-only multi-device config while allowing explicit RPC
+  // placement.
   //
   // The key is erased on use: the passthrough loop further down forwards every
   // remaining key to llama.cpp as '--<key> <value>', and a surviving 'rpc' key

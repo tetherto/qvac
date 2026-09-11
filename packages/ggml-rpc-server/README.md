@@ -7,6 +7,9 @@ revision as the LLM client stack. The JavaScript API starts, waits for, logs,
 and stops the server process so applications do not need to invoke the CLI
 manually.
 
+Prebuilds are supported for desktop Linux/macOS and for Android/iOS mobile
+targets. RDMA remains Linux-only; mobile builds use TCP.
+
 ```js
 const { startRpcServer } = require('@qvac/ggml-rpc-server')
 
