@@ -353,11 +353,23 @@ export async function* completion(
     logger?: Logger
   }
 ): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
-  const { history, modelId, kvCache, tools, generationParams, responseFormat } = params
+  const {
+    history: requestHistory,
+    modelId,
+    kvCache,
+    tools,
+    generationParams,
+    responseFormat
+  } = params
   const { signal, scope } = opts
   const requestLogger = opts.logger ?? logger
 
   const modelConfig = getModelConfig(modelId)
+  const configuredSystemPrompt = (modelConfig as { system_prompt?: string }).system_prompt
+  const history =
+    configuredSystemPrompt && extractSystemPrompt(requestHistory) === null
+      ? [{ role: 'system' as const, content: configuredSystemPrompt }, ...requestHistory]
+      : requestHistory
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
   const toolsActive = !!tools?.length && toolsEnabled
   const dialect =
@@ -479,10 +491,6 @@ export async function* completion(
   let preserveCacheOnUnwind = false
   scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
-  // A committed boundary is the only thing that proves the cache holds a
-  // rendered prefix this payload can leave out. Without one the full history
-  // goes, so a cold turn sends the system message the same way the
-  // no-kv-cache path does.
   let payload: ReturnType<typeof prepareMessagesForCache>
   try {
     payload = prepareMessagesForCache(

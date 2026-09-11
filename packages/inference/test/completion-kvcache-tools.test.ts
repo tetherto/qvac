@@ -33,7 +33,7 @@ import { ModelType } from '@/schemas'
 type LooseHandler = (request: unknown) => AsyncGenerator<unknown, unknown, unknown>
 
 type RecordedCall = {
-  messages: { role?: string; type?: string; name?: string }[]
+  messages: { role?: string; type?: string; name?: string; content?: string }[]
   prefill: boolean
 }
 
@@ -719,4 +719,58 @@ test('completion: kv-cache tolerates a cached attachment vanishing from disk', a
     unregisterModel(modelId)
     clearRegistry()
   }
+})
+
+test('completion: kv-cache seeds the configured system prompt when the history omits one', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-sysprompt-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, {
+    tools: true,
+    system_prompt: 'Always answer with the single word BANANA.'
+  })
+
+  const complete = completer(modelId, 'sysprompt-regression-key')
+  await complete([user('What is the capital of France?')])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 1, 'the turn reached the model once')
+  const systemMessages = turnCalls[0]!.messages.filter((msg) => msg.role === 'system')
+  t.is(systemMessages.length, 1, 'the configured system prompt is sent with the turn')
+  t.is(
+    systemMessages[0]!.content,
+    'Always answer with the single word BANANA.',
+    'the configured instruction reaches the model'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: kv-cache keeps the caller system message over the configured one', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-sysprompt-override-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, {
+    tools: true,
+    system_prompt: 'Always answer with the single word BANANA.'
+  })
+
+  const complete = completer(modelId, 'sysprompt-override-key')
+  await complete([
+    { role: 'system', content: 'Answer in French.' },
+    user('What is the capital of France?')
+  ] as HistoryEntry[])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  const systemMessages = turnCalls[0]!.messages.filter((msg) => msg.role === 'system')
+  t.is(systemMessages.length, 1, 'only one system message is sent')
+  t.is(systemMessages[0]!.content, 'Answer in French.', 'the caller system message wins')
+
+  unregisterModel(modelId)
+  clearRegistry()
 })
