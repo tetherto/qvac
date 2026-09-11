@@ -26,6 +26,10 @@ function disablesFlashAttention(architecture: string): boolean {
   return architecture.startsWith('bitnet')
 }
 
+// Shared with the computed floor so a mixed set carries one weights assumption, not two.
+export const LLAMA_WEIGHTS_ASSUMPTION =
+  'weights are counted at full artifact size; llama.cpp maps them by default, so those pages are file-backed and evictable rather than anonymous RAM'
+
 /**
  * Estimates memory for a llama.cpp completion or embedding model from catalog
  * metadata alone.
@@ -63,9 +67,7 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   // The upper coefficient covers the allocator's copy-on-write and alignment
   // slack measured during calibration.
   const artifactBytes = profile.artifactBytes + extraArtifactBytes
-  assumptions.push(
-    'weights are counted at full artifact size; llama.cpp maps them by default, so those pages are file-backed and evictable rather than anonymous RAM'
-  )
+  assumptions.push(LLAMA_WEIGHTS_ASSUMPTION)
   if (extraArtifactBytes > 0) {
     assumptions.push('companion artifacts passed in `artifacts` are counted at full size')
   }

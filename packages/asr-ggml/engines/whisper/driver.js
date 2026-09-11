@@ -1,14 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WhisperDriver = void 0;
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-const path = require("bare-path");
 const whisper_1 = require("./whisper");
 const configChecker_1 = require("./configChecker");
 const error_1 = require("../../lib/error");
+const backends_1 = require("../../lib/backends");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
-const PREBUILDS_DIR = path.join(__dirname, "..", "..", "prebuilds");
 const MS_PER_SECOND = 1000;
 const DEFAULT_BYTE_FORMAT = "s16le";
 /** The native wire format is pinned; all input is normalized to f32. */
@@ -296,7 +294,7 @@ class WhisperDriver {
             audio_format: WIRE_AUDIO_FORMAT,
             backendsDir: typeof this.params.backendsDir === "string"
                 ? this.params.backendsDir
-                : PREBUILDS_DIR,
+                : (0, backends_1.resolveBackendsDir)(),
         };
     }
     _buildWhisperConfig(overrideWhisperConfig) {

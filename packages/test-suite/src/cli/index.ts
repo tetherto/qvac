@@ -61,6 +61,12 @@ program
     'Exclude tests in these suites (comma-separated, e.g., "slow,flaky")'
   )
   .option(
+    '--include <testIds>',
+    'Run these exact testIds in addition to the suite/filter selection (comma-separated). ' +
+      'Unlike --filter, which also selects but NARROWS the set, this UNIONS — e.g. --suite=smoke --include=a,b runs smoke plus a and b. ' +
+      'Ids match exactly; an id the catalog does not contain fails the run'
+  )
+  .option(
     '--report-dir <dir>',
     'Directory to write reports + read device-mem.ndjson from (used by run:local; producer also writes test-timeline.ndjson here)'
   )
@@ -196,6 +202,10 @@ const addLocalOpts = (cmd: Command) =>
     .option('--filter <categories>', 'Filter tests by category (forwarded to producer)')
     .option('--suite <suites>', 'Include only these suites (forwarded to producer)')
     .option('--exclude-suite <suites>', 'Exclude these suites (forwarded to producer)')
+    .option(
+      '--include <testIds>',
+      'Exact testIds to run on top of the suite/filter selection (forwarded to producer)'
+    )
     .option('--report-dir <dir>', 'Custom report directory')
 
 addLocalOpts(program.command('run:local:desktop'))

@@ -12,6 +12,12 @@ on:
       - "scripts/ci/**"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
+      # The rtf-expected-devices guard test asserts these workflows' matrix
+      # row counts against their rtf_expected_devices outputs, so a
+      # matrix-only edit must trigger the perf-report unit tests too.
+      - ".github/workflows/integration-test-asr-ggml.yml"
+      - ".github/workflows/integration-test-tts-ggml.yml"
+      - ".github/workflows/integration-test-bci-whispercpp.yml"
   workflow_dispatch:
 
 permissions:
