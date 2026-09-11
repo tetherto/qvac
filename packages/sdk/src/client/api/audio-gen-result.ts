@@ -1,14 +1,21 @@
 import {
+  audioEditClientParamsSchema,
+  audioEditStreamResponseSchema,
   audioGenClientParamsSchema,
   audioGenStreamResponseSchema,
+  type AudioEditClientParams,
+  type AudioEditStreamRequest,
+  type AudioEditStreamResponse,
   type AudioGenAudio,
   type AudioGenClientParams,
   type AudioGenProgress,
   type AudioGenResult,
   type AudioGenStats,
   type AudioGenStreamRequest,
+  type AudioGenStreamResponse,
   type InferenceBackendDiagnostics
 } from '@qvac/inference/surface'
+import type { z } from 'zod'
 import { parseClientInput } from '@/client/parse-input'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 import { decodeBase64 } from '@/utils/encoding'
@@ -16,6 +23,9 @@ import { InvalidResponseError } from '@/utils/errors-client'
 import { InferenceCancelledError } from '@/utils/errors-server'
 
 export type AudioGenStreamFactory = (request: AudioGenStreamRequest) => AsyncGenerator<unknown>
+export type AudioEditStreamFactory = (request: AudioEditStreamRequest) => AsyncGenerator<unknown>
+
+type AudioRunFrame = AudioGenStreamResponse | AudioEditStreamResponse
 
 function concatenateChunks(chunks: Uint8Array[]) {
   const totalLength = chunks.reduce((total, chunk) => total + chunk.length, 0)
@@ -39,7 +49,38 @@ export function createAudioGenResult(
     type: 'audioGenStream',
     requestId
   }
+  return collectAudioRun(requestId, 'audioGenStream', audioGenStreamResponseSchema, () =>
+    streamFactory(request)
+  )
+}
 
+export function createAudioEditResult(
+  params: AudioEditClientParams,
+  streamFactory: AudioEditStreamFactory
+): AudioGenResult {
+  const parsed = parseClientInput(audioEditClientParamsSchema, params)
+  const requestId = generateClientRequestId()
+  const request: AudioEditStreamRequest = {
+    ...parsed,
+    type: 'audioEditStream',
+    requestId
+  }
+  return collectAudioRun(requestId, 'audioEditStream', audioEditStreamResponseSchema, () =>
+    streamFactory(request)
+  )
+}
+
+/**
+ * Consumes one generation or editing stream into the shared run shape:
+ * progress ticks are queued for `progressStream`, PCM chunks accumulate into
+ * `audio`, and the terminal frame settles `stats` and `diagnostics`.
+ */
+function collectAudioRun(
+  requestId: string,
+  wireType: AudioRunFrame['type'],
+  responseSchema: z.ZodType<AudioRunFrame>,
+  open: () => AsyncGenerator<unknown>
+): AudioGenResult {
   const progressQueue: AudioGenProgress[] = []
   const pcmChunks: Uint8Array[] = []
   let sampleRate: number | undefined
@@ -81,16 +122,16 @@ export function createAudioGenResult(
   async function processResponses() {
     let receivedDone = false
     try {
-      for await (const response of streamFactory(request)) {
+      for await (const response of open()) {
         if (
           !response ||
           typeof response !== 'object' ||
           !('type' in response) ||
-          response.type !== 'audioGenStream'
+          response.type !== wireType
         ) {
           continue
         }
-        const chunk = audioGenStreamResponseSchema.parse(response)
+        const chunk = responseSchema.parse(response)
 
         if (chunk.progress) {
           progressQueue.push(chunk.progress)
@@ -114,7 +155,7 @@ export function createAudioGenResult(
             break
           }
           if (sampleRate === undefined || channels === undefined || bitsPerSample === undefined) {
-            throw new InvalidResponseError('audioGenStream audio chunk')
+            throw new InvalidResponseError(`${wireType} audio chunk`)
           }
           resolveAudio({
             pcm: concatenateChunks(pcmChunks),
@@ -129,11 +170,10 @@ export function createAudioGenResult(
       }
 
       if (!receivedDone) {
-        throw new InvalidResponseError('audioGenStream terminal response')
+        throw new InvalidResponseError(`${wireType} terminal response`)
       }
     } catch (error) {
-      progressError =
-        error instanceof Error ? error : new InvalidResponseError('audioGenStream', error)
+      progressError = error instanceof Error ? error : new InvalidResponseError(wireType, error)
       rejectAudio(progressError)
       rejectStats(progressError)
       rejectDiagnostics(progressError)

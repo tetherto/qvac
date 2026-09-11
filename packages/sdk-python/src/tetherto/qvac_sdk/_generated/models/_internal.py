@@ -320,9 +320,350 @@ class AssessModelFitResponse(GeneratedBaseModel):
     type: Literal["assessModelFit"] = "assessModelFit"
 
 
+class AudioEditStreamRequestOperationsItemFlowEditFrom(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    caption: Annotated[str, Field(min_length=1)]
+    lyrics: Annotated[
+        str | None,
+        Field(description="Lyrics for this prompt; omit for `[Instrumental]`."),
+    ] = None
+
+
+class AudioEditStreamRequestOperationsItemFlowEditTo(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    caption: Annotated[str, Field(min_length=1)]
+    lyrics: Annotated[
+        str | None,
+        Field(description="Lyrics for this prompt; omit for `[Instrumental]`."),
+    ] = None
+
+
+class AudioEditStreamRequestOperationsItemFlowEdit(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["flow-edit"] = "flow-edit"
+    from_: Annotated[
+        AudioEditStreamRequestOperationsItemFlowEditFrom,
+        Field(
+            alias="from",
+            description="Description of the unedited source audio.",
+            title="AudioEditStreamRequestOperationsItemFlowEditFrom",
+        ),
+    ]
+    to: Annotated[
+        AudioEditStreamRequestOperationsItemFlowEditTo,
+        Field(
+            description="Description of the desired audio.",
+            title="AudioEditStreamRequestOperationsItemFlowEditTo",
+        ),
+    ]
+    n_min: Annotated[
+        float | None,
+        Field(
+            alias="nMin",
+            description="Start of the Flow-Edit diffusion window (0..1, default 0).",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    n_max: Annotated[
+        float | None,
+        Field(
+            alias="nMax",
+            description="End of the Flow-Edit diffusion window (0..1, default 1).",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    n_avg: Annotated[
+        int | None,
+        Field(
+            alias="nAvg",
+            description="Forward-noise samples averaged per active step (default 1).",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
+class AudioEditStreamRequestOperationsItemRepaintMode(Enum):
+    conservative = "conservative"
+    balanced = "balanced"
+    aggressive = "aggressive"
+
+
+class AudioEditStreamRequestOperationsItemRepaint(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["repaint"] = "repaint"
+    caption: Annotated[str, Field(min_length=1)]
+    lyrics: Annotated[
+        str | None,
+        Field(
+            description="Lyrics for the repainted region; omit for `[Instrumental]`."
+        ),
+    ] = None
+    start: Annotated[
+        float,
+        Field(
+            description="Region start in seconds; must lie inside the source recording.",
+            ge=0.0,
+        ),
+    ]
+    end: Annotated[
+        float | None,
+        Field(
+            description="Region end in seconds; omit to repaint through the end of the source. The range must span at least one latent frame (1/25 s).",
+            gt=0.0,
+        ),
+    ] = None
+    mode: Annotated[
+        AudioEditStreamRequestOperationsItemRepaintMode | None,
+        Field(
+            description="Preservation mode outside the repainted region (default balanced).",
+            title="AudioEditStreamRequestOperationsItemRepaintMode",
+        ),
+    ] = None
+    strength: Annotated[
+        float | None,
+        Field(
+            description="Balanced-mode preservation strength (0..1, default 0.5).",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+
+
+class AudioEditStreamRequestSourceAudioBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: str
+
+
+class AudioEditStreamRequestSourceAudioFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: str
+
+
+class AudioEditStreamRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_id: Annotated[str, Field(alias="modelId", min_length=1)]
+    operations: Annotated[
+        list[
+            AudioEditStreamRequestOperationsItemFlowEdit
+            | AudioEditStreamRequestOperationsItemRepaint
+        ],
+        Field(
+            description="Ordered edit pipeline: operations run in array order and may repeat or mix. Flow-Edit is supported on turbo DiT variants only.",
+            min_length=1,
+        ),
+    ]
+    seed: Annotated[
+        int | None,
+        Field(
+            description="Seeds the first operation; each following operation uses seed + its index.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    source_audio: Annotated[
+        AudioEditStreamRequestSourceAudioBase64
+        | AudioEditStreamRequestSourceAudioFilePath,
+        Field(
+            alias="sourceAudio",
+            description="Recording to edit: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1].",
+        ),
+    ]
+    type: Literal["audioEditStream"] = "audioEditStream"
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
+
+
+class AudioEditStreamResponseProgress(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    stage: str
+    step: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[
+        int,
+        Field(
+            description="Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class AudioEditStreamResponseStopReason(Enum):
+    completed = "completed"
+    cancelled = "cancelled"
+
+
+class AudioEditStreamResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    audio_duration_ms: Annotated[float | None, Field(alias="audioDurationMs")] = None
+    total_time_ms: Annotated[float | None, Field(alias="totalTimeMs")] = None
+    real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
+    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
+    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+
+
+class AudioEditStreamResponseDiagnosticsSelectedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class AudioEditStreamResponseDiagnosticsGraphicsApi(Enum):
+    vulkan = "vulkan"
+    opencl = "opencl"
+    opengl = "opengl"
+    webgpu = "webgpu"
+    metal = "metal"
+    direct3d11 = "direct3d11"
+    direct3d12 = "direct3d12"
+    cuda = "cuda"
+    level_zero = "levelZero"
+    rocm = "rocm"
+
+
+class AudioEditStreamResponseDiagnosticsDriver(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(min_length=1)]
+    version: Annotated[str | None, Field(min_length=1)] = None
+
+
+class AudioEditStreamResponseDiagnosticsFallbackRequestedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class AudioEditStreamResponseDiagnosticsFallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    requested_backend: Annotated[
+        str | None, Field(alias="requestedBackend", min_length=1)
+    ] = None
+    requested_device: Annotated[
+        AudioEditStreamResponseDiagnosticsFallbackRequestedDevice | None,
+        Field(
+            alias="requestedDevice",
+            title="AudioEditStreamResponseDiagnosticsFallbackRequestedDevice",
+        ),
+    ] = None
+    reason: Annotated[str, Field(min_length=1)]
+
+
+class AudioEditStreamResponseDiagnosticsProbeStatus(Enum):
+    compatible = "compatible"
+    incompatible = "incompatible"
+    unknown = "unknown"
+
+
+class AudioEditStreamResponseDiagnosticsProbe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        AudioEditStreamResponseDiagnosticsProbeStatus,
+        Field(title="AudioEditStreamResponseDiagnosticsProbeStatus"),
+    ]
+    backend: Annotated[str, Field(min_length=1)]
+    reason: str | None = None
+
+
+class AudioEditStreamResponseDiagnostics(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
+    selected_device: Annotated[
+        AudioEditStreamResponseDiagnosticsSelectedDevice,
+        Field(
+            alias="selectedDevice",
+            title="AudioEditStreamResponseDiagnosticsSelectedDevice",
+        ),
+    ]
+    graphics_api: Annotated[
+        AudioEditStreamResponseDiagnosticsGraphicsApi | None,
+        Field(
+            alias="graphicsApi", title="AudioEditStreamResponseDiagnosticsGraphicsApi"
+        ),
+    ] = None
+    driver: Annotated[
+        AudioEditStreamResponseDiagnosticsDriver | None,
+        Field(title="AudioEditStreamResponseDiagnosticsDriver"),
+    ] = None
+    gpu_id: Annotated[
+        str | None,
+        Field(
+            alias="gpuId",
+            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+            min_length=1,
+        ),
+    ] = None
+    fallback: Annotated[
+        AudioEditStreamResponseDiagnosticsFallback | None,
+        Field(title="AudioEditStreamResponseDiagnosticsFallback"),
+    ] = None
+    probe: Annotated[
+        AudioEditStreamResponseDiagnosticsProbe | None,
+        Field(title="AudioEditStreamResponseDiagnosticsProbe"),
+    ] = None
+
+
+class AudioEditStreamResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["audioEditStream"] = "audioEditStream"
+    progress: Annotated[
+        AudioEditStreamResponseProgress | None,
+        Field(title="AudioEditStreamResponseProgress"),
+    ] = None
+    data: Annotated[str | None, Field(min_length=1)] = None
+    sample_rate: Annotated[
+        int | None, Field(alias="sampleRate", gt=0, le=9007199254740991)
+    ] = None
+    channels: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
+    bits_per_sample: Annotated[
+        int | None, Field(alias="bitsPerSample", gt=0, le=9007199254740991)
+    ] = None
+    done: bool
+    stop_reason: Annotated[
+        AudioEditStreamResponseStopReason | None,
+        Field(alias="stopReason", title="AudioEditStreamResponseStopReason"),
+    ] = None
+    stats: Annotated[
+        AudioEditStreamResponseStats | None, Field(title="AudioEditStreamResponseStats")
+    ] = None
+    diagnostics: Annotated[
+        AudioEditStreamResponseDiagnostics | None,
+        Field(
+            description="Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+            title="AudioEditStreamResponseDiagnostics",
+        ),
+    ] = None
+
+
 class AudioGenStreamRequestTaskType(Enum):
     text2music = "text2music"
     cover_nofsq = "cover-nofsq"
+
+
+class AudioCode(RootModel[int]):
+    root: Annotated[int, Field(ge=-2147483648, le=2147483647)]
 
 
 class AudioGenStreamRequestReferenceAudioBase64(GeneratedBaseModel):
@@ -359,6 +700,13 @@ class AudioGenStreamRequest(GeneratedBaseModel):
     bpm: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
     keyscale: Annotated[str | None, Field(min_length=1)] = None
     timesignature: Annotated[str | None, Field(min_length=1)] = None
+    augment_caption_with_metadata: Annotated[
+        bool | None,
+        Field(
+            alias="augmentCaptionWithMetadata",
+            description="Append BPM/tempo, time signature, and key guidance to the internal conditioning caption while the result metadata keeps the original caption (default: false). ACE-Step only; rejected by MiniMax.",
+        ),
+    ] = None
     duration: Annotated[
         float | None,
         Field(
@@ -481,6 +829,15 @@ class AudioGenStreamRequest(GeneratedBaseModel):
             description="Blend of the initial DiT noise toward the clean source latent (0..1). 0 = pure noise, 1 ≈ source latent. Default 0.",
             ge=0.0,
             le=1.0,
+        ),
+    ] = None
+    audio_codes: Annotated[
+        list[AudioCode] | None,
+        Field(
+            alias="audioCodes",
+            description="Frozen ACE-Step semantic codes (int32) to synthesize instead of running the LM, e.g. codes recovered from an earlier run. ACE-Step only; rejected by MiniMax.",
+            max_length=3000,
+            min_length=1,
         ),
     ] = None
     reference_audio: Annotated[
@@ -2620,9 +2977,20 @@ class CompletionStreamResponse(GeneratedBaseModel):
     ]
 
 
+class AudioGenEditOperation(Enum):
+    flow_edit = "flow-edit"
+    repaint = "repaint"
+
+
 class AudioGenEngine(Enum):
     acestep = "acestep"
     minimax = "minimax"
+
+
+class AudioGenRepaintMode(Enum):
+    conservative = "conservative"
+    balanced = "balanced"
+    aggressive = "aggressive"
 
 
 class AudioGenTaskType(Enum):
@@ -18525,6 +18893,7 @@ class Response_1(
 class Response(
     RootModel[
         AssessModelFitResponse
+        | AudioEditStreamResponse
         | AudioGenStreamResponse
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
@@ -18572,6 +18941,7 @@ class Response(
 ):
     root: Annotated[
         AssessModelFitResponse
+        | AudioEditStreamResponse
         | AudioGenStreamResponse
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
@@ -18631,6 +19001,7 @@ class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
 class Request(
     RootModel[
         AssessModelFitRequest
+        | AudioEditStreamRequest
         | AudioGenStreamRequest
         | BatchCompletionStreamRequest
         | BciTranscribeRequest
@@ -18674,6 +19045,7 @@ class Request(
 ):
     root: Annotated[
         AssessModelFitRequest
+        | AudioEditStreamRequest
         | AudioGenStreamRequest
         | BatchCompletionStreamRequest
         | BciTranscribeRequest

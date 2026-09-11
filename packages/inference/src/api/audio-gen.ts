@@ -1,12 +1,19 @@
+import type { z } from 'zod'
 import {
+  audioEditClientParamsSchema,
+  audioEditStreamResponseSchema,
   audioGenClientParamsSchema,
   audioGenStreamResponseSchema,
+  type AudioEditClientParams,
+  type AudioEditStreamRequest,
+  type AudioEditStreamResponse,
   type AudioGenAudio,
   type AudioGenClientParams,
   type AudioGenProgress,
   type AudioGenResult,
   type AudioGenStats,
   type AudioGenStreamRequest,
+  type AudioGenStreamResponse,
   type InferenceBackendDiagnostics
 } from '@/schemas/index'
 import { stream } from '@/dispatch'
@@ -50,6 +57,58 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
     type: 'audioGenStream',
     requestId
   }
+  return collectAudioRun(request, requestId, audioGenStreamResponseSchema)
+}
+
+/**
+ * Edits a source recording with a loaded ACE-Step AudioGen model: an ordered
+ * pipeline of `flow-edit` (re-condition the whole clip from one prompt to
+ * another) and `repaint` (regenerate a time range) operations, executed in
+ * array order. The source is interleaved stereo 48 kHz PCM — a file path
+ * decoded server-side, or raw Float32 LE bytes in `[-1, 1]`.
+ *
+ * @param params - Loaded model ID, the source audio, the ordered `operations`, and an optional `seed`.
+ * @returns The same run shape as `audioGen()`: `requestId`, `progressStream`, `audio`, `stats`, and `diagnostics`.
+ *
+ * @example
+ * ```typescript
+ * const run = audioEdit({
+ *   modelId,
+ *   sourceAudio: "/path/to/song.wav",
+ *   operations: [
+ *     { type: "flow-edit", from: { caption: "acoustic folk" }, to: { caption: "synthwave" } },
+ *     { type: "repaint", caption: "analog synth solo", start: 10, end: 20 },
+ *   ],
+ *   seed: 7,
+ * });
+ * const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
+ * ```
+ */
+export function audioEdit(params: AudioEditClientParams): AudioGenResult {
+  const parsed = parseClientInput(audioEditClientParamsSchema, params)
+  const requestId = generateRandomRequestId()
+  const request: AudioEditStreamRequest = {
+    ...parsed,
+    type: 'audioEditStream',
+    requestId
+  }
+  return collectAudioRun(request, requestId, audioEditStreamResponseSchema)
+}
+
+type AudioRunRequest = AudioGenStreamRequest | AudioEditStreamRequest
+type AudioRunFrame = AudioGenStreamResponse | AudioEditStreamResponse
+
+/**
+ * Consumes one generation or editing stream into the shared run shape:
+ * progress ticks are queued for `progressStream`, PCM chunks accumulate into
+ * `audio`, and the terminal frame settles `stats` and `diagnostics`.
+ */
+function collectAudioRun(
+  request: AudioRunRequest,
+  requestId: string,
+  responseSchema: z.ZodType<AudioRunFrame>
+): AudioGenResult {
+  const wireType = request.type
 
   const progressQueue: AudioGenProgress[] = []
   const pcmChunks: Uint8Array[] = []
@@ -97,11 +156,11 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
           !response ||
           typeof response !== 'object' ||
           !('type' in response) ||
-          response.type !== 'audioGenStream'
+          response.type !== wireType
         ) {
           continue
         }
-        const chunk = audioGenStreamResponseSchema.parse(response)
+        const chunk = responseSchema.parse(response)
 
         if (chunk.progress) {
           progressQueue.push(chunk.progress)
@@ -125,7 +184,7 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
             break
           }
           if (sampleRate === undefined || channels === undefined || bitsPerSample === undefined) {
-            throw new InvalidResponseError('audioGenStream audio chunk')
+            throw new InvalidResponseError(`${wireType} audio chunk`)
           }
           resolveAudio({
             pcm: concatenateChunks(pcmChunks),
@@ -140,11 +199,10 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
       }
 
       if (!receivedDone) {
-        throw new InvalidResponseError('audioGenStream terminal response')
+        throw new InvalidResponseError(`${wireType} terminal response`)
       }
     } catch (error) {
-      progressError =
-        error instanceof Error ? error : new InvalidResponseError('audioGenStream', error)
+      progressError = error instanceof Error ? error : new InvalidResponseError(wireType, error)
       rejectAudio(progressError)
       rejectStats(progressError)
       rejectDiagnostics(progressError)

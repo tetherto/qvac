@@ -62,6 +62,7 @@ export {
   vlaPadState,
   VLA_DEFAULT_IMAGE_SIZE,
   audioGen,
+  audioEdit,
   type FinetuneHandle
 } from './client/api'
 export { close } from './client'
@@ -178,6 +179,9 @@ export {
   AUDIOGEN_INPUT_SAMPLE_RATE,
   AUDIOGEN_INPUT_CHANNELS,
   AUDIOGEN_INPUT_MAX_SECONDS,
+  AUDIOGEN_MAX_AUDIO_CODES,
+  AUDIOGEN_EDIT_OPERATIONS,
+  AUDIOGEN_REPAINT_MODES,
   type AudioGenEngine,
   type AudioGenTaskType,
   type AudioGenAudioInput,
@@ -189,6 +193,14 @@ export {
   type AudioGenStats,
   type AudioGenResult,
   type AudioGenStreamResponse,
+  type AudioGenEditOperationType,
+  type AudioGenRepaintMode,
+  type AudioEditPrompt,
+  type AudioEditFlowEditOperation,
+  type AudioEditRepaintOperation,
+  type AudioEditOperation,
+  type AudioEditClientParams,
+  type AudioEditStreamResponse,
   type VideoClientParams,
   type VideoStreamResponse,
   type VideoStats,

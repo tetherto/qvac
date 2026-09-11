@@ -68,6 +68,7 @@ def test_js_client_api_capabilities_have_python_equivalents():
     # method; the capability, not each helper, is what's guarded here.
     js_to_python = {
         "audioGen": "audio_gen_stream",
+        "audioEdit": "audio_edit_stream",
         "batchCompletion": "batch_completion_stream",
         "completion": "completion",
         "deleteCache": "delete_cache",

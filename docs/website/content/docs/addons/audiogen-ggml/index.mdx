@@ -81,6 +81,6 @@ await model.destroy();
 
 ## Reference and cover audio
 
-`run()` also accepts `referenceAudio` (timbre conditioning) and, with `taskType: "cover-nofsq"`, `sourceAudio` plus `audioCoverStrength` / `coverNoiseStrength`. Both PCM inputs are `Float32Array` values holding finite, normalized samples in interleaved stereo order at 48 kHz; the addon does not resample or convert channels. Through the SDK, `audioGen()` accepts file paths (decoded for you) or raw PCM buffers — see [Music generation](/ai-capabilities/music-generation#reference-audio-and-covers).
+`run()` also accepts `referenceAudio` (timbre conditioning) and, with `taskType: "cover-nofsq"`, `sourceAudio` plus `audioCoverStrength` / `coverNoiseStrength`. Both PCM inputs are `Float32Array` values holding finite, normalized samples in interleaved stereo order at 48 kHz; the addon does not resample or convert channels. Through the SDK, `audioGen()` accepts file paths (decoded for you) or raw PCM buffers — see [Music generation](/ai-capabilities/music-generation#reference-audio-and-covers). The addon's ordered `edit()` pipeline (Flow-Edit and Repaint) is exposed by the SDK as [`audioEdit()`](/ai-capabilities/music-generation#edit-an-existing-recording).
 
 For runtime controls, LM sampling and DCW parameters, supported encoders, cancellation, and complete examples, see the [package README](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml#readme).

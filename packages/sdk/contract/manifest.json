@@ -7,6 +7,12 @@
       "responseSchema": "schema.json#/$defs/assessModelFit.response"
     },
     {
+      "name": "audioEditStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/audioEditStream.request",
+      "responseSchema": "schema.json#/$defs/audioEditStream.response"
+    },
+    {
       "name": "audioGenStream",
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/audioGenStream.request",
