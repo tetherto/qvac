@@ -141,6 +141,42 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25)."
     ),
+  'batch-size': z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe('Logical maximum batch size, the tokens submitted per decode call. Default 2048.'),
+  'ubatch-size': z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe('Physical maximum batch size, the tokens computed in one pass. Default 512.'),
+  'n-cpu-moe': z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      'Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.'
+    ),
+  'image-max-tokens': z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(
+      'Upper bound on the tokens one image may occupy. Vision models only. Unset uses the model default.'
+    ),
+  'image-min-tokens': z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(
+      'Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.'
+    ),
   openclCacheDir: z
     .string()
     .optional()
