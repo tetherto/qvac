@@ -232,7 +232,7 @@ jobs:
   await-ts-checks:
     name: Await PR-head TypeScript checks
     if: github.event_name == 'pull_request_target' && needs.authorize.outputs.allowed == 'true'
-    needs: authorize
+    needs: [fork-approval, authorize]
     uses: ./.github/workflows/reusable-await-ts-checks.yml
     with:
       check_name: 'model-fit-pr-head-ts-checks / ts-checks'
