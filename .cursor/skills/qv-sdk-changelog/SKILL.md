@@ -259,13 +259,20 @@ bun run scripts/release-version.ts <version> --force-extract
 ```
 
 This is the exact command the old workflow ran. The dispatcher reads the
-version and forwards to the minor (`X.Y.0`: freeze outgoing series →
-regenerate latest) or patch (`X.Y.Z`, `Z >= 1`: insert the `## vX.Y.Z` section)
-orchestrator. It writes only:
+version and forwards to the minor (`X.Y.0`: generate the new series' MDX at
+`reference/{api,release-notes}/v<X.Y>.x.mdx`, rewrite both `index.mdx` shims
+to `<include>` the new series file, and rotate the managed alias block in
+`public/_redirects` so the new `v<X.Y>.x` URL 301s to the shim canonical)
+or patch (`X.Y.Z`, `Z >= 1`: insert the `## vX.Y.Z` section into the target
+series' `v<X.Y>.x.mdx`; for `patch-latest`, also mirror the refreshed
+description onto the release-notes shim) orchestrator. It writes only:
 
 - `docs/website/content/docs/reference/api/**` (API summary MDX)
 - `docs/website/content/docs/reference/release-notes/**` (release notes MDX)
 - `docs/website/src/lib/versions.ts` (version-switcher manifest)
+- `docs/website/public/_redirects` (**minor only** — the managed
+  `# ==== BEGIN latest-series alias (managed) ====` block; patches never
+  touch this file)
 
 **2. Verify the site still builds (mandatory):**
 
@@ -328,6 +335,10 @@ When `--package=sdk`, Step 8 also generates the documentation-site surfaces
 - `docs/website/content/docs/reference/api/**` – API reference MDX
 - `docs/website/content/docs/reference/release-notes/**` – Release notes MDX
 - `docs/website/src/lib/versions.ts` – Version-switcher manifest
+- `docs/website/public/_redirects` – **minor releases only** — the managed
+  latest-series alias block (delimited by
+  `# ==== BEGIN latest-series alias (managed) ====` markers). Patch
+  releases never touch this file.
 
 ## Tag Format
 
@@ -354,7 +365,7 @@ Before completing:
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] NOTICE file updated for the target package
 - [ ] When `--package=sdk`: `qv-sdk-lockstep-sync` run (sdk-python), python `generate.py --check` passing
-- [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and `git status` shows only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` as committable docs changes (byproducts gitignored)
+- [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and `git status` shows only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` (and `public/_redirects` on **minor** releases — the managed latest-series alias block) as committable docs changes (byproducts gitignored)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions

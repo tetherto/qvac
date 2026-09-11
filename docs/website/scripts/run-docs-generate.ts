@@ -38,7 +38,12 @@ const sdkPath =
 console.log(`SDK version: ${version}`);
 console.log(`SDK path:    ${sdkPath}`);
 
-execSync(`bun run scripts/generate-api-docs.ts ${version} --latest`, {
+// The generator always writes to v<X.Y>.x.mdx now — the current latest
+// included. This is a preview-only regen (no shim rewrite, no _redirects
+// touch, no release orchestration) so it happily overwrites the current
+// series page in place; a follow-up `release-version-minor.ts` run is
+// what refreshes the shim + `_redirects` block on a real minor rotation.
+execSync(`bun run scripts/generate-api-docs.ts ${version}`, {
   stdio: "inherit",
   env: { ...process.env, SDK_PATH: sdkPath },
 });
