@@ -12,7 +12,6 @@ Release Date: 2026-09-04
 
 ## 🔌 API
 
-- Add ABot-World interactive world sessions to the SDK. (see PR [#3812](https://github.com/tetherto/qvac/pull/3812)) - See [API changes](./api.md)
 - Generate model resource profiles for the catalog. (see PR [#4045](https://github.com/tetherto/qvac/pull/4045)) - See [API changes](./api.md)
 - AssessModelFit pre-download fit assessment. (see PR [#4047](https://github.com/tetherto/qvac/pull/4047)) - See [API changes](./api.md)
 - Expose assessModelFit from the SDK. (see PR [#4048](https://github.com/tetherto/qvac/pull/4048)) - See [API changes](./api.md)
