@@ -31,11 +31,8 @@ const BASE_CONFIG = {
   verbosity: '2'
 }
 
-// QVAC_HAS_MULTI_GPU only promises two OR MORE GPUs, so a share count cannot
-// be hardcoded: a tensor-split matching neither the eligible device count nor
-// the registered GPU count is rejected, which would break this suite on a
-// runner with three or more eligible devices. Probe the participating count
-// with a plain layer split first, then build one share per device.
+// QVAC_HAS_MULTI_GPU promises two OR MORE GPUs, and a tensor-split matching
+// neither the eligible nor the registered GPU count is rejected, so probe.
 async function discoverDeviceCount(modelPath) {
   const specLogger = attachSpecLogger({ forwardToConsole: false })
   const addon = new GGMLBert({

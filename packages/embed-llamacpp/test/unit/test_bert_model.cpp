@@ -962,8 +962,6 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeLayer) {
   }
 }
 
-// 'row' never took effect on any backend this addon admits, so it is rejected
-// outright rather than silently loaded as 'layer'.
 TEST_F(BertModelTest, CommonParamsParseSplitModeRowRejected) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
@@ -1024,9 +1022,8 @@ TEST_F(BertModelTest, SplitDeviceSelectionRemapsTensorShares) {
   EXPECT_EQ(config.at("tensor-split"), "1,3");
 }
 
-// RPC0 is hoisted ahead of Vulkan0, but two shares for two eligible devices is
-// unambiguous because it does not match the three registered GPUs: N == F and
-// N != R, so the list is already in final order and passes through untouched.
+// RPC0 is hoisted ahead of Vulkan0, yet the shares pass through untouched:
+// two matches the eligible count and not the three registered GPUs.
 TEST_F(BertModelTest, EligibleCountTensorSharesTakenAsFinalOrder) {
   common_params params;
   std::unordered_map<std::string, std::string> config{{"tensor-split", "1,2"}};
@@ -1045,8 +1042,7 @@ TEST_F(BertModelTest, EligibleCountTensorSharesTakenAsFinalOrder) {
   EXPECT_EQ(config.at("tensor-split"), "1,2");
 }
 
-// Whitespace is trimmed off each share; two shares for two eligible devices
-// with F == R is final order, so the values keep the order they were given in.
+// Eligible count wins the tie with the registered count, so the order is kept.
 TEST_F(BertModelTest, TensorSplitTrimsShareWhitespace) {
   common_params params;
   std::unordered_map<std::string, std::string> config{{"tensor-split", "1, 2"}};
@@ -1065,9 +1061,8 @@ TEST_F(BertModelTest, TensorSplitTrimsShareWhitespace) {
   EXPECT_EQ(config.at("tensor-split"), "1,2");
 }
 
-// Cardinality is checked even when the mapping did not move: fabric validates
-// only against llama_max_devices and zero-pads a short list, which would leave
-// the second GPU with no layers at all.
+// Checked even when the mapping did not move: fabric zero-pads a short list,
+// leaving the second GPU with no layers.
 TEST_F(BertModelTest, ShortTensorSplitRejectedWhenMappingUnchanged) {
   common_params params;
   std::unordered_map<std::string, std::string> config{{"tensor-split", "1"}};
@@ -1086,8 +1081,7 @@ TEST_F(BertModelTest, ShortTensorSplitRejectedWhenMappingUnchanged) {
       qvac_errors::StatusError);
 }
 
-// Same unchanged mapping, too many shares: fabric would silently drop the tail
-// rather than report the mismatch.
+// Too many shares: fabric would silently drop the tail.
 TEST_F(BertModelTest, LongTensorSplitRejectedWhenMappingUnchanged) {
   common_params params;
   std::unordered_map<std::string, std::string> config{
@@ -1107,9 +1101,7 @@ TEST_F(BertModelTest, LongTensorSplitRejectedWhenMappingUnchanged) {
       qvac_errors::StatusError);
 }
 
-// A leading delimiter must not survive into the value fabric parses: its
-// std::stof throws on an empty token, so the re-joined list carries no empty
-// field even though the share count is unchanged.
+// Fabric's std::stof throws on the empty field a leading delimiter yields.
 TEST_F(BertModelTest, TensorSplitDropsLeadingDelimiter) {
   common_params params;
   std::unordered_map<std::string, std::string> config{{"tensor-split", ",1,2"}};
@@ -1128,8 +1120,7 @@ TEST_F(BertModelTest, TensorSplitDropsLeadingDelimiter) {
   EXPECT_EQ(config.at("tensor-split"), "1,2");
 }
 
-// Only one spelling can be remapped; leaving the other would let it race the
-// rewritten one through the passthrough loop.
+// Only one spelling can be remapped; the other would race it downstream.
 TEST_F(BertModelTest, TensorSplitRejectsBothSpellings) {
   common_params params;
   std::unordered_map<std::string, std::string> config{
@@ -1276,14 +1267,8 @@ TEST_F(BertModelTest, CpuFallbackClearsUnderscoreTensorSplit) {
   EXPECT_EQ(model.getCommonParams().tensor_split[1], 0.0F);
 }
 
-// A GPU split request goes through getSplitDeviceSelection(); with no eligible
-// device it must land on the same CPU seam as an explicit device=cpu.
-//
-// The share count is probed rather than hardcoded: a fixed two-share value is a
-// wrong-cardinality request on any single-GPU host (one eligible Metal device
-// on darwin-arm64), which the split path rejects during load. A first load
-// without tensor-split reports how many eligible devices this host actually
-// pinned, and the real load below asks for exactly that many shares.
+// The share count is probed rather than hardcoded: a fixed two-share value is
+// a wrong-cardinality request on a single-GPU host and is rejected during load.
 TEST_F(BertModelTest, GpuSplitRequestWithoutEligibleDeviceFallsBackToCpu) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
@@ -1306,8 +1291,7 @@ TEST_F(BertModelTest, GpuSplitRequestWithoutEligibleDeviceFallsBackToCpu) {
     }
   }
 
-  // With no eligible GPU keep the original two-share request, so the CPU
-  // fallback branch is exercised exactly as before.
+  // With no eligible GPU any share count reaches the CPU fallback branch.
   std::string shares = "50,50";
   if (eligibleDevices > 0) {
     shares.clear();

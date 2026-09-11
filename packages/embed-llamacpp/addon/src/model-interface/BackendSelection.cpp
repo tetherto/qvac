@@ -89,12 +89,8 @@ bool hasMetalFamily(
          registryName == "metal";
 }
 
-// Classify OpenCL from the same identity source eligibility uses, so a device
-// admitted by its registry name is also bucketed and filtered as OpenCL. The
-// gap this closes is unreachable with shipped backends -- ggml's OpenCL backend
-// names every device "GPUOpenCL", so a device-name test agrees -- but the
-// registry-identity arm is new here, so this keeps the two in step rather than
-// fixing a live defect.
+// Same identity source as eligibility, so a device admitted by its registry
+// name is also bucketed and filtered as OpenCL.
 bool isOpenClDevice(
     const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
@@ -116,7 +112,6 @@ deviceIdentity(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   return name + " (" + registry + ")";
 }
 
-// Follow ocr-ggml's matcher shape with embed-specific eligible families.
 bool isEligibleGpuDevice(
     const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const enum ggml_backend_dev_type type = bckI.ggml_backend_dev_type(dev);
@@ -195,8 +190,7 @@ void tryEmplaceDevice(
   const enum ggml_backend_dev_type backendTypeEnum =
       bckI.ggml_backend_dev_type(dev);
   const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
-  // Resolved once and shared by the type filter and the bucket choice, so the
-  // two can never disagree about what counts as an OpenCL device.
+  // Shared by the type filter and the bucket choice so the two cannot disagree.
   const bool isOpenCl = isOpenClDevice(bckI, dev);
   const bool isGpuType = backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
                          backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
@@ -417,12 +411,8 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       result.rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
       continue;
     }
-    // Materialise each string before the next interface call. The returned
-    // pointers are not guaranteed to outlive a subsequent call on the same
-    // interface, and holding one across another call is a use-after-free
-    // against any implementation that stores results in a reallocating
-    // container. DeviceDescription above is safe for the same reason: its
-    // std::string members copy in declaration order.
+    // Copy each returned string before the next interface call: the pointers
+    // are not guaranteed to outlive it.
     ggml_backend_dev_props props{};
     bckI.ggml_backend_dev_get_props(dev, &props);
     // Raw id, compared byte for byte like fabric's strcmp: a CUDA virtual
@@ -451,19 +441,9 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
-    // vcpkg pins qvac-fabric 10297.1.2, whose llama_prepare_model_devices
-    // (src/llama.cpp:257-262) keeps only the first integrated GPU.
-    // upstream/main has already moved to 10549, which these branches adopt on
-    // their pending merge with main, and 10549's rule (src/llama.cpp:265-273)
-    // is the one implemented here: keep the first integrated GPU plus every
-    // later one whose backend REGISTRY handle matches the last kept one's;
-    // registry identity, not its name. Dropping the others is upstream
-    // llama.cpp #23897, a workaround for one integrated device enumerated by
-    // several backends; the same-registry exception is #26953, for the virtual
-    // devices CUDA reports as integrated. Unreachable on what fabric ships
-    // today — Metal and OpenCL never report IGPU and fabric builds no CUDA
-    // backend — but this package already admits CUDA, so the exception goes
-    // live the moment CUDA ships.
+    // Keep the first integrated GPU plus every later one whose backend registry
+    // HANDLE matches the last kept one's (llama.cpp #26953) — identity, not
+    // name.
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
       if (integrated.empty() ||
           reg == bckI.ggml_backend_dev_backend_reg(integrated.back().handle)) {

@@ -20,11 +20,9 @@ struct MockDevice {
   std::string regName;
   enum ggml_backend_dev_type type;
   std::string deviceId;
-  /// Index of the device whose `ggml_backend_reg_t` this device reports. Unset
-  /// means "my own", which is the one-registry-per-device default. Registry
-  /// IDENTITY, not its name, is what the iGPU retention rule compares, so a
-  /// shared registry can only be modelled by pointing two devices at one
-  /// handle.
+  /// Index of the device whose `ggml_backend_reg_t` this one reports; unset
+  /// means its own. The iGPU retention rule compares registry IDENTITY, so a
+  /// shared registry is only modelled by pointing two devices at one handle.
   std::optional<size_t> regAliasIndex;
 
   MockDevice(
@@ -102,8 +100,8 @@ private:
   }
 
   static ggml_backend_reg_t static_dev_backend_reg(ggml_backend_dev_t dev) {
-    // One registry per device unless the device aliases another's, resolved
-    // through the live vector so a reallocation cannot leave a stale pointer.
+    // Resolved through the live vector so a reallocation leaves no stale
+    // pointer.
     MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
     if (currentInstance != nullptr && mock_dev != nullptr &&
         mock_dev->regAliasIndex.has_value() &&
@@ -429,10 +427,7 @@ TEST_F(BackendSelectionTest, RegistryIdentityCanAdmitKnownFamily) {
   }
 }
 
-// An Adreno OpenCL device identified only by its REGISTRY name must land in the
-// OpenCL-priority bucket, which outranks a plain Vulkan GPU enumerated first.
-// Classifying it by device name instead puts it in the generic GPU bucket and
-// the Vulkan device wins.
+// The OpenCL-priority bucket outranks a plain Vulkan GPU enumerated first.
 TEST_F(BackendSelectionTest, RegistryOnlyOpenClOutranksEarlierVulkan) {
   mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
   mockBackend.addDevice(MockDevice(
@@ -440,9 +435,7 @@ TEST_F(BackendSelectionTest, RegistryOnlyOpenClOutranksEarlierVulkan) {
   expectChosen(mockBackend, BackendType::GPU, "driver-device-0");
 }
 
-// OpenCL is the escape hatch that survives the main-gpu device-type filter, so
-// an `integrated` request must still select a GPU-typed OpenCL device. That
-// only holds if the OpenCL test consults the registry name as well.
+// OpenCL is the escape hatch that survives the main-gpu device-type filter.
 TEST_F(BackendSelectionTest, RegistryOnlyOpenClSurvivesMainGpuTypeFilter) {
   mockBackend.addDevice(MockDevice(
       ADRENO_DESC, "driver-device-0", GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL"));
@@ -457,8 +450,6 @@ TEST_F(BackendSelectionTest, DeviceFamilyNamesRequireKnownPrefixes) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
-// MUSA is not an allowlisted family, named either on the device or on the
-// registry it came from, so a MUSA-only machine falls back to CPU.
 TEST_F(BackendSelectionTest, MusaDeviceIsRejected) {
   mockBackend.addDevice(createGPUDevice("Moore Threads MTT S80", "MUSA0"));
   expectChosenForPreference(
@@ -474,8 +465,6 @@ TEST_F(BackendSelectionTest, MusaDeviceIsRejected) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
-// An unknown family behind an eligible device must not be picked up as a
-// fallback: Vulkan0 is still chosen.
 TEST_F(BackendSelectionTest, UnknownGpuAfterVulkanChoosesVulkan) {
   mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice("Future GPU", "FutureBackend0"));
@@ -771,8 +760,7 @@ TEST_F(BackendSelectionTest, RpcDoesNotSuppressLocalIntegratedGpu) {
       getSplitDeviceNames(bckI), (std::vector<std::string>{"RPC0", "MTL0"}));
 }
 
-// The same card reported by two backends carries one PCI id byte for byte, so
-// the registry-order first entry wins, as in fabric.
+// One card reported by two backends carries one PCI id, so the first wins.
 TEST_F(BackendSelectionTest, CudaAndVulkanSamePciIdKeepsRegistryFirst) {
   mockBackend.addDevice(withDeviceId(
       MockDevice(
@@ -784,8 +772,7 @@ TEST_F(BackendSelectionTest, CudaAndVulkanSamePciIdKeepsRegistryFirst) {
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
 }
 
-// Fabric compares raw ids with strcmp, so CUDA virtual (MPS/MIG) devices are
-// distinct devices and both stay in the split set.
+// Fabric compares raw ids with strcmp, so CUDA virtual devices stay distinct.
 TEST_F(BackendSelectionTest, CudaVirtualDeviceIdsAreKeptDistinct) {
   mockBackend.addDevice(withDeviceId(
       MockDevice(
@@ -835,10 +822,8 @@ TEST_F(BackendSelectionTest, SplitDevicesExcludeUnsupportedBackends) {
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));
 }
 
-// The origin rule (upstream llama.cpp #23897): a second iGPU from a DIFFERENT
-// backend registry is the same physical device enumerated twice, so it is
-// dropped. Both devices share a registry NAME and still have distinct registry
-// handles — the rule compares identity, so matching names must not be enough.
+// Both devices share a registry NAME but have distinct handles: the rule
+// compares identity, so matching names must not be enough to keep the second.
 TEST_F(BackendSelectionTest, SplitDevicesKeepOneIgpuPerDistinctRegistry) {
   mockBackend.addDevice(MockDevice(
       "Intel Iris Xe", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"));
@@ -848,9 +833,8 @@ TEST_F(BackendSelectionTest, SplitDevicesKeepOneIgpuPerDistinctRegistry) {
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));
 }
 
-// The exception (upstream llama.cpp #26953): CUDA reports virtual devices as
-// integrated GPUs, so every later iGPU sharing the kept one's registry handle
-// is a distinct device and must survive. Reachable once fabric builds CUDA.
+// CUDA reports virtual devices as integrated GPUs, so a later iGPU sharing the
+// kept one's registry handle is distinct and survives (llama.cpp #26953).
 TEST_F(BackendSelectionTest, SplitDevicesKeepIgpusSharingOneRegistry) {
   mockBackend.addDevice(withDeviceId(
       MockDevice("NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),
@@ -866,9 +850,7 @@ TEST_F(BackendSelectionTest, SplitDevicesKeepIgpusSharingOneRegistry) {
       getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0", "CUDA1"}));
 }
 
-// Retention chains off the most recently KEPT iGPU, not off the most recently
-// SEEN one: a dropped device's registry must not become the reference that
-// admits a later device sharing it.
+// Retention chains off the last KEPT iGPU, not the last SEEN one.
 TEST_F(BackendSelectionTest, SplitDevicesChainIgpuRegistryFromLastKept) {
   mockBackend.addDevice(MockDevice(
       "NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"));

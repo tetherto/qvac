@@ -76,9 +76,7 @@ void applySplitDeviceSelection(
     common_params& params, std::unordered_map<std::string, std::string>& config,
     const backend_selection::SplitDeviceSelection& selection);
 
-/// Local policy traits of the whole split set: OpenCL when any device in the
-/// set is OpenCL, and the reported backend is the first non-RPC device (the
-/// first device only when the whole set is RPC). Requires a non-empty set.
+/// Traits of the whole split set; requires a non-empty set.
 struct SplitBackendTraits {
   std::string backendName;
   bool isOpenCl = false;

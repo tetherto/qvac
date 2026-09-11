@@ -381,13 +381,8 @@ void applySplitDeviceSelection(
     std::string normalized = tensorSplit->second;
     std::ranges::replace(normalized, '/', ',');
     const std::vector<std::string> proportions = split(normalized, ',');
-    // Re-join from the tokens rather than forwarding the caller's string.
-    // Fabric tokenizes on the regex [,/]+, so a run of delimiters collapses
-    // there as it does here and '1,,2' is two shares on both sides. The
-    // divergence is an empty or whitespace-only FIELD: fabric keeps it
-    // (',1,2' yields a leading "", '1, ,2' a middle " ") and std::stof throws
-    // on either, while split() trims and drops it. Such a value would be
-    // counted as two shares here and then rejected by fabric's parser.
+    // Re-join from the tokens: fabric keeps empty and whitespace-only fields
+    // (',1,2', '1, ,2') and its std::stof throws on them.
     auto join = [](const std::vector<std::string>& shares) {
       std::string joined;
       for (const std::string& share : shares) {
@@ -398,16 +393,9 @@ void applySplitDeviceSelection(
       }
       return joined;
     };
-    // Cardinality decides how the list is read, in this order:
-    //   1. one share per eligible device -> already in final order
-    //   2. one share per registered GPU  -> remap through sourceGpuIndex
-    //   3. anything else                 -> reject
-    // Final order wins when both counts are equal: this addon pins
-    // params.devices itself, so fabric applies share i to final device i.
-    // The check runs even when the mapping did not move, because fabric
-    // validates only against llama_max_devices; it zero-pads a short list,
-    // silently leaving a participating GPU with no layers, and drops the tail
-    // of a long one.
+    // Final order wins on a tie: this addon pins params.devices itself, so
+    // fabric applies share i to final device i. Rejecting a mismatch is on us —
+    // fabric checks only llama_max_devices, then zero-pads or truncates.
     if (proportions.size() == selection.devices.size()) {
       tensorSplit->second = join(proportions);
     } else if (proportions.size() != selection.sourceGpuCount) {
@@ -476,10 +464,8 @@ parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
   if (val == "layer") {
     splitMode = LLAMA_SPLIT_MODE_LAYER;
   } else if (val == "row") {
-    // Row split needs split buffers from every device in the split set and
-    // no backend this addon admits provides them, so it never took effect;
-    // fabric marks the mode deprecated. Reject it instead of silently
-    // loading as 'layer'.
+    // Needs split buffers from every device in the split set; no backend this
+    // addon admits provides them.
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         string_format(
@@ -573,11 +559,7 @@ BertModelSetup setupParams(
     } else {
       chosenBackend =
           chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
-      // Name-based, unlike the split path, which carries the registry-aware
-      // trait through splitBackendTraits. Returning the trait alongside the
-      // name would change chooseBackend's signature in both addons, and the
-      // gap is unreachable with shipped backends: ggml's OpenCL backend names
-      // every device "GPUOpenCL", so name and registry always agree today.
+      // Name-based: chooseBackend returns only a name, no registry handle.
       isOpenCl = chosenBackend.first == BackendType::GPU &&
                  chosenBackend.second.find("opencl") != std::string::npos;
     }
