@@ -913,6 +913,64 @@ TEST_F(LoadFitNormalizationTest, SplitModeNonAdrenoSetIsNotRestricted) {
   EXPECT_EQ(result.params.devices.back(), nullptr);
 }
 
+// The restriction's own tier max must ignore RPC devices, in BOTH directions.
+// An RPC device's description is its endpoint string (ggml-rpc.cpp:3749), so a
+// tier parsed off one says nothing about the remote GPU. Here an endpoint
+// reading as 830 sits beside a local 740: the CPU fallback the local tier
+// demands must still happen.
+TEST_F(
+    LoadFitNormalizationTest,
+    SplitModeRestrictionIgnoresRpcEndpointRaisingTier) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "vulkan0"});
+  selection.devices[0].isRpc = true;
+  selection.devices[0].adrenoVersion = 830;
+  selection.devices[1].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_EQ(result.params.main_gpu, -1);
+  ASSERT_EQ(result.params.devices.size(), 1U);
+  EXPECT_EQ(result.params.devices.front(), nullptr);
+}
+
+// The other direction: an endpoint reading as a sub-800 tier beside a local
+// NON-Adreno GPU. There is no local Adreno at all, so nothing is restricted —
+// counting the endpoint would clear the list and force CPU.
+TEST_F(
+    LoadFitNormalizationTest,
+    SplitModeRestrictionIgnoresRpcEndpointOnNonAdrenoLocal) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "vulkan0"});
+  selection.devices[0].isRpc = true;
+  selection.devices[0].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {.active = true},
+      dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_FALSE(result.adrenoVersion.has_value());
+  ASSERT_EQ(result.params.devices.size(), 3U);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
 // The reported tier is the MAX across local participants, not the first local
 // device's. The lower tier sorts first on purpose: reading the first local
 // device would report 740 and leave the Adreno-800+ quantized-KV guard

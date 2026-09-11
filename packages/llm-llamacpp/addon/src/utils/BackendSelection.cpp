@@ -654,15 +654,25 @@ void backend_selection::applyAdrenoRestrictions(
     return;
   }
 
-  // The MAX tier across participants rather than a per-device test, matching
-  // chooseBackend's host-wide maxAdrenoVersion. Reproduced over the SPLIT SET:
-  // chooseBackend takes its maximum over a wider set that is not deduplicated
-  // and has no discrete-over-integrated preference, so the two can differ on a
-  // host where an Adreno is in one set and not the other. A device with no
-  // tier is not an Adreno and never triggers the rule on its own.
+  // The MAX tier across LOCAL participants rather than a per-device test,
+  // matching chooseBackend's host-wide maxAdrenoVersion. Reproduced over the
+  // SPLIT SET: chooseBackend takes its maximum over a wider set that is not
+  // deduplicated and has no discrete-over-integrated preference, so the two
+  // can differ on a host where an Adreno is in one set and not the other. A
+  // device with no tier is not an Adreno and never triggers the rule on its
+  // own.
+  //
+  // RPC devices are excluded, and this must stay that way in BOTH directions.
+  // ggml reports an RPC device's endpoint string as its description
+  // (ggml-rpc.cpp:3749, surfaced at :3318-3321), so a tier parsed off one is a
+  // hostname carrying no information about the remote GPU. Including them lets
+  // endpoint text decide placement: "adreno830..." beside a local 740 would
+  // skip the required CPU fallback, and "adreno740..." beside a non-Adreno
+  // local GPU would clear the whole list. Do not widen this on a
+  // safety intuition; there is no safety to gain, only a wrong placement.
   std::optional<int> maxAdrenoVersion;
   for (const SplitDevice& device : selection.devices) {
-    if (device.adrenoVersion.has_value() &&
+    if (!device.isRpc && device.adrenoVersion.has_value() &&
         (!maxAdrenoVersion.has_value() ||
          device.adrenoVersion.value() > maxAdrenoVersion.value())) {
       maxAdrenoVersion = device.adrenoVersion;
