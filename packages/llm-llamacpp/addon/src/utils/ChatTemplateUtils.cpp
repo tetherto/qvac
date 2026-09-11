@@ -3,14 +3,19 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <map>
 #include <ranges>
+#include <set>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
 #include "QwenTemplate.hpp"
+#include "addon/LlmErrors.hpp"
+#include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -198,6 +203,38 @@ std::optional<ReasoningTags> selectReasoningTagSource(
   return fallbackTags;
 }
 
+ReasoningBudgetTags selectReasoningBudgetTags(
+    const std::string& templateThinkingStartTag,
+    const std::string& templateThinkingEndTag,
+    const std::vector<std::string>& templateThinkingEndTags,
+    const std::optional<ReasoningTags>& fallbackTags) {
+  // Same both-or-neither test as `selectReasoningTagSource`, so the budget and
+  // the detector cannot disagree about which source is in play. Written out
+  // rather than derived from that function's return because the template
+  // branch keeps the full end-tag list, which `ReasoningTags` cannot hold.
+  if (!templateThinkingStartTag.empty() && !templateThinkingEndTag.empty()) {
+    return ReasoningBudgetTags{
+        .startTag = templateThinkingStartTag,
+        .endTags = templateThinkingEndTags};
+  }
+  if (!fallbackTags.has_value()) {
+    return ReasoningBudgetTags{};
+  }
+  return ReasoningBudgetTags{
+      .startTag = fallbackTags->open, .endTags = {fallbackTags->close}};
+}
+
+bool reasoningBudgetSamplerBuilt(const common_params_sampling& sampling) {
+  // Mirrors qvac-fabric `common/sampling.cpp`: both marker lists must be
+  // non-empty, and something must actually want the sampler — a lazy grammar
+  // (which needs it for thinking-block suppression), a finite cap, or
+  // `reasoning_control`.
+  return !sampling.reasoning_budget_start.empty() &&
+         !sampling.reasoning_budget_end.empty() &&
+         (sampling.grammar_lazy || sampling.reasoning_budget_tokens >= 0 ||
+          sampling.reasoning_control);
+}
+
 std::optional<ReasoningTags>
 selectReasoningTagsForModel(const ::llama_model* model) {
   if (model == nullptr) {
@@ -252,30 +289,175 @@ getChatTemplate(const ::llama_model* model, const common_params& params) {
   return chatTemplate;
 }
 
-std::string getPrompt(
+namespace {
+
+/// Whether a rendered prompt actually names any of the tools it was given.
+///
+/// Only ever an optimisation now. A name in the prompt that the conversation
+/// cannot have supplied proves the template put it there, which lets the
+/// healthy path answer "not dropped" without a second render. It is not used
+/// to prove the converse: a name being *absent* is not a drop, because the
+/// template may have emitted it in a form this scan cannot see — a case fold,
+/// `\uXXXX`-escaped JSON, a serialiser that splits the name. Those go to
+/// `renderIsUnchangedWithoutTools` like every other unproven case. See
+/// `jinjaRenderOmittedTools`, the entry point.
+///
+/// Substring, not parse: a template that emitted the definitions verbatim
+/// cannot have done so without their names. Any name is enough — a partial
+/// render still put tools in front of the model, and reporting a drop for
+/// that would be a false positive.
+bool promptNamesAnyTool(
+    const std::string& prompt, const std::vector<common_chat_tool>& tools) {
+  for (const common_chat_tool& tool : tools) {
+    // An empty name is unnameable and matches everywhere; `validateToolNames`
+    // rejects it before a real request reaches here, and skipping it keeps a
+    // directly-constructed `getPrompt` call from reading as "rendered".
+    if (!tool.name.empty() && prompt.find(tool.name) != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Whether the conversation itself carries any of the tool names, in any field
+/// the renderer can put into the prompt.
+///
+/// This is the masking source. It is not exotic: the ordinary multi-turn tool
+/// loop replays prior calls, and `tool_calls[].name` and `tool_name` hold the
+/// tool's own name by construction — so the second turn of every tool
+/// conversation reaches the prompt carrying a name the template need not have
+/// rendered.
+bool messagesNameAnyTool(
+    const std::vector<common_chat_msg>& messages,
+    const std::vector<common_chat_tool>& tools) {
+  auto mentions = [&tools](const std::string& text) {
+    if (text.empty()) {
+      return false;
+    }
+    for (const common_chat_tool& tool : tools) {
+      if (!tool.name.empty() && text.find(tool.name) != std::string::npos) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const common_chat_msg& message : messages) {
+    if (mentions(message.content) || mentions(message.reasoning_content) ||
+        mentions(message.tool_name)) {
+      return true;
+    }
+    for (const common_chat_msg_content_part& part : message.content_parts) {
+      if (mentions(part.text)) {
+        return true;
+      }
+    }
+    for (const common_chat_tool_call& call : message.tool_calls) {
+      if (mentions(call.name) || mentions(call.arguments)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/// Renders the same inputs with the tools removed and reports whether that
+/// changed the prompt at all.
+///
+/// An identical prompt is a *proof* of omission rather than a heuristic: the
+/// only thing that differs between the two renders is the tool list, so a
+/// byte-identical result means supplying the tools had no effect on what the
+/// model will read. The conversation text is present in both renders, which is
+/// precisely why this survives masking where a substring scan cannot.
+///
+/// Everything else is held identical by copying `inputs` — including `now`,
+/// which is a plain `time_point` member, so there is no clock skew between the
+/// two renders. `tool_choice` is left alone because it never reaches Jinja; it
+/// is consumed on the grammar side.
+bool renderIsUnchangedWithoutTools(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs, bool* outThinkingForcedOpen,
-    std::string* outThinkingStartTag, std::string* outThinkingEndTag,
-    std::vector<std::string>* outThinkingEndTags,
-    std::string* outGenerationPrompt) {
-  auto exportParams = [&](const common_chat_params& params) {
-    if (outThinkingForcedOpen) {
-      *outThinkingForcedOpen = params.thinking_forced_open;
-    }
-    if (outThinkingStartTag) {
-      *outThinkingStartTag = params.thinking_start_tag;
-    }
-    if (outThinkingEndTag) {
-      *outThinkingEndTag = params.thinking_end_tags.empty()
-                               ? std::string()
-                               : params.thinking_end_tags.front();
-    }
-    if (outThinkingEndTags) {
-      *outThinkingEndTags = params.thinking_end_tags;
-    }
-    if (outGenerationPrompt) {
-      *outGenerationPrompt = params.generation_prompt;
-    }
+    const common_chat_templates_inputs& inputs,
+    const std::string& promptWithTools) {
+  common_chat_templates_inputs probe = inputs;
+  probe.tools.clear();
+  try {
+    auto probeParams = common_chat_templates_apply(tmpls, probe);
+    return probeParams.prompt == promptWithTools;
+  } catch (...) {
+    // A template that cannot render this conversation without tools raises
+    // here. That is not evidence the definitions were emitted — but it is not
+    // evidence they were dropped either, and this flag *strips the tool list*,
+    // so it must never fire on a guess. Fail towards leaving the caller's
+    // tools alone.
+    return false;
+  }
+}
+
+/// Whether a successful Jinja render left the tool definitions out.
+///
+/// Every drop reported here is decided by the render itself, never by a name
+/// scan: the answer is always "removing the tools left this prompt
+/// byte-identical". That is what makes a reported drop a proof rather than a
+/// guess, which matters because the caller acts on it by stripping the tool
+/// list and by refusing an explicit `tool_choice: "required"`.
+///
+/// It still does not claim the converse — see the note on
+/// `PromptRenderResult::toolDefinitionsDropped` for the partial-render
+/// residual that no prompt-side check can close.
+///
+/// A capability answer cannot stand in for any of this.
+/// `common_chat_templates_get_caps()` decides `supports_tools` by executing the
+/// template against fabric's own synthetic probe conversation and checking
+/// whether the probe touched `tools[0].function.name`
+/// (common/jinja/caps.cpp:255-256). That probe leads with a user turn, so a
+/// template guarding its tool block on the conversation shape reports
+/// "capable" and can still omit the block for a request shaped differently —
+/// the shape-sensitivity QVAC-23251 hit.
+bool jinjaRenderOmittedTools(
+    const struct common_chat_templates* tmpls,
+    const common_chat_templates_inputs& inputs, const std::string& prompt) {
+  // The one case a scan can settle, and it is the healthy one: a tool name is
+  // in the prompt and nowhere in the conversation, so the template is the only
+  // thing that can have put it there. Keeps the second render off the path
+  // every well-behaved tools request takes.
+  if (promptNamesAnyTool(prompt, inputs.tools) &&
+      !messagesNameAnyTool(inputs.messages, inputs.tools)) {
+    return false;
+  }
+  // Everything else is decided by rendering again without the tools. Both
+  // remaining shapes are unproven for the same reason — the prompt text does
+  // not say who put a name there, or whether an absent name was emitted in a
+  // form the scan cannot match — and the differential render answers both.
+  return renderIsUnchangedWithoutTools(tmpls, inputs, prompt);
+}
+
+} // namespace
+
+PromptRenderResult getPrompt(
+    const struct common_chat_templates* tmpls,
+    struct common_chat_templates_inputs& inputs) {
+  // Single export point for all three render paths below.
+  // Takes ownership: every caller below hands over a local it no longer
+  // reads, and the payload carries several strings plus three vectors.
+  auto exportParams = [](common_chat_params&& params,
+                         bool renderedByJinja,
+                         bool toolDefinitionsDropped) {
+    PromptRenderResult out;
+    out.prompt = std::move(params.prompt);
+    out.thinkingForcedOpen = params.thinking_forced_open;
+    out.thinkingStartTag = std::move(params.thinking_start_tag);
+    out.thinkingEndTag = params.thinking_end_tags.empty()
+                             ? std::string()
+                             : params.thinking_end_tags.front();
+    out.thinkingEndTags = std::move(params.thinking_end_tags);
+    out.generationPrompt = std::move(params.generation_prompt);
+    out.grammar = std::move(params.grammar);
+    out.grammarLazy = params.grammar_lazy;
+    out.grammarTriggers = std::move(params.grammar_triggers);
+    out.preservedTokens = std::move(params.preserved_tokens);
+    out.additionalStops = std::move(params.additional_stops);
+    out.renderedByJinja = renderedByJinja;
+    out.toolDefinitionsDropped = toolDefinitionsDropped;
+    return out;
   };
   // A template can fail either because it rejects the tool definitions or
   // because it rejects the shape of the message list (e.g. Qwen3.5 raises
@@ -286,8 +468,35 @@ std::string getPrompt(
   std::string firstError;
   try {
     auto params = common_chat_templates_apply(tmpls, inputs);
-    exportParams(params);
-    return params.prompt;
+    // Two ways a *successful* render still leaves the tools out. The legacy
+    // (non-Jinja) renderer ignores `inputs.tools` outright. And a Jinja
+    // template can render happily without them — because it references tools
+    // nowhere, or because whatever guards its tool block did not hold for this
+    // conversation. That second one is the silent case this flag exists to
+    // expose, since nothing else in the pipeline can tell it from a
+    // tools-aware render.
+    const bool legacyDroppedTools = !inputs.use_jinja && !inputs.tools.empty();
+    const bool jinjaOmittedTools =
+        inputs.use_jinja && !inputs.tools.empty() &&
+        jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
+    const bool droppedTools = legacyDroppedTools || jinjaOmittedTools;
+    if (jinjaOmittedTools) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[ChatTemplateUtils] supplying the tools did not change the rendered "
+          "prompt; the chat template left the definitions out and the model "
+          "never saw them\n");
+    }
+    if (droppedTools) {
+      // Keep the header's contract: callers never see a tool list the
+      // rendered prompt does not carry. That is also what stops a tool
+      // grammar being applied for tools the model cannot have read.
+      inputs.tools.clear();
+    }
+    return exportParams(
+        std::move(params),
+        /* renderedByJinja = */ inputs.use_jinja,
+        /* toolDefinitionsDropped = */ droppedTools);
   } catch (const std::exception& e) {
     firstError = e.what();
   } catch (...) {
@@ -304,10 +513,12 @@ std::string getPrompt(
           string_format(
               "[ChatTemplateUtils] chat template rejected the tool "
               "definitions; rendering without tools. Error: %s\n",
-              firstError.c_str()));
+              forLogMessage(firstError, K_MAX_LOG_DIAGNOSTIC).c_str()));
       inputs.tools.clear();
-      exportParams(params);
-      return params.prompt;
+      return exportParams(
+          std::move(params),
+          /* renderedByJinja = */ inputs.use_jinja,
+          /* toolDefinitionsDropped = */ true);
     } catch (...) {
       // Falls through: the template rejects this conversation with or
       // without tools, so tools were not the cause.
@@ -320,19 +531,27 @@ std::string getPrompt(
           "[ChatTemplateUtils] chat template could not render this "
           "conversation; falling back to the legacy renderer, which ignores "
           "tools. Error: %s\n",
-          firstError.c_str()));
+          forLogMessage(firstError, K_MAX_LOG_DIAGNOSTIC).c_str()));
   inputs.use_jinja = false;
   auto params = common_chat_templates_apply(tmpls, inputs);
-  exportParams(params);
-  return params.prompt;
+  const bool legacyDroppedTools = !inputs.tools.empty();
+  // Keep the header's contract: callers never see a tool list the rendered
+  // prompt does not carry.
+  inputs.tools.clear();
+  return exportParams(
+      std::move(params),
+      /* renderedByJinja = */ false,
+      /* toolDefinitionsDropped = */ legacyDroppedTools);
 }
 
-bool configureReasoningBudgetSampling(
-    common_params& params, ::llama_context* lctx,
-    const std::string& thinkingStartTag,
+namespace {
+
+void applyReasoningBudget(
+    common_params_sampling& next, const common_params& params,
+    const Tokenizer& tokenize, const std::string& thinkingStartTag,
     const std::vector<std::string>& thinkingEndTags,
     const std::string& generationPrompt) {
-  common_params_sampling next = params.sampling;
+  // The token cap is what `reasoning_budget` controls; -1 means unlimited.
   next.reasoning_budget_tokens =
       params.reasoning_budget > 0 ? params.reasoning_budget : -1;
   next.reasoning_budget_start.clear();
@@ -340,34 +559,471 @@ bool configureReasoningBudgetSampling(
   next.reasoning_budget_forced.clear();
   next.generation_prompt.clear();
 
-  if (params.reasoning_budget > 0 && lctx != nullptr &&
-      !thinkingEndTags.empty() && !thinkingEndTags.front().empty()) {
-    next.generation_prompt = generationPrompt;
+  // The tag vectors are populated whenever reasoning markers are known at
+  // all, *regardless* of the cap — llama-server does the same
+  // (tools/server/server-common.cpp). "Known at all" is the caller's
+  // `selectReasoningBudgetTags` result, which is template-first with a
+  // model-family fallback, not the template alone: fabric only builds the
+  // reasoning-budget sampler when these are non-empty, and that sampler is
+  // also what keeps a lazy tool grammar from arming inside the reasoning
+  // block: without it, `grammar_should_apply` returns true unconditionally
+  // and a `<tool_call>` written inside `<think>` would trigger tool-call
+  // syntax mid-reasoning. With an unlimited cap and no lazy grammar fabric
+  // still builds nothing, so this costs only the tokenization.
+  //
+  // `generation_prompt` doubles as the grammar-prefill input, and fabric feeds
+  // it to any eager prefill-needing grammar (common/sampling.cpp). An
+  // OUTPUT_FORMAT grammar built from json_schema_to_grammar starts at a JSON
+  // value, and a USER grammar starts wherever the caller says, so prefilling
+  // an assistant header into either makes common_sampler_init throw.
+  //
+  // So it is set only when the grammar this request will carry can accept it:
+  // NONE (where `common_grammar_needs_prefill` is false and the value is
+  // inert) or TOOL_CALLS (which is rendered from a template that emitted this
+  // very prefix). Without the type check, a model loaded with a positive
+  // `reasoning_budget` — a load-time config key — failed *every* json_schema
+  // request against a thinking template for as long as it stayed loaded.
+  const bool grammarAcceptsPrefill =
+      next.grammar.type == COMMON_GRAMMAR_TYPE_NONE ||
+      next.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS;
+  if (tokenize && !thinkingEndTags.empty() &&
+      !thinkingEndTags.front().empty()) {
+    if (params.reasoning_budget > 0 && grammarAcceptsPrefill) {
+      next.generation_prompt = generationPrompt;
+    }
     if (!thinkingStartTag.empty()) {
-      next.reasoning_budget_start =
-          common_tokenize(lctx, thinkingStartTag, false, true);
+      next.reasoning_budget_start = tokenize(thinkingStartTag);
     }
 
     next.reasoning_budget_end.reserve(thinkingEndTags.size());
     for (const std::string& thinkingEndTag : thinkingEndTags) {
       if (!thinkingEndTag.empty()) {
-        next.reasoning_budget_end.emplace_back(
-            common_tokenize(lctx, thinkingEndTag, false, true));
+        next.reasoning_budget_end.emplace_back(tokenize(thinkingEndTag));
       }
     }
-    next.reasoning_budget_forced = common_tokenize(
-        lctx,
-        params.sampling.reasoning_budget_message + thinkingEndTags.front(),
-        false,
-        true);
+    next.reasoning_budget_forced = tokenize(
+        params.sampling.reasoning_budget_message + thinkingEndTags.front());
+  }
+}
+
+bool sameTriggers(
+    const std::vector<common_grammar_trigger>& a,
+    const std::vector<common_grammar_trigger>& b) {
+  return std::ranges::equal(
+      a,
+      b,
+      [](const common_grammar_trigger& x, const common_grammar_trigger& y) {
+        return x.type == y.type && x.value == y.value && x.token == y.token;
+      });
+}
+
+bool samplingChanged(
+    const common_params_sampling& before, const common_params_sampling& next) {
+  return before.reasoning_budget_tokens != next.reasoning_budget_tokens ||
+         before.reasoning_budget_start != next.reasoning_budget_start ||
+         before.reasoning_budget_end != next.reasoning_budget_end ||
+         before.reasoning_budget_forced != next.reasoning_budget_forced ||
+         before.generation_prompt != next.generation_prompt ||
+         before.grammar.type != next.grammar.type ||
+         before.grammar.grammar != next.grammar.grammar ||
+         before.grammar_lazy != next.grammar_lazy ||
+         !sameTriggers(before.grammar_triggers, next.grammar_triggers) ||
+         before.preserved_tokens != next.preserved_tokens;
+}
+
+// Mirrors tools/server/server-schema.cpp: preserved tokens keep only strings
+// that tokenize to a single id; a WORD trigger that tokenizes to a single id
+// is promoted to a TOKEN trigger. Returns false when the resulting grammar
+// would be rejected by common_sampler_init (lazy with no triggers).
+bool applyToolGrammar(
+    common_params_sampling& next, const Tokenizer& tokenize,
+    const PromptRenderResult& rendered) {
+  std::set<llama_token> preserved;
+  for (const std::string& text : rendered.preservedTokens) {
+    const auto ids = tokenize(text);
+    if (ids.size() == 1) {
+      preserved.insert(ids[0]);
+    }
   }
 
+  std::vector<common_grammar_trigger> triggers;
+  triggers.reserve(rendered.grammarTriggers.size());
+  for (const common_grammar_trigger& trigger : rendered.grammarTriggers) {
+    if (trigger.type != COMMON_GRAMMAR_TRIGGER_TYPE_WORD) {
+      triggers.push_back(trigger);
+      continue;
+    }
+    const auto ids = tokenize(trigger.value);
+    if (ids.size() == 1) {
+      if (!preserved.contains(ids[0])) {
+        QLOG_IF(
+            Priority::ERROR,
+            string_format(
+                "[ChatTemplateUtils] tool grammar trigger word is not a "
+                "preserved token; not applying the tool grammar: %s\n",
+                forLogMessage(trigger.value).c_str()));
+        return false;
+      }
+      common_grammar_trigger promoted;
+      promoted.type = COMMON_GRAMMAR_TRIGGER_TYPE_TOKEN;
+      promoted.value = trigger.value;
+      promoted.token = ids[0];
+      triggers.push_back(std::move(promoted));
+    } else {
+      triggers.push_back(trigger);
+    }
+  }
+
+  if (rendered.grammarLazy && triggers.empty()) {
+    QLOG_IF(
+        Priority::ERROR,
+        "[ChatTemplateUtils] template produced a lazy tool grammar with no "
+        "triggers; not applying the tool grammar\n");
+    return false;
+  }
+
+  next.grammar =
+      common_grammar(COMMON_GRAMMAR_TYPE_TOOL_CALLS, rendered.grammar);
+  next.grammar_lazy = rendered.grammarLazy;
+  next.grammar_triggers = std::move(triggers);
+  next.preserved_tokens = std::move(preserved);
+  // The grammar sampler must skip the assistant prefix already in the prompt.
+  next.generation_prompt = rendered.generationPrompt;
+  return true;
+}
+
+} // namespace
+
+namespace {
+
+/// Two ways a declared name cannot be used to select its own tool, both
+/// rejected at declaration time so the invariant holds that every accepted
+/// definition can be named.
+///
+/// `auto`, `none` and `required` are the `tool_choice` mode words, matched by
+/// `resolveToolChoiceCore` before it ever looks a function up: such a tool
+/// would be advertised in the prompt and yet unselectable, with `none`
+/// silently disabling tools rather than choosing one and `required` meaning
+/// "any tool".
+///
+/// An empty name is unselectable for the same reason from both directions —
+/// the JS layer rejects `tool_choice: ""` outright, and natively an empty
+/// choice is read as `auto` — and it would also give the tool the bare
+/// `"tool-"` grammar rule. Note two empty names already collide under the
+/// fold below; only a single one reached here.
+void rejectUnselectableToolName(const std::string& name) {
+  if (name.empty()) {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "prompt declares a tool with an empty name, which could never be "
+        "selected by generationParams.tool_choice");
+  }
+  if (name != "auto" && name != "none" && name != "required") {
+    return;
+  }
+  throw qvac_errors::StatusError(
+      errors::ADDON_ID,
+      qvac_errors::general_error::toString(
+          qvac_errors::general_error::InvalidArgument),
+      string_format(
+          "prompt declares a tool named %s, which is reserved as a "
+          "generationParams.tool_choice mode and so could never be selected "
+          "by name",
+          forLogMessage(name).c_str()));
+}
+
+/// Four conditions are rejected outright, because each one makes a tool the
+/// caller declared unreachable or ambiguous:
+///  - two tools sharing a name: `tool_choice: "<name>"` cannot say which, and
+///    the template gets two blocks the model cannot tell apart;
+///  - a name equal to one of the `tool_choice` mode words, and an empty name:
+///    both are matched by `resolveToolChoiceCore` before the function lookup,
+///    so neither tool can ever be selected by name (see
+///    `rejectUnselectableToolName`);
+///  - two names that fold to the same grammar rule, which lets one shadow the
+///    other while both stay advertised in the prompt.
+///
+/// One condition remains a warning: a name outside `[A-Za-z0-9_.-]` that does
+/// *not* collide with another tool. Exotic characters alone are harmless — the
+/// fold below turns them into a rule name that is still unique — so the
+/// warning exists only to explain the collision if a second such name arrives.
+void validateToolNames(const std::vector<common_chat_tool>& tools) {
+  std::set<std::string> seen;
+  // Names folded the way fabric's rule-name sanitiser folds them, to catch two
+  // tools that are distinct here but collapse to one grammar rule. Maps each
+  // folded form back to the first raw name that produced it, for the error.
+  std::map<std::string, std::string> folded;
+  for (const common_chat_tool& tool : tools) {
+    if (!seen.insert(tool.name).second) {
+      throw qvac_errors::StatusError(
+          errors::ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "prompt declares two tools named %s",
+              forLogMessage(tool.name).c_str()));
+    }
+    rejectUnselectableToolName(tool.name);
+    // Mirrors fabric's `rule_name()` (common/peg-parser.cpp), which is
+    // `std::regex_replace(name, "[^a-zA-Z0-9-]+", "-")`: every byte outside
+    // `[A-Za-z0-9-]` folds to '-', and a *run* of them collapses to a single
+    // '-'. An explicit ASCII range rather than `std::isalnum`, which is
+    // locale-dependent and can accept bytes >= 0x80 that the regex rejects.
+    // Getting this wrong in either direction produces a false negative: an
+    // earlier version treated '_' and '.' as safe and so missed `get_weather`
+    // vs `get-weather`, the most plausible real collision.
+    const auto isRuleSafe = [](char c) {
+      return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+             (c >= '0' && c <= '9') || c == '-';
+    };
+    std::string foldedName;
+    foldedName.reserve(tool.name.size());
+    bool plain = true;
+    bool lastWasFolded = false;
+    for (const char c : tool.name) {
+      const bool safe = isRuleSafe(c);
+      // '_' and '.' fold in fabric but are conventional in tool names, so they
+      // do not trip the "exotic characters" warning below.
+      plain = plain && (safe || c == '_' || c == '.');
+      if (safe) {
+        foldedName += c;
+        lastWasFolded = false;
+      } else if (!lastWasFolded) {
+        foldedName += '-';
+        lastWasFolded = true;
+      }
+    }
+    if (!plain) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[ChatTemplateUtils] tool name %s contains characters outside "
+              "[A-Za-z0-9_.-]; its grammar rule name may collide with another "
+              "tool's\n",
+              forLogMessage(tool.name).c_str()));
+    }
+    // A rejection, not a warning, because the fold above is byte-exact rather
+    // than a guess: fabric's `rule_name()` (common/peg-parser.cpp:1036) is
+    // `std::regex_replace(name, "[^a-zA-Z0-9-]+", "-")`, and the loop above
+    // reproduces it character for character. Every fabric handler that builds
+    // a tool grammar names its rules `"tool-" + name` (chat.cpp:1071, 1227,
+    // 1402, 1557, 1661, 1801) and registers them through
+    // `common_peg_parser_builder::rule`, which stores `rules_[clean_name]` and
+    // returns a `ref` resolved by name — so two folded-identical names leave
+    // both refs pointing at the last rule registered. Under `auto` or
+    // `required` both tools stay advertised in the prompt while only one
+    // argument schema constrains decoding, and the caller sees a well-formed
+    // call against the wrong schema with nothing in the response to say so. A
+    // log line the API caller never reads is not a proportionate answer to
+    // that.
+    const auto collision = folded.emplace(foldedName, tool.name);
+    if (!collision.second) {
+      throw qvac_errors::StatusError(
+          errors::ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "prompt declares tools %s and %s, whose names fold to the same "
+              "grammar rule (%s); one would shadow the other while both stay "
+              "advertised in the prompt",
+              forLogMessage(collision.first->second).c_str(),
+              forLogMessage(tool.name).c_str(),
+              forLogMessage(foldedName).c_str()));
+    }
+  }
+}
+
+} // namespace
+
+namespace {
+
+/// Every validity rule for `tool_choice`, with no copy of the tool list.
+/// `namedIndex` is set only when the choice names one declared function.
+struct ToolChoiceCore {
+  common_chat_tool_choice choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
+  std::optional<size_t> namedIndex;
+};
+
+ToolChoiceCore resolveToolChoiceCore(
+    const std::optional<std::string>& rawToolChoice,
+    const std::vector<common_chat_tool>& tools) {
+  // Runs on every path deliberately, which means twice per single-prompt
+  // request (once from `validateToolChoice` before the KV-invalidating try,
+  // once from `resolveToolChoice` at render time) and once on the batch path,
+  // which never calls `validateToolChoice`. Validating twice costs two small
+  // container allocations per request and duplicates any warning; validating
+  // only in `validateToolChoice` would leave the batch path unchecked, which is
+  // the worse trade.
+  validateToolNames(tools);
+  ToolChoiceCore core;
+  if (!rawToolChoice || rawToolChoice->empty() || *rawToolChoice == "auto") {
+    return core;
+  }
+  const std::string& raw = *rawToolChoice;
+  if (raw == "none" || raw == "required") {
+    core.choice = common_chat_tool_choice_parse_oaicompat(raw);
+    if (core.choice == COMMON_CHAT_TOOL_CHOICE_REQUIRED && tools.empty()) {
+      throw qvac_errors::StatusError(
+          errors::ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          "generationParams.tool_choice is \"required\" but the prompt "
+          "declares no tools");
+    }
+    return core;
+  }
+  // Anything else names one declared function.
+  const auto it = std::ranges::find_if(
+      tools, [&](const common_chat_tool& t) { return t.name == raw; });
+  if (it == tools.end()) {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "generationParams.tool_choice names an undeclared function: %s",
+            forLogMessage(raw).c_str()));
+  }
+  core.choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
+  core.namedIndex = static_cast<size_t>(std::distance(tools.begin(), it));
+  return core;
+}
+
+} // namespace
+
+void validateToolChoice(
+    const std::optional<std::string>& rawToolChoice,
+    const std::vector<common_chat_tool>& tools) {
+  (void)resolveToolChoiceCore(rawToolChoice, tools);
+}
+
+ResolvedToolChoice resolveToolChoice(
+    const std::optional<std::string>& rawToolChoice,
+    const std::vector<common_chat_tool>& tools) {
+  const ToolChoiceCore core = resolveToolChoiceCore(rawToolChoice, tools);
+  ResolvedToolChoice resolved;
+  resolved.choice = core.choice;
+  if (core.namedIndex) {
+    resolved.tools = {tools[*core.namedIndex]};
+  } else {
+    resolved.tools = tools;
+  }
+  return resolved;
+}
+
+void requireToolChoiceHonoured(
+    common_chat_tool_choice choice, bool toolDefinitionsDropped,
+    bool toolGrammarApplied, const char* logTag) {
+  // Only REQUIRED is a demand. "auto" tolerates a prose answer by definition,
+  // and "none" asked for no constraint, so neither can be violated here.
+  if (choice != COMMON_CHAT_TOOL_CHOICE_REQUIRED) {
+    return;
+  }
+  if (toolDefinitionsDropped) {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s generationParams.tool_choice demanded a tool call, but the "
+            "chat template did not render the tool definitions",
+            logTag));
+  }
+  if (!toolGrammarApplied) {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s generationParams.tool_choice demanded a tool call, but no "
+            "tool-call grammar could be applied to constrain it",
+            logTag));
+  }
+}
+
+bool configureTemplateDerivedSampling(
+    common_params& params, const Tokenizer& tokenize,
+    const PromptRenderResult& rendered, bool toolsRequested,
+    const std::optional<ReasoningTags>& fallbackReasoningTags) {
+  common_params_sampling next = params.sampling;
+  // Not `rendered.thinkingStartTag` / `rendered.thinkingEndTags` directly:
+  // those are the template's markers alone, while the reasoning detector
+  // falls back to the model-family table. See `selectReasoningBudgetTags`.
+  const ReasoningBudgetTags budgetTags = selectReasoningBudgetTags(
+      rendered.thinkingStartTag,
+      rendered.thinkingEndTag,
+      rendered.thinkingEndTags,
+      fallbackReasoningTags);
+  applyReasoningBudget(
+      next,
+      params,
+      tokenize,
+      budgetTags.startTag,
+      budgetTags.endTags,
+      rendered.generationPrompt);
+
+  // Only a TOOL_CALLS grammar is ours to clear. A USER or OUTPUT_FORMAT
+  // grammar was set by load-time config or per-request generationParams and
+  // must survive a tools-free request untouched.
+  if (next.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS) {
+    next.grammar = {};
+  }
+  // The companion fields, however, are cleared unconditionally. There are two
+  // writers — this function and `applyGenerationOverridesToSampling`, which
+  // clears them when it installs a USER / OUTPUT_FORMAT grammar — and both own
+  // them per request, so whatever is in them belongs to an earlier request's
+  // grammar either way. Leaving them behind would attach a stale
+  // `grammar_lazy` and its `<tool_call>` trigger to a USER / OUTPUT_FORMAT
+  // grammar installed later, making the caller's grammar lazy on a trigger it
+  // can never emit — i.e. silently unenforced. A third writer would need the
+  // same per-request ownership to stay safe.
+  next.grammar_lazy = false;
+  next.grammar_triggers.clear();
+  next.preserved_tokens.clear();
+
+  bool toolGrammarApplied = false;
+  if (toolsRequested && rendered.renderedByJinja && !rendered.grammar.empty() &&
+      tokenize) {
+    if (next.grammar.type == COMMON_GRAMMAR_TYPE_USER ||
+        next.grammar.type == COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[ChatTemplateUtils] a user grammar or json_schema is active; the "
+          "template's tool-call grammar is not applied\n");
+    } else {
+      toolGrammarApplied = applyToolGrammar(next, tokenize, rendered);
+    }
+  }
+
+  // A tool grammar is stateful: the previous request may have driven it to
+  // its terminal state, and common_sampler_reset() rewinds only the sampler
+  // chain, never the grammar. So an applied tool grammar always needs a fresh
+  // sampler, even when the grammar text is identical to the last request's.
+  //
+  // The reasoning-budget sampler needs the same treatment, for a narrower but
+  // real case. `common_sampler::reset()` clears `prev` and the chain and
+  // nothing else (common/sampling.cpp:124-128), so an `rbudget` left in
+  // REASONING_BUDGET_DONE by a request that exhausted its cap survives into
+  // the next one, and an identical render is `samplingChanged`-false.
+  //
+  // That is harmless when the model emits its own reasoning opener: DONE
+  // re-arms on a sampled start tag and resets `remaining` to the full budget
+  // (common/reasoning-budget.cpp:146-160), which is how the Qwen3 family
+  // behaves. It is not harmless when the *template* force-opens the channel
+  // (a DeepSeek-R1-style prompt ending in `<think>`): then no start tag is
+  // ever sampled, the matcher is armed only by the prefill feed inside
+  // `common_sampler_init` (sampling.cpp:319-322), and without a rebuild the
+  // second request's cap goes unenforced for as long as the model stays
+  // loaded. Forced unconditionally rather than gated on a force-open
+  // predicate, because the cost is one `common_sampler_init` on a request
+  // that already asked for a reasoning cap — the same trade the tool-grammar
+  // term above already makes.
+  const bool statefulSamplerApplied =
+      toolGrammarApplied || reasoningBudgetSamplerBuilt(next);
   const bool changed =
-      params.sampling.reasoning_budget_tokens != next.reasoning_budget_tokens ||
-      params.sampling.reasoning_budget_start != next.reasoning_budget_start ||
-      params.sampling.reasoning_budget_end != next.reasoning_budget_end ||
-      params.sampling.reasoning_budget_forced != next.reasoning_budget_forced ||
-      params.sampling.generation_prompt != next.generation_prompt;
+      statefulSamplerApplied || samplingChanged(params.sampling, next);
   if (changed) {
     params.sampling = std::move(next);
   }

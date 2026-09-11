@@ -18,7 +18,7 @@
 # Process for a new exception:
 #   1. The gate blocks a High finding it cannot classify (novel / review-required
 #      license). Its PR comment names the dependency and links this file.
-#   2. Run the compliance SKILL (.cursor/skills/qv-notice-generate) to make the
+#   2. Run the compliance SKILL (.agents/skills/qv-notice-generate) to make the
 #      call: confirm how we use the dependency and whether the terms allow it.
 #   3. If accepted, add an entry below and get it CODEOWNERS-reviewed. If not,
 #      remove/replace the dependency.

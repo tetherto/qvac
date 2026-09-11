@@ -15,6 +15,7 @@ add_executable(
   test_logging.cpp
   test_model_metadata.cpp
   test_utils.cpp
+  backend_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
@@ -74,29 +75,29 @@ endif()
 target_link_libraries(
   addon-test
   PRIVATE
-    llama::llama
-    llama::llama-common
+    qvac-fabric::headers
+    ${qvac_fabric_target}_module
     GTest::gtest
     GTest::gtest_main
     GTest::gmock_main
 )
 
+# Stage the shared Fabric runtime and its dlopen'd ggml backends beside the test
+# binary. backend_env.cpp uses GGML_BACKEND_DIR to preload them.
+qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
+
+# AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
+# addon-test dynamically links the shared @qvac/fabric runtime
+# (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
+# -static-libstdc++. See packages/classification-ggml/test/unit/CMakeLists.txt
+# for the full rationale. scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI
+# runs: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1.
 if(NOT WIN32)
   target_link_libraries(
     addon-test
     PRIVATE
       -fsanitize=address
   )
-endif()
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    add_custom_command(TARGET addon-test POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:ggml::${_backend}>
-        ${CMAKE_CURRENT_BINARY_DIR}
-      COMMENT "Copying ggml backend ${_backend} to test directory"
-    )
-  endforeach()
 endif()
 
 add_test(NAME EmbedModelTests COMMAND addon-test)

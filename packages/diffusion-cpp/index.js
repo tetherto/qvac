@@ -295,7 +295,7 @@ class ImgStableDiffusion {
             throw new Error('ESRGAN upscale requested but files.esrgan was not provided');
         }
         if (params.init_image && this._files.llm) {
-            if (prediction !== 'flux2_flow' && prediction !== 'flux_flow') {
+            if (prediction !== 'flux2_flow') {
                 throw new Error('FLUX img2img requires an explicit prediction type in config. ' +
                     "Set prediction: 'flux2_flow' (FLUX.2). " +
                     'Without this the addon silently falls back to the SD/SDEdit img2img branch ' +
@@ -504,7 +504,7 @@ class EsrganUpscaler {
 exports.EsrganUpscaler = EsrganUpscaler;
 function applyFluxImg2ImgDimDefaults(params, prediction, hasInitImages) {
     void hasInitImages;
-    const isFlux = prediction === 'flux_flow' || prediction === 'flux2_flow';
+    const isFlux = prediction === 'flux2_flow';
     if (!isFlux) {
         return params;
     }

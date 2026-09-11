@@ -1,0 +1,139 @@
+{
+  "name": "@qvac/vla-ggml",
+  "root": "packages/vla-ggml",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'carved out of on-pr-nx.yml; orchestrated by on-pr-vla.yml (fabric overlay needs fabric built before its consumers, which one flat prebuild matrix cannot express)'",
+        "cwd": "packages/vla-ggml",
+        "ci": {
+          "carveOut": true,
+          "hasCppLint": true,
+          "includeRocmSdk": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts+lint",
+          "hasFabricLockstep": true
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/vla-ggml",
+        "ci": {
+          "artifactNamePrefix": "vla-",
+          "linuxExtraPackages": "libxi-dev libxtst-dev libxrandr-dev",
+          "includeVulkanSdk": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/vla-ggml"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/vla-ggml",
+        "ci": {
+          "testCommandSuffix": true,
+          "useTeeLogging": true,
+          "dualRegistry": true,
+          "tolerateSigsegv": true,
+          "linuxArmApt": ["mesa-vulkan-drivers"],
+          "windowsVulkan": { "setSdk": true, "addPath": true },
+          "modelCache": [
+            {
+              "paths": "packages/vla-ggml/model/vla",
+              "hashFilesGlob": ".github/workflows/integration-test-nx.yml",
+              "warm": "false"
+            }
+          ],
+          "modelS3": [
+            { "src": "qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf", "dest": "model/vla/smolvla-libero-vision-q8.gguf", "skipOnCacheHit": true },
+            { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/pi05-base-q-aggressive.gguf", "dest": "model/vla/pi05/pi05-base-q-aggressive.gguf" },
+            { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/fixture.safetensors", "dest": "test/pi05-oracle/fixture.safetensors" },
+            { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/activations.safetensors", "dest": "test/pi05-oracle/activations.safetensors" },
+            { "src": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf", "dest": "model/vla/groot/groot-q8_vf16.gguf" },
+            { "src": "qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors", "dest": "test/groot-oracle/activations_v4.safetensors" }
+          ],
+          "modelEnv": {
+            "QVAC_VLA_MODEL": "{workspace}/{workdir}/model/vla/smolvla-libero-vision-q8.gguf",
+            "PI05_TEST_GGUF": "{workspace}/{workdir}/model/vla/pi05/pi05-base-q-aggressive.gguf",
+            "PI05_TEST_FIXTURE": "{workspace}/{workdir}/test/pi05-oracle/fixture.safetensors",
+            "PI05_TEST_ACTIVATIONS": "{workspace}/{workdir}/test/pi05-oracle/activations.safetensors",
+            "GROOT_TEST_GGUF": "{workspace}/{workdir}/model/vla/groot/groot-q8_vf16.gguf",
+            "GROOT_TEST_ACTIVATIONS_V4": "{workspace}/{workdir}/test/groot-oracle/activations_v4.safetensors"
+          },
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
+            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm" },
+            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-24.04-arm" },
+            { "os": "macos-15-xlarge", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "macos-15-large", "platform": "darwin", "arch": "x64", "runner": "macos-15-large", "modelCache": false, "modelS3": false, "modelEnv": false },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
+          ]
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/vla-ggml"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/vla-ggml",
+        "ci": {
+          "mode": "standard",
+          "windowsVsGenerator": true,
+          "dualRegistry": true,
+          "vulkan": { "os": "ubuntu-24.04", "shell": "bash", "path": "/opt/vulkansdk/x86_64" },
+          "platforms": [
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "macos-15-intel", "platform": "darwin", "arch": "x64" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
+          ]
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/vla-ggml",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "none",
+          "repoName": "vla",
+          "testGateMode": "none",
+          "npmTagOverride": "latest"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}
