@@ -42,6 +42,16 @@ on:
         type: boolean
         required: false
         default: false
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay and lints against the published npm baseline. A
+          fabric-stack PR must set it: clang-tidy parses the addon's translation
+          units, so without the overlay it reads the released fabric headers and
+          reports every signature the PR has already moved past as an error.
+        type: string
+        required: false
+        default: ""
 
 jobs:
   cpp-lint:
@@ -151,6 +161,28 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: npm install
+
+      # Must sit between npm install and bare-make generate: the overlay
+      # rewrites node_modules/@qvac/fabric/prebuilds in place, and generate is
+      # what bakes those include paths into compile_commands.json for clang-tidy.
+      - if: ${{ inputs.fabric-overlay-artifact != '' }}
+        name: Download fabric-prebuilds for overlay
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      # This job is pinned to qvac-ubuntu2204-x64, so the platform pair is fixed
+      # rather than read off a matrix. Scoping it means the action fails loudly
+      # if the artifact has no linux-x64/ instead of silently overlaying nothing.
+      - if: ${{ inputs.fabric-overlay-artifact != '' }}
+        name: Overlay PR @qvac/fabric prebuilds
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: linux
+          arch: x64
 
       - name: Generate build system
         id: bare_make_generate
