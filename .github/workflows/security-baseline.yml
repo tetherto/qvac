@@ -91,6 +91,7 @@ jobs:
           .github/scripts/test/publish-gate-policy.test.mjs
           .github/scripts/test/publish-gpr-skip-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
+          .github/scripts/test/await-ts-checks.test.mjs
 
       # Pins which registry the mobile prebuild fallback resolves. The
       # @tetherto/<addon>-mono path is how an unmerged NATIVE change reaches a
