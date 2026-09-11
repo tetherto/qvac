@@ -451,17 +451,18 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
-    // Deliberate divergence from fabric 10549, which keeps the first iGPU plus
-    // every further iGPU from the same registry: embed keeps at most one.
-    // ocr-ggml and vla-ggml are already on 10549 and still resolve to a single
-    // device without building a fabric-shaped list at all, so one iGPU matches
-    // the rest of the repo; and the rules only differ on a host exposing two or
-    // more distinct iGPUs under one registry, which no shipped backend
-    // configuration produces (Metal and OpenCL always report GPU, and Vulkan
-    // deduplicates physical devices by UUID before registering them).
-    // SplitDevicesKeepOnlyOneIntegratedGpu pins this choice.
+    // Fabric 10549 (llama_prepare_model_devices, src/llama.cpp:265-273) keeps
+    // the first integrated GPU plus every later one whose backend REGISTRY
+    // handle matches the last kept one's; registry identity, not its name.
+    // Dropping the others is upstream llama.cpp #23897, a workaround for one
+    // integrated device enumerated by several backends; the same-registry
+    // exception is #26953, for the virtual devices CUDA reports as integrated.
+    // Unreachable on what fabric ships today — Metal and OpenCL never report
+    // IGPU and fabric builds no CUDA backend — but this package already admits
+    // CUDA, so the exception goes live the moment CUDA ships.
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
-      if (integrated.empty()) {
+      if (integrated.empty() ||
+          reg == bckI.ggml_backend_dev_backend_reg(integrated.back().handle)) {
         integrated.emplace_back(std::move(selected));
       }
       continue;

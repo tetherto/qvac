@@ -20,6 +20,12 @@ struct MockDevice {
   std::string regName;
   enum ggml_backend_dev_type type;
   std::string deviceId;
+  /// Index of the device whose `ggml_backend_reg_t` this device reports. Unset
+  /// means "my own", which is the one-registry-per-device default. Registry
+  /// IDENTITY, not its name, is what the iGPU retention rule compares, so a
+  /// shared registry can only be modelled by pointing two devices at one
+  /// handle.
+  std::optional<size_t> regAliasIndex;
 
   MockDevice(
       std::string&& desc, std::string&& backend,
@@ -30,6 +36,11 @@ struct MockDevice {
 
 static MockDevice withDeviceId(MockDevice device, std::string&& id) {
   device.deviceId = std::move(id);
+  return device;
+}
+
+static MockDevice withRegistryOf(MockDevice device, size_t deviceIndex) {
+  device.regAliasIndex = deviceIndex;
   return device;
 }
 
@@ -91,6 +102,15 @@ private:
   }
 
   static ggml_backend_reg_t static_dev_backend_reg(ggml_backend_dev_t dev) {
+    // One registry per device unless the device aliases another's, resolved
+    // through the live vector so a reallocation cannot leave a stale pointer.
+    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
+    if (currentInstance != nullptr && mock_dev != nullptr &&
+        mock_dev->regAliasIndex.has_value() &&
+        mock_dev->regAliasIndex.value() < currentInstance->devices.size()) {
+      return reinterpret_cast<ggml_backend_reg_t>(
+          &currentInstance->devices[mock_dev->regAliasIndex.value()]);
+    }
     return reinterpret_cast<ggml_backend_reg_t>(dev);
   }
 
@@ -815,17 +835,51 @@ TEST_F(BackendSelectionTest, SplitDevicesExcludeUnsupportedBackends) {
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));
 }
 
-// Pins a deliberate divergence from fabric 10549, which keeps every additional
-// iGPU sharing the first one's registry. Embed keeps at most one. Changing this
-// means revisiting that decision, not fixing a bug -- see the comment in
-// getSplitDeviceSelection.
-TEST_F(BackendSelectionTest, SplitDevicesKeepOnlyOneIntegratedGpu) {
+// The origin rule (upstream llama.cpp #23897): a second iGPU from a DIFFERENT
+// backend registry is the same physical device enumerated twice, so it is
+// dropped. Both devices share a registry NAME and still have distinct registry
+// handles — the rule compares identity, so matching names must not be enough.
+TEST_F(BackendSelectionTest, SplitDevicesKeepOneIgpuPerDistinctRegistry) {
   mockBackend.addDevice(MockDevice(
       "Intel Iris Xe", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"));
   mockBackend.addDevice(MockDevice(
       "Intel Iris Xe", "Vulkan1", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));
+}
+
+// The exception (upstream llama.cpp #26953): CUDA reports virtual devices as
+// integrated GPUs, so every later iGPU sharing the kept one's registry handle
+// is a distinct device and must survive. Reachable once fabric builds CUDA.
+TEST_F(BackendSelectionTest, SplitDevicesKeepIgpusSharingOneRegistry) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice("NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),
+      "0000:01:00.0-v0"));
+  mockBackend.addDevice(withRegistryOf(
+      withDeviceId(
+          MockDevice(
+              "NVIDIA GB10", "CUDA1", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),
+          "0000:01:00.0-v1"),
+      0));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0", "CUDA1"}));
+}
+
+// Retention chains off the most recently KEPT iGPU, not off the most recently
+// SEEN one: a dropped device's registry must not become the reference that
+// admits a later device sharing it.
+TEST_F(BackendSelectionTest, SplitDevicesChainIgpuRegistryFromLastKept) {
+  mockBackend.addDevice(MockDevice(
+      "NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"));
+  mockBackend.addDevice(MockDevice(
+      "Intel UHD 770", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"));
+  mockBackend.addDevice(withRegistryOf(
+      MockDevice(
+          "Intel Iris Xe", "Vulkan1", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"),
+      1));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
 }
 
 TEST_F(BackendSelectionTest, SplitDevicesPreferDiscreteAndDedupeByDeviceId) {

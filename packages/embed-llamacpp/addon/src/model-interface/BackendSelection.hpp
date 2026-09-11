@@ -73,7 +73,8 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 /// @brief Select the Fabric-compatible split list for layer split mode.
 /// Mirrors qvac-fabric's filtered device branch under this addon's allowlist:
 ///   - RPC devices are prepended and never suppress a local GPU.
-///   - Local discrete GPUs when any are eligible, otherwise one integrated GPU.
+///   - Local discrete GPUs when any are eligible, otherwise the first
+///     integrated GPU plus any later one sharing its backend registry handle.
 ///   - Discrete duplicates are dropped by the raw
 ///     `ggml_backend_dev_props::device_id`, compared byte for byte as fabric
 ///     does, so CUDA virtual (`-vN`) devices stay distinct; a device with a
