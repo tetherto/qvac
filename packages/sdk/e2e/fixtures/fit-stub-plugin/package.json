@@ -1,0 +1,21 @@
+{
+  "name": "custom-fit-stub-plugin",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "e2e fixture: runs @qvac/model-fit on a header-only sparse stub of a downloaded GGUF and compares with the full file",
+  "exports": {
+    "./plugin": "./plugin.js",
+    "./check": "./check.mjs",
+    "./client": {
+      "types": "./client.d.ts",
+      "default": "./client.js"
+    }
+  },
+  "dependencies": {
+    "@qvac/model-fit": "^0.8.0"
+  },
+  "peerDependencies": {
+    "@qvac/sdk": "*",
+    "zod": "*"
+  }
+}
