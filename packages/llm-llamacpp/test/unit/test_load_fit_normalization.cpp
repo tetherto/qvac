@@ -336,15 +336,16 @@ protected:
       std::vector<std::string> tensorDevices = {}) {
     return {
         .resolveBackend =
-            [selected](
-                backend_selection::BackendType,
-                const std::optional<backend_selection::MainGpu>&,
-                const ModelMetaData&,
-                bool,
-                const std::vector<std::string>&) { return selected; },
+            [selected](const backend_selection::BackendRequest&) {
+              return selected;
+            },
         .gpuBackendSupportsRowSplit =
             [supportsRowSplit]() { return supportsRowSplit; },
-        .tensorSplitDeviceNames = [tensorDevices]() { return tensorDevices; }};
+        .tensorSplitDeviceNames =
+            [tensorDevices](
+                const std::string&, const backend_selection::LoadConstraints&) {
+              return tensorDevices;
+            }};
   }
 
   static lfn::ConfigMap baseConfig() {
@@ -431,15 +432,9 @@ TEST_F(LoadFitNormalizationTest, RowSplitProbeRunsOnlyForSelectedGpuRowMode) {
       "/tmp/model.gguf", std::move(cpuRowConfig), metadata_, {}, dependencies));
   EXPECT_EQ(probeCalls, 0);
 
-  dependencies.resolveBackend =
-      [](backend_selection::BackendType,
-         const std::optional<backend_selection::MainGpu>&,
-         const ModelMetaData&,
-         bool,
-         const std::vector<std::string>&) {
-        return lfn::SelectedBackend{
-            .type = backend_selection::GPU, .name = "none"};
-      };
+  dependencies.resolveBackend = [](const backend_selection::BackendRequest&) {
+    return lfn::SelectedBackend{.type = backend_selection::GPU, .name = "none"};
+  };
   static_cast<void>(lfn::normalizeLoadForFit(
       "/tmp/model.gguf", baseConfig(), metadata_, {}, dependencies));
   EXPECT_EQ(probeCalls, 0);
@@ -449,6 +444,26 @@ TEST_F(LoadFitNormalizationTest, RowSplitProbeRunsOnlyForSelectedGpuRowMode) {
   static_cast<void>(lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(gpuRowConfig), metadata_, {}, dependencies));
   EXPECT_EQ(probeCalls, 1);
+}
+
+TEST_F(LoadFitNormalizationTest, DuplicateKvCacheConstraintsAreDeduplicated) {
+  std::vector<enum ggml_type> capturedTypes;
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
+  dependencies.resolveBackend =
+      [&capturedTypes](const backend_selection::BackendRequest& request) {
+        capturedTypes = request.constraints.kvCacheTypes;
+        return lfn::SelectedBackend{
+            .type = backend_selection::GPU, .name = "none"};
+      };
+
+  auto config = baseConfig();
+  config["cache-type-k"] = "pq3_0";
+  config["cache-type-v"] = "pq3_0";
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+
+  ASSERT_EQ(capturedTypes.size(), 1U);
+  EXPECT_EQ(capturedTypes.front(), GGML_TYPE_PQ3_0);
 }
 
 // QVAC-23763: the split-mode --device branch. A CPU-only test process has no
@@ -471,9 +486,10 @@ TEST_F(LoadFitNormalizationTest, SplitModeOmitsDeviceWhenTheDependencyIsUnset) {
 
 TEST_F(LoadFitNormalizationTest, SplitModeOmitsDeviceOnAnEmptyDeviceList) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
-  dependencies.splitModeDeviceNames = [](const std::string&) {
-    return std::vector<std::string>{};
-  };
+  dependencies.splitModeDeviceNames =
+      [](const std::string&, const backend_selection::LoadConstraints&) {
+        return std::vector<std::string>{};
+      };
   auto config = baseConfig();
   config["split-mode"] = "layer";
   const auto result = lfn::normalizeLoadForFit(
@@ -485,7 +501,9 @@ TEST_F(LoadFitNormalizationTest, SplitModeEmitsDeviceForTheScopedList) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
   std::string seenSelectedName;
   dependencies.splitModeDeviceNames =
-      [&seenSelectedName](const std::string& selectedName) {
+      [&seenSelectedName](
+          const std::string& selectedName,
+          const backend_selection::LoadConstraints&) {
         seenSelectedName = selectedName;
         return std::vector<std::string>{"none"};
       };
@@ -502,9 +520,10 @@ TEST_F(LoadFitNormalizationTest, SplitModeEmitsDeviceForTheScopedList) {
 // "none" and this would not throw.
 TEST_F(LoadFitNormalizationTest, SplitModeJoinsSeveralDevicesIntoOneValue) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
-  dependencies.splitModeDeviceNames = [](const std::string&) {
-    return std::vector<std::string>{"none", "phantom0"};
-  };
+  dependencies.splitModeDeviceNames =
+      [](const std::string&, const backend_selection::LoadConstraints&) {
+        return std::vector<std::string>{"none", "phantom0"};
+      };
   auto config = baseConfig();
   config["split-mode"] = "layer";
   EXPECT_THROW(
@@ -518,9 +537,10 @@ TEST_F(LoadFitNormalizationTest, SplitModeJoinsSeveralDevicesIntoOneValue) {
 // rewritten to the selected device's position rather than forwarded as-is.
 TEST_F(LoadFitNormalizationTest, SplitModeRewritesMainGpuToTheScopedPosition) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
-  dependencies.splitModeDeviceNames = [](const std::string&) {
-    return std::vector<std::string>{"none"};
-  };
+  dependencies.splitModeDeviceNames =
+      [](const std::string&, const backend_selection::LoadConstraints&) {
+        return std::vector<std::string>{"none"};
+      };
   auto config = baseConfig();
   config["split-mode"] = "layer";
   config["main-gpu"] = "3";
@@ -533,9 +553,10 @@ TEST_F(LoadFitNormalizationTest, SplitModeRewritesMainGpuToTheScopedPosition) {
 // and the caller's index must survive untouched.
 TEST_F(LoadFitNormalizationTest, SplitModeKeepsMainGpuWhenDeviceIsOmitted) {
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
-  dependencies.splitModeDeviceNames = [](const std::string&) {
-    return std::vector<std::string>{};
-  };
+  dependencies.splitModeDeviceNames =
+      [](const std::string&, const backend_selection::LoadConstraints&) {
+        return std::vector<std::string>{};
+      };
   auto config = baseConfig();
   config["split-mode"] = "layer";
   config["main-gpu"] = "3";
@@ -549,10 +570,12 @@ TEST_F(LoadFitNormalizationTest, SplitModeKeepsMainGpuWhenDeviceIsOmitted) {
 TEST_F(LoadFitNormalizationTest, SingleGpuModeIgnoresTheSplitDeviceList) {
   bool consulted = false;
   auto dependencies = backend({.type = backend_selection::GPU, .name = "none"});
-  dependencies.splitModeDeviceNames = [&consulted](const std::string&) {
-    consulted = true;
-    return std::vector<std::string>{"phantom0"};
-  };
+  dependencies.splitModeDeviceNames =
+      [&consulted](
+          const std::string&, const backend_selection::LoadConstraints&) {
+        consulted = true;
+        return std::vector<std::string>{"phantom0"};
+      };
   auto config = baseConfig();
   config["split-mode"] = "none";
   const auto result = lfn::normalizeLoadForFit(

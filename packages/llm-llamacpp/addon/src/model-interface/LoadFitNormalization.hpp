@@ -76,26 +76,28 @@ struct SelectedBackend {
   bool isMaliGpu = false;
 };
 
-/// Args: preferred type, main-gpu override, model metadata, isFinetuning,
-/// and the parsed `backend` priority list (empty when the caller did not set
-/// one). QVAC-23763.
-using BackendResolver = std::function<SelectedBackend(
-    backend_selection::BackendType,
-    const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
-    bool, const std::vector<std::string>&)>;
+/// QVAC-23763: takes the whole request rather than a growing argument list. The
+/// KV-cache-type constraint was the sixth thing selection needed to know, and
+/// the positional form had already reached five.
+using BackendResolver =
+    std::function<SelectedBackend(const backend_selection::BackendRequest&)>;
 
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
   std::function<bool()> gpuBackendSupportsRowSplit;
-  /// Args: the chosen backend's device name. Returns the devices to pass as
-  /// `--device` in multi-GPU split mode, or empty to keep omitting it.
+  /// Args: the chosen backend's device name and load constraints. Returns the
+  /// devices to pass as `--device` in multi-GPU split mode, or empty to keep
+  /// omitting it.
   /// QVAC-23763. Unset is treated as empty, so existing callers that build this
   /// struct without it keep the pre-CUDA behaviour.
-  std::function<std::vector<std::string>(const std::string&)>
+  std::function<std::vector<std::string>(
+      const std::string&, const backend_selection::LoadConstraints&)>
       splitModeDeviceNames;
-  /// Devices to pin LLAMA_SPLIT_MODE_TENSOR to. Consulted only for tensor
-  /// mode; see backend_selection::getTensorSplitDeviceNames.
-  std::function<std::vector<std::string>()> tensorSplitDeviceNames;
+  /// Devices that meet the load constraints to pin LLAMA_SPLIT_MODE_TENSOR to.
+  /// Consulted only for tensor mode; see getTensorSplitDeviceNames.
+  std::function<std::vector<std::string>(
+      const std::string&, const backend_selection::LoadConstraints&)>
+      tensorSplitDeviceNames;
 };
 
 struct NormalizedLoad {
