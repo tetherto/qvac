@@ -1,0 +1,8 @@
+{
+  "name": "inference-addon-cpp",
+  "root": "packages/inference-addon-cpp",
+  "targets": {},
+  "implicitDependencies": [
+    "lint-cpp"
+  ]
+}

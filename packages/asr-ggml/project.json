@@ -1,0 +1,119 @@
+{
+  "name": "@qvac/asr-ggml",
+  "root": "packages/asr-ggml",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "hasCppLint": true,
+          "hasCoload": true,
+          "coloadActive": false,
+          "hasPerfReport": true,
+          "perfReportVariant": "rtf",
+          "perfReportScript": "scripts/perf-report/aggregate-asr-ggml-rtf.js",
+          "perfReportManualDir": "packages/asr-ggml/benchmarks/manual-results",
+          "perfReportDesktopPattern": "rtf-results-asr-ggml-*",
+          "perfReportMobilePattern": "perf-report-asr-ggml-*",
+          "perfReportOutputStem": "asr-ggml-unified-performance-report"
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "artifactNamePrefix": "asr-ggml-",
+          "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev",
+          "setupPythonOnWindows": true,
+          "includeVulkanSdk": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/asr-ggml"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "carveOut": true
+        }
+      }
+    },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-asr-ggml-rtf.js",
+          "manualDir": "packages/asr-ggml/benchmarks/manual-results"
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/asr-ggml"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "mode": "coverage",
+          "continueOnError": true,
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
+          ],
+          "hasCcache": true,
+          "needsWhisperHfModels": true,
+          "needsParakeetS3Gguf": true,
+          "buildOutputDir": "build/addon/tests",
+          "testEnvVars": [
+            { "name": "QVAC_TEST_GGUF", "path": "models/sortformer-4spk-v1.q4_0.gguf" }
+          ]
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "rename-prefix",
+          "repoName": "asr-ggml",
+          "testGateMode": "post-publish-integration"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}

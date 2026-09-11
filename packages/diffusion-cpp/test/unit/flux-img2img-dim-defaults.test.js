@@ -40,6 +40,13 @@ test('non-FLUX prediction — params returned unchanged', function (t) {
   t.absent(result.height)
 })
 
+test('legacy FLUX.1 prediction does not receive FLUX.2 defaults', function (t) {
+  const result = applyFluxImg2ImgDimDefaults(BASE_PARAMS, 'flux_flow', false)
+  t.is(result, BASE_PARAMS)
+  t.absent(result.width)
+  t.absent(result.height)
+})
+
 test('both axes explicit — params returned unchanged', function (t) {
   const params = { ...BASE_PARAMS, width: 512, height: 512 }
   const result = applyFluxImg2ImgDimDefaults(params, FLUX_PRED, false)
