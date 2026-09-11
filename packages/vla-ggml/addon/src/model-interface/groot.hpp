@@ -570,10 +570,13 @@ public:
   // embodiment is requested; the tag is unknown to the full tag->cat_id map;
   // the resolved cat_id is not in this GGUF's ship set; or the resolved
   // num_cameras is unknown/invalid and no override was supplied.
+  // `backendOverride` lists GPU backend families in priority order, e.g.
+  // {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
   GrootModel(
       const std::string& ggufPath, bool forceCpu,
       const std::string& backendsDir,
-      const VlaEmbodimentRequest& embodiment = {});
+      const VlaEmbodimentRequest& embodiment = {},
+      const std::vector<std::string>& backendOverride = {});
 
   ~GrootModel() override;
 

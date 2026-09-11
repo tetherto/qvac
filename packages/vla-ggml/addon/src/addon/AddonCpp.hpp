@@ -44,11 +44,14 @@ public:
   // `backendsDir`: absolute path to the prebuilds folder; forwarded to the
   // backend implementation so ggml backends are loaded from an absolute
   // path rather than relative to process CWD (required on mobile).
+  // `backendOverride`: GPU backend families in priority order, e.g.
+  // {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
   explicit VlaModel(
       const std::string& ggufPath, bool forceCpu = false,
-      std::string backendsDir = {}, const VlaEmbodimentRequest& embodiment = {})
+      std::string backendsDir = {}, const VlaEmbodimentRequest& embodiment = {},
+      const std::vector<std::string>& backendOverride = {})
       : model_(createVlaModelFromGguf(
-            ggufPath, forceCpu, backendsDir, embodiment)) {
+            ggufPath, forceCpu, backendsDir, embodiment, backendOverride)) {
     // Canonical `backendDevice` encoding used across the inference addons
     // (LlamaModel, BertModel): 0 = CPU, 1 = GPU. Captured at load time so
     // `runtimeStats()` can report it without re-querying ggml.
