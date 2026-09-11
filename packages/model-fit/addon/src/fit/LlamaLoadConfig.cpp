@@ -646,15 +646,33 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
       config["flash-attn"] = isBitnet ? "off" : "on";
     }
   }
-  // Exact `on`, matching `llm-llamacpp`'s `valueIs("flash-attn", "flash_attn",
-  // "on")` (LoadFitNormalization.cpp:287). The broader truthiness diverged:
-  // with `flash_attn: 'true'` the addon's q8_0 KV auto-default below does not
-  // fire and the load keeps f16, so treating it as enabled here halved the
-  // projected KV footprint — the direction that reports `fits` for a load that
-  // will not. Widening the spelling belongs in `llm-llamacpp` first so both
-  // move together.
-  const bool flashEnabled =
-      config.contains("flash-attn") && lower(config.at("flash-attn")) == "on";
+  // qvac-fabric's own vocabulary, called rather than mirrored so this cannot
+  // drift from `llm-llamacpp`'s `resolveFlashAttn` again: the two have to agree
+  // or the fitter and the loader answer differently for the same config. Both
+  // read the same three sets, case-sensitively as fabric does — lowercasing
+  // here made the fitter more permissive than the parser it feeds.
+  const auto flashIt = config.find("flash-attn");
+  const bool flashSet = flashIt != config.end();
+  const std::string flashValue = flashSet ? flashIt->second : std::string();
+  if (flashSet && !common_arg_utils::is_truthy(flashValue) &&
+      !common_arg_utils::is_falsey(flashValue) &&
+      !common_arg_utils::is_autoy(flashValue)) {
+    // Rejected here rather than left to fabric's parser in
+    // `parseGenericConfig`, which runs after the guards below: a mixed-case
+    // `On` used to arm them and surface a typo as the Adreno quantized-KV
+    // error, the same misattribution the loader side closed.
+    throw std::invalid_argument(
+        "model-fit: config.flash-attn must be one of 'on', 'enabled', 'true', "
+        "'1', 'off', 'disabled', 'false', '0', 'auto', or '-1'");
+  }
+  const bool flashEnabled = flashSet && common_arg_utils::is_truthy(flashValue);
+  // "Might flash attention end up on?" — `'auto'` counts, because fabric
+  // promotes AUTO to ENABLED for a quantized V cache, so the crash guard has to
+  // fire for it. The q8_0 projection below stays on `flashEnabled`, matching
+  // the loader, which withholds that default from `'auto'` to preserve
+  // fabric's capability probe.
+  const bool flashMayEnable =
+      flashEnabled || (flashSet && common_arg_utils::is_autoy(flashValue));
   const auto isQuantizedCache = [](const std::string& value) {
     const std::string type = lower(value);
     return type == "q8_0" || type == "q4_0" || type == "q4_1" ||
@@ -689,7 +707,7 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     return unsupported(
         "TurboQuant and PolarQuant KV cache are not supported on Metal");
   }
-  if (isAdrenoVulkan && flashEnabled && (quantizedK || quantizedV)) {
+  if (isAdrenoVulkan && flashMayEnable && (quantizedK || quantizedV)) {
     return unsupported(
         "quantized KV cache with flash attention is not supported on Adreno "
         "800+ Vulkan");

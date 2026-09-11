@@ -1651,7 +1651,7 @@ test('mobile validate-devices reads its filter/shard data from the tested ref, n
 
 test('mobile dispatch inputs are injection-safe and default to branch-native + exact-model runs', () => {
   // (1) `${{ github.event.inputs.package }}` must never be interpolated into a
-  // run: script — it goes through an `env:` block per github-actions.mdc, else a
+  // run: script — it goes through an `env:` block per .github/AGENTS.md, else a
   // crafted spec (`"; curl … | bash; echo "`) breaks out of the scope check that
   // renders after the quotes break; (2) the model-match operator defaults to
   // EQUALS so a maxDevices:1 dispatch bills the exact fleet model, not a CONTAINS
