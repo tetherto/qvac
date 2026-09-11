@@ -9,20 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The published linux-x64 prebuild ships the CUDA backend again, next to
+  Vulkan and the CPU variants: with the per-platform prebuild packages the
+  CUDA module no longer pushes one npm tarball over the registry size limit.
+  CUDA stays a runtime-loaded module — it wins the GPU cascade only where the
+  NVIDIA driver and the CUDA 13 runtime libraries (cudart, cuBLAS) resolve at
+  load time; every other host keeps Vulkan or CPU. `npm run build:cuda`
+  builds the same configuration from source.
+
 - Opt-in CUDA builds (`ENABLE_CUDA=ON`) now work on win32-x64 and linux-arm64
   in addition to linux-x64. The CUDA backend ships as a runtime-loaded module
   (`.dll` on Windows, `.so` on Linux) next to the addon, so a CUDA-enabled
   build still loads on hosts without an NVIDIA stack and falls back to Vulkan
   or CPU. linux-arm64 targets Jetson Orin (8.7), Grace-Hopper (9.0) and
   GB10 / DGX Spark (12.1) natively, with 8.0 PTX for discrete Ampere+ cards.
-  Published prebuilds are unchanged (Vulkan on Linux/Windows).
+  Published linux-arm64 and win32-x64 prebuilds are unchanged (Vulkan).
 
 ### Changed
 
-- Raise the `speech-cpp` floor to 2026-09-04#1 and floor `ggml-speech` at
-  2026-09-04#2: fixes a Windows CUDA crash on engine unload and a stale
-  backend-capability cache that could abort GPU synthesis after backend
-  reloads, and brings in the fused speech ops and CUDA-graphs decode path.
+- Raise the `speech-cpp` floor to 2026-09-10 (one aligned stack across the
+  speech packages) and floor `ggml-speech` at 2026-09-09#1: fixes a Windows
+  CUDA crash on engine unload and a stale backend-capability cache that could
+  abort GPU synthesis after backend reloads, and brings in the fused speech
+  ops and CUDA-graphs decode path. Supertonic reaches 2x+ real-time Vulkan
+  synthesis for q8_0 and f16, runs one-graph duration and text encoders with
+  the CFM loop's CFG batched along time, and keeps the fused graph path on
+  CPU builds without a pointwise BLAS; CPU inference picks up tinyBLAS on
+  x86 Linux and Apple silicon.
 
 - **Per-platform prebuild packages.** `@qvac/tts-ggml` is now a meta package
   that ships the JavaScript wrapper only; native prebuilds install through

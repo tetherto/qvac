@@ -9,10 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The published linux-x64 prebuild ships the CUDA backend again, next to
+  Vulkan and the CPU variants: with the per-platform prebuild packages the
+  CUDA module no longer pushes one npm tarball over the registry size limit.
+  CUDA stays a runtime-loaded module — the engine prefers it over Vulkan only
+  where the NVIDIA driver and the CUDA 13 runtime libraries (cudart, cuBLAS)
+  resolve at load time; every other host keeps Vulkan or CPU. `npm run
+  build:cuda` builds the same configuration from source.
+
 - Extend opt-in CUDA builds (`ENABLE_CUDA=ON`) from linux-x64 to linux-arm64
   and win32-x64. CUDA, Vulkan, and CPU variants ship as runtime-loaded modules
   beside the addon, allowing hosts without an NVIDIA stack to fall back to
-  Vulkan or CPU. Published prebuilds remain CUDA-free.
+  Vulkan or CPU. Published linux-arm64 and win32-x64 prebuilds remain
+  CUDA-free.
 - `generateLrc` generation control: karaoke-style synchronized lyric
   timestamps in `stats.lrc` (standard LRC text) with an alignment confidence
   in `stats.lyricsScore`. Requires lyrics — explicit or Simple-Mode written —
@@ -35,12 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Require `speech-cpp` port revision `2026-09-04#1`, which adds the engine's
-  ACE-Step LRC generation, audio understanding (reverse pipeline) and Query
-  Rewriting (FORMAT pass) on top of the teacher-forced LM quality scoring,
-  and rejects `[Instrumental]` lyrics under Query Rewriting. Floor
-  `ggml-speech` at 2026-09-09 for hybrid CUDA modules on linux-arm64 and
-  win32-x64 and correct module-local timing initialization.
+- Require `speech-cpp` port revision `2026-09-10` (one aligned stack across
+  the speech packages), which adds the engine's ACE-Step LRC generation,
+  audio understanding (reverse pipeline) and Query Rewriting (FORMAT pass) on
+  top of the teacher-forced LM quality scoring, rejects `[Instrumental]`
+  lyrics under Query Rewriting, and runs the ACE-Step LM on the GPU for every
+  Vulkan device except ARM Mali. Floor `ggml-speech` at 2026-09-09#1 for
+  hybrid CUDA modules on linux-arm64 and win32-x64, correct module-local
+  timing initialization, tinyBLAS CPU acceleration on x86 Linux and Apple
+  silicon, and CPU-variant modules on every linux-x64 build.
 
 - **Per-platform prebuild packages.** `@qvac/audiogen-ggml` is now a meta
   package that ships the JavaScript wrapper only; native prebuilds install

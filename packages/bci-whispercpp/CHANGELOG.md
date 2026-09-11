@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-10, aligning bci-whispercpp with
+  the other speech packages on one engine stack. For the whisper engine this
+  brings the silero VAD `use_gpu` crash fix on GPU builds and the whisper
+  memory-fit preflight; the newer ggml-speech it pulls in adds tinyBLAS CPU
+  acceleration on x86 Linux and Apple silicon.
+
 ## [0.9.0] - 2026-09-07
 
 ### Changed
