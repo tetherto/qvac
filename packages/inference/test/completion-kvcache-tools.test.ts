@@ -7,6 +7,7 @@ import {
   unregisterModel,
   type AnyModel
 } from '@/runtime/model-registry'
+import { getRequestRegistry } from '@/runtime'
 import { ModelType } from '@/schemas'
 
 // -----------------------------------------------------------------------------
@@ -613,13 +614,13 @@ test('completion: kv-cache drops the fresh prime when the first turn is refused'
   clearRegistry()
 })
 
-// An unrecognised failure may have dirtied KV state, so the destructive
-// default must hold: the cache file is unlinked and the retry starts cold.
-test('completion: kv-cache rolls back on an unrecognised addon failure between turns', async (t) => {
+// The addon saves the cache file only after a run completes and skips the save
+// on its error paths, so a run that threw left the committed file untouched.
+test('completion: kv-cache survives an unrecognised addon failure between turns', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
-  const modelId = `kvcache-unknown-rolls-back-${Date.now()}`
+  const modelId = `kvcache-unknown-survives-${Date.now()}`
   const calls: RecordedCall[] = []
   const cachePaths: string[] = []
   registerSecondTurnThrowingModel(
@@ -632,11 +633,160 @@ test('completion: kv-cache rolls back on an unrecognised addon failure between t
     modelId,
     calls,
     cachePaths,
-    'unknown-rolls-back-key'
+    'unknown-survives-key'
   )
-  t.absent(fileSurvivedRefusal, 'the cache file is unlinked after an unrecognised failure')
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the failure')
   t.ok(refusal instanceof Error && /exploded mid-decode/.test(refusal.message), 'turn two fails')
   t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// Scripted fake: on `cancelOnRun` the run cancels its own request after the
+// first token, the way a stop button lands mid-decode. `stopReason` is what
+// the addon reports on the finished run; a cancelled run reports none.
+function registerScriptedModel(
+  modelId: string,
+  calls: RecordedCall[],
+  cachePaths: string[],
+  script: {
+    cancelOnRun?: number
+    tokensOnRun?: (run: number) => string[]
+    stopReason?: string
+  }
+): void {
+  const registry = getRequestRegistry()
+  let runCount = 0
+  registerModel(modelId, {
+    model: {
+      run(
+        prompt: unknown,
+        opts?: { prefill?: boolean; cacheKey?: string; saveCacheToDisk?: boolean }
+      ) {
+        calls.push({
+          messages: prompt as RecordedCall['messages'],
+          prefill: opts?.prefill === true
+        })
+        if (opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
+        const run = opts?.prefill ? 0 : ++runCount
+        const written =
+          opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
+            ? writeCacheFile(opts.cacheKey)
+            : Promise.resolve()
+        const tokens = script.tokensOnRun?.(run) ?? ['The area is 25 square units.']
+        return {
+          iterate: async function* () {
+            await written
+            for (const token of tokens) yield token
+            if (run === script.cancelOnRun) {
+              registry.cancel({ requestId: `${modelId}-${run}` })
+              await new Promise<void>((resolve) => setTimeout(resolve, 0))
+            }
+          },
+          await: () => written,
+          cancel: () => Promise.resolve(),
+          stats: script.stopReason ? { stopReason: script.stopReason } : {}
+        }
+      },
+      addon: { cancel: () => Promise.resolve() }
+    } as unknown as AnyModel,
+    path: `/tmp/${modelId}.gguf`,
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+}
+
+// The addon rewinds a cancelled run to the pre-request state before it
+// re-saves, so the file still holds the committed turn and must be kept.
+test('completion: kv-cache keeps the committed file when a warm turn is cancelled', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-cancel-keeps-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerScriptedModel(modelId, calls, cachePaths, { cancelOnRun: 2 })
+  const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'cancel-keeps-key'
+  )
+  t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the cancel')
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: kv-cache drops the fresh prime when the first turn is cancelled', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-cancel-cold-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerScriptedModel(modelId, calls, cachePaths, { cancelOnRun: 1 })
+  const complete = completer(modelId, 'cancel-cold-key')
+  await complete([user('Area of a triangle, base 10 height 5?')])
+
+  const fs = await import('bare-fs')
+  t.ok(
+    cachePaths.length > 0 && !fs.existsSync(cachePaths[cachePaths.length - 1]!),
+    'the fresh prime is not left behind'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// An abort that lands after the addon already finished the run is not a
+// rewind: the file holds this turn, so the boundary would be one exchange
+// short. Destructive rollback keeps the next turn correct.
+test('completion: kv-cache drops the file when an abort lands after generation finished', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-late-abort-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerScriptedModel(modelId, calls, cachePaths, { cancelOnRun: 2, stopReason: 'eos' })
+  const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'late-abort-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the cache file is unlinked after a late abort')
+  t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A zero-token finish is saved by the addon with the prompt appended, so the
+// file no longer matches the committed boundary and must go.
+test('completion: kv-cache drops the file after a zero-token warm turn', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-zero-token-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerScriptedModel(modelId, calls, cachePaths, {
+    tokensOnRun: (run) => (run === 2 ? [] : ['25.']),
+    stopReason: 'eos'
+  })
+  const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'zero-token-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the cache file is unlinked after a zero-token turn')
   t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
 
   unregisterModel(modelId)

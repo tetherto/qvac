@@ -16,10 +16,6 @@ import {
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
 import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
-import {
-  isAddonPreMutationRefusal,
-  isAddonContextOverflowError
-} from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import {
   decideCachedHistorySlice,
@@ -72,6 +68,12 @@ interface ProcessModelResponseResult extends CompletionResult {
    * to an empty payload.
    */
   producedTokens: boolean
+  /**
+   * True when the addon reports a terminal stop reason, i.e. generation ran
+   * to its own end and the cache file holds this turn. A cancelled run has
+   * none: the addon rewinds it to the pre-request state before saving.
+   */
+  generationFinished: boolean
 }
 
 interface ChatHistory {
@@ -366,13 +368,15 @@ async function* processModelResponse(
 
   const responseWithStats = response as unknown as ResponseWithStats
   const stats = withEmittedTokens(normalizeCompletionStats(responseWithStats.stats), emittedPieces)
+  const stopReason = responseWithStats.stats?.stopReason
 
   return {
     ...buildStreamResult(modelExecutionMs, stats),
     toolCalls: toolCallsResult,
     responseText: accumulatedText,
     producedTokens,
-    stoppedAtContextBoundary: responseWithStats.stats?.stopReason === 'contextOverflow'
+    stoppedAtContextBoundary: stopReason === 'contextOverflow',
+    generationFinished: stopReason !== undefined && stopReason !== 'none'
   }
 }
 
@@ -532,8 +536,9 @@ export async function* completion(
   // flips the turn's internal `committed` flag so this becomes a no-op
   // on the happy path. Scope unwinding is LIFO — registered after the
   // `removeEventListener` defer above so rollback runs before the
-  // listener detach. A thrown overflow, pre-mutation refusal, or pre-addon
-  // attachment failure never persists the turn; the committed cache stays valid.
+  // listener detach. `preserveCacheOnUnwind` selects the non-destructive
+  // `releaseTurn` when the file on disk is known to still hold the last
+  // committed turn; `releaseTurn` still drops a cache this turn primed.
   let preserveCacheOnUnwind = false
   scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
@@ -570,7 +575,10 @@ export async function* completion(
       setActiveResponse
     )
   } catch (error) {
-    preserveCacheOnUnwind = isAddonContextOverflowError(error) || isAddonPreMutationRefusal(error)
+    // The addon writes the cache file only after a run completes and skips the
+    // save on every error path, so a run that threw left the committed file as
+    // it was.
+    preserveCacheOnUnwind = true
     throw error
   }
   const shouldCommitTurn = shouldCommitCachedTurn({
@@ -580,6 +588,13 @@ export async function* completion(
     predict: mergedGenerationParams?.predict ?? (modelConfig as { predict?: number }).predict,
     stoppedAtContextBoundary: result.stoppedAtContextBoundary
   })
+  // A cancelled run is rewound by the addon to the pre-request state before the
+  // file is re-saved, so the committed cache is intact. Every other non-commit
+  // finish (zero tokens, budget or context stop) was saved as-is and must go.
+  // An abort that landed after the addon reported a stop reason is the latter.
+  if (!shouldCommitTurn) {
+    preserveCacheOnUnwind = signal.aborted && !result.generationFinished
+  }
 
   if (typeof kvCache === 'string') {
     // Custom-key path: the addon wrote the new cache state inline at
