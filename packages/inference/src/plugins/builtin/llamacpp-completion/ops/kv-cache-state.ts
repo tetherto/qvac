@@ -60,11 +60,13 @@ export function shouldCommitCachedTurn(context: CacheCommitContext): boolean {
  * attachment probing). Kept here so the decision can be unit-tested in
  * isolation.
  *
- * A committed `savedCount` means the cache holds the rendered prefix for that
- * many messages, so slicing from it drops exactly what the cache supplies —
- * the system message among them. Without a usable boundary the cache supplies
- * nothing, so the whole history goes to the addon, system message included:
- * anything held back would simply be missing from the prompt.
+ * A non-zero `savedCount` is itself the proof that a cache holds a rendered
+ * prefix: it is recorded only after a save is verified. It means the prefix
+ * covers that many messages, so slicing from it drops exactly what the cache
+ * supplies — the system message among them. Without a usable boundary the
+ * cache supplies nothing, so the whole history goes to the addon, system
+ * message included: anything held back would simply be missing from the
+ * prompt.
  *
  * The regression guard: a non-zero `savedCount` that slices the history down
  * to an empty array is stale, and the caller resends the full history rather
@@ -72,14 +74,10 @@ export function shouldCommitCachedTurn(context: CacheCommitContext): boolean {
  */
 export function decideCachedHistorySlice(
   savedCount: number,
-  cacheExists: boolean,
   history: HistoryMessage[]
 ): HistorySliceDecision {
-  const hasCachedPrefix = cacheExists && history.length > 0
-  const sliced =
-    hasCachedPrefix && savedCount > 0 && savedCount <= history.length
-      ? history.slice(savedCount)
-      : null
+  const hasCachedPrefix = savedCount > 0 && history.length > 0
+  const sliced = hasCachedPrefix && savedCount <= history.length ? history.slice(savedCount) : null
 
   // A non-null slice that is empty means the saved count is stale: the
   // cached turn boundary is claiming the entire current history is
@@ -90,8 +88,8 @@ export function decideCachedHistorySlice(
 
   return {
     messages: useSlice ? sliced : history,
-    // Only a boundary that was actually consulted can be stale. Absent a cache
-    // or a history to slice, the count is simply unused and left alone.
-    clearStaleCount: hasCachedPrefix && !useSlice && savedCount > 0
+    // Only a boundary that was actually consulted can be stale. Absent a
+    // history to slice, the count is simply unused and left alone.
+    clearStaleCount: hasCachedPrefix && !useSlice
   }
 }

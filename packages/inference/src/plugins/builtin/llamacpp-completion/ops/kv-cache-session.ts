@@ -302,7 +302,7 @@ async function deleteInactiveAutoCaches(): Promise<void> {
   const cacheKeys = await planAutoCacheEvictions({
     activeCachePaths: snapshotActivePaths(),
     // The quota pass stops at `retainedBytes <= maxBytes`, and a total reaches
-    // 0 while zero-byte caches remain (an empty `.bin` from a crashed prime).
+    // 0 while zero-byte caches remain (an empty `.bin` from an interrupted save).
     // A negative quota is unreachable, so every inactive entry is selected.
     maxBytes: -1,
     // No age threshold: the quota pass above already selects everything.
@@ -323,13 +323,13 @@ export interface TurnHandle {
   readonly cachePath: string
   /**
    * Snapshot of the on-disk saved-message count at `beginTurn` time
-   * (0 if the cache was just primed). Consumed by `decideCachedHistorySlice`
-   * to pick the message tail for the next addon call.
+   * (0 on a cold turn). Consumed by `decideCachedHistorySlice` to pick the
+   * message tail for the next addon call.
    */
   readonly savedCount: number
   /**
    * Whether the cached prefix already holds a rendered static tool block, so
-   * this turn can leave it out of its payload. False on a fresh prime and
+   * this turn can leave it out of its payload. False on a cold turn and
    * whenever the previous turn couldn't confirm the block reached the model.
    */
   readonly toolBlockCached: boolean
@@ -425,7 +425,7 @@ export interface KvCacheSession {
   /**
    * Non-destructive counterpart of `rollback`: releases locks and refs but
    * keeps the committed disk cache and its recorded prefix valid for a retry.
-   * A cache freshly primed by this same turn rolls back instead.
+   * A cache this same turn created rolls back instead.
    */
   releaseTurn(turn: TurnHandle): Promise<void>
 
@@ -517,7 +517,6 @@ export function createKvCacheSession(
       }
       throw error
     }
-    // A turn cancelled by the time it holds the lock must not prime (native work).
     // getCacheFilePath already mkdir'd the parent, so prune it before surfacing
     // the cancellation the plugin rides.
     if (input.signal?.aborted) {
@@ -528,10 +527,10 @@ export function createKvCacheSession(
     const handle = makeHandle(cachePath, undefined, releaseWriteLock, input.signal)
 
     try {
-      // In-memory registry check first — the addon defers disk writes, so
-      // a freshly-primed cache may not yet exist on disk. If the
-      // in-memory flag isn't set, fall back to a filesystem probe so
-      // caches surviving across process restarts still hit the reuse path.
+      // In-memory registry check first — the addon defers disk writes, so a
+      // just-saved cache may not yet exist on disk. If the in-memory flag isn't
+      // set, fall back to a filesystem probe so caches surviving across process
+      // restarts still hit the reuse path.
       let exists = initializedCaches.has(cachePath)
       if (!exists) {
         try {
@@ -588,7 +587,6 @@ export function createKvCacheSession(
       }
       throw error
     }
-    // A turn cancelled by the time it holds the lock must not prime (native work).
     // Discovery already mkdir'd the parent and wrote the auto marker; clean both
     // before surfacing the cancellation.
     if (input.signal?.aborted) {
@@ -670,8 +668,6 @@ export function createKvCacheSession(
         result.toolBlockCached
       )
       if (!ok) {
-        // The expected save didn't land — treat the turn as a rollback
-        // so the next turn re-primes cleanly.
         await runRollback(state)
         return
       }
@@ -773,8 +769,7 @@ export function createKvCacheSession(
     const state = turnState.get(turn)
     if (!state) return
     if (state.committed || state.rolledBack) return
-    // A cache this same turn primed has no committed state to keep — a failed
-    // first turn must not leave its own prime behind.
+    // Nothing committed exists to keep, so a failed first turn is destructive.
     if (state.createdByThisTurn) {
       await runRollback(state)
       return
@@ -793,9 +788,13 @@ export function createKvCacheSession(
     try {
       await fsPromises.unlink(state.cachePath)
     } catch (unlinkError) {
-      logger.warn(
-        `[kv-cache] Failed to remove cache file during rollback; next turn may load stale KV state. path=${state.cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
-      )
+      // A turn that fails before the addon's save has no file to remove, so
+      // ENOENT leaves no stale state behind and is not worth a warning.
+      if ((unlinkError as { code?: string }).code !== 'ENOENT') {
+        logger.warn(
+          `[kv-cache] Failed to remove cache file during rollback; next turn may load stale KV state. path=${state.cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
+        )
+      }
     }
     // Release before pruning so an empty parent can go; a sibling still holding
     // the path keeps it in the active snapshot and protects the directory.
@@ -858,8 +857,8 @@ export function createKvCacheSession(
  * cleared without a lock, so an interleaving that lands the delete's
  * in-memory cleanup after a concurrent turn has already renamed/committed
  * its file splits state: the file stays on disk while its saved-count and
- * init flag are cleared, so the next turn sees the file, skips priming, and
- * reports `savedCount=0`. Callers must not delete a key that is in active use.
+ * init flag are cleared, so the next turn loads the file and reports
+ * `savedCount=0`. Callers must not delete a key that is in active use.
  * The `auto` target is the exception: it skips keys an in-flight turn holds
  * and clears each one under the cache-state lock.
  */
