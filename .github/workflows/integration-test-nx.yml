@@ -84,10 +84,12 @@ jobs:
   matrix:
     name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
       carveouts: ${{ steps.compute.outputs.carveouts }}
+      pinmodel: ${{ steps.filter.outputs.pinmodel }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - id: compute
@@ -98,6 +100,14 @@ jobs:
           head-ref: ${{ inputs.head-ref }}
           overrides: ${{ inputs.overrides }}
           packages: ${{ inputs.packages }}
+      - id: filter
+        shell: bash
+        env:
+          M: ${{ steps.compute.outputs.matrix }}
+        run: |
+          # One row per package, not per platform: the job pins the manifest once
+          # and runs on its own non-GPU runner regardless of the platform rows.
+          echo "pinmodel=$(echo "$M" | jq -c '[.[] | select(.hasPinModelManifest == true) | {package, workdir}] | unique_by(.package)')" >> "$GITHUB_OUTPUT"
 
   # Carve-outs asr-ggml and llm-llamacpp have bespoke integration flows; routed to
   # their own reusable when nx flags them affected (options.ci carveOut:true).
@@ -134,41 +144,37 @@ jobs:
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
     needs: [matrix, runner_names]
-    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
+    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest && needs.matrix.outputs.pinmodel != '[]'
     strategy:
       matrix:
-        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+        include: ${{ fromJSON(needs.matrix.outputs.pinmodel || '[]') }}
     # Non-GPU: downloads and hashes only, no native binary (#4102).
     runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    timeout-minutes: 60
     environment: release
     permissions:
       contents: read
     steps:
-      # matrix isn't available in a job-level if:, so gating is per-step.
       - name: Manual Workspace Cleanup
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
         working-directory: .
       - name: Checkout code
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
       - name: Setup Node.js
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
       - name: Generate pins from fresh downloads
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         working-directory: ${{ matrix.workdir }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: node scripts/generate-model-manifest.mjs --force
       - name: Upload pinned model manifest
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: ${{ matrix.package }}-model-manifest
