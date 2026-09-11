@@ -1649,3 +1649,153 @@ test('kv-cache-session: releaseTurn preserves the committed cache and admits a w
     cleanup()
   }
 })
+
+// `resetForTest()` clears every in-memory layer while leaving the cache
+// directory untouched — the state a fresh worker process starts from.
+test('kv-cache-session: a committed named-cache boundary survives a worker restart', async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    let primeCallCount = 0
+    const primeIfMissing = async (p: string) => {
+      primeCallCount++
+      writeFakeCache(p)
+    }
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-a',
+      configHash,
+      primeIfMissing
+    })
+    await session.commitTurn(first, { kind: 'static', messageCount: 5, toolBlockCached: true })
+    t.ok(
+      fs.existsSync(mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(first.cachePath)),
+      'commit wrote the boundary sidecar next to the .bin'
+    )
+
+    mod.__kvCacheSessionTestHooks.resetForTest()
+
+    const restarted = mod.createKvCacheSession('test-model')
+    const second = await restarted.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-a',
+      configHash,
+      primeIfMissing
+    })
+    t.is(primeCallCount, 1, 'the on-disk cache is reused, not re-primed')
+    t.is(second.savedCount, 5, 'the saved-message boundary is restored from disk')
+    t.is(second.toolBlockCached, true, 'the tool-block flag is restored with it')
+    await restarted.releaseTurn(second)
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: rollback removes the boundary sidecar with the cache file', async (t) => {
+  const { fs, path, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    let primeCallCount = 0
+    const primeIfMissing = async (p: string) => {
+      primeCallCount++
+      writeFakeCache(p)
+    }
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-rollback',
+      configHash,
+      primeIfMissing
+    })
+    await session.commitTurn(first, { kind: 'static', messageCount: 4, toolBlockCached: false })
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(first.cachePath)
+
+    const second = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-rollback',
+      configHash,
+      primeIfMissing
+    })
+    await session.rollback(second)
+    t.is(fs.existsSync(sidecarPath), false, 'rollback unlinked the sidecar')
+    t.is(
+      fs.existsSync(path.dirname(path.dirname(first.cachePath))),
+      false,
+      'the cache-key directory is pruned once the sidecar is gone'
+    )
+
+    mod.__kvCacheSessionTestHooks.resetForTest()
+    const third = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'restart-rollback',
+      configHash,
+      primeIfMissing
+    })
+    t.is(primeCallCount, 2, 'a restart after rollback primes again')
+    t.is(third.savedCount, 0, 'and starts from a cold boundary')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: an unreadable boundary sidecar falls back to a cold boundary', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const configHash = mod.generateConfigHash('sys', [])
+    let primeCallCount = 0
+    const primeIfMissing = async (p: string) => {
+      primeCallCount++
+      writeFakeCache(p)
+    }
+
+    for (const [key, sidecar] of [
+      ['restart-garbage', '{not json'],
+      ['restart-shape', JSON.stringify({ messages: -1, toolBlock: 'yes' })]
+    ] as const) {
+      const cachePath = await utils.getCacheFilePath('test-model', configHash, key)
+      writeFakeCache(cachePath)
+      fs.writeFileSync(
+        mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(cachePath),
+        sidecar
+      )
+
+      const turn = await mod.createKvCacheSession('test-model').beginTurn({
+        kind: 'custom',
+        customKey: key,
+        configHash,
+        primeIfMissing
+      })
+      t.is(primeCallCount, 0, `${key}: the .bin is still trusted and reused`)
+      t.is(turn.savedCount, 0, `${key}: the bad sidecar is ignored`)
+    }
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: priming discards a sidecar whose cache file is gone', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const configHash = mod.generateConfigHash('sys', [])
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'restart-orphan')
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(cachePath)
+    fs.writeFileSync(sidecarPath, JSON.stringify({ messages: 9, toolBlock: true }))
+
+    const turn = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'restart-orphan',
+      configHash,
+      primeIfMissing: async (p: string) => {
+        writeFakeCache(p)
+      }
+    })
+    t.is(turn.savedCount, 0, 'a fresh prime starts from a cold boundary')
+    t.is(turn.toolBlockCached, false, 'and without a cached tool block')
+    t.is(fs.existsSync(sidecarPath), false, 'the orphaned sidecar was removed')
+  } finally {
+    cleanup()
+  }
+})
