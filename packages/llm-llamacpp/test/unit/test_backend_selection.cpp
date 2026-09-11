@@ -158,18 +158,6 @@ private:
     return "";
   }
 
-  static void static_dev_get_props(
-      ggml_backend_dev_t dev, struct ggml_backend_dev_props* props) {
-    *props = {};
-    if (!currentInstance)
-      return;
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (mock_dev && !mock_dev->deviceId.empty()) {
-      currentInstance->string_storage.push_back(mock_dev->deviceId);
-      props->device_id = currentInstance->string_storage.back().c_str();
-    }
-  }
-
   static enum ggml_backend_dev_type static_dev_type(ggml_backend_dev_t dev) {
     if (!currentInstance)
       return GGML_BACKEND_DEVICE_TYPE_CPU;
