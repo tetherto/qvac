@@ -602,7 +602,7 @@ resources.define('diffusion-esrgan', {
     device: 'gpu',
     threads: 4,
     prediction: 'v',
-    vae_on_cpu: true,
+    params_backend: 'vae=cpu',
     upscaler: {
       type: 'esrgan',
       model_src: REALESRGAN_X4PLUS_ANIME_6B,

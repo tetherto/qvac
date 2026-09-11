@@ -23,8 +23,20 @@ doesn't get lost when a generated subclass sets its own `model_config`
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from typing import Any, ClassVar
+
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class GeneratedBaseModel(BaseModel):
     model_config = ConfigDict(validate_default=True, populate_by_name=True)
+    __forbidden_fields__: ClassVar[frozenset[str]] = frozenset()
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_forbidden_fields(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            forbidden = cls.__forbidden_fields__.intersection(value)
+            if forbidden:
+                raise ValueError(f"Unsupported fields: {', '.join(sorted(forbidden))}")
+        return value

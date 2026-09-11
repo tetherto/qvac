@@ -101,6 +101,28 @@ test('loadModel: an unknown config key is named', function (t) {
   t.ok(message?.includes('modelConfig'), 'points at modelConfig')
 })
 
+test('loadModel: removed diffusion placement options name their replacements', function (t) {
+  for (const [key, replacement] of Object.entries({
+    clip_on_cpu: "modelConfig.params_backend: 'te=cpu'",
+    vae_on_cpu: "modelConfig.params_backend: 'vae=cpu'",
+    control_net_cpu: "modelConfig.backend: 'controlnet=cpu'"
+  })) {
+    for (const value of [true, false]) {
+      const message = inputError(loadBuiltinToRequestSchema, {
+        modelSrc: 'diffusion.gguf',
+        modelType: 'sdcpp-generation',
+        modelConfig: { [key]: value }
+      })
+      t.ok(message?.includes(`${key} was removed`))
+      t.ok(
+        message?.includes(
+          value ? replacement : 'Remove it; no replacement is needed when it is false.'
+        )
+      )
+    }
+  }
+})
+
 test('loadModel: a wrong value type is named with its exact path', function (t) {
   const message = inputError(loadBuiltinToRequestSchema, {
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,

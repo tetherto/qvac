@@ -49,6 +49,27 @@ const cacheModeSchema = z.enum([
   'cache-dit'
 ])
 
+function removedBackendOption(key: string, guidance: string) {
+  return (
+    z
+      .custom<never>(() => false, {
+        // Keep unions from replacing the migration error with a fallback error.
+        abort: false,
+        error: (issue) =>
+          `${key} was removed. ` +
+          (issue.input === false ||
+          issue.input === 0 ||
+          issue.input === 'false' ||
+          issue.input === '0'
+            ? 'Remove it; no replacement is needed when it is false.'
+            : guidance)
+      })
+      .optional()
+      // JSON Schema cannot infer the custom check's rejection of every value.
+      .meta({ not: {}, deprecated: true })
+  )
+}
+
 export const sdcppConfigSchema = z.object({
   mode: z
     .enum(['diffusion', 'upscale', 'video', 'world'])
@@ -129,8 +150,6 @@ export const sdcppConfigSchema = z.object({
     .enum(['cpu', 'cuda', 'std_default'])
     .optional()
     .describe('Sampler RNG type override. Default: auto (follows `rng`).'),
-  clip_on_cpu: z.boolean().optional().describe('Force CLIP text encoder to run on CPU'),
-  vae_on_cpu: z.boolean().optional().describe('Force VAE decoder to run on CPU'),
   vae_auto_cpu_fallback: z
     .boolean()
     .optional()
@@ -145,7 +164,59 @@ export const sdcppConfigSchema = z.object({
   offload_to_cpu: z
     .boolean()
     .optional()
-    .describe('Keep model weights in CPU memory and offload them during GPU compute'),
+    .describe(
+      'Keep model weights in CPU memory and offload them during GPU compute. ' +
+        "Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module."
+    ),
+  control_net_cpu: removedBackendOption(
+    'control_net_cpu',
+    "Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU."
+  ),
+  clip_on_cpu: removedBackendOption(
+    'clip_on_cpu',
+    "Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, " +
+      "or modelConfig.backend: 'te=cpu' to run its graph on CPU."
+  ),
+  vae_on_cpu: removedBackendOption(
+    'vae_on_cpu',
+    "Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, " +
+      "or modelConfig.backend: 'vae=cpu' to run its graph on CPU."
+  ),
+  backend: z
+    .string()
+    .optional()
+    .describe(
+      'Runtime backend for diffusion and video graphs, globally or per module, ' +
+        "for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'."
+    ),
+  params_backend: z
+    .string()
+    .optional()
+    .describe(
+      'Parameter residency for diffusion and video, independent of graph execution. ' +
+        "'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights " +
+        'from the local model file on demand and releases them after use. Disk is ' +
+        'never selected automatically. With offload_to_cpu enabled, explicit ' +
+        'assignments override CPU residency only for the specified modules.'
+    ),
+  max_vram: z
+    .union([z.number(), z.string()])
+    .optional()
+    .describe(
+      'VRAM budget in GiB for diffusion and video graph-cut execution. Positive ' +
+        'values set a budget; negative values use free VRAM minus the absolute ' +
+        'value as headroom; 0 disables graph cutting. Accepts per-device assignments ' +
+        "such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
+    ),
+  stream_layers: z
+    .boolean()
+    .optional()
+    .describe(
+      'Prefetch and evict diffusion layers from CPU RAM in diffusion and video ' +
+        'mode. Only takes effect with graph cutting enabled by max_vram and CPU ' +
+        'diffusion parameter residency. Does not stream from disk; use ' +
+        "params_backend: 'diffusion=disk' for on-demand file reads. Default: false."
+    ),
   flash_attn: z.boolean().optional().describe('Enable flash attention to reduce memory usage'),
   diffusion_fa: z
     .boolean()
@@ -382,7 +453,10 @@ export const sdcppConfigSchema = z.object({
     )
 })
 
-export type SdcppConfig = z.input<typeof sdcppConfigSchema>
+export type SdcppConfig = Omit<
+  z.input<typeof sdcppConfigSchema>,
+  'control_net_cpu' | 'clip_on_cpu' | 'vae_on_cpu'
+>
 
 export const diffusionStatsSchema = z.object({
   modelLoadMs: z
