@@ -100,6 +100,8 @@ Phase 3 — classify against the impact policy
         │
         ├── nothing user-facing ──────────► NO_DOCS_IMPACT        STOP
         ├── a generated surface covers it ─► GENERATED_DOCS_ONLY  STOP
+        ├── is the behaviour supported? ──► HUMAN_INPUT_REQUIRED  STOP
+        │   the repo does not say
         ▼
       DOCS_UPDATE_REQUIRED
         │
@@ -274,7 +276,11 @@ Documentary implication:
 maxTokens is essential to controlling output, so it belongs on the capability page, per the policy on essential parameters.
 ```
 
-3. If the state is `NO_DOCS_IMPACT` or `GENERATED_DOCS_ONLY`, then stop and emit the no-update report. Else continue.
+3. If the repo does not settle whether the changed behaviour is public and supported, then emit `HUMAN_INPUT_REQUIRED`, put that exact question to the developer, and stop.
+
+This is the impact ambiguity, not the routing one. It appears when an observable behaviour changed and no barrel export, no TSDoc, no test and no page says whether that behaviour is part of the contract or an accident of the implementation. Documenting an accident is worse than documenting nothing, because the next change silently breaks a promise the docs made. Ask instead of inferring. Phase 4 raises the same state for a different reason: there the behaviour is known and the page is not.
+
+4. If the state is `NO_DOCS_IMPACT` or `GENERATED_DOCS_ONLY`, then stop and emit the no-update report. Else continue.
 
 When you claim `GENERATED_DOCS_ONLY`, name the covering surface in the report. An unnamed claim is not checkable.
 
@@ -441,6 +447,8 @@ Match the patch to the change type:
 | New essential parameter on an existing function | Document it on the capability page, as a `Features` bullet or as prose in the relevant section. Follow `text-generation.mdx`. |
 | Observable behaviour changed | Correct the stale statement in place. Do not rewrite the section. |
 | New function in an existing capability | Add it to the `Functions` list with a `/reference/api#<symbol>` link. |
+| New flag on an existing CLI command | Document it inside that command's own `###` block in `cli/index.mdx`, following how the neighbouring flags are shown. |
+| New CLI command | Add a `` ### `qvac <command>` `` heading under `## Reference` in `cli/index.mdx`, matching the shape of the commands already there. Never a new page. |
 | New function that institutes a new capability | Run the `NEW_CAPABILITY_PAGE` subprocedure, below. |
 
 4. Present the diff to the developer before writing to disk.

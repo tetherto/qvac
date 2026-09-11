@@ -367,15 +367,18 @@ function runR1(pages: Page[], files: ChangedFile[]) {
       if (pairHits > 0) continue;
     }
 
-    // A new example with no page reference and no referenced sibling. R2 may
-    // still route it by the functions it calls; if not, Phase 4 asks.
+    // A new example with no page reference and no referenced sibling. R2 does
+    // NOT recover it: R2 reads the `api/` barrel, and never looks at which
+    // functions an example calls. R3 may still place it if the routing map
+    // declares its area; otherwise Phase 4 asks, and the answer becomes a map
+    // entry.
     unrouted.push({
       source: file.path,
       bucket: file.bucket,
       status: file.status,
       reason:
         file.status === "A"
-          ? "new example; no page references it yet. R2 may route it by the functions it calls, otherwise the destination section must be chosen by hand."
+          ? "new example; no page references it yet, so the destination section must be named by hand"
           : "example is not referenced by any page in scope",
     });
   }
@@ -565,18 +568,17 @@ function runR4(pages: Page[], files: ChangedFile[]) {
   }
 
   for (const [folder, folderFiles] of folders) {
-    const command = CLI_COMMANDS[folder];
+    // A folder absent from CLI_COMMANDS is, in practice, a command added after
+    // that map was written: every folder under src/ is a command today, and the
+    // framework folder (src/cli/) is bucketed `cli-infra` before it gets here.
+    // The convention is `qvac <folder>`, so fall back to it and keep the new
+    // command inside R4 (acceptance scenario Q). The map still earns its keep
+    // for the commands whose name does not follow the folder — `bundle-sdk` is
+    // `qvac bundle sdk`, `openai` is `qvac openai spec`. If a non-command
+    // folder ever appears, it routes to `## Reference` and the Phase 4 filter
+    // drops it: no claim there went stale.
+    const command = CLI_COMMANDS[folder] ?? `qvac ${folder}`;
     const representative = folderFiles[0]!.path;
-
-    if (!command) {
-      unrouted.push({
-        source: `packages/cli/src/${folder}/`,
-        bucket: "cli-command",
-        status: folderFiles[0]!.status,
-        reason: `no command mapping for src/${folder}/ — add it to CLI_COMMANDS and give it a heading in cli/index.mdx`,
-      });
-      continue;
-    }
 
     if (!cliIndex) continue;
 
@@ -605,12 +607,28 @@ function runR4(pages: Page[], files: ChangedFile[]) {
     } else {
       // A new command folder with no heading. This is NOT a new page — the CLI
       // documents commands as sections of one page (acceptance scenario Q).
-      unrouted.push({
-        source: `packages/cli/src/${folder}/`,
-        bucket: "cli-command",
-        status: folderFiles[0]!.status,
-        reason: `no \`${command}\` heading in cli/index.mdx — propose adding one under "## Reference" (a new command is a new section, never a new page)`,
-      });
+      // The destination is deterministic, so route it instead of asking: a new
+      // command always becomes a `###` heading under `## Reference`.
+      const reference = cliIndex.headings.find(
+        (h) => h.level === 2 && h.text.trim() === "Reference",
+      );
+
+      if (reference) {
+        record(
+          cliIndex,
+          reference.line,
+          "R4",
+          representative,
+          `new command with no \`${command}\` heading yet — add one under "## Reference"`,
+        );
+      } else {
+        unrouted.push({
+          source: `packages/cli/src/${folder}/`,
+          bucket: "cli-command",
+          status: folderFiles[0]!.status,
+          reason: `no \`${command}\` heading in cli/index.mdx and no "## Reference" section to add one under`,
+        });
+      }
     }
 
     // Narrative sections that also describe this command.
@@ -811,6 +829,14 @@ function main() {
   const routedSources = new Set(candidates.map((c) => c.source));
   runR3(pages, changeSet.files, routedSources);
 
+  // An exact router can report a file unrouted and R3 can then place it — a
+  // Python example with no `file=` directive and no TS sibling is the common
+  // case. Reporting both would make Phase 4 ask which page covers a topic the
+  // run just routed. A route is an answer; unrouted is the absence of one, so
+  // the candidate wins.
+  const resolvedSources = new Set(candidates.map((c) => c.source));
+  const stillUnrouted = unrouted.filter((u) => !resolvedSources.has(u.source));
+
   // Group by page: the unit a reviewer opens.
   const byPage = new Map<string, Candidate[]>();
   for (const c of candidates) {
@@ -818,13 +844,13 @@ function main() {
     byPage.get(c.page)!.push(c);
   }
 
-  const newSymbols = unrouted.filter((u) => u.newSymbol).map((u) => u.newSymbol!);
+  const newSymbols = stillUnrouted.filter((u) => u.newSymbol).map((u) => u.newSymbol!);
 
   // Advisory only. The skill owns the state machine; the router reports the
   // signals it can see.
   let state = "DOCS_UPDATE_REQUIRED";
   if (byPage.size === 0 && newSymbols.length > 0) state = "NEW_CAPABILITY_PAGE";
-  else if (byPage.size === 0 && unrouted.length > 0) state = "HUMAN_INPUT_REQUIRED";
+  else if (byPage.size === 0 && stillUnrouted.length > 0) state = "HUMAN_INPUT_REQUIRED";
   else if (byPage.size === 0) state = "NO_DOCS_IMPACT";
 
   console.log(
@@ -840,7 +866,7 @@ function main() {
         pages: [...byPage.entries()]
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([page, hits]) => ({ page, targets: hits })),
-        unrouted,
+        unrouted: stillUnrouted,
         discarded,
       },
       null,

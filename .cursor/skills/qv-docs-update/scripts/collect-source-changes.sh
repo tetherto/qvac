@@ -141,7 +141,12 @@ bucket_for() {
     # and would otherwise match the command glob.
     packages/cli/src/cli/*) echo "cli-infra"; return ;;
     packages/cli/src/config.ts|packages/cli/src/errors.ts|packages/cli/src/logger.ts|packages/cli/src/index.ts) echo "cli-infra"; return ;;
-    packages/cli/src/bundle-sdk/*|packages/cli/src/serve/*|packages/cli/src/configure/*|packages/cli/src/openai/*|packages/cli/src/doctor/*|packages/cli/src/verify/*) echo "cli-command"; return ;;
+    # Any command folder, not a closed list of the commands that exist today. A
+    # NEW command has to reach R4, which routes it to the `## Reference` section
+    # of cli/index.mdx. A closed list bucketed it `internal`, and a run that is
+    # internal-only stops at NO_DOCS_IMPACT — an entire new command disappearing
+    # without a word (acceptance scenario Q).
+    packages/cli/src/*/*) echo "cli-command"; return ;;
 
     packages/sdk-python/*) echo "python-surface"; return ;;
   esac
