@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.24.1] - 2026-09-12
+
+### Changed
+
+- `@qvac/fabric` dependency floor raised `^0.10.0` -> `^0.10.1`, picking up the
+  fabric runtime built with `-DLLAMA_OPENSSL=OFF`. Upstream defaults
+  `LLAMA_OPENSSL` to `ON`, so `vendor/cpp-httplib` linked `OpenSSL::SSL` /
+  `OpenSSL::Crypto` into the shared runtime; nothing in this addon uses
+  httplib's HTTPS path, so the prebuild no longer carries a
+  build-host-dependent system OpenSSL it never calls.
+
+  This is a floor raise, not a range change: `^0.10.0` already admitted
+  `0.10.1`, so a fresh install resolved it either way. What changes is that the
+  unpatched `0.10.0` can no longer satisfy the range, so an existing install or
+  a stale lockfile is forced onto the patched runtime.
+
 ## [0.24.0] - 2026-09-01
 
 ### Changed
