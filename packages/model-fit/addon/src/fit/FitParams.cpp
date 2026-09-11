@@ -33,6 +33,53 @@ namespace {
 std::mutex
     g_fitMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
+/// Attaches the per-device memory projection for the resolved parameters.
+///
+/// Runs one more no-alloc probe, so it costs roughly what the fit cost. A probe
+/// failure leaves `out.projection` empty and never touches `out.status`.
+/// `mparams`/`cparams` must still borrow from live storage when this is called.
+void captureProjection(
+    const std::string& modelPath, const llama_model_params& mparams,
+    const llama_context_params& cparams, uint64_t marginBytes, FitResult& out) {
+  try {
+    std::vector<ggml_backend_dev_t> devs;
+    uint32_t hpNgl = 0;
+    uint32_t hpNctTrain = 0;
+    uint32_t hpNexpert = 0;
+    const common_device_memory_data_vec rows = common_get_device_memory_data(
+        modelPath.c_str(),
+        &mparams,
+        &cparams,
+        devs,
+        hpNgl,
+        hpNctTrain,
+        hpNexpert,
+        GGML_LOG_LEVEL_INFO);
+    // `devs` is the model's device list (`llama_model_get_device`), filled by
+    // the same probe that produced `rows`, so the zip cannot drift. It is not
+    // `nDevices` (`ggml_backend_dev_count`): the CPU device is counted there
+    // but its demand is folded into the trailing host row.
+    if (rows.size() != devs.size() + 1) {
+      return;
+    }
+    out.projection.reserve(rows.size());
+    for (size_t i = 0; i < rows.size(); ++i) {
+      const bool isHost = i == devs.size();
+      const char* name = isHost ? "host" : ggml_backend_dev_name(devs[i]);
+      out.projection.push_back(
+          {name == nullptr ? "" : name,
+           static_cast<uint64_t>(rows[i].total),
+           static_cast<uint64_t>(rows[i].free),
+           marginBytes,
+           static_cast<uint64_t>(rows[i].model),
+           static_cast<uint64_t>(rows[i].context),
+           static_cast<uint64_t>(rows[i].compute)});
+    }
+  } catch (const std::exception&) {
+    out.projection.clear();
+  }
+}
+
 /// Resolves the directory the packaged ggml backends are loaded from.
 ///
 /// The resolved path is handed to `ggml_backend_load_all_from_path`, which
@@ -430,6 +477,11 @@ FitResult runFit(const FitRequest& req) {
   // A fitted 0 means "the trained context", not a usable load plan.
   detail::finalizeFitContext(out, trainedCtx);
 
+  // `out.status`, not the local: finalize above may have downgraded to ERROR.
+  if (out.status != static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR)) {
+    captureProjection(req.modelPath, mparams, cparams, margins[0], out);
+  }
+
   return out;
 }
 
@@ -543,6 +595,19 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
   out.nCtx = contextParams.n_ctx;
   out.nBatch = contextParams.n_batch;
   out.nUbatch = contextParams.n_ubatch;
+
+  // Before the tensorSplit move below: `modelParams.tensor_split` points into
+  // `execution.tensorSplit`, and the projection probe reads modelParams.
+  // finalizeFitContext runs after this and clears the rows if it downgrades.
+  if (status != COMMON_PARAMS_FIT_STATUS_ERROR) {
+    captureProjection(
+        req.modelPath,
+        modelParams,
+        contextParams,
+        static_cast<uint64_t>(req.marginMiB) * 1024ULL * 1024ULL,
+        out);
+  }
+
   out.tensorSplit = std::move(execution.tensorSplit);
   out.splitMode = static_cast<int32_t>(modelParams.split_mode);
   out.mainGpu = modelParams.main_gpu;

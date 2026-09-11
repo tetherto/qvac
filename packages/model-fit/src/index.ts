@@ -98,6 +98,27 @@ export interface FitBuftOverride {
   bufferType: string
 }
 
+/**
+ * Projected memory for one device — or the trailing `"host"` row — at the
+ * resolved parameters, in bytes. `totalBytes`/`freeBytes` are the budget the
+ * verdict was judged against; the remaining fields are the projected demand.
+ */
+export interface FitProjectionRow {
+  /** Device name as the backend reports it, or `"host"` for the host row. */
+  name: string
+  totalBytes: number
+  /**
+   * Raw backend gauge, before the margin. The budget the verdict was judged
+   * against is `freeBytes - marginBytes`; headroom is that minus the demand.
+   */
+  freeBytes: number
+  /** The margin applied to this row, in bytes (`marginMiB` × 1 MiB). */
+  marginBytes: number
+  modelBytes: number
+  contextBytes: number
+  computeBytes: number
+}
+
 /** What the fitter measured against. Present on every outcome. */
 export interface FitDeviceInventory {
   /**
@@ -109,6 +130,18 @@ export interface FitDeviceInventory {
   nDevices: number
   /** Of those, how many are accelerators (GPU or iGPU). 0 means host-only. */
   nGpuDevices: number
+  /**
+   * Projected memory per device the model was assigned to, in the order
+   * llama.cpp holds them (`llama_model_get_device`, the index `tensorSplit`
+   * uses), ending with the host row. The device rows are not `nDevices`: the
+   * CPU device is counted there but its demand lands in the host row. Match
+   * rows by `name`, not by position against `nDevices`.
+   *
+   * Populated on SUCCESS and FAILURE; empty on ERROR, and empty when the probe
+   * that produces it fails. Optional because results decoded from an older
+   * addon or process runner predate the field.
+   */
+  projection?: FitProjectionRow[]
 }
 
 /** The fitted load plan. Only meaningful on a SUCCESS. */

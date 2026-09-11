@@ -136,6 +136,31 @@ function assertFitPlan (result: Record<string, unknown>, required: boolean): voi
   }
 }
 
+// Optional on every outcome: older addon and runner results predate the field.
+// When present it must be well-formed — a truncated row is a malformed
+// response, not missing evidence.
+function assertProjection (result: Record<string, unknown>): void {
+  if (result['projection'] === undefined) return
+  if (!Array.isArray(result['projection'])) {
+    throw new TypeError('Fit process result projection must be an array')
+  }
+  for (const row of result['projection']) {
+    if (!isRecord(row) || typeof row['name'] !== 'string') {
+      throw new TypeError('Fit process result projection rows must carry a string name')
+    }
+    for (const key of [
+      'totalBytes',
+      'freeBytes',
+      'marginBytes',
+      'modelBytes',
+      'contextBytes',
+      'computeBytes'
+    ]) {
+      assertNumber(row, key)
+    }
+  }
+}
+
 // `unsupported-config` is reachable only through the v2 llama-load path, so the
 // parser enforces that rather than accepting it on either envelope: a v1
 // response carrying it is malformed, not merely unusual.
@@ -149,6 +174,7 @@ function assertFitResultShape (value: unknown, errorReasons: string[]): void {
   assertNumber(value, 'maxDevices')
   assertNumber(value, 'nDevices')
   assertNumber(value, 'nGpuDevices')
+  assertProjection(value)
 
   switch (value['status']) {
     case 0:
