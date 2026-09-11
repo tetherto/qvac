@@ -198,7 +198,24 @@ test('mobile smoke rows infer backend from platform and remain visibly marked', 
   const markdown = renderMarkdown(iosRecords.concat(androidRecord), [])
   assert.ok(markdown.includes('| Language | Run Type |'))
   assert.ok(markdown.includes('GPU backends covered: metal, vulkan'))
-  assert.ok(markdown.includes('GPU backends still missing: opencl'))
+  assert.ok(markdown.includes('GPU backends still missing: opencl, cuda'))
+})
+
+test('a desktop record labels the observed backend, so a CUDA-pinned lane is not aggregated as vulkan', () => {
+  const observedCuda = desktopReport(false)
+  observedCuda.summary.backendId = 2
+  observedCuda.labels.activeBackend = 'cuda'
+  assert.equal(normalizeDesktopRecord(observedCuda, '/x/ci.json').backend, 'cuda')
+
+  const activeOnly = desktopReport(false)
+  activeOnly.labels.activeBackend = 'cuda'
+  assert.equal(normalizeDesktopRecord(activeOnly, '/x/ci.json').backend, 'cuda')
+
+  const fellBackToCpu = desktopReport(false)
+  fellBackToCpu.summary.backendId = 0
+  assert.equal(normalizeDesktopRecord(fellBackToCpu, '/x/ci.json').backend, 'cpu')
+
+  assert.equal(normalizeDesktopRecord(desktopReport(false), '/x/ci.json').backend, 'vulkan')
 })
 
 test('android GPU rows on Adreno devices resolve to opencl, correcting the guessed vulkan label token', () => {
