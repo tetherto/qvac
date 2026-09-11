@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <common/common.h>
 
@@ -69,6 +70,28 @@ bool isPinnedGpu(const common_params& params, const BackendDevice& expected) {
   return params.devices.size() == 2 &&
          params.devices.front() == expected.handle &&
          params.devices.back() == nullptr && params.main_gpu == 0;
+}
+
+// Checks a two-device `tensor-split` positionally. A malformed value never
+// arrives as an unsupported result: fabric runs `std::stof` per field, and an
+// empty one escapes its handler as `std::invalid_argument` that can terminate
+// the process instead of unwinding ("stof: no conversion", observed while
+// verifying these cases). That is the whole reason the value has to be
+// sanitized before fabric parses it, so these cases assert on a clean parse
+// rather than trying to catch a throw.
+bool splitsAcross(
+    const std::string& tensorSplit, const std::vector<BackendDevice>& devices,
+    float first, float second) {
+  const auto normalized = model_fit::normalizeLlamaLoadConfig(
+      "/model.gguf",
+      LlamaConfigMap{
+          {"device", "gpu"},
+          {"split-mode", "layer"},
+          {"tensor-split", tensorSplit}},
+      ModelTraits{},
+      devices);
+  return normalized.supported && normalized.params.tensor_split[0] == first &&
+         normalized.params.tensor_split[1] == second;
 }
 
 } // namespace
@@ -246,6 +269,12 @@ int main() {
   }
 
   {
+    // Two eligible GPUs, because a two-share `tensor-split` is only a
+    // well-formed value for a two-device split: one share per device in the
+    // final list is what fabric applies positionally, and any other count is
+    // rejected rather than zero-padded or truncated.
+    const BackendDevice metal1 =
+        device("Metal1", "Apple GPU 1", BackendDeviceType::Gpu, 3, "Metal");
     const auto normalized = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
@@ -254,7 +283,7 @@ int main() {
             {"split-mode", "layer"},
             {"tensor-split", "0.25,0.75"}},
         ModelTraits{},
-        {metal(), cpu()});
+        {metal(), metal1, cpu()});
 
     expect(normalized.supported, "ordinary GPU config must be supported");
     expect(
@@ -701,6 +730,80 @@ int main() {
             ambiguousTensorSplit.params.tensor_split[0] == 2.0F &&
             ambiguousTensorSplit.params.tensor_split[1] == 3.0F,
         "final-list tensor shares must remain positional after filtering");
+
+    // Fabric tokenizes `--tensor-split` on the regex [,/]+, so a run of
+    // delimiters collapses and "1,,2" is two shares, not three. The old
+    // getline split kept the empty field, read three shares, took the
+    // one-share-per-registered-GPU branch and so shifted every share one
+    // device right — emitting ",2", whose empty leading field fabric's
+    // std::stof then threw on. The llm and embed addons accept this value.
+    expect(
+        splitsAcross("1,,2", {rocm, vulkan, vulkan1, cpu()}, 1.0F, 2.0F),
+        "collapsed tensor-split delimiters must yield one share per surviving "
+        "device");
+    expect(
+        splitsAcross("1, 2", {rocm, vulkan, vulkan1, cpu()}, 1.0F, 2.0F),
+        "tensor shares must be trimmed before reaching qvac-fabric");
+    expect(
+        splitsAcross(",1,2", {vulkan, vulkan1, cpu()}, 1.0F, 2.0F),
+        "a leading tensor-split delimiter must not survive into the emitted "
+        "value, which fabric's std::stof would throw on");
+
+    const auto shortTensorSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"}, {"split-mode", "layer"}, {"tensor-split", "1"}},
+        ModelTraits{},
+        {vulkan, vulkan1, cpu()});
+    expect(
+        !shortTensorSplit.supported &&
+            shortTensorSplit.unsupportedDetail ==
+                "tensor-split cardinality does not match the registered GPU "
+                "device list after filtering",
+        "a short tensor-split list must be rejected even when the device "
+        "mapping did not move: fabric zero-pads it and leaves the second GPU "
+        "with no layers");
+
+    const auto longTensorSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"split-mode", "layer"},
+            {"tensor-split", "1,2,3"}},
+        ModelTraits{},
+        {vulkan, vulkan1, cpu()});
+    expect(
+        !longTensorSplit.supported &&
+            longTensorSplit.unsupportedDetail ==
+                "tensor-split cardinality does not match the registered GPU "
+                "device list after filtering",
+        "a long tensor-split list must be rejected even when the device "
+        "mapping did not move: fabric silently drops the tail");
+
+    // One share per eligible device is read as the final order whether or not
+    // that order is stable. Here ROCm filters out and the RPC device is
+    // hoisted ahead of the local GPU, so the surviving source indices run
+    // {2, 1}; the retired order-stability gate rejected this outright.
+    expect(
+        splitsAcross("1,2", {rocm, vulkan, rpc, cpu()}, 1.0F, 2.0F),
+        "final-list tensor shares must be accepted across a reordered device "
+        "list");
+
+    const auto unrelatedTensorSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"split-mode", "layer"},
+            {"tensor-split", "1,2,3,4"}},
+        ModelTraits{},
+        {rocm, vulkan, vulkan1, cpu()});
+    expect(
+        !unrelatedTensorSplit.supported &&
+            unrelatedTensorSplit.unsupportedDetail ==
+                "tensor-split cardinality does not match the registered GPU "
+                "device list after filtering",
+        "a tensor-split list matching neither the eligible nor the registered "
+        "GPU count must be rejected");
 
     const auto layerMainGpu = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",

@@ -293,41 +293,86 @@ SplitDeviceSelection selectSplitDevices(
   return result;
 }
 
+// Tokenize the way fabric's --tensor-split handler does: it splits on the
+// regex [,/]+, so runs of delimiters collapse and '1,,2' is two shares. A
+// plain getline split kept the empty field, which shifted every later share
+// one device to the right and could emit a leading empty token that fabric's
+// std::stof then throws on.
+std::vector<std::string> splitTensorShares(const std::string& value) {
+  auto trim = [](const std::string& token) -> std::string {
+    auto start =
+        std::find_if(token.begin(), token.end(), [](unsigned char character) {
+          return std::isspace(character) == 0;
+        });
+    if (start == token.end()) {
+      return "";
+    }
+    auto end =
+        std::find_if(token.rbegin(), token.rend(), [](unsigned char character) {
+          return std::isspace(character) == 0;
+        }).base();
+    return {start, end};
+  };
+  std::vector<std::string> tokens;
+  std::istringstream stream(value);
+  for (std::string token; std::getline(stream, token, ',');) {
+    std::string trimmed = trim(token);
+    if (!trimmed.empty()) {
+      tokens.push_back(std::move(trimmed));
+    }
+  }
+  return tokens;
+}
+
+std::string joinTensorShares(const std::vector<std::string>& shares) {
+  std::string joined;
+  for (const std::string& share : shares) {
+    if (!joined.empty()) {
+      joined += ',';
+    }
+    joined += share;
+  }
+  return joined;
+}
+
 std::optional<std::string> remapTensorSplit(
     const std::string& value, const SplitDeviceSelection& selection) {
-  bool mappingChanged = selection.devices.size() != selection.sourceGpuCount;
-  for (size_t index = 0; !mappingChanged && index < selection.devices.size();
-       ++index) {
-    mappingChanged = selection.devices[index].sourceGpuIndex != index;
-  }
-  if (!mappingChanged) {
-    return value;
-  }
   std::string normalized = value;
   std::ranges::replace(normalized, '/', ',');
-  std::vector<std::string> proportions;
-  std::istringstream values(normalized);
-  for (std::string proportion; std::getline(values, proportion, ',');) {
-    proportions.push_back(std::move(proportion));
-  }
-  const bool finalOrderIsStable = std::ranges::is_sorted(
-      selection.devices, {}, [](const SplitDeviceRef& device) {
-        return device.sourceGpuIndex;
-      });
-  if (proportions.size() == selection.devices.size() && finalOrderIsStable) {
-    return normalized;
+  const std::vector<std::string> proportions = splitTensorShares(normalized);
+
+  // Cardinality decides how the list is read, in this order:
+  //   1. one share per eligible device -> already in final order
+  //   2. one share per registered GPU  -> remap through sourceGpuIndex
+  //   3. anything else                 -> reject
+  // Final order wins when both counts are equal, matching the addons: they
+  // pin params.devices themselves, so fabric applies share i to final device
+  // i. The check runs even when the mapping did not move, because fabric
+  // validates only against llama_max_devices; it zero-pads a short list,
+  // silently leaving a participating GPU with no layers, and drops the tail of
+  // a long one. The addons reject both, so the projection has to as well or it
+  // models a load the addon would refuse.
+  //
+  // Re-emit from the tokens rather than the caller's string. Fabric collapses
+  // delimiter runs the same way, but it keeps an empty or whitespace-only
+  // FIELD (',1,2' yields a leading "", '1, ,2' a middle " ") and std::stof
+  // throws on either, while splitTensorShares trims and drops it. Such a
+  // value was observed taking the process down here rather than raising
+  // catchably: the throw escaped a catch in the immediate caller frame and
+  // reached libc++abi. Sanitizing before fabric parses is the only reliable
+  // place to handle it.
+  if (proportions.size() == selection.devices.size()) {
+    return joinTensorShares(proportions);
   }
   if (proportions.size() != selection.sourceGpuCount) {
     return std::nullopt;
   }
-  std::string remapped;
+  std::vector<std::string> remapped;
+  remapped.reserve(selection.devices.size());
   for (const SplitDeviceRef& device : selection.devices) {
-    if (!remapped.empty()) {
-      remapped += ',';
-    }
-    remapped += proportions[device.sourceGpuIndex];
+    remapped.push_back(proportions[device.sourceGpuIndex]);
   }
-  return remapped;
+  return joinTensorShares(remapped);
 }
 
 // `row` is rejected rather than parsed: fabric deprecates it, no eligible
