@@ -76,6 +76,7 @@ jobs:
   authorize:
     needs: [fork-approval]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
@@ -102,6 +103,7 @@ jobs:
     needs: [authorize]
     if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
@@ -314,6 +316,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -352,6 +355,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.tschecks || '[]') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: release
     steps:
       - name: Checkout code
@@ -384,6 +388,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.fabric || '[]') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -434,6 +439,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.perfrtf || '[]') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -521,6 +527,7 @@ jobs:
     needs: [prebuild, ci-router, matrix, verify-prebuild-linking]
     if: always() && !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.matrix.outputs.prebuilds != '[]'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       statuses: write
