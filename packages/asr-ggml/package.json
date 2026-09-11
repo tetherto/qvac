@@ -1,17 +1,41 @@
 {
   "name": "@qvac/asr-ggml",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet) inference addon for qvac on the Bare runtime",
   "addon": true,
   "engines": {
     "bare": ">=1.20.0"
   },
+  "imports": {
+    "#host-addon": {
+      "linux": {
+        "x64": ["@qvac/asr-ggml-linux-x64", "./addon-unavailable.js"],
+        "arm64": ["@qvac/asr-ggml-linux-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "darwin": {
+        "arm64": ["@qvac/asr-ggml-darwin-arm64", "./addon-unavailable.js"],
+        "x64": ["@qvac/asr-ggml-darwin-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "win32": {
+        "x64": ["@qvac/asr-ggml-win32-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "android": {
+        "arm64": ["@qvac/asr-ggml-android-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "ios": ["@qvac/asr-ggml-ios", "./addon-unavailable.js"],
+      "default": "./addon-unavailable.js"
+    }
+  },
   "scripts": {
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" && lunte \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\"",
+    "lint:js": "prettier --check \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" \"addon-unavailable.js\" && lunte \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" \"addon-unavailable.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\"",
+    "format": "prettier --write \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" \"addon-unavailable.js\"",
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:native:cuda": "bare-make generate -D ASR_CUDA=ON && bare-make build && bare-make install",
@@ -91,6 +115,7 @@
   "files": [
     "addonLogging.js",
     "addonLogging.d.ts",
+    "addon-unavailable.js",
     "binding.js",
     "index.js",
     "index.d.ts",
@@ -134,10 +159,15 @@
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",
     "bare-ffmpeg": "^1.0.0-32",
+    "bare-https": "^3.0.0",
+    "bare-os": "^3.6.2",
+    "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
     "bare-subprocess": "^6.0.0",
+    "bare-url": "^2.1.6",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
+    "cmake-npm": "^1.1.0",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
@@ -147,6 +177,7 @@
     "lunte": "^1.8.0",
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0",
+    "streamx": "^2.25.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0"
   },
@@ -193,6 +224,10 @@
       "lunte"
     ],
     "binding.js": [
+      "prettier --write",
+      "lunte"
+    ],
+    "addon-unavailable.js": [
       "prettier --write",
       "lunte"
     ]

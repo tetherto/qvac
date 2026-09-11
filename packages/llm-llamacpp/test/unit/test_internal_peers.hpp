@@ -137,6 +137,23 @@ public:
     scheduler.evalMediaFunc_ = std::move(fn);
   }
 
+  /// The factory the scheduler calls once per admission to build a slot's
+  /// driver. Fetch it, wrap it, and hand the wrapper back with
+  /// `setDriverFactory` to reach a driver at the one moment a test can:
+  /// after construction and before its first decode. The slot itself is not
+  /// observable that early — `slots_[seqId]` is populated by `submitLocked`
+  /// after the factory returns.
+  static const qvac_lib_inference_addon_llama::batching::DriverFactory&
+  driverFactory(Scheduler& scheduler) {
+    return scheduler.driverFactory_;
+  }
+
+  static void setDriverFactory(
+      Scheduler& scheduler,
+      qvac_lib_inference_addon_llama::batching::DriverFactory factory) {
+    scheduler.driverFactory_ = std::move(factory);
+  }
+
   /// The admission id currently stamped on `seqId`, or nullopt when the slot
   /// is free / out of range. Takes the scheduler mutex, so it must not be
   /// called from code the worker runs while holding it (streaming callbacks);
@@ -176,6 +193,14 @@ public:
 
 class MtmdLlmContextTestPeer {
 public:
+  /// Bitmaps staged for the next `mtmd_tokenize`. `tokenizeChat` drains them,
+  /// so between requests this must be 0: a non-zero count means a failed
+  /// request left its media behind, and the next multimodal request would
+  /// hand fabric more bitmaps than its prompt has markers.
+  static size_t loadedMediaCount(const MtmdLlmContext& context) {
+    return context.bitmaps_.entries.size();
+  }
+
   static bool removeThinkingFromContext(const MtmdLlmContext& context) {
     return context.removeThinkingFromContext_;
   }

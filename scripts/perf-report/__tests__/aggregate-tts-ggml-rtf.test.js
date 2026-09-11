@@ -31,7 +31,8 @@ const {
   normalizeStreamingRecord,
   expandCanonicalReport,
   dedupeRecords,
-  renderMarkdown
+  renderMarkdown,
+  missingExpectedDevices
 } = require('../aggregate-tts-ggml-rtf')
 
 const MB = 1024 * 1024
@@ -197,7 +198,24 @@ test('mobile smoke rows infer backend from platform and remain visibly marked', 
   const markdown = renderMarkdown(iosRecords.concat(androidRecord), [])
   assert.ok(markdown.includes('| Language | Run Type |'))
   assert.ok(markdown.includes('GPU backends covered: metal, vulkan'))
-  assert.ok(markdown.includes('GPU backends still missing: opencl'))
+  assert.ok(markdown.includes('GPU backends still missing: opencl, cuda'))
+})
+
+test('a desktop record labels the observed backend, so a CUDA-pinned lane is not aggregated as vulkan', () => {
+  const observedCuda = desktopReport(false)
+  observedCuda.summary.backendId = 2
+  observedCuda.labels.activeBackend = 'cuda'
+  assert.equal(normalizeDesktopRecord(observedCuda, '/x/ci.json').backend, 'cuda')
+
+  const activeOnly = desktopReport(false)
+  activeOnly.labels.activeBackend = 'cuda'
+  assert.equal(normalizeDesktopRecord(activeOnly, '/x/ci.json').backend, 'cuda')
+
+  const fellBackToCpu = desktopReport(false)
+  fellBackToCpu.summary.backendId = 0
+  assert.equal(normalizeDesktopRecord(fellBackToCpu, '/x/ci.json').backend, 'cpu')
+
+  assert.equal(normalizeDesktopRecord(desktopReport(false), '/x/ci.json').backend, 'vulkan')
 })
 
 test('android GPU rows on Adreno devices resolve to opencl, correcting the guessed vulkan label token', () => {
@@ -616,4 +634,38 @@ test('dedupeRecords keeps rows evaluated by different Whisper models separate', 
   )
 
   assert.equal(dedupeRecords([small, tiny]).length, 2)
+})
+
+// ---------------------------------------------------------------------------
+// Expected-device gate (--expect-devices)
+
+test('missing expected devices are detected from desktop rows only', () => {
+  const records = [
+    normalizeDesktopRecord(desktopReport(true), 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json'),
+    { source: 'mobile-ci', device: 'qvac-macos26-arm64-gpu' },
+    { source: 'manual', device: 'macos-15-large' }
+  ]
+  assert.deepEqual(missingExpectedDevices(records, []), [])
+  assert.deepEqual(missingExpectedDevices(records, ['rtx-4090-box']), [])
+  // Mobile and manual rows never stand in for a desktop lane.
+  assert.deepEqual(
+    missingExpectedDevices(records, ['rtx-4090-box', 'qvac-macos26-arm64-gpu', 'macos-15-large']),
+    ['qvac-macos26-arm64-gpu', 'macos-15-large']
+  )
+})
+
+test('markdown surfaces missing expected devices and stays silent without the flag', () => {
+  const records = [normalizeDesktopRecord(desktopReport(true), 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json')]
+  const expected = ['rtx-4090-box', 'qvac-macos26-arm64-gpu']
+
+  const markdown = renderMarkdown(records, [], expected)
+  assert.ok(markdown.includes('- Expected desktop devices reporting: 1/2'))
+  assert.ok(markdown.includes('MISSING desktop devices'))
+  assert.ok(markdown.includes('qvac-macos26-arm64-gpu'))
+
+  assert.ok(!renderMarkdown(records, []).includes('Expected desktop devices'))
+
+  const complete = renderMarkdown(records, [], ['rtx-4090-box'])
+  assert.ok(complete.includes('- Expected desktop devices reporting: 1/1'))
+  assert.ok(!complete.includes('MISSING desktop devices'))
 })

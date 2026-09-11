@@ -403,6 +403,9 @@ FitResult runFit(const FitRequest& req) {
       buftOverrides.data(),
       margins.data(),
       nCtxMin,
+      // prefetch_weights_auto — see the note at the invoker call in
+      // LlamaLoadConfig.cpp. False preserves the pre-10549.0.0 projection.
+      false,
       GGML_LOG_LEVEL_INFO);
 
   out.status = static_cast<int>(status);
