@@ -73,7 +73,6 @@ test('video op: H3 validates before native execution and preserves audio results
         { height: 528 },
         { fps: 16 },
         { cfg_scale: 0 },
-        { scheduler: 'simple' as const },
         { vace_strength: 0 },
         { strength: 0 },
         { stg_scale: 0 },
@@ -90,7 +89,12 @@ test('video op: H3 validates before native execution and preserves audio results
         )
       }
       t.is(observed.length, 0, 'invalid H3 requests never reach native execution')
-      for (const params of [{ video_frames: 124 }, { video_frames: 22 }, {}]) {
+      for (const params of [
+        { video_frames: 124 },
+        { video_frames: 22 },
+        {},
+        { scheduler: 'simple' as const }
+      ]) {
         const chunks = []
         for await (const chunk of videoOp({ ...base, ...params })) chunks.push(chunk)
         t.is(chunks[0]?.data, 'UklGRg==')

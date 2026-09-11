@@ -68,6 +68,8 @@ test('H3 plugin: rejects missing and conflicting companions before resolution', 
     { t5XxlModelSrc: '/models/t5.gguf' },
     { highNoiseDiffusionModelSrc: '/models/expert.gguf' },
     { clipVisionModelSrc: '/models/clip.gguf' },
+    { clipLModelSrc: '/models/clip-l.safetensors' },
+    { clipGModelSrc: '/models/clip-g.safetensors' },
     { mode: 'diffusion' as const }
   ]) {
     let calls = 0
@@ -97,7 +99,9 @@ test('H3 plugin: constructor rejects incomplete and conflicting artifacts', (t) 
     { vaeModelPath: '' },
     { t5XxlModelPath: '/models/t5.gguf' },
     { highNoiseDiffusionModelPath: '/models/expert.gguf' },
-    { clipVisionModelPath: '/models/clip.gguf' }
+    { clipVisionModelPath: '/models/clip.gguf' },
+    { clipLModelPath: '/models/clip-l.safetensors' },
+    { clipGModelPath: '/models/clip-g.safetensors' }
   ]) {
     t.exception(
       () =>
@@ -115,4 +119,30 @@ test('H3 plugin: constructor rejects incomplete and conflicting artifacts', (t) 
       ModelLoadFailedError as new () => Error
     )
   }
+})
+
+test('H3 plugin: a Wan config carrying a stray llmModelSrc still loads as Wan', async (t) => {
+  const wan = {
+    mode: 'video' as const,
+    t5XxlModelSrc: '/models/t5.gguf',
+    vaeModelSrc: '/models/video.safetensors',
+    llmModelSrc: '/models/encoder.gguf'
+  }
+  const resolved = await diffusionPlugin.resolveConfig!(wan, {
+    resolveModelPath: async (src) => String(src),
+    modelSrc: '/models/model.gguf',
+    modelType: 'sdcpp-generation'
+  })
+  const { model } = diffusionPlugin.createModel({
+    modelId: 'wan-stray-llm',
+    modelPath: '/models/model.gguf',
+    modelConfig: resolved.config,
+    artifacts: resolved.artifacts
+  })
+  const debug = model as { _files?: Record<string, string> }
+  t.alike(debug._files, {
+    model: '/models/model.gguf',
+    vae: '/models/video.safetensors',
+    t5Xxl: '/models/t5.gguf'
+  })
 })

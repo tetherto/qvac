@@ -252,19 +252,30 @@ export const diffusionPlugin = definePlugin({
         "modelConfig.audioVaeModelSrc requires mode: 'video' (LTX-2 or MiniMax-H3)."
       )
     }
+    // Without the LTX-2 connectors, the audio VAE selects MiniMax-H3; an `llm`
+    // does too, but only when no Wan text encoder is present — a Wan config
+    // carrying a stray `llmModelSrc` has always had it dropped below, and
+    // stealing that field would break it. Reject the companions H3 cannot
+    // consume up front, before any of them is downloaded and then dropped.
     if (
       cfg.mode === 'video' &&
       !embeddingsConnectorsModelSrc &&
-      (audioVaeModelSrc || llmModelSrc)
+      (audioVaeModelSrc || (llmModelSrc && !t5XxlModelSrc))
     ) {
       if (!audioVaeModelSrc || !llmModelSrc || !vaeModelSrc) {
         throw new ModelLoadFailedError(
           'MiniMax-H3 requires llmModelSrc, vaeModelSrc and audioVaeModelSrc.'
         )
       }
-      if (t5XxlModelSrc || highNoiseDiffusionModelSrc || clipVisionModelSrc) {
+      if (
+        t5XxlModelSrc ||
+        highNoiseDiffusionModelSrc ||
+        clipVisionModelSrc ||
+        clipLModelSrc ||
+        clipGModelSrc
+      ) {
         throw new ModelLoadFailedError(
-          'MiniMax-H3 cannot use Wan T5, high-noise or CLIP-vision companions.'
+          'MiniMax-H3 cannot use Wan T5, high-noise, CLIP-vision or CLIP-L/G companions.'
         )
       }
     }
@@ -430,7 +441,13 @@ export const diffusionPlugin = definePlugin({
     }
 
     if (config.mode === 'video') {
-      // Select the companion layout; native code verifies the model's tensors.
+      // Companion layout selection, mirroring how the addon self-detects it:
+      // the LTX-2 text-embedding connectors switch to the LTX-2 layout (Gemma
+      // via llm + video VAE + connectors, optional audio VAE —
+      // `SdModel::isLtxModel_ = !embeddingsConnectorsPath.empty()`); without
+      // them, an audio VAE (or an llm with no Wan T5) means MiniMax-H3
+      // (llm + video VAE + audio VAE); everything else is Wan via t5Xxl.
+      // Native code verifies the model's tensors.
       const embeddingsConnectorsModelPath = artifacts?.['embeddingsConnectorsModelPath']
 
       if (!artifacts?.['vaeModelPath']) {
@@ -459,17 +476,24 @@ export const diffusionPlugin = definePlugin({
           }),
           ...(artifacts['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
         }
-      } else if (artifacts['audioVaeModelPath'] || artifacts['llmModelPath']) {
+      } else if (
+        artifacts['audioVaeModelPath'] ||
+        (artifacts['llmModelPath'] && !artifacts['t5XxlModelPath'])
+      ) {
         if (!artifacts['audioVaeModelPath'] || !artifacts['llmModelPath']) {
-          throw new ModelLoadFailedError('MiniMax-H3 requires llmModelSrc and audioVaeModelSrc.')
+          throw new ModelLoadFailedError(
+            'MiniMax-H3 requires llmModelSrc, vaeModelSrc and audioVaeModelSrc.'
+          )
         }
         if (
           artifacts['t5XxlModelPath'] ||
           artifacts['highNoiseDiffusionModelPath'] ||
-          artifacts['clipVisionModelPath']
+          artifacts['clipVisionModelPath'] ||
+          artifacts['clipLModelPath'] ||
+          artifacts['clipGModelPath']
         ) {
           throw new ModelLoadFailedError(
-            'MiniMax-H3 cannot use Wan T5, high-noise or CLIP-vision companions.'
+            'MiniMax-H3 cannot use Wan T5, high-noise, CLIP-vision or CLIP-L/G companions.'
           )
         }
         files = {

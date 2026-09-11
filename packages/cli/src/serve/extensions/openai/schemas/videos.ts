@@ -36,7 +36,7 @@ export const videosCreateBody = z
       )
       .optional()
       .describe(
-        'Target duration in seconds. Rounded to supported frame counts: 4*k+1 for Wan, 17*k+5 at 24 FPS for an explicitly configured MiniMax-H3 model.'
+        'Target duration in seconds. Mapped to `video_frames = 17*k+5` at 24 FPS for a model whose config declares the MiniMax-H3 layout, and to `nearest_4k+1(seconds * fps)` otherwise.'
       ),
     size: z
       .string()
@@ -75,7 +75,7 @@ export const videosCreateBody = z
       .max(120)
       .optional()
       .describe(
-        'QVAC extension. 0 < fps ≤ 120; duration mapping defaults to 16 for Wan and 24 for MiniMax-H3.'
+        'QVAC extension. 0 < fps ≤ 120, default 16. MiniMax-H3 requires exactly 24 and rejects any other value; its `seconds` mapping always uses 24 regardless of what is sent here.'
       ),
     steps: z.coerce
       .number()

@@ -48,7 +48,6 @@ try {
     fps: 24,
     steps: 8,
     cfg_scale: 1,
-    scheduler: 'discrete',
     seed: 11
   })
   const progress = (async () => {

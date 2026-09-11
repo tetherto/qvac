@@ -71,12 +71,14 @@ test('H3 schema: validates fixed controls and unsupported conditioning', (t) => 
       steps: 8
     }).success
   )
+  // H3 carries no scheduler restriction of its own; only the LTX-2 scheduler is
+  // rejected, and that happens one layer up in nonLtxVideoRequestSchema.
+  t.ok(h3VideoRequestSchema.safeParse({ ...base, scheduler: 'simple' }).success)
   for (const params of [
     { width: 944 },
     { height: 528 },
     { fps: 16 },
     { cfg_scale: 0 },
-    { scheduler: 'simple' },
     { mode: 'img2vid', init_image: PNG_B64 },
     { control_frames: [PNG_B64] },
     { vace_strength: 0 },
