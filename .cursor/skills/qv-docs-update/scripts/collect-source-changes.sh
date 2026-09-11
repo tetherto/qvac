@@ -44,7 +44,7 @@ if [[ -z "$REPO" ]]; then
   REPO="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
 fi
 
-if [[ -z "$REPO" || ! -d "$REPO/.git" ]]; then
+if [[ -z "$REPO" ]] || ! git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null; then
   echo "collect-source-changes: not a git repository: ${REPO:-<unset>}" >&2
   exit 2
 fi
