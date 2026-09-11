@@ -474,9 +474,10 @@ function runR2(pages: Page[], files: ChangedFile[]) {
       // `text-generation.mdx` writes
       // [`batchCompletion()`](/ai-capabilities/batch-processing) and carries a
       // whole paragraph on how that function shares `parallel` slots — a claim
-      // that goes stale like any other. Anchor-only matching misses it, and
-      // because R3 runs only when R1/R2/R4 are all empty, the page is missed
-      // silently whenever some other page did match.
+      // that goes stale like any other. Anchor-only matching misses it, and R3
+      // never recovers the page: the fallback only picks up files the exact
+      // routers could not resolve, and this file WAS resolved by R2 — just onto
+      // a different page. Without this pass the page is missed silently.
       //
       // This stays a lookup rather than the loose name-grep the design
       // rejected: it matches a markdown link whose text is the symbol, so the
@@ -637,7 +638,7 @@ function runR4(pages: Page[], files: ChangedFile[]) {
 }
 
 // ---------------------------------------------------------------------------
-// R3 — area fallback (declared, runs only when R1/R2/R4 found nothing)
+// R3 — area fallback (declared; runs per file, for paths R1/R2/R4 left unrouted)
 // ---------------------------------------------------------------------------
 
 interface MapEntry {

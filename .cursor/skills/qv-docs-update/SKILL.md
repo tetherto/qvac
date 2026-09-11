@@ -13,6 +13,8 @@ Whenever a developer finishes implementing a feature in the SDK or the CLI, they
 
 Route a source change to the documentation pages it invalidated. Propose the smallest patch that makes them correct again.
 
+Everything you write is read by a developer building a local AI application on QVAC, an open-source ecosystem. `docs/website` is their developer portal: it teaches how to use the SDK and the CLI, never how the codebase works internally. Write for that reader in Phase 3 and Phase 5.
+
 Run this skill only when the developer asks for it. The source API must be stable. Do not run it mid-implementation: developers iterate on an API several times before it settles, and prose written against a moving surface is the waste this skill exists to avoid.
 
 ## What this skill reads and writes
@@ -65,7 +67,9 @@ There are seven. Five classify one source file. Two describe the whole run.
 
 Assign the file-scoped states one source file at a time. If one file is unresolved, keep the patches already proposed for the files that routed cleanly.
 
-Both scripts report a single `state` field covering the whole run. Treat it as the starting point, then refine per file as you work.
+Both scripts report a single run-level `state` field, and it is **advisory**. You own the state machine, not the scripts.
+
+The collector decides only the two states it can prove alone, `NO_SOURCE_CHANGE` and `NO_DOCS_IMPACT`, and reports `CONTINUE` for everything else. `CONTINUE` is not one of the seven states: it means the script reached no verdict and Phase 3 must judge. The router reports its best guess from the routing signals it can see. Treat either field as a starting point, then refine per file as you work.
 
 The final report carries one state in its header. Choose it this way. If any file is `HUMAN_INPUT_REQUIRED`, then report `HUMAN_INPUT_REQUIRED`, and list the resolved patches alongside the pending question. Else if every patch was applied and validated, then report `DONE`. Else report the state that every file shares.
 
@@ -147,7 +151,7 @@ The output has this shape:
 
 ```json
 {
-  "state": "DOCS_UPDATE_REQUIRED",
+  "state": "CONTINUE",
   "base": { "ref": "origin/main", "sha": "3f2a91c…", "short": "3f2a91c" },
   "strong_evidence": true,
   "buckets": ["api", "examples"],
@@ -170,7 +174,7 @@ Each file carries a bucket. The bucket decides which router runs in Phase 4.
 | `area` | `packages/sdk/src/{logging,models,server,worker}/**` |
 | `internal` | everything else |
 
-The script decides two states on its own. It reports `NO_SOURCE_CHANGE` when nothing changed, and `NO_DOCS_IMPACT` when every changed file is `internal`.
+The script decides two states on its own. It reports `NO_SOURCE_CHANGE` when nothing changed, and `NO_DOCS_IMPACT` when every changed file is `internal`. Every other run reports `CONTINUE`: changes exist, and their documentary impact is Phase 3's to judge.
 
 2. If `state` is `NO_SOURCE_CHANGE` or `NO_DOCS_IMPACT`, then stop and emit the no-update report. Else continue.
 
@@ -178,7 +182,7 @@ The script decides two states on its own. It reports `NO_SOURCE_CHANGE` when not
 
 The script cannot read the public export surface. Get it from the barrel, comparing the base against the working tree.
 
-3. Read the barrel at the base and in the working tree, then record added, removed, and renamed exports.
+3. If no changed file is in the `api` or `surface` bucket, then skip to step 5. Else read the barrel at the base and in the working tree, and record added, removed, and renamed exports.
 
 ```bash
 git show <base-sha>:packages/sdk/src/client/api/index.ts
@@ -323,10 +327,11 @@ Read the fields as follows:
 - `pages[].targets[]` are the candidates. Each one is a page section to judge in step 3.
 - `evidence` is the authored binding the router matched. It is a fact about the repo, not a guess.
 - `line` is where that binding sits in the page. Use it to find the section fast.
+- `section` is `null` on a page-level hit: every R3 hit, and the `cli/http-server/**` subtree of R4. The router bound the page, not a section, because the map and the subtree rule name pages only.
 - `unrouted[]` are source files no router could place. Handle them in step 5.
 - `discarded[]` are hits that fell outside the allowlist or hit a path declared undocumented. Copy them into the report. Never re-add them.
 - `new_capability_symbols[]` are new exported symbols in `client/api/` with no page. Each one means `NEW_CAPABILITY_PAGE`.
-- `r3_used` is `true` when the declared area map produced the hits. R3 is a fallback, so treat those candidates with more suspicion than R1, R2 and R4 hits.
+- `r3_used` is `true` only when **every** hit came from the area map. It is run-level, so a run with one R1 hit and one R3 hit reports `false`. To weigh a single candidate, read its `via` field instead: R3 is the declared fallback, so treat an R3 candidate with more suspicion than an R1, R2 or R4 hit.
 - `high_page_count` is `true` when the router produced more than four pages. It is counted before your filtering, so recount after step 3.
 
 There are four routers, and their hits are unioned. R1, R2 and R4 are exact: each resolves a binding that already exists in the content. R3 is the declared fallback and labels itself as such.
@@ -351,6 +356,8 @@ A `pages: []` entry in the routing map is a positive declaration that a path is 
 2. Read each candidate section in the page it belongs to.
 
 Judge the page itself, not the diff. Read the section with `DOCS_IMPACT` in hand.
+
+If `section` is `null`, then read the whole page and choose the section yourself, then state that choice and its justification in the candidate's `Reason`. This is the one place where you pick a target the router did not name, so make the choice auditable rather than silent. If no section on the page fits, dismiss the candidate — do not invent a section for it.
 
 3. For each candidate, answer this question in writing: did this section become incorrect, incomplete, misleading, or materially insufficient after the change described in `DOCS_IMPACT`?
 
@@ -379,7 +386,9 @@ ai-capabilities/text-generation.mdx
 configuration/index.mdx
   3. Section: "Reference"
      Via:     R3 (packages/sdk/src/client/config-loader/**)
-     Reason:  the key table enumerates every option and lacks the new one.
+     Reason:  R3 bound the page and named no section; "Reference" is the only
+              section that enumerates config keys, and its key table lacks the
+              new one.
      Action:  add the key, its accepted values, and its default.
 
 Dismissed:
@@ -401,7 +410,9 @@ or the source change mixes scopes. The patches stand.
 
 6. For each entry in `new_capability_symbols[]`, run the `NEW_CAPABILITY_PAGE` subprocedure, below.
 
-7. For each entry in `unrouted[]` that is user-facing, emit `HUMAN_INPUT_REQUIRED` for that source and ask which page covers the topic.
+7. For each entry in `unrouted[]` that is user-facing **and carries no `newSymbol`**, emit `HUMAN_INPUT_REQUIRED` for that source and ask which page covers the topic.
+
+`new_capability_symbols[]` is derived from `unrouted[]`, so a new symbol appears in both lists. Step 6 already handled it. Asking about it here would create the page and then ask which page covers the topic.
 
 The answer becomes a new `routing-map.yaml` entry. That is how the map grows. A source file that is not user-facing needs no question: ignore it.
 
@@ -444,7 +455,9 @@ Match the patch to the change type:
 
 There are five gates. Run them in order. If any gate fails, report the error, leave the patches on disk for the developer to fix, and do not declare `DONE`.
 
-1. Run `git status --short` and check every touched file against the allowlist in [references/docs-scope.md](references/docs-scope.md).
+1. List the files **this run wrote** — the targets patched in Phase 5, plus the four registration points when the `NEW_CAPABILITY_PAGE` subprocedure ran — and check each one against the allowlist in [references/docs-scope.md](references/docs-scope.md).
+
+Check the files this run wrote, never the dirty working tree. The tree legitimately holds the developer's own changes under `packages/**`, which Phase 1 collected on purpose. Treating those as scope violations would abort every run. To confirm nothing else in the website was touched, run `git status --short -- docs/website/` and verify that every path it lists is one you wrote.
 
 A file outside the allowlist aborts the run. Revert everything already applied. `index.mdx` and `custom-tree.ts` pass only when the diff is an append inside the AI-capabilities block.
 
