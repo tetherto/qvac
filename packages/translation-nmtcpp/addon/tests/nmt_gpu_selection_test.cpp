@@ -184,8 +184,57 @@ TEST_F(NmtGpuSelectionTest, NullDeviceAndNullBufferFallBackSafely) {
   EXPECT_EQ(select({}, 1), nullptr);
 }
 
-TEST_F(NmtGpuSelectionTest, LoaderAndComputeSelectionsAreStable) {
-  inventory = {{"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU}};
-  EXPECT_EQ(select(), select());
+// Both production call sites, make_buft_list (nmt_loader.cpp) and
+// nmt_backend_init_gpu (nmt_state_backend.cpp), call nmtSelectGpuDevice
+// through the same 4-arg overload, so the model-buffer device and the compute
+// device cannot disagree by construction. Those two functions have internal
+// linkage and bind the real ggml symbols, so a test cannot reach them without
+// giving them external linkage and an injection seam; that is deliberately not
+// done here. What is testable is that the shared selector is deterministic and
+// order-independent over a mixed inventory, which is what would actually break
+// if the policy drifted. An earlier version of this test asserted
+// select() == select() over a single device, which held even if a call site
+// diverged.
+TEST_F(NmtGpuSelectionTest, SelectorIsDeterministicOverMixedInventory) {
+  inventory = {
+      {"ROCm0", "HIP", GGML_BACKEND_DEVICE_TYPE_GPU},
+      {"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU},
+      {"Vulkan1", "Vulkan", GGML_BACKEND_DEVICE_TYPE_IGPU}};
+  const ggml_backend_dev_t expected = deviceGet(1);
+  EXPECT_EQ(select(), expected);
+  EXPECT_EQ(select(), expected);
+}
+
+// Same eligible device set, presented in the opposite registry order: the
+// ineligible family must not shift which device wins.
+TEST_F(NmtGpuSelectionTest, SelectionIsIndependentOfIneligiblePosition) {
+  inventory = {
+      {"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU},
+      {"ROCm0", "HIP", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), deviceGet(0));
+
+  inventory = {
+      {"ROCm0", "HIP", GGML_BACKEND_DEVICE_TYPE_GPU},
+      {"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), deviceGet(1));
+}
+
+// An unknown family after an eligible device must not displace it. The
+// existing coverage coming into this change had unknown-alone cases only.
+TEST_F(NmtGpuSelectionTest, UnknownFamilyAfterEligibleIsSkipped) {
+  inventory = {
+      {"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU},
+      {"FutureBackend0", "FutureBackend", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), deviceGet(0));
+}
+
+TEST_F(NmtGpuSelectionTest, MusaIsRejectedByDeviceName) {
+  inventory = {{"MUSA0", "MUSA", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), nullptr);
+}
+
+TEST_F(NmtGpuSelectionTest, MusaIsRejectedByRegistryName) {
+  inventory = {{"SomeGpu", "MUSA", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), nullptr);
 }
 } // namespace
