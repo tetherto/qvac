@@ -594,23 +594,18 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
-    // Deliberate divergence from fabric 10549, which main pins: its
-    // llama_prepare_model_devices (src/llama.cpp:265-273) keeps the first iGPU
-    // plus every further one from the SAME registry; this keeps one, as do
-    // embed and model-fit, and as ocr-ggml and vla-ggml do by resolving to a
-    // single device. It NARROWS the deleted getTensorSplitDeviceNames, which
-    // kept every iGPU deduplicated by device_id, but one shared rule across
-    // the change set was judged worth more. Unobservable on shipped configs: a
-    // host would need two IGPU-typed devices from one registry, and Metal and
-    // OpenCL always report GPU, never IGPU (ggml-metal.cpp:685-689,
-    // ggml-opencl.cpp:11459-11463), while Vulkan dedupes by UUID/LUID first
-    // (ggml-vulkan.cpp:8843-8872, comparison at 8861-8865) — except between
-    // two MoltenVK drivers (8866-8868), which report one UUID for distinct
-    // GPUs, so the exception is a multi-GPU Apple card under MoltenVK.
-    // Revisit as a fleet-wide 10549 decision, not here. Pinned by
-    // BackendSelectionTest.SplitSelectionKeepsSingleIntegratedGpu.
+    // Fabric 10549 (llama_prepare_model_devices, src/llama.cpp:265-273) keeps
+    // the first integrated GPU plus every later one whose backend REGISTRY
+    // handle matches the last kept one's; registry identity, not its name.
+    // Dropping the others is upstream llama.cpp #23897, a workaround for one
+    // integrated device enumerated by several backends; the same-registry
+    // exception is #26953, for the virtual devices CUDA reports as integrated.
+    // Unreachable on what fabric ships today — Metal and OpenCL never report
+    // IGPU and fabric builds no CUDA backend — but this package already admits
+    // CUDA, so the exception goes live the moment CUDA ships.
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
-      if (integrated.empty()) {
+      if (integrated.empty() ||
+          reg == bckI.ggml_backend_dev_backend_reg(integrated.back().handle)) {
         integrated.emplace_back(std::move(selected));
       }
       continue;

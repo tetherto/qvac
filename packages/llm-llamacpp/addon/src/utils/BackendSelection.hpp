@@ -132,7 +132,8 @@ void applyAdrenoRestrictions(
 /// applying this addon's supported-backend allowlist:
 ///   - CUDA and RPC GPU devices are eligible for their upcoming Fabric builds.
 ///   - RPC devices are prepended and do not suppress a local integrated GPU.
-///   - Local discrete GPUs when any are present, otherwise one integrated GPU.
+///   - Local discrete GPUs when any are present, otherwise the first
+///     integrated GPU plus any later one sharing its backend registry handle.
 ///   - Duplicates are dropped by `ggml_backend_dev_props::device_id`, the same
 ///     key fabric uses. Deduping by *description* would be wrong: Vulkan sets
 ///     the description to the raw device name, which is identical for two
