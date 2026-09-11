@@ -11,7 +11,6 @@ import type {
 } from '@/schemas/index'
 import {
   logCacheDisabled,
-  logCacheInit,
   logCacheSave,
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
@@ -169,38 +168,6 @@ export function transformMessages(
   return transformed
 }
 
-/**
- * Prime the cache prefix with the system prompt only.
- *
- * Tools deliberately stay out of the prefix: a message list with no user turn
- * is not a renderable conversation for every chat template (Qwen3.5 raises
- * `No user query found in messages.` because it anchors its tool block on the
- * last user query), and a template failure degrades the whole render rather
- * than just the tool block. Tools travel with the turn instead.
- */
-async function initSystemPromptCache(
-  model: AnyModel,
-  cachePathToUse: string,
-  systemPromptToUse: string,
-  cacheKey: string,
-  onResponse?: (response: { cancel(): Promise<void> }) => void
-) {
-  const primeMessages: ChatHistory[] = [{ role: 'system', content: systemPromptToUse }]
-
-  logCacheInit(cacheKey, systemPromptToUse)
-  logMessagesToAddon(primeMessages, 'CACHE_INIT')
-
-  const primeResponse = await runModel(model, primeMessages, {
-    cacheKey: cachePathToUse,
-    saveCacheToDisk: true,
-    prefill: true
-  })
-  // Register the prime so an abort during a cold-cache prefill cancels it.
-  onResponse?.(primeResponse)
-
-  await primeResponse.await()
-}
-
 type HistoryMsg = {
   role: string
   content: string
@@ -268,20 +235,12 @@ function prepareMessagesForCache(
 ): CachePayload {
   const toolBlock = tools?.length ? transformMessages(tools) : []
 
-  if (!(cacheExists && history.length > 0)) {
-    const historyWithoutSystem = history.filter((msg) => msg.role !== 'system')
-    return {
-      messages: withToolBlock(transformMessages(historyWithoutSystem), toolBlock),
-      toolBlockCached: rendersToolBlock(historyWithoutSystem, toolBlock)
-    }
-  }
-
   // Slice from the turn's `savedCount` so callers can
   // stage multiple messages between completions. `decideCachedHistorySlice`
   // also guards against the QVAC-17780 stale-count regression: if the
   // saved boundary would slice the history down to an empty payload
   // (e.g. after a cancelled mid-decode), it falls back to the full
-  // non-system history and signals the caller to drop the bad entry.
+  // history and signals the caller to drop the bad entry.
   // The session owns the entry; `dropStaleSavedCount` clears it
   // without touching the on-disk file (the file is still trustworthy
   // — only the boundary count is wrong).
@@ -394,11 +353,23 @@ export async function* completion(
     logger?: Logger
   }
 ): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
-  const { history, modelId, kvCache, tools, generationParams, responseFormat } = params
+  const {
+    history: requestHistory,
+    modelId,
+    kvCache,
+    tools,
+    generationParams,
+    responseFormat
+  } = params
   const { signal, scope } = opts
   const requestLogger = opts.logger ?? logger
 
   const modelConfig = getModelConfig(modelId)
+  const configuredSystemPrompt = (modelConfig as { system_prompt?: string }).system_prompt
+  const history =
+    configuredSystemPrompt && extractSystemPrompt(requestHistory) === null
+      ? [{ role: 'system' as const, content: configuredSystemPrompt }, ...requestHistory]
+      : requestHistory
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
   const toolsActive = !!tools?.length && toolsEnabled
   const dialect =
@@ -489,28 +460,12 @@ export async function* completion(
   // rather than a warm prefix holding the old block.
   const configHash = generateConfigHash(systemPromptFromHistory, toolsActive ? tools : undefined)
 
-  const systemPromptToUse =
-    systemPromptFromHistory ||
-    (modelConfig as { system_prompt?: string }).system_prompt ||
-    'You are a helpful assistant.'
-
-  const primeIfMissing = async (cachePath: string) => {
-    await initSystemPromptCache(
-      model,
-      cachePath,
-      systemPromptToUse,
-      typeof kvCache === 'string' ? kvCache : 'auto',
-      setActiveResponse
-    )
-  }
-
   let turn: TurnHandle
   if (typeof kvCache === 'string') {
     turn = await session.beginTurn({
       kind: 'custom',
       customKey: kvCache,
       configHash,
-      primeIfMissing,
       signal
     })
   } else {
@@ -523,7 +478,6 @@ export async function* completion(
       kind: 'auto',
       configHash,
       history: cacheMessages,
-      primeIfMissing,
       signal
     })
   }
@@ -537,15 +491,12 @@ export async function* completion(
   let preserveCacheOnUnwind = false
   scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
-  // `cacheExists` is implied by `beginTurn` — the session either found
-  // an existing cache or just primed one. Pass `true` to the message
-  // selector so the slicing branches engage.
   let payload: ReturnType<typeof prepareMessagesForCache>
   try {
     payload = prepareMessagesForCache(
       session,
       turn,
-      /* cacheExists */ true,
+      turn.savedCount > 0,
       history,
       toolsActive ? tools : undefined
     )
