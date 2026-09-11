@@ -155,10 +155,9 @@ deviceFamily(const NmtBackendInterface& backend, ggml_backend_dev_t device) {
   const ggml_backend_reg_t registry = backend.deviceRegistry(device);
   const char* registryName =
       registry != nullptr ? backend.registryName(registry) : nullptr;
-  const std::string deviceNameLower =
+  std::string normalizedDeviceName =
       deviceName == nullptr ? ""
                             : std::string(deviceName, strnlen(deviceName, 256));
-  std::string normalizedDeviceName = deviceNameLower;
   std::ranges::transform(
       normalizedDeviceName,
       normalizedDeviceName.begin(),

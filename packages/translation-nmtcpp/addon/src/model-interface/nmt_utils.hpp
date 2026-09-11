@@ -52,6 +52,14 @@ struct NmtBackendInterface {
 // or nullptr if no eligible device was found (including when a device matched
 // but its buffer type was null — a WARNING is emitted in that case). Callers
 // do NOT need to re-check the buffer type of a non-null return value.
+//
+// Both production call sites go through this 4-arg overload, so the
+// model-buffer device and the compute device cannot disagree by construction.
+// That parity is not directly testable: both callers have internal linkage and
+// bind the real ggml symbols, so reaching them would mean giving them external
+// linkage and an injection seam of their own, which is deliberately not done.
+// Note that a selector-stability assertion would not cover it either — it holds
+// even if a call site diverges.
 ggml_backend_dev_t nmtSelectGpuDevice(
     bool useGpu, const std::string& gpuBackend, int gpuDevice,
     const char* logPrefix);

@@ -307,7 +307,7 @@ GPU execution is limited to Vulkan, Metal/MTL, OpenCL, CUDA, and RPC devices rep
 
 OpenCL is admitted as a family, not narrowed to Adreno. The selector inspects only the device and registry name, never the vendor or description, so any GPU or integrated-GPU OpenCL device is eligible. What gates it is the build-time `USE_OPENCL` guard, which exists because Adreno is the only OpenCL target this package has been validated on; an explicit `gpu_backend` selector bypasses that guard as an informed opt-in.
 
-ACCEL and META devices are never chosen as the **primary** compute device. ACCEL is not entirely unused, though: after the primary device is selected, the loader still initializes ACCEL-typed devices and adds them to the backend list, which is how a co-processor can contribute to a graph it supports. That walk skips the primary device, skips OpenCL-named ACCEL devices when the build guard is off, and skips an ACCEL device sharing the primary's trailing ordinal. GPU-typed families never enter it, so a rejected family such as ROCm cannot re-enter through this path.
+ACCEL and META devices are never chosen as the **primary** compute device; the existing secondary ACCEL walk that adds co-processors to the backend list is unchanged.
 
 > **Tip:** Use `model.getActiveBackendName()` after `load()` to confirm which backend actually took the request — see [Additional Features](#additional-features). The GGML scheduler silently falls back to CPU when no usable GPU ICD is registered, and this is the only way to detect that.
 

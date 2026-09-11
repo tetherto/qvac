@@ -457,9 +457,8 @@ nmt_backend_init(const nmt_context_params& params) {
 
   ggml_backend_t backend_gpu = nmt_backend_init_gpu(params);
 
-  // Track the primary so the secondary ACCEL walk cannot reinitialize it:
-  // remember the device pointer we already picked so the loop below does not
-  // re-init the same device.
+  // Remember the device we already picked so the secondary ACCEL walk below
+  // cannot reinitialize it.
   ggml_backend_dev_t primary_dev =
       backend_gpu ? ggml_backend_get_device(backend_gpu) : nullptr;
 
