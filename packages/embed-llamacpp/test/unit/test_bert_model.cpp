@@ -981,8 +981,9 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRowRejected) {
   } catch (const qvac_errors::StatusError& error) {
     EXPECT_EQ(
         std::string(error.what()),
-        "parseSplitMode: split-mode 'row' is not supported, must be 'none' "
-        "or 'layer'; use 'layer'.\n");
+        "parseSplitMode: split-mode 'row' is no longer accepted; it never took "
+        "effect on any shipped backend. Use 'layer' (accepted values: 'none', "
+        "'layer').\n");
   }
 }
 

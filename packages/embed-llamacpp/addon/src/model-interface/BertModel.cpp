@@ -483,8 +483,9 @@ parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         string_format(
-            "%s: split-mode 'row' is not supported, must be 'none' or "
-            "'layer'; use 'layer'.\n",
+            "%s: split-mode 'row' is no longer accepted; it never took effect "
+            "on any shipped backend. Use 'layer' (accepted values: 'none', "
+            "'layer').\n",
             __func__));
   } else if (val != "none") {
     throw qvac_errors::StatusError(
