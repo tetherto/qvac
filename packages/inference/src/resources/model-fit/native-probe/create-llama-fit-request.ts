@@ -89,7 +89,7 @@ const UNSUPPORTED_KEYS: readonly string[] = ['lora', 'projection_model_src']
  * M4 Pro against `@qvac/model-fit@0.8.0`: an 18.3 GiB model at 32k context
  * still reports `fits` on `device: 'cpu'` (and it does decode — at 0.1 tok/s).
  * That answer carries no admission information, so it is refused here rather
- * than spending a child process to produce it.
+ * than spending a fit call to produce it.
  */
 function isCpuLoad(params: Record<string, string>): boolean {
   return params['device']?.toLowerCase() === 'cpu'
@@ -105,7 +105,6 @@ export interface CreateLlamaFitRequestParams {
   modelConfig: unknown
   artifacts?: Record<string, string> | undefined
   isShardedModel: boolean
-  isMobile: boolean
 }
 
 function loadKindFor(modelType: CanonicalModelType): LlamaLoadKind | undefined {
@@ -161,15 +160,11 @@ function contextFloor(params: Record<string, string>): number | undefined {
  * Builds a protocol-v2 fit request from the same resolved model config the real
  * load is about to use, or explains why this load cannot be answered for.
  *
- * Structural shapes the SDK owns are refused here so no child process starts.
- * Value-level policy (device names, symbolic GPU selection, context bounds)
- * stays inside `@qvac/model-fit`, which reports `unsupported-config` for it.
+ * Structural shapes the SDK owns are refused here so the fitter is not asked
+ * a question it cannot answer. Value-level policy (device names, symbolic GPU
+ * selection, context bounds) stays inside `@qvac/model-fit`.
  */
 export function createLlamaFitRequest(params: CreateLlamaFitRequestParams): LlamaFitRequestPlan {
-  if (params.isMobile) {
-    return unsupported('mobile has no disposable process boundary')
-  }
-
   const loadKind = loadKindFor(params.modelType)
   if (loadKind === undefined) {
     return unsupported(`model type is not a llama.cpp load: ${params.modelType}`)

@@ -17,10 +17,9 @@ const { withDangerousMod } = configPlugins
 const DEFERRED_MODULES = ['expo-file-system', 'react-native-bare-kit']
 
 /**
- * Desktop-only modules deferred so bare-pack stops walking into them. They back
- * the advisory fit check, which mobile refuses at runtime, but the imports are
- * static and pull in `bare-process` -> `bare-posix`, which ships no
- * `android-arm64` prebuild and fails bundle verification.
+ * Desktop-only spawn path, deferred so bare-pack does not walk `bare-process`
+ * -> `bare-posix` (no `android-arm64` prebuild). Mobile advisory uses
+ * in-process `@qvac/model-fit` (`fitParams`), not this subprocess.
  */
 const MOBILE_UNSUPPORTED_MODULES = ['bare-runtime/spawn', '@qvac/model-fit/process']
 

@@ -138,13 +138,21 @@ async function defaultResidentModelBytes(): Promise<number> {
 }
 
 /**
- * Also lazy: the supervisor pulls the Bare process launcher and the packaged
- * runner path, and a disabled check must not load either.
+ * Also lazy: the desktop supervisor pulls the Bare process launcher, and a
+ * disabled check must not load it. Mobile uses in-process `fitParams` instead
+ * of spawn (`bare-runtime/spawn` stays deferred from the mobile pack).
  */
 async function resolveRunFit(
-  explicit: typeof runIsolatedFit | undefined
+  explicit: typeof runIsolatedFit | undefined,
+  mobile: boolean
 ): Promise<typeof runIsolatedFit> {
   if (explicit !== undefined) return explicit
+  if (mobile) {
+    const { runInProcessFit } = await import(
+      '@/resources/model-fit/native-probe/run-in-process-fit'
+    )
+    return runInProcessFit as typeof runIsolatedFit
+  }
   return (await import('@/resources/model-fit/native-probe/run-isolated-fit')).runIsolatedFit
 }
 
@@ -201,10 +209,10 @@ function report(logger: Logger, input: AdvisoryFitInput, outcome: AdvisoryFitOut
   }
 
   // `unsupported-load` covers every load this check refuses up front — all
-  // non-llama.cpp model types and mobile — so at `info` it would tag every
-  // whisper/tts/ocr load on every start. `debug` for those; `info` where a
-  // child ran (or should have) and produced no verdict, because there "why was
-  // there no evidence" is the most useful thing this check can report.
+  // non-llama.cpp model types — so at `info` it would tag every whisper/tts/ocr
+  // load on every start. `debug` for those; `info` where a fitter ran (or
+  // should have) and produced no verdict, because there "why was there no
+  // evidence" is the most useful thing this check can report.
   const line = `${prefix} no fit evidence: ${outcome.reason}${
     outcome.message === undefined ? '' : ` (${outcome.message})`
   }`
@@ -232,13 +240,13 @@ export async function runAdvisoryFitCheck(
     logger ??= getEngineLogger()
     if (!(await resolveEnabled(options.enabled))) return unknown('disabled')
 
+    const mobile = await resolveMobile(options.mobile)
     const plan = createLlamaFitRequest({
       modelType: input.modelType,
       modelPath: input.modelPath,
       modelConfig: input.modelConfig,
       artifacts: input.artifacts,
-      isShardedModel: input.isShardedModel,
-      isMobile: await resolveMobile(options.mobile)
+      isShardedModel: input.isShardedModel
     })
 
     if (!plan.supported) {
@@ -250,7 +258,7 @@ export async function runAdvisoryFitCheck(
     const residentBytes = await (options.residentModelBytes ?? defaultResidentModelBytes)()
     const residentReserveMiB = Math.ceil(residentBytes / BYTES_PER_MIB)
 
-    const runFit = await resolveRunFit(options.runFit)
+    const runFit = await resolveRunFit(options.runFit, mobile)
     // Always sent, even with a zero reserve: relying on the addon default for
     // the base margin would leave two sources of truth that match today and
     // diverge silently if the addon default moves.
