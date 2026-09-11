@@ -119,7 +119,7 @@ Example: [`.github/workflows/cpp-tests-classification.yml`](../../.github/workfl
 
 ## See also
 
-- [`.cursor/rules/devops/github-actions.mdc`](../../.cursor/rules/devops/github-actions.mdc) — Cursor rule for workflow authors
+- [`.github/AGENTS.md`](../../.github/AGENTS.md) — scoped guidance for workflow authors
 - [`packages/ocr-ggml/.agent/knowledge/ci-validation.md`](../../packages/ocr-ggml/.agent/knowledge/ci-validation.md) — agent knowledge for CI troubleshooting
 - [`docs/ci/LABELS.md`](LABELS.md) — PR label gating
 - [`docs/ci/TEAMS.md`](TEAMS.md) — who can apply privileged labels
