@@ -7,6 +7,23 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import type { LlmStats } from '@/utils/addon-responses'
 
+test('normalizeCompletionStats: preserves MTP counters, including inactive zeros', (t) => {
+  for (const stats of [
+    { draftAccepted: 7, draftTotal: 12 },
+    { draftAccepted: 0, draftTotal: 0 },
+    { draftTotal: 4 }
+  ]) {
+    const normalized = normalizeCompletionStats(stats)
+    t.alike(normalized, stats)
+  }
+})
+
+test('normalizeCompletionStats: omits absent and non-finite MTP counters', (t) => {
+  t.alike(normalizeCompletionStats({ generatedTokens: 5 }), { generatedTokens: 5 })
+  t.is(normalizeCompletionStats({ draftAccepted: NaN, draftTotal: Infinity }), undefined)
+  t.alike(normalizeCompletionStats({ draftAccepted: -Infinity, draftTotal: 4 }), { draftTotal: 4 })
+})
+
 test('normalizeCompletionStats: drops non-finite addon numbers', (t) => {
   const stats: LlmStats = {
     TTFT: Number.NaN,

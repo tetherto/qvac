@@ -1114,6 +1114,20 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    draft_accepted: Annotated[
+        float | None,
+        Field(
+            alias="draftAccepted",
+            description="MTP draft tokens accepted by the target for this request. Zero when MTP is inactive.",
+        ),
+    ] = None
+    draft_total: Annotated[
+        float | None,
+        Field(
+            alias="draftTotal",
+            description="MTP draft tokens proposed for this request. Zero when MTP is inactive.",
+        ),
+    ] = None
     backend_device: Annotated[
         BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice
         | None,
@@ -1246,6 +1260,20 @@ class BatchCompletionStreamResponseStats(GeneratedBaseModel):
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    draft_accepted: Annotated[
+        float | None,
+        Field(
+            alias="draftAccepted",
+            description="MTP draft tokens accepted by the target for this request. Zero when MTP is inactive.",
+        ),
+    ] = None
+    draft_total: Annotated[
+        float | None,
+        Field(
+            alias="draftTotal",
+            description="MTP draft tokens proposed for this request. Zero when MTP is inactive.",
+        ),
+    ] = None
     backend_device: Annotated[
         BatchCompletionStreamResponseStatsBackendDevice | None,
         Field(
@@ -1990,6 +2018,20 @@ class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseM
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    draft_accepted: Annotated[
+        float | None,
+        Field(
+            alias="draftAccepted",
+            description="MTP draft tokens accepted by the target for this request. Zero when MTP is inactive.",
+        ),
+    ] = None
+    draft_total: Annotated[
+        float | None,
+        Field(
+            alias="draftTotal",
+            description="MTP draft tokens proposed for this request. Zero when MTP is inactive.",
+        ),
+    ] = None
     backend_device: Annotated[
         CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice | None,
         Field(
@@ -2517,6 +2559,20 @@ class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel)
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    draft_accepted: Annotated[
+        float | None,
+        Field(
+            alias="draftAccepted",
+            description="MTP draft tokens accepted by the target for this request. Zero when MTP is inactive.",
+        ),
+    ] = None
+    draft_total: Annotated[
+        float | None,
+        Field(
+            alias="draftTotal",
+            description="MTP draft tokens proposed for this request. Zero when MTP is inactive.",
+        ),
+    ] = None
     backend_device: Annotated[
         CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice | None,
         Field(
@@ -7426,6 +7482,63 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             alias="flash-attn",
             description="Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn",
+        ),
+    ] = None
+    spec_type: Annotated[
+        Literal["draft-mtp"] | None,
+        Field(
+            alias="spec-type",
+            description="Enable MTP self-speculative decoding with `'draft-mtp'`. Off when unset. Requires a model with a bundled MTP head and `parallel: 1`; the addon falls back to normal decoding for models without the head or with `parallel > 1`.",
+        ),
+    ] = None
+    spec_draft_n_max: Annotated[
+        int | None,
+        Field(
+            alias="spec-draft-n-max",
+            description="Maximum draft tokens proposed per MTP verification round. Addon default 3.",
+            ge=1,
+            le=2147483647,
+        ),
+    ] = None
+    spec_draft_n_min: Annotated[
+        int | None,
+        Field(
+            alias="spec-draft-n-min",
+            description="Minimum draft tokens to use in speculative decoding. Addon default 0.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    spec_draft_p_min: Annotated[
+        float | None,
+        Field(
+            alias="spec-draft-p-min",
+            description="Minimum draft token probability for speculative decoding. Addon default 0.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    spec_draft_backend_sampling: Annotated[
+        bool | None,
+        Field(
+            alias="spec-draft-backend-sampling",
+            description="Enable backend sampling for the speculative draft context. Set false to disable it; unset keeps the addon default.",
+        ),
+    ] = None
+    spec_draft_device: Annotated[
+        str | None,
+        Field(
+            alias="spec-draft-device",
+            description="Comma-separated backend device names for the speculative draft context.",
+        ),
+    ] = None
+    spec_draft_ngl: Annotated[
+        int | None,
+        Field(
+            alias="spec-draft-ngl",
+            description="Draft GPU layer count. Unset keeps the addon default.",
+            ge=-1,
+            le=2147483647,
         ),
     ] = None
     tensor_split: Annotated[

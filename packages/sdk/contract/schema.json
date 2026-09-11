@@ -1414,6 +1414,14 @@
                           "avgConcurrentSeq": {
                             "type": "number"
                           },
+                          "draftAccepted": {
+                            "description": "MTP draft tokens accepted by the target for this request. Zero when MTP is inactive.",
+                            "type": "number"
+                          },
+                          "draftTotal": {
+                            "description": "MTP draft tokens proposed for this request. Zero when MTP is inactive.",
+                            "type": "number"
+                          },
                           "backendDevice": {
                             "type": "string",
                             "enum": ["cpu", "gpu"],
@@ -1537,6 +1545,14 @@
               "type": "number"
             },
             "avgConcurrentSeq": {
+              "type": "number"
+            },
+            "draftAccepted": {
+              "description": "MTP draft tokens accepted by the target for this request. Zero when MTP is inactive.",
+              "type": "number"
+            },
+            "draftTotal": {
+              "description": "MTP draft tokens proposed for this request. Zero when MTP is inactive.",
               "type": "number"
             },
             "backendDevice": {
@@ -2486,6 +2502,14 @@
                       "avgConcurrentSeq": {
                         "type": "number"
                       },
+                      "draftAccepted": {
+                        "description": "MTP draft tokens accepted by the target for this request. Zero when MTP is inactive.",
+                        "type": "number"
+                      },
+                      "draftTotal": {
+                        "description": "MTP draft tokens proposed for this request. Zero when MTP is inactive.",
+                        "type": "number"
+                      },
                       "backendDevice": {
                         "type": "string",
                         "enum": ["cpu", "gpu"],
@@ -3074,6 +3098,14 @@
                         "type": "number"
                       },
                       "avgConcurrentSeq": {
+                        "type": "number"
+                      },
+                      "draftAccepted": {
+                        "description": "MTP draft tokens accepted by the target for this request. Zero when MTP is inactive.",
+                        "type": "number"
+                      },
+                      "draftTotal": {
+                        "description": "MTP draft tokens proposed for this request. Zero when MTP is inactive.",
                         "type": "number"
                       },
                       "backendDevice": {
@@ -8677,6 +8709,43 @@
                       "type": "string",
                       "enum": ["on", "off", "auto"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn"
+                    },
+                    "spec-type": {
+                      "description": "Enable MTP self-speculative decoding with `'draft-mtp'`. Off when unset. Requires a model with a bundled MTP head and `parallel: 1`; the addon falls back to normal decoding for models without the head or with `parallel > 1`.",
+                      "type": "string",
+                      "const": "draft-mtp"
+                    },
+                    "spec-draft-n-max": {
+                      "description": "Maximum draft tokens proposed per MTP verification round. Addon default 3.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "spec-draft-n-min": {
+                      "description": "Minimum draft tokens to use in speculative decoding. Addon default 0.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2147483647
+                    },
+                    "spec-draft-p-min": {
+                      "description": "Minimum draft token probability for speculative decoding. Addon default 0.",
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "spec-draft-backend-sampling": {
+                      "description": "Enable backend sampling for the speculative draft context. Set false to disable it; unset keeps the addon default.",
+                      "type": "boolean"
+                    },
+                    "spec-draft-device": {
+                      "description": "Comma-separated backend device names for the speculative draft context.",
+                      "type": "string"
+                    },
+                    "spec-draft-ngl": {
+                      "description": "Draft GPU layer count. Unset keeps the addon default.",
+                      "type": "integer",
+                      "minimum": -1,
+                      "maximum": 2147483647
                     },
                     "tensor-split": {
                       "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",

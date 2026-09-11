@@ -715,6 +715,23 @@ export const completionContextOverflowWarmCache = createCompletionTest(
   { estimatedDurationMs: 30000, dependency: 'llm-small-ctx' }
 )
 
+export const completionMtp = createCompletionTest(
+  'completion-mtp',
+  {
+    history: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      {
+        role: 'user',
+        content: 'What is the capital of France? Answer in one complete sentence.'
+      }
+    ],
+    stream: true,
+    generationParams: { ...DETERMINISTIC, predict: 64, reasoning_budget: 0 }
+  },
+  { validation: 'regex', pattern: '[Pp]aris' },
+  { dependency: 'none', estimatedDurationMs: 30000 }
+)
+
 export const completionTests = [
   completionStreaming,
   completionTemperature01,
@@ -759,6 +776,7 @@ export const completionTests = [
   completionReasoningBudgetUnrestricted,
   completionRemoveThinkingFromContext,
   completionStats,
+  completionMtp,
   completionStopReasonLength,
   completionContextBoundaryStop,
   completionContextOverflowPrefill,

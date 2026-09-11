@@ -135,6 +135,49 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`."
     ),
+  'spec-type': z
+    .literal('draft-mtp')
+    .optional()
+    .describe(
+      "Enable MTP self-speculative decoding with `'draft-mtp'`. Off when unset. Requires a model with a bundled MTP head and `parallel: 1`; the addon falls back to normal decoding for models without the head or with `parallel > 1`."
+    ),
+  'spec-draft-n-max': z
+    .number()
+    .int()
+    .min(1)
+    .max(2147483647)
+    .optional()
+    .describe('Maximum draft tokens proposed per MTP verification round. Addon default 3.'),
+  'spec-draft-n-min': z
+    .number()
+    .int()
+    .min(0)
+    .max(2147483647)
+    .optional()
+    .describe('Minimum draft tokens to use in speculative decoding. Addon default 0.'),
+  'spec-draft-p-min': z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe('Minimum draft token probability for speculative decoding. Addon default 0.'),
+  'spec-draft-backend-sampling': z
+    .boolean()
+    .optional()
+    .describe(
+      'Enable backend sampling for the speculative draft context. Set false to disable it; unset keeps the addon default.'
+    ),
+  'spec-draft-device': z
+    .string()
+    .optional()
+    .describe('Comma-separated backend device names for the speculative draft context.'),
+  'spec-draft-ngl': z
+    .number()
+    .int()
+    .min(-1)
+    .max(2147483647)
+    .optional()
+    .describe('Draft GPU layer count. Unset keeps the addon default.'),
   'tensor-split': z
     .string()
     .optional()
