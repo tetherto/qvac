@@ -244,6 +244,7 @@ Skips integrated GPUs during backend selection. Falls back to CPU if no discrete
 | `split-mode: 'tensor'` through the SDK | Rejected by `@qvac/inference`'s Zod schema, which does not yet include `'tensor'`; use direct addon `loadModel` |
 | Both `split-mode` and `split_mode` provided | Throws `InvalidArgument` error |
 | Both `main-gpu` and `main_gpu` provided | Throws `InvalidArgument` error |
+| Both `tensor-split` and `tensor_split` provided | Throws `InvalidArgument` — only one spelling can be remapped onto the pinned list, and leaving the other would let it race the rewritten one |
 
 ## Benchmarking
 

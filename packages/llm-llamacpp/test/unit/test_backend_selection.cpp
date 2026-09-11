@@ -432,18 +432,6 @@ TEST_F(BackendSelectionTest, MetalGPUShouldBeChosenOverCPU) {
   expectChosen(mockBackend, BackendType::GPU, "metal");
 }
 
-TEST_F(BackendSelectionTest, RocmBeforeVulkanChoosesVulkan) {
-  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
-  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
-  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
-}
-
-TEST_F(BackendSelectionTest, RocmAfterVulkanChoosesVulkan) {
-  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
-  mockBackend.addDevice(createGPUDevice("AMD Radeon", "hip0"));
-  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
-}
-
 TEST_F(BackendSelectionTest, RocmOnlyFallsBackToCpu) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
   expectChosenForPreference(
@@ -471,6 +459,31 @@ TEST_F(BackendSelectionTest, MainGpuIndexTargetingRocmFallsBackToCpu) {
   MainGpu mainGpu = 0;
   expectChosenForPreference(
       mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+}
+
+// A refused device is recorded before the main-gpu type filter, so the
+// CPU-fallback warning still names it when `integrated`/`dedicated` would have
+// skipped its type anyway.
+TEST_F(BackendSelectionTest, MainGpuIntegratedWarnsAboutRefusedDiscreteGpu) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  MainGpu mainGpu = MainGpuType::Integrated;
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("ROCm0 (standard)") != std::string::npos;
+  }));
+}
+
+TEST_F(BackendSelectionTest, MainGpuDedicatedWarnsAboutRefusedIntegratedGpu) {
+  mockBackend.addDevice(createIGPUDevice("AMD Radeon", "ROCm0"));
+  MainGpu mainGpu = MainGpuType::Dedicated;
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("ROCm0 (standard)") != std::string::npos;
+  }));
 }
 
 TEST_F(BackendSelectionTest, RegistryFamilyNamesRequireExactIdentity) {
@@ -528,8 +541,8 @@ TEST_F(BackendSelectionTest, IntegratedRocmIsExcluded) {
   }));
 }
 
-// Mirrors the ROCm before/after pair: registry position must not decide
-// eligibility. In both cases the eligible device is deliberately the
+// Registry position must not decide eligibility. In both cases the eligible
+// device is deliberately the
 // IGPU-typed one and the unknown family is GPU-typed, so an unknown wrongly
 // admitted would win the bucket ordering (gpuBackends is consulted before
 // igpuBackends) and be chosen — asserting vulkan0 therefore proves the

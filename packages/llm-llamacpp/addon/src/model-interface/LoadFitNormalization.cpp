@@ -710,10 +710,7 @@ void remapTensorSplit(
   //   3. anything else                 -> reject
   // Final order wins when both counts are equal. The addon pins
   // params.devices itself, so fabric applies share i to final device i, which
-  // makes the final list the contract the caller is writing against. An
-  // earlier revision gated case 1 on the final order still being sorted and
-  // preferred the raw reading otherwise; that rejected perfectly
-  // unambiguous input on any host where RPC hoisting reorders the list.
+  // makes the final list the contract the caller is writing against.
   if (proportions.size() == selection.devices.size()) {
     value->second = joinShares(proportions);
     return;
@@ -916,17 +913,25 @@ NormalizedLoad normalizeLoadForFit(
       backend_selection::applyAdrenoRestrictions(
           splitSelection, metadata, finetuneOverrides.active);
       if (!splitSelection.devices.empty()) {
-        // KV-cache traits apply when any participant has them. The projector
-        // device and Adreno tier come from the first local device: RPC devices
-        // are prepended and can host neither.
-        //
-        // The tier REPORTED here (first local device) and the tier the Adreno
-        // RESTRICTION above uses (max across participants) differ on purpose.
-        // The restriction reproduces chooseBackend's host-wide policy, which
-        // is keyed on the max. This value instead feeds per-load traits
-        // (projector default, ubatch and KV-quant thresholds), where the
-        // participant actually hosting the projector is the right input and
-        // where model-fit mirrors the same choice.
+        // Which field comes from which participant, and why:
+        //   - name: the FIRST LOCAL device. It becomes mmproj_backend, and the
+        //     projector runs on one device; RPC devices are prepended and
+        //     cannot host it.
+        //   - adrenoVersion: the MAX tier across LOCAL participants, matching
+        //     both chooseBackend (BackendSelection.cpp:472) and the
+        //     restriction applied above. It gates the quantized-KV +
+        //     flash-attention rejection, which exists to replace a native
+        //     abort with a clean error, so any local participant at 800+ has
+        //     to arm it; reporting only the first local tier would leave it
+        //     disarmed on a mixed-tier set. RPC devices are excluded because
+        //     ggml reports the ENDPOINT STRING as an RPC device's description
+        //     (ggml-rpc.cpp:3749, surfaced at :3318-3321), so parsing a tier
+        //     off one reads a hostname: it can never see a real remote Adreno,
+        //     and a host or port containing "dreno" plus digits would arm the
+        //     guard and reject a valid config. Do not widen this to all
+        //     participants on a safety intuition — there is no safety to gain.
+        //   - isOpenCl / isMetal: true when ANY participant has them, since
+        //     the KV-cache rules they gate apply to the whole load.
         const auto& devices = splitSelection.devices;
         const auto local = std::ranges::find_if(
             devices, [](const backend_selection::SplitDevice& device) {
@@ -941,11 +946,18 @@ NormalizedLoad normalizeLoadForFit(
                     return d.*trait;
                   });
             };
+        std::optional<int> maxAdrenoVersion;
+        for (const backend_selection::SplitDevice& device : devices) {
+          if (!device.isRpc && device.adrenoVersion.has_value() &&
+              (!maxAdrenoVersion.has_value() ||
+               device.adrenoVersion.value() > maxAdrenoVersion.value())) {
+            maxAdrenoVersion = device.adrenoVersion;
+          }
+        }
         selected = {
             .type = BackendType::GPU,
             .name = primary.name,
-            .adrenoVersion = primary.adrenoVersion,
-            .isMaliGpu = primary.isMaliGpu,
+            .adrenoVersion = maxAdrenoVersion,
             .isOpenCl = anyDevice(&backend_selection::SplitDevice::isOpenCl),
             .isMetal = anyDevice(&backend_selection::SplitDevice::isMetal)};
       } else if (!splitSelection.rejectedDevices.empty()) {
@@ -1065,9 +1077,7 @@ NormalizedLoad normalizeLoadForFit(
       if (splitMode != LLAMA_SPLIT_MODE_NONE) {
         remapTensorSplit(configFilemap, splitSelection);
       }
-    } else if (
-        selected.type == BackendType::CPU ||
-        selected.type == BackendType::GPU) {
+    } else if (selected.type == BackendType::CPU) {
       params.mmproj_use_gpu = false;
       if (mmprojUseGpuOverride.value_or(false)) {
         QLOG_IF(
@@ -1097,7 +1107,7 @@ NormalizedLoad normalizeLoadForFit(
     }
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
-      configVector.emplace_back(useGpu ? selected.name : "none");
+      configVector.emplace_back(selected.name);
     } else {
       std::string deviceList;
       params.devices.clear();

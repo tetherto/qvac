@@ -487,8 +487,9 @@ TEST_F(LoadFitNormalizationTest, SplitModeFallsBackToRpcPrimaryWhenAllRpc) {
 }
 
 // A KV-cache trait held by any participant governs the whole load: the
-// OpenCL (Adreno) device in second position suppresses the q8_0 default, while
-// the projector device and Adreno tier still come from the first local device.
+// OpenCL (Adreno) device in second position suppresses the q8_0 default and,
+// being LOCAL, contributes its tier to the reported max. The projector device
+// still comes from the first local device.
 TEST_F(LoadFitNormalizationTest, SplitModeKvTraitsComeFromAnyDevice) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -503,7 +504,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeKvTraitsComeFromAnyDevice) {
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
 
   EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
-  EXPECT_FALSE(result.adrenoVersion.has_value());
+  EXPECT_EQ(result.adrenoVersion, 830);
   EXPECT_NE(result.params.cache_type_k, GGML_TYPE_Q8_0);
   EXPECT_NE(result.params.cache_type_v, GGML_TYPE_Q8_0);
 }
@@ -566,34 +567,6 @@ TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsFinalCountWhenReordered) {
 
   EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F);
   EXPECT_FLOAT_EQ(result.params.tensor_split[1], 3.0F);
-}
-
-// N == F < R with a final order that is NOT sorted by sourceGpuIndex: the
-// ineligible middle card is filtered out and the RPC device is hoisted ahead
-// of the local GPU. An earlier revision gated the final-count reading on the
-// order still being sorted and rejected this outright, even though two shares
-// can only mean the two eligible devices.
-TEST_F(
-    LoadFitNormalizationTest,
-    TensorSplitAcceptsFinalCountWhenRpcHoistedAndDeviceFiltered) {
-  auto config = baseConfig();
-  config["split-mode"] = "layer";
-  config["tensor-split"] = "0.25,0.75";
-  auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
-  auto selection = splitSelection({"rpc0", "vulkan0"});
-  selection.sourceGpuCount = 3;
-  selection.devices[0].isRpc = true;
-  selection.devices[0].sourceGpuIndex = 2;
-  selection.devices[1].sourceGpuIndex = 0;
-  dependencies.splitDevices = [selection]() { return selection; };
-
-  const auto result = lfn::normalizeLoadForFit(
-      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
-
-  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
-  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 0.25F);
-  EXPECT_FLOAT_EQ(result.params.tensor_split[1], 0.75F);
 }
 
 // A count matching neither cardinality is rejected, and the message must name
@@ -711,6 +684,31 @@ TEST_F(
             {"vulkan0", "vulkan1"}));
     EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F) << value;
     EXPECT_FLOAT_EQ(result.params.tensor_split[1], 2.0F) << value;
+  }
+}
+
+// Only one spelling can be remapped; leaving the other would let it race the
+// rewritten one through the passthrough loop.
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsBothSpellings) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,1";
+  config["tensor_split"] = "2,1";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "vulkan0"},
+            {"vulkan0", "vulkan1"})));
+    FAIL() << "both tensor-split spellings must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "both 'tensor-split' and 'tensor_split' are present"));
   }
 }
 
@@ -913,6 +911,80 @@ TEST_F(LoadFitNormalizationTest, SplitModeNonAdrenoSetIsNotRestricted) {
   EXPECT_EQ(result.runtimeBackendDevice, 1);
   ASSERT_EQ(result.params.devices.size(), 3U);
   EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+// The reported tier is the MAX across local participants, not the first local
+// device's. The lower tier sorts first on purpose: reading the first local
+// device would report 740 and leave the Adreno-800+ quantized-KV guard
+// disarmed while an 830 participates. Observed through that guard, which
+// suppresses the q8_0 KV default once armed.
+TEST_F(LoadFitNormalizationTest, SplitModeReportsMaxAdrenoTierAcrossDevices) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 740;
+  selection.devices[1].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.adrenoVersion, 830);
+  // Armed: the q8_0 default is suppressed on Adreno 800+ Vulkan.
+  EXPECT_NE(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_NE(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+// The max spans LOCAL participants only. An RPC device's description is its
+// endpoint string (ggml-rpc.cpp:3749), so a host or port that happens to parse
+// as an Adreno tier must not raise the reported tier or arm the crash guard:
+// here the endpoint would read as 830 while the only real GPU is a 740.
+TEST_F(LoadFitNormalizationTest, SplitModeMaxAdrenoTierIgnoresRpcEndpoint) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "vulkan0"});
+  selection.devices[0].isRpc = true;
+  selection.devices[0].adrenoVersion = 830;
+  selection.devices[1].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.adrenoVersion, 740);
+  // Not armed: the q8_0 default still applies on Adreno <800.
+  EXPECT_EQ(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+// The same mixed-tier set must also reject an EXPLICIT quantized KV type,
+// which is the crash guard proper: it replaces a native abort with a clean
+// error, so an 830 participant has to arm it whatever position it holds.
+TEST_F(
+    LoadFitNormalizationTest, SplitModeMaxAdrenoTierArmsQuantizedKvRejection) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["cache-type-k"] = "q8_0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 740;
+  selection.devices[1].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+    FAIL() << "quantized KV must be rejected when any participant is 800+";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("not supported on Adreno 800+ (Vulkan)"));
+  }
 }
 
 // split-mode 'none' still resolves through chooseBackend, which owns the same

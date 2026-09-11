@@ -150,14 +150,6 @@ bool hasMetalFamily(
          registryName == "metal";
 }
 
-bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
-  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
-  return hasBackendFamily(
-      lowerCopy(bckI.ggml_backend_dev_name(dev)),
-      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
-      "rpc");
-}
-
 bool isOpenClDevice(
     const BackendInterface& bckI, const ggml_backend_dev_t dev,
     const DeviceDescription& devDescr) {
@@ -276,17 +268,18 @@ void tryEmplaceDevice(
       bckI.ggml_backend_dev_type(dev);
   const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
   const bool isOpenCl = isOpenClDevice(bckI, dev, devDescr);
+  const bool isGpuType = backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
+                         backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
+  // Record a refused GPU before the main-gpu type filter so the CPU-fallback
+  // warning names it even when `integrated`/`dedicated` skips its type.
+  if (isGpuType && !isEligibleGpuDevice(bckI, dev)) {
+    rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+    return;
+  }
   if (shouldProcessDevice(backendTypeEnum, isOpenCl, mainGpuType)) {
 #ifndef NDEBUG
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "New GPU device", nullptr);
 #endif
-    if (!isEligibleGpuDevice(bckI, dev)) {
-      if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
-          backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU) {
-        rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
-      }
-      return;
-    }
     ::emplaceIfValidDevice(
         bckI,
         gpuBackends,
@@ -593,45 +586,29 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
         .name = namePtr,
         .handle = dev,
         .sourceGpuIndex = sourceGpuIndex,
-        .isRpc = isRpcDevice(bckI, dev),
+        .isRpc = hasBackendFamily(deviceName, registryName, "rpc"),
         .adrenoVersion = parseAdrenoVersion(description),
-        .isMaliGpu = description.find("mali") != std::string::npos,
         .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
         .isMetal = hasMetalFamily(deviceName, registryName)};
     if (selected.isRpc) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
-    // At most ONE integrated GPU, which is fabric's pre-10549 rule. A
-    // deliberate decision, not an oversight, and NOT parity with the fabric
-    // that main now pins: 10549 changed llama_prepare_model_devices
-    // (src/llama.cpp:265-273) to keep the first iGPU plus every further one
-    // registered by the SAME backend registry, so an iGPU seen twice by one
-    // backend is kept twice while cross-backend duplicates are still dropped.
-    //
-    // Not adopted, for three reasons:
-    //   - One rule across the packages in this change set, which all carry
-    //     the pre-10549 behaviour. ocr-ggml and vla-ggml never face the
-    //     question: both resolve to a single device and build no device list
-    //     at all (OcrBackendSelection trySelectGpu / vla pickBestGpuDevice).
-    //   - It NARROWS this addon's own prior behaviour. The
-    //     getTensorSplitDeviceNames deleted in this change kept every iGPU,
-    //     deduplicated by device_id, which was arguably closer to 10549's
-    //     intent. One shared rule was judged worth more than each package
-    //     approximating fabric differently.
-    //   - The narrowing is unobservable on shipped configurations, so it
-    //     costs nothing today. A host would need two IGPU-typed devices from
-    //     one registry: Metal and OpenCL both report type GPU, never IGPU
-    //     (ggml-metal.cpp:685-689, ggml-opencl.cpp:11459-11463), and Vulkan
-    //     already dedupes physical devices by UUID/LUID before registering
-    //     them (ggml-vulkan.cpp:8843-8872, comparison at 8861-8865). That
-    //     dedup is not unconditional — it is skipped when both drivers are
-    //     MoltenVK (8866-8868), since MoltenVK reports one UUID for distinct
-    //     GPUs on multi-GPU Apple cards — so the honest claim is "no shipped
-    //     configuration other than a multi-GPU Apple card under MoltenVK".
-    //
-    // Revisit with a deliberate fleet-wide 10549 decision, not here. Pinned
-    // by BackendSelectionTest.SplitSelectionKeepsSingleIntegratedGpu.
+    // Deliberate divergence from fabric 10549, which main pins: its
+    // llama_prepare_model_devices (src/llama.cpp:265-273) keeps the first iGPU
+    // plus every further one from the SAME registry; this keeps one, as do
+    // embed and model-fit, and as ocr-ggml and vla-ggml do by resolving to a
+    // single device. It NARROWS the deleted getTensorSplitDeviceNames, which
+    // kept every iGPU deduplicated by device_id, but one shared rule across
+    // the change set was judged worth more. Unobservable on shipped configs: a
+    // host would need two IGPU-typed devices from one registry, and Metal and
+    // OpenCL always report GPU, never IGPU (ggml-metal.cpp:685-689,
+    // ggml-opencl.cpp:11459-11463), while Vulkan dedupes by UUID/LUID first
+    // (ggml-vulkan.cpp:8843-8872, comparison at 8861-8865) — except between
+    // two MoltenVK drivers (8866-8868), which report one UUID for distinct
+    // GPUs, so the exception is a multi-GPU Apple card under MoltenVK.
+    // Revisit as a fleet-wide 10549 decision, not here. Pinned by
+    // BackendSelectionTest.SplitSelectionKeepsSingleIntegratedGpu.
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
       if (integrated.empty()) {
         integrated.emplace_back(std::move(selected));
@@ -677,10 +654,12 @@ void backend_selection::applyAdrenoRestrictions(
     return;
   }
 
-  // The MAX tier across participants, matching chooseBackend's host-wide
-  // maxAdrenoVersion rather than a per-device test, so a mixed-Adreno host
-  // resolves the same way on both paths. A device with no tier is not an
-  // Adreno and never triggers the rule on its own.
+  // The MAX tier across participants rather than a per-device test, matching
+  // chooseBackend's host-wide maxAdrenoVersion. Reproduced over the SPLIT SET:
+  // chooseBackend takes its maximum over a wider set that is not deduplicated
+  // and has no discrete-over-integrated preference, so the two can differ on a
+  // host where an Adreno is in one set and not the other. A device with no
+  // tier is not an Adreno and never triggers the rule on its own.
   std::optional<int> maxAdrenoVersion;
   for (const SplitDevice& device : selection.devices) {
     if (device.adrenoVersion.has_value() &&

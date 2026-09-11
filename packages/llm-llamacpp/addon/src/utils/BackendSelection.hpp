@@ -88,7 +88,6 @@ struct SplitDevice {
   size_t sourceGpuIndex = 0;
   bool isRpc = false;
   std::optional<int> adrenoVersion;
-  bool isMaliGpu = false;
   bool isOpenCl = false;
   bool isMetal = false;
 };
@@ -111,9 +110,12 @@ SplitDeviceSelection getSplitDeviceSelection();
 /// one-bit (TQ1_0/TQ2_0) BitNet and for finetuning:
 ///   - Adreno <800: CPU only  -> clears @p selection.devices
 ///   - Adreno 800+: prefer Vulkan over OpenCL -> drops the OpenCL devices
-/// The tier is the MAX across participants, as in `chooseBackend`; a device
-/// with no Adreno tier never triggers the rule on its own, and a non-Adreno
-/// set is left untouched.
+/// The tier is the MAX across participants, as in `chooseBackend`, but taken
+/// over the SPLIT SET only: `chooseBackend`'s maximum spans a wider set that is
+/// not deduplicated and has no discrete-over-integrated preference, so the two
+/// can differ where an Adreno is in one set and not the other. A device with no
+/// Adreno tier never triggers the rule on its own, and a non-Adreno set is left
+/// untouched.
 ///
 /// This FILTERS the one authoritative device list from
 /// `getSplitDeviceSelection()`; it does not make a second, independent device
