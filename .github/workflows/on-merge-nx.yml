@@ -48,6 +48,22 @@ on:
         required: false
         default: ""
         type: string
+      # GPR dist-tag override, as main's per-package files offered. Empty keeps
+      # the tag publish-logic derives from the branch, so a dispatch behaves the
+      # same as a push unless the operator picks one.
+      # `auto` rather than main's "" option: an empty choice option is an
+      # actionlint syntax error, and these files are kept lint-clean.
+      tag:
+        description: "GPR dist-tag override (auto = use the branch-derived tag)"
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - latest
+          - dev
+          - feature
+          - temp
 
 permissions:
   contents: read
@@ -405,7 +421,9 @@ jobs:
         uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          # Empty on push, 'auto' on an un-overridden dispatch: both fall through
+          # to the tag publish-logic derived from the branch.
+          tag: ${{ (inputs.tag != 'auto' && inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
           workdir: ${{ matrix.workdir }}
           name-suffix: "-mono"
 
