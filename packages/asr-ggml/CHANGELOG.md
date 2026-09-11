@@ -16,6 +16,18 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- Extend the opt-in CUDA build (`ASR_CUDA=ON`) from linux-x64 to linux-arm64
+  and win32-x64. On all three platforms the CUDA backend ships as a
+  runtime-loaded module (`.so` on Linux, `.dll` on Windows) staged next to the
+  addon: it engages only where the NVIDIA driver and the CUDA 13 runtime
+  libraries resolve, and hosts without them fall back to Vulkan or CPU exactly
+  as before. The whisper engine's backend loader now also runs on Windows
+  (with addon-relative self-location when `backendsDir` is omitted), which
+  hybrid win32 builds need to register any backend at all. Published prebuilds
+  remain CUDA-free. The linux-arm64 module natively targets Jetson Orin (8.7),
+  Grace-Hopper (9.0) and GB10 / DGX Spark (12.1), with other Ampere+ parts
+  covered through the bundled 8.0 PTX.
+
 - Add NVIDIA Nemotron 3.5 ASR Streaming 0.6B support to the Parakeet engine,
   including locale prompting, cache-aware streaming operating points,
   conversion tooling, and a model-specific 320 ms streaming default.
@@ -40,6 +52,23 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Raise the `speech-cpp` floor to 2026-09-10. Nemotron 3.5 ASR streaming is
+  now validated on Vulkan and CUDA: the encoder and the fused transducer
+  decode run on the GPU at all five cache-aware operating points, with
+  engine parity tests against NeMo references at each of them. The window
+  also extends the Parakeet Core ML offline-encoder path used by the
+  `coreml` build on Apple platforms.
+
+- Raise the `speech-cpp` floor to 2026-09-09 (ggml-speech 2026-09-09#1).
+  Parakeet CPU transcription is 2.2 to 2.6x faster on x86 desktops: the TDT
+  decoder runs as ggml graphs instead of a host loop, positional projections
+  are cached per graph, and the encoder drops several full-tensor copies.
+  ggml now builds with tinyBLAS on linux-x64 and darwin-arm64, and the
+  linux-x64 prebuild ships the per-arch CPU backend modules beside the addon
+  (AVX-512 hosts no longer run the AVX2 kernels), the same hybrid layout the
+  cuda build already used. The window also carries the memory-fit preflight
+  APIs, the hybrid RNN-T head, and Nemotron OpenCL support.
+
 - Raise the `speech-cpp` floor to 2026-09-03. Silero VAD now honors
   `use_gpu`: the compute backends match the weight placement, fixing the
   ggml_backend_sched abort ("pre-allocated tensor in a buffer that cannot
@@ -49,6 +78,18 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   The addon creates its VAD context with the default (CPU) parameters, so
   runtime behavior is unchanged; the fix matters for anything that opts
   VAD into the GPU.
+
+- **Per-platform prebuild packages.** `@qvac/asr-ggml` is now a meta package
+  that ships the JavaScript wrapper only; native prebuilds install through
+  `os`/`cpu` filtered `optionalDependencies` (`@qvac/asr-ggml-<platform>-<arch>`,
+  iOS flavours grouped in `@qvac/asr-ggml-ios`), version-locked to the meta
+  package. Breaking for the published file layout:
+  `node_modules/@qvac/asr-ggml/prebuilds` no longer exists in npm installs —
+  use the new `resolveBackendsDir()` export instead of hardcoding that path.
+  Supported installers are npm 7+, pnpm, bun, and Yarn Berry; Yarn v1 and
+  `--omit=optional` installs fail at require time with an error naming the
+  missing platform package. A locally built `prebuilds/` directory keeps
+  taking precedence, so source builds are unaffected.
 
 ## [0.4.2] - 2026-09-01
 

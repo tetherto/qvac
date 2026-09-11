@@ -389,8 +389,7 @@ to 1) or **reduce devices**. Both caps fail fast and free.
 - Mobile status was **dropped from the Merge Guard**: it is no longer a required
   (or optional-but-reported) check, so a mobile run can never block a merge.
 - The **`run-mobile-addon-tests` label is kept** but no longer starts a standalone
-  mobile suite. It still gates the on-device (Device Farm) co-load smoke where
-  that exists. See [LABELS.md](./LABELS.md).
+  mobile suite. See [LABELS.md](./LABELS.md).
 
 ## What did **not** change
 

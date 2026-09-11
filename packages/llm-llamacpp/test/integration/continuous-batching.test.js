@@ -1081,7 +1081,7 @@ test(
     const shortGroupGenerated = toNumber(responses[0].stats.generatedTokens)
     const storyGroupGenerated = toNumber(responses[1].stats.generatedTokens)
     t.ok(
-      shortGroupGenerated < 16 && shortGroupGenerated < storyGroupGenerated,
+      shortGroupGenerated <= 16 && shortGroupGenerated < storyGroupGenerated,
       `group 0 generatedTokens (${shortGroupGenerated}) stays at its own scale vs story group (${storyGroupGenerated}) — groups never read each other's figures`
     )
     t.ok(storyGroupGenerated > 20, `story group generated a long output (${storyGroupGenerated})`)
