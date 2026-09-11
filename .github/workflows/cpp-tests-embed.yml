@@ -125,7 +125,7 @@ jobs:
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
-          platform: ${{ matrix.platform }}
+          platform: ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }}
           arch: ${{ matrix.arch || 'x64' }}
 
       - name: Install bare tooling
