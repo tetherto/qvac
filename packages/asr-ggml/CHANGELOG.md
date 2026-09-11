@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-11
+
 ### Added
 
 - The published linux-x64 prebuild ships the CUDA backend again, next to
@@ -40,52 +42,42 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   including locale prompting, cache-aware streaming operating points,
   conversion tooling, and a model-specific 320 ms streaming default.
 
-- Add Core ML (Apple Neural Engine) RTF benchmark lanes for the Parakeet TDT
-  models on the darwin-arm64 desktop runner, covering f16/q8_0/q4_0. A matrix
-  entry opts in with `"coreml": true`; the encoder then runs on the ANE via an
-  exported `<stem>-encoder.mlmodelc` sidecar while the TDT decoder stays on
-  Metal. Because the sidecar is picked up by presence alone — and one sidecar
-  serves every quantisation of its stem — Core ML entries run against an
-  isolated `models/coreml/` copy so the existing CPU and Metal lanes cannot
-  silently start measuring the Neural Engine. `activeBackend` is now derived
-  from the observed per-run `encoderOnCoreml` stat rather than the requested
-  backend, and the benchmark refuses to write an artifact whose label would not
-  match what actually ran, in either direction. Sidecars are pinned in
-  `test/integration/parakeet-coreml.manifest.json` and staged by
-  `scripts/stage-integration-models.mjs`; lanes skip themselves loudly where no
-  sidecar is staged, so the matrix is unaffected until one is published. Core ML
-  covers the offline TDT encoder only, and the aggregate report expects it for
-  the parakeet engine alone. Measured on an Apple M1 Pro: 1.20-1.27x faster than
-  the Metal lane (mean RTF, five runs per lane) — see the package README.
+- Run the Parakeet TDT offline encoder on the Apple Neural Engine (Core ML)
+  on darwin-arm64: when an exported `<stem>-encoder.mlmodelc` sidecar sits
+  next to the model, the encoder runs on the ANE while the TDT decoder stays
+  on Metal. The sidecar is picked up by presence alone, one sidecar serves
+  every quantisation of its stem, and the per-run `encoderOnCoreml` stat
+  reports whether it engaged. Covers the offline TDT encoder only. Measured
+  on an Apple M1 Pro: 1.20-1.27x faster than Metal (mean RTF over five runs
+  per variant) — see the package README.
 
 ### Changed
 
-- Raise the `speech-cpp` floor to 2026-09-10. Nemotron 3.5 ASR streaming is
-  now validated on Vulkan and CUDA: the encoder and the fused transducer
-  decode run on the GPU at all five cache-aware operating points, with
-  engine parity tests against NeMo references at each of them. The window
-  also extends the Parakeet Core ML offline-encoder path used by the
-  `coreml` build on Apple platforms.
+- Raise the `speech-cpp` floor to 2026-09-10 and floor `ggml-speech` at
+  2026-09-09#1. The engine window since 0.4.2 brings:
 
-- Raise the `speech-cpp` floor to 2026-09-09 (ggml-speech 2026-09-09#1).
-  Parakeet CPU transcription is 2.2 to 2.6x faster on x86 desktops: the TDT
-  decoder runs as ggml graphs instead of a host loop, positional projections
-  are cached per graph, and the encoder drops several full-tensor copies.
-  ggml now builds with tinyBLAS on linux-x64 and darwin-arm64, and the
-  linux-x64 prebuild ships the per-arch CPU backend modules beside the addon
-  (AVX-512 hosts no longer run the AVX2 kernels), the same hybrid layout the
-  cuda build already used. The window also carries the memory-fit preflight
-  APIs, the hybrid RNN-T head, and Nemotron OpenCL support.
-
-- Raise the `speech-cpp` floor to 2026-09-03. Silero VAD now honors
-  `use_gpu`: the compute backends match the weight placement, fixing the
-  ggml_backend_sched abort ("pre-allocated tensor in a buffer that cannot
-  run the operation") that killed every `use_gpu=true` VAD context init on
-  GPU builds (Metal, Vulkan, CUDA, HIP), and the VAD LSTM input is made
-  contiguous to satisfy the CUDA mul-mat-vec kernel's stride requirement.
-  The addon creates its VAD context with the default (CPU) parameters, so
-  runtime behavior is unchanged; the fix matters for anything that opts
-  VAD into the GPU.
+  - Nemotron 3.5 ASR streaming validated on Vulkan and CUDA: the encoder and
+    the fused transducer decode run on the GPU at all five cache-aware
+    operating points, with engine parity tests against NeMo references at
+    each of them. The window also extends the Parakeet Core ML
+    offline-encoder path on Apple platforms and adds Nemotron OpenCL
+    support.
+  - Parakeet CPU transcription 2.2 to 2.6x faster on x86 desktops: the TDT
+    decoder runs as ggml graphs instead of a host loop, positional
+    projections are cached per graph, and the encoder drops several
+    full-tensor copies. ggml now builds with tinyBLAS on linux-x64 and
+    darwin-arm64, and the linux-x64 prebuild ships the per-arch CPU backend
+    modules beside the addon (AVX-512 hosts no longer run the AVX2 kernels),
+    the same hybrid layout the cuda build already used. The window also
+    carries the memory-fit preflight APIs and the hybrid RNN-T head.
+  - Silero VAD now honors `use_gpu`: the compute backends match the weight
+    placement, fixing the ggml_backend_sched abort ("pre-allocated tensor in
+    a buffer that cannot run the operation") that killed every `use_gpu=true`
+    VAD context init on GPU builds (Metal, Vulkan, CUDA, HIP), and the VAD
+    LSTM input is made contiguous to satisfy the CUDA mul-mat-vec kernel's
+    stride requirement. The addon creates its VAD context with the default
+    (CPU) parameters, so runtime behavior is unchanged; the fix matters for
+    anything that opts VAD into the GPU.
 
 - **Per-platform prebuild packages.** `@qvac/asr-ggml` is now a meta package
   that ships the JavaScript wrapper only; native prebuilds install through
