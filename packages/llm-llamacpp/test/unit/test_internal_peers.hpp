@@ -180,6 +180,10 @@ public:
   static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
     return context.rollbackState_.reasoningBoundaryNPast();
   }
+
+  static llama_pos specCellsUsed(const MtmdLlmContext& context) {
+    return context.specCellsUsed();
+  }
 };
 
 class TextLlmContextTestPeer {

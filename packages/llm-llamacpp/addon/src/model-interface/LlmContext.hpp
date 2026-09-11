@@ -678,7 +678,7 @@ protected:
   // is a graceful ContextOverflow stop rather than an attempted discard.
   [[nodiscard]] bool specEnsureRecoveryHeadroom() {
     const llama_pos needed = specRecoveryPositions();
-    return specPos() + needed <= specCtxCeiling();
+    return specCellsUsed() + needed <= specCtxCeiling();
   }
 
   void specCommitPendingToken(
@@ -699,7 +699,7 @@ protected:
   }
 
   [[nodiscard]] bool specEnsurePendingTokenHeadroom() {
-    return specPos() + 1 <= specCtxCeiling();
+    return specCellsUsed() + 1 <= specCtxCeiling();
   }
 
   // MTP speculative-decoding generation loop: draft from the MTP head, verify
@@ -882,18 +882,19 @@ protected:
         return cancelSpec();
       }
 
-      if (specPos() + 1 > specCtxCeiling()) {
+      if (specCellsUsed() + 1 > specCtxCeiling()) {
         return finishSpec(/*ok=*/false);
       }
 
-      // Remaining context headroom for THIS round. The verify batch below spans
-      // [id_last, draft0 .. draftN-1] up to specPos() + draft.size(); the guard
-      // above only proves there is room for id_last (1 slot). To avoid decoding
-      // past specCtxCeiling() (which llama_decode rejects -> a hard
+      // Remaining context headroom for THIS round. The verify batch below uses
+      // one cell for id_last and one per draft token. The guard above only
+      // proves there is room for id_last. To avoid decoding past
+      // specCtxCeiling() (which llama_decode rejects -> a hard
       // FailedToDecode at the boundary instead of a graceful stop), the draft
       // length must be <= headroom. headroom >= 0 here (guaranteed by the
       // guard); 0 means "no draft this round, just re-decode id_last".
-      const llama_pos headroom = specCtxCeiling() - specPos() - 1;
+      const llama_pos cellsBase = specCellsUsed();
+      const llama_pos headroom = specCtxCeiling() - cellsBase - 1;
       const int roundNMax = headroom < static_cast<llama_pos>(nMax)
                                 ? static_cast<int>(headroom)
                                 : nMax;
@@ -918,9 +919,9 @@ protected:
         common_speculative_draft(spec_.get());
         // Bound the returned draft by BOTH limits regardless of drafter
         // behavior (the MTP drafter ignores the dp.n_max hint):
-        //  - `headroom`: keeps the max verify-batch position at
-        //    specPos() + headroom = specCtxCeiling() - 1, so the decode can
-        //    never run past the context ceiling; and
+        //  - `headroom`: keeps physical usage at cellsBase + headroom =
+        //    specCtxCeiling() - 1, so the decode cannot exceed the KV budget;
+        //    and
         //  - `nMax`: the capacity specBatch(nMax + 1) was allocated with.
         //  Fabric
         //    only clamps its params.n_max to n_mtp_layers for chain_heads
@@ -986,7 +987,7 @@ protected:
         // otherwise the visible output gains a token that is absent from KV and
         // generatedTokens, and the following round reports an avoidable error.
         if (j == draft.size() &&
-            posBase + 1 + static_cast<llama_pos>(j) >= specCtxCeiling()) {
+            cellsBase + 1 + static_cast<llama_pos>(j) >= specCtxCeiling()) {
           stoppedAtContextCeiling = true;
           finished = true;
           break;
@@ -1109,6 +1110,9 @@ protected:
   virtual void
   specBeginGeneration(const std::function<void(const std::string&)>&) = 0;
   [[nodiscard]] virtual llama_pos specPos() const = 0;
+  // Physical KV-cell usage normally matches the logical position. Mtmd
+  // overrides this because M-RoPE media can occupy several cells per position.
+  [[nodiscard]] virtual llama_pos specCellsUsed() const { return specPos(); }
   virtual void specSetPos(llama_pos pos) = 0;
   [[nodiscard]] virtual llama_pos specCtxCeiling() const = 0;
   virtual llama_token specSampleFirstToken(bool& sampled) = 0;

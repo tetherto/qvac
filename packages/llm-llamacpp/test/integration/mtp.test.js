@@ -201,14 +201,90 @@ safeTest(
       `MTP still drafts with reasoning on (draftAccepted=${stats.draftAccepted})`
     )
 
-    if (output.includes('<think>')) {
-      t.ok(output.includes('</think>'), 'reasoning block closed (balanced tags)')
-      // The reasoning-recovery EOG ban must leave a non-empty answer AFTER the
-      // close marker — the failure mode of the spec-path bug was an empty reply.
-      const afterThink = output.split('</think>').pop().trim()
-      t.ok(afterThink.length > 0, 'non-empty answer follows the reasoning block')
-    }
+    t.ok(output.includes('<think>'), 'reasoning block opened')
+    t.ok(output.includes('</think>'), 'reasoning block closed (balanced tags)')
+    // The reasoning-recovery EOG ban must leave a non-empty answer after the
+    // close marker. The broken spec path returned an empty reply here.
+    const afterThink = output.split('</think>').pop().trim()
+    t.ok(afterThink.length > 0, 'non-empty answer follows the reasoning block')
     t.ok(/paris/i.test(output), 'output still names the capital after reasoning')
+  }
+)
+
+safeTest('Qwen3.5-0.8B MTP stays aligned after cancellation', { timeout: 600_000 }, async (t) => {
+  const addon = await loadAddon(t, {
+    withSpec: true,
+    overrides: { n_predict: '256' }
+  })
+  const longPrompt = [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'Write a detailed story about an otter crossing an ocean.' }
+  ]
+  const interrupted = await addon.run(longPrompt)
+  let resolveFirstUpdate
+  const firstUpdate = new Promise((resolve) => {
+    resolveFirstUpdate = resolve
+  })
+  interrupted.onUpdate(resolveFirstUpdate)
+  const interruptedDone = interrupted.await().catch((err) => {
+    if (!/cancel|aborted|stopp?ed/i.test(err?.message || '')) throw err
+  })
+
+  await Promise.race([
+    firstUpdate,
+    interruptedDone.then(() => {
+      throw new Error('generation completed before cancellation could run')
+    })
+  ])
+  await addon.cancel()
+  await interruptedDone
+
+  const response = await addon.run(PROMPT)
+  const output = await collectResponse(response)
+  t.ok(output.length > 0, 'generation after cancellation produced output')
+  t.ok(
+    response.stats.draftAccepted > 0,
+    `MTP still drafts after cancellation (draftAccepted=${response.stats.draftAccepted})`
+  )
+})
+
+safeTest(
+  'Qwen3.5-0.8B MTP compacts reasoning across sequential turns',
+  { timeout: 600_000 },
+  async (t) => {
+    const addon = await loadAddon(t, {
+      withSpec: true,
+      overrides: { 'reasoning-budget': '32', n_predict: '200' }
+    })
+
+    const first = await addon.run(PROMPT)
+    const firstOutput = await collectResponse(first)
+    t.ok(firstOutput.includes('</think>'), 'turn 1 completed its reasoning block')
+
+    const second = await addon.run(PROMPT)
+    const secondOutput = await collectResponse(second)
+    t.ok(secondOutput.includes('</think>'), 'turn 2 completed its reasoning block')
+    t.ok(
+      second.stats.draftAccepted > 0,
+      `turn 2 still drafts after compaction (draftAccepted=${second.stats.draftAccepted})`
+    )
+  }
+)
+
+safeTest(
+  'Qwen3.5-0.8B MTP honors reverse prompt during drafting',
+  { timeout: 600_000 },
+  async (t) => {
+    const { output, stats } = await runOnce(t, {
+      withSpec: true,
+      overrides: { reverse_prompt: 'Paris' }
+    })
+    t.ok(/paris/i.test(output), 'reverse prompt is present in the output')
+    t.is(stats.stopReason, 'antiprompt', 'spec generation reports the reverse prompt stop')
+    t.ok(
+      stats.draftAccepted > 0,
+      `MTP accepted drafts before the reverse prompt stop (draftAccepted=${stats.draftAccepted})`
+    )
   }
 )
 
@@ -419,7 +495,6 @@ safeTest(
     const addon = await loadAddon(t, { withSpec: true })
     const prefillResp = await addon.run(PROMPT, { prefill: true })
     await collectResponse(prefillResp)
-    t.ok(true, 'prefill-only request completed')
     t.is(prefillResp.stats.draftAccepted, 0, 'prefill-only request reports no accepted drafts')
     t.is(prefillResp.stats.draftTotal, 0, 'prefill-only request reports no draft attempts')
 

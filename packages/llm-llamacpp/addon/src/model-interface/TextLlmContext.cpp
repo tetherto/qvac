@@ -1191,6 +1191,8 @@ bool TextLlmContext::rollbackCurrentRequest(
       .onPureAttentionRolledBack = [this]() { nPast_ = preRequestNPast_; },
   });
 
+  rollbackDraftContext();
+
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
@@ -1404,10 +1406,12 @@ void TextLlmContext::compactThinkSpan() {
           .onCompacted =
               [this](const ReasoningBlockCompactor::Outcome& compacted) {
                 nPast_ = compacted.newPos;
+                rollbackDraftContext(compacted.newPos);
               },
           .onFailedKvWiped =
               [this]() {
                 nPast_ = 0;
+                rollbackDraftContext();
                 rollbackState_.reset();
                 compactor_.reset();
               },

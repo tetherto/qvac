@@ -1342,6 +1342,8 @@ TEST_F(MtmdLlmContextTest, SyncPositionAdvancesKvCellsForGeneratedTokens) {
 
   LlmContext* ctx = LlamaModelTestPeer::llmContext(*model);
   ASSERT_NE(ctx, nullptr);
+  auto* mtmd = dynamic_cast<MtmdLlmContext*>(ctx);
+  ASSERT_NE(mtmd, nullptr);
   auto* driver = dynamic_cast<SequenceDriver*>(ctx);
   ASSERT_NE(driver, nullptr)
       << "MTMD context must expose the SequenceDriver interface";
@@ -1353,6 +1355,8 @@ TEST_F(MtmdLlmContextTest, SyncPositionAdvancesKvCellsForGeneratedTokens) {
   ctx->setNPast(prefillPos);
   ctx->setCacheTokens(prefillCells);
   ASSERT_EQ(driver->getKvCellsUsed(), prefillCells);
+  EXPECT_EQ(MtmdLlmContextTestPeer::specCellsUsed(*mtmd), prefillCells)
+      << "speculative headroom must use physical KV cells after media";
 
   // The scheduler feeds three generated text tokens, advancing the logical
   // position 10 -> 13. Generated text is one KV cell per position.
@@ -1378,7 +1382,7 @@ TEST_F(MtmdLlmContextTest, SyncPositionAdvancesKvCellsForGeneratedTokens) {
 // fabric build, which would abort the suite rather than fail a check.
 TEST_F(MtmdLlmContextTest, PendingEogBanMasksEveryEogTokenAndIsConsumedOnce) {
   if (!hasValidQwen35Model()) {
-    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+    FAIL() << "Qwen3.5 multimodal model or projection file not found";
   }
 
   auto model = createQwen35Model();

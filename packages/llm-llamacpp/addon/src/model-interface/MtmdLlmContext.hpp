@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <optional>
 #include <vector>
@@ -308,6 +309,9 @@ private:
   void specBeginGeneration(
       const std::function<void(const std::string&)>& outputCallback) override;
   [[nodiscard]] llama_pos specPos() const override { return current_.pos; }
+  [[nodiscard]] llama_pos specCellsUsed() const override {
+    return std::max(current_.pos, current_.cacheTokens);
+  }
   void specSetPos(llama_pos pos) override {
     current_.cacheTokens += pos - current_.pos;
     current_.pos = pos;

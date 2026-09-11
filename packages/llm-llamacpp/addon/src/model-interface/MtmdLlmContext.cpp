@@ -834,6 +834,8 @@ bool MtmdLlmContext::cancelGenerationCleanup(
           },
   });
 
+  rollbackDraftContext();
+
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
@@ -1540,10 +1542,12 @@ void MtmdLlmContext::compactThinkSpan() {
               [this](const ReasoningBlockCompactor::Outcome& result) {
                 current_.pos = result.newPos;
                 refreshCurrentCacheTokensFromMemory();
+                rollbackDraftContext(result.newPos);
               },
           .onFailedKvWiped =
               [this]() {
                 current_ = {};
+                rollbackDraftContext();
                 rollbackState_.reset();
                 compactor_.reset();
               },
