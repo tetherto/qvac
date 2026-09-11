@@ -181,9 +181,19 @@ if [ "$PLATFORM" = "iOS" ]; then
         # an earlier job would otherwise be reported as this run's crash. Names
         # carry the crash time and are unique, so comparing names is exact —
         # unlike an mtime window, which cannot tell the two apart.
+        #
+        # SNAP_RC is what lets us tell "the phone had no prior reports" from "we
+        # never managed to ask". This runs at phase start, when the device is
+        # least ready (usbmux hiccup, pairing race, still booting); treating a
+        # failed snapshot as an empty one would let every stale report through
+        # as this run's crash, which is worse than reporting none.
+        SNAP_RC=1
         BEFORE_DIR=$(mktemp -d)
         BEFORE_LIST=$(mktemp)
-        pymobiledevice3 crash pull "$BEFORE_DIR" >/dev/null 2>&1
+        if command -v pymobiledevice3 >/dev/null 2>&1; then
+          pymobiledevice3 crash pull "$BEFORE_DIR" >/dev/null 2>&1
+          SNAP_RC=$?
+        fi
         find "$BEFORE_DIR" -type f -exec basename {} \; > "$BEFORE_LIST" 2>/dev/null
         rm -rf "$BEFORE_DIR"
 
@@ -197,25 +207,38 @@ if [ "$PLATFORM" = "iOS" ]; then
         else
           echo "[crash] pymobiledevice3 unavailable - skipping crash-report pull"
         fi
-        # Keep this app's reports that were not already there before wdio ran.
+        # Keep this app's reports. Subtract the pre-run snapshot only when we
+        # actually have one — otherwise we cannot tell this run's crash from a
+        # leftover, and say so rather than claiming provenance we never had.
         find "$CRASH_DIR" -type f | while IFS= read -r f; do
           case "$(basename "$f")" in
             QvacAddonTester*) ;;
             *) rm -f "$f"; continue ;;
           esac
-          if grep -Fxq "$(basename "$f")" "$BEFORE_LIST" 2>/dev/null; then rm -f "$f"; fi
+          if [ "$SNAP_RC" -eq 0 ] && grep -Fxq "$(basename "$f")" "$BEFORE_LIST" 2>/dev/null; then
+            rm -f "$f"
+          fi
         done
         rm -f "$BEFORE_LIST"
         find "$CRASH_DIR" -mindepth 1 -type d -empty -delete 2>/dev/null
         # Echo it inline too: Customer_Artifacts can be missed, this output can't.
         NEWEST=$(ls -t "$CRASH_DIR"/QvacAddonTester* 2>/dev/null | head -1)
-        if [ -n "$NEWEST" ]; then
+        if [ -n "$NEWEST" ] && [ "$SNAP_RC" -eq 0 ]; then
           echo "[CRASH_REPORT_START] $(basename "$NEWEST")"
           head -c 20000 "$NEWEST"
           echo ""
           echo "[CRASH_REPORT_END]"
-        else
+        elif [ -n "$NEWEST" ]; then
+          echo "[crash] UNVERIFIED: the pre-run snapshot failed (rc=$SNAP_RC), so these reports"
+          echo "[crash] UNVERIFIED: cannot be attributed to this run — the phone is reused."
+          echo "[CRASH_REPORT_START_UNVERIFIED] $(basename "$NEWEST")"
+          head -c 20000 "$NEWEST"
+          echo ""
+          echo "[CRASH_REPORT_END_UNVERIFIED]"
+        elif [ "$SNAP_RC" -eq 0 ]; then
           echo "[crash] no new QvacAddonTester crash report from this run"
+        else
+          echo "[crash] no QvacAddonTester crash report on the device (snapshot also failed, rc=$SNAP_RC)"
         fi
         exit $WDIO_RC
 EOF

@@ -1830,6 +1830,22 @@ test('iOS mobile runs collect on-device crash reports', () => {
   assert.match(generateTestspec.slice(crashPull), /grep -Fxq "\$\(basename "\$f"\)" "\$BEFORE_LIST"/)
   assert.doesNotMatch(generateTestspec, /-mmin/, 'no rolling time window — names are exact')
 
+  // A snapshot that never ran is not an empty phone. Both pulls are guarded,
+  // the snapshot's status is kept, and a report can only be presented as this
+  // run's when that status is good — otherwise it is labelled UNVERIFIED.
+  assert.match(generateTestspec, /SNAP_RC=\$\?/, "the snapshot's exit status must be captured")
+  assert.strictEqual(
+    (generateTestspec.match(/command -v pymobiledevice3 >\/dev\/null 2>&1/g) || []).length,
+    3,
+    'install check plus both pulls are guarded',
+  )
+  assert.match(
+    generateTestspec,
+    /if \[ -n "\$NEWEST" \] && \[ "\$SNAP_RC" -eq 0 \]/,
+    'a verified report requires a successful snapshot',
+  )
+  assert.match(generateTestspec, /CRASH_REPORT_START_UNVERIFIED/)
+
   // ...and they have to reach the uploaded artifact.
   assert.match(collectLogs, /-type d -name "crash-reports"/)
   assert.match(collectLogs, /Extracted iOS crash report/)
