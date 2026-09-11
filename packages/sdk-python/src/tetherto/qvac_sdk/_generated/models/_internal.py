@@ -10638,7 +10638,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
             alias="nCtx",
             description="Cap on the T3 context length in tokens (prompt + generated speech, ~25 tokens ≈ 1 s of audio). The KV cache is allocated up front at this length, so it directly bounds memory; 0 uses the GGUF’s full context.",
             ge=0,
-            le=9007199254740991,
+            le=2147483647,
         ),
     ] = None
     kv_cache_type: Annotated[
@@ -10655,7 +10655,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
             alias="streamChunkTokens",
             description="Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
             ge=0,
-            le=9007199254740991,
+            le=2147483647,
         ),
     ] = None
     stream_first_chunk_tokens: Annotated[
@@ -10664,7 +10664,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
             alias="streamFirstChunkTokens",
             description="Smaller first streaming chunk for lower first-audio latency.",
             ge=0,
-            le=9007199254740991,
+            le=2147483647,
         ),
     ] = None
     cfm_steps: Annotated[
@@ -10673,7 +10673,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
             alias="cfmSteps",
             description="Chatterbox CFM Euler step count. Default 2.",
             ge=0,
-            le=9007199254740991,
+            le=2147483647,
         ),
     ] = None
     cfg_rate: Annotated[
@@ -10689,24 +10689,24 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
         Field(
             description="CPU thread count; overrides the hardware default.",
             gt=0,
-            le=9007199254740991,
+            le=2147483647,
         ),
     ] = None
     n_gpu_layers: Annotated[
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            ge=-2147483648,
+            le=2147483647,
         ),
     ] = None
     seed: Annotated[
         int | None,
         Field(
             description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            ge=-2147483648,
+            le=2147483647,
         ),
     ] = None
     backends_dir: Annotated[
@@ -11090,10 +11090,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         ),
     ] = None
     tts_num_inference_steps: Annotated[
-        float | None,
+        int | None,
         Field(
             alias="ttsNumInferenceSteps",
             description="Supertonic vector-estimator CFM steps; 0 uses the GGUF default.",
+            ge=0,
+            le=2147483647,
         ),
     ] = None
     use_gpu: Annotated[
@@ -11117,24 +11119,24 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         Field(
             description="CPU thread count; overrides the hardware default.",
             gt=0,
-            le=9007199254740991,
+            le=2147483647,
         ),
     ] = None
     n_gpu_layers: Annotated[
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            ge=-2147483648,
+            le=2147483647,
         ),
     ] = None
     seed: Annotated[
         int | None,
         Field(
             description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            ge=-2147483648,
+            le=2147483647,
         ),
     ] = None
     vulkan_cache_dir: Annotated[
@@ -11572,7 +11574,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -12361,7 +12363,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -12837,7 +12839,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -17640,6 +17642,14 @@ class TextToSpeechRequestPace(Enum):
 
 class TextToSpeechRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Client-generated id for targeting this run with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
     text: Annotated[str, Field(min_length=1)]
     stream: bool | None = True
@@ -17737,6 +17747,11 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     )
 
 
+class TextToSpeechResponseStopReason(Enum):
+    completed = "completed"
+    cancelled = "cancelled"
+
+
 class TextToSpeechResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -17766,6 +17781,10 @@ class TextToSpeechResponse(GeneratedBaseModel):
             alias="isLast",
             description="True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
         ),
+    ] = None
+    stop_reason: Annotated[
+        TextToSpeechResponseStopReason | None,
+        Field(alias="stopReason", title="TextToSpeechResponseStopReason"),
     ] = None
 
 
@@ -17798,6 +17817,14 @@ class TextToSpeechStreamRequestPace(Enum):
 
 class TextToSpeechStreamRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Client-generated id for targeting this run with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
     accumulate_sentences: Annotated[bool | None, Field(alias="accumulateSentences")] = (
         None
@@ -17900,6 +17927,11 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     )
 
 
+class TextToSpeechStreamResponseStopReason(Enum):
+    completed = "completed"
+    cancelled = "cancelled"
+
+
 class TextToSpeechStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -17930,6 +17962,10 @@ class TextToSpeechStreamResponse(GeneratedBaseModel):
             alias="isLast",
             description="True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
         ),
+    ] = None
+    stop_reason: Annotated[
+        TextToSpeechStreamResponseStopReason | None,
+        Field(alias="stopReason", title="TextToSpeechStreamResponseStopReason"),
     ] = None
 
 

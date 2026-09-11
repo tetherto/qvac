@@ -5,6 +5,8 @@ import {
   textToSpeechStreamRequestSchema,
   textToSpeechStreamResponseSchema,
   ttsConfigSchema,
+  ttsRuntimeConfigSchema,
+  ttsParlerLoadConfigSchema,
   ttsChatterboxRuntimeConfigSchema,
   ttsParlerRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
@@ -1023,6 +1025,73 @@ test('ttsConfigSchema: accepts the LavaSR sources for Parler', (t) => {
   t.is(r.success, true, 'Parler is one of the four engines whose native config reads LavaSR')
 })
 
+test('ttsConfigSchema: pins Parler native streaming to 44.1 kHz only without the enhancer', (t) => {
+  // ParlerModel.cpp waives the pin when enhancerGgufPath is set: the enhancer's
+  // overlap-reprocess window resamples seam-free. Mirror of the CosyVoice3 rule.
+  for (const schema of [ttsConfigSchema, ttsParlerLoadConfigSchema]) {
+    const pinned = schema.safeParse({
+      ttsEngine: 'parler',
+      streamChunkTokens: 20,
+      outputSampleRate: 48000
+    })
+    t.is(pinned.success, false, 'without the enhancer the pin applies')
+    if (!pinned.success) {
+      t.is(pinned.error.issues[0]?.path.join('.'), 'outputSampleRate')
+    }
+
+    for (const outputSampleRate of [48000, 16000]) {
+      const waived = schema.safeParse({
+        ttsEngine: 'parler',
+        streamChunkTokens: 20,
+        outputSampleRate,
+        lavasrEnhancerModelSrc: 'registry://s3/lavasr/enhancer.gguf'
+      })
+      t.is(waived.success, true, `with the enhancer ${outputSampleRate} Hz is accepted`)
+    }
+  }
+})
+
+test('ttsConfigSchema: bounds the Chatterbox and Supertonic integer knobs to int32', (t) => {
+  // The addon narrows every integer knob with `| 0`; a wider value would wrap
+  // silently (nGpuLayers 2^32 -> 0, contradicting the derived useGPU).
+  t.is(chatterbox({ nCtx: 2147483648 }).success, false)
+  t.is(chatterbox({ nGpuLayers: 4294967296 }).success, false)
+  t.is(chatterbox({ streamChunkTokens: 2147483648 }).success, false)
+  t.is(supertonic({ nGpuLayers: 4294967296 }).success, false)
+  t.is(supertonic({ seed: 2147483648 }).success, false)
+  t.is(chatterbox({ nCtx: 2147483647, nGpuLayers: 99, seed: -2147483648 }).success, true)
+})
+
+test('ttsConfigSchema: bounds Supertonic ttsNumInferenceSteps like the native check', (t) => {
+  // SupertonicModel::validateConfig rejects negatives with 'steps must be >= 0'
+  // and the addon narrows with `| 0`, so a fraction would silently truncate.
+  for (const ttsNumInferenceSteps of [-1, 2.7]) {
+    const r = supertonic({ ttsNumInferenceSteps })
+    t.is(r.success, false, `ttsNumInferenceSteps ${ttsNumInferenceSteps} must be rejected`)
+    if (!r.success) t.is(r.error.issues[0]?.path.join('.'), 'ttsNumInferenceSteps')
+  }
+  for (const ttsNumInferenceSteps of [0, 4]) {
+    t.is(supertonic({ ttsNumInferenceSteps }).success, true)
+  }
+})
+
+test('ttsResponseSchema: carries stopReason on the terminal frame', (t) => {
+  for (const stopReason of ['completed', 'cancelled']) {
+    const r = ttsResponseSchema.safeParse({
+      type: 'textToSpeech',
+      buffer: [],
+      done: true,
+      stopReason
+    })
+    t.is(r.success, true, stopReason)
+  }
+  t.is(
+    ttsResponseSchema.safeParse({ type: 'textToSpeech', buffer: [], done: true, stopReason: 'x' })
+      .success,
+    false
+  )
+})
+
 test('ttsConfigSchema: rejects the Parler LavaSR denoiser with native chunk streaming', (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: 'parler',
@@ -1235,18 +1304,12 @@ test('ttsStatsSchema: carries the addon RuntimeStats surface', (t) => {
 
 test('TTS_ENGINES matches the ttsEngine discriminator of every config arm', (t) => {
   // The exported constant is the machine-readable engine list; it must not
-  // drift from the discriminated union it describes.
-  const fromUnion = [
-    ttsConfigSchema.safeParse({ ttsEngine: 'chatterbox', language: 'en' }),
-    ttsConfigSchema.safeParse({ ttsEngine: 'supertonic', language: 'en' }),
-    ttsConfigSchema.safeParse({ ttsEngine: 'parler' }),
-    ttsConfigSchema.safeParse({ ttsEngine: 'cosyvoice3' }),
-    ttsConfigSchema.safeParse({
-      ttsEngine: 'audio8',
-      audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf'
-    })
-  ]
-  t.is(fromUnion.length, TTS_ENGINES.length, 'one arm per exported engine')
+  // drift from the discriminated union it describes — derive the arms from the
+  // union itself so adding an engine to one side without the other fails here.
+  const armEngines = ttsRuntimeConfigSchema.options.map(
+    (arm) => (arm.shape as { ttsEngine: { value: string } }).ttsEngine.value
+  )
+  t.alike(armEngines, [...TTS_ENGINES], 'one arm per exported engine, in addon order')
   for (const engine of TTS_ENGINES) {
     const r = ttsConfigSchema.safeParse({ ttsEngine: engine })
     // Some arms need required companions; what matters is that the

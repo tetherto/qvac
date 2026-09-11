@@ -224,11 +224,15 @@ function buildTextToSpeechStreamRequest(
  * if the consumer breaks out before the terminal frame, or rejects on a
  * pipeline error. Awaiting `done` is safe even when no stream is iterated.
  *
- * `result.sampleRate` and `result.stats` resolve alongside the audio and, like
- * `done`, always settle — with `undefined` when the run produced none — so
- * awaiting either is safe whether or not a stream is iterated. Read
- * `sampleRate` rather than assuming the engine default: `outputSampleRate` and
- * the LavaSR enhancer both change it.
+ * `result.sampleRate` resolves from the first audio frame (so it can be awaited
+ * before draining the audio); `result.stats` and `result.stopReason` resolve
+ * from the terminal frame. All three resolve — with `undefined` when the run
+ * produced none — rather than reject. In `stream: true` mode (the default) the
+ * run starts lazily: nothing is sent until `bufferStream` is first iterated, so
+ * `done`, `sampleRate`, `stats` and `stopReason` stay pending until then. In
+ * `stream: false` and `sentenceStream: true` modes the run starts immediately.
+ * Read `sampleRate` rather than assuming the engine default: `outputSampleRate`
+ * and the LavaSR enhancer both change it.
  *
  * @param params - TTS request parameters (see `TtsClientParamsInput`).
  * @param options - Optional RPC options (timeout, profiling, force new connection).
@@ -274,39 +278,56 @@ export function textToSpeech(
  * promises that always RESOLVE — with `undefined` when the run produced none —
  * so `await result.sampleRate` can never hang or reject on its own.
  */
-type TtsSideChannel = {
+export type TtsSideChannel = {
   sampleRate: Promise<number | undefined>
   stats: Promise<TtsStats | undefined>
+  stopReason: Promise<'completed' | 'cancelled' | undefined>
   observe(response: TtsResponse): void
   settle(): void
 }
 
-function createTtsSideChannel(): TtsSideChannel {
+/** Exported for test use; not part of the public API surface. */
+export function createTtsSideChannel(): TtsSideChannel {
   let resolveSampleRate!: (value: number | undefined) => void
   let resolveStats!: (value: TtsStats | undefined) => void
+  let resolveStopReason!: (value: 'completed' | 'cancelled' | undefined) => void
   const sampleRate = new Promise<number | undefined>((resolve) => {
     resolveSampleRate = resolve
   })
   const stats = new Promise<TtsStats | undefined>((resolve) => {
     resolveStats = resolve
   })
+  const stopReason = new Promise<'completed' | 'cancelled' | undefined>((resolve) => {
+    resolveStopReason = resolve
+  })
 
   let seenSampleRate: number | undefined
   let latestStats: TtsStats | undefined
+  let seenStopReason: 'completed' | 'cancelled' | undefined
   let settled = false
 
   return {
     sampleRate,
     stats,
+    stopReason,
     observe(response) {
-      seenSampleRate ??= response.sampleRate
+      // Resolve on the FIRST frame that carries a rate, not at end of stream:
+      // a caller opening an audio device wants it before draining the audio.
+      // Promise resolution is idempotent, so settle() can still resolve the
+      // undefined fallback for a run that never reported one.
+      if (seenSampleRate === undefined && response.sampleRate !== undefined) {
+        seenSampleRate = response.sampleRate
+        resolveSampleRate(seenSampleRate)
+      }
       if (response.stats !== undefined) latestStats = response.stats
+      if (response.stopReason !== undefined) seenStopReason = response.stopReason
     },
     settle() {
       if (settled) return
       settled = true
       resolveSampleRate(seenSampleRate)
       resolveStats(latestStats)
+      resolveStopReason(seenStopReason)
     }
   }
 }
@@ -353,7 +374,8 @@ function sentenceStreamTts(
     done: multicast.done,
     requestId: request.requestId as string,
     sampleRate: side.sampleRate,
-    stats: side.stats
+    stats: side.stats,
+    stopReason: side.stopReason
   }
 }
 
@@ -408,7 +430,8 @@ function plainStreamTts(
     done,
     requestId: request.requestId as string,
     sampleRate: side.sampleRate,
-    stats: side.stats
+    stats: side.stats,
+    stopReason: side.stopReason
   }
 }
 
@@ -468,7 +491,8 @@ function collectTts(
     done,
     requestId: request.requestId as string,
     sampleRate: side.sampleRate,
-    stats: side.stats
+    stats: side.stats,
+    stopReason: side.stopReason
   }
 }
 

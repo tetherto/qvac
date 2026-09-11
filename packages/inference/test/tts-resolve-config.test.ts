@@ -570,6 +570,35 @@ test('ttsPlugin createModel: wires the Supertonic options the addon honours', as
   t.is(model._nGpuLayers, 99)
   t.is(model._seed, 7)
   t.is(model._config?.backendsDir, '/opt/backends')
+  t.is(model._config?.useGPU, true, 'nGpuLayers alone states GPU intent')
+})
+
+test('ttsPlugin createModel: derives the Supertonic useGPU default from nGpuLayers', async (t) => {
+  // Supertonic defaults to CPU, but the addon's assertGpuIntentConsistent
+  // rejects a stated useGPU that contradicts nGpuLayers, so a bare
+  // `nGpuLayers` must imply the matching useGPU rather than the CPU default.
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const cases: Array<[number | undefined, boolean]> = [
+    [undefined, false],
+    [0, false],
+    [99, true],
+    [-1, true]
+  ]
+  for (const [nGpuLayers, expected] of cases) {
+    const result = ttsPlugin.createModel({
+      modelId: `tts-supertonic-gpu-${String(nGpuLayers)}`,
+      modelPath: '/tmp/supertonic3-q8_0.gguf',
+      artifacts: {},
+      modelConfig: {
+        ttsEngine: 'supertonic',
+        language: 'en',
+        ...(nGpuLayers !== undefined ? { nGpuLayers } : {})
+      }
+    })
+    const model = result.model as TtsGgmlDebugModel
+    t.is(model._config?.useGPU, expected, `nGpuLayers ${String(nGpuLayers)}`)
+  }
 })
 
 test('ttsPlugin resolveConfig: resolves the Parler LavaSR sources', async (t) => {

@@ -10908,7 +10908,7 @@
                           "description": "Cap on the T3 context length in tokens (prompt + generated speech, ~25 tokens ≈ 1 s of audio). The KV cache is allocated up front at this length, so it directly bounds memory; 0 uses the GGUF’s full context.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "kvCacheType": {
                           "description": "T3 KV-cache storage dtype. `f16` is the safe cross-backend default; `q8_0` is smaller and faster where the backend implements its ops.",
@@ -10920,19 +10920,19 @@
                           "description": "Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "streamFirstChunkTokens": {
                           "description": "Smaller first streaming chunk for lower first-audio latency.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "cfmSteps": {
                           "description": "Chatterbox CFM Euler step count. Default 2.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "cfgRate": {
                           "description": "Chatterbox S3Gen classifier-free-guidance rate; `0` skips the unconditioned pass, a positive value overrides the model’s baked rate. Omit to keep the baked rate.",
@@ -10943,19 +10943,19 @@
                           "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
                         },
                         "seed": {
                           "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
                         },
                         "backendsDir": {
                           "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
@@ -11618,7 +11618,9 @@
                         },
                         "ttsNumInferenceSteps": {
                           "description": "Supertonic vector-estimator CFM steps; 0 uses the GGUF default.",
-                          "type": "number"
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
                         },
                         "useGPU": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
@@ -11634,19 +11636,19 @@
                           "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
                         },
                         "seed": {
                           "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
                         },
                         "vulkanCacheDir": {
                           "description": "Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.",
@@ -11973,7 +11975,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -12331,7 +12333,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -12889,7 +12891,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -17819,6 +17821,11 @@
         "modelId": {
           "type": "string"
         },
+        "requestId": {
+          "description": "Client-generated id for targeting this run with `cancel({ requestId })`.",
+          "type": "string",
+          "minLength": 1
+        },
         "inputType": {
           "default": "text",
           "type": "string"
@@ -17989,6 +17996,11 @@
         "isLast": {
           "description": "True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
           "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["completed", "cancelled"],
+          "title": "TextToSpeechResponseStopReason"
         }
       },
       "required": ["type", "buffer", "done"],
@@ -18000,6 +18012,11 @@
       "properties": {
         "modelId": {
           "type": "string"
+        },
+        "requestId": {
+          "description": "Client-generated id for targeting this run with `cancel({ requestId })`.",
+          "type": "string",
+          "minLength": 1
         },
         "inputType": {
           "default": "text",
@@ -18168,6 +18185,11 @@
         "isLast": {
           "description": "True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
           "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["completed", "cancelled"],
+          "title": "TextToSpeechStreamResponseStopReason"
         }
       },
       "required": ["type", "buffer", "done"],

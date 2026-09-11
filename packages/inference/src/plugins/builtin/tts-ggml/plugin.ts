@@ -598,12 +598,13 @@ export const ttsPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats } = result.value
+          const { modelExecutionMs, stats, cancelled } = result.value
           yield attachModelExecutionMs(
             {
               type: 'textToSpeech' as const,
               buffer: [],
               done: true,
+              stopReason: cancelled ? ('cancelled' as const) : ('completed' as const),
               ...(stats && { stats })
             },
             modelExecutionMs
@@ -636,12 +637,13 @@ export const ttsPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats } = result.value
+          const { modelExecutionMs, stats, cancelled } = result.value
           yield attachModelExecutionMs(
             {
               type: 'textToSpeechStream' as const,
               buffer: [],
               done: true,
+              stopReason: cancelled ? ('cancelled' as const) : ('completed' as const),
               ...(stats && { stats })
             },
             modelExecutionMs

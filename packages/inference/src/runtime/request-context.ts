@@ -145,11 +145,16 @@ function installDefaultPolicies(r: RequestRegistry): void {
   // authoritative, which is what model-scoped cancel needs: exactly one
   // registered request owns the addon at a time, so cancelling a queued run
   // aborts it before it starts instead of interrupting the run in flight.
+  // Deeper than the other lanes on purpose: the addon's own queue was
+  // unbounded, and a caller fanning a paragraph out sentence-by-sentence
+  // (`Promise.all` over a few dozen `textToSpeech` calls) is a realistic
+  // pattern that must keep working. Beyond this the call rejects with a typed
+  // RequestRejectedByPolicyError instead of piling up.
   r.policy({
     kind: 'tts',
     maxConcurrentPerModel: 1,
     onOverflow: 'queue',
-    maxQueueDepthPerModel: 64
+    maxQueueDepthPerModel: 256
   })
   // An ABot-World session runs one job at a time: the addon rejects a second
   // step while a block is still streaming, and scene creation shares the same

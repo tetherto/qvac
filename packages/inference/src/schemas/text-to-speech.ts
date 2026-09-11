@@ -155,9 +155,9 @@ const ttsSupertonicLanguageSchema = z.enum(TTS_SUPERTONIC_LANGUAGES)
 const ttsParlerEmotionSchema = z.enum(TTS_PARLER_EMOTIONS)
 const ttsCosyvoice3EmotionSchema = z.enum(TTS_COSYVOICE3_EMOTIONS)
 const ttsPaceSchema = z.enum(TTS_PACES)
+// Every integer knob is int32: the addon narrows them with `| 0` before the
+// native call, so a wider value would wrap silently instead of failing.
 const ttsIntegerSchema = z.number().int()
-const ttsNonNegativeIntegerSchema = ttsIntegerSchema.nonnegative()
-const ttsPositiveIntegerSchema = ttsIntegerSchema.positive()
 const ttsInt32Schema = ttsIntegerSchema.min(-2147483648).max(2147483647)
 const ttsNonNegativeInt32Schema = ttsInt32Schema.nonnegative()
 const ttsPositiveInt32Schema = ttsInt32Schema.positive()
@@ -169,7 +169,7 @@ const TTS_SEED_DESC =
   'RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).'
 const TTS_THREADS_DESC = 'CPU thread count; overrides the hardware default.'
 const TTS_NGPU_LAYERS_DESC =
-  'Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.'
+  'Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.'
 const TTS_STREAM_CHUNK_TOKENS_DESC =
   'Speech tokens per native streaming chunk; 0 disables native chunk streaming.'
 const TTS_STREAM_FIRST_CHUNK_TOKENS_DESC =
@@ -326,10 +326,15 @@ type TtsParlerRuntimeRefinementInput = TtsParlerDescriptionRefinementInput & {
   nGpuLayers?: number | undefined
 }
 
-function refineParlerRuntimeConfig(config: TtsParlerRuntimeRefinementInput, ctx: z.RefinementCtx) {
-  refineParlerDescriptionFields(config, ctx)
-  refineGpuIntent(config, ctx)
-
+// Parler's native chunk streaming cannot resample across chunk seams, so the
+// rate is pinned to 44.1 kHz — unless the LavaSR enhancer is loaded, whose
+// overlap-reprocess window resamples seam-free (ParlerModel.cpp waives the
+// check on enhancerGgufPath). The load schema applies the waiver; the runtime
+// schema has no enhancer field and always pins.
+function refineParlerNativeStreamingRate(
+  config: TtsParlerRuntimeRefinementInput,
+  ctx: z.RefinementCtx
+) {
   const nativeStreamingEnabled = (config.streamChunkTokens ?? 0) > 0
   if (
     nativeStreamingEnabled &&
@@ -340,9 +345,16 @@ function refineParlerRuntimeConfig(config: TtsParlerRuntimeRefinementInput, ctx:
       code: 'custom',
       path: ['outputSampleRate'],
       message:
-        'Parler native streaming emits at 44100 Hz; omit outputSampleRate, use 44100, or disable native streaming.'
+        'Parler native streaming emits at 44100 Hz; omit outputSampleRate, use 44100, ' +
+        'enable the LavaSR enhancer (which resamples seam-free), or disable native streaming.'
     })
   }
+}
+
+function refineParlerRuntimeConfig(config: TtsParlerRuntimeRefinementInput, ctx: z.RefinementCtx) {
+  refineParlerDescriptionFields(config, ctx)
+  refineGpuIntent(config, ctx)
+  refineParlerNativeStreamingRate(config, ctx)
 }
 
 export const ttsChatterboxRuntimeConfigSchema = z
@@ -368,7 +380,7 @@ export const ttsChatterboxRuntimeConfigSchema = z
       .describe(
         'Speech-rate multiplier (1.0 = unchanged, <1 slower, >1 faster), applied as a pitch-preserving WSOLA time-stretch. Range 0.25–4.0.'
       ),
-    nCtx: ttsNonNegativeIntegerSchema
+    nCtx: ttsNonNegativeInt32Schema
       .optional()
       .describe(
         'Cap on the T3 context length in tokens (prompt + generated speech, ~25 tokens ≈ 1 s of audio). The KV cache is allocated up front at this length, so it directly bounds memory; 0 uses the GGUF’s full context.'
@@ -380,13 +392,11 @@ export const ttsChatterboxRuntimeConfigSchema = z
         'T3 KV-cache storage dtype. `f16` is the safe cross-backend default; `q8_0` is smaller and faster where the backend implements its ops.'
       ),
     // Chatterbox-only native streaming controls.
-    streamChunkTokens: ttsNonNegativeIntegerSchema
-      .optional()
-      .describe(TTS_STREAM_CHUNK_TOKENS_DESC),
-    streamFirstChunkTokens: ttsNonNegativeIntegerSchema
+    streamChunkTokens: ttsNonNegativeInt32Schema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
+    streamFirstChunkTokens: ttsNonNegativeInt32Schema
       .optional()
       .describe(TTS_STREAM_FIRST_CHUNK_TOKENS_DESC),
-    cfmSteps: ttsNonNegativeIntegerSchema
+    cfmSteps: ttsNonNegativeInt32Schema
       .optional()
       .describe('Chatterbox CFM Euler step count. Default 2.'),
     cfgRate: z
@@ -396,9 +406,11 @@ export const ttsChatterboxRuntimeConfigSchema = z
       .describe(
         'Chatterbox S3Gen classifier-free-guidance rate; `0` skips the unconditioned pass, a positive value overrides the model’s baked rate. Omit to keep the baked rate.'
       ),
-    threads: ttsPositiveIntegerSchema.optional().describe(TTS_THREADS_DESC),
-    nGpuLayers: ttsIntegerSchema.optional().describe(TTS_NGPU_LAYERS_DESC),
-    seed: ttsIntegerSchema.optional().describe(TTS_SEED_DESC),
+    // Int32 like the other engines: the addon narrows with `| 0`, so a wider
+    // value would wrap silently rather than fail.
+    threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+    nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
+    seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
     ...ttsBackendDirFieldsShape,
     ...ttsOpenclCacheFieldShape
   })
@@ -447,15 +459,16 @@ export const ttsSupertonicRuntimeConfigSchema = z
       .describe(
         "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`, applied when the engine is built. Mutually exclusive with `ttsSpeed`; cannot be changed per request."
       ),
-    ttsNumInferenceSteps: z
-      .number()
+    // SupertonicModel::validateConfig rejects negatives ('steps must be >= 0')
+    // and the addon narrows with `| 0`, so bound it like its sibling ttsSpeed.
+    ttsNumInferenceSteps: ttsNonNegativeInt32Schema
       .optional()
       .describe('Supertonic vector-estimator CFM steps; 0 uses the GGUF default.'),
     useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
     outputSampleRate: ttsOutputSampleRateSchema.optional(),
-    threads: ttsPositiveIntegerSchema.optional().describe(TTS_THREADS_DESC),
-    nGpuLayers: ttsIntegerSchema.optional().describe(TTS_NGPU_LAYERS_DESC),
-    seed: ttsIntegerSchema.optional().describe(TTS_SEED_DESC),
+    threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+    nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
+    seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
     vulkanCacheDir: z
       .string()
       .min(1)
@@ -468,36 +481,41 @@ export const ttsSupertonicRuntimeConfigSchema = z
   })
   .superRefine(refineSupertonicRateControls)
 
+// A shape rather than a schema so the load schema below can be built from it
+// and carry its own refinement set (the enhancer waiver needs the load-only
+// lavasrEnhancerModelSrc field, which the runtime schema never sees).
+const ttsParlerRuntimeConfigShape = {
+  ttsEngine: z.literal('parler').describe('TTS engine: Parler.'),
+  ...ttsParlerDescriptionFieldsShape,
+  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  outputSampleRate: ttsOutputSampleRateSchema.optional(),
+  streamChunkTokens: ttsNonNegativeInt32Schema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
+  streamFirstChunkTokens: ttsNonNegativeInt32Schema
+    .optional()
+    .describe(TTS_STREAM_FIRST_CHUNK_TOKENS_DESC),
+  threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+  nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
+  seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
+  temperature: z.number().nonnegative().optional().describe(TTS_TEMPERATURE_DESC),
+  topK: ttsNonNegativeInt32Schema.optional().describe(TTS_TOP_K_DESC),
+  topP: z.number().positive().max(1).optional().describe(TTS_TOP_P_DESC),
+  maxFrames: z
+    .union([z.literal(0), ttsInt32Schema.min(10)])
+    .optional()
+    .describe(TTS_MAX_FRAMES_DESC),
+  minNewTokens: ttsInt32Schema
+    .min(-1)
+    .optional()
+    .describe('Parler minimum tokens before EOS; `-1` uses the model default.'),
+  normalizeNumbers: z
+    .boolean()
+    .optional()
+    .describe('Parler prompt digit expansion (engine default: enabled).'),
+  ...ttsBackendDirFieldsShape
+}
+
 export const ttsParlerRuntimeConfigSchema = z
-  .object({
-    ttsEngine: z.literal('parler').describe('TTS engine: Parler.'),
-    ...ttsParlerDescriptionFieldsShape,
-    useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
-    outputSampleRate: ttsOutputSampleRateSchema.optional(),
-    streamChunkTokens: ttsNonNegativeInt32Schema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
-    streamFirstChunkTokens: ttsNonNegativeInt32Schema
-      .optional()
-      .describe(TTS_STREAM_FIRST_CHUNK_TOKENS_DESC),
-    threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
-    nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
-    seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
-    temperature: z.number().nonnegative().optional().describe(TTS_TEMPERATURE_DESC),
-    topK: ttsNonNegativeInt32Schema.optional().describe(TTS_TOP_K_DESC),
-    topP: z.number().positive().max(1).optional().describe(TTS_TOP_P_DESC),
-    maxFrames: z
-      .union([z.literal(0), ttsInt32Schema.min(10)])
-      .optional()
-      .describe(TTS_MAX_FRAMES_DESC),
-    minNewTokens: ttsInt32Schema
-      .min(-1)
-      .optional()
-      .describe('Parler minimum tokens before EOS; `-1` uses the model default.'),
-    normalizeNumbers: z
-      .boolean()
-      .optional()
-      .describe('Parler prompt digit expansion (engine default: enabled).'),
-    ...ttsBackendDirFieldsShape
-  })
+  .object(ttsParlerRuntimeConfigShape)
   .superRefine(refineParlerRuntimeConfig)
 
 // CosyVoice3 structured instruct: a raw string passes through to the engine as
@@ -735,9 +753,28 @@ export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema.ex
   ...ttsLavasrLoadFieldsShape
 })
 
-export const ttsParlerLoadConfigSchema = ttsParlerRuntimeConfigSchema
-  .extend({ ...ttsLavasrLoadFieldsShape })
-  .superRefine(refineLavasrDenoiserStreaming)
+type TtsParlerLoadRefinementInput = TtsParlerRuntimeRefinementInput & {
+  lavasrEnhancerModelSrc?: ModelSrcInput | undefined
+  lavasrDenoiserModelSrc?: ModelSrcInput | undefined
+}
+
+function refineParlerLoadConfig(config: TtsParlerLoadRefinementInput, ctx: z.RefinementCtx) {
+  refineParlerDescriptionFields(config, ctx)
+  refineGpuIntent(config, ctx)
+  // Same waiver CosyVoice3 gets: with the enhancer active the addon resamples
+  // seam-free, so the 44.1 kHz native-streaming pin only applies without it.
+  if (config.lavasrEnhancerModelSrc === undefined) {
+    refineParlerNativeStreamingRate(config, ctx)
+  }
+  refineLavasrDenoiserStreaming(config, ctx)
+}
+
+export const ttsParlerLoadConfigSchema = z
+  .object({
+    ...ttsParlerRuntimeConfigShape,
+    ...ttsLavasrLoadFieldsShape
+  })
+  .superRefine(refineParlerLoadConfig)
 
 // CosyVoice3 zero-shot / cross-lingual voice cloning. The speech tokenizer and
 // the CAM++ speaker encoder are NOT in the LLM GGUF's companion set — they are
@@ -1023,7 +1060,14 @@ export const ttsRequestSchema = z
 // Mirrors @qvac/tts-ggml's `RuntimeStats`, using the same field names as the
 // transcription and audio-gen stats so a caller reads one vocabulary across
 // the audio plugins. `audioDuration` keeps its existing name (the addon calls
-// it `audioDurationMs`; both are milliseconds).
+// it `audioDurationMs`; both are milliseconds). `totalTime` is in SECONDS —
+// `realTimeFactor` = `totalTime` * 1000 / `audioDuration`.
+//
+// The chunked paths (`stream: true`, `sentenceStream`, and the duplex session)
+// run one native job per sentence and the addon's aggregate carries only the
+// four summable fields (totalTime, audioDuration, totalSamples,
+// generatedFrames); the five backend fields below are reported by batch
+// synthesis (`stream: false`) only.
 export const ttsStatsSchema = z.object({
   audioDuration: z.number().optional(),
   totalTime: z.number().optional(),
@@ -1067,7 +1111,10 @@ export const ttsResponseSchema = z.object({
     .optional()
     .describe(
       'True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).'
-    )
+    ),
+  // On the terminal frame only: how the run ended. A run stopped by
+  // `cancel()` ends cleanly with `cancelled` rather than as an error.
+  stopReason: z.enum(['completed', 'cancelled']).optional()
 })
 
 // Internal: kept un-exported to present a single request-schema surface to
@@ -1104,7 +1151,10 @@ export const textToSpeechStreamResponseSchema = z.object({
     .optional()
     .describe(
       'True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).'
-    )
+    ),
+  // On the terminal frame only: how the run ended. A run stopped by
+  // `cancel()` ends cleanly with `cancelled` rather than as an error.
+  stopReason: z.enum(['completed', 'cancelled']).optional()
 })
 
 export type TtsEngine = (typeof TTS_ENGINES)[number]
@@ -1177,6 +1227,11 @@ export interface TextToSpeechStreamResult {
    * backend). `undefined` when the run ended before the addon reported any.
    */
   stats: Promise<TtsStats | undefined>
+  /**
+   * How the run ended: `'cancelled'` when it was stopped by `cancel()`,
+   * `'completed'` otherwise. `undefined` if no terminal frame was seen.
+   */
+  stopReason: Promise<'completed' | 'cancelled' | undefined>
 }
 
 export interface TextToSpeechStreamSession {

@@ -8,7 +8,7 @@ schemaType: HowTo
 
 Text-to-Speech uses [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) (GGML) as the inference engine. Load any supported model using `modelType: "tts"`. Then, provide `text` as input (with `inputType: "text"`) to generate speech audio.
 
-`textToSpeech()` returns an object containing `buffer` and, when streaming is enabled, a `bufferStream` for incremental audio output.
+`textToSpeech()` returns synchronously with `buffer`, `bufferStream`, `done`, `requestId`, `sampleRate`, `stats` and `stopReason`; see [Audio output](#audio-output), [Cancelling a run](#cancelling-a-run) and [Runtime statistics](#runtime-statistics) below.
 
 ## Functions
 
@@ -41,7 +41,7 @@ For reference, the rate each configuration produces:
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Chatterbox              | 24,000 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | Supertonic              | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
-| Parler                  | 44,100 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 44,100 Hz |
+| Parler                  | 44,100 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 44,100 Hz unless the LavaSR enhancer is loaded |
 | CosyVoice3              | 24,000 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 24,000 Hz unless the LavaSR enhancer is loaded |
 | Audio8                  | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | LavaSR enhancer enabled | 48,000 Hz by default, or `modelConfig.outputSampleRate` when set                                                    |
@@ -64,21 +64,35 @@ await cancel({ requestId: result.requestId });
   stops the engine.
 </Callout>
 
-`cancel({ modelId, kind: "tts" })` cancels whatever run currently owns the
-model. Synthesis is serialised per model, so a run still waiting its turn is
-cancelled before it starts rather than interrupting the one in flight.
+`cancel({ modelId, kind: "tts" })` aborts the run in flight on that model
+and every run queued behind it. To stop a single run, cancel by `requestId`:
+synthesis is serialised per model (one active run, up to 256 waiting — beyond
+that the call rejects with `RequestRejectedByPolicyError`), so cancelling a
+queued run by id removes it from the queue without touching the one in flight.
+
+A cancelled run ends cleanly rather than as an error: `done` resolves `true`,
+`buffer` / `bufferStream` stop at whatever was delivered, and
+`await result.stopReason` is `"cancelled"` (`"completed"` otherwise).
 
 ## Runtime statistics
 
 `textToSpeech()` returns a `stats` promise carrying the engine's own runtime
-statistics from the final frame (`undefined` if the run reported none):
+statistics from the final frame (`undefined` if the run reported none).
+
+<Callout type="info">
+  The five backend fields (`backendDevice`, `backendId`, `gpuUnsupported`,
+  `enhancerBackendDevice`, `enhancerBackendId`) are reported by batch
+  synthesis (`stream: false`) only. The chunked paths — `stream: true` (the
+  default), `sentenceStream: true`, and `textToSpeechStream()` — run one
+  native job per sentence and aggregate only the timing and sample counts.
+</Callout>
 
 | Field | Meaning |
 | ----- | ------- |
 | `audioDuration` | Length of the synthesized audio, in milliseconds. |
-| `totalTime` | Wall-clock synthesis time, in milliseconds. |
-| `realTimeFactor` | Synthesis time divided by audio duration; below 1.0 is faster than real time. |
-| `tokensPerSecond` | Decode throughput. On Audio8 this counts codec frames. |
+| `totalTime` | Wall-clock synthesis time, in **seconds** (`audioDuration` is milliseconds). |
+| `realTimeFactor` | `totalTime × 1000 / audioDuration`; below 1.0 is faster than real time. |
+| `tokensPerSecond` | Input characters synthesized per second; on Audio8, codec frames per second. |
 | `totalSamples` | PCM sample count. |
 | `generatedFrames` | Audio8 only: codec frames generated, on a fixed 46 ms grid. |
 | `backendDevice` | Compute device chosen at load: `0` CPU, `1` GPU. |
@@ -122,8 +136,9 @@ time-stretch bounded to `0.25`–`4.0` (Chatterbox has no `pace` channel).
 KV cache is allocated up front at that length, so it directly bounds memory.
 `kvCacheType` picks the KV-cache dtype — `f16` (the safe cross-backend
 default), `f32`, or `q8_0` (smaller and faster where the backend implements
-its ops). `seed`, `threads`, `nGpuLayers`, `outputSampleRate`, `backendsDir`,
-and `openclCacheDir` work as on the other engines, and Chatterbox supports
+its ops). `seed`, `threads`, `nGpuLayers`, `outputSampleRate` and `backendsDir` work
+as on the other engines; `openclCacheDir` (the Android OpenCL program cache)
+is accepted by Chatterbox, Supertonic and CosyVoice3 only. Chatterbox supports
 [LavaSR](#lavasr) post-processing.
 
 ### Supertonic
@@ -149,9 +164,10 @@ mutually exclusive and rejected together at load. Unlike Parler and CosyVoice3,
 Supertonic conditions `pace` when the engine is built, so it cannot be changed
 per request — set it in `modelConfig`.
 
-`seed`, `threads`, `nGpuLayers`, `outputSampleRate`, `backendsDir`, and
-`openclCacheDir` work as on the other engines; `vulkanCacheDir` additionally
-persists the compiled Vulkan pipeline cache when `useGPU` is set.
+`seed`, `threads`, `nGpuLayers`, `outputSampleRate` and `backendsDir` work
+as on the other engines; `openclCacheDir` is accepted by Chatterbox,
+Supertonic and CosyVoice3 only, and `vulkanCacheDir` additionally persists
+the compiled Vulkan pipeline cache when `useGPU` is set.
 
 ### Parler-TTS
 
@@ -191,8 +207,12 @@ For free-form conditioning, use `description` or its alias
 
 <Callout type="warn">
   `description` and `voiceDescription` cannot be combined with each other or
-  with the structured voice fields. These per-request fields are Parler-only;
-  using them with Chatterbox or Supertonic returns a request-validation error.
+  with the structured voice fields. `description`, `voiceDescription` and the
+  descriptor fields (`voice`, `pitch`, `expressivity`, `noise`, `reverb`,
+  `quality`) are Parler-only; `emotion` and `pace` are also accepted per
+  request by CosyVoice3 (emotion limited to `anger`, `happy`, `neutral`,
+  `sad`). Sending any of them to Chatterbox, Supertonic or Audio8 returns a
+  request-validation error.
 </Callout>
 
 Supported emotions are `command`, `anger`, `narration`, `conversation`,
@@ -209,7 +229,8 @@ Parler supports all three SDK streaming surfaces:
 Set `streamChunkTokens` above zero to enable native chunk streaming;
 `streamFirstChunkTokens` only tunes the first chunk and does not enable
 streaming by itself. Native streaming emits at 44.1 kHz, so omit
-`outputSampleRate` or set it to `44100` when `streamChunkTokens > 0`.
+`outputSampleRate`, set it to `44100`, or load the LavaSR enhancer (which
+resamples seam-free) when `streamChunkTokens > 0`.
 Integer generation controls use signed 32-bit values. Parler also supports
 [LavaSR](#lavasr) post-processing via `lavasrEnhancerModelSrc` and
 `lavasrDenoiserModelSrc` (the denoiser is batch-only — disable native chunk
@@ -330,7 +351,7 @@ const modelId = await loadModel({
   modelType: "tts",
   modelConfig: {
     ttsEngine: "cosyvoice3",
-    referenceAudioSrc: { path: "/path/to/reference.wav" },
+    referenceAudioSrc: "/path/to/reference.wav",
     cosyvoice3S3tokModelSrc: TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0.src,
     cosyvoice3CampplusModelSrc: TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32.src,
     // Zero-shot: the exact words spoken in reference.wav.

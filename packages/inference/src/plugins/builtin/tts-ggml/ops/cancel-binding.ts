@@ -1,9 +1,28 @@
+import type { AbortSignal } from 'bare-abort-controller'
 import { getEngineLogger } from '@/logging/index'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRequestId } from '@/runtime/request-id'
 
 type CancellableModel = {
   cancel?: () => Promise<void>
+}
+
+/**
+ * The abort is persistent state, not a one-shot poke. The addon's `cancel()`
+ * only reaches a native job that is live at that instant, and every chunked
+ * path (`stream: true`, `sentenceStream`, the duplex session) runs one native
+ * job per sentence — so a cancel that lands between two jobs is a native
+ * no-op and synthesis would carry on. Ops call this on every chunk: once the
+ * signal is aborted it re-issues the cancel (the next job is live by then),
+ * and returns true so the caller drops the output instead of forwarding it.
+ */
+export async function cancelIfAborted(model: unknown, signal: AbortSignal): Promise<boolean> {
+  if (!signal.aborted) return false
+  const cancellable = model as CancellableModel
+  if (typeof cancellable.cancel === 'function') {
+    await cancellable.cancel().catch(() => {})
+  }
+  return true
 }
 
 /**

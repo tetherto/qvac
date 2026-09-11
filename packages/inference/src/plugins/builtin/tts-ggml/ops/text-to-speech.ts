@@ -1,3 +1,4 @@
+import type { AbortSignal } from 'bare-abort-controller'
 import { getModel } from '@/runtime/model-registry'
 import { ttsRequestSchema, type TtsRequest, type TtsStats } from '@/schemas/index'
 import { nowMs } from '@/profiling/index'
@@ -15,7 +16,7 @@ import {
   getParlerJobOptions,
   type ParlerJobOptions
 } from '@/plugins/builtin/tts-ggml/ops/parler-options'
-import { bindTtsCancel } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
+import { bindTtsCancel, cancelIfAborted } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
 
 type RunStreamModel = {
   runStream: (
@@ -36,13 +37,32 @@ function hasRunStream(model: unknown): model is RunStreamModel {
   )
 }
 
-export async function* textToSpeech(
-  params: TtsRequest
-): AsyncGenerator<TtsOpYield, { modelExecutionMs: number; stats?: TtsStats }> {
+/** What the handler turns into the terminal frame. */
+export type TtsOpResult = { modelExecutionMs: number; stats?: TtsStats; cancelled?: boolean }
+
+function finish(
+  modelStart: number,
+  response: { stats?: AddonTtsStats },
+  cancelled: boolean
+): TtsOpResult {
+  const stats = collectTtsStats(response)
+  return {
+    ...buildStreamResult(nowMs() - modelStart, hasDefinedValues(stats) ? stats : undefined),
+    ...(cancelled ? { cancelled: true } : {})
+  }
+}
+
+// The addon fails the response with its own 'Job cancelled' error once a
+// cancel lands on a live job. After an abort that is the expected way out,
+// not a failure to surface.
+function rethrowUnlessCancelled(error: unknown, signal: AbortSignal) {
+  if (!signal.aborted) throw error
+}
+
+export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYield, TtsOpResult> {
   const request = ttsRequestSchema.parse(params)
   const {
     modelId,
-    inputType,
     text,
     stream,
     sentenceStream,
@@ -55,7 +75,7 @@ export async function* textToSpeech(
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeech')
 
   await using ctx = await bindTtsCancel(model, modelId, request.requestId)
-  if (ctx.signal.aborted) return buildStreamResult(0)
+  if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
 
   const modelStart = nowMs()
 
@@ -82,37 +102,46 @@ export async function* textToSpeech(
     if (!stream) {
       let completeBuffer: number[] = []
       let sampleRate: number | undefined
-      for await (const data of response.iterate()) {
-        // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
-        if (data.outputArray != null) {
-          sampleRate ??= data.sampleRate
-          completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+      try {
+        for await (const data of response.iterate()) {
+          if (await cancelIfAborted(model, ctx.signal)) continue
+          // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
+          if (data.outputArray != null) {
+            sampleRate ??= data.sampleRate
+            completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+          }
         }
+      } catch (error) {
+        rethrowUnlessCancelled(error, ctx.signal)
       }
-      const modelExecutionMs = nowMs() - modelStart
-      const stats = collectTtsStats(response)
+      // A cancelled collect must not hand back a partial buffer as if complete.
+      if (ctx.signal.aborted) return finish(modelStart, response, true)
       yield { buffer: completeBuffer, ...(sampleRate !== undefined ? { sampleRate } : {}) }
-      return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
+      return finish(modelStart, response, false)
     }
 
-    for await (const data of response.iterate()) {
-      // lunte-disable-next-line eqeqeq -- `== null` intentionally matches null and undefined
-      if (data.outputArray == null) continue
-      const buf = Array.from(data.outputArray)
-      if (buf.length === 0) continue
-      yield { buffer: buf, ...chunkMetadata(data) }
+    try {
+      for await (const data of response.iterate()) {
+        if (await cancelIfAborted(model, ctx.signal)) continue
+        // lunte-disable-next-line eqeqeq -- `== null` intentionally matches null and undefined
+        if (data.outputArray == null) continue
+        const buf = Array.from(data.outputArray)
+        if (buf.length === 0) continue
+        yield { buffer: buf, ...chunkMetadata(data) }
+      }
+    } catch (error) {
+      rethrowUnlessCancelled(error, ctx.signal)
     }
-
-    const modelExecutionMs = nowMs() - modelStart
-    const stats = collectTtsStats(response)
-    return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
+    return finish(modelStart, response, ctx.signal.aborted)
   }
 
   const response = (await model.run({
     input: text,
-    // The addon's job field is `type`; `inputType` was never read. (The native
-    // layer ignores it today, so this is wiring, not a behaviour change.)
-    type: inputType,
+    // The addon's job field is `type`, and its native layer accepts only
+    // 'text' (AddonJs.hpp runJob) — the addon's own streaming paths hard-code
+    // it. Pin it here too, so the request's `inputType` (which the schema
+    // does not constrain) behaves the same on every path.
+    type: 'text',
     ...(stream ? { streamOutput: true } : {}),
     // `run({ streamOutput: true })` runs the same chunker as `runStream()`, so
     // the chunking knobs apply here too — they used to be honoured only on the
@@ -128,24 +157,27 @@ export async function* textToSpeech(
     let completeBuffer: number[] = []
     let sampleRate: number | undefined
 
-    for await (const data of response.iterate()) {
-      sampleRate ??= data.sampleRate
-      completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+    try {
+      for await (const data of response.iterate()) {
+        if (await cancelIfAborted(model, ctx.signal)) continue
+        sampleRate ??= data.sampleRate
+        completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+      }
+    } catch (error) {
+      rethrowUnlessCancelled(error, ctx.signal)
     }
-
-    const modelExecutionMs = nowMs() - modelStart
-    const stats = collectTtsStats(response)
-
+    if (ctx.signal.aborted) return finish(modelStart, response, true)
     yield { buffer: completeBuffer, ...(sampleRate !== undefined ? { sampleRate } : {}) }
-    return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
+    return finish(modelStart, response, false)
   }
 
-  for await (const data of response.iterate()) {
-    yield { buffer: Array.from(data.outputArray), ...chunkMetadata(data) }
+  try {
+    for await (const data of response.iterate()) {
+      if (await cancelIfAborted(model, ctx.signal)) continue
+      yield { buffer: Array.from(data.outputArray), ...chunkMetadata(data) }
+    }
+  } catch (error) {
+    rethrowUnlessCancelled(error, ctx.signal)
   }
-
-  const modelExecutionMs = nowMs() - modelStart
-  const stats = collectTtsStats(response)
-
-  return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
+  return finish(modelStart, response, ctx.signal.aborted)
 }
