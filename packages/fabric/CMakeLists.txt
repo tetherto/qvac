@@ -82,7 +82,7 @@ endif()
 # linked directly into qvac__fabric.bare and self-register via static
 # initializers, so there is nothing to stage (and we must not ship the .a files).
 set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
+if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if(TARGET ggml::${_backend})
       get_target_property(_backend_type ggml::${_backend} TYPE)

@@ -59,6 +59,25 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
 
   await inference.load()
 
+  // chooseBackend() logs this only on the override path; a `backend` that
+  // matches no device falls through to the default cascade with a warning, and
+  // the override block is skipped outright for a CPU load. Without this the
+  // pin is advisory, and the four Qwen3.5 tests that depend on it would fall
+  // back to CUDA and report their old flakiness as a genuine failure.
+  //
+  // Call this AFTER the first completion, never straight after load(): backend
+  // selection is lazy, so the log lands a tick later and an immediate check
+  // reads an empty buffer and fails on a pin that did bind.
+  function assertBackendPin() {
+    if (!config.backend || config.device !== 'gpu') {
+      return
+    }
+    t.ok(
+      specLogger.logs.some((l) => /backend override/.test(l)),
+      `${config.backend} backend pin took effect`
+    )
+  }
+
   t.teardown(async () => {
     try {
       specLogger.release()
@@ -68,7 +87,7 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
     }
   })
 
-  return { inference }
+  return { inference, assertBackendPin }
 }
 
 // Shared helper: Run a completion and collect response
@@ -722,9 +741,18 @@ safeTest(
 // checkpoint and verifies the recurrent-memory gate keeps the cache
 // untouched. Qwen3.5 thinking traces can exceed 1k tokens before
 // `</think>` closes, so we give a larger n_predict / ctx_size.
+//
+// These four ask for Vulkan on linux x64, where CUDA is now preferred. They
+// need the model to emit `</think>` inside n_predict, because the compactor
+// only drops a span that actually closed, and whether it closes is not stable
+// across backends: measured greedy at v10297.1.0, CUDA closed after 355 tokens
+// while CPU ran the full 3072 without closing, diverging about fifteen tokens
+// in. That is a cross-backend trajectory divergence, tracked separately.
+// Pinning the backend keeps these tests meaningful; it does not fix it.
 const QWEN35_REASONING_CONFIG = {
   ctx_size: '8192',
-  n_predict: '3072'
+  n_predict: '3072',
+  ...(os.platform() === 'linux' && os.arch() === 'x64' ? { backend: 'vulkan' } : {})
 }
 
 // Qwen3.5 is a hybrid SSM family. The recurrent half is rolled back
@@ -740,7 +768,7 @@ safeTest(
     timeout: 900_000
   },
   async (t) => {
-    const { inference } = await setupReasoningModel(t, false, {
+    const { inference, assertBackendPin } = await setupReasoningModel(t, false, {
       modelDef: QWEN35_MODEL,
       configOverrides: QWEN35_REASONING_CONFIG
     })
@@ -748,6 +776,7 @@ safeTest(
     const messages = createInitialMessages()
 
     const { response, stats } = await runCompletionWithStats(inference, messages)
+    assertBackendPin()
     t.comment(`response (len=${response.length}): ${response.slice(0, 200)}...`)
     t.comment(`stats: ${JSON.stringify(stats)}`)
 
@@ -786,7 +815,7 @@ safeTest(
       } catch {}
     })
 
-    const { inference } = await setupReasoningModel(t, false, {
+    const { inference, assertBackendPin } = await setupReasoningModel(t, false, {
       modelDef: QWEN35_MODEL,
       configOverrides: QWEN35_REASONING_CONFIG
     })
@@ -797,6 +826,7 @@ safeTest(
       cacheKey: sessionPath,
       generationParams: { remove_thinking_from_context: true }
     })
+    assertBackendPin()
     t.comment(`turn 1 stats: ${JSON.stringify(t1.stats)}`)
     t.ok(
       toNumber(t1.stats.thinkingBlockDiscards) >= 1,

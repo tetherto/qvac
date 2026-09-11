@@ -1,8 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "reference": "main",
-    "baseline": "18fd55a0288f492346964fe780fb8c7c8789c351",
+    "reference": "feat/QVAC-23763-diffusion-cuda",
+    "baseline": "36e7f8fc815125c3a6e90e8d55c7d003d54d213a",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [

@@ -27,6 +27,7 @@ export type CacheMode = 'disabled' | 'easycache' | 'ucache' | 'dbcache' | 'taylo
 export interface SdConfig {
     threads?: NumericLike;
     device?: 'gpu' | 'cpu';
+    backend?: string;
     'main-gpu'?: number | 'integrated' | 'dedicated';
     type?: WeightType;
     rng?: RngType;
@@ -41,7 +42,6 @@ export interface SdConfig {
     diffusion_fa?: boolean;
     mmap?: boolean;
     offload_to_cpu?: boolean;
-    backend?: string;
     params_backend?: string;
     max_vram?: number | string;
     stream_layers?: boolean;

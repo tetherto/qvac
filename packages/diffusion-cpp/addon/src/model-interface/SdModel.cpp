@@ -442,26 +442,31 @@ void SdModel::load() {
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
 
   std::string mainGpuBackend;
+  const bool useGpu =
+      sd_backend_selection::parseConfigDeviceString(config_.device) ==
+      sd_backend_selection::ConfigDevice::Gpu;
   if (!config_.backendSpec.empty()) {
     params.backend = config_.backendSpec.c_str();
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "Explicit stable-diffusion backend assignment '" + config_.backendSpec +
             "'");
-  } else if (
-      !config_.mainGpu.empty() &&
-      sd_backend_selection::parseConfigDeviceString(config_.device) ==
-          sd_backend_selection::ConfigDevice::Gpu) {
-    auto mainGpuSpec = sd_backend_selection::parseMainGpu(config_.mainGpu);
-    if (auto resolved =
-            sd_backend_selection::resolveMainGpuBackendName(*mainGpuSpec);
+  } else if (useGpu && (!config_.backend.empty() || !config_.mainGpu.empty())) {
+    const auto backendPriority =
+        sd_backend_selection::parseBackendOverride(config_.backend);
+    const auto mainGpuSpec =
+        config_.mainGpu.empty()
+            ? std::optional<sd_backend_selection::MainGpuSpec>()
+            : sd_backend_selection::parseMainGpu(config_.mainGpu);
+    if (auto resolved = sd_backend_selection::resolveGpuBackendName(
+            backendPriority, mainGpuSpec);
         resolved.has_value()) {
       mainGpuBackend = *resolved;
       params.backend = mainGpuBackend.c_str();
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "main-gpu pinning stable-diffusion backend '" + mainGpuBackend + "'");
-    } else {
+          "Selected stable-diffusion backend '" + mainGpuBackend + "'");
+    } else if (mainGpuSpec.has_value()) {
       // An explicit main-gpu request (e.g. 'integrated' on a host with no
       // integrated GPU, 'dedicated' with no discrete GPU, or an out-of-range
       // index) could not be satisfied. Fall back to CPU instead of silently
@@ -474,7 +479,7 @@ void SdModel::load() {
           "main-gpu '" + config_.mainGpu +
               "' not available; falling back to CPU");
     }
-  } else if (!config_.mainGpu.empty()) {
+  } else if (!useGpu && !config_.mainGpu.empty()) {
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "main-gpu ignored because device is 'cpu'");

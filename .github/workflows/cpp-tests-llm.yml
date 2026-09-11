@@ -134,6 +134,13 @@ jobs:
         shell: bash
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
+      # QVAC-23763: cuda-backend hard-errors without the pinned nvcc. Linux and
+      # Windows must not fall back to a runner's system CUDA installation.
+      - if: ${{ matrix.platform == 'linux' || matrix.platform == 'windows' }}
+        id: setup-cuda
+        name: Setup CUDA toolkit for the ggml CUDA backend
+        uses: ./.github/actions/setup-cuda
+
       # This job runs PR-head code, so only trusted events may write the shared
       # cache (.cursor/rules/devops/github-actions.mdc:82). No restore-keys: a
       # prefix match would re-save the previous entry's archives and grow without
@@ -149,7 +156,7 @@ jobs:
           github.event_name == 'schedule'
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          key: cpp-tests-v6-llm-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), 'vcpkg-overlays/triplets/**', 'vcpkg-overlays/toolchains/**') }}
+          key: cpp-tests-v6-llm-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ steps.setup-cuda.outputs.msvc-version || 'non-windows' }}-${{ hashFiles('.github/actions/setup-cuda/action.yml', 'vcpkg-overlays/ports/qvac-fabric/**', 'vcpkg-overlays/triplets/**', 'vcpkg-overlays/toolchains/**', format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - name: Get vcpkg cache (restore-only, untrusted contexts)
@@ -160,7 +167,7 @@ jobs:
           github.event_name != 'schedule'
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          key: cpp-tests-v6-llm-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), 'vcpkg-overlays/triplets/**', 'vcpkg-overlays/toolchains/**') }}
+          key: cpp-tests-v6-llm-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ steps.setup-cuda.outputs.msvc-version || 'non-windows' }}-${{ hashFiles('.github/actions/setup-cuda/action.yml', 'vcpkg-overlays/ports/qvac-fabric/**', 'vcpkg-overlays/triplets/**', 'vcpkg-overlays/toolchains/**', format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - name: Setup Node.js
@@ -274,4 +281,3 @@ jobs:
             cat build/test/unit/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
-
