@@ -154,7 +154,7 @@ The output has this shape:
 ```json
 {
   "state": "CONTINUE",
-  "base": { "ref": "origin/main", "sha": "3f2a91c…", "short": "3f2a91c" },
+  "base": { "ref": "tether/main", "sha": "3f2a91c…", "short": "3f2a91c", "via": "url" },
   "strong_evidence": true,
   "buckets": ["api", "examples"],
   "file_count": 2,
@@ -181,6 +181,8 @@ The script decides two states on its own. It reports `NO_SOURCE_CHANGE` when not
 2. If `state` is `NO_SOURCE_CHANGE` or `NO_DOCS_IMPACT`, then stop and emit the no-update report. Else continue.
 
 `strong_evidence` is `true` when any of `examples`, `api`, or `cli-command` was touched. Treat it as weight in Phase 3, not as a verdict. Do not put it in the report.
+
+`base.via` records how the base was chosen: `url` when a remote points at `tetherto/qvac`, `explicit` when the developer passed `--base`, `single-remote` when neither applied and the clone has exactly one remote. Report the base with its `via`. A `single-remote` base plus an implausible `file_count` means the base is wrong, so stop and say so rather than routing hundreds of files.
 
 The script cannot read the public export surface. Get it from the barrel, comparing the base against the working tree.
 
@@ -217,7 +219,7 @@ This object is what you read from here on. Do not go back to the raw diff after 
 ```text
 SOURCE_CHANGE_SET
 
-Base: origin/main @ 3f2a91c
+Base: tether/main @ 3f2a91c (via url)
 Packages: packages/sdk
 
 Buckets:
@@ -303,7 +305,7 @@ The output has this shape:
 ```json
 {
   "state": "DOCS_UPDATE_REQUIRED",
-  "base": { "ref": "origin/main", "sha": "3f2a91c…", "short": "3f2a91c" },
+  "base": { "ref": "tether/main", "sha": "3f2a91c…", "short": "3f2a91c", "via": "url" },
   "r3_used": false,
   "high_page_count": false,
   "new_capability_symbols": [],

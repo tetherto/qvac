@@ -10,10 +10,11 @@
 # Usage:
 #   collect-source-changes.sh [--base <ref>] [--repo <path>]
 #
-#   --base   base ref to diff against. Default: origin/main, falling back to
-#            tether/main, then main. The merge base with HEAD is used, never
-#            the ref's tip, so an out-of-date branch does not report the
-#            base's own commits as local changes.
+#   --base   base ref to diff against. Default: `main` on the remote whose URL
+#            points at tetherto/qvac, whatever that remote is called locally,
+#            falling back to the sole remote when only one exists. The merge
+#            base with HEAD is used, never the ref's tip, so an out-of-date
+#            branch does not report the base's own commits as local changes.
 #   --repo   monorepo root. Default: the repo containing this script.
 #
 # The developer invokes the skill mid-work, so committed changes alone are not
@@ -61,31 +62,57 @@ SOURCE_PATHS=(
 # Resolve the base
 # ---------------------------------------------------------------------------
 
-resolve_base_ref() {
+# Sets BASE_REF to a resolvable ref and BASE_VIA to how it was chosen. Both
+# reach the JSON, so a wrong base shows up in the report instead of silently
+# shaping every later phase.
+resolve_base() {
   if [[ -n "$BASE_REF" ]]; then
-    git -C "$REPO" rev-parse --verify --quiet "$BASE_REF" >/dev/null && {
-      printf '%s' "$BASE_REF"
+    if git -C "$REPO" rev-parse --verify --quiet "$BASE_REF" >/dev/null; then
+      BASE_VIA="explicit"
       return 0
-    }
+    fi
     echo "collect-source-changes: base ref not found: $BASE_REF" >&2
     return 1
   fi
 
-  # `tether` is the upstream remote name in this monorepo's fork-first model;
-  # `origin` is the personal fork. Try both, then a local main.
-  local candidate
-  for candidate in origin/main tether/main main; do
-    if git -C "$REPO" rev-parse --verify --quiet "$candidate" >/dev/null; then
-      printf '%s' "$candidate"
+  # The base is the upstream monorepo, identified by URL and never by name. The
+  # remote is `origin` in the default setup (a branch on tetherto/qvac, which is
+  # how the repo is used), `tether` in some clones, and `upstream` in a fork
+  # setup. Choosing by name tried `origin/main` first and, on a clone whose
+  # origin was a fork 1384 commits behind, collected 1565 files as "changes".
+  local remote url
+  while read -r remote; do
+    url="$(git -C "$REPO" remote get-url "$remote" 2>/dev/null || true)"
+    case "$url" in
+      *tetherto/qvac|*tetherto/qvac.git)
+        if git -C "$REPO" rev-parse --verify --quiet "$remote/main" >/dev/null; then
+          BASE_REF="$remote/main"
+          BASE_VIA="url"
+          return 0
+        fi
+        ;;
+    esac
+  done < <(git -C "$REPO" remote)
+
+  # One remote and no URL match: an internal mirror, or a host renamed. With a
+  # single remote there is no fork to confuse it with.
+  local remote_count
+  remote_count="$(git -C "$REPO" remote | wc -l)"
+  if [[ "$remote_count" -eq 1 ]]; then
+    remote="$(git -C "$REPO" remote)"
+    if git -C "$REPO" rev-parse --verify --quiet "$remote/main" >/dev/null; then
+      BASE_REF="$remote/main"
+      BASE_VIA="single-remote"
       return 0
     fi
-  done
+  fi
 
-  echo "collect-source-changes: no usable base ref (tried origin/main, tether/main, main)" >&2
+  echo "collect-source-changes: cannot tell which remote is the monorepo — pass --base <ref>" >&2
   return 1
 }
 
-BASE_REF="$(resolve_base_ref)" || exit 2
+BASE_VIA=""
+resolve_base || exit 2
 BASE_SHA="$(git -C "$REPO" merge-base HEAD "$BASE_REF")"
 BASE_SHORT="$(git -C "$REPO" rev-parse --short "$BASE_SHA")"
 
@@ -232,8 +259,8 @@ done
 
 printf '{\n'
 printf '  "state": "%s",\n' "$STATE"
-printf '  "base": {"ref": "%s", "sha": "%s", "short": "%s"},\n' \
-  "$(json_escape "$BASE_REF")" "$BASE_SHA" "$BASE_SHORT"
+printf '  "base": {"ref": "%s", "sha": "%s", "short": "%s", "via": "%s"},\n' \
+  "$(json_escape "$BASE_REF")" "$BASE_SHA" "$BASE_SHORT" "$BASE_VIA"
 printf '  "strong_evidence": %s,\n' "$([[ $STRONG -eq 1 ]] && echo true || echo false)"
 printf '  "buckets": [%s],\n' "$BUCKETS_JSON"
 printf '  "file_count": %d,\n' "${#CHANGED_PATHS[@]}"
