@@ -65,9 +65,10 @@ takes precedence. Use `require('@qvac/audiogen-ggml').resolveBackendsDir()`
 to locate the directory holding the host's prebuilt binaries and dynamically
 loaded ggml backends.
 
-The published Linux and Windows prebuilds ship Vulkan. CUDA is opt-in at build
-time on linux-x64, linux-arm64, and win32-x64 via
-`bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host). When
+The published linux-x64 prebuild bundles the CUDA backend next to Vulkan; the
+linux-arm64 and Windows prebuilds ship Vulkan, and there CUDA is opt-in at
+build time via `npm run build:cuda` (or `bare-make generate -D ENABLE_CUDA=ON`;
+needs `nvcc` on the build host). When
 CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend mode: the
 CPU-variant, Vulkan, and CUDA backends ship as runtime-loaded modules (`.so` on
 Linux, `.dll` on Windows) beside the addon, and only the CUDA module depends on
