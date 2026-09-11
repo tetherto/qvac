@@ -91,6 +91,29 @@ test('buildParakeetEngineConfig forwards Indic Conformer language', (t) => {
   })
 })
 
+test('buildParakeetEngineConfig forwards Nemotron locale and preserves native chunk default', (t) => {
+  const config = buildParakeetEngineConfig({
+    language: 'en-US',
+    streaming: true,
+    streamingChunkMs: undefined
+  })
+
+  t.alike(config, {
+    engine: 'parakeet',
+    parakeetConfig: {
+      language: 'en-US',
+      streaming: true
+    }
+  })
+
+  t.alike(buildParakeetReloadConfig({ language: 'auto', streamingChunkMs: 320 }), {
+    parakeetConfig: {
+      language: 'auto',
+      streamingChunkMs: 320
+    }
+  })
+})
+
 test('ASR reload config builders keep engine-specific wrappers', (t) => {
   t.alike(
     buildWhisperReloadConfig({

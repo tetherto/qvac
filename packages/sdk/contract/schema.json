@@ -9544,7 +9544,7 @@
                       "type": "boolean"
                     },
                     "streamingChunkMs": {
-                      "description": "Streaming chunk cadence in ms. Default 2000.",
+                      "description": "Streaming chunk cadence in ms. Defaults to 320 for Nemotron and 2000 for existing models. Nemotron supports 80, 160, 320, 560, or 1120.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
@@ -9560,7 +9560,7 @@
                       "type": "boolean"
                     },
                     "streamingEnergyVad": {
-                      "description": "CTC/TDT-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
+                      "description": "Optional ASR energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
                       "type": "boolean"
                     },
                     "streamingLeftContextMs": {
@@ -9576,7 +9576,7 @@
                       "maximum": 9007199254740991
                     },
                     "language": {
-                      "description": "Multilingual CTC language id (e.g. `hi`, `ta`); required for Indic Conformer GGUFs, ignored on monolingual CTC.",
+                      "description": "Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.",
                       "type": "string"
                     },
                     "streamingSpkCacheEnable": {
