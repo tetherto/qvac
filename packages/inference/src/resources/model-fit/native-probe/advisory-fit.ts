@@ -148,9 +148,8 @@ async function resolveRunFit(
 ): Promise<typeof runIsolatedFit> {
   if (explicit !== undefined) return explicit
   if (mobile) {
-    const { runInProcessFit } = await import(
-      '@/resources/model-fit/native-probe/run-in-process-fit'
-    )
+    const { runInProcessFit } =
+      await import('@/resources/model-fit/native-probe/run-in-process-fit')
     return runInProcessFit as typeof runIsolatedFit
   }
   return (await import('@/resources/model-fit/native-probe/run-isolated-fit')).runIsolatedFit
