@@ -83,13 +83,22 @@ jobs:
     with:
       workdir: "packages/model-fit"
 
+  verify-generated:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-generated-wrappers.yml
+    with:
+      workdir: packages/model-fit
+
   # Publish to GitHub Package Registry (GPR) for non-release branches
   publish-gpr:
     needs:
       - build
       - publish-logic
+      - verify-generated
     if: >-
-      needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'
+      needs.verify-generated.result == 'success' &&
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     continue-on-error: true
     runs-on: ubuntu-latest
     environment: release
@@ -125,8 +134,10 @@ jobs:
       - build
       - publish-logic
       - release-merge-guard
+      - verify-generated
     if: >-
-      !cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+      needs.verify-generated.result == 'success' &&
+      (!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:

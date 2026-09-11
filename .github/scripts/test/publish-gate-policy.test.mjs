@@ -2,13 +2,22 @@
 // on-merge-* never runs on a pull request, and actionlint checks structure,
 // not semantics.
 //
+// The expected set is derived from the *packages* -- every on-merge-*.yml that
+// invokes a publish action for a package defining `check:generated` -- and
+// deliberately NOT from which workflows already call the verify reusable. An
+// earlier revision filtered on the latter, which is the very property these
+// tests assert: the list could never contain a pipeline that omitted the gate,
+// so three wrapper publishers stayed ungated without failing anything.
+// Filtering a conformance list on the conformance property makes the
+// assertions vacuous.
+//
 // The `result == 'success'` assertion below is not redundant with the `needs:`
 // one. An `if:` containing `!cancelled()`, `always()` or `failure()` stops
 // GitHub skipping the job on a failed dependency, so `needs:` alone silently
 // fail-opens (the M5 defect); every publish-npm job uses `!cancelled()`.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -54,13 +63,13 @@ function eachJob(source) {
   return jobs
 }
 
-// A wrapper pipeline is any on-merge-*.yml that calls the verify reusable.
-// Derived so a new pipeline cannot opt out of these assertions by omission.
-function wrapperPipelines() {
+// Every merge-triggered pipeline, gated or not. The gate must never take part
+// in building this list -- see the header.
+function onMergeWorkflows() {
   return readdirSync(WORKFLOW_DIR)
     .filter((name) => /^on-merge-.*\.ya?ml$/.test(name))
+    .sort()
     .map((name) => `.github/workflows/${name}`)
-    .filter((path) => read(path).includes(`uses: ${VERIFY_REUSABLE}`))
 }
 
 // Publish jobs are identified by what they do -- invoking a publish action --
@@ -68,6 +77,57 @@ function wrapperPipelines() {
 // is still covered.
 function publishJobs(source) {
   return eachJob(source).filter((job) => /uses:.*publish-library-to-(gpr|npm)/.test(job.text))
+}
+
+function unquote(value) {
+  return value.replace(/^["']/, '').replace(/["']$/, '')
+}
+
+// Job-level `env:` only (four-space key, six-space entries). Step-level env
+// blocks are indented deeper and must not leak into the lookup.
+function jobEnv(jobText) {
+  const env = new Map()
+  const block = jobText.match(/^ {4}env:\n((?: {6}[A-Za-z_][A-Za-z0-9_]*:.*\n)*)/m)
+  if (!block) return env
+  for (const line of block[1].split('\n')) {
+    const entry = line.match(/^ {6}([A-Za-z_][A-Za-z0-9_]*):[ \t]*(.*?)[ \t]*$/)
+    if (entry) env.set(entry[1], unquote(entry[2]))
+  }
+  return env
+}
+
+// The package directory a job acts on, read off the `workdir:` it hands the
+// publish action. Several pipelines pass that as `${{ env.PKG_DIR }}` or
+// `${{ env.WORKDIR }}`, so job-level env is resolved first. The filename is
+// not a usable substitute: on-merge-vla.yml publishes packages/vla-ggml.
+function packageDirs(jobText) {
+  const env = jobEnv(jobText)
+  const dirs = new Set()
+  for (const match of jobText.matchAll(/^\s*workdir:[ \t]*(.+?)[ \t]*$/gm)) {
+    let value = unquote(match[1])
+    const expression = value.match(/^\$\{\{\s*env\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}$/)
+    if (expression) value = env.get(expression[1]) ?? ''
+    if (/^packages\/[^/]+$/.test(value)) dirs.add(value)
+  }
+  return [...dirs]
+}
+
+// A package with no `check:generated` has no committed tsc output to drift
+// (e.g. fabric), and gating its publish on the reusable would only fail the
+// verify job on a missing npm script.
+function definesCheckGenerated(packageDir) {
+  const manifestPath = join(root, packageDir, 'package.json')
+  if (!existsSync(manifestPath)) return false
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  return typeof manifest.scripts?.['check:generated'] === 'string'
+}
+
+// Package-derived, so a new wrapper publisher is covered the moment it lands
+// and cannot opt out of the assertions below by omitting the gate.
+function wrapperPipelines() {
+  return onMergeWorkflows().filter((path) =>
+    publishJobs(read(path)).some((job) => packageDirs(job.text).some(definesCheckGenerated)),
+  )
 }
 
 // The `if:` value, flattened to one line. Both `>-` and `|` styles appear.
@@ -78,11 +138,33 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
+// Guards the derivation itself. If `packageDirs` silently resolved nothing --
+// a renamed input, a new indirection -- `wrapperPipelines()` would quietly
+// empty out and every assertion below would pass while gating nothing.
+test('every on-merge publish job resolves to exactly one package directory', () => {
+  const offenders = []
+
+  for (const path of onMergeWorkflows()) {
+    for (const job of publishJobs(read(path))) {
+      const dirs = packageDirs(job.text)
+      if (dirs.length !== 1) {
+        offenders.push(`${path}::${job.name}: resolved ${dirs.length} package dirs (${dirs})`)
+        continue
+      }
+      if (!existsSync(join(root, dirs[0], 'package.json'))) {
+        offenders.push(`${path}::${job.name}: ${dirs[0]}/package.json does not exist`)
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
 test('wrapper publish pipelines are discovered', () => {
   const pipelines = wrapperPipelines()
   assert.ok(
-    pipelines.length >= 9,
-    `expected at least the nine TypeScript-wrapper pipelines, found ${pipelines.length}`,
+    pipelines.length >= 13,
+    `expected at least the thirteen wrapper publish pipelines, found ${pipelines.length}: ${pipelines}`,
   )
 })
 
@@ -128,6 +210,32 @@ test('every wrapper publish job is gated on verify-generated', () => {
   assert.deepEqual(offenders, [])
 })
 
+// The converse of the gating test: a pipeline wired to the reusable for a
+// package with no `check:generated` would fail the verify job on every run,
+// because the reusable deliberately runs the script without --if-present.
+test('every pipeline calling the verify reusable has a check:generated to run', () => {
+  const offenders = []
+
+  for (const path of onMergeWorkflows()) {
+    const source = read(path)
+    if (!source.includes(`uses: ${VERIFY_REUSABLE}`)) continue
+
+    for (const job of eachJob(source)) {
+      if (!job.text.includes(`uses: ${VERIFY_REUSABLE}`)) continue
+      const dirs = packageDirs(job.text)
+      if (dirs.length !== 1) {
+        offenders.push(`${path}::${job.name}: verify caller resolved ${dirs.length} workdirs`)
+        continue
+      }
+      if (!definesCheckGenerated(dirs[0])) {
+        offenders.push(`${path}::${job.name}: ${dirs[0]} defines no check:generated script`)
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
 test('the verify job stays unprivileged and secretless', () => {
   const source = withoutComments(read('.github/workflows/verify-generated-wrappers.yml'))
 
@@ -146,7 +254,7 @@ test('the verify job stays unprivileged and secretless', () => {
 test('callers grant the verify job no more than contents: read', () => {
   const offenders = []
 
-  for (const path of wrapperPipelines()) {
+  for (const path of onMergeWorkflows()) {
     for (const job of eachJob(read(path))) {
       if (!job.text.includes(`uses: ${VERIFY_REUSABLE}`)) continue
       if (!/^ {4}permissions:\n {6}contents: read\n/m.test(job.text)) {
@@ -154,6 +262,37 @@ test('callers grant the verify job no more than contents: read', () => {
       }
       if (/^ {4}secrets:/m.test(job.text)) {
         offenders.push(`${path}::${job.name}: caller must not pass secrets to the verify job`)
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
+// A drift check that cannot see untracked files passes on an emitted wrapper
+// that was never committed. `git status --porcelain --untracked-files=all`
+// sees it; `git diff --exit-code` does not.
+test('every check:generated script observes untracked output', () => {
+  const offenders = []
+  const seen = new Set()
+
+  for (const path of wrapperPipelines()) {
+    for (const job of publishJobs(read(path))) {
+      for (const dir of packageDirs(job.text)) {
+        if (seen.has(dir)) continue
+        seen.add(dir)
+        const manifest = JSON.parse(read(join(dir, 'package.json')))
+        const script = manifest.scripts?.['check:generated']
+        if (!script) continue
+        // Delegating to a script file is fine; those assert tracked-ness
+        // themselves (see packages/*/scripts/check-generated.mjs).
+        if (/\bnode\b[^&|]*check-generated/.test(script)) continue
+        if (/git diff\b/.test(script)) {
+          offenders.push(`${dir}: check:generated uses git diff, which cannot see untracked files`)
+        }
+        if (!/--untracked-files=all/.test(script)) {
+          offenders.push(`${dir}: check:generated must pass --untracked-files=all`)
+        }
       }
     }
   }
