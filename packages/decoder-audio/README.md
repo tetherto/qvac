@@ -2,6 +2,87 @@
 
 This decoder library leverages FFmpeg for efficient audio decoding. It simplifies processing of input audio, particularly as a preprocessing step for other addons.
 
+It also provides video-frame extraction for VLM inputs. The audio API is unchanged;
+the package is still named `@qvac/decoder-audio`.
+
+## Video frames
+
+```javascript
+const { VideoFrameDecoder } = require('@qvac/decoder-audio/video')
+const decoder = new VideoFrameDecoder()
+
+for await (const { rgb, width, height, ptsMs } of decoder.frames('/videos/clip.mp4')) {
+  // rgb is an owned Uint8Array: width * height * 3 bytes, packed RGB24.
+  // Pass selected frames and their timestamps to a video-capable VLM.
+}
+console.log(decoder.runtimeStats)
+```
+
+This API runs in Bare, including a Bare worker inside a mobile app. It does not
+load model weights, require `load()`, launch an FFmpeg executable, or itself run
+a VLM. It reuses [bare-ffmpeg](https://github.com/holepunchto/bare-ffmpeg)'s CPU
+decoders and scaler. Adding this package to an app that does not already use it
+still adds bare-ffmpeg's native binaries.
+
+`frames(input, { signal })` accepts a local file path, a complete `Uint8Array`, a
+synchronous `{ size, read(offset, length): Uint8Array }` reader, or an
+`AsyncIterable<Uint8Array>`. The reader must provide bytes synchronously and may
+return short reads. Inputs must remain unchanged while in use. Network URLs are
+not fetched by this API; an app can provide downloaded chunks instead.
+
+Finite chunk streams are saved to a private, size-limited temporary file before
+decoding. This supports MP4 files whose index is at the end; it is **not live
+streaming**. Staged files are deleted after completion, failure, early iterator
+exit, or cancellation. A process crash can leave a temporary directory; apps
+with stricter storage policies should supply an app-managed `tempDirectory` and
+clean stale directories on startup. The source producer must cooperate with
+cancellation to stop its own network or I/O work.
+
+`probe(input, { signal })` returns dimensions, duration, codec, rotation, an HDR
+flag and the chosen sampling policy without decoding all frames. In `auto` mode
+it scans video packet metadata; this reads the file but does not decode pixels.
+A chunk iterable is consumed by `probe`; use a fresh input for a later `frames`
+call. Avoid a separate probe if only extraction is needed: `runtimeStats.info`
+already contains this information.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `mode` | `auto` | Use key frames when their rate is 1–5/s, with no gap longer than 1s and no burst above 5/s. Otherwise sample uniformly. `uniform` and `keyframes` are explicit overrides. |
+| `fps` | 2 | Maximum target sampling rate; not a promise that every requested timestamp has a frame. |
+| `maxFrames` | 64 | Maximum sampled frames, spread across the complete clip. |
+| `maxDurationS` | 300 | Reject longer clips; no silent truncation. |
+| `maxDimension` | 448 | Longest output edge, preserving aspect ratio and never upscaling. |
+| `maxInputBytes` | 2 GiB | Limit for files, byte arrays, readers and staged chunks. |
+| `maxOutputBytes` | 64 MiB | Total emitted RGB byte budget. |
+| `tempDirectory` | OS temporary directory | Parent for private per-request staging directories. |
+
+Policy defaults and hard safety ceilings live in `src/video/config.ts` and are
+exported as `VIDEO_DEFAULTS`/`VIDEO_LIMITS`. Options may lower the budgets; output
+resolution can be increased up to the hard ceiling if the byte budget allows it.
+For uniform sampling the interval is `max(1000 / fps, durationMs / maxFrames)`.
+A 10-second clip therefore uses up to 2 fps; a 5-minute clip uses about one frame
+every 4.69 seconds. Codec key frames are compression boundaries, not selected
+important events. Auto/key-frame modes can miss brief actions; use `uniform`
+when predictable temporal coverage matters. Returned timestamps are the actual
+decoded presentation times relative to the first video presentation.
+
+Memory is bounded, not constant throughout a VLM pipeline. The iterator releases
+its native decoder/scaler resources, but any frames the caller retains still
+occupy RAM. 64 square 448-pixel RGB frames require 36.75 MiB for one copy; decoder
+buffers, native copies, model image preprocessing, weights and KV cache are
+additional. Model context checks remain necessary even when frame limits pass.
+
+Limitations: finite duration must be available; source images are limited to
+4096×2160 pixels in area; non-square pixels, mirrored/perspective transforms and
+mid-stream format/dimension changes are rejected. Audio tracks are ignored.
+HEVC/HDR decoding depends on the bundled codec, and conversion to RGB24 is not
+HDR tone mapping: HDR colors may differ from display playback. DRM-protected
+content and arbitrary live sessions are not supported.
+
+See `example/extract-video.js` for an executable path/chunk example. Generated
+fixtures in `test/helpers/video-fixture.js` exercise decoding, EOF drain,
+rotation, sampling, mixed audio/video and cleanup without internet downloads.
+
 ## Table of Contents
 
 - [Supported Platforms](#supported-platforms)

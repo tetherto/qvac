@@ -10,7 +10,13 @@ const { spawnSync } = require('node:child_process')
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const PACKAGE_JSON_PATH = path.join(PACKAGE_ROOT, 'package.json')
-const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+// npm.cmd is a batch file, which spawnSync cannot execute directly on Windows.
+// Run npm's JavaScript entry point without a shell (also safe for paths with spaces).
+const NPM_CLI =
+  process.env.npm_execpath ||
+  (process.platform === 'win32'
+    ? path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    : null)
 const JAVASCRIPT_EXTENSIONS = new Set(['.cjs', '.js', '.mjs'])
 const IMPORT_PATTERNS = [
   /(?:require|import)\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
@@ -20,7 +26,15 @@ const IMPORT_PATTERNS = [
 const PROMOTED_MODULES = ['bare-fs', 'bare-path', 'bare-url']
 
 function runNpm(arguments_, cwd) {
-  const result = spawnSync(NPM_COMMAND, arguments_, { cwd, encoding: 'utf8' })
+  const result = spawnSync(
+    NPM_CLI ? process.execPath : 'npm',
+    NPM_CLI ? [NPM_CLI, ...arguments_] : arguments_,
+    {
+      cwd,
+      encoding: 'utf8'
+    }
+  )
+  if (result.error) throw result.error
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`)
   return result.stdout
 }

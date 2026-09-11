@@ -7,14 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `VideoFrameDecoder` alongside the unchanged audio decoder. File paths, byte buffers, seekable readers and finite chunk streams produce bounded, downscaled RGB24 frames with timestamps and right-angle rotation.
+- Added automatic key-frame selection when packet timestamps show 1–5 key frames per second without long gaps; other clips use uniform sampling across the full duration. Explicit uniform and key-frame modes are available.
+- Added frame, duration, dimension and byte limits, cancellation/cleanup, sampling statistics, and generated video tests shared by desktop and mobile.
+
 ### Changed
 
+- Raised the `bare-ffmpeg` minimum to 1.5.0 for the video/side-data API and promoted `bare-os` to a runtime dependency for private temporary-file staging. No additional FFmpeg binary or new decoder package is introduced.
 - Migrated the wrapper and type declarations to TypeScript. Sources now live under `src/`; the published `index.js`, `constants.js`, `utils/*.js` and their `.d.ts` declarations are generated from them and committed. Public API and CommonJS export shape are unchanged.
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2634](https://github.com/tetherto/qvac/pull/2634)).
 - Promoted `bare-fs`, `bare-path`, and `bare-url` to runtime dependencies because the published mobile test runtime imports them.
 
 ### Fixed
 
+- Run the compiler/npm JavaScript entry points directly in validation helpers so Windows package-contract and generated-output checks work without a shell.
 - Corrected `DecoderOutput.outputArray` to `Buffer`; it was declared as `ArrayBuffer` while the decoder has always emitted a `Buffer`.
 - Added the missing type declarations for `utils/createStreamAccumulator`, which previously shipped with no `.d.ts`.
 

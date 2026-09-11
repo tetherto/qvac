@@ -1,6 +1,6 @@
 {
   "name": "@qvac/decoder-audio",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "",
   "license": "Apache-2.0",
   "author": "Tether",
@@ -33,6 +33,7 @@
     "constants.js",
     "constants.d.ts",
     "utils",
+    "video",
     "index.d.ts",
     "test/mobile",
     "LICENSE",
@@ -41,13 +42,13 @@
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
+    "./video": "./video/index.js",
     "./constants": "./constants.js",
     "./constants.js": "./constants.js"
   },
   "devDependencies": {
     "@types/node": "^22.14.1",
     "bare-abort-controller": "^1.1.2",
-    "bare-os": "^3.6.2",
     "bare-process": "^4.2.2",
     "brittle": "^3.13.1",
     "eslint": "^9.39.4",
@@ -64,7 +65,8 @@
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.6.0",
     "@qvac/logging": "^0.1.0",
-    "bare-ffmpeg": "^1.0.0-32",
+    "bare-ffmpeg": "^1.5.0",
+    "bare-os": "^3.6.2",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
     "bare-url": "^2.1.6"
