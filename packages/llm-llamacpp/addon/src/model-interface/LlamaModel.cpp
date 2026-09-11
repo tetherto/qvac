@@ -891,6 +891,18 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       // per-context accumulator, so a per-job value would be misattributed.
       // Unlike the two above, those have no per-slot source to move to.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      // Always 0 here, and present rather than omitted. `index.d.ts` declares
+      // both non-optional, so leaving them out hands a consumer `undefined`
+      // where the types promise a number. 0 is honest rather than a
+      // placeholder: MTP runs only in `runSpeculativeGeneration`, reached from
+      // the sequential `generateResponse`, and every caller of jobTerminalStats
+      // comes through the scheduler instead -- which never speculates. Matches
+      // batchRuntimeStatsLocked, which hardcodes the same pair for the same
+      // reason. Deliberately not read off llmContext_: a peer job may be
+      // mid-decode on the shared context, which is why this whole function
+      // composes from the returned snapshot and takes no live model read.
+      {"draftAccepted", static_cast<int64_t>(0)},
+      {"draftTotal", static_cast<int64_t>(0)},
       {"backendDevice", runtimeBackendDevice_}};
   // Unlike the vision counters, the stop reason IS per-sequence, so a job can
   // report its own without misattribution — a single concurrent prompt would

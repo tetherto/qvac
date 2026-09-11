@@ -1238,6 +1238,43 @@ TEST_F(LoadFitNormalizationTest, NonPositiveSpecDraftMaximumIsRejected) {
   }
 }
 
+// The upper clamp is the one with memory consequences, and nothing pinned it.
+// `common_context_params_to_llama` sizes `cparams.n_rs_seq` from
+// `speculative.need_n_rs_seq()`, which returns the raw `draft.n_max` for MTP,
+// and recurrent memory scales with `1 + n_rs_seq` -- so an unclamped
+// `spec-draft-n-max` is a straight allocation multiplier. The clamp has to bind
+// here, in normalization, because this runs before the target context is built.
+TEST_F(LoadFitNormalizationTest, OversizedSpecDraftMaximumIsClampedToCeiling) {
+  for (const char* value : {"129", "1000000"}) {
+    auto config = baseConfig();
+    config["spec-type"] = "draft-mtp";
+    config["spec-draft-n-max"] = value;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::CPU, .name = "none"}));
+    EXPECT_EQ(result.params.speculative.draft.n_max, lfn::K_MAX_SPEC_DRAFT)
+        << "spec-draft-n-max=" << value << " must clamp to the ceiling";
+  }
+}
+
+// A value inside the range must survive untouched -- a clamp that pinned every
+// input to 128 would pass the test above.
+TEST_F(LoadFitNormalizationTest, InRangeSpecDraftMaximumIsPreserved) {
+  auto config = baseConfig();
+  config["spec-type"] = "draft-mtp";
+  config["spec-draft-n-max"] = "4";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+  EXPECT_EQ(result.params.speculative.draft.n_max, 4);
+}
+
 TEST_F(LoadFitNormalizationTest, DuplicateSplitModeRemainsInvalidArgument) {
   auto config = baseConfig();
   config["split-mode"] = "layer";

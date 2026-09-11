@@ -258,7 +258,7 @@ void TextLlmContext::initializeCommonState() {
             std::clamp(params_.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
         spec_.reset(common_speculative_init(
             params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
-        ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
+        probeTargetSeqRmTypeOnce();
         QLOG_IF(
             Priority::INFO,
             "[TextLlm] MTP draft context + common_speculative initialized\n");
@@ -1609,7 +1609,19 @@ void TextLlmContext::compactThinkSpan() {
           .onCompacted =
               [this](const ReasoningBlockCompactor::Outcome& compacted) {
                 nPast_ = compacted.newPos;
-                rollbackDraftContext(compacted.newPos);
+                // Full clear, NOT a mirror at `newPos`. The compactor restores
+                // the boundary snapshot at `snapshotPos` and replays forward,
+                // so `newPos == snapshotPos + replayCount` and there is no
+                // `llama_memory_seq_add` to renumber anything: the target's
+                // cells [snapshotPos, newPos) are rewritten in place. Dropping
+                // only >= newPos would leave the draft holding the old
+                // reasoning-span KV at exactly those positions. `Outcome` does
+                // not expose `snapshotPos`, and the replay decodes through
+                // llama.cpp directly (never `decodeAndSpecProcess`), so the
+                // draft cannot be re-fed either -- an empty draft that
+                // re-seeds forward is the only safe state, as at `loadCache`
+                // and `resetState`.
+                rollbackDraftContext();
               },
           .onFailedKvWiped =
               [this]() {

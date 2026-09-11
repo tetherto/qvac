@@ -137,6 +137,17 @@ protected:
     return model;
   }
 
+  // Shared body for the n_predict-cutoff rollback cases. Two budgets exercise
+  // the same contract: `n_predict = 64` is the original coverage (a real
+  // multi-token reasoning run cut off mid-`<think>`), and `n_predict = 1` is
+  // the deterministic variant that always stops right after the template's
+  // forced reasoning opener. `minGenerated` is the floor the run must reach --
+  // it is the assertion that stops a broken cutoff from passing silently, so
+  // it tracks the budget rather than being pinned at 1. `cacheName` keeps the
+  // two cases on separate cache files.
+  void runNPredictCutoffRollsBackCache(
+      const std::string& nPredict, double minGenerated, const char* cacheName);
+
   std::string qwen35_model_path =
       test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
   std::string qwen35_projection_path =
@@ -500,14 +511,9 @@ TEST_F(
   fs::remove(cachePath);
 }
 
-TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
-  if (!hasValidQwen35Model()) {
-    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
-  }
-
-  // A one-token budget deterministically stops after the template's forced
-  // reasoning opener, before the model can emit its close marker.
-  config_files["n_predict"] = "1";
+void MtmdLlmContextTest::runNPredictCutoffRollsBackCache(
+    const std::string& nPredict, double minGenerated, const char* cacheName) {
+  config_files["n_predict"] = nPredict;
   config_files["temp"] = "0";
 
   auto model = createQwen35Model();
@@ -517,8 +523,7 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
   auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
   ASSERT_NE(ctx, nullptr) << "Qwen3.5 VLM must use the MTMD context";
 
-  const fs::path cachePath =
-      fs::temp_directory_path() / "qvac-qwen35-mtmd-npredict-rollback.bin";
+  const fs::path cachePath = fs::temp_directory_path() / cacheName;
   fs::remove(cachePath);
 
   const char* systemMsg =
@@ -571,7 +576,7 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
       << "small-budget MTMD run must enter reasoning before n_predict cutoff";
   EXPECT_EQ(cutoffOutput.find("</think>"), std::string::npos)
       << "test must stop inside reasoning to exercise rollback, not compaction";
-  EXPECT_GE(generatedTokens, 1.0)
+  EXPECT_GE(generatedTokens, minGenerated)
       << "small-budget MTMD run should reach n_predict";
   EXPECT_EQ(ctx->getCacheTokens(), primerCacheTokens)
       << "MTMD rollback must restore cache-token bookkeeping to primer state";
@@ -594,6 +599,31 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
       << "follow-up should extend the rolled-back primer cache";
 
   fs::remove(cachePath);
+}
+
+// The original coverage: a real multi-token reasoning run cut off mid-`<think>`
+// by the budget. Kept alongside the 1-token variant below rather than replaced
+// by it -- a floor of 1 is satisfied by any generation at all, so on its own it
+// could not fail if the cutoff stopped working.
+TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+  runNPredictCutoffRollsBackCache(
+      "64", 64.0, "qvac-qwen35-mtmd-npredict-rollback.bin");
+}
+
+// A one-token budget deterministically stops after the template's forced
+// reasoning opener, before the model can emit its close marker -- so this case
+// reaches the rollback path without depending on how long the model reasons.
+TEST_F(
+    MtmdLlmContextTest,
+    Qwen35MtmdSingleTokenNPredictCutoffMidReasoningRollsBackCache) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+  runNPredictCutoffRollsBackCache(
+      "1", 1.0, "qvac-qwen35-mtmd-npredict1-rollback.bin");
 }
 
 // Multimodal hybrid (Qwen3.5) compaction. `MtmdLlmContext` shares the

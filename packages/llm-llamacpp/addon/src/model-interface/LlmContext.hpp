@@ -20,6 +20,7 @@
 #include "llama.h"
 #include "model-interface/LoadFitNormalization.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ScopeGuard.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 
@@ -620,6 +621,7 @@ protected:
   // Drafts are capped to the target's bounded partial-seq_rm capacity so a
   // rejected draft is always a plain seq_rm.
   common_context_seq_rm_type ctxTgtSeqRmType_ = COMMON_CONTEXT_SEQ_RM_TYPE_PART;
+  bool ctxTgtSeqRmProbed_ = false;
   int64_t draftAccepted_ = 0;
   int64_t draftTotal_ = 0;
   int64_t specGeneratedTokens_ = 0;
@@ -637,6 +639,24 @@ protected:
   // Skipping this after cancel / resetState / loadCache is exactly what lets
   // the draft and target contexts diverge (orphaned draft KV -> degraded
   // drafts, or MTP silently disabling itself mid-session).
+  // `common_context_can_seq_rm` is not a cheap query: it clears the target's
+  // memory, decodes 2 dummy tokens, then clears and synchronizes
+  // (common/common.cpp). llama bills any decode of more than one token as a
+  // PROMPT eval -- `n_p_eval += n_queued_tokens` -- so re-running it inflates
+  // the next request's reported promptTokens and ppTPS by 2. The Mtmd
+  // draft-context rebuild runs once per media turn and lands AFTER
+  // `llama_perf_context_reset`, which is exactly where that showed up.
+  //
+  // The answer describes the TARGET context, which no rebuild replaces, so
+  // probe it once and reuse the result forever after.
+  void probeTargetSeqRmTypeOnce() {
+    if (ctxTgtSeqRmProbed_) {
+      return;
+    }
+    ctxTgtSeqRmType_ = common_context_can_seq_rm(getCtx());
+    ctxTgtSeqRmProbed_ = true;
+  }
+
   void rollbackDraftContext(llama_pos startPos = -1) noexcept {
     if (!ctxDraft_) {
       return;
@@ -712,8 +732,15 @@ protected:
   // Check room for an inline reasoning recovery before it decodes. Sliding
   // context support has been removed from the addon, so insufficient headroom
   // is a graceful ContextOverflow stop rather than an attempted discard.
+  //
+  // `+ 1` for the answer token both recovery call sites sample immediately
+  // afterwards. Reserving only the committed positions is checked again by
+  // specEnsurePendingTokenHeadroom(), but by then the close marker has already
+  // been streamed and decoded -- so at the exact boundary the caller would emit
+  // `</think>` and then stop with an empty answer. Reserving the sampled token
+  // up front turns that into a clean pre-recovery stop.
   [[nodiscard]] bool specEnsureRecoveryHeadroom() {
-    const llama_pos needed = specRecoveryPositions();
+    const llama_pos needed = specRecoveryPositions() + 1;
     return specCellsUsed() + needed <= specCtxCeiling();
   }
 
@@ -746,6 +773,17 @@ protected:
     lastGenerationUsedSpec_ = true;
     specGeneratedTokens_ = 0;
     specBeginGeneration(outputCallback);
+
+    // Every cancel check below consumes the flag inline (load, then store
+    // false). The exits that THROW -- the verify-batch FailedToDecode, both
+    // specCommitPendingToken throws, and any clearSequenceMemory -- bypass all
+    // of them and would leave a set flag behind for the next generation's
+    // entry check to consume as a cancellation that never happened. Clearing
+    // unconditionally on the way out is safe: a stop that arrives during
+    // teardown belongs to no live request.
+    ScopeGuard stopFlagGuard(
+        [this]() noexcept { stopGeneration_.store(false); },
+        "LlmContext MTP stop-flag reset on speculative-loop exit");
 
     // llama.cpp classifies every decode with more than one queued token as a
     // prompt eval. Speculative verify batches therefore make its live
@@ -851,7 +889,14 @@ protected:
       if (!specEnsureRecoveryHeadroom()) {
         return finishSpec(/*ok=*/false);
       }
+      // No common_speculative_accept here, unlike the in-loop recovery: no
+      // verify batch has run yet, so `pending_h` still holds the last row of
+      // the prompt prefill, which IS the correct pairing row for this decode.
+      // Charge the recovery's committed tokens against n_predict, as below.
+      const int32_t committedBeforeRecovery = lastGeneratedTokenCount_;
       specRecoverReasoning(idLast, specBatch, outputCallback);
+      generated += static_cast<unsigned>(std::max<int32_t>(
+          0, lastGeneratedTokenCount_ - committedBeforeRecovery));
       if (stopGeneration_.load()) {
         stopGeneration_.store(false);
         return cancelSpec();
@@ -1044,7 +1089,33 @@ protected:
           if (!specEnsureRecoveryHeadroom()) {
             return finishSpec(/*ok=*/false);
           }
+          // Rewind the MTP head's carry-over hidden state BEFORE the recovery
+          // decode. common_speculative_process() unconditionally leaves
+          // `pending_h` = the h-row of the LAST token in the verify batch, and
+          // accept(n) is the only thing that rewinds it to `verify_h[n]`. The
+          // recovery's own decode runs through decodeAndSpecProcess, i.e. a
+          // fresh process() that consumes `pending_h` and then overwrites
+          // `verify_h` -- so skipping the accept here pairs the close marker
+          // with a REJECTED draft token's hidden state, and every later draft
+          // attends over that cell. Silent: output stays correct because the
+          // target verifies everything, it just depresses the acceptance rate
+          // for the rest of the generation. Reaching index `j` implies every
+          // earlier draft matched, so nAccepted == j selects the last kept
+          // token. The `if (!reasoningRecovered)` block below is skipped on
+          // this path, which is why the accept has to happen here.
+          if (!draft.empty() && spec_) {
+            common_speculative_accept(
+                spec_.get(), seqId_, static_cast<uint16_t>(nAccepted));
+          }
+          // Charge what the recovery itself commits (the close marker, plus up
+          // to two newlines on Text) against n_predict. Both recovery
+          // implementations already count those tokens into
+          // lastGeneratedTokenCount_; without this they are invisible to the
+          // budget and a request can overrun the limit it declared.
+          const int32_t committedBeforeRecovery = lastGeneratedTokenCount_;
           specRecoverReasoning(tok, specBatch, outputCallback);
+          generated += static_cast<unsigned>(std::max<int32_t>(
+              0, lastGeneratedTokenCount_ - committedBeforeRecovery));
           if (stopGeneration_.load()) {
             stopGeneration_.store(false);
             return cancelSpec();

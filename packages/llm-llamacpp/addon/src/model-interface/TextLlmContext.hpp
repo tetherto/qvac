@@ -335,6 +335,14 @@ private:
   [[nodiscard]] llama_pos specCtxCeiling() const override {
     return ctxCeiling();
   }
+  // handleReasoningEOS commits the close marker, and the 2 newlines only when
+  // the vocab actually yielded a single-token newline (ReasoningUtils leaves
+  // `cached_newline_token` null otherwise). Reporting a flat 3 on a model
+  // without one refuses recoveries that would have fit -- the same
+  // over-reservation MtmdLlmContext already overrides away.
+  [[nodiscard]] llama_pos specRecoveryPositions() const override {
+    return reasoningState_.cached_newline_token == LLAMA_TOKEN_NULL ? 1 : 3;
+  }
   llama_token specSampleFirstToken(bool& sampled) override {
     return sampleToken(-1, sampled);
   }

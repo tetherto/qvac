@@ -282,7 +282,7 @@ void MtmdLlmContext::initializeMtpDraftContext() {
         std::clamp(params_.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
     spec_.reset(common_speculative_init(
         params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
-    ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
+    probeTargetSeqRmTypeOnce();
     specDisabledByMedia_ = false;
     QLOG_IF(
         Priority::INFO,
@@ -1681,7 +1681,11 @@ void MtmdLlmContext::compactThinkSpan() {
               [this](const ReasoningBlockCompactor::Outcome& result) {
                 current_.pos = result.newPos;
                 refreshCurrentCacheTokensFromMemory();
-                rollbackDraftContext(result.newPos);
+                // Full clear, not a mirror at `newPos` -- see the matching
+                // comment in TextLlmContext::compactThinkSpan. The compactor
+                // rewrites [snapshotPos, newPos) in place, so those are
+                // precisely the draft cells a `newPos` mirror would keep.
+                rollbackDraftContext();
               },
           .onFailedKvWiped =
               [this]() {
@@ -1815,9 +1819,11 @@ void MtmdLlmContext::resetState(bool resetStats) {
   common_sampler_reset(smpl_.get());
 
   // `params_.n_batch >= 2` repeats the construction-time gate: this path
-  // re-creates the draft context after a media turn disabled it, and would
-  // otherwise re-run the 2-token `common_context_can_seq_rm` probe that
-  // aborts at n_batch == 1.
+  // re-creates the draft context after a media turn disabled it, and a verify
+  // batch is `id_last` + >=1 draft token, which trips
+  // `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` at n_batch == 1. (The
+  // 2-token `common_context_can_seq_rm` probe is no longer a concern here --
+  // `probeTargetSeqRmTypeOnce` runs it only on the first draft-context build.)
   if (specDisabledByMedia_ && mtpDraftRequested_ && params_.n_parallel <= 1 &&
       params_.n_batch >= 2) {
     initializeMtpDraftContext();
