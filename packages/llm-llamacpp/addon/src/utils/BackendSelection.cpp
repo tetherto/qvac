@@ -31,7 +31,7 @@ bool isSupportedFinetuneArchitecture(std::string_view arch) {
 // Adreno tier at and above which the restricted workloads below run on the GPU
 // (Vulkan) instead of the CPU. Shared by chooseBackend and
 // applyAdrenoRestrictions so the single-device and split paths cannot drift.
-constexpr int kAdreno800Threshold = 800;
+constexpr int K_ADRENO800_THRESHOLD = 800;
 
 // TQ1_0/TQ2_0 BitNet. Also shared by both paths, for the same reason.
 bool isBitnetOneBitModel(const ModelMetaData* metadata) {
@@ -440,7 +440,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   const bool isBitnetOneBit = isBitnetOneBitModel(metadata);
 
   if (noMainGpuOverride && isAdreno && isFinetuning) {
-    if (maxAdrenoVersion.value() >= kAdreno800Threshold) {
+    if (maxAdrenoVersion.value() >= K_ADRENO800_THRESHOLD) {
       bckI.llamaLogCallback(
           GGML_LOG_LEVEL_INFO,
           "Finetuning on Adreno 800+: preferring Vulkan",
@@ -452,14 +452,14 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       clearAllGpuBackends();
     }
   } else if (noMainGpuOverride && isAdreno) {
-    if (isBitnetOneBit && maxAdrenoVersion.value() < kAdreno800Threshold) {
+    if (isBitnetOneBit && maxAdrenoVersion.value() < K_ADRENO800_THRESHOLD) {
       bckI.llamaLogCallback(
           GGML_LOG_LEVEL_INFO,
           "BitNet TQ on Adreno <800: only CPU supported",
           nullptr);
       clearAllGpuBackends();
     } else if (
-        isBitnetOneBit && maxAdrenoVersion.value() >= kAdreno800Threshold) {
+        isBitnetOneBit && maxAdrenoVersion.value() >= K_ADRENO800_THRESHOLD) {
       bckI.llamaLogCallback(
           GGML_LOG_LEVEL_INFO,
           "BitNet TQ on Adreno 800+: preferring Vulkan over OpenCL",
@@ -673,7 +673,7 @@ void backend_selection::applyAdrenoRestrictions(
   }
 
   const char* workload = isFinetuning ? "Finetuning" : "BitNet TQ";
-  if (maxAdrenoVersion.value() < kAdreno800Threshold) {
+  if (maxAdrenoVersion.value() < K_ADRENO800_THRESHOLD) {
     LOG_WRN(
         "%s on Adreno <800 (%d): only CPU supported; dropping all %zu split "
         "device(s) and falling back to CPU\n",
