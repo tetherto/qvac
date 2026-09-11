@@ -1,5 +1,42 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `flash-attn` is now recognised as enabled on every spelling qvac-fabric
+  accepts — `on`, `enabled`, `true` and `1` — matching `@qvac/llm-llamacpp`.
+  This supersedes the 0.6.0 entry below pinning it to `on` only: that pinning
+  was correct while the loader also required exact `on`, and became an
+  over-estimate of KV memory once the loader widened. Values are matched by
+  calling `common_arg_utils::is_truthy` / `is_falsey` / `is_autoy` directly
+  rather than mirroring the sets, so the two packages cannot drift again.
+
+- The Adreno 800+/Vulkan quantized-KV guard now also fires for
+  `flash-attn: 'auto'`, matching the loader. Fabric promotes AUTO to ENABLED
+  for a quantized V cache, so the fitter previously reported as supported a
+  configuration the loader rejects with `InvalidArgument`. The q8_0 KV
+  auto-default deliberately still does *not* fire for `'auto'` — quantizing V
+  is what triggers that promotion, which skips the capability probe `'auto'`
+  exists to run.
+
+- An unrecognised or mixed-case `flash-attn` value is rejected up front, naming
+  the accepted spellings, instead of falling through the guards and reaching
+  fabric's parser afterwards. On Adreno 800+ Vulkan with a quantized KV cache
+  the old order surfaced a typo as an unsupported-hardware verdict. Matching is
+  case-sensitive, as fabric's own predicates are.
+
+## [0.10.0] - 2026-09-10
+
+### Fixed
+
+- The addon failed to compile against the published shared runtime. `common_fit_params` gained a ninth parameter, `prefetch_weights_auto`, in `qvac-fabric` 10549.0.0, and the call site was updated for it in #4154 — but the `@qvac/fabric` range was left at `^0.10.0`, which resolves a build carrying the previous eight-parameter signature. Every build outside the PR-validation path therefore failed with `no matching function for call to 'invokeLlamaFit'`.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.10.0` -> `^0.13.0`, which carries `qvac-fabric` `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.10.0` would not have resolved `0.13.0` on its own.
+- Also ships the pnpm+nx monorepo foundation (#3543), which landed after `0.9.0` with no version bump of its own.
+
 ## [0.9.0] - 2026-09-07
 
 ### Changed

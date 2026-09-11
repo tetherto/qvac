@@ -9,8 +9,13 @@
       "version>=": "1.4.4#3"
     },
     {
+      "name": "ggml-speech",
+      "version>=": "2026-09-09#1",
+      "default-features": false
+    },
+    {
       "name": "speech-cpp",
-      "version>=": "2026-09-03#1",
+      "version>=": "2026-09-10",
       "default-features": false,
       "features": [
         "audiogen",
@@ -20,7 +25,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-03#1",
+      "version>=": "2026-09-10",
       "default-features": false,
       "features": [
         "audiogen",
@@ -31,7 +36,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-03#1",
+      "version>=": "2026-09-10",
       "default-features": false,
       "features": [
         "audiogen",
@@ -43,10 +48,11 @@
   "features": {
     "cuda": {
       "description": "Enable CUDA GPU acceleration",
+      "supports": "!(osx | ios | android)",
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-09-03#1",
+          "version>=": "2026-09-10",
           "default-features": false,
           "features": [
             "cuda"
@@ -66,7 +72,7 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-09-03#1",
+          "version>=": "2026-09-10",
           "default-features": false,
           "features": [
             "vulkan"

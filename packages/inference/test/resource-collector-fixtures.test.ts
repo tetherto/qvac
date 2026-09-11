@@ -33,6 +33,8 @@ function createFixture(options?: {
   gpuSampleMemoryTotal?: number
   emptyGPUInventory?: boolean
   platform?: string
+  processAvailableBytes?: number
+  failProcessMemorySample?: boolean
 }) {
   const calls = {
     createCPU: 0,
@@ -140,7 +142,8 @@ function createFixture(options?: {
       return `opaque-${calls.gpuIds}`
     },
     sampleProcessMemory() {
-      return { usedBytes: 2048, availableBytes: undefined }
+      if (options?.failProcessMemorySample) throw new Error('process memory sample failed')
+      return { usedBytes: 2048, availableBytes: options?.processAvailableBytes }
     }
   }
 
@@ -183,6 +186,33 @@ test('samples live values only when requested', (t) => {
   }
   t.is(calls.cpuSample, 1)
   t.is(calls.gpuSample, 1)
+})
+
+test('grades the per-process memory sample under the process scope', (t) => {
+  const withoutAllowance = createSystemResourceCollector(createFixture().dependencies).sample()
+  const withAllowance = createSystemResourceCollector(
+    createFixture({ processAvailableBytes: 512 }).dependencies
+  ).sample()
+  const failed = createSystemResourceCollector(
+    createFixture({ failProcessMemorySample: true }).dependencies
+  ).sample()
+
+  t.alike(withAllowance.memory.processUsedBytes, {
+    status: 'supported',
+    value: 2048,
+    provenance: { source: 'bare-os', scope: 'process' }
+  })
+  t.alike(withAllowance.memory.processAvailableBytes, {
+    status: 'supported',
+    value: 512,
+    provenance: { source: 'bare-os', scope: 'process' }
+  })
+
+  t.is(withoutAllowance.memory.processUsedBytes.status, 'supported')
+  t.is(withoutAllowance.memory.processAvailableBytes.status, 'unavailable')
+
+  t.is(failed.memory.processUsedBytes.status, 'failed')
+  t.is(failed.memory.processAvailableBytes.status, 'failed')
 })
 
 test('contains CPU and GPU initialization failures independently', (t) => {
