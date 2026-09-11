@@ -329,7 +329,29 @@ export const kvCacheAutoConcurrency: TestDefinition = {
   metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 60000 }
 }
 
+// A cancelled follow-up turn must not cost the session its committed cache.
+// The addon rewinds a cancelled run to the pre-request state and the engine
+// keeps the file, so the next turn stays warm. Proven by prompt tokens: the
+// warm turn sends only its own message, while the same history without a
+// cache sends all of it.
+export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
+  testId: 'kv-cache-cancel-keeps-committed-cache',
+  params: {
+    cacheKey: 'cancel-keeps-committed-session',
+    // Turn one must finish on its own: a budget-stopped turn is not committed.
+    firstUserMessage: 'List ten animals, one per line.',
+    cancelledUserMessage: 'Now tell me a long story about wizards.',
+    thirdUserMessage: 'What is 2+2? Answer with just the number.',
+    expectedAnswerContains: '4',
+    cancelAfterTokens: 3,
+    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 256 }
+  },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 60000 }
+}
+
 export const kvCacheTests = [
+  kvCacheCancelKeepsCommittedCache,
   kvCacheConcurrentSameKey,
   kvCacheConcurrentSameKeyAuto,
   kvCacheAutoConcurrency,
