@@ -12,7 +12,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 53 functions in `packages/sdk/client/api/`.
+> **Scope**: 53 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -2110,6 +2110,54 @@ while (walking) {
   const { frames } = worldStep({ modelId, keys: heldKeys }); // e.g. { W: true, L: true }
   for (const frame of await frames) display(frame);
 }
+```
+
+---
+
+## Objects
+
+### `profiler`
+
+QVAC Profiler
+
+**Shape**:
+
+```ts
+const profiler: {
+  clear(): void;
+  disable(): void;
+  enable(options?: ProfilerRuntimeOptions): void;
+  exportJSON(options?: { includeRecentEvents?: boolean }): ProfilerExport;
+  exportSummary(): string;
+  exportTable(): string;
+  getAggregates(): Record<string, AggregatedStats>;
+  getConfig(): ResolvedProfilerConfig;
+  isEnabled(): boolean;
+  onRecord(callback: (event: ProfilingEvent) => void): () => void;
+};
+```
+
+**Methods**:
+
+- **`clear()`** — Clears all aggregated data and the recent-events ring buffer.
+- **`disable()`** — Disables profiling.
+- **`enable(options?)`** — Enables profiling and resets all previously aggregated data.
+- **`exportJSON(options?)`** — Exports profiling data as a structured JSON object suitable for machine consumption.
+- **`exportSummary()`** — Exports a short, human-readable summary string of the aggregated stats.
+- **`exportTable()`** — Exports aggregated stats as a formatted ASCII table suitable for terminal output.
+- **`getAggregates()`** — Returns all aggregated stats keyed by operation name.
+- **`getConfig()`** — Returns the current effective profiler configuration.
+- **`isEnabled()`** — Returns whether profiling is currently enabled.
+- **`onRecord(callback)`** — Registers a listener for profiling events; returns an unsubscribe function.
+
+**Example**:
+```ts
+import { profiler } from "@qvac/inference";
+
+profiler.enable({ mode: "summary" });
+// ... run inference operations ...
+console.log(profiler.exportTable());
+profiler.disable();
 ```
 
 ---
