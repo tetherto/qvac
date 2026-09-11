@@ -106,22 +106,10 @@ SplitDeviceSelection getSplitDeviceSelection();
 
 /// @brief Apply the Adreno workload restrictions to a split device set.
 ///
-/// Mirrors the policy `chooseBackend` applies to its single-device pick, for
-/// one-bit (TQ1_0/TQ2_0) BitNet and for finetuning:
+/// For one-bit (TQ1_0/TQ2_0) BitNet and for finetuning, using the max tier
+/// across the set's local devices:
 ///   - Adreno <800: CPU only  -> clears @p selection.devices
 ///   - Adreno 800+: prefer Vulkan over OpenCL -> drops the OpenCL devices
-/// The tier is the MAX across participants, as in `chooseBackend`, but taken
-/// over the SPLIT SET only: `chooseBackend`'s maximum spans a wider set that is
-/// not deduplicated and has no discrete-over-integrated preference, so the two
-/// can differ where an Adreno is in one set and not the other. A device with no
-/// Adreno tier never triggers the rule on its own, and a non-Adreno set is left
-/// untouched.
-///
-/// This FILTERS the one authoritative device list from
-/// `getSplitDeviceSelection()`; it does not make a second, independent device
-/// decision. An emptied list falls through the caller's existing CPU-fallback
-/// path. Re-running `chooseBackend` alongside the split list would reintroduce
-/// exactly the second decision that is not wanted here.
 void applyAdrenoRestrictions(
     SplitDeviceSelection& selection, const ModelMetaData& metadata,
     bool isFinetuning);
@@ -130,7 +118,7 @@ void applyAdrenoRestrictions(
 ///
 /// Selection mirrors qvac-fabric's filtered branch (`src/llama.cpp`) while
 /// applying this addon's supported-backend allowlist:
-///   - CUDA and RPC GPU devices are eligible for their upcoming Fabric builds.
+///   - CUDA, RPC, Vulkan, Metal and Adreno OpenCL devices are eligible.
 ///   - RPC devices are prepended and do not suppress a local integrated GPU.
 ///   - Local discrete GPUs when any are present, otherwise the first
 ///     integrated GPU plus any later one sharing its backend registry handle.

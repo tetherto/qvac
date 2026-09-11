@@ -28,12 +28,11 @@ bool isSupportedFinetuneArchitecture(std::string_view arch) {
          SUPPORTED_FINETUNE_ARCHITECTURES.end();
 }
 
-// Adreno tier at and above which the restricted workloads below run on the GPU
-// (Vulkan) instead of the CPU. Shared by chooseBackend and
-// applyAdrenoRestrictions so the single-device and split paths cannot drift.
+// Adreno tier at and above which the restricted workloads run on Vulkan
+// instead of the CPU.
 constexpr int K_ADRENO800_THRESHOLD = 800;
 
-// TQ1_0/TQ2_0 BitNet. Also shared by both paths, for the same reason.
+// One-bit BitNet is the TQ1_0/TQ2_0 quantizations.
 bool isBitnetOneBitModel(const ModelMetaData* metadata) {
   return metadata != nullptr && metadata->hasOneBitQuantization() &&
          metadata->tryGetString("general.architecture") == "bitnet";
@@ -172,7 +171,6 @@ deviceIdentity(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   return name + " (" + registry + ")";
 }
 
-// Follow ocr-ggml's matcher shape with LLM-specific eligible families.
 bool isEligibleGpuDevice(
     const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const enum ggml_backend_dev_type type = bckI.ggml_backend_dev_type(dev);
@@ -270,8 +268,8 @@ void tryEmplaceDevice(
   const bool isOpenCl = isOpenClDevice(bckI, dev, devDescr);
   const bool isGpuType = backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
                          backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
-  // Record a refused GPU before the main-gpu type filter so the CPU-fallback
-  // warning names it even when `integrated`/`dedicated` skips its type.
+  // Recorded before the main-gpu type filter so the CPU-fallback warning names
+  // a refused device even when `integrated`/`dedicated` skips its type.
   if (isGpuType && !isEligibleGpuDevice(bckI, dev)) {
     rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
     return;
@@ -570,8 +568,8 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
                                      ? std::string(props.device_id)
                                      : std::string();
     const char* namePtr = bckI.ggml_backend_dev_name(dev);
-    // The name identifies the device in the pinned-device log and, for the
-    // primary, becomes mmproj_backend, so an empty one is rejected like null.
+    // The primary device's name becomes mmproj_backend, so an empty name is
+    // rejected like a null one.
     if (namePtr == nullptr || *namePtr == '\0') {
       result.rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
       continue;
@@ -594,19 +592,8 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
-    // vcpkg pins qvac-fabric 10297.1.2, whose llama_prepare_model_devices
-    // (src/llama.cpp:257-262) keeps only the first integrated GPU.
-    // upstream/main has already moved to 10549, which these branches adopt on
-    // their pending merge with main, and 10549's rule (src/llama.cpp:265-273)
-    // is the one implemented here: keep the first integrated GPU plus every
-    // later one whose backend REGISTRY handle matches the last kept one's;
-    // registry identity, not its name. Dropping the others is upstream
-    // llama.cpp #23897, a workaround for one integrated device enumerated by
-    // several backends; the same-registry exception is #26953, for the virtual
-    // devices CUDA reports as integrated. Unreachable on what fabric ships
-    // today — Metal and OpenCL never report IGPU and fabric builds no CUDA
-    // backend — but this package already admits CUDA, so the exception goes
-    // live the moment CUDA ships.
+    // Keep the first integrated GPU plus every later one whose backend registry
+    // HANDLE matches the last kept one's (llama.cpp #23897, #26953).
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
       if (integrated.empty() ||
           reg == bckI.ggml_backend_dev_backend_reg(integrated.back().handle)) {
@@ -653,22 +640,8 @@ void backend_selection::applyAdrenoRestrictions(
     return;
   }
 
-  // The MAX tier across LOCAL participants rather than a per-device test,
-  // matching chooseBackend's host-wide maxAdrenoVersion. Reproduced over the
-  // SPLIT SET: chooseBackend takes its maximum over a wider set that is not
-  // deduplicated and has no discrete-over-integrated preference, so the two
-  // can differ on a host where an Adreno is in one set and not the other. A
-  // device with no tier is not an Adreno and never triggers the rule on its
-  // own.
-  //
-  // RPC devices are excluded, and this must stay that way in BOTH directions.
-  // ggml reports an RPC device's endpoint string as its description
-  // (ggml-rpc.cpp:3749, surfaced at :3318-3321), so a tier parsed off one is a
-  // hostname carrying no information about the remote GPU. Including them lets
-  // endpoint text decide placement: "adreno830..." beside a local 740 would
-  // skip the required CPU fallback, and "adreno740..." beside a non-Adreno
-  // local GPU would clear the whole list. Do not widen this on a
-  // safety intuition; there is no safety to gain, only a wrong placement.
+  // Max tier across local participants; RPC is skipped because ggml reports an
+  // RPC device's endpoint string as its description (ggml-rpc.cpp:3749).
   std::optional<int> maxAdrenoVersion;
   for (const SplitDevice& device : selection.devices) {
     if (!device.isRpc && device.adrenoVersion.has_value() &&

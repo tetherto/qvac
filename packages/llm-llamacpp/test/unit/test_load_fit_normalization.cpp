@@ -486,10 +486,8 @@ TEST_F(LoadFitNormalizationTest, SplitModeFallsBackToRpcPrimaryWhenAllRpc) {
   EXPECT_EQ(result.params.mmproj_backend, "rpc0");
 }
 
-// A KV-cache trait held by any participant governs the whole load: the
-// OpenCL (Adreno) device in second position suppresses the q8_0 default and,
-// being LOCAL, contributes its tier to the reported max. The projector device
-// still comes from the first local device.
+// A KV-cache trait held by any participant governs the whole load, while the
+// projector device still comes from the first local one.
 TEST_F(LoadFitNormalizationTest, SplitModeKvTraitsComeFromAnyDevice) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -545,11 +543,8 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFollowsFilteredDeviceMapping) {
   EXPECT_FLOAT_EQ(result.params.tensor_split[1], 3.0F);
 }
 
-// Two shares against three registered GPUs and two eligible devices is
-// unambiguous BECAUSE N != R: the list cannot be a per-registered-GPU list, so
-// it can only be the per-eligible-device one. That reading holds however the
-// final list is ordered — the addon pins params.devices itself, so fabric
-// applies share i to final device i regardless of the source ordinals.
+// Two shares against three registered GPUs can only be the per-eligible-device
+// list, and it is read in final order whatever the source ordinals are.
 TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsFinalCountWhenReordered) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -569,8 +564,8 @@ TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsFinalCountWhenReordered) {
   EXPECT_FLOAT_EQ(result.params.tensor_split[1], 3.0F);
 }
 
-// A count matching neither cardinality is rejected, and the message must name
-// both so the caller can tell which list they were meant to write.
+// The message names both cardinalities so the caller can tell which list to
+// write.
 TEST_F(
     LoadFitNormalizationTest,
     TensorSplitRejectsCountMatchingNeitherCardinality) {
@@ -597,8 +592,7 @@ TEST_F(
   }
 }
 
-// The share count is validated even when the device order is unchanged and
-// nothing needs remapping.
+// The share count is validated even when nothing needs remapping.
 TEST_F(LoadFitNormalizationTest, TensorSplitRejectsWrongCountWithoutRemap) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -615,11 +609,8 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRejectsWrongCountWithoutRemap) {
       qvac_errors::StatusError);
 }
 
-// Fabric tokenizes --tensor-split on `[,/]+` and parses each token with
-// std::stof, so consecutive delimiters collapse and surrounding whitespace is
-// ignored. The share counter must agree, or a value fabric accepts is rejected
-// here. What reaches fabric is the RE-JOINED token list, not the caller's
-// string: each of these is normalised to "1,2".
+// Fabric tokenizes --tensor-split on `[,/]+`, so the share counter must too;
+// each of these normalises to "1,2".
 TEST_F(LoadFitNormalizationTest, TensorSplitCountsTokensLikeFabric) {
   for (const char* value : {"1,,2", "1, 2", "1/2"}) {
     auto config = baseConfig();
@@ -638,11 +629,8 @@ TEST_F(LoadFitNormalizationTest, TensorSplitCountsTokensLikeFabric) {
   }
 }
 
-// Every registered GPU is eligible here (F == R == 2), so the final order
-// wins and no remapping happens even though RPC hoisting left the final list
-// unsorted by sourceGpuIndex: the caller's two shares land on the two final
-// devices in the order given. The value still goes through fabric's
-// tokenization — "1,, 2" is counted, and re-joined, as the two shares 1 and 2.
+// Equal counts resolve to the final order even though RPC hoisting left it
+// unsorted by sourceGpuIndex.
 TEST_F(LoadFitNormalizationTest, TensorSplitFinalOrderWinsWhenCountsAreEqual) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -661,13 +649,8 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFinalOrderWinsWhenCountsAreEqual) {
   EXPECT_FLOAT_EQ(result.params.tensor_split[1], 2.0F);
 }
 
-// Fabric splits with std::sregex_token_iterator(..., -1), which KEEPS an empty
-// or whitespace-only field — ",1,2" yields a leading "", "1, ,2" a middle " " —
-// and std::stof throws on either. The addon's own tokenizer trims and drops
-// those fields, so each of these counts as two shares here. Re-emitting the
-// tokens we counted is what closes the gap: fabric is handed "1,2" and never
-// sees the blank field, where forwarding the caller's string verbatim would
-// have had it reject a value this function accepted.
+// Fabric keeps empty and whitespace-only fields and would throw on them, so
+// what reaches it is the re-joined token list: each of these becomes "1,2".
 TEST_F(
     LoadFitNormalizationTest, TensorSplitEmptyOrBlankFieldsNeverReachFabric) {
   for (const char* value : {",1,2", "/1,2", "1, ,2", ", 1 , 2 ,"}) {
@@ -760,10 +743,7 @@ TEST_F(LoadFitNormalizationTest, SplitModeWarnsWhenEveryGpuIsRejected) {
           "ROCm0 (HIP); falling back to CPU"));
 }
 
-// LLAMA_SPLIT_MODE_ROW needs split buffers, which only SYCL provides and SYCL
-// is outside the allowlist — so 'row' could never take effect here and used to
-// be silently mapped to 'layer'. It is rejected up front now, and the message
-// must direct callers to the two modes that do work.
+// The message must direct callers to the two modes that do work.
 TEST_F(LoadFitNormalizationTest, SplitModeRowIsRejected) {
   auto config = baseConfig();
   config["split-mode"] = "row";
@@ -785,11 +765,9 @@ TEST_F(LoadFitNormalizationTest, SplitModeRowIsRejected) {
   }
 }
 
-// QVAC-24205: chooseBackend's Adreno restrictions (one-bit BitNet, finetuning)
-// must also govern the split device set, which never calls chooseBackend. The
-// fixture's resolveBackend is a pass-through that applies no policy of its
-// own, so every placement these cases observe comes from
-// applyAdrenoRestrictions filtering the split list.
+// QVAC-24205: the Adreno restrictions (one-bit BitNet, finetuning) also govern
+// the split device set. The fixture's resolveBackend applies no policy of its
+// own, so every placement below comes from applyAdrenoRestrictions.
 
 TEST_F(LoadFitNormalizationTest, SplitModeOneBitBitnetBelowAdreno800UsesCpu) {
   test_common::MockModelMetaData bitnet{true, "bitnet"};
@@ -913,11 +891,8 @@ TEST_F(LoadFitNormalizationTest, SplitModeNonAdrenoSetIsNotRestricted) {
   EXPECT_EQ(result.params.devices.back(), nullptr);
 }
 
-// The restriction's own tier max must ignore RPC devices, in BOTH directions.
-// An RPC device's description is its endpoint string (ggml-rpc.cpp:3749), so a
-// tier parsed off one says nothing about the remote GPU. Here an endpoint
-// reading as 830 sits beside a local 740: the CPU fallback the local tier
-// demands must still happen.
+// An RPC endpoint reading as 830 beside a local 740 must not skip the CPU
+// fallback the local tier demands.
 TEST_F(
     LoadFitNormalizationTest,
     SplitModeRestrictionIgnoresRpcEndpointRaisingTier) {
@@ -942,9 +917,8 @@ TEST_F(
   EXPECT_EQ(result.params.devices.front(), nullptr);
 }
 
-// The other direction: an endpoint reading as a sub-800 tier beside a local
-// NON-Adreno GPU. There is no local Adreno at all, so nothing is restricted —
-// counting the endpoint would clear the list and force CPU.
+// The other direction: a sub-800 endpoint beside a non-Adreno local GPU must
+// not clear the list, since there is no local Adreno at all.
 TEST_F(
     LoadFitNormalizationTest,
     SplitModeRestrictionIgnoresRpcEndpointOnNonAdrenoLocal) {
@@ -971,11 +945,8 @@ TEST_F(
   EXPECT_EQ(result.params.devices.back(), nullptr);
 }
 
-// The reported tier is the MAX across local participants, not the first local
-// device's. The lower tier sorts first on purpose: reading the first local
-// device would report 740 and leave the Adreno-800+ quantized-KV guard
-// disarmed while an 830 participates. Observed through that guard, which
-// suppresses the q8_0 KV default once armed.
+// The reported tier is the MAX across local participants: the lower tier sorts
+// first so that reading only the first device would leave the guard disarmed.
 TEST_F(LoadFitNormalizationTest, SplitModeReportsMaxAdrenoTierAcrossDevices) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -995,10 +966,8 @@ TEST_F(LoadFitNormalizationTest, SplitModeReportsMaxAdrenoTierAcrossDevices) {
   EXPECT_NE(result.params.cache_type_v, GGML_TYPE_Q8_0);
 }
 
-// The max spans LOCAL participants only. An RPC device's description is its
-// endpoint string (ggml-rpc.cpp:3749), so a host or port that happens to parse
-// as an Adreno tier must not raise the reported tier or arm the crash guard:
-// here the endpoint would read as 830 while the only real GPU is a 740.
+// The max spans local participants only: here the RPC endpoint would read as
+// 830 while the only real GPU is a 740.
 TEST_F(LoadFitNormalizationTest, SplitModeMaxAdrenoTierIgnoresRpcEndpoint) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -1019,9 +988,8 @@ TEST_F(LoadFitNormalizationTest, SplitModeMaxAdrenoTierIgnoresRpcEndpoint) {
   EXPECT_EQ(result.params.cache_type_v, GGML_TYPE_Q8_0);
 }
 
-// The same mixed-tier set must also reject an EXPLICIT quantized KV type,
-// which is the crash guard proper: it replaces a native abort with a clean
-// error, so an 830 participant has to arm it whatever position it holds.
+// The crash guard proper: an 830 participant arms it whatever position it
+// holds, replacing a native abort with a clean error.
 TEST_F(
     LoadFitNormalizationTest, SplitModeMaxAdrenoTierArmsQuantizedKvRejection) {
   auto config = baseConfig();
@@ -1045,9 +1013,8 @@ TEST_F(
   }
 }
 
-// split-mode 'none' still resolves through chooseBackend, which owns the same
-// policy there. The pass-through resolveBackend applies none, so a GPU result
-// on an Adreno-<800 one-bit BitNet load proves the split filter did not run.
+// split-mode 'none' resolves through chooseBackend, so a GPU result on an
+// Adreno-<800 one-bit BitNet load proves the split filter did not run.
 TEST_F(
     LoadFitNormalizationTest, SplitModeNoneLeavesAdrenoPolicyToChooseBackend) {
   test_common::MockModelMetaData bitnet{true, "bitnet"};
@@ -1093,12 +1060,9 @@ TEST_F(LoadFitNormalizationTest, TensorSplitParsesAndDisablesFit) {
 }
 
 TEST_F(LoadFitNormalizationTest, TensorSplitLeavesFitEnabledForOtherModes) {
-  // Only 'layer' is exercised with a GPU name here. 'none' is covered
-  // separately below with the CPU backend. Every mode forwards `--device`:
-  // NONE forwards the single chosen name, and the split modes forward the
-  // eligible list. The fixture default {"none"} keeps the split modes
-  // host-independent, since llama.cpp's parser rejects a device that does not
-  // exist on the host running the test.
+  // 'none' is covered separately below with the CPU backend: it forwards
+  // `--device <name>` to llama.cpp's parser, which rejects a device that does
+  // not exist on the host running the test.
   auto layerConfig = baseConfig();
   layerConfig["split-mode"] = "layer";
   const auto layer = lfn::normalizeLoadForFit(

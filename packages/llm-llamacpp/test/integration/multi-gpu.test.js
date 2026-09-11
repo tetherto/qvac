@@ -51,14 +51,9 @@ const BASE_CONFIG = {
   verbosity: '2'
 }
 
-// QVAC_HAS_MULTI_GPU promises two OR MORE GPUs, so a hardcoded share list is
-// only correct on a two-device runner. A count matching neither the eligible
-// device count nor the registered GPU count is now rejected outright, so
-// discover the real count instead of assuming it.
-//
-// The probe is a plain layer split: that mode needs no share list, pins the
-// eligible device set, and logs one `<Device> model buffer size` line per
-// participant, which is the same signal the assertions already read.
+// QVAC_HAS_MULTI_GPU promises two OR MORE GPUs, so the eligible count is
+// discovered with a layer-split probe: that mode needs no share list and logs
+// one `<Device> model buffer size` line per participant.
 async function discoverDeviceCount(modelPath) {
   let addon = null
   const specLogger = attachSpecLogger({ forwardToConsole: false })
@@ -96,8 +91,7 @@ async function runMultiGpuTest(t, extraConfig, assertDevices) {
     })
 
     const modelPath = path.join(dirPath, modelName)
-    // A config function needs the device count, which costs a probe load, so
-    // only pay for it when one is supplied.
+    // The probe load is only paid for when a config function needs the count.
     let resolvedConfig = extraConfig
     if (typeof extraConfig === 'function') {
       const deviceCount = await discoverDeviceCount(modelPath)
@@ -157,9 +151,6 @@ safeTest(
   }
 )
 
-// 'row' needs split buffers, which only SYCL provides and SYCL is outside the
-// addon's allowlist, so the mode never took effect here; it is rejected rather
-// than silently run as 'layer'.
 safeTest('multi-gpu: split-mode=row is rejected', { timeout: 600_000, skip }, async (t) => {
   if (!hasMultiGpu) {
     t.comment('Skipping: QVAC_HAS_MULTI_GPU is not set')
@@ -201,10 +192,7 @@ safeTest(
   }
 )
 
-// One equal share per eligible device, derived rather than hardcoded: '1,1'
-// only matched a two-device runner and would be rejected on a runner with
-// three or more eligible devices. Timeout is doubled because the derivation
-// adds a probe load.
+// One equal share per eligible device; the extra probe load doubles the timeout.
 safeTest(
   'multi-gpu: split-mode=layer with tensor-split and main-gpu',
   { timeout: 1_200_000, skip },

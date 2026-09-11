@@ -28,11 +28,9 @@ struct MockDevice {
   /// dedupe, keep it" case. Descriptions are NOT unique: Vulkan reports the
   /// raw device name, identical across identical cards.
   std::string deviceId;
-  /// Index of the device whose `ggml_backend_reg_t` this device reports. Unset
-  /// means "my own", which is the one-registry-per-device default. Registry
-  /// IDENTITY, not its name, is what the iGPU retention rule compares, so a
-  /// shared registry can only be modelled by pointing two devices at one
-  /// handle.
+  /// Index of the device whose `ggml_backend_reg_t` this device reports; unset
+  /// means its own. The iGPU retention rule compares registry identity, not
+  /// name, so a shared registry can only be modelled by aliasing a handle.
   std::optional<size_t> regAliasIndex;
 
   MockDevice(
@@ -414,10 +412,8 @@ TEST_F(BackendSelectionTest, FamilyDeviceNameWorksWithForeignRegistry) {
   expectChosen(mockBackend, BackendType::GPU, "cuda0");
 }
 
-// The OpenCL bucket is keyed on the backend family (registry or device name),
-// the same predicate that admits the device. A device the OpenCL registry names
-// after the GPU must still land in that bucket, or the Adreno rules that clear
-// it would miss the device.
+// The OpenCL bucket is keyed on backend family, so a device the OpenCL registry
+// names after the GPU must still land in it for the Adreno rules to reach it.
 TEST_F(BackendSelectionTest, OpenClRegistryDeviceLandsInOpenClBucket) {
   mockBackend.addDevice(MockDevice(
       ADRENO_DESC, "Adreno0", GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL"));
@@ -481,9 +477,6 @@ TEST_F(BackendSelectionTest, MainGpuIndexTargetingRocmFallsBackToCpu) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
 }
 
-// A refused device is recorded before the main-gpu type filter, so the
-// CPU-fallback warning still names it when `integrated`/`dedicated` would have
-// skipped its type anyway.
 TEST_F(BackendSelectionTest, MainGpuIntegratedWarnsAboutRefusedDiscreteGpu) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
   MainGpu mainGpu = MainGpuType::Integrated;
@@ -520,11 +513,8 @@ TEST_F(BackendSelectionTest, DeviceFamilyNamesRequireKnownPrefixes) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
-// MUSA (Moore Threads) is a real ggml backend that this addon does not ship,
-// and it is nowhere in the allowlist — named explicitly here rather than left
-// to the generic unknown-family cases, because "musa" shares no prefix with
-// any eligible family and a future allowlist edit must not admit it silently.
-// The matcher reads two identities, so both must reject it: the device name...
+// MUSA (Moore Threads) is a real ggml backend outside the allowlist; the
+// matcher reads two identities, so both must reject it.
 TEST_F(BackendSelectionTest, MusaDeviceNameFallsBackToCpu) {
   mockBackend.addDevice(createGPUDevice("MTT S80", "MUSA0"));
   expectChosenForPreference(
@@ -535,8 +525,6 @@ TEST_F(BackendSelectionTest, MusaDeviceNameFallsBackToCpu) {
   }));
 }
 
-// ...and the registry name, which alone would admit a device the registry
-// names after the GPU.
 TEST_F(BackendSelectionTest, MusaRegistryNameFallsBackToCpu) {
   mockBackend.addDevice(
       MockDevice("MTT S80", "MttGpu0", GGML_BACKEND_DEVICE_TYPE_GPU, "MUSA"));
@@ -548,9 +536,8 @@ TEST_F(BackendSelectionTest, MusaRegistryNameFallsBackToCpu) {
   }));
 }
 
-// The allowlist runs on IGPU-typed devices too (AMD APUs register their
-// integrated graphics through ROCm/HIP), and every other ROCm fixture here is
-// GPU-typed. An integrated ROCm device must be excluded just the same.
+// The allowlist runs on IGPU-typed devices too: AMD APUs register their
+// integrated graphics through ROCm/HIP.
 TEST_F(BackendSelectionTest, IntegratedRocmIsExcluded) {
   mockBackend.addDevice(createIGPUDevice("AMD Radeon 780M", "ROCm0"));
   expectChosenForPreference(
@@ -561,12 +548,8 @@ TEST_F(BackendSelectionTest, IntegratedRocmIsExcluded) {
   }));
 }
 
-// Registry position must not decide eligibility. In both cases the eligible
-// device is deliberately the
-// IGPU-typed one and the unknown family is GPU-typed, so an unknown wrongly
-// admitted would win the bucket ordering (gpuBackends is consulted before
-// igpuBackends) and be chosen — asserting vulkan0 therefore proves the
-// rejection, not a GPU-over-iGPU preference.
+// The eligible device is the IGPU-typed one and the unknown family is
+// GPU-typed, so a wrongly admitted unknown would win the bucket ordering.
 TEST_F(BackendSelectionTest, UnknownGpuBeforeVulkanChoosesVulkan) {
   mockBackend.addDevice(createGPUDevice("Future GPU", "FutureBackend0"));
   mockBackend.addDevice(createIGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
@@ -1300,14 +1283,13 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenPreferredCpu) {
 
 // ---- getSplitDeviceNames ----
 //
-// QVAC-24253: the explicit device list pinned to --device in every split mode
-// (LLAMA_SPLIT_MODE_LAYER, _ROW and _TENSOR).
+// QVAC-24253: the device list pinned in every split mode, which also enforces
+// the addon's backend allowlist (isEligibleGpuDevice).
 //
 // qvac-fabric's tensor branch selects devices with no type filter and no
 // dedupe, so without this list it recruits integrated GPUs alongside discrete
 // ones and shards a physical GPU registered by two backends twice. These pin
-// the filtering the addon does on fabric's behalf; the list also enforces the
-// addon's backend allowlist (isEligibleGpuDevice) in every split mode.
+// the filtering the addon does on fabric's behalf.
 
 TEST_F(BackendSelectionTest, SplitDevices_NoDevices_ReturnsEmpty) {
   BackendInterface bckI = mockBackend.toBackendInterface();
@@ -1345,12 +1327,10 @@ TEST_F(BackendSelectionTest, SplitDevices_ExcludesIgpuWhenDiscretePresent) {
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
-// The origin rule (upstream llama.cpp #23897): a second iGPU from a DIFFERENT
-// backend registry is the same physical device enumerated twice, so it is
-// dropped. Both devices share a registry NAME and still have distinct registry
-// handles — the rule compares identity, so matching names must not be enough.
-// Distinct device_ids keep device_id dedup from being an alternative
-// explanation for the single survivor.
+// llama.cpp #23897: a second iGPU from a different backend registry is the same
+// physical device enumerated twice. The two share a registry NAME but not a
+// handle, and the rule compares handles; their device_ids differ so device_id
+// dedup cannot explain the single survivor.
 TEST_F(BackendSelectionTest, SplitSelectionKeepsOneIgpuPerDistinctRegistry) {
   mockBackend.addDevice(withDeviceId(
       MockDevice(
@@ -1372,9 +1352,8 @@ TEST_F(BackendSelectionTest, SplitSelectionKeepsOneIgpuPerDistinctRegistry) {
   EXPECT_EQ(selection.devices[0].sourceGpuIndex, 0U);
 }
 
-// The exception (upstream llama.cpp #26953): CUDA reports virtual devices as
-// integrated GPUs, so every later iGPU sharing the kept one's registry handle
-// is a distinct device and must survive. Reachable once fabric builds CUDA.
+// llama.cpp #26953: CUDA reports virtual devices as integrated GPUs, so a later
+// iGPU sharing the kept one's registry handle is distinct and must survive.
 TEST_F(BackendSelectionTest, SplitSelectionKeepsIgpusSharingOneRegistry) {
   mockBackend.addDevice(withDeviceId(
       MockDevice("NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),
@@ -1398,9 +1377,8 @@ TEST_F(BackendSelectionTest, SplitSelectionKeepsIgpusSharingOneRegistry) {
   EXPECT_EQ(selection.devices[1].sourceGpuIndex, 1U);
 }
 
-// Retention chains off the most recently KEPT iGPU, not off the most recently
-// SEEN one: a dropped device's registry must not become the reference that
-// admits a later device sharing it.
+// Retention chains off the most recently KEPT iGPU, not the most recently SEEN
+// one, so a dropped device's registry cannot admit a later device sharing it.
 TEST_F(BackendSelectionTest, SplitSelectionChainsIgpuRegistryFromLastKept) {
   mockBackend.addDevice(withDeviceId(
       MockDevice("NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),
