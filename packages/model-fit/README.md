@@ -191,6 +191,10 @@ runner directly. The runner is not a mobile isolation mechanism: iOS and
 Android callers must treat fit admission as unknown unless the platform
 provides a proven process boundary.
 
+Per-platform support, the documented `unknown` policy, CI evidence for the
+disposable-process boundary, and shipped-size figures live in
+[`docs/SUPPORT-MATRIX.md`](docs/SUPPORT-MATRIX.md).
+
 ### What the parent observes
 
 A supervisor must key off the **stdout line**, not the exit code, because the
