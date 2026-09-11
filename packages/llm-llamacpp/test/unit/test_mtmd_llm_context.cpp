@@ -1446,3 +1446,63 @@ TEST_F(MtmdLlmContextTest, PendingEogBanMasksEveryEogTokenAndIsConsumedOnce) {
         << "ban re-applied to EOG token " << token << " after being consumed";
   }
 }
+
+// The speculative reasoning recovery substitutes and decodes a `</think>` when
+// the model emits EOS inside the block. On a Qwen MTP text turn through the
+// multimodal context, with tools and unlimited reasoning, that token also has
+// to reach fabric's reasoning-budget matcher: skip the accept and the matcher
+// stays in COUNTING, so `grammar_should_apply` keeps a lazy tool grammar
+// disarmed for the rest of the request even though the visible reasoning block
+// has closed. `TextLlmContext::handleReasoningEOS` has always done this; the
+// multimodal twin did not.
+//
+// Reaching the recovery for real needs an EOS sampled inside `<think>` on the
+// MTP path, which is not forceable from a black-box test, so the peer drives
+// `specRecoverReasoning` directly. Both directions are asserted: without the
+// lazy grammar the recovery must NOT feed the sampler, because the accept is
+// only provably safe when the grammar sampler was never given the token.
+TEST_F(MtmdLlmContextTest, SpecReasoningRecoveryAcceptsCloseTagForLazyGrammar) {
+  if (!hasValidQwen35Model()) {
+    FAIL() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  auto model = createQwen35Model();
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+
+  // Seed a valid sequence position: the recovery decodes the substituted tag.
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hi"}])";
+  prompt.prefill = true;
+  ASSERT_NO_THROW({ (void)model->processPrompt(prompt); });
+
+  LlmContext* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr) << "model reported loaded but exposes no context";
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr) << "expected the multimodal context implementation";
+
+  using Peer = MtmdLlmContextTestPeer;
+
+  const llama_token closeTok = Peer::firstTokenOf(*ctx, "</think>");
+  const llama_token sentinel = Peer::firstTokenOf(*ctx, "x");
+  ASSERT_NE(closeTok, LLAMA_TOKEN_NULL);
+  ASSERT_NE(sentinel, LLAMA_TOKEN_NULL);
+  ASSERT_NE(closeTok, sentinel)
+      << "the two probe tokens must differ for the assertions below to mean "
+         "anything";
+
+  // No lazy grammar: `reasoningBudgetSamplerBuilt` is false, so the recovery
+  // must leave the sampler history alone and the sentinel survives.
+  EXPECT_EQ(
+      Peer::recoverReasoningAndReportLastAccepted(
+          *ctx, closeTok, sentinel, /*lazyGrammar=*/false),
+      sentinel)
+      << "recovery fed the sampler with no lazy grammar active";
+
+  // Lazy grammar plus a built budget sampler: the substituted close tag must
+  // be accepted, or the budget matcher never leaves COUNTING.
+  EXPECT_EQ(
+      Peer::recoverReasoningAndReportLastAccepted(
+          *ctx, closeTok, sentinel, /*lazyGrammar=*/true),
+      closeTok)
+      << "substituted close tag never reached the reasoning-budget matcher";
+}

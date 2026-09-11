@@ -192,6 +192,40 @@ public:
   static llama_pos specCellsUsed(const MtmdLlmContext& context) {
     return context.specCellsUsed();
   }
+
+  /// First token of `text` under the live vocab, for picking two ids known to
+  /// differ without hard-coding vocab specifics into a test.
+  static llama_token firstTokenOf(const MtmdLlmContext& ctx, const char* text) {
+    const auto ids = common_tokenize(ctx.modelCtx_.lctx, text, false, true);
+    return ids.empty() ? LLAMA_TOKEN_NULL : ids.front();
+  }
+
+  /// Drive `specRecoverReasoning` and report the sampler's last accepted
+  /// token.
+  ///
+  /// That recovery only runs from the MTP speculative loop on a real EOS
+  /// inside `<think>`, which no black-box test can force deterministically, so
+  /// the accept contract is pinned here. `sentinel` is accepted first with
+  /// `is_generated = false`, so "the recovery did not accept" is observable as
+  /// the sentinel surviving rather than as an unspecified initial value.
+  ///
+  /// `reasoningBudgetSamplerBuilt` only requires both marker lists to be
+  /// non-empty, so their contents do not affect what is asserted.
+  static llama_token recoverReasoningAndReportLastAccepted(
+      MtmdLlmContext& ctx, llama_token closeTok, llama_token sentinel,
+      bool lazyGrammar) {
+    common_sampler_accept(ctx.smpl_.get(), sentinel, false);
+    ctx.params_.sampling.grammar_lazy = lazyGrammar;
+    ctx.params_.sampling.reasoning_budget_start = {closeTok};
+    ctx.params_.sampling.reasoning_budget_end = {{closeTok}};
+    ctx.params_.sampling.reasoning_budget_tokens = -1;
+    ctx.params_.sampling.reasoning_control = false;
+    ctx.reasoningState_.inside_reasoning = true;
+    ctx.reasoningState_.cached_close_tag_token = closeTok;
+    LlamaBatch batch(1, 0, 1);
+    ctx.specRecoverReasoning(LLAMA_TOKEN_NULL, batch, nullptr);
+    return common_sampler_last(ctx.smpl_.get());
+  }
 };
 
 class TextLlmContextTestPeer {
