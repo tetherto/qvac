@@ -240,6 +240,9 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
+      # prebuilds-nx's prebuild job requests actions: read (the reuse action lists
+      # prior runs); the caller must grant at least that or the run start-fails.
+      actions: read
     uses: ./.github/workflows/prebuilds-nx.yml
     with:
       ref: ${{ github.sha }}
