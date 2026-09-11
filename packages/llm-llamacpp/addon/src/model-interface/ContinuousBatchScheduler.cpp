@@ -428,6 +428,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
 
   ScopeGuard cacheGuard([this, seqId] { clearSeqKv(seqId); });
 
+  // `json_schema` / `tool_choice` shape the chat-template render, not the
+  // sampler, so they travel separately from the `tmpParams` overrides above.
+  driver->setRenderOverrides(renderOverridesFrom(request.overrides));
+
   PrefillPlan plan = driver->preparePrefill(
       request.chatMsgs,
       request.tools,
@@ -1051,9 +1055,11 @@ void RuntimeStatsSnapshot::recordDecodeStep(
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
-    int64_t nPast, int64_t thinkingDiscards, const Request& req) {
+    int64_t nPast, int64_t thinkingDiscards, int64_t toolsDropped,
+    const Request& req) {
   cacheTokens += nPast;
   thinkingBlockDiscards += thinkingDiscards;
+  toolDefinitionsDropped += toolsDropped;
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
   // Count tokens actually prefilled, not the prompt size planned at admission:
   // once prefill completes, prefillFedCount is reset to 0, so the full prompt
@@ -1567,6 +1573,11 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
   for (const ObservedRequestStats& stats : all) {
     agg.generatedTokens += stats.generatedTokens;
     agg.promptTokens += stats.promptTokens;
+    // Summed like the token counts rather than averaged: a multi-item group's
+    // caller asked one question, and "two of my renders dropped their tools"
+    // is the honest answer to it.
+    agg.thinkingBlockDiscards += stats.thinkingBlockDiscards;
+    agg.toolDefinitionsDropped += stats.toolDefinitionsDropped;
     // Kept only while every request reports the same reason: a one-item group
     // (the concurrent single-prompt path) keeps it, a mixed group drops it.
     if (&stats == &all.front()) {
@@ -1599,6 +1610,7 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
   int64_t nPast = 0;
   int64_t thinkingDiscards = 0;
+  int64_t toolsDropped = 0;
   // Read after the caller has finalized the driver, so a finished sequence
   // reports its terminal reason; a cancelled/prefill-only slot reports None.
   std::optional<GenerationStopReason> stopReason;
@@ -1615,15 +1627,25 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     nPast = static_cast<int64_t>(slot.driver->getNPast());
     thinkingDiscards =
         static_cast<int64_t>(slot.driver->getThinkingBlockDiscards());
+    toolsDropped =
+        static_cast<int64_t>(slot.driver->getToolDefinitionsDropped());
     stopReason = slot.driver->getGenerationStopReason();
   }
-  stats_.accumulateSlot(nPast, thinkingDiscards, req);
+  stats_.accumulateSlot(nPast, thinkingDiscards, toolsDropped, req);
   // Every terminal path that folds a slot into the aggregate also records the
   // request's observed end-to-end figures for its submitter, next to its
   // output.
   if (slot.group) {
-    slot.group->requestStats[slot.outputIndex] =
+    ObservedRequestStats observed =
         computeObservedStats(slot.enqueuedAt, req, stopReason);
+    // Set here rather than inside `computeObservedStats`, which is a pure
+    // function of the request's own stamps: these two come off the slot driver,
+    // which only this function holds. The same two values also go into the
+    // scheduler-wide accumulator above — that copy stays, for the whole-model
+    // `runtimeStats()` read.
+    observed.thinkingBlockDiscards = thinkingDiscards;
+    observed.toolDefinitionsDropped = toolsDropped;
+    slot.group->requestStats[slot.outputIndex] = std::move(observed);
   }
 }
 
