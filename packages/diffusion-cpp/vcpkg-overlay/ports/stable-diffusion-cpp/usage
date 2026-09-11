@@ -1,0 +1,10 @@
+The package stable-diffusion-cpp provides CMake integration:
+
+  find_package(stable-diffusion-cpp CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE stable-diffusion::stable-diffusion)
+
+GPU backends are controlled through the ggml dependency:
+  cuda   - CUDA GPU backend
+  metal  - Metal GPU backend (macOS/iOS)
+  vulkan - Vulkan GPU backend
+  opencl - OpenCL GPU backend (Android/Adreno)
