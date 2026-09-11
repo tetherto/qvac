@@ -7435,6 +7435,65 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             description="Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
         ),
     ] = None
+    batch_size: Annotated[
+        int | None,
+        Field(
+            alias="batch-size",
+            description="Logical maximum batch size, the tokens submitted per decode call. Default 2048.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    ubatch_size: Annotated[
+        int | None,
+        Field(
+            alias="ubatch-size",
+            description="Physical maximum batch size, the tokens computed in one pass. Default 512.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    cpu_moe: Annotated[
+        bool | None,
+        Field(
+            alias="cpu-moe",
+            description="Keep all Mixture-of-Experts weights on the CPU, freeing accelerator memory for the rest of the model. Mixture-of-Experts models only. Default false.",
+        ),
+    ] = None
+    n_cpu_moe: Annotated[
+        int | None,
+        Field(
+            alias="n-cpu-moe",
+            description="Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    kv_offload: Annotated[
+        bool | None,
+        Field(
+            alias="kv-offload",
+            description="Whether to hold the KV cache in accelerator memory. Default true. Set false to keep it in system memory, which frees accelerator memory at the cost of decode speed.",
+        ),
+    ] = None
+    image_max_tokens: Annotated[
+        int | None,
+        Field(
+            alias="image-max-tokens",
+            description="Upper bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    image_min_tokens: Annotated[
+        int | None,
+        Field(
+            alias="image-min-tokens",
+            description="Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
     opencl_cache_dir: Annotated[
         str | None,
         Field(
