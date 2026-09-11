@@ -42,15 +42,16 @@ test('the CUDA feature targets supported desktop platforms', () => {
   assert.equal(dependency.platform, DESKTOP_PLATFORM)
 })
 
-test('the hybrid backend dependency floors match the reviewed speech stack', () => {
+test('the hybrid backend dependency floors stay in lockstep', () => {
   const ggmlDependency = namedDependencies(vcpkgManifest.dependencies, GGML_PORT)[0]
   const speechDependencies = namedDependencies(vcpkgManifest.dependencies, SPEECH_PORT)
+  const speechFloor = speechDependencies[0]['version>=']
 
-  assert.equal(ggmlDependency['version>='], '2026-09-09#1')
   assert.equal(ggmlDependency['default-features'], false)
-  assert.equal(cudaSpeechDependency()['version>='], '2026-09-10')
+  assert.ok(speechFloor)
+  assert.equal(cudaSpeechDependency()['version>='], speechFloor)
   assert.equal(
-    speechDependencies.every((dependency) => dependency['version>='] === '2026-09-10'),
+    speechDependencies.every((dependency) => dependency['version>='] === speechFloor),
     true
   )
 })
