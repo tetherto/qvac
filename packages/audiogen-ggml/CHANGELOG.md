@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-11`. The pinned engine adds an
+  optional Apple-only Core ML sidecar for the ACE-Step VAE decoder
+  (`AUDIOGEN_COREML`); the prebuilds keep it disabled, so published behavior
+  is unchanged until a build opts in.
+
 ## [0.4.0] - 2026-09-11
 
 ### Added
