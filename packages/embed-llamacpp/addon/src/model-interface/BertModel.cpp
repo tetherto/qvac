@@ -377,42 +377,55 @@ bool applySplitDeviceSelection(
         "other.");
   }
   auto tensorSplit = hyphen != config.end() ? hyphen : underscore;
-  bool mappingChanged = selection.devices.size() != selection.sourceGpuCount;
-  for (size_t index = 0; !mappingChanged && index < selection.devices.size();
-       ++index) {
-    mappingChanged = selection.devices[index].sourceGpuIndex != index;
-  }
-  if (mappingChanged && tensorSplit != config.end()) {
+  if (tensorSplit != config.end()) {
     std::string normalized = tensorSplit->second;
     std::ranges::replace(normalized, '/', ',');
     const std::vector<std::string> proportions = split(normalized, ',');
-    const bool finalOrderIsStable = std::ranges::is_sorted(
-        selection.devices,
-        {},
-        [](const backend_selection::SplitDevice& device) {
-          return device.sourceGpuIndex;
-        });
-    if (proportions.size() == selection.devices.size() && finalOrderIsStable) {
-      tensorSplit->second = std::move(normalized);
-    } else {
-      if (proportions.size() != selection.sourceGpuCount) {
-        throw qvac_errors::StatusError(
-            qvac_errors::general_error::InvalidArgument,
-            string_format(
-                "tensor-split has %zu values for %zu registered GPU devices; "
-                "cannot reconcile it with the %zu eligible devices.",
-                proportions.size(),
-                selection.sourceGpuCount,
-                selection.devices.size()));
-      }
-      std::string remapped;
-      for (const backend_selection::SplitDevice& device : selection.devices) {
-        if (!remapped.empty()) {
-          remapped += ',';
+    // Re-join from the tokens rather than forwarding the caller's string.
+    // Fabric tokenizes on the regex [,/]+, so a run of delimiters collapses
+    // there as it does here and '1,,2' is two shares on both sides. The
+    // divergence is an empty or whitespace-only FIELD: fabric keeps it
+    // (',1,2' yields a leading "", '1, ,2' a middle " ") and std::stof throws
+    // on either, while split() trims and drops it. Such a value would be
+    // counted as two shares here and then rejected by fabric's parser.
+    auto join = [](const std::vector<std::string>& shares) {
+      std::string joined;
+      for (const std::string& share : shares) {
+        if (!joined.empty()) {
+          joined += ',';
         }
-        remapped += proportions[device.sourceGpuIndex];
+        joined += share;
       }
-      tensorSplit->second = std::move(remapped);
+      return joined;
+    };
+    // Cardinality decides how the list is read, in this order:
+    //   1. one share per eligible device -> already in final order
+    //   2. one share per registered GPU  -> remap through sourceGpuIndex
+    //   3. anything else                 -> reject
+    // Final order wins when both counts are equal: this addon pins
+    // params.devices itself, so fabric applies share i to final device i.
+    // The check runs even when the mapping did not move, because fabric
+    // validates only against llama_max_devices; it zero-pads a short list,
+    // silently leaving a participating GPU with no layers, and drops the tail
+    // of a long one.
+    if (proportions.size() == selection.devices.size()) {
+      tensorSplit->second = join(proportions);
+    } else if (proportions.size() != selection.sourceGpuCount) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "tensor-split has %zu values, which matches neither the %zu "
+              "registered GPU devices nor the %zu eligible devices.",
+              proportions.size(),
+              selection.sourceGpuCount,
+              selection.devices.size()));
+    } else {
+      std::vector<std::string> remapped;
+      remapped.reserve(selection.devices.size());
+      for (const backend_selection::SplitDevice& device : selection.devices) {
+        remapped.push_back(proportions[device.sourceGpuIndex]);
+      }
+      tensorSplit->second = join(remapped);
     }
   }
 

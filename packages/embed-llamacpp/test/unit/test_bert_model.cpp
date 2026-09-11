@@ -1022,9 +1022,10 @@ TEST_F(BertModelTest, SplitDeviceSelectionRemapsTensorShares) {
   EXPECT_EQ(config.at("tensor-split"), "1,3");
 }
 
-// RPC0 is hoisted ahead of Vulkan0, so two shares could be read in registry
-// order or in final order; only the raw three-share form can be remapped.
-TEST_F(BertModelTest, AmbiguousTensorSharesAreRejected) {
+// RPC0 is hoisted ahead of Vulkan0, but two shares for two eligible devices is
+// unambiguous because it does not match the three registered GPUs: N == F and
+// N != R, so the list is already in final order and passes through untouched.
+TEST_F(BertModelTest, EligibleCountTensorSharesTakenAsFinalOrder) {
   common_params params;
   std::unordered_map<std::string, std::string> config{{"tensor-split", "1,2"}};
   backend_selection::SplitDeviceSelection selection{
@@ -1037,12 +1038,11 @@ TEST_F(BertModelTest, AmbiguousTensorSharesAreRejected) {
             .sourceGpuIndex = 0}},
       .sourceGpuCount = 3};
 
-  EXPECT_THROW(
-      applySplitDeviceSelection(params, config, selection),
-      qvac_errors::StatusError);
+  EXPECT_TRUE(applySplitDeviceSelection(params, config, selection));
+  EXPECT_EQ(config.at("tensor-split"), "1,2");
 }
 
-TEST_F(BertModelTest, FinalCountTensorSharesAcceptedWhenOrderUnchanged) {
+TEST_F(BertModelTest, FinalCountTensorSharesAcceptedAsFinalOrder) {
   common_params params;
   std::unordered_map<std::string, std::string> config{{"tensor-split", "1,3"}};
   backend_selection::SplitDeviceSelection selection{
@@ -1059,6 +1059,8 @@ TEST_F(BertModelTest, FinalCountTensorSharesAcceptedWhenOrderUnchanged) {
   EXPECT_EQ(config.at("tensor-split"), "1,3");
 }
 
+// Collapsed delimiters leave two shares for two eligible devices, and with
+// F == R final order wins: the list is re-joined as-is, never remapped.
 TEST_F(BertModelTest, TensorSplitDropsEmptyShares) {
   common_params params;
   std::unordered_map<std::string, std::string> config{{"tensor-split", "1,,2"}};
@@ -1073,9 +1075,11 @@ TEST_F(BertModelTest, TensorSplitDropsEmptyShares) {
       .sourceGpuCount = 2};
 
   EXPECT_TRUE(applySplitDeviceSelection(params, config, selection));
-  EXPECT_EQ(config.at("tensor-split"), "2,1");
+  EXPECT_EQ(config.at("tensor-split"), "1,2");
 }
 
+// Whitespace is trimmed off each share; two shares for two eligible devices
+// with F == R is final order, so the values keep the order they were given in.
 TEST_F(BertModelTest, TensorSplitTrimsShareWhitespace) {
   common_params params;
   std::unordered_map<std::string, std::string> config{{"tensor-split", "1, 2"}};
@@ -1090,7 +1094,94 @@ TEST_F(BertModelTest, TensorSplitTrimsShareWhitespace) {
       .sourceGpuCount = 2};
 
   EXPECT_TRUE(applySplitDeviceSelection(params, config, selection));
-  EXPECT_EQ(config.at("tensor-split"), "2,1");
+  EXPECT_EQ(config.at("tensor-split"), "1,2");
+}
+
+// Cardinality is checked even when the mapping did not move: fabric validates
+// only against llama_max_devices and zero-pads a short list, which would leave
+// the second GPU with no layers at all.
+TEST_F(BertModelTest, ShortTensorSplitRejectedWhenMappingUnchanged) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{{"tensor-split", "1"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan1",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
+
+  EXPECT_THROW(
+      applySplitDeviceSelection(params, config, selection),
+      qvac_errors::StatusError);
+}
+
+// Same unchanged mapping, too many shares: fabric would silently drop the tail
+// rather than report the mismatch.
+TEST_F(BertModelTest, LongTensorSplitRejectedWhenMappingUnchanged) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{
+      {"tensor-split", "1,2,3"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan1",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
+
+  EXPECT_THROW(
+      applySplitDeviceSelection(params, config, selection),
+      qvac_errors::StatusError);
+}
+
+// One ineligible GPU is filtered out and RPC0 is hoisted ahead of the local
+// GPUs, so the final order matches neither the registry order nor its own
+// indices; three shares for three eligible devices is still final order.
+TEST_F(BertModelTest, EligibleCountTensorSharesAcceptedWithUnstableOrder) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{
+      {"tensor-split", "5,3,2"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "RPC0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 3,
+            .isRpc = true},
+           {.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan1",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x3),
+            .sourceGpuIndex = 2}},
+      .sourceGpuCount = 4};
+
+  EXPECT_TRUE(applySplitDeviceSelection(params, config, selection));
+  EXPECT_EQ(config.at("tensor-split"), "5,3,2");
+}
+
+// A leading delimiter must not survive into the value fabric parses: its
+// std::stof throws on an empty token, so the re-joined list carries no empty
+// field even though the share count is unchanged.
+TEST_F(BertModelTest, TensorSplitDropsLeadingDelimiter) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{{"tensor-split", ",1,2"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan1",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
+
+  EXPECT_TRUE(applySplitDeviceSelection(params, config, selection));
+  EXPECT_EQ(config.at("tensor-split"), "1,2");
 }
 
 TEST_F(BertModelTest, SplitTraitsFlagOpenClFromAnyDevice) {

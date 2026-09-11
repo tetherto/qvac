@@ -416,6 +416,31 @@ TEST_F(BackendSelectionTest, DeviceFamilyNamesRequireKnownPrefixes) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
+// MUSA is not an allowlisted family, named either on the device or on the
+// registry it came from, so a MUSA-only machine falls back to CPU.
+TEST_F(BackendSelectionTest, MusaDeviceIsRejected) {
+  mockBackend.addDevice(createGPUDevice("Moore Threads MTT S80", "MUSA0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+
+  mockBackend.clearDevices();
+  mockBackend.addDevice(MockDevice(
+      "Moore Threads MTT S80",
+      "mtt-device-0",
+      GGML_BACKEND_DEVICE_TYPE_GPU,
+      "MUSA"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+}
+
+// An unknown family behind an eligible device must not be picked up as a
+// fallback: Vulkan0 is still chosen.
+TEST_F(BackendSelectionTest, UnknownGpuAfterVulkanChoosesVulkan) {
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice("Future GPU", "FutureBackend0"));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
 TEST_F(BackendSelectionTest, TryMainGpuFromMapWithInteger) {
   std::unordered_map<std::string, std::string> configFilemap;
   configFilemap["main-gpu"] = "0";
