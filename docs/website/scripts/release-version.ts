@@ -4,8 +4,12 @@
  * version is a minor (`X.Y.0`) or a patch (`X.Y.Z`, `Z >= 1`) and calls
  * the appropriate orchestrator.
  *
- * The minor and patch flows have very different effects (full freeze +
- * regenerate vs. title-only + append-patch), but from the workflow's
+ * The minor and patch flows have very different effects (minor generates
+ * the new series' `v<X.Y>.x.mdx`, rewrites both `index.mdx` shims to
+ * `<include>` it, and rotates the managed `latest-series alias` block in
+ * `public/_redirects`; patch inserts a `## vX.Y.Z` section into an
+ * existing series file and, for `patch-latest`, mirrors the refreshed
+ * description onto the release-notes shim), but from the workflow's
  * perspective they share the same wrapper steps (fork-approval, dual
  * checkout, link-integrity tests, PR open). A single entry point keeps
  * the GitHub workflow simple while preserving the per-flow invariants

@@ -67,7 +67,8 @@ function isRunnableExamplePath(packagePath, filePath) {
 }
 
 function exampleCommand(packagePath, filePath) {
-  if (isSdkPackage(packagePath)) return sdkExampleCommand(packagePath, filePath);
+  if (isSdkPackage(packagePath))
+    return sdkExampleCommand(packagePath, filePath);
   return genericExampleCommand(packagePath, filePath);
 }
 
@@ -98,6 +99,12 @@ function buildManifest({
     ...new Set(files.map((f) => packagePathFor(f.path)).filter(Boolean)),
   ].sort();
   const touchedPackages = [];
+  // sdkE2eSetup needs every touched path, not just this package's, to catch
+  // packages/inference changes on PRs that never touch packages/sdk itself.
+  const allChangedPaths = fileStatuses
+    .filter((f) => TEST_STATUS.has(f.status))
+    .map((f) => f.path)
+    .sort();
 
   for (const packagePath of packagePaths) {
     const packageJson = readPackageJson(worktreePath || root, packagePath);
@@ -138,26 +145,24 @@ function buildManifest({
     const commands = discoverCommands(packagePath, packageJson);
     const kind = classifyPackage(packagePath, packageJson);
     const recommendation = recommendPackage({ packagePath, commands });
-    const relatedExampleCommands =
-      isSdkPackage(packagePath)
-        ? relatedSdkExamples({
-            root: worktreePath || root,
-            packagePath,
-            changedPaths,
-            changedExamples: addedOrModifiedExamples,
-            worktreePath,
-          })
-        : [];
-    const relatedTests =
-      isSdkPackage(packagePath)
-        ? relatedSdkTests({
-            root: worktreePath || root,
-            packagePath,
-            changedPaths,
-            changedTests: addedOrModifiedTests,
-            changedExamples: addedOrModifiedExamples,
-          })
-        : [];
+    const relatedExampleCommands = isSdkPackage(packagePath)
+      ? relatedSdkExamples({
+          root: worktreePath || root,
+          packagePath,
+          changedPaths,
+          changedExamples: addedOrModifiedExamples,
+          worktreePath,
+        })
+      : [];
+    const relatedTests = isSdkPackage(packagePath)
+      ? relatedSdkTests({
+          root: worktreePath || root,
+          packagePath,
+          changedPaths,
+          changedTests: addedOrModifiedTests,
+          changedExamples: addedOrModifiedExamples,
+        })
+      : [];
     const packageInfo = {
       path: packagePath,
       cwd: commandCwd(worktreePath, packagePath),
@@ -180,8 +185,10 @@ function buildManifest({
         commands.testCandidates.length > 0,
     };
 
-    if (isSdkPackage(packagePath)) {
-      packageInfo.sdkE2eSetup = sdkE2eSetup(changedPaths);
+    // packages/inference isn't in SDK_POD_PACKAGE_PATHS -- it has no examples/e2e
+    // of its own -- but still needs the SDK e2e setup recommendation attached.
+    if (isSdkPackage(packagePath) || packagePath === "packages/inference") {
+      packageInfo.sdkE2eSetup = sdkE2eSetup(allChangedPaths);
       packageInfo.sdkE2eCwd = worktreePath
         ? join(worktreePath, "packages", "sdk", "e2e")
         : "packages/sdk/e2e";

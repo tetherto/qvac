@@ -13,8 +13,9 @@ This directory does not contain a `SKILL.md`; it is not a Cursor skill itself. T
 
 ## Files
 
-- [`pr-status.mjs`](pr-status.mjs) — CLI renderer. Modes: `team`, `review`, `my`. `team` and `review` are pod-scoped (`--pod` required). `my` is cross-pod by default (`--pod` optional; if omitted, every pod under `.github/teams/` is loaded). Add `--json` for machine-readable output used by daily status workflows.
+- [`pr-status.mjs`](pr-status.mjs) — CLI renderer. Modes: `team`, `review`, `my`. `team` and `review` are pod-scoped (`--pod` required). `my` is cross-pod by default (`--pod` optional; if omitted, every pod under `.github/teams/` is loaded). Add `--json` for machine-readable output used by daily status workflows; with `--tiers`, docs-only PRs live under `tiers.<tier>.docs` (not the top-level tier buckets), while `groups.*` still lists every PR.
 - [`pr-activity.mjs`](pr-activity.mjs) — shared PR data collector/classifier used by `pr-status.mjs` and daily workflow tooling. It fetches open PRs, resolves pod ownership, computes review state, stale/re-review/ready groups, and merge-conflict flags.
+- [`pr-activity.test.mjs`](pr-activity.test.mjs) — unit tests for docs-only classification, e2e check-name parsing, and honorary-lead roles. Run: `node --test .cursor/skills/_lib/pr-skills/pr-activity.test.mjs`.
 - [`team.mjs`](team.mjs) — team-metadata loader. `loadTeam(pod)` reads a single pod; `discoverPods()` enumerates every `.github/teams/<pod>.json`; `findPodForFiles(files, pods)` returns the pod that owns a PR's touched files (first match wins).
 - [`slack.mjs`](slack.mjs) — Slack-handle map loader. File lives at `~/.config/qvac-pr-skills/slack.json`, schema `{ map, pendingReview }`. Bootstraps missing entries from `gh api users/<login>` and parks newly seeded logins on `pendingReview` so the skill workflow can confirm them with the user.
 - [`worktree.mjs`](worktree.mjs) — worktree manager for `/qv-pr-review` and `/qv-pr-test`. `resolvePR` (gh-resolved baseRefName, fail-fast — does NOT default to main), `fetchPRRefs` (single fetch for both PR head and base ref), `ensureWorktreeSynced` (sync mode, in-place `reset --hard`; preserves untracked artifacts at the same SHA and runs `clean -fdx` only after SHA drift), `lockPR` (per-PR flock), `computePatch` (3-dot diff to `/tmp/pr-<num>.patch`), `cleanupCache` (LRU keep 3).
@@ -65,7 +66,7 @@ node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --auth
 
 `pod` and `union` are only honored with `--mode team`; other modes ignore them (with a warning on stderr).
 
-`--tiers` (opt-in, `--mode team` only): split the dashboard into author tiers — pod Core (roster authors), Platform/Middleware (same GitHub org, not on roster), External Contribution (outside the org, or `community-contribution` label fallback). Off by default so other pods keep a flat list; `/qv-sdk-pr-status` passes it.
+`--tiers` (opt-in, `--mode team` only): split the dashboard into author tiers — pod Core (roster authors), Platform/Middleware (same GitHub org, not on roster), External Contribution (outside the org, or `community-contribution` label fallback). Docs-only PRs (`docPaths`) render in a `### 📚 Docs` lane inside each tier. `--pod sdk` also adds a per-platform `e2e:` line on Core impl PRs. Off by default so other pods keep a flat list; `/qv-sdk-pr-status` passes `--tiers`.
 
 `pr-status.mjs` reads `~/.config/qvac-pr-skills/config.json` when present for
 GitHub repo and stale-day settings. If config is missing, the repo is inferred
@@ -86,6 +87,10 @@ from the local `upstream` remote.
    ```
 
    `ownedPaths` are prefix-matched against changed-file paths to decide whether a PR is "owned" by this pod in the primary repo. Use trailing slashes.
+
+   `docPaths` (optional) are prefix-matched the same way. A PR that hits `docPaths` and misses `ownedPaths` is docs-only; with `--tiers` it renders under `### 📚 Docs` instead of mixing with impl.
+
+   `approvalLeads` (optional) GitHub logins whose formal `APPROVED` satisfies the team-lead gate and appear on `Reviews:`. They are not Core authors and are not ping targets.
 
    `extraRepos` (optional, `--mode team` only) is a list of additional `owner/name` repos the pod owns wholesale: **every** open PR there is in-scope regardless of touched paths. Plain `owner/name` entries are used as-is; an entry whose name segment contains `*` (e.g. `owner/prefix-*`) is treated as a glob and resolved per run against the org's non-archived repos via `gh repo list`. Repos the caller cannot read are skipped with a one-line stderr warning. The primary repo (`config.github.repo`) stays path-filtered — do not duplicate it under `extraRepos`. PRs from extra repos carry a `prRef` of `owner/repo#<num>` (primary-repo PRs keep `#<num>`).
 

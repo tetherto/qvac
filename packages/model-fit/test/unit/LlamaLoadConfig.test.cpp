@@ -820,6 +820,7 @@ int main() {
                                      llama_model_tensor_buft_override*,
                                      size_t*,
                                      uint32_t,
+                                     bool,
                                      ggml_log_level) {
                                    ++completionFitCalls;
                                    return COMMON_PARAMS_FIT_STATUS_SUCCESS;
@@ -859,6 +860,7 @@ int main() {
                                     llama_model_tensor_buft_override*,
                                     size_t*,
                                     uint32_t,
+                                    bool,
                                     ggml_log_level) {
                                   ++embeddingFitCalls;
                                   return COMMON_PARAMS_FIT_STATUS_SUCCESS;
@@ -891,6 +893,7 @@ int main() {
                   llama_model_tensor_buft_override*,
                   size_t*,
                   uint32_t,
+                  bool,
                   ggml_log_level) {
                 ++unsupportedFitCalls;
                 return COMMON_PARAMS_FIT_STATUS_SUCCESS;

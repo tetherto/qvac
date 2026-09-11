@@ -26,6 +26,17 @@
   the old order surfaced a typo as an unsupported-hardware verdict. Matching is
   case-sensitive, as fabric's own predicates are.
 
+## [0.10.0] - 2026-09-10
+
+### Fixed
+
+- The addon failed to compile against the published shared runtime. `common_fit_params` gained a ninth parameter, `prefetch_weights_auto`, in `qvac-fabric` 10549.0.0, and the call site was updated for it in #4154 — but the `@qvac/fabric` range was left at `^0.10.0`, which resolves a build carrying the previous eight-parameter signature. Every build outside the PR-validation path therefore failed with `no matching function for call to 'invokeLlamaFit'`.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.10.0` -> `^0.13.0`, which carries `qvac-fabric` `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.10.0` would not have resolved `0.13.0` on its own.
+- Also ships the pnpm+nx monorepo foundation (#3543), which landed after `0.9.0` with no version bump of its own.
+
 ## [0.9.0] - 2026-09-07
 
 ### Changed
