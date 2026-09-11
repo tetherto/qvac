@@ -401,6 +401,27 @@ TEST_F(BackendSelectionTest, RpcEndpointDoesNotRaiseAdrenoVersion) {
   EXPECT_EQ(adrenoVersion.value(), 740);
 }
 
+// The Mali flag reads the same description field as the Adreno tier, so an
+// endpoint hostname must not set it either.
+TEST_F(BackendSelectionTest, RpcEndpointDoesNotSetMaliFlag) {
+  mockBackend.addDevice(createGPUDevice("intel graphics", "vulkan0"));
+  mockBackend.addDevice(MockDevice(
+      "mali-rig.local:50052", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  std::optional<int> adrenoVersion;
+  bool isMaliGpu = true;
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      &adrenoVersion,
+      false,
+      &isMaliGpu);
+  EXPECT_EQ(result.first, BackendType::GPU);
+  EXPECT_FALSE(isMaliGpu);
+}
+
 TEST_F(BackendSelectionTest, CudaBackendIsEligible) {
   mockBackend.addDevice(MockDevice(
       "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));

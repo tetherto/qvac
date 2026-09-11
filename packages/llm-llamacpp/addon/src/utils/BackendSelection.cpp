@@ -223,10 +223,10 @@ void emplaceIfValidDevice(
   // QVAC-21867: track Mali GPUs (description is lowercased by
   // DeviceDescription) so callers can pick per-device-class defaults for
   // the multimodal projector backend.
-  if (devDescr.gpuDescription.find("mali") != std::string::npos) {
+  if (!isRpc && devDescr.gpuDescription.find("mali") != std::string::npos) {
     sawMaliGpu = true;
   }
-  // RPC is skipped: its description is the endpoint string, so a tier parsed
+  // RPC is skipped: its description is the endpoint string, so a class parsed
   // off one is a hostname.
   if (isAdreno && !isRpc) {
     auto version = parseAdrenoVersion(devDescr.gpuDescription);
