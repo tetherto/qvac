@@ -981,6 +981,59 @@ int main() {
                 LLAMA_FLASH_ATTN_TYPE_DISABLED,
         "split-mode traits must come from the final discrete device set");
 
+    // The reported Adreno tier is the MAX across the split set, not the first
+    // local device's. The 740 sorts first on purpose: reading the first local
+    // device would report 740 and leave the Adreno-800+ quantized-KV guard
+    // disarmed while an 830 participates, diverging from the load the addon
+    // performs. Observed through that guard, which suppresses the q8_0 KV
+    // default once armed and rejects an explicit quantized type outright.
+    const BackendDevice adrenoLowVulkan =
+        device("Vulkan0", "Adreno 740", BackendDeviceType::Gpu, 70, "Vulkan");
+    const BackendDevice adrenoHighVulkan =
+        device("Vulkan1", "Adreno 830", BackendDeviceType::Gpu, 71, "Vulkan");
+    const auto mixedTierSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{},
+        {adrenoLowVulkan, adrenoHighVulkan, cpu()});
+    expect(
+        mixedTierSplit.supported &&
+            mixedTierSplit.params.cache_type_k == GGML_TYPE_F16 &&
+            mixedTierSplit.params.cache_type_v == GGML_TYPE_F16,
+        "mixed-tier split set must report the max Adreno tier and suppress the "
+        "quantized KV default");
+    const auto mixedTierSplitRejected = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"split-mode", "layer"},
+            {"cache-type-v", "q8_0"},
+            {"flash-attn", "on"}},
+        ModelTraits{},
+        {adrenoLowVulkan, adrenoHighVulkan, cpu()});
+    expect(
+        !mixedTierSplitRejected.supported,
+        "an 800+ local participant must arm the quantized KV rejection "
+        "whatever position it holds");
+
+    // The max spans LOCAL participants only. An RPC device's description is
+    // its endpoint string (ggml-rpc.cpp:3749), so a host or port that happens
+    // to parse as an Adreno tier must not raise the reported tier: here the
+    // endpoint reads as 830 while the only real GPU is a 740, so the guard
+    // must stay disarmed and the q8_0 default must still apply.
+    const BackendDevice rpcAdrenoEndpoint = device(
+        "RPC0", "adreno830.local:50052", BackendDeviceType::Gpu, 72, "RPC");
+    const auto rpcEndpointTier = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{},
+        {rpcAdrenoEndpoint, adrenoLowVulkan, cpu()});
+    expect(
+        rpcEndpointTier.supported &&
+            rpcEndpointTier.params.cache_type_k == GGML_TYPE_Q8_0 &&
+            rpcEndpointTier.params.cache_type_v == GGML_TYPE_Q8_0,
+        "an RPC endpoint string must not raise the reported Adreno tier");
+
     BackendDevice rocmDiscrete = rocm;
     rocmDiscrete.deviceId = "pci-amd";
     adrenoIntegrated.handle = reinterpret_cast<ggml_backend_dev_t>(54);

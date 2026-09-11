@@ -834,17 +834,29 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     } else {
       splitSelection = selectSplitDevices(devices, isEmbedding);
       if (!splitSelection.devices.empty()) {
-        // The Adreno rule is about the local GPU the layers land on; an RPC
-        // device is first in the list but says nothing about it.
-        const auto local = std::ranges::find_if(
-            splitSelection.devices, [](const SplitDeviceRef& device) {
-              return !isRpc(*device.device);
-            });
+        // `selected` is the first device because that is what names the
+        // backend. The Adreno tier is the MAX across LOCAL participants,
+        // mirroring selectGpu above and the addon (LoadFitNormalization.cpp):
+        // it gates the quantized-KV + flash-attention rejection, which
+        // replaces a native abort with a clean error, so any local participant
+        // at 800+ must arm it; reading only the first local device would leave
+        // the projection disarmed on a mixed-tier set and diverge from the
+        // load. RPC devices are excluded because ggml reports the ENDPOINT
+        // STRING as an RPC device's description (ggml-rpc.cpp:3749, surfaced at
+        // :3318-3321), so a tier parsed off one is a hostname: it can never see
+        // a real remote Adreno, and a host or port containing "adreno" plus
+        // digits would arm the guard and reject a valid config. Do not widen
+        // this to all participants on a safety intuition.
+        int maxAdrenoVersion = 0;
+        for (const SplitDeviceRef& device : splitSelection.devices) {
+          if (!isRpc(*device.device)) {
+            maxAdrenoVersion =
+                std::max(maxAdrenoVersion, adrenoVersion(*device.device));
+          }
+        }
         selection = {
             .selected = splitSelection.devices.front().device,
-            .adrenoVersion = local == splitSelection.devices.end()
-                                 ? 0
-                                 : adrenoVersion(*local->device)};
+            .adrenoVersion = maxAdrenoVersion};
       }
     }
   }
