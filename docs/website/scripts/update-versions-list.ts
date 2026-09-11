@@ -3,12 +3,16 @@
  * Refresh `src/lib/versions.ts` from the contents of `content/docs/reference/api/`
  * and `content/docs/reference/release-notes/`.
  *
- * The site has two versioned sections (API summary, release notes), each
- * served as a single MDX file **per minor series**:
- *   - `<basePath>/index.mdx`        — current latest minor series
- *   - `<basePath>/vX.Y.x.mdx`       — archived minor series (literal `x`,
- *                                     accumulates patches as `## vX.Y.Z`
- *                                     sections inside the file)
+ * The site has two versioned sections (API summary, release notes). Under
+ * the shim-based layout each minor series has a permanent MDX file:
+ *   - `<basePath>/vX.Y.x.mdx`       — one page per minor series (literal
+ *                                     `x`), including the current latest.
+ *                                     Accumulates patches as `## vX.Y.Z`
+ *                                     sections inside the file.
+ *   - `<basePath>/index.mdx`        — thin shim that `<include>`s the
+ *                                     current-latest `vX.Y.x.mdx`. Not
+ *                                     enumerated here — this script only
+ *                                     cares about the series files.
  *
  * This script discovers all `vX.Y.x.mdx` siblings, sorts them descending
  * by major/minor, and rewrites `versions.ts` so the version selector
@@ -107,8 +111,11 @@ function buildSectionLiteral(
 ): string {
   // Strip latestSeries from the olderSeries set so we don't double-list
   // the current latest minor as both the (latest) entry and an archived
-  // sibling — useful when the index.mdx has already been frozen as
-  // v<latestSeries>.mdx during a release flow.
+  // sibling. Under the shim-based layout `v<latestSeries>.x.mdx` is
+  // always on disk (content lives there; the freeze step is gone), so
+  // the disk-scan always turns it up alongside the older archived
+  // siblings — the filter turns that "always duplicated" input into the
+  // single `(latest)` entry the selector expects.
   const filteredOlder = olderSeries.filter((s) => s !== latestSeries);
 
   const lines: string[] = [];
@@ -221,7 +228,7 @@ export const API_SECTION: VersionedSection = ${apiSection};
 
 export const RELEASE_NOTES_SECTION: VersionedSection = ${releaseNotesSection};
 
-const VERSIONED_SECTIONS: VersionedSection[] = [
+export const VERSIONED_SECTIONS: VersionedSection[] = [
   API_SECTION,
   RELEASE_NOTES_SECTION,
 ];
