@@ -145,14 +145,17 @@ backend families, so it must not be used to interpret the plan.
 `mainGpu` is a **raw ggml registry index** — the order `ggml_backend_dev_get`
 enumerates, not a position in llama's GPU list — or `-1` for the CPU sentinel,
 which requires `nGpuLayers: 0` and `splitMode: 0`. llama reads it only under
-split mode NONE; LAYER and TENSOR leave it inert. It is validated when
-`splitMode` is NONE or omitted: an index at or past `nDevices` **throws** (the
-bound is only known once the backends are registered, so the native side
-reports it), and an in-range index that is not a supported GPU — the CPU entry,
-or a backend outside the allowlist — is **projected CPU-only** rather than
-rejected. A pinned
-`splitMode` of NONE or TENSOR throws on a host with no supported GPU unless the
-request is the CPU sentinel or its `mainGpu` target was projected CPU-only.
+split mode NONE; LAYER, TENSOR and an **omitted** `splitMode` all leave it
+inert — llama's default split mode is LAYER and the fitter never rewrites it,
+so omitting the mode is a LAYER projection, not a possible NONE. It is
+validated only when `splitMode` is pinned to `0` (NONE): an index at or past
+`nDevices` **throws** (the bound is only known once the backends are
+registered, so the native side reports it), and an in-range index that is not a
+supported GPU — the CPU entry, or a backend outside the allowlist — is
+**projected CPU-only** rather than rejected. With `splitMode` omitted the whole
+eligible device list is kept whatever `mainGpu` says. A pinned `splitMode` of
+NONE or TENSOR throws on a host with no supported GPU unless the request is the
+CPU sentinel or its `mainGpu` target was projected CPU-only.
 
 `splitMode` accepts `0` (NONE), `1` (LAYER) and `3` (TENSOR). `2` (ROW)
 **throws**: fabric deprecates row split, no supported backend provides the

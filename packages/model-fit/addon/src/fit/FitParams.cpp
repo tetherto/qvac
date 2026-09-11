@@ -249,16 +249,22 @@ FitResult runFit(const FitRequest& req) {
           discoveredDevices, LlamaLoadKind::Completion);
   const size_t eligibleGpuDevices = eligibleDevices.size() - 1;
 
-  // llama reads main_gpu only under LLAMA_SPLIT_MODE_NONE. LAYER and TENSOR
-  // leave it inert, so it is not validated there. An unpinned split mode is
-  // validated: it goes in at llama's default, which is precisely the condition
-  // under which the fitter is free to rewrite it. If it lands on NONE, the raw
-  // registry target is converted to a one-device supported list below, so the
-  // identity has to be valid up front. The extra no-GPU placement check further
-  // down still applies only to an explicit NONE or TENSOR.
-  const bool mainGpuIsUsed =
-      req.hasMainGpu && req.mainGpu >= 0 &&
-      (!req.hasSplitMode || req.splitMode == LLAMA_SPLIT_MODE_NONE);
+  // llama reads main_gpu only under LLAMA_SPLIT_MODE_NONE — the single-GPU
+  // collapse in `llama_prepare_model_devices` is gated on exactly that mode
+  // (llama.cpp:293-306) — so LAYER and TENSOR leave it inert and it is not
+  // validated there. An OMITTED split mode is inert too, and that is the
+  // load-bearing correction: `llama_model_default_params` leaves split_mode at
+  // LLAMA_SPLIT_MODE_LAYER (llama-model.cpp:2739) and `common_fit_params`
+  // never writes split_mode at all — it only reads it (common/fit.cpp:272,
+  // :593) — so an unpinned mode goes in as LAYER and comes back as LAYER.
+  // Treating it as a possible NONE acted on main_gpu for a projection that
+  // cannot reach NONE: an eligible index collapsed the multi-device list to
+  // one, an ineligible one forced CPU, and an out-of-range one threw. Only an
+  // explicit NONE activates it. The no-GPU placement check further down is
+  // already scoped that way (`requiresSupportedGpu`).
+  const bool mainGpuIsUsed = req.hasMainGpu && req.mainGpu >= 0 &&
+                             req.hasSplitMode &&
+                             req.splitMode == LLAMA_SPLIT_MODE_NONE;
 
   // Past the end of the registry there is no device to select or to reject to
   // CPU, so the index is an argument error, not a placement. The bound is only

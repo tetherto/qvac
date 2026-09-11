@@ -74,10 +74,12 @@ export interface FitConfig {
     /**
      * Raw ggml registry index of the device a NONE placement goes on, or -1 for
      * the CPU sentinel (requires `nGpuLayers` 0 and `splitMode` 0). llama reads
-     * it only under split mode NONE; LAYER and TENSOR leave it inert. Validated
-     * when `splitMode` is NONE or omitted: an index at or past `nDevices` throws,
-     * and an in-range index that is not a supported GPU — the CPU entry, or a
-     * backend outside the allowlist — yields a CPU-only projection instead.
+     * it only under split mode NONE; LAYER, TENSOR and an omitted `splitMode`
+     * leave it inert — llama defaults to LAYER and the fitter never rewrites the
+     * mode. Validated only when `splitMode` is pinned to 0: an index at or past
+     * `nDevices` throws, and an in-range index that is not a supported GPU — the
+     * CPU entry, or a backend outside the allowlist — yields a CPU-only
+     * projection instead.
      */
     mainGpu?: number;
     /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */

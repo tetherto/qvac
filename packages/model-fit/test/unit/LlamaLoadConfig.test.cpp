@@ -1034,6 +1034,72 @@ int main() {
             rpcEndpointTier.params.cache_type_v == GGML_TYPE_Q8_0,
         "an RPC endpoint string must not raise the reported Adreno tier");
 
+    // QVAC-24205: the one-bit BitNet Adreno policy `selectGpu` applies on the
+    // NONE path must also govern the FINAL SPLIT SET, because the llm addon
+    // applies it there (`applyAdrenoRestrictions`). Without it the projection
+    // reported a GPU fit for a LAYER load the addon runs on the CPU.
+    const BackendDevice adrenoLowVulkanTwo =
+        device("Vulkan2", "Adreno 740", BackendDeviceType::Gpu, 73, "Vulkan");
+    const auto bitnetSplitBelow800 = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {adrenoLowVulkan, adrenoLowVulkanTwo, cpu()});
+    expect(
+        bitnetSplitBelow800.supported &&
+            isCpuPlacement(bitnetSplitBelow800.params) &&
+            bitnetSplitBelow800.params.split_mode == LLAMA_SPLIT_MODE_NONE,
+        "one-bit BitNet on an Adreno <800 split set must project CPU");
+
+    // At 800+ the policy drops OpenCL and keeps Vulkan, so the split list
+    // survives minus the OpenCL participant.
+    const BackendDevice adrenoHighOpenCl =
+        device("GPUOpenCL", "Adreno 830", BackendDeviceType::Gpu, 74, "OpenCL");
+    const auto bitnetSplitAbove800 = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {adrenoHighVulkan, adrenoHighOpenCl, cpu()});
+    expect(
+        bitnetSplitAbove800.supported &&
+            isPinnedGpu(bitnetSplitAbove800.params, adrenoHighVulkan),
+        "one-bit BitNet on an Adreno 800+ split set must drop OpenCL and keep "
+        "Vulkan");
+
+    // The restriction's tier max excludes RPC for the same reason the reported
+    // tier does, and it matters in BOTH directions. An endpoint reading as 830
+    // beside a local 740 must not cancel the CPU fallback the local tier
+    // demands.
+    const auto bitnetSplitRpcRaisesTier = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {rpcAdrenoEndpoint, adrenoLowVulkan, cpu()});
+    expect(
+        bitnetSplitRpcRaisesTier.supported &&
+            isCpuPlacement(bitnetSplitRpcRaisesTier.params),
+        "an RPC endpoint must not raise the restriction's tier past 800");
+
+    // And an endpoint reading as a sub-800 tier beside a local NON-Adreno GPU
+    // must not restrict anything: there is no local Adreno at all.
+    const BackendDevice rpcLowAdrenoEndpoint = device(
+        "RPC1", "adreno740.local:50052", BackendDeviceType::Gpu, 75, "RPC");
+    const BackendDevice nonAdrenoVulkan =
+        device("Vulkan3", "NVIDIA GPU", BackendDeviceType::Gpu, 76, "Vulkan");
+    const auto bitnetSplitRpcLowersTier = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {rpcLowAdrenoEndpoint, nonAdrenoVulkan, cpu()});
+    expect(
+        bitnetSplitRpcLowersTier.supported &&
+            bitnetSplitRpcLowersTier.params.devices.size() == 3 &&
+            bitnetSplitRpcLowersTier.params.devices.front() ==
+                rpcLowAdrenoEndpoint.handle &&
+            bitnetSplitRpcLowersTier.params.devices[1] ==
+                nonAdrenoVulkan.handle,
+        "an RPC endpoint must not restrict a split set with no local Adreno");
+
     BackendDevice rocmDiscrete = rocm;
     rocmDiscrete.deviceId = "pci-amd";
     adrenoIntegrated.handle = reinterpret_cast<ggml_backend_dev_t>(54);

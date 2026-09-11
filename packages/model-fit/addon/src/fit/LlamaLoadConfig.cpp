@@ -425,6 +425,27 @@ int adrenoVersion(const BackendDevice& device) {
   }
 }
 
+// The MAX tier across LOCAL split participants, mirroring `selectGpu` and the
+// llm addon (BackendSelection.cpp / LoadFitNormalization.cpp). 0 means no local
+// Adreno, which is not an Adreno host and triggers nothing.
+//
+// RPC devices are excluded, and that must hold in BOTH directions: ggml reports
+// the ENDPOINT STRING as an RPC device's description (ggml-rpc.cpp:3749,
+// surfaced at :3318-3321), so a tier parsed off one is a hostname carrying no
+// information about the remote GPU. Counting them would let endpoint text
+// decide placement — an endpoint reading as 830 beside a local 740 would skip a
+// required CPU fallback, and one reading as 740 beside a non-Adreno local GPU
+// would clear the whole list. Do not widen this on a safety intuition.
+int maxLocalAdrenoVersion(const SplitDeviceSelection& selection) {
+  int maxVersion = 0;
+  for (const SplitDeviceRef& device : selection.devices) {
+    if (!isRpc(*device.device)) {
+      maxVersion = std::max(maxVersion, adrenoVersion(*device.device));
+    }
+  }
+  return maxVersion;
+}
+
 struct BackendSelection {
   const BackendDevice* selected = nullptr;
   int adrenoVersion = 0;
@@ -833,30 +854,44 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
       selection = selectGpu(devices, traits, mainGpu, isEmbedding);
     } else {
       splitSelection = selectSplitDevices(devices, isEmbedding);
+      // `selectGpu`'s one-bit BitNet Adreno policy governs the NONE path only,
+      // and this path never calls it. The llm addon applies that same policy to
+      // its FINAL SPLIT SET (`applyAdrenoRestrictions`, BackendSelection.cpp),
+      // so leaving it out here projected a GPU fit for a LAYER load the addon
+      // runs on CPU — the projection-versus-load divergence this allowlist work
+      // exists to remove. Finetuning, the addon's other trigger, cannot reach
+      // this package: every key containing "finetune" is rejected by
+      // UNSUPPORTED_KEY_PARTS.
+      //
+      // It FILTERS the one authoritative device list rather than making a
+      // second placement decision, and it runs before the tensor-split remap
+      // and the trait derivation below so both read the filtered set. An
+      // emptied list falls through to the CPU branch with no extra branch here.
+      if (!isEmbedding && traits.architecture == "bitnet" &&
+          traits.hasOneBitQuantization) {
+        const int localAdreno = maxLocalAdrenoVersion(splitSelection);
+        if (localAdreno > 0 && localAdreno < ADRENO_UBATCH_THRESHOLD) {
+          // Only CPU is supported below 800: an empty list projects CPU.
+          splitSelection.devices.clear();
+        } else if (localAdreno >= ADRENO_UBATCH_THRESHOLD) {
+          // 800+ prefers Vulkan over OpenCL.
+          std::erase_if(splitSelection.devices, [](const SplitDeviceRef& ref) {
+            return isOpenClDevice(*ref.device);
+          });
+        }
+      }
       if (!splitSelection.devices.empty()) {
         // `selected` is the first device because that is what names the
-        // backend. The Adreno tier is the MAX across LOCAL participants,
-        // mirroring selectGpu above and the addon (LoadFitNormalization.cpp):
-        // it gates the quantized-KV + flash-attention rejection, which
-        // replaces a native abort with a clean error, so any local participant
-        // at 800+ must arm it; reading only the first local device would leave
-        // the projection disarmed on a mixed-tier set and diverge from the
-        // load. RPC devices are excluded because ggml reports the ENDPOINT
-        // STRING as an RPC device's description (ggml-rpc.cpp:3749, surfaced at
-        // :3318-3321), so a tier parsed off one is a hostname: it can never see
-        // a real remote Adreno, and a host or port containing "adreno" plus
-        // digits would arm the guard and reject a valid config. Do not widen
-        // this to all participants on a safety intuition.
-        int maxAdrenoVersion = 0;
-        for (const SplitDeviceRef& device : splitSelection.devices) {
-          if (!isRpc(*device.device)) {
-            maxAdrenoVersion =
-                std::max(maxAdrenoVersion, adrenoVersion(*device.device));
-          }
-        }
+        // backend. The Adreno tier is the MAX across LOCAL participants of the
+        // FILTERED set, mirroring selectGpu above and the addon
+        // (LoadFitNormalization.cpp): it gates the quantized-KV +
+        // flash-attention rejection, which replaces a native abort with a clean
+        // error, so any local participant at 800+ must arm it; reading only the
+        // first local device would leave the projection disarmed on a
+        // mixed-tier set and diverge from the load.
         selection = {
             .selected = splitSelection.devices.front().device,
-            .adrenoVersion = maxAdrenoVersion};
+            .adrenoVersion = maxLocalAdrenoVersion(splitSelection)};
       }
     }
   }

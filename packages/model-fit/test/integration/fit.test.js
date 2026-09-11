@@ -650,14 +650,15 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
 
 // The fitter ignores main_gpu entirely, so a bad placement used to surface only
 // as llama failing the internal load — a bare ERROR indistinguishable from a
-// genuine "does not fit". Validation applies to SPLIT_MODE_NONE and to an
-// unpinned split mode; LAYER and TENSOR are exempt. mainGpu is a raw registry
+// genuine "does not fit". Validation applies to a PINNED SPLIT_MODE_NONE only;
+// LAYER, TENSOR and an omitted mode are exempt. mainGpu is a raw registry
 // index: past the registry it throws, in range but not a supported GPU it is
 // projected on the CPU.
 test('mainGpu is validated only when llama uses it', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   // Nothing pinned, so this projects on every host class and cannot throw.
-  const outOfRange = fitParams({ modelPath }).nDevices
+  const baseline = fitParams({ modelPath })
+  const outOfRange = baseline.nDevices
 
   // Past the registry there is no device to select or to reject to CPU: an
   // argument error carrying the bound, on GPU and CPU-only hosts alike. The
@@ -667,10 +668,26 @@ test('mainGpu is validated only when llama uses it', async function (t) {
     () => fitParams({ modelPath, splitMode: 0, mainGpu: outOfRange }),
     /mainGpu \d+ is out of range: \d+ devices are registered/
   )
-  await t.exception.all(
-    () => fitParams({ modelPath, mainGpu: outOfRange }),
-    /mainGpu \d+ is out of range/
-  )
+
+  // An omitted splitMode is not a possible NONE. llama's default is
+  // LLAMA_SPLIT_MODE_LAYER and common_fit_params never writes split_mode, so
+  // the projection stays on LAYER and mainGpu is inert: an out-of-range index
+  // is neither validated nor acted on, and the plan matches the one nothing
+  // pinned produces. It used to throw here, which rejected a valid request and
+  // — for an in-range index — narrowed or CPU-forced a LAYER projection.
+  const omitted = fitParams({ modelPath, mainGpu: outOfRange })
+  t.is(omitted.status, baseline.status, 'an omitted splitMode ignores mainGpu')
+  t.is(omitted.splitMode, baseline.splitMode, 'the projected mode is unchanged')
+  t.is(omitted.mainGpu, baseline.mainGpu, 'the projected placement is unchanged')
+
+  // Every in-range index is inert too, the CPU registry entry and any backend
+  // outside the allowlist included: with no pinned mode none of them narrows
+  // the device list or forces the projection onto the host. Under a pinned
+  // NONE the same indices DO move the placement — asserted below.
+  for (let mainGpu = 0; mainGpu < outOfRange; mainGpu++) {
+    const res = fitParams({ modelPath, mainGpu })
+    t.is(res.mainGpu, baseline.mainGpu, `raw index ${mainGpu} is inert without a pinned mode`)
+  }
 
   // Outside NONE the field is inert, so the same index is accepted and the
   // real model projects a plan: the guard stays scoped rather than becoming a

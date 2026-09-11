@@ -75,10 +75,12 @@ struct FitRequest {
   bool hasSplitMode = false;
 
   /// Raw ggml registry index of the device a NONE placement goes on. llama
-  /// reads it only under `LLAMA_SPLIT_MODE_NONE`; LAYER and TENSOR leave it
-  /// inert. Validated when `splitMode` is NONE or unpinned: out of range
-  /// throws, in range but outside the supported GPU list projects CPU-only.
-  /// -1 is the CPU sentinel and requires `nGpuLayers` 0 and `splitMode` NONE.
+  /// reads it only under `LLAMA_SPLIT_MODE_NONE`; LAYER, TENSOR and an
+  /// UNPINNED mode all leave it inert, the last because llama's default is
+  /// LAYER and the fitter never rewrites `split_mode`. Validated only when
+  /// `splitMode` is pinned to NONE: out of range throws, in range but outside
+  /// the supported GPU list projects CPU-only. -1 is the CPU sentinel and
+  /// requires `nGpuLayers` 0 and `splitMode` NONE.
   int32_t mainGpu = 0;
   bool hasMainGpu = false;
 
@@ -228,9 +230,10 @@ void normalizePlanPlacement(
 /// Throws `std::invalid_argument` for arguments that cannot be acted on:
 ///  - a `modelPath` that is empty or relative;
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
-///  - a `mainGpu` at or past `nDevices` when `splitMode` is NONE or unpinned
-///    (in range but outside the supported GPU list is not an error: the
-///    projection is CPU-only instead);
+///  - a `mainGpu` at or past `nDevices` when `splitMode` is pinned to NONE (in
+///    range but outside the supported GPU list is not an error: the projection
+///    is CPU-only instead; an unpinned mode makes `mainGpu` inert, so nothing
+///    is validated and nothing is narrowed);
 ///  - a pinned `splitMode` of ROW — see `applyFitRequest`;
 ///  - a pinned `splitMode` of NONE or TENSOR on a host with no supported GPU,
 ///    unless the request is the CPU sentinel or its raw `mainGpu` target is
