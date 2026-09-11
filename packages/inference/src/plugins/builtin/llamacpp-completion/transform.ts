@@ -35,5 +35,19 @@ export function transformLlmConfig(llmConfig: LlmConfig) {
     delete transformed['opencl_cache_dir']
   }
 
+  if ('cpu-moe' in transformed) {
+    if (transformed['cpu-moe'] === 'true') {
+      transformed['cpu-moe'] = ''
+    } else {
+      delete transformed['cpu-moe']
+    }
+  }
+
+  if ('kv-offload' in transformed) {
+    const enabled = transformed['kv-offload'] === 'true'
+    delete transformed['kv-offload']
+    transformed[enabled ? 'kv-offload' : 'no-kv-offload'] = ''
+  }
+
   return transformed
 }

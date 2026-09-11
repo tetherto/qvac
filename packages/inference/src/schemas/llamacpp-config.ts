@@ -153,6 +153,12 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe('Physical maximum batch size, the tokens computed in one pass. Default 512.'),
+  'cpu-moe': z
+    .boolean()
+    .optional()
+    .describe(
+      'Keep all Mixture-of-Experts weights on the CPU, freeing accelerator memory for the rest of the model. Mixture-of-Experts models only. Default false.'
+    ),
   'n-cpu-moe': z
     .number()
     .int()
@@ -160,6 +166,12 @@ export const llmConfigBaseSchema = z.object({
     .optional()
     .describe(
       'Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.'
+    ),
+  'kv-offload': z
+    .boolean()
+    .optional()
+    .describe(
+      'Whether to hold the KV cache in accelerator memory. Default true. Set false to keep it in system memory, which frees accelerator memory at the cost of decode speed.'
     ),
   'image-max-tokens': z
     .number()
