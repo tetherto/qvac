@@ -2,6 +2,12 @@
 name: "Integration Tests (nx)"
 
 on:
+  # TEMP on this probe branch only: a workflow is not dispatchable until it has
+  # a run of its own, and this one has only ever run as a called reusable. One
+  # pull_request run registers it so the dispatch API accepts it.
+  pull_request:
+    paths:
+      - ".github/workflows/integration-test-nx.yml"
   workflow_dispatch:
     inputs:
       base-ref:
