@@ -8682,6 +8682,44 @@
                       "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
                       "type": "string"
                     },
+                    "batch-size": {
+                      "description": "Logical maximum batch size, the tokens submitted per decode call. Default 2048.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "ubatch-size": {
+                      "description": "Physical maximum batch size, the tokens computed in one pass. Default 512.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "cpu-moe": {
+                      "description": "Keep all Mixture-of-Experts weights on the CPU, freeing accelerator memory for the rest of the model. Mixture-of-Experts models only. Default false.",
+                      "type": "boolean"
+                    },
+                    "n-cpu-moe": {
+                      "description": "Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "kv-offload": {
+                      "description": "Whether to hold the KV cache in accelerator memory. Default true. Set false to keep it in system memory, which frees accelerator memory at the cost of decode speed.",
+                      "type": "boolean"
+                    },
+                    "image-max-tokens": {
+                      "description": "Upper bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "image-min-tokens": {
+                      "description": "Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
                     "openclCacheDir": {
                       "description": "Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.",
                       "type": "string"
