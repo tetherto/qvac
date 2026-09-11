@@ -58,6 +58,9 @@ runs:
           [ -z "$ref" ] && return 0
           [ "$ref" = "HEAD" ] && return 0
           git rev-parse --verify --quiet "refs/heads/${ref}" >/dev/null 2>&1 && return 0
+          # A SHA (on-merge passes github.sha) is already present after checkout
+          # and is not a branch, so fetching refs/heads/<sha> would hard-fail.
+          git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null 2>&1 && return 0
           git fetch --no-tags --depth=1 origin "+refs/heads/${ref}:refs/heads/${ref}"
         }
         fetch_ref "$BASE_REF"

@@ -184,6 +184,13 @@ jobs:
       contents: read
       actions: read
     steps:
+      # A relative `uses:` resolves from the job workspace, so the action has to
+      # be checked out first. Trusted ref, same as detect-fabric-stack; the
+      # action takes its token as an input and needs no git credentials.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
       - name: Wait for fabric-prebuilds from on-pr-fabric
         uses: ./.github/actions/wait-and-download-fabric-prebuilds
         with:
