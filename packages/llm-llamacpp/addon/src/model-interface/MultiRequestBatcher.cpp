@@ -177,6 +177,10 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
   if (seqId >= slots_.size() || slots_[seqId].has_value()) {
     return AddStatus::ErrNoFreeSlot;
   }
+  // Belt and braces: every release path already zeroes this, so a fresh
+  // occupant can never inherit one. Zeroing on admission too means the
+  // invariant holds even if a future release path forgets.
+  releaseBudget(seqId);
   slots_[seqId].emplace(
       seqId, std::move(plan), maxTokensPerSequence_, initialPos);
   return AddStatus::Ok;
@@ -195,8 +199,9 @@ MultiRequestBatcher::FillResult
 MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
   std::ranges::fill(chunkSizes_, 0u);
 
-  std::vector<uint32_t> unbudgeted;
-  unbudgeted.reserve(slots_.size());
+  // Reused across steps (capacity reserved once in the ctor) so the planner
+  // does not allocate on the per-decode-step hot path.
+  unbudgeted_.clear();
   unsigned numActive = 0;
   unsigned numPrefilling = 0;
   for (const auto& slot :
@@ -205,7 +210,7 @@ MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
     if (slot->isPrefillPending()) {
       numPrefilling++;
     }
-    unbudgeted.push_back(slot->seqId);
+    unbudgeted_.push_back(slot->seqId);
   }
   if (numActive == 0) {
     return {};
@@ -229,30 +234,49 @@ MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
   // the rest is split evenly. Budgeting per slot rather than taking a global
   // min is what keeps a generating slot (want == 1) from throttling a
   // concurrent prefill to one token per decode step.
+  //
+  // The tradeoff this replaces the old global-min clamp with: a step's token
+  // count is no longer bounded by (smallest remaining x numActive) but by
+  // batch capacity, so a step taken while a large prefill is co-resident can
+  // carry far more tokens than one taken between generating slots alone. A
+  // generating slot is served first in the *budget* (want == 1 always fits),
+  // but its token still rides the same llama_decode() call as that prefill,
+  // so its inter-token latency rises with the step. That is the intended
+  // exchange - much lower TTFT and higher aggregate throughput for a larger
+  // spread in per-token latency while prefill and generation overlap - but
+  // it is a real behaviour change, not a free win.
   unsigned remaining = capacity;
-  while (!unbudgeted.empty()) {
-    // `remaining >= unbudgeted.size()` is an invariant of this loop, so the
+  while (!unbudgeted_.empty()) {
+    // `remaining >= unbudgeted_.size()` is an invariant of this loop, so the
     // share is always at least one token and every slot makes progress.
-    const unsigned share = remaining / static_cast<unsigned>(unbudgeted.size());
+    const unsigned share =
+        remaining / static_cast<unsigned>(unbudgeted_.size());
     bool grantedAny = false;
-    for (auto it = unbudgeted.begin(); it != unbudgeted.end();) {
+    // Order within `unbudgeted_` is irrelevant, so a granted slot is removed
+    // by swapping the back element into its place - O(1) instead of the O(n)
+    // shift a vector::erase() from the middle would cost. Every element is
+    // still examined exactly once per round: the swapped-in element lands at
+    // the current index, which is not advanced.
+    for (size_t i = 0; i < unbudgeted_.size();) {
+      const uint32_t seqId = unbudgeted_[i];
       const unsigned want =
-          std::min(maxChunkSize_, slots_[*it]->remainingToFeed());
+          std::min(maxChunkSize_, slots_[seqId]->remainingToFeed());
       if (want > share) {
-        ++it;
+        i++;
         continue;
       }
-      chunkSizes_[*it] = want;
+      chunkSizes_[seqId] = want;
       remaining -= want;
-      it = unbudgeted.erase(it);
+      unbudgeted_[i] = unbudgeted_.back();
+      unbudgeted_.pop_back();
       grantedAny = true;
     }
     if (!grantedAny) {
-      for (const uint32_t seqId : unbudgeted) {
+      for (const uint32_t seqId : unbudgeted_) {
         chunkSizes_[seqId] = share;
         remaining -= share;
       }
-      unbudgeted.clear();
+      unbudgeted_.clear();
     }
   }
 
@@ -279,6 +303,9 @@ MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
   std::ranges::fill(lastLogitIndices_, -1);
 
   const FillResult bState = planChunksForActiveSeqs(batch);
+  // planChunksForActiveSeqs() zeroed every budget, so a fill that grants
+  // nothing also clears any budget an earlier step left outstanding.
+  budgetsPending_ = bState.totalTokens > 0;
   if (bState.totalTokens == 0) {
     return bState;
   }
@@ -339,6 +366,15 @@ void advanceReqPrefill(
 } // namespace
 
 void MultiRequestBatcher::advance(const PrefillCompleteFn& onPrefillComplete) {
+  // Committing is one-shot. Without this, a second advance() with no
+  // fillBatch() between would re-apply the same budgets with nothing
+  // decoded, running currentPos ahead of the KV cache — a desync that
+  // reaches syncPosition() and any persisted session cache, silently.
+  if (!budgetsPending_) {
+    return;
+  }
+  budgetsPending_ = false;
+
   for (auto& slot : slots_ | views::filter(Request::isOptHasTokensToFeed)) {
     Request& req = *slot;
     // Exactly what the last fillBatch() fed this slot. A slot that was
@@ -472,9 +508,16 @@ void MultiRequestBatcher::markAllFinished(StopReason reason) {
   }
 }
 
+void MultiRequestBatcher::releaseBudget(uint32_t seqId) noexcept {
+  if (seqId < chunkSizes_.size()) {
+    chunkSizes_[seqId] = 0u;
+  }
+}
+
 std::vector<Request> MultiRequestBatcher::extractFinished() {
   std::vector<Request> finished;
   for (auto& slot : slots_ | views::filter(Request::isOptFinished)) {
+    releaseBudget(slot->seqId);
     finished.push_back(std::move(*slot));
     slot.reset();
   }
@@ -487,6 +530,7 @@ bool MultiRequestBatcher::cancel(uint32_t seqId, const KvClearFn& kvClear) {
     if (kvClear) {
       kvClear(seqId);
     }
+    releaseBudget(seqId);
     slots_[seqId].reset();
   }
   return valid;
@@ -498,6 +542,7 @@ void MultiRequestBatcher::clear(const KvClearFn& kvClear) {
       if (kvClear) {
         kvClear(static_cast<uint32_t>(i));
       }
+      releaseBudget(static_cast<uint32_t>(i));
       slots_[i].reset();
     }
   }

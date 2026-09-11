@@ -18,6 +18,13 @@ namespace {
 /// `kMixedChunk` when they differ. Chunks are budgeted per slot, but these
 /// tests set up uniform active sets, so this keeps their assertions as
 /// direct as they were when one chunk size covered the whole batch.
+///
+/// A slot with tokens to feed that was granted *nothing* also returns
+/// `kMixedChunk`. Skipping those instead would make this blind to the one
+/// regression per-slot budgeting can cause that a global chunk size could
+/// not — starving a single slot while its neighbours look correct — which
+/// is exactly what the assertions translated to use this helper used to
+/// catch for free, `chunkSize` being one value for the whole batch.
 constexpr unsigned kMixedChunk = std::numeric_limits<unsigned>::max();
 
 unsigned uniformChunk(const MultiRequestBatcher& batcher) {
@@ -26,6 +33,10 @@ unsigned uniformChunk(const MultiRequestBatcher& batcher) {
   for (uint32_t seqId = 0; seqId < kSeqScanLimit; seqId++) {
     const unsigned granted = batcher.chunkSizeFor(seqId);
     if (granted == 0) {
+      const Request* req = batcher.requestAt(seqId);
+      if (req != nullptr && req->hasTokensToFeed()) {
+        return kMixedChunk;
+      }
       continue;
     }
     if (seen == 0) {
@@ -553,11 +564,212 @@ TEST_F(
   EXPECT_EQ(result.prefillTokens, 5u);
   EXPECT_EQ(result.totalTokens, 6u);
 
+  // Heterogeneous chunks are the new code path, so pin the batch layout they
+  // produce and not just the grants: the generating slot takes index 0, the
+  // prefilling slot the next five, and only the last of those carries the
+  // logits row. A regression that budgeted correctly but mis-placed the
+  // logits flag would leave the newcomer unable to sample.
+  llama_batch& lBatch = *batch;
+  EXPECT_EQ(lBatch.n_tokens, 6);
+  EXPECT_EQ(lBatch.seq_id[0][0], static_cast<llama_seq_id>(seqId0));
+  EXPECT_EQ(lBatch.logits[0], 1);
+  for (int i = 1; i <= 5; i++) {
+    EXPECT_EQ(lBatch.seq_id[i][0], static_cast<llama_seq_id>(seqId1));
+    EXPECT_EQ(lBatch.token[i], 20 + (i - 1));
+    EXPECT_EQ(lBatch.pos[i], i - 1);
+    EXPECT_EQ(lBatch.logits[i], i == 5 ? 1 : 0);
+  }
+
+  mocked_llama_decode(*batch);
   batcher.advance();
   // One step was enough: the late arrival is ready to sample its first token.
   const Request* late = batcher.requestAt(seqId1);
   ASSERT_NE(late, nullptr);
   EXPECT_TRUE(late->isPrefillComplete());
+
+  // And it really can sample — the logits row recorded above is reachable.
+  batcher.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
+    return mocked_llama_sampler_sample(seqId, logitIdx);
+  });
+  late = batcher.requestAt(seqId1);
+  ASSERT_NE(late, nullptr);
+  EXPECT_EQ(late->generatedTokens.size(), 1u);
+}
+
+/// The water-fill's redistribution round: capacity binds, but not evenly.
+/// Slots whose want fits the current equal share are granted it outright and
+/// the surplus flows to the rest, which then split a *larger* share than the
+/// first round offered. The three pre-existing capacity tests all resolve in
+/// a single pass (every want above the share, or capacity never binding), so
+/// without this the multi-round path — and with it the bound that keeps the
+/// sum of the grants inside `batch.capacity()`, which is what stops fillBatch
+/// writing past the llama_batch — is never executed.
+TEST(MultiRequestBatcherCapacityTest, WaterFillRedistributesSurplus) {
+  constexpr unsigned maxChunkSize = 8;
+  constexpr unsigned maxTokensPerSeq = 100;
+  constexpr size_t batchSize = 4;
+  constexpr int32_t batchCapacity = 10;
+
+  MultiRequestBatcher batcher(maxChunkSize, maxTokensPerSeq, batchSize);
+  LlamaBatch batch(batchCapacity, 0, batchSize);
+
+  // Two 1-token prompts and two 8-token prompts. Round 1: share = 10/4 = 2,
+  // so the two short slots take 1 each and 8 tokens remain for two slots.
+  // Round 2: share = 8/2 = 4 — still under their want of 8 — so they split
+  // it evenly. Grants: 1, 1, 4, 4 = 10, exactly capacity.
+  uint32_t shortA = 0, shortB = 0, longA = 0, longB = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10}, shortA), MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({20}, shortB), MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({30, 31, 32, 33, 34, 35, 36, 37}, longA),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({40, 41, 42, 43, 44, 45, 46, 47}, longB),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  const auto result = batcher.fillBatch(batch);
+
+  EXPECT_EQ(result.numActiveSequences, 4u);
+  EXPECT_EQ(batcher.chunkSizeFor(shortA), 1u);
+  EXPECT_EQ(batcher.chunkSizeFor(shortB), 1u);
+  EXPECT_EQ(batcher.chunkSizeFor(longA), 4u);
+  EXPECT_EQ(batcher.chunkSizeFor(longB), 4u);
+  EXPECT_EQ(result.totalTokens, 10u);
+  EXPECT_EQ(result.prefillTokens, 10u);
+
+  // The bound that makes this memory-safe, asserted directly.
+  EXPECT_LE(result.totalTokens, static_cast<unsigned>(batchCapacity));
+  EXPECT_EQ((*batch).n_tokens, batchCapacity);
+
+  // The short slots consumed their whole prompt, so they carry a logits row;
+  // the long ones are mid-prefill and must not.
+  EXPECT_EQ((*batch).logits[0], 1);
+  EXPECT_EQ((*batch).logits[1], 1);
+  EXPECT_EQ((*batch).logits[5], 0);
+  EXPECT_EQ((*batch).logits[9], 0);
+}
+
+/// The even-split branch grants `share` to every survivor, and `share` is by
+/// construction below each survivor's want — so no slot is ever handed more
+/// than it has left to feed even when the remainders are uneven.
+TEST(MultiRequestBatcherCapacityTest, EvenSplitNeverExceedsRemainingToFeed) {
+  constexpr unsigned maxChunkSize = 8;
+  constexpr unsigned maxTokensPerSeq = 100;
+  constexpr size_t batchSize = 3;
+  constexpr int32_t batchCapacity = 7;
+
+  MultiRequestBatcher batcher(maxChunkSize, maxTokensPerSeq, batchSize);
+  LlamaBatch batch(batchCapacity, 0, batchSize);
+
+  // Wants 3, 8, 8 against capacity 7. Round 1: share = 7/3 = 2, nothing
+  // fits, so all three split 2 each = 6 tokens, one left unused. The slot
+  // with only 3 tokens left takes 2, not 3 — and critically not more.
+  uint32_t small = 0, bigA = 0, bigB = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 11, 12}, small),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({20, 21, 22, 23, 24, 25, 26, 27}, bigA),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({30, 31, 32, 33, 34, 35, 36, 37}, bigB),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  const auto result = batcher.fillBatch(batch);
+
+  EXPECT_EQ(batcher.chunkSizeFor(small), 2u);
+  EXPECT_EQ(batcher.chunkSizeFor(bigA), 2u);
+  EXPECT_EQ(batcher.chunkSizeFor(bigB), 2u);
+  EXPECT_EQ(result.totalTokens, 6u);
+  EXPECT_LE(result.totalTokens, static_cast<unsigned>(batchCapacity));
+
+  // Mid-prefill on every slot, so no logits row anywhere.
+  for (int i = 0; i < (*batch).n_tokens; i++) {
+    EXPECT_EQ((*batch).logits[i], 0);
+  }
+}
+
+/// Committing a step is one-shot. A second advance() with no fillBatch()
+/// between must not replay the budgets: that would run currentPos ahead of
+/// the KV cache with nothing decoded, and nothing downstream would notice.
+TEST_F(MultiRequestBatcherTest, SecondAdvanceWithoutFillBatchIsNoOp) {
+  MultiRequestBatcher batcher(8, 100, 2);
+  LlamaBatch batch(16, 0, 2);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 11, 12}, seqId),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  const auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.totalTokens, 3u);
+  mocked_llama_decode(*batch);
+  batcher.advance();
+
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  const llama_pos posAfterCommit = req->currentPos;
+  const size_t fedAfterCommit = req->prefillFedCount;
+
+  batcher.advance();
+  batcher.advance();
+
+  req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  EXPECT_EQ(req->currentPos, posAfterCommit);
+  EXPECT_EQ(req->prefillFedCount, fedAfterCommit);
+}
+
+/// A budget belongs to the request it was computed for. Freeing a slot drops
+/// it, so a later occupant of the same seqId cannot be advanced by tokens it
+/// never had in the batch.
+TEST_F(MultiRequestBatcherTest, FreeingASlotDropsItsChunkBudget) {
+  MultiRequestBatcher batcher(8, 100, 2);
+  LlamaBatch batch(16, 0, 2);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 11, 12, 13}, seqId),
+      MultiRequestBatcher::AddStatus::Ok);
+  const auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.totalTokens, 4u);
+  ASSERT_EQ(batcher.chunkSizeFor(seqId), 4u);
+
+  EXPECT_TRUE(batcher.cancel(seqId));
+  EXPECT_EQ(batcher.chunkSizeFor(seqId), 0u);
+
+  // The slot is reusable and its new occupant starts from a clean budget.
+  uint32_t reused = 0;
+  ASSERT_EQ(
+      batcher.addRequest({20, 21}, reused), MultiRequestBatcher::AddStatus::Ok);
+  EXPECT_EQ(reused, seqId);
+  EXPECT_EQ(batcher.chunkSizeFor(reused), 0u);
+
+  // A stray advance() cannot move the newcomer: the budget went with the
+  // cancelled request, and the commit for that step was already consumed.
+  batcher.advance();
+  const Request* fresh = batcher.requestAt(reused);
+  ASSERT_NE(fresh, nullptr);
+  EXPECT_EQ(fresh->currentPos, 0);
+  EXPECT_EQ(fresh->prefillFedCount, 0u);
+}
+
+/// extractFinished() frees slots too, so it must drop budgets as well.
+TEST_F(MultiRequestBatcherTest, ExtractFinishedDropsChunkBudget) {
+  MultiRequestBatcher batcher(8, 100, 2);
+  LlamaBatch batch(16, 0, 2);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 11}, seqId), MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(batcher.fillBatch(batch).totalTokens, 2u);
+  ASSERT_EQ(batcher.chunkSizeFor(seqId), 2u);
+
+  EXPECT_TRUE(batcher.markFinished(seqId));
+  ASSERT_EQ(batcher.extractFinished().size(), 1u);
+  EXPECT_EQ(batcher.chunkSizeFor(seqId), 0u);
 }
 
 TEST_F(MultiRequestBatcherTest, RejectsOversizedRequests) {
