@@ -309,6 +309,16 @@ declare namespace LlmLlamacpp {
          */
         json_schema?: string | Record<string, unknown>;
         /**
+         * Tool choice for a request whose prompt declares `function` tools, in the
+         * OpenAI style: `"auto"` (default) lets the model decide and constrains a
+         * call only once it starts one; `"required"` forces a tool call;
+         * `"none"` disables the tool-call grammar while leaving the tool
+         * definitions in the prompt; any other string names one declared function
+         * and forces a call to it. Ignored when the prompt carries no tools;
+         * `"required"` or a function name without tools throws.
+         */
+        tool_choice?: "auto" | "none" | "required" | (string & {});
+        /**
          * Per-request reasoning channel budget. `-1` keeps the model's reasoning
          * channel on; `0` disables it for this request; any positive integer caps
          * the reasoning channel at that many tokens. Equivalent to the load-time
@@ -491,6 +501,22 @@ declare namespace LlmLlamacpp {
          * was disabled per-request, or when no reasoning blocks were emitted.
          */
         thinkingBlockDiscards: number;
+        /**
+         * Number of prompt renders in this request that provably left the tool
+         * definitions out — the template either rejected them, or supplying them
+         * did not change the rendered prompt at all. Such a render has its tool
+         * list stripped, so no tool grammar constrains it.
+         *
+         * Read this in one direction only. Non-zero means definitions were dropped
+         * and the model did not see them. **0 is not a guarantee that the model saw
+         * every definition**: a template that renders only some of the supplied
+         * tools changes the render and so reports no drop. Closing that needs the
+         * renderer to report what it consumed.
+         *
+         * Per-inference for single requests; summed across completed slots for
+         * batch requests. 0 when no tools were sent.
+         */
+        toolDefinitionsDropped: number;
         /**
          * How busy the shared backend was, not a property of your request: the
          * mean number of sequences decoded together per engine step, including
