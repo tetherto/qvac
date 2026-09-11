@@ -1,7 +1,8 @@
 # QVAC SDK E2E Tests - PR Trigger
 #
 # Triggers SDK e2e tests via test-sdk.yml when:
-#   - "test-e2e-smoke" label applied: runs smoke suite on desktop + mobile
+#   - "test-e2e-smoke" label applied: runs the smoke suite, plus the tests this
+#     PR touched, on desktop + mobile
 #   - "test-e2e-full" label applied: runs full suite on desktop + mobile
 #   - PR opened/updated targeting release-* branch with SDK/inference changes: runs full suite
 #
@@ -92,15 +93,119 @@ jobs:
             echo "should-run=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # Extends a smoke run with the tests this PR touched, so a green smoke run also
+  # means "your changes passed". Bundles PR-authored test files to read their
+  # testIds, so it executes PR code and therefore holds no write scopes — the
+  # summary is posted by report-impacted from the JSON alone.
+  resolve-impacted:
+    needs: [resolve-config]
+    if: >-
+      needs.resolve-config.outputs.should-run == 'true'
+      && needs.resolve-config.outputs.suite == 'smoke'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      include: ${{ steps.impacted.outputs.include }}
+      impacted-json: ${{ steps.impacted.outputs.impacted-json }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # contract/models.json carries the model -> engine link the engine
+          # relation resolves through; without it that relation is a no-op.
+          sparse-checkout: |
+            packages/sdk/e2e
+            packages/sdk/contract
+            packages/sdk/src/client/api
+            packages/inference/src/registry.ts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: List PR files
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          script: |
+            // The files API carries the per-file patch, which gives per-line
+            // attribution without cloning the repository's history.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+            require('node:fs').writeFileSync(
+              `${process.env.GITHUB_WORKSPACE}/pr-files.json`,
+              JSON.stringify(files.map(({ filename, patch }) => ({ filename, patch })))
+            );
+            core.info(`${files.length} changed file(s) in this PR`);
+
+      # Only esbuild is needed to read the test definitions, so this skips the
+      # e2e install entirely. Pinned to keep the analysis reproducible.
+      - name: Install esbuild
+        run: npm install --no-save --no-fund --no-audit --prefix "$RUNNER_TEMP/mapper" esbuild@0.27.0
+
+      - name: Compute impacted tests
+        id: impacted
+        working-directory: packages/sdk/e2e
+        env:
+          ESBUILD_MODULE: ${{ runner.temp }}/mapper/node_modules/esbuild/lib/main.js
+        run: >-
+          node scripts/impacted-tests.mjs
+          --repo-root "$GITHUB_WORKSPACE"
+          --pr-files "$GITHUB_WORKSPACE/pr-files.json"
+          --github-output "$GITHUB_OUTPUT"
+
+  # Also runs when resolve-impacted failed, so a fail-open mapper says so on the
+  # PR instead of leaving a plain smoke run looking complete.
+  #
+  # The report arrives as a job output, not an artifact: nothing is extracted
+  # into this job's checkout. It still originates from a job that ran PR code, so
+  # sdk-e2e-report-impacted validates every field before rendering it.
+  report-impacted:
+    needs: [resolve-impacted]
+    if: >-
+      !cancelled()
+      && (needs.resolve-impacted.result == 'success'
+          || needs.resolve-impacted.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-impacted
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - uses: ./.github/actions/sdk-e2e-report-impacted
+        with:
+          impacted-json: ${{ needs.resolve-impacted.outputs.impacted-json }}
+
   run-tests:
     needs:
       - fork-approval
       - resolve-config
-    if: (needs.resolve-config.outputs.should-run == 'true')
+      - resolve-impacted
+    # resolve-impacted is deliberately not gated on: if the impact mapper fails
+    # or is skipped, `include` is empty and the run proceeds as a plain smoke
+    # run. A broken mapper must never block e2e.
+    if: >-
+      !cancelled()
+      && needs.fork-approval.result == 'success'
+      && needs.resolve-config.result == 'success'
+      && needs.resolve-config.outputs.should-run == 'true'
     uses: ./.github/workflows/test-sdk.yml
     with:
       targets: desktop + mobile
       suite: ${{ needs.resolve-config.outputs.suite }}
+      include: ${{ needs.resolve-impacted.outputs.include }}
       test-version: ${{ github.event.pull_request.head.sha }}
       inference-source: branch
       test-suite-source: branch
