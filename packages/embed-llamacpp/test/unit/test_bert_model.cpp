@@ -1314,15 +1314,53 @@ TEST_F(BertModelTest, CpuFallbackClearsUnderscoreTensorSplit) {
 
 // A GPU split request goes through getSplitDeviceSelection(); with no eligible
 // device it must land on the same CPU seam as an explicit device=cpu.
+//
+// The share count is probed rather than hardcoded: a fixed two-share value is a
+// wrong-cardinality request on any single-GPU host (one eligible Metal device
+// on darwin-arm64), which the split path now rejects during load. This test
+// only ever passed with a literal "50,50" because the count was never checked
+// on the unchanged-mapping path. A first load without tensor-split reports how
+// many eligible devices this host actually pinned, and the real load below asks
+// for exactly that many shares.
 TEST_F(BertModelTest, GpuSplitRequestWithoutEligibleDeviceFallsBackToCpu) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
+  size_t eligibleDevices = 0;
+  {
+    std::unordered_map<std::string, std::string> probeConfig;
+    probeConfig["device"] = "gpu";
+    probeConfig["split-mode"] = "layer";
+
+    BertModel probe(getValidModelPath(), probeConfig);
+    probe.initializeBackend(test_backends_dir);
+    probe.waitForLoadInitialization();
+    ASSERT_TRUE(probe.isLoaded());
+    if (getStatValue(probe.runtimeStats(), "backendDevice") != 0.0) {
+      // params.devices carries a nullptr terminator past the pinned devices.
+      ASSERT_GE(probe.getCommonParams().devices.size(), 2U);
+      eligibleDevices = probe.getCommonParams().devices.size() - 1;
+    }
+  }
+
+  // With no eligible GPU keep the original two-share request, so the CPU
+  // fallback branch is exercised exactly as before.
+  std::string shares = "50,50";
+  if (eligibleDevices > 0) {
+    shares.clear();
+    for (size_t index = 0; index < eligibleDevices; ++index) {
+      if (!shares.empty()) {
+        shares += ',';
+      }
+      shares += "50";
+    }
+  }
+
   std::unordered_map<std::string, std::string> config;
   config["device"] = "gpu";
   config["split-mode"] = "layer";
-  config["tensor-split"] = "50,50";
+  config["tensor-split"] = shares;
 
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
