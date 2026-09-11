@@ -28,6 +28,8 @@ or other volatile facts into agent instructions. Link to their owning source.
   the confirmed failure mode rather than speculative paths.
 - Run the narrowest relevant package-owned lint, type, unit, and integration checks
   before handoff. Report any check that cannot run.
+- Do not delete, disable, skip, or weaken tests to make a check pass. Fix the
+  confirmed failure or report the blocker.
 - Do not commit, push, post reviews or comments, publish, or otherwise mutate remote
   systems unless the user explicitly requests it.
 

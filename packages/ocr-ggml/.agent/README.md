@@ -166,8 +166,6 @@ SDK/TS packages get automatic PR checks via `pr-checks-sdk-pod`. All other packa
 | `/release <package>` | Release a package to NPM |
 | `/ci-validate <package>` | Trigger and monitor CI for a package |
 
-Existing skills in `.cursor/` (`qv-addon-changelog`, `qv-sdk-changelog`, etc.) continue to work as before.
-
 ## Parallel Execution
 
 For multiple independent tasks, run agents in parallel with non-overlapping file scopes:
