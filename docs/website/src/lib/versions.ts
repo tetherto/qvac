@@ -78,7 +78,7 @@ export const RELEASE_NOTES_SECTION: VersionedSection = {
   ],
 };
 
-const VERSIONED_SECTIONS: VersionedSection[] = [
+export const VERSIONED_SECTIONS: VersionedSection[] = [
   API_SECTION,
   RELEASE_NOTES_SECTION,
 ];

@@ -52,6 +52,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Raise the `speech-cpp` floor to 2026-09-10. Nemotron 3.5 ASR streaming is
+  now validated on Vulkan and CUDA: the encoder and the fused transducer
+  decode run on the GPU at all five cache-aware operating points, with
+  engine parity tests against NeMo references at each of them. The window
+  also extends the Parakeet Core ML offline-encoder path used by the
+  `coreml` build on Apple platforms.
+
 - Raise the `speech-cpp` floor to 2026-09-09 (ggml-speech 2026-09-09#1).
   Parakeet CPU transcription is 2.2 to 2.6x faster on x86 desktops: the TDT
   decoder runs as ggml graphs instead of a host loop, positional projections
@@ -71,6 +78,18 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   The addon creates its VAD context with the default (CPU) parameters, so
   runtime behavior is unchanged; the fix matters for anything that opts
   VAD into the GPU.
+
+- **Per-platform prebuild packages.** `@qvac/asr-ggml` is now a meta package
+  that ships the JavaScript wrapper only; native prebuilds install through
+  `os`/`cpu` filtered `optionalDependencies` (`@qvac/asr-ggml-<platform>-<arch>`,
+  iOS flavours grouped in `@qvac/asr-ggml-ios`), version-locked to the meta
+  package. Breaking for the published file layout:
+  `node_modules/@qvac/asr-ggml/prebuilds` no longer exists in npm installs —
+  use the new `resolveBackendsDir()` export instead of hardcoding that path.
+  Supported installers are npm 7+, pnpm, bun, and Yarn Berry; Yarn v1 and
+  `--omit=optional` installs fail at require time with an error naming the
+  missing platform package. A locally built `prebuilds/` directory keeps
+  taking precedence, so source builds are unaffected.
 
 ## [0.4.2] - 2026-09-01
 

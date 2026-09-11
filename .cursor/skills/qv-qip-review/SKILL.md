@@ -1,71 +1,55 @@
 ---
 name: qv-qip-review
-description: Reviews a QIP draft or Slack Canvas proposal for approval readiness, missing alternatives, unclear consequences, architecture principle conflicts, and consultation coverage. Produces blockers, clarifying questions, suggested edits, and optional Slack-ready review comments. Use when reviewing a QIP or invoking /qv-qip-review.
+description: Reviews QIP drafts for approval readiness, architectural fit, decision clarity, material trade-offs, and appropriate stakeholder detail. Use when reviewing a QIP or invoking /qv-qip-review.
 ---
 
 # QIP Proposal Review
 
-Review a QIP for approval readiness without substituting for human approvers.
+Review a QIP without substituting for its human approvers. Use `qv-qip-create` for first drafts and `qv-qip-triage` to decide whether a QIP is needed.
 
-## When to use this skill
+## Ground the review
 
-**Use when:**
+1. Read [../qv-qip-create/references/qip-template.md](../qv-qip-create/references/qip-template.md).
+2. Read `docs/architecture/PRINCIPLES.md`.
+3. When the proposal changes runtime, package, plugin, registry, storage, transport, security, public API, release, or deployment boundaries, check its system fit against `docs/architecture/ARCHITECTURE.md` and the relevant current repository sources.
 
-- Reviewing a QIP draft before posting to Slack Canvas
-- Reviewing a QIP as Lead / Architect, Head of QVAC, or CTO support
-- The author asks whether the proposal is ready
-- User invokes `/qv-qip-review`
-
-**Do NOT use for:**
-
-- Creating the first draft (use `qv-qip-create`)
-- Deciding whether a QIP is needed at all (use `qv-qip-triage`)
-
-## Inputs
-
-Accept any of:
-
-- Pasted Slack Canvas text
-- Local markdown draft
-- Summarized proposal from chat
-
-## Review workflow
-
-1. Read [../qv-qip-create/references/qip-template.md](../qv-qip-create/references/qip-template.md)
-2. Read `docs/architecture/PRINCIPLES.md` before checking for principle conflicts
-3. Apply the review criteria below
-4. Check system fit against `docs/architecture/ARCHITECTURE.md` when the proposal touches runtime, package, plugin, registry, or deployment boundaries
-5. Separate blockers from clarifying questions and nice-to-have improvements
-6. Never claim approval on behalf of named approvers
+Do not infer approval, commitments, current behavior, or implementation feasibility without evidence. Treat principle conflicts as review findings, not automatic rejection, unless the proposal hides or misrepresents the conflict.
 
 ## Review criteria
 
-**Template completeness**
+### Decision readiness
 
-- Problem explains what and why
-- Solution is concrete enough to evaluate
-- Alternatives considered is concise or links to detailed research
-- Consequences state positive impact and trade-offs reviewers must accept
-- Out of scope is present when confusion is likely
-- Approvers table is preserved
+- Problem explains what matters and why a decision is needed now.
+- Solution recommends one direction and states the exact approval ask.
+- Architectural responsibilities, boundaries, interactions, and rationale are concrete enough to evaluate.
+- Obvious alternatives are addressed briefly, with supporting research summarized in the Appendix when needed.
+- Consequences state positive impact and the trade-offs reviewers must accept.
+- Decision-relevant trust-boundary, compatibility, migration, and release effects are explicit.
+- Likely scope misunderstandings are excluded explicitly, and the approvers table is preserved.
 
-**Architecture**
+An unclear or absent recommended direction or approval ask is a blocker. Do not use length as a proxy for this check.
 
-- Flag principle conflicts explicitly by principle number and name
-- Flag missing positive impact, trade-offs, or negative consequences
-- Treat principle conflicts as review findings, not automatic rejection, unless the proposal hides the trade-off
+### Decision-brief quality
 
-**Consultation coverage**
+- Use 600-900 words as the target and 1,200 words as a soft ceiling for the core proposal, excluding the approvers table and Appendix.
+- Length above the ceiling is a suggested edit, not a blocker by itself.
+- Flag specific passages when repetition or implementation detail buries the problem, recommended direction, architectural boundary, or accepted trade-offs.
+- Recommend removing file lists and moving useful APIs, protocols, execution steps, test plans, rollout detail, failure-mode analysis, and large comparisons to the Appendix unless they directly affect approval.
+- Check that the Appendix is relevant and organized, research has been synthesized rather than reproduced, external artifacts explain their relevance, principle references explain a concrete fit or conflict, and images are linked rather than embedded as base64 data.
 
-- Owning team lead for affected area
-- Lead / Architect for technical validation when contracts or cross-package impact are involved
-- Cross-cutting expert when runtime, transport, storage, security, registry, native builds, or public SDK API are involved
+### Consultation
 
-Advice coverage is not a voting scheme.
+If consultation context is provided, check coverage of the owning team lead, Lead / Architect, and any relevant cross-cutting expertise. The consultation note belongs outside the Canvas-ready QIP, so its absence from the QIP is not a finding. Advice is direction plus reasoning, not a vote.
 
-## Output format
+## Findings and severity
 
-Lead with findings ordered by approval risk:
+Separate:
+
+- **Blockers:** the decision cannot responsibly be approved, such as no clear approval ask, an unsupported material claim, an unresolved architectural contradiction, or missing impact that could change the decision.
+- **Clarifying questions:** answers would improve confidence but may not require restructuring the proposal.
+- **Suggested edits:** concision, organization, Appendix moves, and other improvements that do not block the decision.
+
+Lead with findings ordered by approval risk and use line-specific references when possible:
 
 ```markdown
 ## Blockers
@@ -84,10 +68,4 @@ Ready | Ready with minor edits | Not ready
 <optional concise paste-ready comment if requested>
 ```
 
-If there are no blockers, say so explicitly.
-
-## Efficiency rules
-
-- Do not rewrite the whole QIP unless the user asks
-- Prefer targeted edits over generic process advice
-- Keep the Slack comment under one screen when provided
+Say explicitly when there are no blockers. Do not rewrite the whole QIP unless asked. Keep an optional Slack comment under one screen.
