@@ -15,7 +15,7 @@
           "platform": "linux | (windows & x64)"
         }
       ],
-      "version>=": "10549.0.0#1"
+      "version>=": "10549.0.0#2"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
