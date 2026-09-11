@@ -273,8 +273,8 @@ SplitDeviceSelection selectSplitDevices(
       rpc.push_back(selected);
     } else if (device.type == BackendDeviceType::IntegratedGpu) {
       // Keep the first integrated GPU and every later one sharing the last
-      // kept one's backend registry HANDLE, as llama does (#26953); registry
-      // identity, not its name.
+      // kept one's backend registry HANDLE. Identity, not name: one device
+      // seen by two backends is a duplicate, several from one backend are not.
       if (integrated.empty() ||
           device.registry == integrated.back().device->registry) {
         integrated.push_back(selected);
@@ -392,15 +392,17 @@ int adrenoVersion(const BackendDevice& device) {
   }
 }
 
-// The max tier across the split participants, 0 when none is an Adreno. RPC is
-// skipped because ggml reports the endpoint string as such a device's
-// description, so a tier parsed off one is a hostname.
+// 0 for an RPC device: ggml reports the endpoint string as its description, so
+// a tier parsed off one is a hostname.
+int localAdrenoVersion(const BackendDevice& device) {
+  return isRpc(device) ? 0 : adrenoVersion(device);
+}
+
+// The max tier across the split participants, 0 when none is an Adreno.
 int maxLocalAdrenoVersion(const SplitDeviceSelection& selection) {
   int maxVersion = 0;
   for (const SplitDeviceRef& device : selection.devices) {
-    if (!isRpc(*device.device)) {
-      maxVersion = std::max(maxVersion, adrenoVersion(*device.device));
-    }
+    maxVersion = std::max(maxVersion, localAdrenoVersion(*device.device));
   }
   return maxVersion;
 }
@@ -419,7 +421,8 @@ BackendSelection selectGpu(
       const BackendDevice& selected = devices[static_cast<size_t>(index)];
       if (selected.handle != nullptr && isEligibleGpu(selected, isEmbedding)) {
         return {
-            .selected = &selected, .adrenoVersion = adrenoVersion(selected)};
+            .selected = &selected,
+            .adrenoVersion = localAdrenoVersion(selected)};
       }
       return {};
     }
@@ -428,15 +431,12 @@ BackendSelection selectGpu(
   const BackendDevice* openCl = nullptr;
   const BackendDevice* discrete = nullptr;
   const BackendDevice* integrated = nullptr;
-  // Unlike `maxLocalAdrenoVersion`, this maximum spans RPC devices: the addon's
-  // `chooseBackend` takes its host-wide maximum over the same unfiltered
-  // inventory.
   int maxAdrenoVersion = 0;
   for (const BackendDevice& device : devices) {
     if (!isEligibleGpu(device, isEmbedding)) {
       continue;
     }
-    maxAdrenoVersion = std::max(maxAdrenoVersion, adrenoVersion(device));
+    maxAdrenoVersion = std::max(maxAdrenoVersion, localAdrenoVersion(device));
     if (isOpenClDevice(device)) {
       if (openCl == nullptr) {
         openCl = &device;
@@ -912,6 +912,13 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
   // move together.
   const bool flashEnabled =
       config.contains("flash-attn") && lower(config.at("flash-attn")) == "on";
+  // "Flash attention might be on": truthy or autoy, matching `llm-llamacpp`'s
+  // `flashAttnMayEnable`. Only the crash guard below reads it — a guard must
+  // fire for any value that can reach fabric with flash attention active.
+  const bool flashMayEnable =
+      config.contains("flash-attn") &&
+      (common_arg_utils::is_truthy(config.at("flash-attn")) ||
+       common_arg_utils::is_autoy(config.at("flash-attn")));
   const auto isQuantizedCache = [](const std::string& value) {
     const std::string type = lower(value);
     return type == "q8_0" || type == "q4_0" || type == "q4_1" ||
@@ -946,7 +953,7 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     return unsupported(
         "TurboQuant and PolarQuant KV cache are not supported on Metal");
   }
-  if (isAdrenoVulkan && flashEnabled && (quantizedK || quantizedV)) {
+  if (isAdrenoVulkan && flashMayEnable && (quantizedK || quantizedV)) {
     return unsupported(
         "quantized KV cache with flash attention is not supported on Adreno "
         "800+ Vulkan");

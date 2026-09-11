@@ -412,6 +412,42 @@ int main() {
           "Adreno 800+ Vulkan");
     }
 
+    // The crash guard asks whether flash attention MIGHT be on, so `auto` arms
+    // it even though it leaves the quantized KV auto-default alone.
+    const auto autoFlashRejected = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"cache-type-v", "q8_0"},
+            {"flash-attn", "auto"}},
+        ModelTraits{},
+        {device("Vulkan0", "Adreno 830", BackendDeviceType::Gpu, 1), cpu()});
+    expect(
+        !autoFlashRejected.supported,
+        "flash-attn=auto with quantized KV must be unsupported on Adreno 800+ "
+        "Vulkan");
+
+    // An RPC device's description is its endpoint string, so an endpoint
+    // reading as 830 beside a local 740 must not raise the reported tier.
+    const auto rpcEndpointTierNoSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {device(
+             "RPC0",
+             "adreno830.local:50052",
+             BackendDeviceType::Gpu,
+             11,
+             "RPC"),
+         device("Vulkan0", "Adreno 740", BackendDeviceType::Gpu, 12, "Vulkan"),
+         cpu()});
+    expect(
+        rpcEndpointTierNoSplit.supported &&
+            rpcEndpointTierNoSplit.params.cache_type_k == GGML_TYPE_Q8_0 &&
+            rpcEndpointTierNoSplit.params.cache_type_v == GGML_TYPE_Q8_0,
+        "an RPC endpoint string must not raise the Adreno tier without a "
+        "split");
+
     const auto metalStandard = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{{"device", "gpu"}, {"cache-type-k", "q4_0"}},
@@ -1124,8 +1160,8 @@ int main() {
         "only the first integrated GPU must survive when the two come from "
         "distinct backend registries");
 
-    // The exception (llama.cpp #26953): CUDA reports virtual devices as
-    // integrated GPUs, so iGPUs sharing the kept one's registry are distinct.
+    // CUDA reports virtual devices as integrated GPUs, so iGPUs sharing the
+    // kept one's registry are distinct devices.
     const BackendDevice firstVirtual = device(
         "CUDA0", "NVIDIA GB10", BackendDeviceType::IntegratedGpu, 62, "CUDA");
     const BackendDevice secondVirtual = withRegistryOf(
