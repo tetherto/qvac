@@ -14,11 +14,11 @@
 #include "RenderOverrides.hpp"
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
-#include "model-interface/LoadFitNormalization.hpp"
 #include "common/chat.h"
 #include "common/sampling.h"
 #include "common/speculative.h"
 #include "llama.h"
+#include "model-interface/LoadFitNormalization.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
