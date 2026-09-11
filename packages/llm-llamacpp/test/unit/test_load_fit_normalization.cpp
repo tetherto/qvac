@@ -1173,6 +1173,46 @@ TEST_F(LoadFitNormalizationTest, UnknownGenericArgumentRemainsInvalid) {
       qvac_errors::StatusError);
 }
 
+TEST_F(LoadFitNormalizationTest, PositiveNegatableBooleanEnablesKvOffload) {
+  auto config = baseConfig();
+  config["kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}, true));
+  EXPECT_FALSE(result.params.no_kv_offload);
+}
+
+TEST_F(LoadFitNormalizationTest, NegatedSpellingDisablesKvOffload) {
+  auto config = baseConfig();
+  config["no-kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}, true));
+  EXPECT_TRUE(result.params.no_kv_offload);
+}
+
+TEST_F(LoadFitNormalizationTest, NegatableBooleanLeavesNeighbouringKeysIntact) {
+  auto config = baseConfig();
+  config["ctx-size"] = "2048";
+  config["no-kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}, true));
+  EXPECT_TRUE(result.params.no_kv_offload);
+  EXPECT_EQ(result.params.n_ctx, 2048);
+  EXPECT_EQ(result.params.n_batch, 512U);
+  EXPECT_EQ(result.params.n_ubatch, 128U);
+}
+
 TEST_F(LoadFitNormalizationTest, InvalidChatTemplateRemainsInvalid) {
   auto config = baseConfig();
   config["chat-template"] = "invalid_template_name_xyz123";

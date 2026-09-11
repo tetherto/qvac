@@ -1144,10 +1144,13 @@ NormalizedLoad normalizeLoadForFit(
 
   int size = static_cast<int>(configVector.size());
 
-  std::unordered_map<std::string, common_arg*> argToOptions;
+  std::unordered_map<std::string, std::pair<common_arg*, bool>> argToOptions;
   for (auto& opt : ctxArg.options) {
     for (const auto& arg : opt.args) {
-      argToOptions[arg] = &opt;
+      argToOptions[arg] = {&opt, /* isPositive */ true};
+    }
+    for (const auto& arg : opt.args_neg) {
+      argToOptions[arg] = {&opt, /* isPositive */ false};
     }
   }
 
@@ -1180,7 +1183,9 @@ NormalizedLoad normalizeLoadForFit(
               qvac_errors::general_error::InvalidArgument),
           errorMsg);
     }
-    auto opt = *argToOptions[arg];
+    auto& entry = argToOptions[arg];
+    auto opt = *entry.first;
+    const bool isPositive = entry.second;
     if (opt.has_value_from_env()) {
       QLOG_IF(
           Priority::DEBUG,
@@ -1194,6 +1199,11 @@ NormalizedLoad normalizeLoadForFit(
     try {
       if (opt.handler_void != nullptr) {
         opt.handler_void(params);
+        continue;
+      }
+
+      if (opt.handler_bool != nullptr) {
+        opt.handler_bool(params, isPositive);
         continue;
       }
 
