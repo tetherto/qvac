@@ -230,6 +230,7 @@ jobs:
           workflow-file: on-pr-embed-llamacpp.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-embed-llamacpp
 
   prebuild:
     permissions:
