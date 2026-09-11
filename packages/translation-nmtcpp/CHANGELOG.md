@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-09-11
+
+### Changed
+
+- `qvac-fabric` is now built with `-DLLAMA_OPENSSL=OFF`, via a repo-local
+  overlay port that is otherwise a verbatim copy of the registry port for
+  `10297.1.1`. Upstream defaults `LLAMA_OPENSSL` to `ON`, so
+  `vendor/cpp-httplib` ran `find_package(OpenSSL)` and linked `OpenSSL::SSL` /
+  `OpenSSL::Crypto` into the installed `cpp-httplib` target whenever
+  `LLAMA_BUILD_COMMON` was on — which is always, since the port requests the
+  `llama` feature. Nothing in this addon uses httplib's HTTPS path, so the
+  prebuild no longer carries a build-host-dependent system OpenSSL it never
+  calls. Same fabric source (`REF v${VERSION}`, same SHA512) and the same
+  `version>=` floor as 0.13.0; only the configure flag differs.
+
 ## [0.13.0] - 2026-08-29
 
 ### Changed
