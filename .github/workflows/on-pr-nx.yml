@@ -128,6 +128,17 @@ jobs:
         with:
           target: on-pr
           config-ref: ${{ inputs.config_ref_override || github.event.repository.default_branch }}
+      # PR head, matching on-pr-fabric: a PR that adds itself as a consumer must
+      # get the overlay in that same PR. Own path, so it cannot clobber the
+      # trusted checkout above.
+      - name: Checkout fabric-consumers manifest (PR head)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: .github/fabric-consumers.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+          path: .fabric-consumers-head
       - id: filter
         shell: bash
         env:
@@ -146,9 +157,8 @@ jobs:
             # self-affect against its own target and miss the on-pr carveOut.
             echo "packages=$(echo "$M" | jq -c '[.[] | .package] | unique')"
             echo "linking=$(echo "$M" | jq -c '[.[] | select(.prebuildLinkingScript != null) | {package, workdir, prebuildLinkingScript}] | unique_by(.package)')"
-            # Read from the trusted checkout, not duplicated into project.json:
-            # fabric-consumers.json is the one list on-pr-fabric already fans out over.
-            echo "fabricconsumers=$(jq -c '.npm_runtime' .github/fabric-consumers.json)"
+            # Not duplicated into project.json: the one list on-pr-fabric fans out over.
+            echo "fabricconsumers=$(jq -c '.npm_runtime' .fabric-consumers-head/.github/fabric-consumers.json)"
           } >> "$GITHUB_OUTPUT"
 
   detect-fabric-stack:
@@ -206,7 +216,7 @@ jobs:
   # classification-ggml, vla-ggml) are not built here as well as by their own
   # orchestrators. The list is already transitive.
   prebuild:
-    needs: [fork-approval, authorize, ci-router, matrix, detect-fabric-stack, resolve-fabric-prebuilds]
+    needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, detect-fabric-stack, resolve-fabric-prebuilds]
     # A failed detection leaves needs_fabric_artifact empty, which satisfies
     # != 'true'; without the result guard a stack PR would build against the
     # released @qvac/fabric and still read as green.
@@ -216,6 +226,7 @@ jobs:
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.matrix.outputs.packages != '[]' &&
       needs.detect-fabric-stack.result == 'success' &&
+      needs.sanity-checks.result != 'failure' && needs.sanity-checks.result != 'cancelled' &&
       (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     # actions: read required down the chain: the reuse action lists prior runs +
     # downloads artifacts (else the reusable's request exceeds the grant -> startup_failure).
@@ -240,13 +251,14 @@ jobs:
       reuse-workflow-file: ${{ needs.detect-fabric-stack.outputs.fabric_stack == 'true' && '' || 'on-pr-nx.yml' }}
 
   cpp-tests:
-    needs: [fork-approval, authorize, ci-router, matrix, detect-fabric-stack, resolve-fabric-prebuilds]
+    needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, detect-fabric-stack, resolve-fabric-prebuilds]
     if: |
       always() && !cancelled() &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.ci-router.outputs.run_cpp_tests == 'true' &&
       needs.matrix.outputs.packages != '[]' &&
       needs.detect-fabric-stack.result == 'success' &&
+      needs.sanity-checks.result != 'failure' && needs.sanity-checks.result != 'cancelled' &&
       (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     permissions:
       contents: read
@@ -265,7 +277,7 @@ jobs:
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   run-integration-tests:
-    needs: [fork-approval, authorize, ci-router, prebuild, matrix, detect-fabric-stack, resolve-fabric-prebuilds]
+    needs: [fork-approval, authorize, ci-router, prebuild, matrix, sanity-checks, detect-fabric-stack, resolve-fabric-prebuilds]
     if: |
       always() && !cancelled() &&
       needs.authorize.outputs.allowed == 'true' &&
@@ -273,6 +285,7 @@ jobs:
       needs.prebuild.result != 'cancelled' &&
       needs.matrix.outputs.packages != '[]' &&
       needs.detect-fabric-stack.result == 'success' &&
+      needs.sanity-checks.result != 'failure' && needs.sanity-checks.result != 'cancelled' &&
       (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     permissions:
       contents: read

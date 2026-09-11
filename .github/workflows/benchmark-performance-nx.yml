@@ -49,6 +49,14 @@ permissions:
   packages: read
   id-token: write
 
+# Safe here because this workflow is dispatch-only. The called leaves must NOT
+# get one: in a reusable, github.workflow resolves to the caller, so the group
+# string would collide with on-merge-nx's and the leaf would wait on a group its
+# own caller holds.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   matrix:
     name: Determine affected packages (nx project.json, transitive)

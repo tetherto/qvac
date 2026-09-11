@@ -205,6 +205,9 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          # This tree is fork code and npm install runs over it, so the token
+          # must not be left behind in .git/config.
+          persist-credentials: false
 
       # Dual-registry auth (options.ci.dualRegistry) — packages with @tetherto
       # (GitHub Packages) deps need an .npmrc + git insteadOf before npm install.

@@ -52,6 +52,7 @@ jobs:
   matrix:
     name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
@@ -71,6 +72,9 @@ jobs:
     needs: matrix
     if: needs.matrix.outputs.any == 'true'
     runs-on: ${{ matrix.runner || matrix.os }}
+    # Native C++ builds on GPU self-hosted runners; without this a wedged job
+    # holds a scarce runner for GitHub default 6h. Matches reusable-prebuilds.
+    timeout-minutes: 120
     environment: release
     permissions:
       contents: read
@@ -107,6 +111,9 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          # This tree is fork code and npm install runs over it (scripted in the
+          # coverage lane), so the token must not be left in .git/config.
+          persist-credentials: false
           # Coverage lanes (asr/tts/bci) carry LFS test fixtures; legacy set
           # lfs:true on those checkouts.
           lfs: ${{ matrix.mode == 'coverage' }}
@@ -529,6 +536,7 @@ jobs:
       actions: read
     needs: test-cpp
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: always()
     steps:
       - name: Download all coverage reports

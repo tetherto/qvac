@@ -165,6 +165,18 @@ runs:
           map(. as $row | $row * ($overrides[$row.package] // {}))
         ' <<< "$ROWS")
 
+        # envSecretName picks which repo secret the leaf exports into the test
+        # env. Allowlist the two the packages actually use, so a project.json
+        # edit cannot reach an unrelated secret.
+        BAD_SECRETS=$(echo "$ROWS" | jq -r '
+          [.[] | .envSecretName // empty] | unique
+          | map(select(. != "GITHUB_TOKEN" and . != "QASE_API_TOKEN")) | join(", ")
+        ')
+        if [ -n "$BAD_SECRETS" ]; then
+          echo "::error::envSecretName must be GITHUB_TOKEN or QASE_API_TOKEN, got: $BAD_SECRETS"
+          exit 1
+        fi
+
         # Partition: carveOut rows go to the caller's bespoke reusable, so keep
         # them out of the generic matrix and surface just their package names.
         CARVEOUTS=$(echo "$ROWS" | jq -c '[.[] | select(.carveOut == true) | .package] | unique')
