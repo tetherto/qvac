@@ -41,7 +41,7 @@ struct NmtBackendInterface {
 // dev pointer from one helper guarantees compute and tensor-buffer placement
 // agree — repeated drift between the two functions has been a maintenance
 // hazard (see QVAC-17790 round-8 R8-D1). gpuDevice is an ordinal within the
-// eligible family inventory.
+// eligible family inventory, which lists dedicated GPUs before integrated ones.
 //
 // `logPrefix` is used only for diagnostic WARN/DEBUG messages so each caller
 // can be identified in logcat (e.g. "[nmt_backend_init_gpu]" vs

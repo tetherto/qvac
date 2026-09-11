@@ -105,7 +105,7 @@ declare namespace TranslationNmtcpp {
         modelType: TranslationNmtcppModelTypes[keyof TranslationNmtcppModelTypes];
         pivotConfig?: Record<string, unknown>;
         /**
-         * Enable an eligible Vulkan, Metal, OpenCL, CUDA, or RPC compute backend.
+         * Enable an eligible Vulkan, Metal, OpenCL, or CUDA compute backend.
          * Bergamot is CPU-only by design — this flag is a no-op for that backend.
          *
          * `use_gpu` mirrors the C-struct field (`nmt_context_params::use_gpu`)

@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 #include <ggml-backend.h>
 #include <ggml.h>
@@ -113,14 +114,7 @@ bool nmtNameContainsCi(const char* name, const std::string& needleLower) {
 }
 
 namespace {
-enum class NmtGpuFamily : std::uint8_t {
-  None,
-  Vulkan,
-  Metal,
-  OpenCl,
-  Cuda,
-  Rpc
-};
+enum class NmtGpuFamily : std::uint8_t { None, Vulkan, Metal, OpenCl, Cuda };
 
 bool nameHasMetalPrefix(const char* name) {
   if (name == nullptr) {
@@ -162,9 +156,10 @@ deviceFamily(const NmtBackendInterface& backend, ggml_backend_dev_t device) {
       normalizedDeviceName,
       normalizedDeviceName.begin(),
       [](unsigned char chr) { return static_cast<char>(std::tolower(chr)); });
+  // Translation runs a single compute device, which RPC cannot serve.
   if (normalizedDeviceName.starts_with("rpc") ||
       nameEqualsCi(registryName, "rpc")) {
-    return NmtGpuFamily::Rpc;
+    return NmtGpuFamily::None;
   }
   if (normalizedDeviceName.starts_with("cuda") ||
       nameEqualsCi(registryName, "cuda")) {
@@ -197,6 +192,53 @@ bool matchesExplicitSelector(
   return nmtNameContainsCi(backend.deviceName(device), selectorLower) ||
          (registry != nullptr &&
           nameEqualsCi(backend.registryName(registry), selectorLower));
+}
+
+// Eligible devices in selection order: dedicated GPUs first, then integrated
+// ones, registry order preserved within each class.
+std::vector<ggml_backend_dev_t>
+eligibleDevices(const NmtBackendInterface& backend) {
+  std::vector<ggml_backend_dev_t> dedicated;
+  std::vector<ggml_backend_dev_t> integrated;
+  const size_t devCount = backend.deviceCount();
+  for (size_t i = 0; i < devCount; ++i) {
+    ggml_backend_dev_t devCur = backend.deviceGet(i);
+    if (devCur == nullptr ||
+        deviceFamily(backend, devCur) == NmtGpuFamily::None) {
+      continue;
+    }
+    if (backend.deviceType(devCur) == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      integrated.push_back(devCur);
+    } else {
+      dedicated.push_back(devCur);
+    }
+  }
+  dedicated.insert(dedicated.end(), integrated.begin(), integrated.end());
+  return dedicated;
+}
+
+// The `ordinal`-th accepted device, or nullptr when it is missing or its
+// buffer type is null (which sets `bufferTypeWasNull`).
+template <typename Accept>
+ggml_backend_dev_t selectNth(
+    const NmtBackendInterface& backend,
+    const std::vector<ggml_backend_dev_t>& eligible, Accept accept, int ordinal,
+    bool& bufferTypeWasNull) {
+  int cnt = 0;
+  for (ggml_backend_dev_t devCur : eligible) {
+    if (!accept(devCur)) {
+      continue;
+    }
+    if (cnt == ordinal) {
+      if (backend.deviceBufferType(devCur) != nullptr) {
+        return devCur;
+      }
+      bufferTypeWasNull = true;
+      return nullptr;
+    }
+    ++cnt;
+  }
+  return nullptr;
 }
 } // namespace
 
@@ -236,48 +278,32 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       });
 
   ggml_backend_dev_t dev = nullptr;
-  const size_t devCount = backend.deviceCount();
+  const std::vector<ggml_backend_dev_t> eligible = eligibleDevices(backend);
 
   if (!gpuBackendLower.empty()) {
     // Mode 1: explicit gpu_backend filter — the gpuDevice-th eligible device
     // whose name contains the selector or whose registry name equals it.
     bool deviceFoundButBuftNull = false;
-    int cnt = 0;
-    for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t devCur = backend.deviceGet(i);
-      if (devCur == nullptr) {
-        continue;
-      }
-      const char* name = backend.deviceName(devCur);
-      if (deviceFamily(backend, devCur) == NmtGpuFamily::None) {
-        continue;
-      }
-      if (!matchesExplicitSelector(backend, devCur, gpuBackendLower)) {
-        continue;
-      }
-      if (cnt == gpuDevice) {
-        ggml_backend_buffer_type_t buft = backend.deviceBufferType(devCur);
-        if (buft != nullptr) {
-          dev = devCur;
-          std::ostringstream oss;
-          oss << "[" << logPrefix << "] SELECTED explicit gpu_backend='"
-              << gpuBackend << "': " << (name != nullptr ? name : "(null)");
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
-        } else {
-          deviceFoundButBuftNull = true;
-          std::ostringstream oss;
-          oss << "[" << logPrefix
-              << "] gpu_backend matched device but buffer type is null — "
-                 "skipping";
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-              oss.str());
-        }
-      }
-      if (++cnt > gpuDevice) {
-        break;
-      }
+    dev = selectNth(
+        backend,
+        eligible,
+        [&](ggml_backend_dev_t devCur) {
+          return matchesExplicitSelector(backend, devCur, gpuBackendLower);
+        },
+        gpuDevice,
+        deviceFoundButBuftNull);
+    if (dev != nullptr) {
+      const char* name = backend.deviceName(dev);
+      std::ostringstream oss;
+      oss << "[" << logPrefix << "] SELECTED explicit gpu_backend='"
+          << gpuBackend << "': " << (name != nullptr ? name : "(null)");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
+    } else if (deviceFoundButBuftNull) {
+      std::ostringstream oss;
+      oss << "[" << logPrefix
+          << "] gpu_backend matched device but buffer type is null — "
+             "skipping";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
 #ifndef QVAC_NMTCPP_USE_OPENCL
     // An explicit selector may opt into OpenCL past the build guard, which
@@ -311,39 +337,26 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   // Mode 2a: prefer OpenCL.
   bool oclDeviceFoundButBuftNull = false;
   if (allowDefaultOpenCl) {
-    int cnt = 0;
-    for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t devCur = backend.deviceGet(i);
-      if (devCur == nullptr) {
-        continue;
-      }
-      const char* name = backend.deviceName(devCur);
-      if (deviceFamily(backend, devCur) != NmtGpuFamily::OpenCl) {
-        continue;
-      }
-      if (cnt == gpuDevice) {
-        ggml_backend_buffer_type_t buft = backend.deviceBufferType(devCur);
-        if (buft != nullptr) {
-          dev = devCur;
-          std::ostringstream oss;
-          oss << "[" << logPrefix << "] SELECTED OpenCL backend: "
-              << (name != nullptr ? name : "(null)");
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
-        } else {
-          oclDeviceFoundButBuftNull = true;
-          std::ostringstream oss;
-          oss << "[" << logPrefix
-              << "] OpenCL device matched but buffer type is null — "
-                 "skipping to Mode 2b fallback";
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-              oss.str());
-        }
-      }
-      if (++cnt > gpuDevice) {
-        break;
-      }
+    dev = selectNth(
+        backend,
+        eligible,
+        [&](ggml_backend_dev_t devCur) {
+          return deviceFamily(backend, devCur) == NmtGpuFamily::OpenCl;
+        },
+        gpuDevice,
+        oclDeviceFoundButBuftNull);
+    if (dev != nullptr) {
+      const char* name = backend.deviceName(dev);
+      std::ostringstream oss;
+      oss << "[" << logPrefix << "] SELECTED OpenCL backend: "
+          << (name != nullptr ? name : "(null)");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
+    } else if (oclDeviceFoundButBuftNull) {
+      std::ostringstream oss;
+      oss << "[" << logPrefix
+          << "] OpenCL device matched but buffer type is null — "
+             "skipping to Mode 2b fallback";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
   }
 
@@ -357,40 +370,26 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
              "falling through to Mode 2b";
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
-    const int fallbackOrdinal = gpuDevice;
-    int cnt2 = 0;
-    for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t devCur = backend.deviceGet(i);
-      if (devCur == nullptr) {
-        continue;
-      }
-      const char* name = backend.deviceName(devCur);
-      const NmtGpuFamily family = deviceFamily(backend, devCur);
-      if (family == NmtGpuFamily::None || family == NmtGpuFamily::OpenCl) {
-        continue;
-      }
-      if (cnt2 == fallbackOrdinal) {
-        if (ggml_backend_buffer_type_t buft = backend.deviceBufferType(devCur);
-            buft != nullptr) {
-          dev = devCur;
-          std::ostringstream oss;
-          oss << "[" << logPrefix << "] SELECTED compute backend: "
-              << (name != nullptr ? name : "(null)");
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
-        } else {
-          std::ostringstream oss;
-          oss << "[" << logPrefix
-              << "] Compute device matched but buffer type is null — "
-                 "skipping";
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-              oss.str());
-        }
-      }
-      if (++cnt2 > fallbackOrdinal) {
-        break;
-      }
+    bool fallbackFoundButBuftNull = false;
+    dev = selectNth(
+        backend,
+        eligible,
+        [&](ggml_backend_dev_t devCur) {
+          return deviceFamily(backend, devCur) != NmtGpuFamily::OpenCl;
+        },
+        gpuDevice,
+        fallbackFoundButBuftNull);
+    if (dev != nullptr) {
+      const char* name = backend.deviceName(dev);
+      std::ostringstream oss;
+      oss << "[" << logPrefix << "] SELECTED compute backend: "
+          << (name != nullptr ? name : "(null)");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
+    } else if (fallbackFoundButBuftNull) {
+      std::ostringstream oss;
+      oss << "[" << logPrefix
+          << "] Compute device matched but buffer type is null — skipping";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
   }
 

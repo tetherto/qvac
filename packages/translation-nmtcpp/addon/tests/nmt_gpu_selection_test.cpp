@@ -131,9 +131,9 @@ TEST_F(NmtGpuSelectionTest, UnknownGpuFamilyFallsBackToCpu) {
   EXPECT_EQ(select(), nullptr);
 }
 
-TEST_F(NmtGpuSelectionTest, RpcRegistryIsEligible) {
+TEST_F(NmtGpuSelectionTest, RpcRegistryFallsBackToCpu) {
   inventory = {{"RPC0", "RPC", GGML_BACKEND_DEVICE_TYPE_GPU}};
-  EXPECT_EQ(select(), deviceGet(0));
+  EXPECT_EQ(select(), nullptr);
 }
 
 TEST_F(NmtGpuSelectionTest, CudaRegistryIsEligible) {
@@ -141,12 +141,17 @@ TEST_F(NmtGpuSelectionTest, CudaRegistryIsEligible) {
   EXPECT_EQ(select(), deviceGet(0));
 }
 
-TEST_F(NmtGpuSelectionTest, ExplicitCudaAndRpcSelectorsAreEligible) {
+TEST_F(NmtGpuSelectionTest, ExplicitCudaIsEligibleAndExplicitRpcIsNot) {
   inventory = {
       {"CUDA0", "CUDA", GGML_BACKEND_DEVICE_TYPE_GPU},
       {"RPC0", "RPC", GGML_BACKEND_DEVICE_TYPE_GPU}};
   EXPECT_EQ(select("cuda"), deviceGet(0));
-  EXPECT_EQ(select("rpc"), deviceGet(1));
+  EXPECT_EQ(select("rpc"), nullptr);
+}
+
+TEST_F(NmtGpuSelectionTest, RpcDeviceNameFallsBackToCpu) {
+  inventory = {{"RPC0", "Future", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), nullptr);
 }
 
 TEST_F(NmtGpuSelectionTest, RegistryFamilyNamesRequireExactIdentity) {
@@ -199,6 +204,38 @@ TEST_F(NmtGpuSelectionTest, MusaIsRejectedByDeviceName) {
 TEST_F(NmtGpuSelectionTest, MusaIsRejectedByRegistryName) {
   inventory = {{"SomeGpu", "MUSA", GGML_BACKEND_DEVICE_TYPE_GPU}};
   EXPECT_EQ(select(), nullptr);
+}
+
+TEST_F(NmtGpuSelectionTest, DedicatedGpuOutranksEarlierIntegratedGpu) {
+  inventory = {
+      {"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_IGPU},
+      {"Vulkan1", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), deviceGet(1));
+  EXPECT_EQ(select({}, 1), deviceGet(0));
+}
+
+TEST_F(NmtGpuSelectionTest, ExplicitSelectorPrefersDedicatedGpu) {
+  inventory = {
+      {"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_IGPU},
+      {"Vulkan1", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select("vulkan"), deviceGet(1));
+}
+
+TEST_F(NmtGpuSelectionTest, DefaultOpenClPrefersDedicatedGpu) {
+  inventory = {
+      {"OpenCL0", "OpenCL", GGML_BACKEND_DEVICE_TYPE_IGPU},
+      {"OpenCL1", "OpenCL", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select({}, 0, true), deviceGet(1));
+}
+
+TEST_F(NmtGpuSelectionTest, RegistryOrderPreservedWithinDeviceClass) {
+  inventory = {
+      {"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU},
+      {"Vulkan1", "Vulkan", GGML_BACKEND_DEVICE_TYPE_IGPU},
+      {"Vulkan2", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select({}, 0), deviceGet(0));
+  EXPECT_EQ(select({}, 1), deviceGet(2));
+  EXPECT_EQ(select({}, 2), deviceGet(1));
 }
 
 TEST_F(NmtGpuSelectionTest, SyclIsRejected) {
