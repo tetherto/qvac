@@ -834,7 +834,7 @@ TEST_F(BackendSelectionTest, SplitDevicesKeepOneIgpuPerDistinctRegistry) {
 }
 
 // CUDA reports virtual devices as integrated GPUs, so a later iGPU sharing the
-// kept one's registry handle is distinct and survives (llama.cpp #26953).
+// kept one's registry handle is a distinct device and survives.
 TEST_F(BackendSelectionTest, SplitDevicesKeepIgpusSharingOneRegistry) {
   mockBackend.addDevice(withDeviceId(
       MockDevice("NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),

@@ -442,8 +442,8 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       continue;
     }
     // Keep the first integrated GPU plus every later one whose backend registry
-    // HANDLE matches the last kept one's (llama.cpp #26953) — identity, not
-    // name.
+    // HANDLE matches the last kept one's. Identity, not name: one device seen
+    // by two backends is a duplicate, several devices from one backend are not.
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
       if (integrated.empty() ||
           reg == bckI.ggml_backend_dev_backend_reg(integrated.back().handle)) {
