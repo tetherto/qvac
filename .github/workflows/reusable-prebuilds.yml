@@ -109,6 +109,18 @@ on:
         type: boolean
         required: false
         default: false
+      include-cuda-win32:
+        description: >-
+          Extend `include-cuda` to the win32-x64 job, using NVIDIA's
+          windows-x86_64 redist components. Opt-in and off by default for the
+          same reason as `include-cuda-arm64`: widening `include-cuda` itself
+          would silently change builds of every addon already passing it.
+          Only provisions the toolkit; a caller also needs a matching
+          `win32-x64:` entry in platform-cmake-defines (e.g.
+          `-D ENABLE_CUDA=ON`) or win32 still ships without CUDA.
+        type: boolean
+        required: false
+        default: false
       extra-cmake-defines:
         description: >-
           Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
@@ -400,10 +412,10 @@ jobs:
       # compile-only and the CUDA backend is a runtime-loaded module that never
       # engages without a device.
       #
-      # arm64 is named rather than implied by "not x64", so a linux arch added
-      # later does not inherit the toolkit from include-cuda-arm64 without
-      # anyone asking for it.
-      - if: ${{ inputs.include-cuda && matrix.platform == 'linux' && (matrix.arch == 'x64' || (matrix.arch == 'arm64' && inputs.include-cuda-arm64)) }}
+      # arm64 and win32 are named rather than implied by "not x64", so a
+      # matrix entry added later does not inherit the toolkit from the
+      # platform-specific opt-ins without anyone asking for it.
+      - if: ${{ inputs.include-cuda && ((matrix.platform == 'linux' && (matrix.arch == 'x64' || (matrix.arch == 'arm64' && inputs.include-cuda-arm64))) || (matrix.platform == 'win32' && inputs.include-cuda-win32)) }}
         name: Setup CUDA toolkit for nvcc compile
         uses: ./.github/actions/setup-cuda
 

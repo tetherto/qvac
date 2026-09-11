@@ -1,12 +1,12 @@
 ---
 name: qv-sdk-pr-status
-description: Team-wide PR dashboard for the SDK pod. Shows open PRs touching SDK pod paths or authored by SDK roster members, sorted oldest-first, grouped by author tier (SDK Core / Platform / External) into needs-your-re-review / stale / needs-review / fully-approved, with merge-conflict and CI-red warnings. Use when checking team SDK pod PR status or invoking /qv-sdk-pr-status.
+description: Team-wide PR dashboard for the SDK pod. Shows open PRs touching SDK pod paths, SDK docs, or authored by SDK roster members, sorted oldest-first, grouped by author tier (SDK Core / Platform / External) into needs-your-re-review / stale / needs-review / fully-approved, with a Docs lane, per-platform e2e on Core impl PRs, merge-conflict and CI-red warnings. Use when checking team SDK pod PR status or invoking /qv-sdk-pr-status.
 disable-model-invocation: true
 ---
 
 # SDK Pod PR Status
 
-Thin wrapper over the shared pr-skills library, pinned to the SDK pod. PR data collection lives in `.cursor/skills/_lib/pr-skills/pr-activity.mjs`; this skill keeps the SDK-specific invocation.
+Thin wrapper over the shared pr-skills library, pinned to the SDK pod. PR data collection lives in `.cursor/skills/_lib/pr-skills/pr-activity.mjs`; this skill keeps the SDK-specific invocation. Docs-only PRs (`docPaths` in sdk.json) render in a Docs lane. SDK Core impl PRs include a per-platform `e2e:` line. `approvalLeads` in sdk.json count as lead approval without becoming Core authors.
 
 ## When to use this skill
 
@@ -28,7 +28,7 @@ Thin wrapper over the shared pr-skills library, pinned to the SDK pod. PR data c
 node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod sdk --mode team --authors union --tiers
 ```
 
-- `--authors union` — PRs that touch SDK `ownedPaths` **or** are authored by an SDK roster member
+- `--authors union` — PRs that touch SDK `ownedPaths` or `docPaths`, **or** are authored by an SDK roster member
 - `--tiers` — split into SDK Core / Platform/Middleware / External Contribution (opt-in; other pods stay flat unless they pass the flag)
 
 For the personal review queue, use `--mode review`. The script and its output format are documented in [.cursor/skills/_lib/pr-skills/README.md](.cursor/skills/_lib/pr-skills/README.md).

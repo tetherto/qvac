@@ -167,6 +167,56 @@ export const assessModelFitResultSchema = z.object({
     .describe('Everything the result took for granted, including estimator defaults.')
 })
 
+// ============== Native probe (pre-load) ==============
+
+/**
+ * The other fit question, kept in this file on purpose: `assessModelFit` above
+ * answers "should I download this?" from calibrated coefficients and a checksum,
+ * while the native probe answers "will the load I am about to run fit?" by
+ * reading the GGUF on disk in a disposable child. Two evidence classes, so two
+ * verdict vocabularies:
+ *
+ * - `likely-fits` / `likely-too-large` hedge because a formula is an estimate.
+ * - `fit` / `does-not-fit` do not, because the probe measured this build of this
+ *   file against this device.
+ *
+ * Precedence when both have spoken about the same model: the probe wins, because
+ * it saw the artifact and the resolved load settings. `assessModelFit` is the
+ * answer available before the bytes are on disk. Neither denies a load today.
+ */
+export const nativeProbeVerdictSchema = z.enum(['fit', 'does-not-fit', 'unknown'])
+
+export const nativeProbePlanSchema = z.object({
+  nCtx: z.number().int().describe('Context the probe resolved for this load, in tokens.'),
+  nGpuLayers: z.number().int().describe('Layers the probe would offload.'),
+  nGpuDevices: z.number().int().describe('GPU devices the offload would span.')
+})
+
+export const nativeProbeFitSchema = z
+  .object({
+    verdict: nativeProbeVerdictSchema.describe(
+      'Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.'
+    ),
+    basis: z
+      .literal('native-probe')
+      .describe(
+        'Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings.'
+      ),
+    estimatorVersion: z
+      .string()
+      .describe(
+        'Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy — `native-probe-v1` withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker.'
+      ),
+    reason: z
+      .string()
+      .describe('Machine-readable reason for the verdict. Never parsed out of log text.'),
+    message: z.string().optional().describe('Human-readable detail, when the reason has any.'),
+    plan: nativeProbePlanSchema
+      .optional()
+      .describe('Placement the probe projected. Present only on a `fit` verdict.')
+  })
+  .meta({ title: 'NativeProbeFit' })
+
 export const assessModelFitRequestSchema = assessModelFitInputSchema.extend({
   type: z.literal('assessModelFit')
 })
@@ -175,6 +225,9 @@ export const assessModelFitResponseSchema = assessModelFitResultSchema.extend({
   type: z.literal('assessModelFit')
 })
 
+export type NativeProbeVerdict = z.infer<typeof nativeProbeVerdictSchema>
+export type NativeProbePlan = z.infer<typeof nativeProbePlanSchema>
+export type NativeProbeFit = z.infer<typeof nativeProbeFitSchema>
 export type ModelFitVerdict = z.infer<typeof modelFitVerdictSchema>
 export type ModelFitModelRef = z.infer<typeof modelFitModelRefSchema>
 export type ModelFitWorkload = z.infer<typeof modelFitWorkloadSchema>

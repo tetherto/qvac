@@ -159,6 +159,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('Video'),
   },
   {
+    name: 'World simulation',
+    url: '/ai-capabilities/world-simulation',
+    type: 'page',
+    icon: resolveIcon('Rotate3d'),
+  },
+  {
     name: 'Music generation',
     url: '/ai-capabilities/music-generation',
     type: 'page',

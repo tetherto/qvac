@@ -184,7 +184,7 @@ endif()
 
 # Symbol-export hygiene: hide this addon's statically linked ggml /
 # stable-diffusion symbols so they cannot interpose on another ggml addon
-# loaded into the same process (see packages/ggml-coload-smoke and
+# loaded into the same process (see
 # .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs). Matches
 # every other ggml addon, which all rely on --exclude-libs,ALL alone;
 # diffusion-cpp previously shipped nothing.
