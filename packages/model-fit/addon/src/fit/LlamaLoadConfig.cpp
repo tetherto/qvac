@@ -273,28 +273,18 @@ SplitDeviceSelection selectSplitDevices(
     if (isRpc(device)) {
       rpc.push_back(selected);
     } else if (device.type == BackendDeviceType::IntegratedGpu) {
-      // Keep only the first iGPU, deliberately NOT following fabric 10549,
-      // which keeps the first plus every later iGPU registered by the same
-      // backend registry (v10549.0.0 src/llama.cpp:265-273, `igpus.empty() ||
-      // ggml_backend_dev_backend_reg(dev) ==
-      // ggml_backend_dev_backend_reg(igpus.back().dev)`). Recorded so this
-      // reads as a decision rather than as staleness.
-      //
-      // The rules can only disagree on a host exposing two or more DISTINCT
-      // iGPUs under one registry with no eligible discrete GPU, which no
-      // shipped backend configuration reaches: Metal (ggml-metal.cpp:685) and
-      // OpenCL (ggml-opencl.cpp:11459) both report device type GPU and never
-      // IGPU, and Vulkan dedups physical devices by UUID/LUID before
-      // registering them (ggml-vulkan.cpp:8843-8872, modulo a MoltenVK
-      // carve-out for Apple multi-GPU cards). A Vulkan view and a HIP view of
-      // one iGPU sit in different registries, where even 10549 keeps only the
-      // first. The IGPU-typed Metal and OpenCL devices in this package's unit
-      // tests are synthetic fixtures, not a counterexample.
-      //
-      // llm, embed and model-fit all use this pre-10549 first-iGPU rule, so
-      // they agree with each other and with ocr-ggml and vla-ggml, which
-      // resolve to a single device without building a device list at all.
-      if (integrated.empty()) {
+      // Fabric 10549 (llama_prepare_model_devices, src/llama.cpp:265-273)
+      // keeps the first integrated GPU plus every later one whose backend
+      // REGISTRY handle matches the last kept one's; registry identity, not
+      // its name. Dropping the others is upstream llama.cpp #23897, a
+      // workaround for one integrated device enumerated by several backends;
+      // the same-registry exception is #26953, for the virtual devices CUDA
+      // reports as integrated. Unreachable on what fabric ships today — Metal
+      // and OpenCL never report IGPU and fabric builds no CUDA backend — but
+      // this package already admits CUDA, so the exception goes live the
+      // moment CUDA ships.
+      if (integrated.empty() ||
+          device.registry == integrated.back().device->registry) {
         integrated.push_back(selected);
       }
     } else {
@@ -673,6 +663,7 @@ std::vector<BackendDevice> discoverBackendDevices() {
          .handle = handle,
          .registryName =
              registry == nullptr ? "" : ggml_backend_reg_name(registry),
+         .registry = registry,
          .deviceId =
              properties.device_id == nullptr ? "" : properties.device_id});
   }
@@ -680,7 +671,7 @@ std::vector<BackendDevice> discoverBackendDevices() {
 }
 
 // Mirrors llama's own default ordering: RPC devices first, then local discrete
-// GPUs or the first local iGPU, with local duplicates removed by device_id.
+// GPUs or the retained local iGPUs, with local duplicates removed by device_id.
 // The result is restricted to supported families and terminated by nullptr.
 std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind) {

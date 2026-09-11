@@ -38,6 +38,11 @@ struct BackendDevice {
   BackendDeviceType type = BackendDeviceType::Cpu;
   ggml_backend_dev_t handle = nullptr;
   std::string registryName;
+  /// Registry IDENTITY, which the iGPU retention rule compares and which the
+  /// name cannot stand in for: two registries may share a name. Snapshotted
+  /// here because selection runs on plain records, with no ggml handle to call
+  /// `ggml_backend_dev_backend_reg` through.
+  ggml_backend_reg_t registry = nullptr;
   std::string deviceId;
 };
 

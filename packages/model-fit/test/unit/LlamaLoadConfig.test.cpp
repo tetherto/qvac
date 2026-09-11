@@ -46,6 +46,9 @@ BackendDevice adreno() {
       .handle = reinterpret_cast<ggml_backend_dev_t>(2)};
 }
 
+// Each device gets its own registry identity by default, derived from the
+// handle: distinct registry handles are the common case, and a shared registry
+// NAME must not be mistaken for one. Use `withRegistryOf` for the shared case.
 BackendDevice device(
     const char* name, const char* description, BackendDeviceType type,
     uintptr_t handle, const char* registryName = "") {
@@ -54,7 +57,15 @@ BackendDevice device(
       .description = description,
       .type = type,
       .handle = reinterpret_cast<ggml_backend_dev_t>(handle),
-      .registryName = registryName};
+      .registryName = registryName,
+      .registry = reinterpret_cast<ggml_backend_reg_t>(handle)};
+}
+
+// Makes `device` report `owner`'s registry handle, the only way to express two
+// devices belonging to one backend registry.
+BackendDevice withRegistryOf(BackendDevice device, const BackendDevice& owner) {
+  device.registry = owner.registry;
+  return device;
 }
 
 // `llama_model_params::devices` is a NULL-terminated list (llama.h:296), so a
@@ -1110,13 +1121,11 @@ int main() {
                 .front() == adrenoIntegrated.handle,
         "unsupported discrete GPUs must not hide an eligible integrated GPU");
 
-    // Pins the pre-10549 first-iGPU rule that llm, embed and model-fit all
-    // share. Fabric 10549 keeps the first iGPU plus every later one from the
-    // same backend registry; two distinct iGPUs under one registry with no
-    // eligible discrete GPU is the only shape the rules disagree on, and no
-    // shipped backend configuration reaches it. Changing this assertion means
-    // overriding a recorded decision, not fixing a bug: the reasoning is at
-    // the retention site in LlamaLoadConfig.cpp.
+    // The origin rule (upstream llama.cpp #23897): a second iGPU from a
+    // DIFFERENT backend registry is the same physical device enumerated twice,
+    // so it is dropped. Both devices share a registry NAME and still have
+    // distinct registry handles — the rule compares identity, so matching
+    // names must not be enough.
     BackendDevice firstIntegrated = device(
         "Vulkan0",
         "Integrated GPU 0",
@@ -1137,8 +1146,55 @@ int main() {
     expect(
         twoIntegrated.size() == 2 &&
             twoIntegrated.front() == firstIntegrated.handle,
-        "only the first integrated GPU must survive, even for distinct iGPUs "
-        "sharing one registry that fabric 10549 would both keep");
+        "only the first integrated GPU must survive when the two come from "
+        "distinct backend registries");
+
+    // The exception (upstream llama.cpp #26953): CUDA reports virtual devices
+    // as integrated GPUs, so every later iGPU sharing the kept one's registry
+    // handle is a distinct device and must survive.
+    const BackendDevice firstVirtual = device(
+        "CUDA0", "NVIDIA GB10", BackendDeviceType::IntegratedGpu, 62, "CUDA");
+    const BackendDevice secondVirtual = withRegistryOf(
+        device(
+            "CUDA1",
+            "NVIDIA GB10",
+            BackendDeviceType::IntegratedGpu,
+            63,
+            "CUDA"),
+        firstVirtual);
+    const auto sharedRegistry = model_fit::eligibleBackendDeviceHandles(
+        {firstVirtual, secondVirtual, cpu()},
+        model_fit::LlamaLoadKind::Completion);
+    expect(
+        sharedRegistry.size() == 3 &&
+            sharedRegistry[0] == firstVirtual.handle &&
+            sharedRegistry[1] == secondVirtual.handle,
+        "iGPUs sharing one backend registry must both survive");
+
+    // Retention chains off the most recently KEPT iGPU, not the most recently
+    // SEEN one: a dropped device's registry must not admit a later device.
+    const BackendDevice foreignIntegrated = device(
+        "Vulkan2",
+        "Integrated GPU 2",
+        BackendDeviceType::IntegratedGpu,
+        64,
+        "Vulkan");
+    const auto chained = model_fit::eligibleBackendDeviceHandles(
+        {firstVirtual,
+         foreignIntegrated,
+         withRegistryOf(
+             device(
+                 "Vulkan3",
+                 "Integrated GPU 3",
+                 BackendDeviceType::IntegratedGpu,
+                 65,
+                 "Vulkan"),
+             foreignIntegrated),
+         cpu()},
+        model_fit::LlamaLoadKind::Completion);
+    expect(
+        chained.size() == 2 && chained.front() == firstVirtual.handle,
+        "a dropped iGPU's registry must not admit a later iGPU sharing it");
 
     const BackendDevice legacyDreno = device(
         "OpenCL0",
