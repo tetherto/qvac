@@ -694,24 +694,35 @@ TEST(MultiRequestBatcherCapacityTest, EvenSplitNeverExceedsRemainingToFeed) {
 /// Committing a step is one-shot. A second advance() with no fillBatch()
 /// between must not replay the budgets: that would run currentPos ahead of
 /// the KV cache with nothing decoded, and nothing downstream would notice.
+///
+/// The prompt deliberately outlasts one chunk (7 tokens at maxChunkSize 2).
+/// A slot whose prefill *completes* in the first step stops satisfying
+/// `hasTokensToFeed()`, so advance()'s own filter would skip it on a second
+/// call and the test would pass whether or not committing is one-shot. Only
+/// a still-prefilling slot is actually exposed to a double-commit.
 TEST_F(MultiRequestBatcherTest, SecondAdvanceWithoutFillBatchIsNoOp) {
-  MultiRequestBatcher batcher(8, 100, 2);
+  MultiRequestBatcher batcher(2, 100, 2);
   LlamaBatch batch(16, 0, 2);
 
   uint32_t seqId = 0;
   ASSERT_EQ(
-      batcher.addRequest({10, 11, 12}, seqId),
+      batcher.addRequest({10, 11, 12, 13, 14, 15, 16}, seqId),
       MultiRequestBatcher::AddStatus::Ok);
 
   const auto result = batcher.fillBatch(batch);
-  ASSERT_EQ(result.totalTokens, 3u);
+  ASSERT_EQ(result.totalTokens, 2u);
   mocked_llama_decode(*batch);
   batcher.advance();
 
   const Request* req = batcher.requestAt(seqId);
   ASSERT_NE(req, nullptr);
+  // Mid-prefill, so the slot still has tokens to feed and advance() would
+  // happily move it again if the commit were not consumed.
+  ASSERT_TRUE(req->hasTokensToFeed());
   const llama_pos posAfterCommit = req->currentPos;
   const size_t fedAfterCommit = req->prefillFedCount;
+  ASSERT_EQ(posAfterCommit, 2);
+  ASSERT_EQ(fedAfterCommit, 2u);
 
   batcher.advance();
   batcher.advance();
