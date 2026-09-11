@@ -17,6 +17,18 @@ on:
         type: boolean
         required: false
         default: false
+      # Must mirror the workflow_call inputs below: the test and RTF steps read
+      # inputs.*, which are empty (falsy) on a dispatch if not declared here.
+      run_rtf_benchmarks:
+        description: "Enable the RTF benchmark leg for packages declaring an rtfBenchmark block."
+        type: boolean
+        required: false
+        default: false
+      run_integration_tests:
+        description: "When false, skip the functional integration suite."
+        type: boolean
+        required: false
+        default: true
       overrides:
         description: "JSON object of {package: {ciField: value}} to override per-run (e.g. flip runRtfBenchmarks on for one package)"
         type: string
