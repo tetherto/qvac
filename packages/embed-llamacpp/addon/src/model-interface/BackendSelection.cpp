@@ -97,6 +97,21 @@ bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
       "rpc");
 }
 
+// Classify OpenCL from the same identity source eligibility uses, so a device
+// admitted by its registry name is also bucketed and filtered as OpenCL. The
+// gap this closes is unreachable with shipped backends -- ggml's OpenCL backend
+// names every device "GPUOpenCL", so a device-name test agrees -- but the
+// registry-identity arm is new here, so this keeps the two in step rather than
+// fixing a live defect.
+bool isOpenClDevice(
+    const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  return hasBackendFamily(
+      lowerCopy(bckI.ggml_backend_dev_name(dev)),
+      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
+      "opencl");
+}
+
 std::string
 deviceIdentity(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
@@ -139,7 +154,7 @@ void emplaceIfValidDevice(
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends, const ggml_backend_dev_t dev,
     const DeviceDescription& devDescr,
-    const enum ggml_backend_dev_type backendTypeEnum) {
+    const enum ggml_backend_dev_type backendTypeEnum, const bool isOpenCl) {
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
     std::string text =
@@ -148,7 +163,6 @@ void emplaceIfValidDevice(
 #endif
   };
 
-  const bool isOpenCl = devDescr.gpuBackend.find("opencl") != std::string::npos;
   const bool isAdreno =
       devDescr.gpuDescription.find("adreno") != std::string::npos;
   if (isOpenCl && isAdreno) {
@@ -166,8 +180,7 @@ void emplaceIfValidDevice(
 
 bool shouldProcessDevice(
     const enum ggml_backend_dev_type backendTypeEnum,
-    const DeviceDescription& devDescr,
-    const std::optional<MainGpuType> mainGpuType) {
+    const std::optional<MainGpuType> mainGpuType, const bool isOpenCl) {
   const bool anyGpu = !mainGpuType.has_value() &&
                       (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
                        backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU);
@@ -177,7 +190,6 @@ bool shouldProcessDevice(
   const bool dedicatedGpu = mainGpuType.has_value() &&
                             mainGpuType.value() == MainGpuType::Dedicated &&
                             backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU;
-  const bool isOpenCl = devDescr.gpuBackend.find("opencl") != std::string::npos;
   return anyGpu || integratedGpu || dedicatedGpu || isOpenCl;
 }
 
@@ -192,6 +204,9 @@ void tryEmplaceDevice(
   const enum ggml_backend_dev_type backendTypeEnum =
       bckI.ggml_backend_dev_type(dev);
   const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
+  // Resolved once and shared by the type filter and the bucket choice, so the
+  // two can never disagree about what counts as an OpenCL device.
+  const bool isOpenCl = isOpenClDevice(bckI, dev);
   const bool isGpuType = backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
                          backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
   // Record a refused GPU before the main-gpu type filter so the CPU-fallback
@@ -200,7 +215,7 @@ void tryEmplaceDevice(
     rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
     return;
   }
-  if (shouldProcessDevice(backendTypeEnum, devDescr, mainGpuType)) {
+  if (shouldProcessDevice(backendTypeEnum, mainGpuType, isOpenCl)) {
 #ifndef NDEBUG
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "New GPU device", nullptr);
 #endif
@@ -214,7 +229,8 @@ void tryEmplaceDevice(
         openClBackends,
         dev,
         devDescr,
-        backendTypeEnum);
+        backendTypeEnum,
+        isOpenCl);
   } else {
 #ifndef NDEBUG
     bckI.llamaLogCallback(
@@ -448,6 +464,15 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
+    // Deliberate divergence from fabric 10549, which keeps the first iGPU plus
+    // every further iGPU from the same registry: embed keeps at most one.
+    // ocr-ggml and vla-ggml are already on 10549 and still resolve to a single
+    // device without building a fabric-shaped list at all, so one iGPU matches
+    // the rest of the repo; and the rules only differ on a host exposing two or
+    // more distinct iGPUs under one registry, which no shipped backend
+    // configuration produces (Metal and OpenCL always report GPU, and Vulkan
+    // deduplicates physical devices by UUID before registering them).
+    // SplitDevicesKeepOnlyOneIntegratedGpu pins this choice.
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
       if (integrated.empty()) {
         integrated.emplace_back(std::move(selected));

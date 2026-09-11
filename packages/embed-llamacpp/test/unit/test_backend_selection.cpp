@@ -409,6 +409,27 @@ TEST_F(BackendSelectionTest, RegistryIdentityCanAdmitKnownFamily) {
   }
 }
 
+// An Adreno OpenCL device identified only by its REGISTRY name must land in the
+// OpenCL-priority bucket, which outranks a plain Vulkan GPU enumerated first.
+// Classifying it by device name instead puts it in the generic GPU bucket and
+// the Vulkan device wins.
+TEST_F(BackendSelectionTest, RegistryOnlyOpenClOutranksEarlierVulkan) {
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  mockBackend.addDevice(MockDevice(
+      ADRENO_DESC, "driver-device-0", GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL"));
+  expectChosen(mockBackend, BackendType::GPU, "driver-device-0");
+}
+
+// OpenCL is the escape hatch that survives the main-gpu device-type filter, so
+// an `integrated` request must still select a GPU-typed OpenCL device. That
+// only holds if the OpenCL test consults the registry name as well.
+TEST_F(BackendSelectionTest, RegistryOnlyOpenClSurvivesMainGpuTypeFilter) {
+  mockBackend.addDevice(MockDevice(
+      ADRENO_DESC, "driver-device-0", GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL"));
+  MainGpu mainGpu = MainGpuType::Integrated;
+  expectChosen(mockBackend, BackendType::GPU, "driver-device-0", mainGpu);
+}
+
 TEST_F(BackendSelectionTest, DeviceFamilyNamesRequireKnownPrefixes) {
   mockBackend.addDevice(MockDevice(
       "Future GPU", "NotVulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Future"));
@@ -790,6 +811,19 @@ TEST_F(BackendSelectionTest, SplitDevicesExcludeUnsupportedBackends) {
   mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
   mockBackend.addDevice(createGPUDevice("Intel Arc", "SYCL0"));
   mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));
+}
+
+// Pins a deliberate divergence from fabric 10549, which keeps every additional
+// iGPU sharing the first one's registry. Embed keeps at most one. Changing this
+// means revisiting that decision, not fixing a bug -- see the comment in
+// getSplitDeviceSelection.
+TEST_F(BackendSelectionTest, SplitDevicesKeepOnlyOneIntegratedGpu) {
+  mockBackend.addDevice(MockDevice(
+      "Intel Iris Xe", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"));
+  mockBackend.addDevice(MockDevice(
+      "Intel Iris Xe", "Vulkan1", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"Vulkan0"}));
 }

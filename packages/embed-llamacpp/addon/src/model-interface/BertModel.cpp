@@ -573,6 +573,11 @@ BertModelSetup setupParams(
     } else {
       chosenBackend =
           chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
+      // Name-based, unlike the split path, which carries the registry-aware
+      // trait through splitBackendTraits. Returning the trait alongside the
+      // name would change chooseBackend's signature in both addons, and the
+      // gap is unreachable with shipped backends: ggml's OpenCL backend names
+      // every device "GPUOpenCL", so name and registry always agree today.
       isOpenCl = chosenBackend.first == BackendType::GPU &&
                  chosenBackend.second.find("opencl") != std::string::npos;
     }
