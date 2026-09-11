@@ -26,6 +26,15 @@ inputs:
     description: "JSON array from upload-to-devicefarm: [{name, grep, arn}]. Used to print a run-to-tests legend. Optional; omit for non-sharded runs."
     required: false
     default: "[]"
+  max-consecutive-aws-failures:
+    description: |
+      Abort the polling loop after this many CONSECUTIVE failed AWS calls. A
+      transient throttle clears within a cycle; a credential that has been
+      destroyed mid-job never does, and the loop cannot otherwise tell the two
+      apart from "test still running" (it just keeps polling to
+      max-wait-time-seconds). Default 5 ≈ 4 minutes.
+    required: false
+    default: "5"
 
 outputs:
   test-result:
@@ -60,21 +69,100 @@ runs:
         RUN_ARNS_JSON: ${{ inputs.run-arns }}
         MAX_WAIT_TIME_SECONDS: ${{ inputs.max-wait-time-seconds }}
         TEST_SPECS_JSON: ${{ inputs.test-specs }}
+        MAX_AWS_FAIL_STREAK: ${{ inputs.max-consecutive-aws-failures }}
       run: |
         set -euo pipefail
 
         # ── helpers ──────────────────────────────────────────────────
         # Bash 3.2 compat: no mapfile, no declare -A.
+
+        # The AWS CLI's two streams go to FILES, not shell variables. Every
+        # aws_retry call site consumes the function's stdout through $(...),
+        # which runs it in a SUBSHELL — anything assigned to a variable in
+        # there is lost to the caller, so a captured-stderr variable would
+        # always read back empty. A file survives the subshell.
+        #
+        # Deliberately not under $RUNNER_TEMP: _work/_temp is swept on this
+        # self-hosted fleet while jobs are still running, which is the very
+        # failure this diagnosis has to stay readable through.
+        AWS_IO_DIR="${RUNNER_WORKSPACE:-${GITHUB_WORKSPACE:-/tmp}}/.df-monitor-io"
+        rm -rf "$AWS_IO_DIR"
+        mkdir -p "$AWS_IO_DIR"
+        trap 'rm -rf "$AWS_IO_DIR"' EXIT
+        AWS_OUT_FILE="$AWS_IO_DIR/aws-stdout"
+        AWS_ERR_FILE="$AWS_IO_DIR/aws-stderr"
+        : > "$AWS_ERR_FILE"
+
+        aws_last_error() {
+          local err=""
+          err=$(tr '\n' ' ' < "$AWS_ERR_FILE" 2>/dev/null || true)
+          if [ -z "$err" ]; then
+            echo "<no stderr captured>"
+          else
+            echo "${err:0:400}"
+          fi
+        }
+
         aws_retry() {
-          local max_attempts=3 attempt=1 result=""
-          while [ $attempt -le $max_attempts ]; do
-            result=$("$@" 2>/dev/null) && { echo "$result"; return 0; }
-            echo "  ⚠️  AWS API attempt $attempt/$max_attempts failed, retrying in 5s..." >&2
+          local max_attempts=3 attempt=1 rc=0
+          while [ "$attempt" -le "$max_attempts" ]; do
+            rc=0
+            "$@" >"$AWS_OUT_FILE" 2>"$AWS_ERR_FILE" || rc=$?
+            if [ "$rc" -eq 0 ]; then
+              cat "$AWS_OUT_FILE"
+              return 0
+            fi
+            # This used to be `2>/dev/null`, so a permanently destroyed
+            # credential logged the same opaque line as a transient throttle.
+            # Run 33413219852 emitted 274 of them and nothing else, turning a
+            # one-line cause ("The config profile (seed) could not be found")
+            # into a two-hour hang and a two-hour investigation.
+            echo "  ⚠️  AWS API attempt $attempt/$max_attempts failed (exit $rc): $(aws_last_error)" >&2
             sleep 5
             attempt=$((attempt + 1))
           done
-          echo ""
           return 1
+        }
+
+        # ── permanent-failure guard ──────────────────────────────────
+        # The polling loop cannot distinguish "the AWS call failed" from "the
+        # test is still running": a failed poll simply leaves the slot
+        # unfinished and the loop sleeps again. A transient error clears on the
+        # next cycle; a deleted credential never does, so the step used to burn
+        # the entire max-wait budget without ever reading a result. Count
+        # CONSECUTIVE failures (reset by any success) and abort instead.
+        #
+        # aws_ok / aws_failed MUST be called from the main shell — never inside
+        # $(...) — or the counter update is discarded with the subshell.
+        AWS_FAIL_STREAK=0
+
+        diagnose_aws() {
+          echo "──────── AWS credential diagnosis ────────"
+          echo "AWS_PROFILE=${AWS_PROFILE:-<unset>}"
+          echo "AWS_CONFIG_FILE=${AWS_CONFIG_FILE:-<unset>}"
+          echo "last stderr: $(aws_last_error)"
+          if [ -n "${AWS_CONFIG_FILE:-}" ] && [ ! -f "${AWS_CONFIG_FILE}" ]; then
+            echo "::error title=AWS config file vanished::${AWS_CONFIG_FILE} no longer exists."
+            echo "It was written earlier in THIS job by 'Bootstrap auto-refreshing AWS"
+            echo "credentials' (seed-and-presign-models). Something outside the job deleted it"
+            echo "mid-run — on the self-hosted fleet that is the runner cleanup that sweeps"
+            echo "_work/_temp when any job on the host finishes, including a sibling job."
+          fi
+          echo "aws sts get-caller-identity:"
+          aws sts get-caller-identity --output text || true
+          echo "──────────────────────────────────────────"
+        }
+
+        aws_ok() { AWS_FAIL_STREAK=0; }
+
+        aws_failed() {
+          AWS_FAIL_STREAK=$((AWS_FAIL_STREAK + 1))
+          echo "::warning title=Device Farm monitor: AWS call failed::$1 failed (${AWS_FAIL_STREAK}/${MAX_AWS_FAIL_STREAK} consecutive): $(aws_last_error)"
+          if [ "$AWS_FAIL_STREAK" -ge "$MAX_AWS_FAIL_STREAK" ]; then
+            echo "::error title=Device Farm monitor: AWS unreachable::${MAX_AWS_FAIL_STREAK} consecutive AWS failures — aborting instead of polling on to the ${MAX_WAIT_TIME:-?}s ceiling. The Device Farm runs themselves may well be healthy; it is this observer that can no longer see them."
+            diagnose_aws
+            exit 1
+          fi
         }
 
         # ── parse ARNs ──────────────────────────────────────────────
@@ -200,51 +288,64 @@ runs:
           for ((i=0; i<RUN_COUNT; i++)); do
             arn="${RUN_ARNS[$i]}"
             if [ "${DONE[$i]}" != "true" ]; then
-              RUN_JSON=$(aws_retry aws devicefarm get-run --arn "$arn" --output json) || true
-              CUR_STATUS[$i]=$(echo "$RUN_JSON" | jq -r '.run.status // "UNKNOWN"')
-              CUR_RESULT[$i]=$(echo "$RUN_JSON" | jq -r '.run.result // "UNKNOWN"')
-              if [ "${CUR_STATUS[$i]}" = "COMPLETED" ]; then
-                DONE[$i]="true"
-                DONE_COUNT=$((DONE_COUNT + 1))
+              RUN_JSON=""
+              if RUN_JSON=$(aws_retry aws devicefarm get-run --arn "$arn" --output json); then
+                aws_ok
+              else
+                # Leave CUR_STATUS at its last known value rather than
+                # overwriting it with UNKNOWN: the run is almost certainly
+                # still fine, it is the observer that has gone blind, and a
+                # fake UNKNOWN transition would pollute the log on the way to
+                # the abort that aws_failed schedules.
+                aws_failed "get-run (Run $((i+1)))"
+                RUN_JSON=""
               fi
-
-              # Transition signals. RUNNING / COMPLETED get promoted
-              # to ::notice:: so they surface at the top of the job
-              # UI; everything else goes to a plain echo so the log
-              # still tells the full story without notice spam.
-              prev_status="${PREV_STATUS[$i]}"
-              cur_status="${CUR_STATUS[$i]}"
-              cur_result="${CUR_RESULT[$i]}"
-              if [ -n "$cur_status" ] && [ "$cur_status" != "$prev_status" ]; then
-                TS=$(date -u +%H:%M:%S)
-                if [ -z "$prev_status" ]; then
-                  # First observation. We don't know the real
-                  # transition time so just announce the attach.
-                  echo "🔌 Monitor attached: Run $((i+1)) starting from state=$cur_status (t=${ELAPSED}s)"
-                  if [ "$cur_status" = "RUNNING" ]; then
-                    RUNNING_AT[$i]=$ELAPSED
-                  fi
-                elif [ "$cur_status" = "RUNNING" ]; then
-                  if [ -z "${RUNNING_AT[$i]}" ]; then
-                    RUNNING_AT[$i]=$ELAPSED
-                    echo "::notice title=Device Farm Run $((i+1)) acquired device::[$TS] $prev_status -> RUNNING after ${ELAPSED}s of queue time"
-                  fi
-                elif [ "$cur_status" = "COMPLETED" ]; then
-                  running_at="${RUNNING_AT[$i]}"
-                  if [ -n "$running_at" ]; then
-                    exec_time=$((ELAPSED - running_at))
-                    echo "::notice title=Device Farm Run $((i+1)) finished::[$TS] result=$cur_result | queued ${running_at}s | executed ${exec_time}s | total ${ELAPSED}s"
-                  else
-                    # Defensive: COMPLETED without ever observing
-                    # RUNNING means we missed the RUNNING window between
-                    # two 30s polls (rare, trivially short runs) or the
-                    # run errored straight from a pending state.
-                    echo "::notice title=Device Farm Run $((i+1)) finished::[$TS] result=$cur_result | total ${ELAPSED}s (no RUNNING window observed)"
-                  fi
-                else
-                  echo "🔄 Run $((i+1)): $prev_status -> $cur_status (elapsed ${ELAPSED}s)"
+              if [ -n "$RUN_JSON" ]; then
+                CUR_STATUS[$i]=$(echo "$RUN_JSON" | jq -r '.run.status // "UNKNOWN"')
+                CUR_RESULT[$i]=$(echo "$RUN_JSON" | jq -r '.run.result // "UNKNOWN"')
+                if [ "${CUR_STATUS[$i]}" = "COMPLETED" ]; then
+                  DONE[$i]="true"
+                  DONE_COUNT=$((DONE_COUNT + 1))
                 fi
-                PREV_STATUS[$i]="$cur_status"
+
+                # Transition signals. RUNNING / COMPLETED get promoted
+                # to ::notice:: so they surface at the top of the job
+                # UI; everything else goes to a plain echo so the log
+                # still tells the full story without notice spam.
+                prev_status="${PREV_STATUS[$i]}"
+                cur_status="${CUR_STATUS[$i]}"
+                cur_result="${CUR_RESULT[$i]}"
+                if [ -n "$cur_status" ] && [ "$cur_status" != "$prev_status" ]; then
+                  TS=$(date -u +%H:%M:%S)
+                  if [ -z "$prev_status" ]; then
+                    # First observation. We don't know the real
+                    # transition time so just announce the attach.
+                    echo "🔌 Monitor attached: Run $((i+1)) starting from state=$cur_status (t=${ELAPSED}s)"
+                    if [ "$cur_status" = "RUNNING" ]; then
+                      RUNNING_AT[$i]=$ELAPSED
+                    fi
+                  elif [ "$cur_status" = "RUNNING" ]; then
+                    if [ -z "${RUNNING_AT[$i]}" ]; then
+                      RUNNING_AT[$i]=$ELAPSED
+                      echo "::notice title=Device Farm Run $((i+1)) acquired device::[$TS] $prev_status -> RUNNING after ${ELAPSED}s of queue time"
+                    fi
+                  elif [ "$cur_status" = "COMPLETED" ]; then
+                    running_at="${RUNNING_AT[$i]}"
+                    if [ -n "$running_at" ]; then
+                      exec_time=$((ELAPSED - running_at))
+                      echo "::notice title=Device Farm Run $((i+1)) finished::[$TS] result=$cur_result | queued ${running_at}s | executed ${exec_time}s | total ${ELAPSED}s"
+                    else
+                      # Defensive: COMPLETED without ever observing
+                      # RUNNING means we missed the RUNNING window between
+                      # two 30s polls (rare, trivially short runs) or the
+                      # run errored straight from a pending state.
+                      echo "::notice title=Device Farm Run $((i+1)) finished::[$TS] result=$cur_result | total ${ELAPSED}s (no RUNNING window observed)"
+                    fi
+                  else
+                    echo "🔄 Run $((i+1)): $prev_status -> $cur_status (elapsed ${ELAPSED}s)"
+                  fi
+                  PREV_STATUS[$i]="$cur_status"
+                fi
               fi
             fi
             [ -n "$STATUS_LINE" ] && STATUS_LINE="${STATUS_LINE} | "
@@ -267,7 +368,13 @@ runs:
               for ((i=0; i<RUN_COUNT; i++)); do
                 if [ "${CUR_STATUS[$i]}" = "RUNNING" ]; then
                   arn="${RUN_ARNS[$i]}"
-                  JOBS_JSON=$(aws_retry aws devicefarm list-jobs --arn "$arn" --output json) || true
+                  JOBS_JSON=""
+                  if JOBS_JSON=$(aws_retry aws devicefarm list-jobs --arn "$arn" --output json); then
+                    aws_ok
+                  else
+                    aws_failed "list-jobs (Run $((i+1)), deep dive)"
+                    JOBS_JSON=""
+                  fi
                   if [ -n "$JOBS_JSON" ]; then
                     echo "Run $((i+1)):"
                     echo "$JOBS_JSON" | jq -r '.jobs[]? | "  device=\(.device.name // "?") os=\(.device.os // "?") | state=\(.status // "?") result=\(.result // "?") | counters=\((.counters // {}).passed // 0)P/\((.counters // {}).failed // 0)F/\((.counters // {}).errored // 0)E/\((.counters // {}).skipped // 0)S of \((.counters // {}).total // 0) | started=\(.started // "-") msg=\((.message // "") | gsub("\n"; " ") | .[0:120])"' || echo "  (jq parse failed)"
@@ -314,7 +421,13 @@ runs:
         RUN_INDEX=0
         for RUN_ARN in "${RUN_ARNS[@]}"; do
           RUN_INDEX=$((RUN_INDEX + 1))
-          RUN_DETAILS=$(aws_retry aws devicefarm get-run --arn "$RUN_ARN" --output json) || true
+          RUN_DETAILS=""
+          if RUN_DETAILS=$(aws_retry aws devicefarm get-run --arn "$RUN_ARN" --output json); then
+            aws_ok
+          else
+            aws_failed "get-run (Run $RUN_INDEX, final aggregation)"
+            RUN_DETAILS=""
+          fi
           [ -z "$RUN_DETAILS" ] && RUN_DETAILS='{}'
           RESULT=$(echo "$RUN_DETAILS" | jq -r '.run.result // "UNKNOWN"')
           RUN_NAME_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
@@ -349,11 +462,23 @@ runs:
             echo "Result: $RESULT"
           fi
 
-          JOBS=$(aws_retry aws devicefarm list-jobs --arn "$RUN_ARN" --output json) || true
+          JOBS=""
+          if JOBS=$(aws_retry aws devicefarm list-jobs --arn "$RUN_ARN" --output json); then
+            aws_ok
+          else
+            aws_failed "list-jobs (Run $RUN_INDEX, final aggregation)"
+            JOBS=""
+          fi
           [ -z "$JOBS" ] && JOBS='{"jobs":[]}'
           for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
             DEVICE_COUNT=$((DEVICE_COUNT + 1))
-            JOB_DETAILS=$(aws_retry aws devicefarm get-job --arn "$JOB_ARN" --output json) || true
+            JOB_DETAILS=""
+            if JOB_DETAILS=$(aws_retry aws devicefarm get-job --arn "$JOB_ARN" --output json); then
+              aws_ok
+            else
+              aws_failed "get-job ($JOB_ARN)"
+              JOB_DETAILS=""
+            fi
             [ -z "$JOB_DETAILS" ] && JOB_DETAILS='{}'
             DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
             JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')

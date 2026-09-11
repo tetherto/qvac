@@ -306,7 +306,10 @@ jobs:
           manifest-path: addon/packages/embed-llamacpp/test/integration/models.manifest.json
           s3-prefix: qvac_models_compiled/mobile-pilot/embed/
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          output-map: ${{ runner.temp }}/embed-url-map.json
+          # github.workspace, not runner.temp: _work/_temp is swept mid-job on
+          # the self-hosted fleet, which has already made this map disappear
+          # between the presign step and the prestage step that reads it.
+          output-map: ${{ github.workspace }}/embed-url-map.json
           mode: presign
 
       # Generate the model pre-stage script. The Device Farm host has reliable
@@ -319,7 +322,7 @@ jobs:
         working-directory: addon/packages/embed-llamacpp
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
-          PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
+          PRESTAGE_URL_MAP: ${{ github.workspace }}/embed-url-map.json
         run: |
           node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -334,7 +337,7 @@ jobs:
         working-directory: addon/packages/embed-llamacpp
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
-          PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
+          PRESTAGE_URL_MAP: ${{ github.workspace }}/embed-url-map.json
         run: |
           node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
           {

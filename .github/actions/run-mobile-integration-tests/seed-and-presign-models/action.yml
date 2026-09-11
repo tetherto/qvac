@@ -57,7 +57,20 @@ runs:
         # credential_process helper the AWS CLI re-invokes near expiry, so a long
         # first seed survives the 2h STS cap. It mints a fresh OIDC JWT and
         # exchanges it via assume-role-with-web-identity (no pre-existing creds).
-        CRED_HELPER="${RUNNER_TEMP}/oidc-cred-process-seed.sh"
+        # NOT $RUNNER_TEMP. On the self-hosted fleet _work/_temp is swept while
+        # jobs are still running — the runner's job-completed hook fires for any
+        # job on the host and takes files belonging to jobs that have not
+        # finished. The profile and its credential_process helper then vanish
+        # mid-job and every subsequent AWS call fails with "The config profile
+        # (seed) could not be found": immediately in a short step, or as a
+        # two-hour hang in the Device Farm polling loop (run 33413219852).
+        # $RUNNER_WORKSPACE (_work/<repo>) is per-runner-instance, lives outside
+        # _temp, and is outside the addon checkout that gets bundled into the
+        # Device Farm app — so nothing sweeps it and nothing ships it.
+        CRED_DIR="${RUNNER_WORKSPACE:-${GITHUB_WORKSPACE:-${RUNNER_TEMP}}}/.qvac-aws-seed"
+        mkdir -p "${CRED_DIR}"
+        chmod 700 "${CRED_DIR}"
+        CRED_HELPER="${CRED_DIR}/oidc-cred-process-seed.sh"
         cat > "${CRED_HELPER}" <<'HELPER'
         #!/usr/bin/env bash
         set -euo pipefail
@@ -78,7 +91,7 @@ runs:
         HELPER
         chmod +x "${CRED_HELPER}"
 
-        AWS_CONFIG_FILE="${RUNNER_TEMP}/aws-config-seed"
+        AWS_CONFIG_FILE="${CRED_DIR}/aws-config-seed"
         cat > "${AWS_CONFIG_FILE}" <<CONFIG
         [profile seed]
         credential_process = ${CRED_HELPER}
