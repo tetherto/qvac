@@ -5,7 +5,6 @@
 #include <utility>
 
 #include <inference-addon-cpp/Errors.hpp>
-#include <nlohmann/json.hpp>
 
 #include "addon/LlmErrors.hpp"
 #include "common/json-schema-to-grammar.h"
@@ -69,7 +68,7 @@ void applyGenerationOverridesToSampling(
   bool installedGrammar = false;
   if (overrides.json_schema) {
     try {
-      auto parsed = nlohmann::ordered_json::parse(*overrides.json_schema);
+      auto parsed = common_json::parse(*overrides.json_schema);
       sampling.grammar = common_grammar(
           COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, json_schema_to_grammar(parsed));
       installedGrammar = true;
