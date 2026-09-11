@@ -18,7 +18,7 @@ Controls how the model is distributed across GPUs.
 |----------|----------|
 | `'none'` | **Default.** Pin the entire model to a single GPU selected by `main-gpu` (or auto-detected). No multi-GPU. |
 | `'layer'`| **Pipeline parallelism.** Each transformer layer is assigned to a GPU. Layers flow sequentially through GPUs. Best for large batch or long-context workloads where layer count exceeds single-GPU VRAM. |
-| `'tensor'`| **EXPERIMENTAL tensor parallelism** via qvac-fabric's meta device — weights *and* KV cache are split across every visible GPU. Desktop only. Requires flash attention, disables auto-fit, and is unavailable for some architectures. **See [tensor parallelism](#tensor-parallelism) below.** |
+| `'tensor'`| **EXPERIMENTAL tensor parallelism** via qvac-fabric's meta device — weights *and* KV cache are split across the eligible devices the addon pins. Desktop only. Requires flash attention, disables auto-fit, and is unavailable for some architectures. **See [tensor parallelism](#tensor-parallelism) below.** |
 
 Accepts both `split-mode` (hyphen) and `split_mode` (underscore). Providing both throws an error. Case-insensitive (`'LAYER'` works).
 
@@ -238,7 +238,7 @@ Skips integrated GPUs during backend selection. Falls back to CPU if no discrete
 | `split-mode: 'tensor'` on Android / iOS | Throws `InvalidArgument` — all multi-GPU params are rejected on mobile |
 | `split-mode: 'tensor'` with `ctx_size` unset | Loads at the model's full trained context; auto-fit is disabled in this mode, so a large model can OOM |
 | `split-mode: 'tensor'` with `fit: 'on'` | `fit` is ignored — the tensor-mode override is applied after argument parsing, because qvac-fabric cannot fit this mode at all |
-| `split-mode: 'tensor'` on a discrete + integrated GPU host | Only the discrete GPUs participate; the addon passes an explicit `--device` list because qvac-fabric's tensor path would otherwise include the iGPU |
+| `split-mode: 'tensor'` on a discrete + integrated GPU host | Only the discrete GPUs participate; the addon pins the device handles it selected via `params.devices` because qvac-fabric's tensor path would otherwise include the iGPU |
 | `split-mode: 'layer'` or `'tensor'` with no eligible GPU device | Falls back to CPU with a warning naming the rejected devices. `split-mode` is reset to `'none'`, `main-gpu` to `-1`, `tensor-split` is erased, and `--device none` is emitted. An empty device list is never passed to qvac-fabric, which treats it as a hard error in tensor mode |
 | `tensor-split` with a value count matching neither the registered GPU count nor the eligible device count | Throws `InvalidArgument` rather than letting qvac-fabric silently pad with zeros, which would leave a participating GPU with no layers |
 | `split-mode: 'tensor'` through the SDK | Rejected by `@qvac/inference`'s Zod schema, which does not yet include `'tensor'`; use direct addon `loadModel` |

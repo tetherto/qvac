@@ -204,6 +204,74 @@ FlashAttnState resolveFlashAttn(
   return {.enabled = truthy, .mayEnable = truthy || autoy};
 }
 
+void remapTensorSplit(
+    load_fit_normalization::ConfigMap& config,
+    const backend_selection::SplitDeviceSelection& selection) {
+  auto hyphen = config.find("tensor-split");
+  auto underscore = config.find("tensor_split");
+  if (hyphen != config.end() && underscore != config.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "both 'tensor-split' and 'tensor_split' are present; use one or the "
+        "other.");
+  }
+  auto value = hyphen != config.end() ? hyphen : underscore;
+  if (value == config.end()) {
+    return;
+  }
+  std::string normalized = value->second;
+  std::ranges::replace(normalized, '/', ',');
+  const std::vector<std::string> proportions = split(normalized, ',');
+
+  // Re-join from the tokens rather than forwarding the caller's string.
+  // Fabric tokenizes on the regex [,/]+, so a run of delimiters collapses
+  // there as it does here and '1,,2' is two shares on both sides. The
+  // divergence is an empty or whitespace-only FIELD: fabric keeps it (',1,2'
+  // yields a leading "", '1, ,2' a middle " ") and std::stof throws on
+  // either, while split() trims and drops it. Such a value would be counted
+  // as two shares here and then rejected by fabric's parser. Emitting the
+  // tokens we counted keeps the two in step.
+  auto joinShares = [](const std::vector<std::string>& shares) {
+    std::string joined;
+    for (const std::string& share : shares) {
+      if (!joined.empty()) {
+        joined += ',';
+      }
+      joined += share;
+    }
+    return joined;
+  };
+
+  // Cardinality decides how the list is read, in this order:
+  //   1. one share per eligible device -> already in final order, pass through
+  //   2. one share per registered GPU  -> remap through sourceGpuIndex
+  //   3. anything else                 -> reject
+  // Final order wins when both counts are equal. The addon pins
+  // params.devices itself, so fabric applies share i to final device i, which
+  // makes the final list the contract the caller is writing against.
+  if (proportions.size() == selection.devices.size()) {
+    value->second = joinShares(proportions);
+    return;
+  }
+  if (proportions.size() != selection.sourceGpuCount) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: tensor-split has %zu values, which matches neither the %zu "
+            "registered GPU devices nor the %zu eligible devices.\n",
+            K_LEGACY_PARSER_NAME.data(),
+            proportions.size(),
+            selection.sourceGpuCount,
+            selection.devices.size()));
+  }
+  std::vector<std::string> remapped;
+  remapped.reserve(selection.devices.size());
+  for (const backend_selection::SplitDevice& device : selection.devices) {
+    remapped.push_back(proportions[device.sourceGpuIndex]);
+  }
+  value->second = joinShares(remapped);
+}
+
 } // namespace
 
 namespace load_fit_normalization {
@@ -666,74 +734,6 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
           []() { return backend_selection::getSplitDeviceSelection(); }};
 }
 
-void remapTensorSplit(
-    ConfigMap& config,
-    const backend_selection::SplitDeviceSelection& selection) {
-  auto hyphen = config.find("tensor-split");
-  auto underscore = config.find("tensor_split");
-  if (hyphen != config.end() && underscore != config.end()) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        "both 'tensor-split' and 'tensor_split' are present; use one or the "
-        "other.");
-  }
-  auto value = hyphen != config.end() ? hyphen : underscore;
-  if (value == config.end()) {
-    return;
-  }
-  std::string normalized = value->second;
-  std::ranges::replace(normalized, '/', ',');
-  const std::vector<std::string> proportions = split(normalized, ',');
-
-  // Re-join from the tokens rather than forwarding the caller's string.
-  // Fabric tokenizes on the regex [,/]+, so a run of delimiters collapses
-  // there as it does here and '1,,2' is two shares on both sides. The
-  // divergence is an empty or whitespace-only FIELD: fabric keeps it (',1,2'
-  // yields a leading "", '1, ,2' a middle " ") and std::stof throws on
-  // either, while split() trims and drops it. Such a value would be counted
-  // as two shares here and then rejected by fabric's parser. Emitting the
-  // tokens we counted keeps the two in step.
-  auto joinShares = [](const std::vector<std::string>& shares) {
-    std::string joined;
-    for (const std::string& share : shares) {
-      if (!joined.empty()) {
-        joined += ',';
-      }
-      joined += share;
-    }
-    return joined;
-  };
-
-  // Cardinality decides how the list is read, in this order:
-  //   1. one share per eligible device -> already in final order, pass through
-  //   2. one share per registered GPU  -> remap through sourceGpuIndex
-  //   3. anything else                 -> reject
-  // Final order wins when both counts are equal. The addon pins
-  // params.devices itself, so fabric applies share i to final device i, which
-  // makes the final list the contract the caller is writing against.
-  if (proportions.size() == selection.devices.size()) {
-    value->second = joinShares(proportions);
-    return;
-  }
-  if (proportions.size() != selection.sourceGpuCount) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        string_format(
-            "%s: tensor-split has %zu values, which matches neither the %zu "
-            "registered GPU devices nor the %zu eligible devices.\n",
-            K_LEGACY_PARSER_NAME.data(),
-            proportions.size(),
-            selection.sourceGpuCount,
-            selection.devices.size()));
-  }
-  std::vector<std::string> remapped;
-  remapped.reserve(selection.devices.size());
-  for (const backend_selection::SplitDevice& device : selection.devices) {
-    remapped.push_back(proportions[device.sourceGpuIndex]);
-  }
-  value->second = joinShares(remapped);
-}
-
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,
     const ModelMetaData& metadata,
@@ -916,7 +916,8 @@ NormalizedLoad normalizeLoadForFit(
         // Which field comes from which participant, and why:
         //   - name: the FIRST LOCAL device. It becomes mmproj_backend, and the
         //     projector runs on one device; RPC devices are prepended and
-        //     cannot host it.
+        //     cannot host it, except when the whole set is RPC and the first
+        //     device is the only candidate left.
         //   - adrenoVersion: the MAX tier across LOCAL participants, matching
         //     both chooseBackend (BackendSelection.cpp:472) and the
         //     restriction applied above. It gates the quantized-KV +

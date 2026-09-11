@@ -594,15 +594,19 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
-    // Fabric 10549 (llama_prepare_model_devices, src/llama.cpp:265-273) keeps
-    // the first integrated GPU plus every later one whose backend REGISTRY
-    // handle matches the last kept one's; registry identity, not its name.
-    // Dropping the others is upstream llama.cpp #23897, a workaround for one
-    // integrated device enumerated by several backends; the same-registry
-    // exception is #26953, for the virtual devices CUDA reports as integrated.
-    // Unreachable on what fabric ships today — Metal and OpenCL never report
-    // IGPU and fabric builds no CUDA backend — but this package already admits
-    // CUDA, so the exception goes live the moment CUDA ships.
+    // vcpkg pins qvac-fabric 10297.1.2, whose llama_prepare_model_devices
+    // (src/llama.cpp:257-262) keeps only the first integrated GPU.
+    // upstream/main has already moved to 10549, which these branches adopt on
+    // their pending merge with main, and 10549's rule (src/llama.cpp:265-273)
+    // is the one implemented here: keep the first integrated GPU plus every
+    // later one whose backend REGISTRY handle matches the last kept one's;
+    // registry identity, not its name. Dropping the others is upstream
+    // llama.cpp #23897, a workaround for one integrated device enumerated by
+    // several backends; the same-registry exception is #26953, for the virtual
+    // devices CUDA reports as integrated. Unreachable on what fabric ships
+    // today — Metal and OpenCL never report IGPU and fabric builds no CUDA
+    // backend — but this package already admits CUDA, so the exception goes
+    // live the moment CUDA ships.
     if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
       if (integrated.empty() ||
           reg == bckI.ggml_backend_dev_backend_reg(integrated.back().handle)) {

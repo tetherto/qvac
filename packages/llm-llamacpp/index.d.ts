@@ -139,7 +139,8 @@ declare namespace LlmLlamacpp {
          * - 'layer' — pipeline parallelism; each GPU holds a contiguous slice of
          *   layers. The compatible choice, effective on every backend shipped here.
          * - 'tensor' — EXPERIMENTAL tensor parallelism via qvac-fabric's meta
-         *   device; weights *and* KV cache are split across every visible GPU.
+         *   device; weights *and* KV cache are split across the eligible devices
+         *   the addon pins.
          *   Desktop only (rejected on Android/iOS). Requires flash attention, so
          *   'flash-attn': 'off' is rejected with InvalidArgument. Disables auto-fit
          *   — gpu_layers then defaults to every layer and ctx_size to the model's
