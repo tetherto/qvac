@@ -48,9 +48,9 @@ test('the hybrid backend dependency floors match the reviewed speech stack', () 
 
   assert.equal(ggmlDependency['version>='], '2026-09-09#1')
   assert.equal(ggmlDependency['default-features'], false)
-  assert.equal(cudaSpeechDependency()['version>='], '2026-09-10')
+  assert.equal(cudaSpeechDependency()['version>='], '2026-09-11')
   assert.equal(
-    speechDependencies.every((dependency) => dependency['version>='] === '2026-09-10'),
+    speechDependencies.every((dependency) => dependency['version>='] === '2026-09-11'),
     true
   )
 })
