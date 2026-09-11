@@ -4,6 +4,20 @@ Blob-core rotation directs future model ingests to a new Hyperblobs core. Existi
 models keep their original `blobBinding` and remain readable from their recorded
 core keys.
 
+## Availability assumption
+
+Rotation changes only the per-indexer blob core used for future model payloads. It
+does not rotate the Autobase metadata view or change `QVAC_REGISTRY_CORE_KEY`.
+Keep the registry available throughout the procedure by restarting one indexer at
+a time and confirming its health before continuing.
+
+`check:blob-cores` queries that stable metadata view through the normal registry
+client. It is an inventory command, not a peer-availability check, so do not use an
+empty result to diagnose registry connectivity. The procedure requires healthy
+indexers before each inventory; if the registry health checks fail, stop the
+rollout and restore metadata availability first. A test that removes every
+metadata peer does not model this rotation procedure.
+
 ## Rotate the indexers
 
 1. Record the current core inventory:

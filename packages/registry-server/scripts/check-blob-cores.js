@@ -124,6 +124,11 @@ async function checkBlobCores(options = {}) {
   })
 
   try {
+    // This is a metadata inventory, not a registry availability probe. Blob-core
+    // rotation leaves the Autobase view core and QVAC_REGISTRY_CORE_KEY unchanged,
+    // and the runbook keeps metadata-serving indexers online while this runs.
+    // Preserve the normal client synchronization semantics instead of requiring a
+    // live peer count, which is not evidence that the persisted view is current.
     await client.ready()
     const models = await client.findModels({}, { includeDeprecated: true })
     return createBlobCoreInventory(models)
@@ -158,7 +163,9 @@ Options:
   --help, -h            Show this help message
 
 The command inventories blob cores referenced by registry model metadata. It does
-not connect to blob cores or download model payloads.`)
+not connect to blob cores or download model payloads. It is not an availability
+check: run it while the registry indexers are healthy, as required by the rotation
+procedure. Blob-core rotation does not rotate the registry metadata view core.`)
 }
 
 async function main() {
