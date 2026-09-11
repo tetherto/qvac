@@ -239,10 +239,8 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   const size_t devCount = backend.deviceCount();
 
   if (!gpuBackendLower.empty()) {
-    // Mode 1: explicit gpu_backend filter — pick the gpuDevice-th eligible
-    // device (GPU/IGPU, Vulkan/Metal/OpenCL family) whose name contains the
-    // selector or whose registry name equals it; 'metal'/'mtl' also match
-    // any Metal-family device.
+    // Mode 1: explicit gpu_backend filter — the gpuDevice-th eligible device
+    // whose name contains the selector or whose registry name equals it.
     bool deviceFoundButBuftNull = false;
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
@@ -282,10 +280,8 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       }
     }
 #ifndef QVAC_NMTCPP_USE_OPENCL
-    // OpenCL is opt-in via any explicit selector that resolves to an OpenCL
-    // device even when the build-time guard is off. Warn loudly because the
-    // guard exists specifically to mitigate the Adreno 830 q4_0 transpose
-    // abort (QVAC-17790); callers bypassing it must accept the risk.
+    // An explicit selector may opt into OpenCL past the build guard, which
+    // exists to avoid the Adreno 830 q4_0 transpose abort (QVAC-17790).
     if (dev != nullptr && deviceFamily(backend, dev) == NmtGpuFamily::OpenCl) {
       std::ostringstream oss;
       oss << "[" << logPrefix << "] Explicit gpu_backend='" << gpuBackend
@@ -351,11 +347,8 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
     }
   }
 
-  // Mode 2b: resolve gpuDevice within the eligible non-OpenCL inventory.
-  // OpenCL is always skipped here because Mode 2a already handles it when
-  // QVAC_NMTCPP_USE_OPENCL is defined, and it's unwanted when the guard is
-  // off. This ensures gpuDevice ordinals map to distinct physical GPUs without
-  // OpenCL duplicates or unsupported families occupying slots.
+  // Mode 2b: resolve gpuDevice within the eligible non-OpenCL inventory, so
+  // ordinals map to distinct physical GPUs without OpenCL duplicates.
   if (dev == nullptr) {
     if (allowDefaultOpenCl && oclDeviceFoundButBuftNull) {
       std::ostringstream oss;

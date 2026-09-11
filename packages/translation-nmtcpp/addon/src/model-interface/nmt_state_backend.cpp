@@ -358,24 +358,11 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       oss_gpu_init.str());
 
-  // Compute-device selection when use_gpu=true.
-  //
-  // Primary selection accepts GPU/IGPU Vulkan, Metal, OpenCL, CUDA, and RPC.
-  //
-  // Two selection modes:
-  //   1. params.gpu_backend non-empty → explicit single-pass filter:
-  //      pick the first eligible device whose name contains gpu_backend
-  //      (case-insensitive substring) or whose registry name equals it.
-  //      `gpu_device` is the ordinal within matches, so
-  //      {gpu_backend="vulkan", gpu_device=1} picks the second Vulkan
-  //      adapter. Any explicit selector resolving to an OpenCL device
-  //      bypasses the guard as an informed opt-in.
-  //   2. params.gpu_backend empty → gated default: when
-  //      QVAC_NMTCPP_USE_OPENCL is defined, prefer an OpenCL-named
-  //      device first; otherwise (and always as a fallback) pick an eligible
-  //      non-OpenCL device. When the guard is off, the fallback
-  //      skips OpenCL-named devices so Bergamot/IndicTrans on Adreno
-  //      830 don't hit the q4_0 transpose crash (QVAC-17790).
+  // Compute-device selection when use_gpu=true: GPU/IGPU Vulkan, Metal,
+  // OpenCL, CUDA and RPC are eligible. Without an explicit gpu_backend,
+  // OpenCL is only picked when QVAC_NMTCPP_USE_OPENCL is defined — otherwise
+  // Bergamot/IndicTrans on Adreno 830 hit a q4_0 transpose crash
+  // (QVAC-17790).
   // Delegate to the shared selector so make_buft_list (in nmt_loader.cpp)
   // and this function agree on the same physical device — historical
   // drift between the two has caused scheduler crashes (R2-C1, R4-C2).
@@ -457,8 +444,7 @@ nmt_backend_init(const nmt_context_params& params) {
 
   ggml_backend_t backend_gpu = nmt_backend_init_gpu(params);
 
-  // Remember the device we already picked so the secondary ACCEL walk below
-  // cannot reinitialize it.
+  // Device already claimed; the ACCEL walk below must not re-init it.
   ggml_backend_dev_t primary_dev =
       backend_gpu ? ggml_backend_get_device(backend_gpu) : nullptr;
 
@@ -466,20 +452,12 @@ nmt_backend_init(const nmt_context_params& params) {
     result.push_back(backend_gpu);
   }
 
-  // Initialise the remaining ACCEL backends. Only ACCEL-typed devices enter
-  // this walk; GPU-typed families (including HIP/ROCm) never do.
-  //
-  // Some builds may expose the same physical accelerator through multiple
-  // ACCEL entries. Initialising duplicates adds synchronisation overhead in
-  // ggml_backend_sched without any parallel-compute benefit because the
-  // scheduler executes splits sequentially.
+  // Initialise the remaining ACCEL backends. The same physical accelerator
+  // can appear as several ACCEL entries; initialising duplicates only adds
+  // ggml_backend_sched synchronisation overhead, as splits run sequentially.
   //
   // Filter strategy:
-  //   1. Skip the device pointer already selected as primary. This is now
-  //      unreachable and kept only as defence in depth: `nmtSelectGpuDevice`
-  //      returns None for anything not typed GPU or IGPU, so the primary can
-  //      never be an ACCEL device and can never be reached by this walk. The
-  //      ACCEL type check below would skip it regardless.
+  //   1. Skip the device pointer already selected as primary.
   //   2. Skip OpenCL devices when the build-time USE_OPENCL guard is off
   //      (consistent with Mode 2b in nmtSelectGpuDevice).
   //   3. Skip any ACCEL device whose trailing ordinal matches the primary's.

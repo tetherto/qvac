@@ -129,10 +129,8 @@ private:
 
   bool useGpu_ = false;
 
-  // Case-insensitive substring filter over ggml device names (e.g. "vulkan",
-  // "vulkan0", "opencl", "metal"), restricted to eligible GPU devices.
-  // Populated from the "gpu_backend" config key by setConfig(). Empty →
-  // default gated selection in nmt_backend_init_gpu.
+  // Case-insensitive filter over eligible GPU device names (e.g. "vulkan0",
+  // "opencl", "metal"). Empty → gated default selection.
   std::string gpuBackend_;
 
   int gpuDevice_ = 0;

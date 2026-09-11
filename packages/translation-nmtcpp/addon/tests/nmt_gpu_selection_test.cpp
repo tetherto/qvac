@@ -184,8 +184,6 @@ TEST_F(NmtGpuSelectionTest, NullDeviceAndNullBufferFallBackSafely) {
   EXPECT_EQ(select({}, 1), nullptr);
 }
 
-// An unknown family after an eligible device must not displace it. The
-// existing coverage coming into this change had unknown-alone cases only.
 TEST_F(NmtGpuSelectionTest, UnknownFamilyAfterEligibleIsSkipped) {
   inventory = {
       {"Vulkan0", "Vulkan", GGML_BACKEND_DEVICE_TYPE_GPU},
