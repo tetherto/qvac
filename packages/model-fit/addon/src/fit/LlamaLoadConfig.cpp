@@ -202,9 +202,8 @@ bool isGpu(const BackendDevice& device) {
          device.type == BackendDeviceType::IntegratedGpu;
 }
 
-// Family predicates, matching llm-llamacpp's BackendSelection.cpp. Every site
-// that classifies a device goes through these two so eligibility and the
-// traits derived later cannot disagree on what counts as OpenCL or Metal.
+// Family predicates, matching llm-llamacpp's BackendSelection.cpp. Eligibility
+// and the traits derived later both go through these.
 bool isOpenClDevice(const BackendDevice& device) {
   const std::string name = lower(device.name);
   return name == "gpuopencl" || name.starts_with("opencl") ||
@@ -273,25 +272,17 @@ SplitDeviceSelection selectSplitDevices(
     if (isRpc(device)) {
       rpc.push_back(selected);
     } else if (device.type == BackendDeviceType::IntegratedGpu) {
-      // Fabric 10549 (llama_prepare_model_devices, src/llama.cpp:265-273)
-      // keeps the first integrated GPU plus every later one whose backend
-      // REGISTRY handle matches the last kept one's; registry identity, not
-      // its name. Dropping the others is upstream llama.cpp #23897, a
-      // workaround for one integrated device enumerated by several backends;
-      // the same-registry exception is #26953, for the virtual devices CUDA
-      // reports as integrated. Unreachable on what fabric ships today — Metal
-      // and OpenCL never report IGPU and fabric builds no CUDA backend — but
-      // this package already admits CUDA, so the exception goes live the
-      // moment CUDA ships.
+      // Keep the first integrated GPU and every later one sharing the last
+      // kept one's backend registry HANDLE, as llama does (#26953); registry
+      // identity, not its name.
       if (integrated.empty() ||
           device.registry == integrated.back().device->registry) {
         integrated.push_back(selected);
       }
     } else {
-      // Dedup on the raw `device_id`, as fabric does (strcmp in
-      // llama_prepare_model_devices): a CUDA and a Vulkan view of one card
-      // share the id, while virtual MPS/MIG devices carry their own and stay
-      // distinct. A null id cannot be deduped against and is kept.
+      // Dedup on the raw `device_id`, as fabric does: a CUDA and a Vulkan view
+      // of one card share it, virtual MPS/MIG devices do not. A null id cannot
+      // be deduped against and is kept.
       const std::string& id = device.deviceId;
       if (id.empty() || seenDiscrete.insert(id).second) {
         discrete.push_back(selected);
@@ -304,8 +295,8 @@ SplitDeviceSelection selectSplitDevices(
   return result;
 }
 
-// Tokenizes like fabric's --tensor-split handler (regex [,/]+), collapsing
-// delimiter runs and dropping empty fields — see remapTensorSplit for why.
+// Tokenizes like fabric's --tensor-split handler (regex [,/]+): delimiter runs
+// collapse and empty fields are dropped.
 std::vector<std::string> splitTensorShares(const std::string& value) {
   auto trim = [](const std::string& token) -> std::string {
     auto start =
@@ -349,26 +340,13 @@ std::optional<std::string> remapTensorSplit(
   std::ranges::replace(normalized, '/', ',');
   const std::vector<std::string> proportions = splitTensorShares(normalized);
 
-  // Cardinality decides how the list is read, in this order:
-  //   1. one share per eligible device -> already in final order
-  //   2. one share per registered GPU  -> remap through sourceGpuIndex
-  //   3. anything else                 -> reject
-  // Final order wins when both counts are equal, matching the addons: they
-  // pin params.devices themselves, so fabric applies share i to final device
-  // i. The check runs even when the mapping did not move, because fabric
-  // validates only against llama_max_devices; it zero-pads a short list,
-  // silently leaving a participating GPU with no layers, and drops the tail of
-  // a long one. The addons reject both, so the projection has to as well or it
-  // models a load the addon would refuse.
+  // Any other cardinality is rejected: fabric validates only against
+  // llama_max_devices, then silently zero-pads a short list and drops the tail
+  // of a long one.
   //
-  // Re-emit from the tokens rather than the caller's string. Fabric collapses
-  // delimiter runs the same way, but it keeps an empty or whitespace-only
-  // FIELD (',1,2' yields a leading "", '1, ,2' a middle " ") and std::stof
-  // throws on either, while splitTensorShares trims and drops it. Such a
-  // value was observed taking the process down here rather than raising
-  // catchably: the throw escaped a catch in the immediate caller frame and
-  // reached libc++abi. Sanitizing before fabric parses is the only reliable
-  // place to handle it.
+  // Re-emitting from the tokens also sanitizes the value: fabric keeps an empty
+  // or whitespace-only FIELD (',1,2', '1, ,2') and its std::stof throws on one
+  // uncatchably, past the caller frame and into libc++abi.
   if (proportions.size() == selection.devices.size()) {
     return joinTensorShares(proportions);
   }
@@ -383,9 +361,8 @@ std::optional<std::string> remapTensorSplit(
   return joinTensorShares(remapped);
 }
 
-// `row` is rejected rather than parsed: fabric deprecates it, no eligible
-// backend provides the split buffers it needs, and the llm/embed addons refuse
-// the load instead of degrading it to `layer`.
+// `row` is deprecated by fabric and no eligible backend provides the split
+// buffers it needs, so it is rejected rather than degraded to `layer`.
 std::optional<std::string> unsupportedSplitMode(const std::string& value) {
   if (value == "row") {
     return "split-mode row is not accepted: no supported backend provides "
@@ -415,17 +392,9 @@ int adrenoVersion(const BackendDevice& device) {
   }
 }
 
-// The MAX tier across LOCAL split participants, mirroring `selectGpu` and the
-// llm addon (BackendSelection.cpp / LoadFitNormalization.cpp). 0 means no local
-// Adreno, which is not an Adreno host and triggers nothing.
-//
-// RPC devices are excluded, and that must hold in BOTH directions: ggml reports
-// the ENDPOINT STRING as an RPC device's description (ggml-rpc.cpp:3749,
-// surfaced at :3318-3321), so a tier parsed off one is a hostname carrying no
-// information about the remote GPU. Counting them would let endpoint text
-// decide placement — an endpoint reading as 830 beside a local 740 would skip a
-// required CPU fallback, and one reading as 740 beside a non-Adreno local GPU
-// would clear the whole list. Do not widen this on a safety intuition.
+// The max tier across the split participants, 0 when none is an Adreno. RPC is
+// skipped because ggml reports the endpoint string as such a device's
+// description, so a tier parsed off one is a hostname.
 int maxLocalAdrenoVersion(const SplitDeviceSelection& selection) {
   int maxVersion = 0;
   for (const SplitDeviceRef& device : selection.devices) {
@@ -459,12 +428,9 @@ BackendSelection selectGpu(
   const BackendDevice* openCl = nullptr;
   const BackendDevice* discrete = nullptr;
   const BackendDevice* integrated = nullptr;
-  // This maximum spans RPC devices too, whose description is the endpoint
-  // string rather than a GPU name — the contamination `maxLocalAdrenoVersion`
-  // above excludes on the split path. It is deliberate here: the addon's
+  // Unlike `maxLocalAdrenoVersion`, this maximum spans RPC devices: the addon's
   // `chooseBackend` takes its host-wide maximum over the same unfiltered
-  // inventory, so narrowing it would make the NONE projection disagree with the
-  // load. Do not re-raise.
+  // inventory.
   int maxAdrenoVersion = 0;
   for (const BackendDevice& device : devices) {
     if (!isEligibleGpu(device, isEmbedding)) {
@@ -489,12 +455,9 @@ BackendSelection selectGpu(
     if (maxAdrenoVersion < ADRENO_UBATCH_THRESHOLD) {
       return {.selected = nullptr, .adrenoVersion = maxAdrenoVersion};
     }
-    // 800+ prefers Vulkan over OpenCL: the addon clears only its OpenCL list
-    // here and then falls through to `gpuBackends.front()` and, failing that,
-    // `igpuBackends.front()` (BackendSelection.cpp chooseBackend). Dropping the
-    // integrated candidate as well would project CPU for a load the addon runs
-    // on the iGPU — reachable wherever an Adreno is exposed as an INTEGRATED
-    // Vulkan adapter, as Mesa's Turnip driver does on linux-arm64.
+    // 800+ prefers Vulkan over OpenCL. The integrated candidate stays: the
+    // addon falls through to its iGPU list too, and Mesa's Turnip driver types
+    // an Adreno as an integrated Vulkan adapter.
     return {
         .selected = discrete != nullptr ? discrete : integrated,
         .adrenoVersion = maxAdrenoVersion};
@@ -681,9 +644,8 @@ std::vector<BackendDevice> discoverBackendDevices() {
   return devices;
 }
 
-// Mirrors llama's own default ordering: RPC devices first, then local discrete
-// GPUs or the retained local iGPUs, with local duplicates removed by device_id.
-// The result is restricted to supported families and terminated by nullptr.
+// Mirrors llama's own default ordering: RPC first, then local discrete GPUs or
+// the retained local iGPUs, deduped by device_id and nullptr-terminated.
 std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind) {
   const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;
@@ -714,10 +676,7 @@ void applyBackendDeviceAllowlist(
     const std::vector<BackendDevice>& devices,
     std::optional<size_t> mainGpuIndex) {
   params.devices = storage.data();
-  // Ordinal 0 of the pinned list on every GPU path, matching
-  // `normalizeLlamaLoadConfig`. Without it the raw caller value survived into
-  // the params fabric reads under NONE, so the two entry points handed fabric
-  // different `main_gpu` for the same placement.
+  // An ordinal into the pinned list, never the caller's raw registry index.
   params.main_gpu = 0;
   if (!mainGpuIndex.has_value()) {
     return;
@@ -860,19 +819,10 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
       selection = selectGpu(devices, traits, mainGpu, isEmbedding);
     } else {
       splitSelection = selectSplitDevices(devices, isEmbedding);
-      // `selectGpu`'s one-bit BitNet Adreno policy governs the NONE path only,
-      // and this path never calls it. The llm addon applies that same policy to
-      // its FINAL SPLIT SET (`applyAdrenoRestrictions`, BackendSelection.cpp),
-      // so leaving it out here projected a GPU fit for a LAYER load the addon
-      // runs on CPU — the projection-versus-load divergence this allowlist work
-      // exists to remove. Finetuning, the addon's other trigger, cannot reach
-      // this package: every key containing "finetune" is rejected by
-      // UNSUPPORTED_KEY_PARTS.
-      //
-      // It FILTERS the one authoritative device list rather than making a
-      // second placement decision, and it runs before the tensor-split remap
-      // and the trait derivation below so both read the filtered set. An
-      // emptied list falls through to the CPU branch with no extra branch here.
+      // The llm addon applies `selectGpu`'s one-bit BitNet Adreno policy to its
+      // final split set (`applyAdrenoRestrictions`), so the same filter runs
+      // here — before the remap and trait derivation, which both read the
+      // filtered set. An emptied list falls through to the CPU branch.
       if (!isEmbedding && traits.architecture == "bitnet" &&
           traits.hasOneBitQuantization) {
         const int localAdreno = maxLocalAdrenoVersion(splitSelection);
@@ -887,18 +837,10 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
         }
       }
       if (!splitSelection.devices.empty()) {
-        // `selected` is only a liveness sentinel on this path — it says the
-        // filtered set is non-empty, and `useGpu` below is the one thing read
-        // off it. The whole set is what the load runs on, so which member is
-        // taken does not matter; `front()` is simply the cheapest to name (with
-        // RPC present it is the RPC device). The Adreno tier is the MAX across
-        // LOCAL participants of the
-        // FILTERED set, mirroring selectGpu above and the addon
-        // (LoadFitNormalization.cpp): it gates the quantized-KV +
-        // flash-attention rejection, which replaces a native abort with a clean
-        // error, so any local participant at 800+ must arm it; reading only the
-        // first local device would leave the projection disarmed on a
-        // mixed-tier set and diverge from the load.
+        // `selected` is only a liveness sentinel here — the load runs on the
+        // whole set, and `useGpu` below is all that is read off it. The tier is
+        // the max across the set because any participant at 800+ must arm the
+        // quantized-KV rejection.
         selection = {
             .selected = splitSelection.devices.front().device,
             .adrenoVersion = maxLocalAdrenoVersion(splitSelection)};
@@ -933,10 +875,8 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     }
   }
 
-  // Traits come from the whole set the load will run on. Under a split mode
-  // that is every device in the final list, since a KV type or flash setting
-  // one participating backend cannot run fails the load whichever device is
-  // listed first; under NONE it is the one selected device.
+  // Traits come from the whole set the load runs on: a KV type one participant
+  // cannot run fails the load whichever device is listed first.
   const bool splitAcrossSet = useGpu && splitMode != LLAMA_SPLIT_MODE_NONE;
   const auto anySplitDevice = [&](bool (*predicate)(const BackendDevice&)) {
     return std::ranges::any_of(

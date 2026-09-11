@@ -249,27 +249,15 @@ FitResult runFit(const FitRequest& req) {
           discoveredDevices, LlamaLoadKind::Completion);
   const size_t eligibleGpuDevices = eligibleDevices.size() - 1;
 
-  // llama reads main_gpu only under LLAMA_SPLIT_MODE_NONE — the single-GPU
-  // collapse in `llama_prepare_model_devices` is gated on exactly that mode
-  // (llama.cpp:293-306) — so LAYER and TENSOR leave it inert and it is not
-  // validated there. An OMITTED split mode is inert too, and that is the
-  // load-bearing correction: `llama_model_default_params` leaves split_mode at
-  // LLAMA_SPLIT_MODE_LAYER (llama-model.cpp:2739) and `common_fit_params`
-  // never writes split_mode at all — it only reads it (common/fit.cpp:272,
-  // :593) — so an unpinned mode goes in as LAYER and comes back as LAYER.
-  // Treating it as a possible NONE acted on main_gpu for a projection that
-  // cannot reach NONE: an eligible index collapsed the multi-device list to
-  // one, an ineligible one forced CPU, and an out-of-range one threw. Only an
-  // explicit NONE activates it. The no-GPU placement check further down is
-  // already scoped that way (`requiresSupportedGpu`).
+  // llama reads main_gpu only under an explicit NONE. An unpinned mode is inert
+  // too: llama defaults split_mode to LAYER and `common_fit_params` only reads
+  // it, never writes it.
   const bool mainGpuIsUsed = req.hasMainGpu && req.mainGpu >= 0 &&
                              req.hasSplitMode &&
                              req.splitMode == LLAMA_SPLIT_MODE_NONE;
 
-  // Past the end of the registry there is no device to select or to reject to
-  // CPU, so the index is an argument error, not a placement. The bound is only
-  // known once the backends are registered, which is why binding.cpp cannot
-  // report it.
+  // Past the registry there is no device to select or to reject to CPU, so the
+  // index is an argument error, not a placement.
   if (mainGpuIsUsed &&
       static_cast<size_t>(req.mainGpu) >= discoveredDevices.size()) {
     throw std::invalid_argument(
@@ -301,12 +289,8 @@ FitResult runFit(const FitRequest& req) {
   // about arguments. binding.cpp cannot do it, since the valid range is unknown
   // until the backends are registered.
   //
-  // NONE and TENSOR need the extra no-GPU placement check after identity
-  // validation — see requiresSupportedGpu. NONE means "put the whole model on
-  // one GPU": with no supported GPU registered there is no such device, and
-  // llama rejects every index including the default 0, except for the exact
-  // CPU-only sentinel configuration. TENSOR refuses an empty device list
-  // outright.
+  // NONE places the whole model on one GPU and TENSOR refuses an empty device
+  // list, so neither is satisfiable without one — see `requiresSupportedGpu`.
   if (requiresSupportedGpu(req, rejectedMainGpu) && eligibleGpuDevices == 0) {
     throw std::invalid_argument(
         req.splitMode == LLAMA_SPLIT_MODE_TENSOR
@@ -391,9 +375,8 @@ FitResult runFit(const FitRequest& req) {
   // `common_fit_params` only rewrites fields that still hold their default
   // value, so pin a field only when the caller explicitly requested one.
   applyFitRequest(req, mparams, cparams);
-  // `devices` is never left NULL: that is llama's "default device selection"
-  // branch, which enumerates every GPU the allowlist excluded. The CPU-only
-  // list is the bare terminator.
+  // `devices` is never left NULL: NULL selects llama's own default enumeration,
+  // which includes every GPU the allowlist excluded.
   if (isExplicitCpuPlacement(req) || rejectedMainGpu) {
     eligibleDevices = {nullptr};
     mparams.devices = eligibleDevices.data();
@@ -449,9 +432,7 @@ FitResult runFit(const FitRequest& req) {
   out.typeV = static_cast<int32_t>(cparams.type_v);
   out.flashAttnType = static_cast<int32_t>(cparams.flash_attn_type);
 
-  // Placement is decided from the plan the fitter returned, not from the host
-  // inventory — see normalizePlanPlacement. -1 for nGpuLayers is llama's
-  // default and does not pin. The raw device counts above stay untouched.
+  // An nGpuLayers of -1 is llama's default, so it pins nothing.
   normalizePlanPlacement(
       out,
       mparams.devices,

@@ -68,19 +68,14 @@ struct FitRequest {
   // field's range is legitimate — including 0, which is a valid split mode,
   // device index and ggml type.
 
-  /// `enum llama_split_mode`: how the model splits across multiple GPUs. NONE,
-  /// LAYER and TENSOR are accepted; ROW throws — fabric deprecates it and no
-  /// supported backend provides the split buffers it needs.
+  /// `enum llama_split_mode`: how the model splits across multiple GPUs. ROW is
+  /// not accepted — see `applyFitRequest`.
   int32_t splitMode = 0;
   bool hasSplitMode = false;
 
-  /// Raw ggml registry index of the device a NONE placement goes on. llama
-  /// reads it only under `LLAMA_SPLIT_MODE_NONE`; LAYER, TENSOR and an
-  /// UNPINNED mode all leave it inert, the last because llama's default is
-  /// LAYER and the fitter never rewrites `split_mode`. Validated only when
-  /// `splitMode` is pinned to NONE: out of range throws, in range but outside
-  /// the supported GPU list projects CPU-only. -1 is the CPU sentinel and
-  /// requires `nGpuLayers` 0 and `splitMode` NONE.
+  /// Raw ggml registry index of the device a NONE placement goes on; inert, and
+  /// so unvalidated, under any other mode. Out of range throws; in range but
+  /// outside the supported GPU list projects CPU-only. -1 is the CPU sentinel.
   int32_t mainGpu = 0;
   bool hasMainGpu = false;
 
@@ -110,20 +105,13 @@ void applyFitRequest(
     const FitRequest& request, llama_model_params& modelParams,
     llama_context_params& contextParams);
 
-/// The CPU-only sentinel: 0 layers and mainGpu -1. Split mode is NOT checked
-/// here because the only caller, `requiresSupportedGpu`, has already
-/// established NONE before it asks; the JS entry point and binding.cpp both
-/// validate the full relationship before `runFit`.
+/// The CPU-only sentinel: 0 layers and mainGpu -1. Split mode is not checked
+/// here; the only caller has already established NONE before it asks.
 bool isExplicitCpuPlacement(const FitRequest& request);
 
-/// Whether `request` cannot be honoured without a supported GPU. NONE places
-/// the whole model on one GPU and TENSOR refuses an empty device list outright
-/// (`llama_prepare_model_devices`), so both are argument errors on a host that
-/// registers none. NONE alone is exempt when the request is the CPU sentinel or
-/// its raw `mainGpu` target was rejected to CPU; TENSOR has no CPU form, so it
-/// requires a GPU unconditionally. LAYER loads on the host when handed no
-/// device, and an unpinned mode stays at llama's LAYER default:
-/// `common_fit_params` never rewrites `split_mode`.
+/// Whether `request` cannot be honoured without a supported GPU: TENSOR always,
+/// NONE unless it is the CPU sentinel or its `mainGpu` target was rejected to
+/// CPU.
 bool requiresSupportedGpu(const FitRequest& request, bool mainGpuRejectedToCpu);
 
 /// Why a fit ended the way it did. `status` alone cannot distinguish an
@@ -179,9 +167,8 @@ struct FitResult {
 
   /// `enum llama_split_mode` — how the model is split across multiple GPUs.
   int32_t splitMode = 0;
-  /// 0 for a GPU plan (the ordinal of the one-device list under NONE; inert
-  /// under LAYER and TENSOR), -1 for any CPU-only plan. Set by
-  /// `normalizePlanPlacement`, so a SUCCESS never echoes a raw input index.
+  /// Ordinal into the pinned device list: 0 for a GPU plan, -1 for a CPU-only
+  /// one. Never the caller's raw registry index.
   int32_t mainGpu = -1;
   /// `enum ggml_type` for the K cache. Changes KV memory, so it changes the
   /// fit.
@@ -208,16 +195,14 @@ struct FitResult {
   size_t nGpuDevices = 0;
 };
 
-/// Whether a SUCCESS plan runs entirely on the host: the fitter was handed the
-/// bare device terminator, or it offloads no layer. Decided from the plan the
-/// fitter returned, never from the host inventory. Always false on any other
-/// status, where the fields carry no decision.
+/// Whether a SUCCESS plan runs entirely on the host: the bare device
+/// terminator, or no offloaded layer. Always false on any other status, whose
+/// fields carry no decision.
 bool isCpuOnlyPlan(const FitResult& result, const ggml_backend_dev_t* devices);
 
-/// The one placement rule for every entry point. On a SUCCESS: a GPU plan
-/// reports `mainGpu` 0; a CPU-only plan reports -1 and, unless the caller
-/// pinned them, split mode NONE and zero layers. Other statuses are left as the
-/// fitter returned them.
+/// On a SUCCESS: a GPU plan reports `mainGpu` 0; a CPU-only plan reports -1
+/// and, unless the caller pinned them, split mode NONE and zero layers. Other
+/// statuses are left as the fitter returned them.
 void normalizePlanPlacement(
     FitResult& result, const ggml_backend_dev_t* devices, bool splitModePinned,
     bool nGpuLayersPinned);
@@ -231,14 +216,11 @@ void normalizePlanPlacement(
 /// Throws `std::invalid_argument` for arguments that cannot be acted on:
 ///  - a `modelPath` that is empty or relative;
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
-///  - a `mainGpu` at or past `nDevices` when `splitMode` is pinned to NONE (in
-///    range but outside the supported GPU list is not an error: the projection
-///    is CPU-only instead; an unpinned mode makes `mainGpu` inert, so nothing
-///    is validated and nothing is narrowed);
+///  - a `mainGpu` at or past `nDevices` when `splitMode` is pinned to NONE; an
+///    in-range but unsupported index projects CPU-only instead;
 ///  - a pinned `splitMode` of ROW — see `applyFitRequest`;
-///  - a pinned `splitMode` of NONE or TENSOR on a host with no supported GPU;
-///    under NONE only, the CPU sentinel and a raw `mainGpu` target rejected to
-///    CPU are exempt — see `requiresSupportedGpu`;
+///  - a pinned `splitMode` of NONE or TENSOR on a host with no supported GPU —
+///    see `requiresSupportedGpu`;
 ///  - an `nCtx`, or an explicitly requested `nCtxMin`, above the context
 ///    length the model declares.
 FitResult runFit(const FitRequest& req);

@@ -82,8 +82,6 @@ int main() {
   }
 
   {
-    // NONE and TENSOR cannot be honoured without a GPU; LAYER and an unpinned
-    // mode load on the host when handed no device.
     expect(
         model_fit::requiresSupportedGpu(splitRequest(0), false),
         "NONE must require a supported GPU");
@@ -103,8 +101,6 @@ int main() {
         !model_fit::requiresSupportedGpu(model_fit::FitRequest{}, false),
         "an unpinned split mode must not require a GPU");
 
-    // ROW is deprecated by fabric and no supported backend provides split
-    // buffers, so applying it is an argument error rather than a placement.
     bool rejectedRow = false;
     try {
       model_fit::applyFitRequest(splitRequest(2), modelParams, contextParams);
@@ -193,9 +189,8 @@ int main() {
             failure.nGpuLayers == -1,
         "a FAILURE must be left as the fitter returned it");
 
-    // A non-zero `mainGpu`, like the FAILURE case above: 0 is the value a
-    // normalized GPU plan carries, so it cannot tell "left alone" from
-    // "normalized".
+    // `mainGpu` must be non-zero: 0 is what a normalized GPU plan carries, so
+    // it cannot tell "left alone" from "normalized".
     model_fit::FitResult error = successPlan(0, 0, 3);
     error.status = 2;
     error.fits = false;

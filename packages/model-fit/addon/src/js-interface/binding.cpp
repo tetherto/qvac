@@ -247,9 +247,8 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "splitMode")) {
     req.splitMode = static_cast<int32_t>(
         requireBoundedSignedInteger(v->as<double>(env), 0.0, 3.0, "splitMode"));
-    // In the enum domain but not accepted: fabric deprecates ROW and no
-    // supported backend provides the split buffers it needs. Rejected here so
-    // it never pays for backend registration.
+    // In the enum domain but not accepted — see `applyFitRequest`. Rejected
+    // here so it never pays for backend registration.
     if (req.splitMode == SPLIT_MODE_ROW) {
       throw StatusError(
           InvalidArgument,

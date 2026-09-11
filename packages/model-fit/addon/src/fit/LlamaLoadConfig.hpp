@@ -38,10 +38,8 @@ struct BackendDevice {
   BackendDeviceType type = BackendDeviceType::Cpu;
   ggml_backend_dev_t handle = nullptr;
   std::string registryName;
-  /// Registry IDENTITY, which the iGPU retention rule compares and which the
-  /// name cannot stand in for: two registries may share a name. Snapshotted
-  /// here because selection runs on plain records, with no ggml handle to call
-  /// `ggml_backend_dev_backend_reg` through.
+  /// Registry identity, which the iGPU retention rule compares; `registryName`
+  /// cannot stand in for it, since two registries may share a name.
   ggml_backend_reg_t registry = nullptr;
   std::string deviceId;
 };
@@ -55,11 +53,11 @@ struct NormalizedLlamaLoad {
   bool supported = true;
   std::string unsupportedDetail;
   common_params params;
-  /// Whether the caller wrote `split-mode`; a pinned mode is reported as is on
-  /// a CPU-only plan instead of being normalized to NONE.
+  /// A pinned split mode survives a CPU-only plan instead of normalizing to
+  /// NONE.
   bool pinsSplitMode = false;
-  /// Whether the caller wrote a `gpu-layers` other than llama's -1 default; a
-  /// pinned count is reported as is on a CPU-only plan.
+  /// A pinned layer count survives a CPU-only plan. -1 is llama's default and
+  /// pins nothing.
   bool pinsGpuLayers = false;
 };
 
@@ -93,10 +91,9 @@ std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
 bool isSupportedGpuOrdinal(
     const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
     size_t mainGpuIndex);
-/// Pins `storage` — the eligible list the caller already built — as the load's
-/// device list and `main_gpu` to ordinal 0 of it. With a `mainGpuIndex`,
-/// narrows the list to that raw registry entry, which then occupies ordinal 0;
-/// the caller validates the index with `isSupportedGpuOrdinal`.
+/// Pins `storage` as the load's device list and `main_gpu` to ordinal 0 of it,
+/// narrowing the list to `mainGpuIndex` when one is given. The caller validates
+/// that index with `isSupportedGpuOrdinal`.
 void applyBackendDeviceAllowlist(
     llama_model_params& params, std::vector<ggml_backend_dev_t>& storage,
     const std::vector<BackendDevice>& devices,

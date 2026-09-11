@@ -25,16 +25,10 @@ const UNREACHABLE_MODEL = path.join(
 // existence check the test is aiming at.
 const UNREACHABLE_BACKENDS_DIR = path.join(process.cwd(), 'model-fit-no-such-backends-dir')
 
-// Deliberately NOT read off `result.mainGpu`: that field is precisely what
-// `normalizePlanPlacement` writes, so a placement bug that inverted it would
-// make this report "no GPU" on every host and the CPU-only branches it guards
-// below would pass vacuously.
-//
-// `nGpuDevices` is raw inventory that may count unsupported backend families,
-// so it is only a cheap pre-filter. The decision comes from a pinned TENSOR
-// probe: the native side rejects it with a distinct argument error when no
-// *supported* GPU is registered, which is a statement about the host rather
-// than about any plan this package computes.
+// A pinned TENSOR probe, not `result.mainGpu`: reading the field this package
+// computes would make every CPU-only branch below pass vacuously under a
+// placement bug. `nGpuDevices` counts unsupported families, so it is only a
+// cheap pre-filter.
 function hasSupportedGpu(modelPath) {
   const inventory = fitParams({ modelPath, marginMiB: 0 })
   if (inventory.nDevices === 0 || inventory.nGpuDevices === 0) return false
@@ -100,8 +94,7 @@ test('intended-load fields are bounded to their enum domains', async function (t
   // wrong bound: an out-of-range value would reach llama as a garbage enum.
   await t.exception.all(() => fitParams({ ...base, splitMode: 4 }), /splitMode must be between/)
   await t.exception.all(() => fitParams({ ...base, splitMode: -1 }), /splitMode must be between/)
-  // In the enum domain but not accepted: fabric deprecates ROW and no supported
-  // backend provides the split buffers it needs.
+  // In the enum domain but not accepted.
   await t.exception.all(
     () => fitParams({ ...base, splitMode: 2 }),
     /splitMode 2 \(ROW\) is not accepted; use 1 \(LAYER\) or 3 \(TENSOR\)/
@@ -203,13 +196,8 @@ test('a pinned intended-load field is returned unchanged', async function (t) {
   // so it genuinely pins rather than being indistinguishable from omission.
   const config = { modelPath, nCtx: 2048, marginMiB: 1024, splitMode: 0, mainGpu: 0 }
 
-  // NONE says "the whole model goes on one GPU", and mainGpu is a raw registry
-  // index. On a host with no supported GPU every in-range index names the CPU
-  // entry or an unsupported backend, so the target is rejected and the load is
-  // projected on the CPU — a verdict, not an opaque ERROR the caller cannot
-  // distinguish from a real fit failure. The "no supported GPU device is
-  // registered" argument error is reachable only without a mainGpu; see the
-  // mainGpu test below.
+  // With no supported GPU every in-range mainGpu names the CPU entry or an
+  // unsupported backend, so the target is rejected to a CPU-only projection.
   if (!hasSupportedGpu(modelPath)) {
     const cpu = fitParams(config)
     t.ok(
@@ -228,8 +216,7 @@ test('a pinned intended-load field is returned unchanged', async function (t) {
 
   t.not(res.status, FIT_STATUS.ERROR, 'a pinned placement is accepted, not rejected')
   t.is(res.splitMode, 0, 'the pinned split mode survives the fit')
-  // A GPU plan reports ordinal 0 of the one-device list built for the target.
-  // Only a SUCCESS that kept no layer on it is CPU-only and reports the sentinel.
+  // Only a SUCCESS that kept no layer on the target is CPU-only.
   t.is(
     res.mainGpu,
     res.status === FIT_STATUS.SUCCESS && res.nGpuLayers === 0 ? -1 : 0,
@@ -363,8 +350,7 @@ test('the plan carries every parameter the fitter is free to rewrite', async fun
   t.ok(res.typeV >= 0, 'typeV is a ggml_type')
   t.ok([-1, 0, 1].includes(res.flashAttnType), 'flashAttnType is a known llama_flash_attn_type')
 
-  // Placement is only a decision on a SUCCESS: 0 for a GPU plan, -1 for any
-  // CPU-only plan, which is also the one that offloads nothing.
+  // Placement is only a decision on a SUCCESS.
   if (res.status === FIT_STATUS.SUCCESS) {
     t.is(
       res.mainGpu,
@@ -667,50 +653,36 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
 
 // The fitter ignores main_gpu entirely, so a bad placement used to surface only
 // as llama failing the internal load — a bare ERROR indistinguishable from a
-// genuine "does not fit". Validation applies to a PINNED SPLIT_MODE_NONE only;
-// LAYER, TENSOR and an omitted mode are exempt. mainGpu is a raw registry
-// index: past the registry it throws, in range but not a supported GPU it is
-// projected on the CPU.
+// genuine "does not fit". Validation applies to a pinned SPLIT_MODE_NONE only.
 test('mainGpu is validated only when llama uses it', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   // Nothing pinned, so this projects on every host class and cannot throw.
   const baseline = fitParams({ modelPath })
   const outOfRange = baseline.nDevices
 
-  // Past the registry there is no device to select or to reject to CPU: an
-  // argument error carrying the bound, on GPU and CPU-only hosts alike. The
-  // bound is only known once the backends are registered, so it cannot be
-  // checked at the JS boundary.
+  // Past the registry there is nothing to select or to reject to CPU.
   await t.exception.all(
     () => fitParams({ modelPath, splitMode: 0, mainGpu: outOfRange }),
     /mainGpu \d+ is out of range: \d+ devices are registered/
   )
 
-  // An omitted splitMode is not a possible NONE. llama's default is
-  // LLAMA_SPLIT_MODE_LAYER and common_fit_params never writes split_mode, so
-  // the projection stays on LAYER and mainGpu is inert: an out-of-range index
-  // is neither validated nor acted on, and the plan matches the one nothing
-  // pinned produces. It used to throw here, which rejected a valid request and
-  // — for an in-range index — narrowed or CPU-forced a LAYER projection.
+  // An omitted splitMode is not a possible NONE: llama defaults to LAYER and
+  // common_fit_params never writes split_mode, so mainGpu stays inert.
   const omitted = fitParams({ modelPath, mainGpu: outOfRange })
   t.is(omitted.status, baseline.status, 'an omitted splitMode ignores mainGpu')
   t.is(omitted.splitMode, baseline.splitMode, 'the projected mode is unchanged')
   t.is(omitted.mainGpu, baseline.mainGpu, 'the projected placement is unchanged')
 
-  // Every in-range index is inert too, the CPU registry entry and any backend
-  // outside the allowlist included: with no pinned mode none of them narrows
-  // the device list or forces the projection onto the host. Under a pinned
-  // NONE the same indices DO move the placement — asserted below.
+  // Every in-range index is inert too, the CPU registry entry included. Under a
+  // pinned NONE the same indices DO move the placement — asserted below.
   for (let mainGpu = 0; mainGpu < outOfRange; mainGpu++) {
     const res = fitParams({ modelPath, mainGpu })
     t.is(res.mainGpu, baseline.mainGpu, `raw index ${mainGpu} is inert without a pinned mode`)
   }
 
-  // Outside NONE the field is inert, so the same index is accepted and the
-  // real model projects a plan: the guard stays scoped rather than becoming a
-  // blanket bound. Only LAYER is asserted here. TENSOR is also inert for
-  // mainGpu, but it throws on a host with no supported GPU (asserted below), so
-  // its status is not a mainGpu signal on every host class.
+  // The guard stays scoped rather than becoming a blanket bound. TENSOR is
+  // inert for mainGpu too, but it throws on a host with no supported GPU
+  // (below), so its status is not a mainGpu signal on every host class.
   const layerRes = fitParams({ modelPath, splitMode: 1, mainGpu: outOfRange })
   t.not(
     layerRes.status,
@@ -719,9 +691,7 @@ test('mainGpu is validated only when llama uses it', async function (t) {
   )
 
   // Every in-range index is a placement, never an ERROR: a supported GPU is
-  // projected on, and anything else — the CPU registry entry is always one of
-  // them — is rejected to a CPU-only projection. On a host with no supported
-  // GPU that is every index.
+  // projected on, anything else is rejected to CPU.
   const outcomes = []
   for (let mainGpu = 0; mainGpu < outOfRange; mainGpu++) {
     const res = fitParams({ modelPath, splitMode: 0, mainGpu })
@@ -745,8 +715,6 @@ test('mainGpu is validated only when llama uses it', async function (t) {
 
   // Without a target there is nothing to reject to CPU, so NONE and TENSOR on a
   // host with no supported GPU are argument errors rather than projections.
-  // With one, NONE without a mainGpu places the model on the first supported
-  // GPU.
   if (!hasSupportedGpu(modelPath)) {
     await t.exception.all(
       () => fitParams({ modelPath, splitMode: 0 }),

@@ -46,9 +46,8 @@ BackendDevice adreno() {
       .handle = reinterpret_cast<ggml_backend_dev_t>(2)};
 }
 
-// Each device gets its own registry identity by default, derived from the
-// handle: distinct registry handles are the common case, and a shared registry
-// NAME must not be mistaken for one. Use `withRegistryOf` for the shared case.
+// Each device gets its own registry identity, derived from the handle; use
+// `withRegistryOf` for the shared case.
 BackendDevice device(
     const char* name, const char* description, BackendDeviceType type,
     uintptr_t handle, const char* registryName = "") {
@@ -61,8 +60,7 @@ BackendDevice device(
       .registry = reinterpret_cast<ggml_backend_reg_t>(handle)};
 }
 
-// Makes `device` report `owner`'s registry handle, the only way to express two
-// devices belonging to one backend registry.
+// Makes `device` report `owner`'s registry handle.
 BackendDevice withRegistryOf(BackendDevice device, const BackendDevice& owner) {
   device.registry = owner.registry;
   return device;
@@ -83,9 +81,8 @@ bool isPinnedGpu(const common_params& params, const BackendDevice& expected) {
          params.devices.back() == nullptr && params.main_gpu == 0;
 }
 
-// Checks a two-device `tensor-split` positionally. These cases assert on a
-// clean parse rather than catching a throw — see remapTensorSplit in
-// LlamaLoadConfig.cpp for why a malformed value cannot be caught here.
+// Checks a two-device `tensor-split` positionally. A malformed value cannot be
+// caught here — see `remapTensorSplit`.
 bool splitsAcross(
     const std::string& tensorSplit, const std::vector<BackendDevice>& devices,
     float first, float second) {
@@ -276,10 +273,8 @@ int main() {
   }
 
   {
-    // Two eligible GPUs, because a two-share `tensor-split` is only a
-    // well-formed value for a two-device split: one share per device in the
-    // final list is what fabric applies positionally, and any other count is
-    // rejected rather than zero-padded or truncated.
+    // Two eligible GPUs: a two-share `tensor-split` is well-formed only for a
+    // two-device split.
     const BackendDevice metal1 =
         device("Metal1", "Apple GPU 1", BackendDeviceType::Gpu, 3, "Metal");
     const auto normalized = model_fit::normalizeLlamaLoadConfig(
@@ -739,11 +734,7 @@ int main() {
         "final-list tensor shares must remain positional after filtering");
 
     // Fabric tokenizes `--tensor-split` on the regex [,/]+, so a run of
-    // delimiters collapses and "1,,2" is two shares, not three. The old
-    // getline split kept the empty field, read three shares, took the
-    // one-share-per-registered-GPU branch and so shifted every share one
-    // device right — emitting ",2", whose empty leading field fabric's
-    // std::stof then threw on. The llm and embed addons accept this value.
+    // delimiters collapses and "1,,2" is two shares, not three.
     expect(
         splitsAcross("1,,2", {rocm, vulkan, vulkan1, cpu()}, 1.0F, 2.0F),
         "collapsed tensor-split delimiters must yield one share per surviving "
@@ -787,10 +778,9 @@ int main() {
         "a long tensor-split list must be rejected even when the device "
         "mapping did not move: fabric silently drops the tail");
 
-    // One share per eligible device is read as the final order whether or not
-    // that order is stable. Here ROCm filters out and the RPC device is
-    // hoisted ahead of the local GPU, so the surviving source indices run
-    // {2, 1}; the retired order-stability gate rejected this outright.
+    // One share per eligible device is read as the final order even when that
+    // order is unstable: ROCm filters out and RPC is hoisted ahead of the local
+    // GPU, so the surviving source indices run {2, 1}.
     expect(
         splitsAcross("1,2", {rocm, vulkan, rpc, cpu()}, 1.0F, 2.0F),
         "final-list tensor shares must be accepted across a reordered device "
@@ -872,8 +862,7 @@ int main() {
             model_fit::LlamaLoadKind::Completion,
             4),
         "main-gpu past the registry must be rejected");
-    // The seam trusts the index; rejection is the caller's job and is asserted
-    // through isSupportedGpuOrdinal above.
+    // The seam trusts the index; rejection is the caller's job.
     llama_model_params fitParams = llama_model_default_params();
     std::vector<ggml_backend_dev_t> fitDeviceStorage =
         model_fit::eligibleBackendDeviceHandles(
@@ -935,8 +924,7 @@ int main() {
         isCpuPlacement(falseVulkanNameConfig.params),
         "device family matching must use known prefixes");
 
-    // Dedup is on the raw `device_id`, as fabric compares it: one card seen
-    // through CUDA and Vulkan collapses, virtual MPS/MIG devices stay distinct.
+    // Dedup is on the raw `device_id`, as fabric compares it.
     BackendDevice cuda =
         device("CUDA0", "NVIDIA GPU", BackendDeviceType::Gpu, 52, "CUDA");
     BackendDevice sameGpuVulkan =
@@ -992,12 +980,9 @@ int main() {
                 LLAMA_FLASH_ATTN_TYPE_DISABLED,
         "split-mode traits must come from the final discrete device set");
 
-    // The reported Adreno tier is the MAX across the split set, not the first
-    // local device's. The 740 sorts first on purpose: reading the first local
-    // device would report 740 and leave the Adreno-800+ quantized-KV guard
-    // disarmed while an 830 participates, diverging from the load the addon
-    // performs. Observed through that guard, which suppresses the q8_0 KV
-    // default once armed and rejects an explicit quantized type outright.
+    // The 740 sorts first on purpose: a first-device read would report 740 and
+    // leave the Adreno-800+ quantized-KV guard disarmed. That guard is what the
+    // assertions observe — armed, it suppresses the q8_0 KV default.
     const BackendDevice adrenoLowVulkan =
         device("Vulkan0", "Adreno 740", BackendDeviceType::Gpu, 70, "Vulkan");
     const BackendDevice adrenoHighVulkan =
@@ -1027,11 +1012,8 @@ int main() {
         "an 800+ local participant must arm the quantized KV rejection "
         "whatever position it holds");
 
-    // The max spans LOCAL participants only. An RPC device's description is
-    // its endpoint string (ggml-rpc.cpp:3749), so a host or port that happens
-    // to parse as an Adreno tier must not raise the reported tier: here the
-    // endpoint reads as 830 while the only real GPU is a 740, so the guard
-    // must stay disarmed and the q8_0 default must still apply.
+    // An RPC device's description is its endpoint string, so an endpoint
+    // reading as 830 beside a local 740 must not raise the reported tier.
     const BackendDevice rpcAdrenoEndpoint = device(
         "RPC0", "adreno830.local:50052", BackendDeviceType::Gpu, 72, "RPC");
     const auto rpcEndpointTier = model_fit::normalizeLlamaLoadConfig(
@@ -1045,10 +1027,8 @@ int main() {
             rpcEndpointTier.params.cache_type_v == GGML_TYPE_Q8_0,
         "an RPC endpoint string must not raise the reported Adreno tier");
 
-    // QVAC-24205: the one-bit BitNet Adreno policy `selectGpu` applies on the
-    // NONE path must also govern the FINAL SPLIT SET, because the llm addon
-    // applies it there (`applyAdrenoRestrictions`). Without it the projection
-    // reported a GPU fit for a LAYER load the addon runs on the CPU.
+    // The one-bit BitNet Adreno policy governs the final split set too, because
+    // the llm addon applies it there (`applyAdrenoRestrictions`).
     const BackendDevice adrenoLowVulkanTwo =
         device("Vulkan2", "Adreno 740", BackendDeviceType::Gpu, 73, "Vulkan");
     const auto bitnetSplitBelow800 = model_fit::normalizeLlamaLoadConfig(
@@ -1062,8 +1042,7 @@ int main() {
             bitnetSplitBelow800.params.split_mode == LLAMA_SPLIT_MODE_NONE,
         "one-bit BitNet on an Adreno <800 split set must project CPU");
 
-    // At 800+ the policy drops OpenCL and keeps Vulkan, so the split list
-    // survives minus the OpenCL participant.
+    // At 800+ the policy drops OpenCL and keeps Vulkan.
     const BackendDevice adrenoHighOpenCl =
         device("GPUOpenCL", "Adreno 830", BackendDeviceType::Gpu, 74, "OpenCL");
     const auto bitnetSplitAbove800 = model_fit::normalizeLlamaLoadConfig(
@@ -1077,10 +1056,8 @@ int main() {
         "one-bit BitNet on an Adreno 800+ split set must drop OpenCL and keep "
         "Vulkan");
 
-    // The restriction's tier max excludes RPC for the same reason the reported
-    // tier does, and it matters in BOTH directions. An endpoint reading as 830
-    // beside a local 740 must not cancel the CPU fallback the local tier
-    // demands.
+    // The restriction's tier max excludes RPC too: an endpoint reading as 830
+    // must not cancel the CPU fallback a local 740 demands.
     const auto bitnetSplitRpcRaisesTier = model_fit::normalizeLlamaLoadConfig(
         "/bitnet.gguf",
         LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
@@ -1091,8 +1068,8 @@ int main() {
             isCpuPlacement(bitnetSplitRpcRaisesTier.params),
         "an RPC endpoint must not raise the restriction's tier past 800");
 
-    // And an endpoint reading as a sub-800 tier beside a local NON-Adreno GPU
-    // must not restrict anything: there is no local Adreno at all.
+    // And a sub-800 endpoint beside a local non-Adreno GPU must restrict
+    // nothing: there is no local Adreno at all.
     const BackendDevice rpcLowAdrenoEndpoint = device(
         "RPC1", "adreno740.local:50052", BackendDeviceType::Gpu, 75, "RPC");
     const BackendDevice nonAdrenoVulkan =
@@ -1121,11 +1098,9 @@ int main() {
                 .front() == adrenoIntegrated.handle,
         "unsupported discrete GPUs must not hide an eligible integrated GPU");
 
-    // The origin rule (upstream llama.cpp #23897): a second iGPU from a
-    // DIFFERENT backend registry is the same physical device enumerated twice,
-    // so it is dropped. Both devices share a registry NAME and still have
-    // distinct registry handles — the rule compares identity, so matching
-    // names must not be enough.
+    // A second iGPU from a different backend registry is the same physical
+    // device enumerated twice, so it is dropped. These two share a registry
+    // NAME and still have distinct handles: the rule compares identity.
     BackendDevice firstIntegrated = device(
         "Vulkan0",
         "Integrated GPU 0",
@@ -1149,9 +1124,8 @@ int main() {
         "only the first integrated GPU must survive when the two come from "
         "distinct backend registries");
 
-    // The exception (upstream llama.cpp #26953): CUDA reports virtual devices
-    // as integrated GPUs, so every later iGPU sharing the kept one's registry
-    // handle is a distinct device and must survive.
+    // The exception (llama.cpp #26953): CUDA reports virtual devices as
+    // integrated GPUs, so iGPUs sharing the kept one's registry are distinct.
     const BackendDevice firstVirtual = device(
         "CUDA0", "NVIDIA GB10", BackendDeviceType::IntegratedGpu, 62, "CUDA");
     const BackendDevice secondVirtual = withRegistryOf(
@@ -1305,11 +1279,9 @@ int main() {
             {"cache-type-k", "q8_0"}},
         ModelTraits{},
         {discreteVulkan, adrenoOpenClDiscrete, cpu()});
-    // The exact detail matters: the OpenCL participant sits SECOND, so a
-    // regression from `anySplitDevice(isOpenClDevice)` to a first-device-only
-    // read would flip `isAdrenoVulkan` true and reject this load by the
-    // Adreno-800+ flash-attention rule instead. Only the message separates the
-    // two.
+    // The exact detail matters: a first-device-only read would reject this load
+    // by the Adreno-800+ flash-attention rule instead, and only the message
+    // separates the two.
     expect(
         !quantizedOnOpenClSet.supported &&
             quantizedOnOpenClSet.unsupportedDetail ==
@@ -1358,12 +1330,10 @@ int main() {
           "BitNet completion Adreno policy must remain CPU fallback");
     }
 
-    // Mesa's Turnip driver types an Adreno as an INTEGRATED Vulkan adapter, so
-    // a linux-arm64 host can present 800+ with no discrete GPU at all. The
-    // addon (BackendSelection.cpp chooseBackend) drops only the OpenCL
-    // candidates at that tier and then falls through to its iGPU list, so the
-    // projection has to keep the iGPU too — returning CPU here would describe a
-    // different load than the one that runs.
+    // Mesa's Turnip driver types an Adreno as an integrated Vulkan adapter, so
+    // a linux-arm64 host can present 800+ with no discrete GPU. The addon drops
+    // only the OpenCL candidates at that tier and falls through to its iGPU
+    // list.
     const BackendDevice integratedAdreno = device(
         "Vulkan0", "Adreno 830", BackendDeviceType::IntegratedGpu, 9, "Vulkan");
     const auto bitnetIntegratedOnly = model_fit::normalizeLlamaLoadConfig(
