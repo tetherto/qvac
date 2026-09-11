@@ -415,8 +415,13 @@ function loadBarrelMap(): Map<string, string[]> {
   const src = fs.readFileSync(API_BARREL, "utf-8");
 
   // `export { a, b as c, type D } from './module'`, brace list possibly
-  // spanning lines.
-  for (const m of src.matchAll(/export\s*\{([^}]*)\}\s*from\s*['"]\.\/([^'"]+)['"]/g)) {
+  // spanning lines. The barrel mixes both specifier styles for the same
+  // directory — line 56 re-exports `audioGen` from `@/client/api/audio-gen` —
+  // so accept the alias too. Missing one makes its module look unexported,
+  // which suppresses the new-capability signal downstream.
+  for (const m of src.matchAll(
+    /export\s*\{([^}]*)\}\s*from\s*['"](?:\.\/|@\/client\/api\/)([^'"]+)['"]/g,
+  )) {
     const module = path.basename(m[2]!, ".js").replace(/\.ts$/, "");
     const symbols: string[] = [];
 
@@ -435,7 +440,9 @@ function loadBarrelMap(): Map<string, string[]> {
 
   // `export * from './module'` names no symbols, so the filename convention is
   // the only signal left for those.
-  for (const m of src.matchAll(/export\s+\*\s+from\s*['"]\.\/([^'"]+)['"]/g)) {
+  for (const m of src.matchAll(
+    /export\s+\*\s+from\s*['"](?:\.\/|@\/client\/api\/)([^'"]+)['"]/g,
+  )) {
     const module = path.basename(m[1]!, ".js").replace(/\.ts$/, "");
     if (!map.has(module)) map.set(module, [kebabToCamel(module)]);
   }

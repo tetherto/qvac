@@ -10,6 +10,8 @@ alwaysApply: false
 
 When modifying files matched by this rule, check whether the corresponding knowledge-base documentation needs updating.
 
+This rule is Cursor knowledge-base only (`.cursor/rules/sdk/docs/*.mdc`). User-facing website prose is `/qv-docs-update`. Do not patch `docs/website/` from this rule.
+
 ## Scope
 
 This rule monitors two packages that have dedicated knowledge-base documentation maintained for Cursor agent context:
