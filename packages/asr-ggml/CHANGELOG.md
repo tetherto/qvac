@@ -16,6 +16,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- The published linux-x64 prebuild ships the CUDA backend again, next to
+  Vulkan and the CPU variants: with the per-platform prebuild packages the
+  CUDA module no longer pushes one npm tarball over the registry size limit.
+  CUDA stays a runtime-loaded module — `use_gpu` / `useGPU` prefers it over
+  Vulkan only where the NVIDIA driver and the CUDA 13 runtime libraries
+  (cudart, cuBLAS) resolve at load time; every other host keeps Vulkan or CPU.
+
 - Extend the opt-in CUDA build (`ASR_CUDA=ON`) from linux-x64 to linux-arm64
   and win32-x64. On all three platforms the CUDA backend ships as a
   runtime-loaded module (`.so` on Linux, `.dll` on Windows) staged next to the
@@ -23,10 +30,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   libraries resolve, and hosts without them fall back to Vulkan or CPU exactly
   as before. The whisper engine's backend loader now also runs on Windows
   (with addon-relative self-location when `backendsDir` is omitted), which
-  hybrid win32 builds need to register any backend at all. Published prebuilds
-  remain CUDA-free. The linux-arm64 module natively targets Jetson Orin (8.7),
-  Grace-Hopper (9.0) and GB10 / DGX Spark (12.1), with other Ampere+ parts
-  covered through the bundled 8.0 PTX.
+  hybrid win32 builds need to register any backend at all. Published
+  linux-arm64 and win32-x64 prebuilds remain CUDA-free. The linux-arm64
+  module natively targets Jetson Orin (8.7), Grace-Hopper (9.0) and GB10 /
+  DGX Spark (12.1), with other Ampere+ parts covered through the bundled
+  8.0 PTX.
 
 - Add NVIDIA Nemotron 3.5 ASR Streaming 0.6B support to the Parakeet engine,
   including locale prompting, cache-aware streaming operating points,
