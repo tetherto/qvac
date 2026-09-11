@@ -15,6 +15,8 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
   const promptTokens = finiteNumber(stats.promptTokens)
   const generatedTokens = finiteNumber(stats.generatedTokens)
   const avgConcurrentSeq = finiteNumber(stats.avgConcurrentSeq)
+  const draftAccepted = finiteNumber(stats.draftAccepted)
+  const draftTotal = finiteNumber(stats.draftTotal)
 
   const normalized: CompletionStats = {
     ...(timeToFirstToken !== undefined && { timeToFirstToken }),
@@ -24,6 +26,8 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
     ...(promptTokens !== undefined && { promptTokens }),
     ...(generatedTokens !== undefined && { generatedTokens }),
     ...(avgConcurrentSeq !== undefined && { avgConcurrentSeq }),
+    ...(draftAccepted !== undefined && { draftAccepted }),
+    ...(draftTotal !== undefined && { draftTotal }),
     ...(stats.backendDevice !== undefined && { backendDevice: stats.backendDevice })
   }
 
@@ -35,6 +39,8 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
     promptTokens === undefined &&
     generatedTokens === undefined &&
     avgConcurrentSeq === undefined &&
+    draftAccepted === undefined &&
+    draftTotal === undefined &&
     stats.backendDevice === undefined
   ) {
     return undefined

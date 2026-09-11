@@ -18,6 +18,16 @@ export const completionStatsSchema = z.object({
   // Non-empty addon stream pieces — prefer for usage reporting when present.
   emittedTokens: z.number().optional(),
   avgConcurrentSeq: z.number().optional(),
+  draftAccepted: z
+    .number()
+    .optional()
+    .describe(
+      'MTP draft tokens accepted by the target for this request. Zero when MTP is inactive.'
+    ),
+  draftTotal: z
+    .number()
+    .optional()
+    .describe('MTP draft tokens proposed for this request. Zero when MTP is inactive.'),
   backendDevice: z.enum(['cpu', 'gpu']).optional()
 })
 

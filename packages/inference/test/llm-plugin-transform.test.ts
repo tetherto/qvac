@@ -6,6 +6,27 @@ function makeConfig(overrides: Record<string, unknown> = {}) {
   return llmConfigSchema.parse(overrides)
 }
 
+test('transformLlmConfig: forwards MTP tuning with native keys and string values', (t) => {
+  const result = transformLlmConfig(
+    makeConfig({
+      'spec-type': 'draft-mtp',
+      'spec-draft-n-max': 2,
+      'spec-draft-n-min': 0,
+      'spec-draft-p-min': 0.5,
+      'spec-draft-backend-sampling': false,
+      'spec-draft-device': 'CPU',
+      'spec-draft-ngl': 0
+    })
+  )
+  t.is(result['spec-type'], 'draft-mtp')
+  t.is(result['spec-draft-n-max'], '2')
+  t.is(result['spec-draft-n-min'], '0')
+  t.is(result['spec-draft-p-min'], '0.5')
+  t.is(result['spec-draft-backend-sampling'], 'false')
+  t.is(result['spec-draft-device'], 'CPU')
+  t.is(result['spec-draft-ngl'], '0')
+})
+
 test('transformLlmConfig: system_prompt is never forwarded to C++', (t) => {
   const config = makeConfig({ system_prompt: 'You are a helpful assistant.' })
   const result = transformLlmConfig(config)
