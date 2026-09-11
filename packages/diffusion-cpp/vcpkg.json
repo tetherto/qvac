@@ -11,7 +11,7 @@
     },
     {
       "name": "stable-diffusion-cpp",
-      "version>=": "2026-08-11#1"
+      "version>=": "2026-08-11#2"
     },
     "stb"
   ],
@@ -23,6 +23,18 @@
           "name": "stable-diffusion-cpp",
           "features": [
             "cuda"
+          ]
+        }
+      ]
+    },
+    "cuda-jetson": {
+      "description": "Build the CUDA 12 Jetson arm64 backend module",
+      "dependencies": [
+        {
+          "name": "stable-diffusion-cpp",
+          "platform": "linux & arm64",
+          "features": [
+            "cuda-jetson"
           ]
         }
       ]
