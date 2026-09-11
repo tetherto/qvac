@@ -433,7 +433,7 @@ jobs:
           fi
 
           echo "Using prebuilds from run ID: $RUN_ID"
-          gh run download "$RUN_ID" --repo "$BENCHMARK_REPOSITORY" -n prebuilds -D "${{ env.WORKDIR }}/prebuilds"
+          gh run download "$RUN_ID" --repo "$BENCHMARK_REPOSITORY" -n prebuilds-asr-ggml -D "${{ env.WORKDIR }}/prebuilds"
           ls -la "${{ env.WORKDIR }}/prebuilds/" || true
 
       # ---------------- whisper-only model staging ----------------

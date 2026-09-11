@@ -82,7 +82,13 @@ export function selectNewestBotStatus(statuses, context) {
 // This rejects a superseded pre-label run whose skipped success merely
 // post-dates the label.
 export function isRunFresh(run, pkg, prUpdatedEpoch) {
-  if (!run || run.path !== `.github/workflows/on-pr-${pkg}.yml`) return false
+  // Trusted from either the legacy on-pr-<pkg>.yml or the consolidated on-pr-nx.yml.
+  // Keep the per-pkg literal so the ci-trust-policy assertion holds.
+  const validPaths = [
+    `.github/workflows/on-pr-${pkg}.yml`,
+    '.github/workflows/on-pr-nx.yml',
+  ]
+  if (!run || !validPaths.includes(run.path)) return false
   const createdMs = Date.parse(run.created_at)
   if (Number.isNaN(createdMs)) return false
   return Math.floor(createdMs / 1000) >= prUpdatedEpoch

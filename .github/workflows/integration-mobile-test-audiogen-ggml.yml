@@ -239,7 +239,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/audiogen-ggml' }}
           addon-npm-name: '@qvac/audiogen-ggml'
-          prebuild-artifact-prefix: 'audiogen-ggml-'
+          prebuild-artifact-prefix: 'prebuild-audiogen-ggml-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           # workflow_call passes prebuild_package; workflow_dispatch passes package_spec.
           package-version: ${{ inputs.prebuild_package || inputs.package_spec }}

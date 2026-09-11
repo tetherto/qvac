@@ -1077,6 +1077,104 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
   )
 })
 
+// on-pr-nx runs on pull_request_target, so every job that executes PR code or
+// holds a write scope must gate on fork-approval. Enumerated from the file so a
+// newly added job cannot land ungated: anything not explicitly exempted below
+// has to carry the gate.
+test('on-pr-nx: every non-exempt job gates on fork-approval', () => {
+  const source = read('.github/workflows/on-pr-nx.yml')
+
+  // Exempt, and why. Each either runs no PR code or establishes the gate itself.
+  const exempt = new Map([
+    ['fork-approval', 'is the gate'],
+    ['ci-router', 'reads PR labels from a trusted checkout; runs no PR code'],
+    ['authorize', 'needs fork-approval already, and is the second half of the gate'],
+    ['matrix', 'checks out the default branch only and reads options.ci off it'],
+    ['publish-prebuild-status', 'trusted sparse checkout; publishes a commit status after gated jobs'],
+  ])
+
+  const jobNames = [...source.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].map(
+    (m) => m[1],
+  )
+  assert.ok(jobNames.length > 10, 'parsed the on-pr-nx job list')
+
+  for (const job of jobNames) {
+    if (exempt.has(job)) continue
+    const block = jobBlock(source, job)
+    const needs = block.match(/needs:[\s\S]*?(?=\n {4}[a-z#]|\n {2}[a-z])/)
+    assert.ok(needs, `'${job}' declares needs`)
+    assert.match(
+      needs[0],
+      /\bfork-approval\b/,
+      `'${job}' must gate on fork-approval (or be added to the exempt map with a reason)`,
+    )
+  }
+
+  // The exempt map must not drift into naming jobs that no longer exist.
+  for (const job of exempt.keys()) {
+    assert.ok(jobNames.includes(job), `exempt job '${job}' still exists`)
+  }
+})
+
+test('on-pr-nx matrix job loads nx-project-matrix from the trusted default branch and reads config off it, never PR head', () => {
+  const source = read('.github/workflows/on-pr-nx.yml')
+  const matrix = jobBlock(source, 'matrix')
+
+  // (i) The matrix composite runs from a FULL (non-sparse) checkout of the trusted
+  // default branch, pinned before `uses:` — never PR head (fork RCE under pull_request_target).
+  const checkoutRefLine = matrix
+    .split('\n')
+    .find((line) => line.trim().startsWith('ref:'))
+  assert.ok(checkoutRefLine, 'matrix job checkout pins a ref')
+  assert.doesNotMatch(
+    checkoutRefLine,
+    /github\.event\.pull_request\.head\./,
+    'matrix checkout ref must never resolve to a PR-head expression',
+  )
+  assert.match(
+    checkoutRefLine,
+    /github\.event\.repository\.default_branch/,
+    'matrix checkout ref is the trusted default branch',
+  )
+  assert.doesNotMatch(
+    matrix,
+    /sparse-checkout:\s*\.github\/actions\/nx-project-matrix/,
+    'matrix job must NOT sparse-checkout (sparse config leaks into the action checkout and breaks the pnpm pin)',
+  )
+  assert.match(
+    matrix,
+    /persist-credentials:\s*false/,
+    'matrix job checkout must not persist credentials',
+  )
+
+  const trustedCheckoutIndex = matrix.search(
+    /uses: actions\/checkout@[0-9a-f]{40}/,
+  )
+  const usesIndex = matrix.indexOf('uses: ./.github/actions/nx-project-matrix')
+  assert.notEqual(usesIndex, -1, 'matrix job runs the nx-project-matrix composite')
+  assert.ok(
+    trustedCheckoutIndex !== -1 && trustedCheckoutIndex < usesIndex,
+    'the trusted default-branch checkout must precede `uses: ./.github/actions/nx-project-matrix`',
+  )
+
+  // (ii) config-ref (the options.ci source) must resolve to the trusted default
+  // branch, never a PR-head expression (else a fork points the git-show at its tree).
+  const configRefLine = matrix
+    .split('\n')
+    .find((line) => line.trim().startsWith('config-ref:'))
+  assert.ok(configRefLine, 'matrix job passes config-ref to nx-project-matrix')
+  assert.doesNotMatch(
+    configRefLine,
+    /github\.event\.pull_request\.head\./,
+    'config-ref must not resolve to a PR-head expression',
+  )
+  assert.match(
+    configRefLine,
+    /github\.event\.repository\.default_branch/,
+    'config-ref resolves to the trusted default branch',
+  )
+})
+
 test('publish-prebuild-status stamps its run URL into target_url', () => {
   const workflowDirectory = join(root, '.github/workflows')
   const offenders = readdirSync(workflowDirectory)

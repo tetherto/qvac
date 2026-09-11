@@ -47,7 +47,6 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: classification-ggml-
       # classification-ggml builds the GGML_BACKEND_DL fabric (gpu-backends), so
       # the build host needs the Vulkan SDK (incl. glslc) to compile the
       # ggml-vulkan module from source on cache-miss — same as the other

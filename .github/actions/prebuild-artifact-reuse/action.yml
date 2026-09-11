@@ -1,12 +1,6 @@
 name: 'Prebuild artifact reuse'
 description: >
-  Shared cross-run prebuild reuse for the addon caching workflows. On a
-  no-native-change push, finds the most recent prior run of THIS PR's head
-  branch that carries a matching per-PR marker (prebuilds-cache-pr-<num>-<hash>)
-  and downloads that run's `prebuilds` artifact, re-publishing it for downstream
-  jobs. Replaces actions/cache (which can't write on pull_request_target). Marker
-  is scoped by PR number, so a PR can only ever reuse ITS OWN prior prebuilds.
-  Single source of truth — do NOT inline per workflow.
+  Cross-run prebuild reuse: on a no-native-change push, finds this PR's prior run carrying a per-PR marker (prebuilds-cache-pr-<num>-<hash>) and re-publishes its prebuilds artifact. Marker is scoped by PR number, so a PR can only reuse its own prebuilds. Single source of truth — do NOT inline per workflow.
 
 inputs:
   github-token:
@@ -21,6 +15,10 @@ inputs:
   pr-number:
     description: 'github.event.pull_request.number'
     required: true
+  artifact-name:
+    description: 'Name of the prebuilds artifact to find/download/re-publish. Defaults to `prebuilds` (legacy per-package workflows); the nx path passes `prebuilds-<pkg>`.'
+    required: false
+    default: 'prebuilds'
 
 outputs:
   reuse_hit:
@@ -40,13 +38,12 @@ runs:
         NATIVE_HASH: ${{ inputs.native-hash }}
         PR_NUMBER: ${{ inputs.pr-number }}
         WORKFLOW_FILE: ${{ inputs.workflow-file }}
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
         RUN_ID: ${{ github.run_id }}
       run: |
         set -u
-        # Marker is scoped by PR NUMBER (globally unique in the base repo) so a
-        # PR can only ever reuse ITS OWN prior prebuilds — a malicious PR's
-        # artifact can never be served to a different (victim) PR even if they
-        # share a fork branch name and native_hash.
+        # Marker is scoped by PR NUMBER so a PR can only reuse ITS OWN prebuilds —
+        # a malicious PR's artifact can never be served to a victim PR.
         WANT="prebuilds-cache-pr-${PR_NUMBER}-${NATIVE_HASH}"
         echo "Looking for marker '$WANT' among prior runs of branch '$HEAD_REF'"
         RUNS=$(gh api "repos/$REPO/actions/workflows/${WORKFLOW_FILE}/runs?branch=${HEAD_REF}&per_page=40" \
@@ -55,9 +52,9 @@ runs:
         for rid in $RUNS; do
           NAMES=$(gh api "repos/$REPO/actions/runs/$rid/artifacts" \
                     --jq '.artifacts[] | select(.expired==false) | .name' 2>/dev/null || true)
-          if echo "$NAMES" | grep -qx "$WANT" && echo "$NAMES" | grep -qx "prebuilds"; then
-            echo "Match in run $rid — downloading its prebuilds artifact"
-            if gh run download "$rid" --repo "$REPO" --name prebuilds --dir cached-prebuilds; then
+          if echo "$NAMES" | grep -qx "$WANT" && echo "$NAMES" | grep -qx "$ARTIFACT_NAME"; then
+            echo "Match in run $rid — downloading its '$ARTIFACT_NAME' artifact"
+            if gh run download "$rid" --repo "$REPO" --name "$ARTIFACT_NAME" --dir cached-prebuilds; then
               HIT=true
               echo "reused-run=$rid" >> "$GITHUB_OUTPUT"
               break
@@ -70,5 +67,5 @@ runs:
       if: steps.reuse.outputs.hit == 'true'
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
       with:
-        name: prebuilds
+        name: ${{ inputs.artifact-name }}
         path: cached-prebuilds

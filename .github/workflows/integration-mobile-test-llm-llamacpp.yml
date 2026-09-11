@@ -395,7 +395,7 @@ jobs:
           # in THIS run (the established behaviour for PR/merge mobile tests). When a
           # pinned version is requested (baseline leg), skip the artifact so it can't pick
           # up a candidate prebuild from the same run, and pull that exact version from npm.
-          prebuild-artifact-prefix: ${{ inputs.addon_npm_version == '' && 'llama-cpp-' || '' }}
+          prebuild-artifact-prefix: ${{ inputs.addon_npm_version == '' && 'prebuild-llm-llamacpp-' || '' }}
           # Baseline leg (pinned version): force the npm prebuild and ignore ALL
           # CI artifacts. Without this the merged `prebuilds` artifact (built from
           # the candidate in this same run) is pulled in when the per-matrix

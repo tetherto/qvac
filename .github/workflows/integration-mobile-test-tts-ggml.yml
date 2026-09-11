@@ -226,7 +226,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/tts-ggml' }}
           addon-npm-name: '@qvac/tts-ggml'
-          prebuild-artifact-prefix: 'tts-ggml-'
+          prebuild-artifact-prefix: 'prebuild-tts-ggml-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           # workflow_call uses prebuild_package; workflow_dispatch exposes the
           # equivalent package_spec input. Keep both paths pinned explicitly so

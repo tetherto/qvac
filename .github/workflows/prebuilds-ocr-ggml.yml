@@ -47,7 +47,6 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: ggml-ocr-
       include-vulkan-sdk: true
       fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
     secrets: inherit
