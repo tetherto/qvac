@@ -421,7 +421,21 @@ std::string LlamaFinetuner::finetune(
     }
 
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
-    model_.reload(FinetuneConfigOverrides{});
+    // Guarded like the error path below, and for the same reason: by this
+    // point the adapter is saved and the finetune has genuinely finished, so
+    // a failing reload (e.g. the load-time probe decode rejecting the
+    // restored inference configuration) must not convert a completed run
+    // into a thrown load error — or cascade into the catch below, which
+    // would reload a second time before rethrowing.
+    try {
+      model_.reload(FinetuneConfigOverrides{});
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "Finetune " + status +
+              ", but the model could not be returned to inference mode; "
+              "reload or unload before serving completions");
+    }
     return status;
   } catch (...) {
     auto state = getCurrentCheckpointStateShared();
