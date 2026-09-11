@@ -21,7 +21,9 @@
 #include <llama.h>
 
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
+#include "test_internal_peers.hpp"
 
 namespace {
 
@@ -683,4 +685,66 @@ TEST_F(ConcurrentProcessByIdTest, WholeModelCancelInDequeueWindowFailsBatch) {
       { model->process(std::any(prompts), kGroupId); }, std::runtime_error)
       << "a batch group caught in the dequeue window must fail with the "
          "queued-drop terminal, not run";
+}
+
+/// `toolDefinitionsDropped` answers "did *my* render lose its tools", which is
+/// the signal the SDK consumes in place of its user-message heuristic
+/// (QVAC-23460), so it has to be the asking job's own figure. It used to be
+/// read off the scheduler-wide accumulator, which `group->stats = stats_`
+/// copies wholesale into every group — so with two jobs in flight each was
+/// told the sum.
+///
+/// Every slot is forced to the same count of 1, which is what makes this
+/// order-independent: whichever job lands on whichever sequence, a per-request
+/// figure is 1 for both and an aggregated one is 2 for both. Forced rather than
+/// provoked because a real drop needs a template that rejects tool definitions,
+/// and that is unreachable through the addon's config — fabric defaults
+/// `use_jinja` to true, the `tools` key only ever sets it, and
+/// `--chat-template` is not registered for `LLAMA_EXAMPLE_COMMON`. The flag's
+/// own computation is covered without a model by
+/// `ChatTemplateUtilsTest.GetPromptFlagsToolDefinitionsDropped`.
+TEST_F(ConcurrentProcessByIdTest, PerJobToolDefinitionsDroppedIsNotAggregated) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "24";
+  config_["parallel"] = "2";
+  auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr) << "parallel=2 must build the scheduler";
+
+  qvac_lib_inference_addon_llama::batching::DriverFactory original =
+      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDriverFactory(
+      *scheduler,
+      [original](
+          const common_params& params, uint32_t seqId, llama_pos ceiling) {
+        std::unique_ptr<SequenceDriver> driver =
+            original(params, seqId, ceiling);
+        if (auto* text = dynamic_cast<TextLlmContext*>(driver.get())) {
+          text->forceToolDefinitionsDroppedForTesting(1);
+        }
+        return driver;
+      });
+
+  auto runJob = [&model](const LlamaModel::Prompt& prompt, JobId id) {
+    std::any out = model->process(std::any(prompt), id);
+    return std::any_cast<std::string>(out);
+  };
+  const auto promptA = makePrompt("What is the capital of France? One word.");
+  const auto promptB = makePrompt("What is two plus two? One word.");
+  auto futureA = std::async(std::launch::async, runJob, promptA, JobId{41});
+  auto futureB = std::async(std::launch::async, runJob, promptB, JobId{42});
+  ASSERT_EQ(
+      futureA.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  ASSERT_EQ(
+      futureB.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  EXPECT_FALSE(futureA.get().empty());
+  EXPECT_FALSE(futureB.get().empty());
+
+  for (const JobId id : {JobId{41}, JobId{42}}) {
+    const auto stats = model->consumeJobStats(id);
+    ASSERT_FALSE(stats.empty()) << "job " << id << " left no observed stats";
+    EXPECT_EQ(test_common::getStatValue(stats, "toolDefinitionsDropped"), 1)
+        << "job " << id
+        << " was told the batch-wide sum instead of its own render's status";
+  }
 }

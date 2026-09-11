@@ -323,11 +323,16 @@ function getSettings() {
   }
 }
 
-// tts-cpp's vcpkg port wires Metal on darwin/ios, Vulkan on linux/win32, and
-// Vulkan + OpenCL on android (see test/integration/gpu-smoke.test.js). There is
-// no CUDA in the default backend cascade today, so CUDA only appears here when
-// it is explicitly requested via the backend hint on a CUDA-capable runner.
+// tts-cpp's vcpkg port wires Metal on darwin/ios, Vulkan on linux/win32 (the
+// linux-x64 prebuild also bundles CUDA, which wins the cascade where it
+// resolves), and Vulkan + OpenCL on android (see
+// test/integration/gpu-smoke.test.js). A TTS_CPP_GPU_BACKEND pin overrides
+// the engine's whole cascade, so on GPU entries it also overrides the matrix
+// backendHint here: the label must name the backend that actually runs, not
+// what a shared matrix guessed.
 function resolveBackend(platformName, useGPU, backendHint) {
+  const pinned = String(getEnv('TTS_CPP_GPU_BACKEND') || '').toLowerCase()
+  if (useGPU && pinned) return pinned
   const hint = String(backendHint || '').toLowerCase()
   if (hint) return hint
   if (!useGPU) return 'cpu'

@@ -194,11 +194,19 @@ jobs:
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
-          # Linux GPU runners exercise the published Vulkan desktop backend.
+          # The linux-x64 prebuild bundles the CUDA and Vulkan backend modules
+          # and ggml registers CUDA first, so the GPU backend is decided by
+          # whether the CUDA module's cudart/cuBLAS DT_NEEDED entries resolve.
+          # cuda_libs points this row's test steps at the runner's CUDA
+          # toolkit (kept outside ldconfig), giving it end-to-end CUDA
+          # coverage; qvac-ubuntu2404-x64-gpu leaves the CUDA module
+          # unresolvable, so ggml skips it and that row keeps dedicated
+          # Vulkan coverage plus the fallback path itself.
           - os: ubuntu-22.04
             platform: linux
             arch: x64
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+            cuda_libs: /usr/local/cuda/lib64
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]
           - os: ubuntu-24.04
@@ -316,13 +324,36 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
           mkdir -p prebuilds "${{ runner.temp }}/tmp"
           rm -f "${{ runner.temp }}/tmp"/*.tgz
           rm -rf "${{ runner.temp }}/tmp/package"
-          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          npm pack "$PREBUILD_PACKAGE" --pack-destination "${{ runner.temp }}/tmp"
           tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
-          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
+          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
+          # meta tarball; split releases ship them in the per-host platform
+          # package under addon/prebuilds/.
+          if [ -d "${{ runner.temp }}/tmp/package/prebuilds" ]; then
+            cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
+          else
+            SPEC="$PREBUILD_PACKAGE"
+            REST="${SPEC#?}"
+            if [ "${REST#*@}" != "$REST" ]; then
+              VERSION="${SPEC##*@}"
+              NAME="${SPEC%@"$VERSION"}"
+            else
+              VERSION=""
+              NAME="$SPEC"
+            fi
+            HOST_SPEC="${NAME}-${{ matrix.platform }}-${{ matrix.arch }}${VERSION:+@$VERSION}"
+            rm -f "${{ runner.temp }}/tmp"/*.tgz
+            rm -rf "${{ runner.temp }}/tmp/package"
+            npm pack "$HOST_SPEC" --pack-destination "${{ runner.temp }}/tmp"
+            tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+            cp -r "${{ runner.temp }}/tmp"/package/addon/prebuilds/* prebuilds/
+          fi
           find prebuilds -type f -name 'tetherto__*' | while read f; do
             mv "$f" "${f/tetherto__/qvac__}"
           done
@@ -331,10 +362,12 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
           New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
           New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
-          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
+          npm pack $env:PREBUILD_PACKAGE --pack-destination "${{ runner.temp }}\tmp"
           $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
           # Extract from inside the temp dir with a RELATIVE archive name. The
           # tar on PATH (Git's MSYS GNU tar) mangles absolute Windows paths — it
@@ -343,7 +376,30 @@ jobs:
           Push-Location "${{ runner.temp }}\tmp"
           tar -xzf $tgz.Name
           Pop-Location
-          Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
+          # meta tarball; split releases ship them in the per-host platform
+          # package under addon/prebuilds/.
+          if (Test-Path "${{ runner.temp }}\tmp\package\prebuilds") {
+            Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          } else {
+            $spec = $env:PREBUILD_PACKAGE
+            $atIndex = $spec.LastIndexOf('@')
+            if ($atIndex -gt 0) {
+              $name = $spec.Substring(0, $atIndex)
+              $version = $spec.Substring($atIndex + 1)
+              $hostSpec = "$name-${{ matrix.platform }}-${{ matrix.arch }}@$version"
+            } else {
+              $hostSpec = "$spec-${{ matrix.platform }}-${{ matrix.arch }}"
+            }
+            Remove-Item "${{ runner.temp }}\tmp\*.tgz" -Force
+            Remove-Item "${{ runner.temp }}\tmp\package" -Recurse -Force
+            npm pack $hostSpec --pack-destination "${{ runner.temp }}\tmp"
+            $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
+            Push-Location "${{ runner.temp }}\tmp"
+            tar -xzf $tgz.Name
+            Pop-Location
+            Copy-Item -Path "${{ runner.temp }}\tmp\package\addon\prebuilds\*" -Destination prebuilds -Recurse -Force
+          }
           Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
             $newName = $_.Name -replace 'tetherto__', 'qvac__'
             Rename-Item -Path $_.FullName -NewName $newName
@@ -437,7 +493,9 @@ jobs:
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           # ggml backend .so/.dylib files load transitively from the prebuilds
           # dir (parakeet's transitive-.so gotcha) — keep for the merged addon.
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          # matrix.cuda_libs additionally resolves the CUDA module's
+          # cudart/cuBLAS dependencies on the CUDA-lane runner.
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.cuda_libs && format(':{0}', matrix.cuda_libs) || '' }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Run integration test (Windows)
@@ -462,7 +520,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.cuda_libs && format(':{0}', matrix.cuda_libs) || '' }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Run integration GPU test (Windows)

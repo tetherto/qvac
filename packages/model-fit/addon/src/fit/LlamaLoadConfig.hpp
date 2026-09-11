@@ -61,9 +61,12 @@ struct LlamaLoadFitRequest {
   uint32_t nCtxMin = 0;
 };
 
+// The `bool` is fabric's `prefetch_weights_auto`, added in common/fit.h by
+// qvac-fabric 10549.0.0. It is the last parameter before the log level.
 using LlamaFitInvoker = std::function<common_params_fit_status(
     const char*, llama_model_params*, llama_context_params*, float*,
-    llama_model_tensor_buft_override*, size_t*, uint32_t, ggml_log_level)>;
+    llama_model_tensor_buft_override*, size_t*, uint32_t, bool,
+    ggml_log_level)>;
 using SupportedLlamaLoadHandler = std::function<void(common_params&)>;
 
 struct LlamaFitExecution {

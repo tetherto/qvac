@@ -10,7 +10,7 @@ name: NOTICE drift
 # Why this gate lives IN-repo (unlike the license/security gates):
 # license-compliance.yml and security-baseline.yml are thin callers to generic
 # reusable workflows in tetherto/qvac-actions. NOTICE generation is NOT generic —
-# it drives repo-local scripts (.cursor/skills/qv-notice-generate/scripts) over
+# it drives repo-local scripts (.agents/skills/qv-notice-generate/scripts) over
 # this repo's package layout, models.prod.json, and vcpkg registries. So the gate
 # is a self-contained in-repo workflow that runs those scripts directly.
 #
@@ -52,7 +52,7 @@ on:
       - "packages/**/pyproject.toml"
       - "packages/registry-server/data/models.prod.json"
       - "packages/**/NOTICE"
-      - ".cursor/skills/qv-notice-generate/**"
+      - ".agents/skills/qv-notice-generate/**"
       - ".github/workflows/notice-drift.yml"
   pull_request:
     paths:
@@ -65,7 +65,7 @@ on:
       - "packages/**/pyproject.toml"
       - "packages/registry-server/data/models.prod.json"
       - "packages/**/NOTICE"
-      - ".cursor/skills/qv-notice-generate/**"
+      - ".agents/skills/qv-notice-generate/**"
       - ".github/workflows/notice-drift.yml"
   schedule:
     # Weekly freshness backstop (Mon 05:00 UTC): catches drift from upstream
@@ -135,7 +135,7 @@ jobs:
         # into a warning unless ENFORCE=true. continue-on-error is intentional
         # here precisely because this is a shadow-mode gate, not a Tier-1 blocker.
         continue-on-error: true
-        run: node .cursor/skills/qv-notice-generate/scripts/generate-notice.js --all
+        run: node .agents/skills/qv-notice-generate/scripts/generate-notice.js --all
 
       - name: Detect NOTICE drift
         id: drift
@@ -166,7 +166,7 @@ jobs:
             done
             echo
             echo "Regenerate with the \`qv-notice-generate\` skill (or run"
-            echo "\`node .cursor/skills/qv-notice-generate/scripts/generate-notice.js --all\`)"
+            echo "\`node .agents/skills/qv-notice-generate/scripts/generate-notice.js --all\`)"
             echo "and commit the result."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -191,7 +191,7 @@ jobs:
               '',
               '```bash',
               'source .env',
-              'node .cursor/skills/qv-notice-generate/scripts/generate-notice.js --all',
+              'node .agents/skills/qv-notice-generate/scripts/generate-notice.js --all',
               '```',
               '',
               `See the [job summary](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for the exact files.`,
