@@ -526,5 +526,3 @@ cjsExports.VideoStableDiffusion = exports.VideoStableDiffusion;
 cjsExports.EsrganUpscaler = EsrganUpscaler;
 cjsExports.applyFluxImg2ImgDimDefaults = applyFluxImg2ImgDimDefaults;
 module.exports = cjsExports;
-
-// TEMP probe marker (tmp-nx-onpr-probe only) - JS-only change to force prebuild reuse.
