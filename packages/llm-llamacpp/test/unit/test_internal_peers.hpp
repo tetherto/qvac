@@ -122,6 +122,14 @@ public:
 
 class MtmdLlmContextTestPeer {
 public:
+  /// Bitmaps staged for the next `mtmd_tokenize`. `tokenizeChat` drains them,
+  /// so between requests this must be 0: a non-zero count means a failed
+  /// request left its media behind, and the next multimodal request would
+  /// hand fabric more bitmaps than its prompt has markers.
+  static size_t loadedMediaCount(const MtmdLlmContext& context) {
+    return context.bitmaps_.entries.size();
+  }
+
   /// The post-reasoning-recovery EOG-ban one-shot flag. Production code only
   /// arms it from inside a reasoning recovery, which requires the model to emit
   /// EOS inside `<think>` — not forceable in a black-box test, hence direct
@@ -233,6 +241,23 @@ public:
   static void
   setEvalMediaFunc(Scheduler& scheduler, Scheduler::EvalMediaFunc fn) {
     scheduler.evalMediaFunc_ = std::move(fn);
+  }
+
+  /// The factory the scheduler calls once per admission to build a slot's
+  /// driver. Fetch it, wrap it, and hand the wrapper back with
+  /// `setDriverFactory` to reach a driver at the one moment a test can:
+  /// after construction and before its first decode. The slot itself is not
+  /// observable that early — `slots_[seqId]` is populated by `submitLocked`
+  /// after the factory returns.
+  static const qvac_lib_inference_addon_llama::batching::DriverFactory&
+  driverFactory(Scheduler& scheduler) {
+    return scheduler.driverFactory_;
+  }
+
+  static void setDriverFactory(
+      Scheduler& scheduler,
+      qvac_lib_inference_addon_llama::batching::DriverFactory factory) {
+    scheduler.driverFactory_ = std::move(factory);
   }
 
   /// The admission id currently stamped on `seqId`, or nullopt when the slot

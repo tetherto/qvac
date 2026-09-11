@@ -123,6 +123,13 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  [[nodiscard]] int32_t getToolDefinitionsDropped() const override;
+  void resetToolDefinitionsDropped() override;
+
+  void setRenderOverrides(RenderOverrides overrides) override {
+    renderOverrides_ = std::move(overrides);
+  }
+
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
   }
@@ -200,6 +207,32 @@ public:
   void forcePrefillEntryRestoreFailureForTesting(bool value) noexcept {
     forcePrefillEntryRestoreFailureForTesting_ = value;
   }
+  /// Replaces the next token this context samples *while the reasoning block
+  /// is open*, before the sampler accepts it. Two reasons for that shape:
+  /// the EOS-inside-reasoning recovery only triggers on a genuinely sampled
+  /// EOS, so `forcedTokens_` cannot reach it (that queue marks a token as not
+  /// sampled by construction); and no template this package ships force-opens
+  /// the channel, so a substitution on the first sample would land before the
+  /// block exists. Consumed by the first qualifying sample after the call.
+  void
+  forceNextSampledTokenInsideReasoningForTesting(llama_token token) noexcept {
+    forcedNextSampledTokenForTesting_ = token;
+  }
+  /// Forces this context's tools-dropped count, so a test can give a slot a
+  /// known value without needing a chat template that actually rejects tool
+  /// definitions — unreachable through the addon's config, since fabric
+  /// defaults `use_jinja` to true and `--chat-template` is not registered for
+  /// `LLAMA_EXAMPLE_COMMON`. Used to prove the count is reported per request
+  /// rather than aggregated across concurrent ones.
+  void forceToolDefinitionsDroppedForTesting(int32_t value) noexcept {
+    toolDefinitionsDropped_ = value;
+  }
+  /// The live sampler, for tests that have to probe fabric-side sampler state
+  /// no field on this class mirrors — the reasoning-budget matcher's, in
+  /// particular. Null when a failed restore left the context without one.
+  [[nodiscard]] common_sampler* samplerForTesting() const noexcept {
+    return smpl_.get();
+  }
 
 private:
   /**
@@ -220,6 +253,12 @@ private:
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools,
       std::vector<llama_token>& inputTokens, bool isCacheLoaded);
+
+  // Ensures `smpl_` is non-null, which a failed per-request restore can leave
+  // it. Attempts one rebuild from the current sampling params and throws if
+  // that fails too. Called at request entry so the failure is a StatusError
+  // rather than a null dereference inside fabric's sampler.
+  void requireSampler();
 
   // Replaces an EOS sampled while inside the reasoning channel with the
   // model's single-token close marker and injects the trailing newlines.
@@ -247,9 +286,14 @@ private:
   [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
   [[nodiscard]] bool rollbackCurrentRequest(
       const std::function<void(const std::string&)>& outputCallback);
+  // `fallbackTags` is the model-family reasoning channel, resolved by the
+  // caller so `configureTemplateDerivedSampling` can build the
+  // reasoning-budget markers from the same value.
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-      const std::string& forcedOpenText);
+      const std::string& forcedOpenText,
+      const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
+          fallbackTags);
 
   // Delegates to `rollbackState_.recordPostReasoningToken` while the
   // post-reasoning capture phase is active, which starts once the close
@@ -387,11 +431,27 @@ private:
   common_params params_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
+  // Per-request stop strings supplied by the chat template
+  // (`common_chat_params::additional_stops`). Refreshed on every
+  // `tokenizeChat`, unlike the load-time `params_.antiprompt`.
+  std::vector<std::string> templateStops_;
+  std::vector<llama_token> templateStopTokens_;
+  // Lowercased copy of the caller-supplied antiprompts only. Those match
+  // case-insensitively and are constant for a whole generation, so the fold is
+  // done once rather than in `checkAntiprompt`'s per-token scan. There is
+  // deliberately no twin for `templateStops_`: template delimiters match
+  // byte-for-byte (see `utils::matchesAnyStopString`).
+  std::vector<std::string> antipromptLower_;
+  // Renders in the current request where the template dropped the tools.
+  int32_t toolDefinitionsDropped_ = 0;
+  // Per-request `tool_choice` for the chat-template render.
+  RenderOverrides renderOverrides_;
   std::vector<llama_token> forcedTokens_;
 
   llama_pos nPast_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
   bool forcePrefillEntryRestoreFailureForTesting_ = false;
+  llama_token forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
   // Snapshot of `nPast_` at `evalMessageWithTools` entry. Restored by
   // `onCancel` to roll back to the pre-request cursor.
   llama_pos preRequestNPast_ = 0;

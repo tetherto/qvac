@@ -165,6 +165,13 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  [[nodiscard]] int32_t getToolDefinitionsDropped() const override;
+  void resetToolDefinitionsDropped() override;
+
+  void setRenderOverrides(RenderOverrides overrides) override {
+    renderOverrides_ = std::move(overrides);
+  }
+
   void setRemoveThinkingFromContext(bool value) override;
 
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
@@ -257,6 +264,25 @@ public:
   void snapshotPreRequestCursor() override;
   void snapshotPreRequestRollbackAnchor() override;
 
+  /// Multimodal twin of `TextLlmContext`'s seam of the same name — see there
+  /// for why the EOS-inside-reasoning recovery cannot be driven through
+  /// `forcedTokens_`, and why the substitution waits for the reasoning block
+  /// to open. This context needs its own because the two duplicate the
+  /// recovery rather than sharing it, so a divergence between them is exactly
+  /// what a text-only test would miss. Applies to whichever of this context's
+  /// two sample sites runs first: `generateResponse` on the single-prompt
+  /// path, `onLogitsReady` under the scheduler.
+  void
+  forceNextSampledTokenInsideReasoningForTesting(llama_token token) noexcept {
+    forcedNextSampledTokenForTesting_ = token;
+  }
+  /// The live sampler, for tests probing fabric-side sampler state — the
+  /// reasoning-budget matcher's in particular. Null when a failed restore
+  /// left the context without one.
+  [[nodiscard]] common_sampler* samplerForTesting() const noexcept {
+    return smpl_.get();
+  }
+
 private:
   // Grants unit tests access to the reasoning-recovery EOG-ban internals
   // (`applyPendingEogBan` + `banEogAfterReasoningRecovery_` + `eogTokens_`),
@@ -285,6 +311,9 @@ private:
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
       bool isCacheLoaded);
+
+  // See TextLlmContext::requireSampler.
+  void requireSampler();
 
   /**
    * The init vision context method. It initializes the vision context.
@@ -390,9 +419,14 @@ private:
   void capturePendingThinkClose();
   void compactThinkSpan();
   [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
+  // See TextLlmContext::configureReasoningTags: `fallbackTags` is the
+  // model-family reasoning channel, resolved by the caller so the
+  // reasoning-budget markers come from the same value.
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-      const std::string& forcedOpenText);
+      const std::string& forcedOpenText,
+      const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
+          fallbackTags);
 
   // Delegates to `rollbackState_.recordPostReasoningToken` while the
   // post-reasoning capture phase is active, which starts once the close
@@ -440,6 +474,19 @@ private:
   common_params params_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
+  // Per-request stop strings supplied by the chat template
+  // (`common_chat_params::additional_stops`). Refreshed on every
+  // `tokenizeChat`, unlike the load-time `params_.antiprompt`.
+  std::vector<std::string> templateStops_;
+  std::vector<llama_token> templateStopTokens_;
+  // Lowercased copy of the caller-supplied antiprompts only; see
+  // TextLlmContext for why `templateStops_` has no folded twin.
+  std::vector<std::string> antipromptLower_;
+  llama_token forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
+  // Renders in the current request where the template dropped the tools.
+  int32_t toolDefinitionsDropped_ = 0;
+  // Per-request `tool_choice` for the chat-template render.
+  RenderOverrides renderOverrides_;
   std::vector<llama_token> forcedTokens_;
   // EOG token ids (precomputed in initializeCommonState for Qwen3 reasoning
   // family models) + a one-shot ban flag, mirroring TextLlmContext. Used only

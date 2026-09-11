@@ -876,10 +876,20 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       {"CacheTokens", stats.cacheTokens},
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
-      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      // Both from `observed`, not the aggregate: the aggregate is
+      // `group->stats = stats_`, a copy of the scheduler-wide accumulator, so
+      // under overlapping top-level `run()` calls it reports a peer's figures
+      // as this job's. `toolDefinitionsDropped` cannot tolerate that at all —
+      // it answers "did *my* render lose its tools", which is what the SDK
+      // consumes in place of a heuristic (QVAC-23460) — and
+      // `thinkingBlockDiscards` moves with it rather than leaving two adjacent
+      // stats on different attribution rules.
+      {"thinkingBlockDiscards", observed.thinkingBlockDiscards},
+      {"toolDefinitionsDropped", observed.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted, matching
       // batchRuntimeStatsLocked: concurrent prompts share the one
       // per-context accumulator, so a per-job value would be misattributed.
+      // Unlike the two above, those have no per-slot source to move to.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
   // Unlike the vision counters, the stop reason IS per-sequence, so a job can
@@ -924,22 +934,35 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
   // Load all prompt media (hoisted byte buffers and inline paths) in
   // prompt-marker order so each bitmap binds to its own MTMD marker.
-  auto loadPlannedMedia = [this, &prompt](const ParsedPromptPayload& parsed) {
-    if (state_->isTextLlm_ && !parsed.mediaPlan.empty()) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(MediaNotSupported),
-          "Media not supported by text-only models");
-    }
-    validateByteBufferCount(parsed.mediaPlan, prompt.media.size());
-    for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
-      if (step.source == MediaSource::ByteBuffer) {
-        loadMedia(prompt.media[step.byteIndex]);
-      } else {
-        state_->llmContext_->loadMedia(step.path);
-      }
-    }
-  };
+  auto validateAndLoadPlannedMedia =
+      [this, &prompt](const ParsedPromptPayload& parsed) {
+        // `tool_choice` is checked against the freshly parsed tool list here,
+        // before the first bitmap reaches the long-lived multimodal context.
+        // `bitmaps_` is drained only by `tokenizeChat`, so a choice rejected
+        // after the load would leave this request's media behind — and the next
+        // multimodal request would then hand `mtmd_tokenize` more bitmaps than
+        // its text has markers, which fabric refuses outright in
+        // `mtmd_tokenizer`'s constructor (tools/mtmd/mtmd.cpp). One caller's
+        // bad argument would cost the *following* request its turn. Both call
+        // sites below have the parsed tools in hand before they load anything,
+        // so the ordering costs nothing.
+        qvac_lib_inference_addon_llama::utils::validateToolChoice(
+            prompt.generationParams.tool_choice, parsed.tools);
+        if (state_->isTextLlm_ && !parsed.mediaPlan.empty()) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              toString(MediaNotSupported),
+              "Media not supported by text-only models");
+        }
+        validateByteBufferCount(parsed.mediaPlan, prompt.media.size());
+        for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
+          if (step.source == MediaSource::ByteBuffer) {
+            loadMedia(prompt.media[step.byteIndex]);
+          } else {
+            state_->llmContext_->loadMedia(step.path);
+          }
+        }
+      };
   if (state_->cacheManager_.has_value()) {
     ParsedPromptPayload parsedPrompt;
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
@@ -949,7 +972,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
           return this->formatPrompt(inputPrompt);
         },
         prompt.cacheKey);
-    loadPlannedMedia(parsedPrompt);
+    validateAndLoadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.shouldResetAfterInference =
@@ -957,7 +980,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
     ParsedPromptPayload parsedPrompt = formatPrompt(prompt.input);
-    loadPlannedMedia(parsedPrompt);
+    validateAndLoadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.shouldResetAfterInference = true;
@@ -982,6 +1005,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   // Reset per-inference counters so they don't leak across runs.
   state_->llmContext_->resetThinkingBlockDiscards();
+  state_->llmContext_->resetToolDefinitionsDropped();
   state_->llmContext_->resetVisionEncodeMs();
   state_->llmContext_->resetSpeculativeRuntimeStats();
 
@@ -989,6 +1013,26 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // resolveChatAndTools in prompt-marker order; see computeMediaLoadOrder.
   std::string out;
   ResolvedPrompt resolved = resolveChatAndTools(prompt);
+
+  // Media staged above is consumed by `tokenizeChat`, which drains `bitmaps_`
+  // on both its success and its `mtmd_tokenize`-failure paths — but only if it
+  // is reached. Nothing else clears them: `resetState` does not touch
+  // `bitmaps_`, so neither does the catch-all's
+  // `resetAndInvalidateActiveCache()`. A bitmap left staged makes the *next*
+  // multimodal request hand `mtmd_tokenize` more bitmaps than its text has
+  // markers, which fabric refuses outright — one request's failure costing the
+  // following one its turn.
+  //
+  // Four ways out of this function skip `tokenizeChat`, which is why the guard
+  // sits here rather than inside it: the early return just below, a throw from
+  // `applyGenerationParams` (an invalid per-request `grammar` / `json_schema`),
+  // and — inside `tokenizeChat` but ahead of the drain — `requireSampler()`
+  // and `requireToolChoiceHonoured()`. Dismissed once eval has returned,
+  // whatever it returned: by then the drain has run or the throw has been
+  // handled. `resetMedia()` on an already-drained list is an empty `clear()`,
+  // and a no-op virtual on text-only contexts.
+  ScopeGuard mediaGuard(
+      [this] { state_->llmContext_->resetMedia(); }, "mediaGuard/staged-media");
 
   if (resolved.shouldResetAfterInference &&
       state_->llmContext_->getNPast() > 0) {
@@ -1010,11 +1054,34 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     return out;
   }
 
+  // `tool_choice` was validated inside `resolveChatAndTools` above, before it
+  // loaded any media — see the comment there. Both properties that ordering
+  // buys are worth naming here, where the failure would be felt: the throw is
+  // outside the try below, whose catch-all runs
+  // `resetAndInvalidateActiveCache()`, so a bad value costs the caller an
+  // error rather than the active KV cache (matching how an invalid
+  // `json_schema` already behaves via applyGenerationParams); and no bitmap
+  // has been appended yet, so it cannot cost the *next* request its turn. The
+  // cache *session* is a third thing this ordering does NOT save —
+  // `resolveChatAndTools` calls `handleCache` itself, so the session is
+  // already resolved by the time the tool list exists to validate against.
   auto restore =
       state_->llmContext_->applyGenerationParams(prompt.generationParams);
+  // Render-time overrides ride alongside the sampler overrides and are
+  // cleared with them, so a request's `tool_choice` can never leak into the
+  // next request's prompt render.
+  state_->llmContext_->setRenderOverrides(
+      renderOverridesFrom(prompt.generationParams));
 
   try {
-    ScopeGuard paramsGuard([&] { restore(); });
+    // Labelled: `restore()` rebuilds the sampler and is the one guarded
+    // callable here that can legitimately throw.
+    ScopeGuard paramsGuard(
+        [&] {
+          state_->llmContext_->setRenderOverrides({});
+          restore();
+        },
+        "paramsGuard/generationParams-restore");
 
     const LlmContext::EvalMessageResult evalResult =
         resolved.tools.empty()
@@ -1025,6 +1092,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
                   resolved.tools,
                   resolved.isCacheLoaded,
                   prompt.prefill);
+    // Eval owns the media from here: `tokenizeChat` has drained it, or has
+    // thrown past this line and left the guard to.
+    mediaGuard.dismiss();
 
     if (!evalResult.ok) {
       QLOG_IF(
@@ -1336,6 +1406,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
       {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted in batch mode: multiple
       // prompts share the one per-context accumulator (reset per prompt), so a
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
@@ -1409,6 +1480,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"promptTokens", promptTokens},
       {"thinkingBlockDiscards",
        static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
+      {"toolDefinitionsDropped",
+       static_cast<int64_t>(state_->llmContext_->getToolDefinitionsDropped())},
       // Why the generation stopped, as the numeric GenerationStopReason
       // value; addon.js maps it to a string (same pattern as
       // backendDevice). Prefill-only requests report None rather than
