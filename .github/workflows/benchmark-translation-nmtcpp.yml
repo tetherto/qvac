@@ -423,8 +423,11 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
+      actions: read
+    uses: ./.github/workflows/prebuilds-nx.yml
     secrets: inherit
+    with:
+      packages: '["translation-nmtcpp"]'
 
   evaluate:
     needs: [setup, build, prebuild]
