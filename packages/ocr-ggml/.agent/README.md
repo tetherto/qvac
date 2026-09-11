@@ -1,17 +1,26 @@
 # .agent/ — Agent-First Development Framework
 
-Canonical source for OCR-specific agent config used by both **Claude Code** and
-**Cursor**. Repository-wide skills live in `.agents/skills`. Run `/setup` after
-cloning to install the generated compatibility files.
+Opt-in pilot for OCR-specific agent configuration used by **Claude Code** and
+**Cursor**. It remains scoped to `packages/ocr-ggml` while the team validates its
+usability; broader repository adoption can be considered separately.
+
+Repository-wide skills live in `.agents/skills` and are independent of this
+framework. Claude Code users install those general skills with `/setup claude`.
+Cursor and Codex discover them directly.
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/tetherto/qvac
 cd qvac
-/setup claude          # or: /setup cursor, /setup all
-/orchestrate <task>    # run full pipeline for an Asana task
+/setup claude                                      # general repository skills for Claude only
+bash packages/ocr-ggml/.agent/setup.sh claude      # opt in to the OCR pilot
+/orchestrate <task>                                # run the OCR pipeline for an Asana task
 ```
+
+Use `cursor` or `all` instead of `claude` with the package setup script to
+install the OCR pilot for those targets. Users who do not want the OCR pilot do
+not run the package script.
 
 The `<task>` argument accepts an Asana task ID or full URL:
 - `1213560067347874`
@@ -25,7 +34,7 @@ The `<task>` argument accepts an Asana task ID or full URL:
 ├── conduct.md              # Behavioral rules for all agents
 ├── mcp.json                # Shared MCP server definitions (Asana)
 ├── settings.json           # Canonical settings (permission allowlist)
-├── setup.sh                # Copies .agent/ config into .claude/ or .cursor/
+├── setup.sh                # Installs the opt-in OCR config for Claude or Cursor
 ├── agents/                 # Agent definitions
 │   ├── implementer.md
 │   ├── test-writer.md
@@ -48,11 +57,11 @@ The `<task>` argument accepts an Asana task ID or full URL:
 .claude/skills/setup/       # Tracked Claude bootstrap copy
 ```
 
-After running `/setup`, repository skills are exposed in `.claude/` through local
-symlinks, or copied on Windows. OCR-specific agents, knowledge, and skills are
-copied into `.claude/` or `.cursor/`. Generated entries are gitignored. Edit
-repository skills in `.agents/skills` and OCR-specific sources in this `.agent`
-directory.
+The root `/setup claude` command exposes repository skills in `.claude/` through
+local symlinks, or copies on Windows. The package setup script separately copies
+OCR-specific agents, knowledge, skills, and configuration into `.claude/` or
+`.cursor/`. Generated entries are gitignored. Edit repository skills in
+`.agents/skills` and OCR-specific sources in this `.agent` directory.
 
 ## Tool Compatibility
 
@@ -74,9 +83,11 @@ Not all features work identically in both tools:
 
 ## How Setup Works
 
+The explicit `packages/ocr-ggml/.agent/setup.sh` command installs only these OCR
+pilot assets:
+
 | Source | Claude Code destination | Cursor destination |
 |---|---|---|
-| Repository `.agents/skills/*` | `.claude/skills/` compatibility view | Native discovery; no copy |
 | `conduct.md` | `.claude/agent-conduct.md` | `.cursor/rules/agent-conduct.mdc` (always-applied rule) |
 | `knowledge/*.md` | `.claude/knowledge/` | `.cursor/rules/knowledge/*.mdc` (requestable rules) |
 | `agents/*.md` | `.claude/agents/` (named agents) | `.cursor/rules/agents/*.mdc` (Task sub-agent prompts) |
@@ -84,29 +95,10 @@ Not all features work identically in both tools:
 | `settings.json` | `.claude/settings.json` | — (not applicable) |
 | `mcp.json` | — (manual `~/.claude/settings.json`) | `.cursor/mcp.json` (reformatted) |
 
-Agent files copied to Cursor have Claude-specific frontmatter (`model`, `color`, `memory`) stripped and `.claude/` path references replaced with Cursor equivalents.
-
-Repository skills such as `qv-addon-changelog` and `qv-sdk-changelog` are managed
-in `.agents/skills`; setup mirrors them only for Claude Code.
-
-### Migrating existing Claude skill links
-
-`/setup claude` automatically replaces per-skill links that point to the former
-`.cursor/skills/<name>` location. It unlinks only the compatibility link and does
-not modify its `.cursor` target.
-
-If `.claude/skills` itself is a symlink, setup stops without changing it because
-the shared target may contain personal skills. Inspect that target and preserve
-anything still needed, then remove only the directory symlink and rerun setup:
-
-```bash
-rm .claude/skills
-bash packages/ocr-ggml/.agent/setup.sh claude
-```
-
-Any other existing file, directory, or unrelated symlink at a generated skill
-destination is also left untouched. Setup reports the collision so it can be
-moved or removed explicitly.
+Agent files copied to Cursor have Claude-specific frontmatter (`model`, `color`,
+`memory`) stripped and `.claude/` path references replaced with Cursor
+equivalents. See [`docs/agent-skills.md`](../../../docs/agent-skills.md) for the
+separate repository-wide skill setup and Claude link migration behavior.
 
 ## Full Pipeline (`/orchestrate`)
 
@@ -161,7 +153,8 @@ SDK/TS packages get automatic PR checks via `pr-checks-sdk-pod`. All other packa
 
 | Skill | Purpose |
 |---|---|
-| `/setup <agent>` | Install skills, knowledge, agents for Claude Code or Cursor |
+| `/setup claude` | Install general repository skills for Claude Code |
+| `bash packages/ocr-ggml/.agent/setup.sh <target>` | Install the opt-in OCR agent framework |
 | `/orchestrate <task>` | Full pipeline: implement → test → CI → review → PR |
 | `/release <package>` | Release a package to NPM |
 | `/ci-validate <package>` | Trigger and monitor CI for a package |
@@ -190,7 +183,7 @@ Rules:
 
 | Problem | Fix |
 |---|---|
-| Agent stops for permission prompt | Add the operation to `.agent/settings.json`, re-run `/setup` |
+| Agent stops for permission prompt | Add the operation to `.agent/settings.json`, rerun the OCR package setup script |
 | Build gate fails | Check output, fix manually or in new session, re-run |
 | Agent modifies wrong files | Make file scopes more explicit in Asana task |
 | Agent stops on ambiguity | Answer the question in Asana, re-run |

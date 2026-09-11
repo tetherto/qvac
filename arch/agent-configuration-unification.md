@@ -52,7 +52,11 @@ alone.
   `policy.allow_implicit_invocation: false` in their per-skill Codex metadata.
 - Updated scripts, workflows, and documentation to use the canonical skill paths.
 - Kept `.claude/skills/setup` as a tracked bootstrap; `/setup claude` creates the
-  remaining local Claude compatibility entries.
+  remaining local Claude compatibility entries through the root-owned
+  `scripts/agent-setup.sh`.
+- Kept the `packages/ocr-ggml/.agent` pilot behind its explicit package setup
+  command. General setup does not install OCR conduct, knowledge, agents,
+  settings, or package skills; broader adoption can follow usability validation.
 - Reduced root `AGENTS.md` to stable operating policy and pointers to authoritative
   repository sources. Personal defaults remain in `~/.codex/AGENTS.md`; no global
   or repository override file is added.
@@ -82,6 +86,7 @@ Before handoff, run:
 ```bash
 node --check scripts/ci/validate-agent-config.mjs
 node scripts/ci/validate-agent-config.mjs
+bash -n scripts/agent-setup.sh
 bash -n packages/ocr-ggml/.agent/setup.sh
 ```
 

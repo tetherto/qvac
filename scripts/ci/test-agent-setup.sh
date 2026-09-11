@@ -18,21 +18,34 @@ make_fixture() {
 
   mkdir -p \
     "$root/.agents/skills/example" \
-    "$root/packages/ocr-ggml/.agent/agents" \
-    "$root/packages/ocr-ggml/.agent/knowledge" \
-    "$root/packages/ocr-ggml/.agent/skills"
-  cp "$REPO_ROOT/packages/ocr-ggml/.agent/setup.sh" \
-    "$root/packages/ocr-ggml/.agent/setup.sh"
+    "$root/scripts"
+  cp "$REPO_ROOT/scripts/agent-setup.sh" "$root/scripts/agent-setup.sh"
   printf '%s\n' '---' 'name: example' 'description: Test skill' '---' \
     > "$root/.agents/skills/example/SKILL.md"
-  printf '%s\n' '# Conduct' > "$root/packages/ocr-ggml/.agent/conduct.md"
-  printf '%s\n' '{}' > "$root/packages/ocr-ggml/.agent/settings.json"
-  printf '%s\n' '{"servers":{}}' > "$root/packages/ocr-ggml/.agent/mcp.json"
   printf '%s\n' "$root"
 }
 
 run_setup() {
   local root="$1"
+
+  (
+    cd "$root"
+    bash scripts/agent-setup.sh claude
+  )
+}
+
+run_ocr_setup() {
+  local root="$1"
+
+  mkdir -p \
+    "$root/packages/ocr-ggml/.agent/agents" \
+    "$root/packages/ocr-ggml/.agent/knowledge" \
+    "$root/packages/ocr-ggml/.agent/skills"
+  cp "$REPO_ROOT/packages/ocr-ggml/.agent/setup.sh" \
+    "$root/packages/ocr-ggml/.agent/setup.sh"
+  printf '%s\n' '# OCR conduct' > "$root/packages/ocr-ggml/.agent/conduct.md"
+  printf '%s\n' '{}' > "$root/packages/ocr-ggml/.agent/settings.json"
+  printf '%s\n' '{"servers":{}}' > "$root/packages/ocr-ggml/.agent/mcp.json"
 
   (
     cd "$root"
@@ -53,8 +66,38 @@ test_unmanaged_directory_is_preserved() {
     fail "setup deleted a file from an unmanaged skill directory"
   [ ! -e "$root/.claude/skills/example/example" ] ||
     fail "setup created a nested link inside an unmanaged skill directory"
+}
+
+test_general_setup_does_not_install_package_framework() {
+  local root
+  root="$(make_fixture isolated-general-setup)"
+  mkdir -p "$root/.claude"
+  printf '%s\n' '{"sentinel":true}' > "$root/.claude/settings.json"
+
+  run_setup "$root" > "$root/setup.log" 2>&1
+
+  [ "$(cat "$root/.claude/settings.json")" = '{"sentinel":true}' ] ||
+    fail "general setup replaced Claude settings"
   [ ! -e "$root/.claude/agent-conduct.md" ] ||
-    fail "setup generated other Claude files before reporting the collision"
+    fail "general setup installed package conduct"
+  [ ! -e "$root/.claude/knowledge" ] ||
+    fail "general setup installed package knowledge"
+  [ ! -e "$root/.claude/agents" ] ||
+    fail "general setup installed package agents"
+}
+
+test_package_setup_does_not_install_repository_skills() {
+  local root
+  root="$(make_fixture isolated-package-setup)"
+
+  run_ocr_setup "$root" > "$root/setup.log" 2>&1
+
+  [ -f "$root/.claude/agent-conduct.md" ] ||
+    fail "OCR setup did not install its package conduct"
+  [ ! -e "$root/.claude/skills/example" ] ||
+    fail "OCR setup installed a repository-wide skill"
+  [ ! -e "$root/.claude/skills/.qvac-repository-skills" ] ||
+    fail "OCR setup created the repository skill manifest"
 }
 
 test_untrusted_manifest_does_not_grant_ownership() {
@@ -133,6 +176,8 @@ test_windows_copy_is_marked_and_repeatable() {
 }
 
 test_unmanaged_directory_is_preserved
+test_general_setup_does_not_install_package_framework
+test_package_setup_does_not_install_repository_skills
 test_untrusted_manifest_does_not_grant_ownership
 test_individual_legacy_link_is_migrated
 test_shared_skills_link_requires_manual_choice

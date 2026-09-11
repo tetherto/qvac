@@ -6,6 +6,7 @@ on:
     branches: [main, release-*, feature-*, tmp-*]
     paths:
       - ".agents/skills/**"
+      - "scripts/agent-setup.sh"
       - ".claude/skills/setup/**"
       - ".github/workflows/on-pr-shared-ci-infra.yml"
       - ".github/actions/cache-models/**"

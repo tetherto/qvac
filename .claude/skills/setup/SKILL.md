@@ -1,21 +1,19 @@
 ---
 name: setup
-description: Run packages/ocr-ggml/.agent/setup.sh to install skills, knowledge, and config for Claude Code or Cursor
-argument-hint: "[claude|cursor|all]"
+description: Install the repository-wide Agent Skills compatibility view for Claude Code
+argument-hint: "[claude]"
 disable-model-invocation: true
 ---
 
-Run the agent config setup script to configure tooling for the specified agent.
+Install the repository-wide skills for Claude Code.
 
-Use the requested target, or `all` when none is provided. Valid targets are
-`claude`, `cursor`, and `all`. Claude Code and Cursor substitute `$ARGUMENTS`
-when the skill is invoked as a slash command; on another host, replace it with
-the target from the user's request.
+Cursor and Codex discover `.agents/skills` directly and do not need this setup.
 
 Execute the following command:
 
 ```bash
-bash packages/ocr-ggml/.agent/setup.sh $ARGUMENTS
+bash scripts/agent-setup.sh claude
 ```
 
-After running, report what was copied/generated.
+After running, report which compatibility entries were linked or copied. This
+setup does not install package-specific agent frameworks.
