@@ -2,6 +2,7 @@
 
 #include <any>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -71,7 +72,7 @@ struct BertModelSetup {
 };
 
 /// Apply the final split-device handles and remap positional tensor shares.
-bool applySplitDeviceSelection(
+void applySplitDeviceSelection(
     common_params& params, std::unordered_map<std::string, std::string>& config,
     const backend_selection::SplitDeviceSelection& selection);
 

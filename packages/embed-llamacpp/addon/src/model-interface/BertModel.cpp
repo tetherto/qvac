@@ -361,11 +361,11 @@ std::size_t BertEmbeddings::size() const { return embeddingCount_; }
 
 std::size_t BertEmbeddings::embeddingSize() const { return embeddingSize_; }
 
-bool applySplitDeviceSelection(
+void applySplitDeviceSelection(
     common_params& params, std::unordered_map<std::string, std::string>& config,
     const backend_selection::SplitDeviceSelection& selection) {
   if (selection.devices.empty()) {
-    return false;
+    return;
   }
 
   auto hyphen = config.find("tensor-split");
@@ -435,7 +435,6 @@ bool applySplitDeviceSelection(
     params.devices.push_back(device.handle);
   }
   params.devices.push_back(nullptr);
-  return true;
 }
 
 SplitBackendTraits
@@ -612,9 +611,7 @@ BertModelSetup setupParams(
                 .c_str(),
             nullptr);
       }
-    } else if (
-        chosenBackend.first == BackendType::CPU ||
-        chosenBackend.first == BackendType::GPU) {
+    } else if (chosenBackend.first == BackendType::CPU) {
       result.resolvedBackendDevice = 0;
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
       params.main_gpu = -1;
@@ -636,7 +633,7 @@ BertModelSetup setupParams(
     }
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
-      configVector.emplace_back(useGpu ? chosenBackend.second : "none");
+      configVector.emplace_back(chosenBackend.second);
     }
     configFilemap.erase(deviceIt);
 

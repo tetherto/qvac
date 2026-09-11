@@ -89,14 +89,6 @@ bool hasMetalFamily(
          registryName == "metal";
 }
 
-bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
-  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
-  return hasBackendFamily(
-      lowerCopy(bckI.ggml_backend_dev_name(dev)),
-      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
-      "rpc");
-}
-
 // Classify OpenCL from the same identity source eligibility uses, so a device
 // admitted by its registry name is also bucketed and filtered as OpenCL. The
 // gap this closes is unreachable with shipped backends -- ggml's OpenCL backend
@@ -152,8 +144,7 @@ bool isEligibleGpuDevice(
 void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends, const ggml_backend_dev_t dev,
-    const DeviceDescription& devDescr,
+    std::vector<std::string>& openClBackends, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum, const bool isOpenCl) {
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
@@ -219,15 +210,11 @@ void tryEmplaceDevice(
 #ifndef NDEBUG
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "New GPU device", nullptr);
 #endif
-    if (!isEligibleGpuDevice(bckI, dev)) {
-      return;
-    }
     ::emplaceIfValidDevice(
         bckI,
         gpuBackends,
         igpuBackends,
         openClBackends,
-        dev,
         devDescr,
         backendTypeEnum,
         isOpenCl);
@@ -458,9 +445,9 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
         .name = name,
         .handle = dev,
         .sourceGpuIndex = sourceGpuIndex,
-        .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl")};
-    if (isRpcDevice(bckI, dev)) {
-      selected.isRpc = true;
+        .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
+        .isRpc = hasBackendFamily(deviceName, registryName, "rpc")};
+    if (selected.isRpc) {
       rpc.emplace_back(std::move(selected));
       continue;
     }
