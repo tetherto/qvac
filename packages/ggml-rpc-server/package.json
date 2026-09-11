@@ -29,12 +29,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/llm-rpc-server"
+    "directory": "packages/ggml-rpc-server"
   },
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/llm-rpc-server#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ggml-rpc-server#readme",
   "devDependencies": {
     "@types/node": "^24.2.1",
     "cmake-bare": "^1.7.5",
