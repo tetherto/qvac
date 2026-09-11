@@ -46,11 +46,11 @@ test('the hybrid backend dependency floors match the reviewed speech stack', () 
   const ggmlDependency = namedDependencies(vcpkgManifest.dependencies, GGML_PORT)[0]
   const speechDependencies = namedDependencies(vcpkgManifest.dependencies, SPEECH_PORT)
 
-  assert.equal(ggmlDependency['version>='], '2026-09-09')
+  assert.equal(ggmlDependency['version>='], '2026-09-09#1')
   assert.equal(ggmlDependency['default-features'], false)
-  assert.equal(cudaSpeechDependency()['version>='], '2026-09-04#1')
+  assert.equal(cudaSpeechDependency()['version>='], '2026-09-10')
   assert.equal(
-    speechDependencies.every((dependency) => dependency['version>='] === '2026-09-04#1'),
+    speechDependencies.every((dependency) => dependency['version>='] === '2026-09-10'),
     true
   )
 })
