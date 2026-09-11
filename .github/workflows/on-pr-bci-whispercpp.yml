@@ -279,6 +279,7 @@ jobs:
           workflow-file: on-pr-bci-whispercpp.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-bci-whispercpp
 
   prebuild:
     permissions:
