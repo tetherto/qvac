@@ -858,10 +858,9 @@ static void tryInitGpuBackend(
         Priority::INFO,
         "smolvla_load_model: force_cpu=true — skipping GPU selection");
   }
-  ggml_backend_dev_t gpu = forceCpu
-      ? nullptr
-      : vla_backend_selection::pickBestGpuDevice(
-            backendOverride, backendRequired);
+  ggml_backend_dev_t gpu = forceCpu ? nullptr
+                                    : vla_backend_selection::pickBestGpuDevice(
+                                          backendOverride, backendRequired);
   if (!gpu) {
     return;
   }
