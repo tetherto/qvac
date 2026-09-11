@@ -475,7 +475,11 @@ nmt_backend_init(const nmt_context_params& params) {
   // scheduler executes splits sequentially.
   //
   // Filter strategy:
-  //   1. Skip the device pointer already selected as primary (same as before).
+  //   1. Skip the device pointer already selected as primary. This is now
+  //      unreachable and kept only as defence in depth: `nmtSelectGpuDevice`
+  //      returns None for anything not typed GPU or IGPU, so the primary can
+  //      never be an ACCEL device and can never be reached by this walk. The
+  //      ACCEL type check below would skip it regardless.
   //   2. Skip OpenCL devices when the build-time USE_OPENCL guard is off
   //      (consistent with Mode 2b in nmtSelectGpuDevice).
   //   3. Skip any ACCEL device whose trailing ordinal matches the primary's.

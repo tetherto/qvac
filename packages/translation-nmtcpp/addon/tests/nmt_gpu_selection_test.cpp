@@ -202,4 +202,10 @@ TEST_F(NmtGpuSelectionTest, MusaIsRejectedByRegistryName) {
   inventory = {{"SomeGpu", "MUSA", GGML_BACKEND_DEVICE_TYPE_GPU}};
   EXPECT_EQ(select(), nullptr);
 }
+
+TEST_F(NmtGpuSelectionTest, SyclIsRejected) {
+  inventory = {{"SYCL0", "SYCL", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  EXPECT_EQ(select(), nullptr);
+  EXPECT_EQ(select("sycl"), nullptr);
+}
 } // namespace
