@@ -544,10 +544,12 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFollowsFilteredDeviceMapping) {
   EXPECT_FLOAT_EQ(result.params.tensor_split[1], 3.0F);
 }
 
-// Final-count shares are only unambiguous while the final list preserves the
-// source order; once it is reordered, two shares for three registered GPUs
-// cannot be attributed to devices.
-TEST_F(LoadFitNormalizationTest, TensorSplitRejectsAmbiguousCardinality) {
+// Two shares against three registered GPUs and two eligible devices is
+// unambiguous BECAUSE N != R: the list cannot be a per-registered-GPU list, so
+// it can only be the per-eligible-device one. That reading holds however the
+// final list is ordered — the addon pins params.devices itself, so fabric
+// applies share i to final device i regardless of the source ordinals.
+TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsFinalCountWhenReordered) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
   config["tensor-split"] = "1,3";
@@ -559,10 +561,67 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRejectsAmbiguousCardinality) {
   selection.devices[1].sourceGpuIndex = 0;
   dependencies.splitDevices = [selection]() { return selection; };
 
-  EXPECT_THROW(
-      static_cast<void>(lfn::normalizeLoadForFit(
-          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
-      qvac_errors::StatusError);
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[1], 3.0F);
+}
+
+// N == F < R with a final order that is NOT sorted by sourceGpuIndex: the
+// ineligible middle card is filtered out and the RPC device is hoisted ahead
+// of the local GPU. An earlier revision gated the final-count reading on the
+// order still being sorted and rejected this outright, even though two shares
+// can only mean the two eligible devices.
+TEST_F(
+    LoadFitNormalizationTest,
+    TensorSplitAcceptsFinalCountWhenRpcHoistedAndDeviceFiltered) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "0.25,0.75";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "vulkan0"});
+  selection.sourceGpuCount = 3;
+  selection.devices[0].isRpc = true;
+  selection.devices[0].sourceGpuIndex = 2;
+  selection.devices[1].sourceGpuIndex = 0;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 0.25F);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[1], 0.75F);
+}
+
+// A count matching neither cardinality is rejected, and the message must name
+// both so the caller can tell which list they were meant to write.
+TEST_F(
+    LoadFitNormalizationTest,
+    TensorSplitRejectsCountMatchingNeitherCardinality) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,2,3,4";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.sourceGpuCount = 3;
+  selection.devices[0].sourceGpuIndex = 0;
+  selection.devices[1].sourceGpuIndex = 2;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+    FAIL() << "four shares match neither 3 registered nor 2 eligible devices";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(), ::testing::HasSubstr("tensor-split has 4 values"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("3 registered GPU devices"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("2 eligible devices"));
+  }
 }
 
 // The share count is validated even when the device order is unchanged and
@@ -586,7 +645,8 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRejectsWrongCountWithoutRemap) {
 // Fabric tokenizes --tensor-split on `[,/]+` and parses each token with
 // std::stof, so consecutive delimiters collapse and surrounding whitespace is
 // ignored. The share counter must agree, or a value fabric accepts is rejected
-// here.
+// here. What reaches fabric is the RE-JOINED token list, not the caller's
+// string: each of these is normalised to "1,2".
 TEST_F(LoadFitNormalizationTest, TensorSplitCountsTokensLikeFabric) {
   for (const char* value : {"1,,2", "1, 2", "1/2"}) {
     auto config = baseConfig();
@@ -605,7 +665,12 @@ TEST_F(LoadFitNormalizationTest, TensorSplitCountsTokensLikeFabric) {
   }
 }
 
-TEST_F(LoadFitNormalizationTest, TensorSplitRemapUsesFabricTokenization) {
+// Every registered GPU is eligible here (F == R == 2), so the final order
+// wins and no remapping happens even though RPC hoisting left the final list
+// unsorted by sourceGpuIndex: the caller's two shares land on the two final
+// devices in the order given. The value still goes through fabric's
+// tokenization — "1,, 2" is counted, and re-joined, as the two shares 1 and 2.
+TEST_F(LoadFitNormalizationTest, TensorSplitFinalOrderWinsWhenCountsAreEqual) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
   config["tensor-split"] = "1,, 2";
@@ -619,8 +684,34 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRemapUsesFabricTokenization) {
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
 
-  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 2.0F);
-  EXPECT_FLOAT_EQ(result.params.tensor_split[1], 1.0F);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[1], 2.0F);
+}
+
+// Fabric splits with std::sregex_token_iterator(..., -1), which KEEPS an empty
+// or whitespace-only field — ",1,2" yields a leading "", "1, ,2" a middle " " —
+// and std::stof throws on either. The addon's own tokenizer trims and drops
+// those fields, so each of these counts as two shares here. Re-emitting the
+// tokens we counted is what closes the gap: fabric is handed "1,2" and never
+// sees the blank field, where forwarding the caller's string verbatim would
+// have had it reject a value this function accepted.
+TEST_F(
+    LoadFitNormalizationTest, TensorSplitEmptyOrBlankFieldsNeverReachFabric) {
+  for (const char* value : {",1,2", "/1,2", "1, ,2", ", 1 , 2 ,"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "layer";
+    config["tensor-split"] = value;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "vulkan0"},
+            {"vulkan0", "vulkan1"}));
+    EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F) << value;
+    EXPECT_FLOAT_EQ(result.params.tensor_split[1], 2.0F) << value;
+  }
 }
 
 // A leftover key would reach fabric through the passthrough loop as

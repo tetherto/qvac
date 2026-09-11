@@ -684,33 +684,57 @@ void remapTensorSplit(
   std::string normalized = value->second;
   std::ranges::replace(normalized, '/', ',');
   const std::vector<std::string> proportions = split(normalized, ',');
-  const bool finalOrderIsStable = std::ranges::is_sorted(
-      selection.devices, {}, [](const backend_selection::SplitDevice& device) {
-        return device.sourceGpuIndex;
-      });
-  if (proportions.size() == selection.devices.size() && finalOrderIsStable) {
-    value->second = std::move(normalized);
+
+  // Re-join from the tokens rather than forwarding the caller's string.
+  // Fabric tokenizes on the regex [,/]+, so a run of delimiters collapses
+  // there as it does here and '1,,2' is two shares on both sides. The
+  // divergence is an empty or whitespace-only FIELD: fabric keeps it (',1,2'
+  // yields a leading "", '1, ,2' a middle " ") and std::stof throws on
+  // either, while split() trims and drops it. Such a value would be counted
+  // as two shares here and then rejected by fabric's parser. Emitting the
+  // tokens we counted keeps the two in step.
+  auto joinShares = [](const std::vector<std::string>& shares) {
+    std::string joined;
+    for (const std::string& share : shares) {
+      if (!joined.empty()) {
+        joined += ',';
+      }
+      joined += share;
+    }
+    return joined;
+  };
+
+  // Cardinality decides how the list is read, in this order:
+  //   1. one share per eligible device -> already in final order, pass through
+  //   2. one share per registered GPU  -> remap through sourceGpuIndex
+  //   3. anything else                 -> reject
+  // Final order wins when both counts are equal. The addon pins
+  // params.devices itself, so fabric applies share i to final device i, which
+  // makes the final list the contract the caller is writing against. An
+  // earlier revision gated case 1 on the final order still being sorted and
+  // preferred the raw reading otherwise; that rejected perfectly
+  // unambiguous input on any host where RPC hoisting reorders the list.
+  if (proportions.size() == selection.devices.size()) {
+    value->second = joinShares(proportions);
     return;
   }
   if (proportions.size() != selection.sourceGpuCount) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         string_format(
-            "%s: tensor-split has %zu values for %zu registered GPU devices; "
-            "cannot reconcile it with the %zu eligible devices.\n",
+            "%s: tensor-split has %zu values, which matches neither the %zu "
+            "registered GPU devices nor the %zu eligible devices.\n",
             K_LEGACY_PARSER_NAME.data(),
             proportions.size(),
             selection.sourceGpuCount,
             selection.devices.size()));
   }
-  std::string remapped;
+  std::vector<std::string> remapped;
+  remapped.reserve(selection.devices.size());
   for (const backend_selection::SplitDevice& device : selection.devices) {
-    if (!remapped.empty()) {
-      remapped += ',';
-    }
-    remapped += proportions[device.sourceGpuIndex];
+    remapped.push_back(proportions[device.sourceGpuIndex]);
   }
-  value->second = std::move(remapped);
+  value->second = joinShares(remapped);
 }
 
 NormalizedLoad normalizeLoadForFit(

@@ -487,6 +487,65 @@ TEST_F(BackendSelectionTest, DeviceFamilyNamesRequireKnownPrefixes) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none");
 }
 
+// MUSA (Moore Threads) is a real ggml backend that this addon does not ship,
+// and it is nowhere in the allowlist — named explicitly here rather than left
+// to the generic unknown-family cases, because "musa" shares no prefix with
+// any eligible family and a future allowlist edit must not admit it silently.
+// The matcher reads two identities, so both must reject it: the device name...
+TEST_F(BackendSelectionTest, MusaDeviceNameFallsBackToCpu) {
+  mockBackend.addDevice(createGPUDevice("MTT S80", "MUSA0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("MUSA0 (standard)") != std::string::npos;
+  }));
+}
+
+// ...and the registry name, which alone would admit a device the registry
+// names after the GPU.
+TEST_F(BackendSelectionTest, MusaRegistryNameFallsBackToCpu) {
+  mockBackend.addDevice(
+      MockDevice("MTT S80", "MttGpu0", GGML_BACKEND_DEVICE_TYPE_GPU, "MUSA"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("MttGpu0 (MUSA)") != std::string::npos;
+  }));
+}
+
+// The allowlist runs on IGPU-typed devices too (AMD APUs register their
+// integrated graphics through ROCm/HIP), and every other ROCm fixture here is
+// GPU-typed. An integrated ROCm device must be excluded just the same.
+TEST_F(BackendSelectionTest, IntegratedRocmIsExcluded) {
+  mockBackend.addDevice(createIGPUDevice("AMD Radeon 780M", "ROCm0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("ROCm0 (standard)") != std::string::npos;
+  }));
+}
+
+// Mirrors the ROCm before/after pair: registry position must not decide
+// eligibility. In both cases the eligible device is deliberately the
+// IGPU-typed one and the unknown family is GPU-typed, so an unknown wrongly
+// admitted would win the bucket ordering (gpuBackends is consulted before
+// igpuBackends) and be chosen — asserting vulkan0 therefore proves the
+// rejection, not a GPU-over-iGPU preference.
+TEST_F(BackendSelectionTest, UnknownGpuBeforeVulkanChoosesVulkan) {
+  mockBackend.addDevice(createGPUDevice("Future GPU", "FutureBackend0"));
+  mockBackend.addDevice(createIGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, UnknownGpuAfterVulkanChoosesVulkan) {
+  mockBackend.addDevice(createIGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice("Future GPU", "FutureBackend0"));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
 // Test tryMainGpuFromMap with integer device index
 TEST_F(BackendSelectionTest, TryMainGpuFromMapWithInteger) {
   std::unordered_map<std::string, std::string> configFilemap;
