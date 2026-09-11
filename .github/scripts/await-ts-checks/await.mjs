@@ -30,10 +30,10 @@ async function main() {
 
   if (!repo || !sha || !checkName) {
     console.log('::error::REPO, PR_HEAD_SHA and CHECK_NAME are required')
-    process.exit(1)
+    return 1
   }
 
-  const code = await pollForCheck({
+  return pollForCheck({
     checkName,
     fetchChecks: () => fetchChecks(repo, sha),
     now: () => Date.now(),
@@ -42,7 +42,11 @@ async function main() {
     timeoutMs: TIMEOUT_MS,
     log: (msg) => console.log(msg),
   })
-  process.exit(code)
 }
 
 main()
+  .then((code) => process.exit(code))
+  .catch((err) => {
+    console.error(err)
+    process.exit(1)
+  })

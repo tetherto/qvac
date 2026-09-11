@@ -57,6 +57,10 @@ test('timed_out -> 1', async () => {
   assert.equal(await run([done('timed_out')]), 1)
 })
 
+test('action_required -> 1', async () => {
+  assert.equal(await run([done('action_required')]), 1)
+})
+
 test('cancelled then success (superseding run) -> 0', async () => {
   assert.equal(await run([done('cancelled'), done('success')]), 0)
 })
