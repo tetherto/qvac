@@ -274,6 +274,9 @@ description onto the release-notes shim) orchestrator. It writes only:
   `# ==== BEGIN latest-series alias (managed) ====` block; patches never
   touch this file)
 
+Those paths are generated here on release. Capability/CLI/config/runtime prose
+is `/qv-docs-update` on the feature PR. Do not hand-edit `reference/**`.
+
 **2. Verify the site still builds (mandatory):**
 
 ```bash

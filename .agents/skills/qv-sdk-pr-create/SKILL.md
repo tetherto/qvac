@@ -65,8 +65,9 @@ Consequences for release changelog / metadata PRs:
 7. Validate tag requirements ([bc]/[api]/[mod])
 8. **If the diff exposes or changes a user-facing SDK capability**, apply first-class product parity (see below) before outputting the description
 9. **If diff touches the `version` of `packages/inference` / `packages/sdk`, or sdk's dep blocks**, chain into the `qv-sdk-lockstep-sync` skill (see "SDK Lockstep Client Sync Trigger" below)
-10. Output complete PR description
-11. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
+10. **If the diff touches user-facing paths under `packages/sdk`, `packages/cli`, or `packages/sdk-python` and `docs/website/content/docs` is not already in the diff**, apply the docs website trigger (see "Docs Website Trigger" below) before outputting the description
+11. Output complete PR description
+12. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
 
 ## Inference Strategy
 
@@ -195,6 +196,18 @@ When triggered, prompt the user to run `qv-sdk-lockstep-sync` so the pod stays a
 ### Opt-out
 
 To skip lockstep sync for a single run, the user can invoke `/qv-sdk-pr-create --no-sync`. The skill proceeds normally and emits a reminder at the end: "Reminder: sdk deps/version changed but lockstep clients were not synced. Run `/qv-sdk-lockstep-sync` before merge."
+
+## Docs Website Trigger
+
+**Trigger:** diff touches user-facing paths under `packages/sdk`, `packages/cli`, or `packages/sdk-python`, and `docs/website/content/docs` is not already in the diff.
+
+### Steps (after Step 9 of Workflow above)
+
+1. When triggered, ask: "user-facing SDK/CLI change with no docs-website diff. run `/qv-docs-update` before opening the PR?" [Yes / No (library-only)]
+2. If yes, read `.agents/skills/qv-docs-update/SKILL.md` and follow it. Don't open the PR until it reports `DONE`, `NO_DOCS_IMPACT`, or `GENERATED_DOCS_ONLY`.
+3. If no (library-only), put the library-only note in the PR body — one line on why the change needs no docs.
+
+This is not the generated API summary — that still ships via `qv-sdk-changelog` on release.
 
 ## Docs Artifacts (SDK Releases)
 
