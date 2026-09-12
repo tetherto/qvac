@@ -514,6 +514,8 @@ curl http://localhost:11434/v1/chat/completions \
   }'
 ```
 
+A `tools` request for a model loaded without `config.tools: true` returns `400 tools_not_enabled` rather than answering in prose.
+
 #### Message content
 
 `messages[].content` accepts both the plain string form and the OpenAI **array-of-parts** form (`[{ "type": "text", "text": "…" }, …]`) that modern clients such as Cline and Open WebUI send. Parts of type `text` are concatenated into a single string; non-text parts (`image_url`, `input_audio`, `file`) are **silently dropped** — the chat surface is text-only and vision is out of scope. Both shapes below are valid:
@@ -667,7 +669,7 @@ The same generation parameters (`temperature`, `top_p`, `seed`, `max_output_toke
 
 When generation is truncated because it hit `max_output_tokens` / `max_tokens`, the response is returned with `status: "incomplete"` and `incomplete_details.reason: "max_output_tokens"` — the Responses-API analogue of chat's `finish_reason: "length"`. `usage.output_tokens` uses the same SDK-stats accounting as the other chat-category routes (`input_tokens` is `0`).
 
-The following Responses-API features are intentionally rejected with `400`: `conversation`, `background: true`, and built-in tools (`web_search`, `file_search`, `code_interpreter`). `function`-typed tools work normally.
+The following Responses-API features are intentionally rejected with `400`: `conversation`, `background: true`, and built-in tools (`web_search`, `file_search`, `code_interpreter`). `function`-typed tools work when the model was loaded with `config.tools: true`; otherwise the request returns `400 tools_not_enabled`.
 
 #### `GET /v1/responses/:id`
 
