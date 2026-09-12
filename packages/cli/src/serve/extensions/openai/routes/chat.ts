@@ -10,6 +10,7 @@ import {
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
+import { assertToolsEnabled } from '@/serve/lib/assert-tools-enabled'
 import {
   chatCompletionsBody,
   CHAT_UNSUPPORTED_PARAMS,
@@ -77,6 +78,8 @@ async function prepare(
     )
   }
 
+  assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
+
   return {
     ...sdk,
     sdkModelId,
@@ -131,7 +134,8 @@ ends with \`data: [DONE]\\n\\n\` (OpenAI compatibility).
 
 **Tools + structured output**: combining \`tools\` with
 \`response_format: { type: 'json_object' | 'json_schema' }\` is rejected with
-\`invalid_response_format\`.
+\`invalid_response_format\`. A \`tools\` request for a model loaded without
+\`config.tools: true\` is rejected with \`tools_not_enabled\`.
 
 **Ignored params** (warned, not rejected): \`logit_bias\`, \`n\`, \`user\`,
 \`seed\`, \`logprobs\`, \`top_logprobs\`, \`frequency_penalty\`,

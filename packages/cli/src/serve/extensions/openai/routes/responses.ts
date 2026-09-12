@@ -6,6 +6,7 @@ import { HttpError } from '@/serve/lib/http-error'
 import { initSSE } from '@/serve/lib/sse'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
+import { assertToolsEnabled } from '@/serve/lib/assert-tools-enabled'
 import {
   responsesBody,
   responsesIdParams,
@@ -73,6 +74,7 @@ addressable via GET / DELETE / input_items.
 - \`background: true\` → \`400 background_not_supported\` (only synchronous responses)
 - \`tools[].type\` other than \`function\` (e.g. \`web_search\`, \`file_search\`, \`code_interpreter\`) → \`400 invalid_tool_type\`
 - structured output (\`json_object\`/\`json_schema\`) combined with non-empty \`tools\` → \`400 invalid_response_format\`
+- \`tools\` on a model loaded without \`config.tools: true\` → \`400 tools_not_enabled\`
 
 **Streaming** (\`stream: true\`) emits the OpenAI Responses SSE event sequence
 (\`response.created\` → \`response.output_text.delta\` … → \`response.completed\`)
@@ -148,6 +150,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           'Structured output (json_object/json_schema) cannot be combined with "tools".'
         )
       }
+
+      assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
 
       let history = sdk.history
       if (sdk.previousResponseId) {
