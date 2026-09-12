@@ -28,6 +28,10 @@ bool isSupportedFinetuneArchitecture(std::string_view arch) {
          SUPPORTED_FINETUNE_ARCHITECTURES.end();
 }
 
+char toLowerChar(unsigned char character) {
+  return static_cast<char>(std::tolower(character));
+}
+
 } // namespace
 
 std::optional<std::string> backend_selection::getUnknownFinetuneArchitecture(
@@ -74,9 +78,9 @@ struct DeviceDescription {
         gpuDescription.begin(),
         gpuDescription.end(),
         gpuDescription.begin(),
-        tolower);
+        toLowerChar);
     std::transform(
-        gpuBackend.begin(), gpuBackend.end(), gpuBackend.begin(), tolower);
+        gpuBackend.begin(), gpuBackend.end(), gpuBackend.begin(), toLowerChar);
     {
       std::string backendTypeStr;
       switch (backendTypeEnum) {
@@ -232,7 +236,8 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
   } catch (const std::exception&) {
     // Not an integer, try enum values
     std::string lowerStr = mainGpuStr;
-    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), tolower);
+    std::transform(
+        lowerStr.begin(), lowerStr.end(), lowerStr.begin(), toLowerChar);
 
     if (lowerStr == "integrated") {
       return MainGpu(MainGpuType::Integrated);
