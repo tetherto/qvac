@@ -554,7 +554,7 @@ safeTest(
     const model = await setupMultimodalBatchModel(t, { parallel: '2' })
 
     const imageCase = IMAGE_CASES[0]
-    const textCase = CASES[0]
+    const textCase = CASES.find((item) => item.id === 'story-otter')
     t.ok(
       fs.existsSync(getMediaPath(imageCase.imageFile)),
       `media file ${imageCase.imageFile} exists`
@@ -591,14 +591,22 @@ safeTest(
       )
     }
 
-    // avgConcurrentSeq counts every scheduler step (prefill and media-barrier
-    // steps included, see RuntimeStatsSnapshot::recordDecodeStep), so it
-    // measures slot co-residency, not decode interleaving — co-batched prefill
-    // alone can clear 1.0 even with decode pipelining regressed. 1.2 is the
-    // same bar the 2-slot rolling-admission test uses; the measured value is a
-    // deterministic 1.571 on Android/Windows/Linux (seed 42, temp 0), leaving
-    // ~30% margin. Decode-phase correctness is guarded by the per-slot output
-    // assertions above, not by this stat.
+    // avgConcurrentSeq is token-weighted over every scheduler step, prefill and
+    // media-barrier steps included (see RuntimeStatsSnapshot::recordDecodeStep),
+    // so it reports how much of the epoch's work was shared between slots.
+    //
+    // The text case must be one that generates for a while — hence the story
+    // case rather than a one-word answer. With a one-word answer the text slot
+    // is done after ~2 decode steps while the image slot still has a dozen
+    // media segments to encode, so the epoch mean is ~1.1 no matter how well
+    // the two are pipelined, and the bar can only be met by the text slot being
+    // *starved*: before the per-slot chunk budgets landed, a slot blocked on a
+    // media barrier clamped every co-resident prefill to one token per step,
+    // which kept the text slot resident (and not decoding, dec=0) for ~29 steps
+    // and inflated this figure to ~1.9. That is the bug this test is supposed to
+    // catch, not the behaviour it should require. With a generating text case
+    // the figure measures the real thing: steps carrying an image prefill and a
+    // text decode together.
     t.ok(
       avgConcurrentSeq > 1.2,
       `avgConcurrentSeq (${avgConcurrentSeq}) > 1.2 confirms the image and text slots were batched together`

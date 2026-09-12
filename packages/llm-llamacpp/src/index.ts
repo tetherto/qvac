@@ -1455,7 +1455,9 @@ namespace LlmLlamacpp {
     toolDefinitionsDropped: number;
     /**
      * How busy the shared backend was, not a property of your request: the
-     * mean number of sequences decoded together per engine step, including
+     * mean number of sequences decoded together, weighted by the tokens each
+     * engine step carried so the figure tracks how much traffic shared the
+     * backend rather than how finely the scheduler sliced its work. Includes
      * overlapping requests from other callers (capped by the `parallel`
      * configuration). 1.0 = the model was effectively yours alone; ~N = your
      * tokens shared compute with N-1 others, so this request's observed `TPS`

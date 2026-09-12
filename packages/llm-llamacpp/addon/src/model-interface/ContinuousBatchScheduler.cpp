@@ -860,7 +860,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   serviceNextMediaSegmentLocked(lock);
 
   const auto fillResult = batcher_.fillBatch(batch_);
-  if (fillResult.chunkSize == 0) {
+  if (fillResult.totalTokens == 0) {
     // A media segment serviced above can finish a slot (prefill-only
     // request or per-sequence cap) without leaving tokens to feed; drain
     // here or the worker would spin on the occupied slot forever.
@@ -901,18 +901,15 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
     return false;
   }
-  const unsigned numGenerating =
-      fillResult.numActiveSequences - fillResult.numPrefillingSequences;
-  const unsigned prefillTokens =
-      fillResult.chunkSize * fillResult.numPrefillingSequences;
-  const unsigned decodeTokens = fillResult.chunkSize * numGenerating;
+  // Slots are budgeted individually, so the split comes back as exact sums
+  // rather than one chunk size times a sequence count.
   stats_.recordDecodeStep(
       fillResult.numActiveSequences,
-      prefillTokens,
-      decodeTokens,
+      fillResult.prefillTokens,
+      fillResult.decodeTokens,
       std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
 
-  batcher_.advance(fillResult.chunkSize, prefillCompleteFn());
+  batcher_.advance(prefillCompleteFn());
 
   if (!cancelRequested_.load()) {
     batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
@@ -1041,6 +1038,17 @@ void RuntimeStatsSnapshot::recordDecodeStep(
   if (totalTokens == 0) {
     return;
   }
+  // Weight co-residency by the work the step actually carried, not by the
+  // step itself. Slots are budgeted individually, so one step can feed a
+  // whole prefill chunk to one sequence and a single sampled token to
+  // another; counting both steps equally would make the mean a function of
+  // how finely prefill happens to be sliced rather than of how much traffic
+  // shared the backend. Concretely, throttling a co-resident prefill to one
+  // token per step stretches the same sharing across many more steps and so
+  // *raises* a step-weighted mean — which is why speeding prefill up used to
+  // read as a concurrency regression.
+  concurrentSeqTokenSum_ += numActiveSequences * totalTokens;
+  weightedTokenTotal_ += totalTokens;
   // Split step time between prefill and decode by token count. On a mixed
   // prefill+decode step (common in continuous batching when a new request
   // starts prefilling while another is generating) the previous
@@ -1076,6 +1084,13 @@ void RuntimeStatsSnapshot::accumulateSlot(
 }
 
 double RuntimeStatsSnapshot::avgConcurrentSeq() const {
+  if (weightedTokenTotal_ > 0) {
+    return static_cast<double>(concurrentSeqTokenSum_) /
+           static_cast<double>(weightedTokenTotal_);
+  }
+  // Every recorded step carried zero tokens (nothing was ever fed), so there
+  // is no token weight to average over. Fall back to the step-weighted mean
+  // rather than reporting 0.0 for an epoch that did have live sequences.
   return decodeStepCount_ > 0 ? static_cast<double>(concurrentSeqSum_) /
                                     static_cast<double>(decodeStepCount_)
                               : 0.0;
