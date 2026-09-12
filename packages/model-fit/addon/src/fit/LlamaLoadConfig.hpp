@@ -36,9 +36,12 @@ struct BackendDevice {
   std::string name;
   std::string description;
   BackendDeviceType type = BackendDeviceType::Cpu;
-  bool supportsSplitBuffer = false;
   ggml_backend_dev_t handle = nullptr;
   std::string registryName;
+  /// Registry identity, which the iGPU retention rule compares; `registryName`
+  /// cannot stand in for it, since two registries may share a name.
+  ggml_backend_reg_t registry = nullptr;
+  std::string deviceId;
 };
 
 struct ModelTraits {
@@ -50,6 +53,12 @@ struct NormalizedLlamaLoad {
   bool supported = true;
   std::string unsupportedDetail;
   common_params params;
+  /// A pinned split mode survives a CPU-only plan instead of normalizing to
+  /// NONE.
+  bool pinsSplitMode = false;
+  /// A pinned layer count survives a CPU-only plan. -1 is llama's default and
+  /// pins nothing.
+  bool pinsGpuLayers = false;
 };
 
 struct LlamaLoadFitRequest {
@@ -78,6 +87,20 @@ struct LlamaFitExecution {
 };
 
 std::vector<BackendDevice> discoverBackendDevices();
+std::vector<ggml_backend_dev_t> eligibleBackendDeviceHandles(
+    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind);
+/// Whether the raw registry entry at `mainGpuIndex` is a supported GPU. The
+/// one-device list built for it always places it at ordinal 0.
+bool isSupportedGpuOrdinal(
+    const std::vector<BackendDevice>& devices, LlamaLoadKind loadKind,
+    size_t mainGpuIndex);
+/// Pins `storage` as the load's device list and `main_gpu` to ordinal 0 of it,
+/// narrowing the list to `mainGpuIndex` when one is given. The caller validates
+/// that index with `isSupportedGpuOrdinal`.
+void applyBackendDeviceAllowlist(
+    llama_model_params& params, std::vector<ggml_backend_dev_t>& storage,
+    const std::vector<BackendDevice>& devices,
+    std::optional<size_t> mainGpuIndex = std::nullopt);
 ModelTraits readModelTraits(const std::string& modelPath);
 void validateLlamaLoadFitCriticalIntegers(const LlamaConfigMap& config);
 std::optional<std::string>
