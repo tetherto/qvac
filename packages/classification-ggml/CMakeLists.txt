@@ -32,6 +32,18 @@ qvac_addon_use_fabric()
 # executables, and keeping the shipped module out of the tree means the FuzzTest
 # toolchain never instruments it.
 if(NOT BUILD_FUZZING)
+  # TEMPORARY PIN - drop once qvac-lib-inference-addon-cpp ships a release that
+  # compiles against bare-headers >= 1.32.0 and the vcpkg floor is raised.
+  # bare-headers 1.32.0 (published 2026-09-07 11:58 UTC) changed the `elements`
+  # parameter of js_set_array_elements() to `js_value_t *const []`, which the
+  # pinned addon-cpp 1.3.3 header (JsUtils.hpp:531, `const js_value_t **`) can no
+  # longer compile against - every fresh build after that time fails on all
+  # platforms. add_bare_module() below fetches bare-headers@latest into _bare via
+  # cmake-npm, whose install_node_module() keeps an already-present copy, so
+  # installing the last compatible release first makes it stick. 1.30.0 is the
+  # version every green build before 2026-09-07 used.
+  download_bare_headers(_pinned_bare_headers VERSION 1.30.0)
+
   add_bare_module(classification-ggml EXPORTS)
 
   set(ADDON_SOURCES
