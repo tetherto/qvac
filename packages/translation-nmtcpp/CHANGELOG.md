@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.13.1] - 2026-09-11
 
+### Fixed
+
+- Native builds no longer fail against `bare-headers` 1.32+ (`js_set_array_elements`
+  const mismatch in `qvac-lib-inference-addon-cpp` 1.3.3 `JsUtils.hpp`). Configure
+  now pins `bare-headers@1.30.0` before `add_bare_module()` so cmake-npm keeps the
+  last compatible headers. Drop the pin once addon-cpp compiles against
+  `bare-headers >= 1.32.0` and the vcpkg floor is raised.
+
 ### Changed
 
 - `qvac-fabric` is now built with `-DLLAMA_OPENSSL=OFF`, via a repo-local
