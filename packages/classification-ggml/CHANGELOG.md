@@ -7,6 +7,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.1] - 2026-09-12
+
+### Fixed
+
+- Native builds no longer fail against `bare-headers` 1.32+ (`js_set_array_elements`
+  const mismatch in `qvac-lib-inference-addon-cpp` 1.3.3 `JsUtils.hpp`). Configure
+  now pins `bare-headers@1.30.0` before `add_bare_module()` so cmake-npm keeps the
+  last compatible headers. Drop the pin once addon-cpp compiles against
+  `bare-headers >= 1.32.0` and the vcpkg floor is raised.
+
+### Changed
+
+- `@qvac/fabric` dependency floor raised `^0.10.0` -> `^0.10.1`, picking up the
+  fabric runtime built with `-DLLAMA_OPENSSL=OFF`. Upstream defaults
+  `LLAMA_OPENSSL` to `ON`, so `vendor/cpp-httplib` linked `OpenSSL::SSL` /
+  `OpenSSL::Crypto` into the shared runtime; nothing in this addon uses
+  httplib's HTTPS path, so the prebuild no longer carries a
+  build-host-dependent system OpenSSL it never calls.
+
+  This is a floor raise, not a range change: `^0.10.0` already admitted
+  `0.10.1`, so a fresh install resolved it either way. What changes is that the
+  unpatched `0.10.0` can no longer satisfy the range, so an existing install or
+  a stale lockfile is forced onto the patched runtime.
+
 ## [0.23.0] - 2026-09-01
 
 ### Changed
