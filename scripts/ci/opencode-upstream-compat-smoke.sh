@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+VERIFY_RUN_OUTPUT="$SCRIPT_DIR/verify-opencode-run-output.cjs"
+
 SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
 QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
@@ -136,7 +139,7 @@ run_opencode=(
   --log-level DEBUG
   --model "qvac/${QVAC_MODEL}"
   --format json
-  "Reply with one short sentence that includes qvac-ok."
+  "Reply with exactly this text and nothing else: qvac-ok"
 )
 
 if command -v timeout > /dev/null 2>&1; then
@@ -148,6 +151,8 @@ else
     > "$ARTIFACT_DIR/opencode-run.jsonl" \
     2> "$ARTIFACT_DIR/opencode-run.stderr"
 fi
+
+node "$VERIFY_RUN_OUTPUT" "$ARTIFACT_DIR/opencode-run.jsonl"
 
 {
   echo
