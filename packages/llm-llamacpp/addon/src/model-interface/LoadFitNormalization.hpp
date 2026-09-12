@@ -74,6 +74,8 @@ struct SelectedBackend {
   std::string name = "none";
   std::optional<int> adrenoVersion;
   bool isMaliGpu = false;
+  bool isOpenCl = false;
+  bool isMetal = false;
 };
 
 using BackendResolver = std::function<SelectedBackend(
@@ -83,10 +85,8 @@ using BackendResolver = std::function<SelectedBackend(
 
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
-  std::function<bool()> gpuBackendSupportsRowSplit;
-  /// Devices to pin LLAMA_SPLIT_MODE_TENSOR to. Consulted only for tensor
-  /// mode; see backend_selection::getTensorSplitDeviceNames.
-  std::function<std::vector<std::string>()> tensorSplitDeviceNames;
+  /// Authoritative eligible device set for every multi-GPU split mode.
+  std::function<backend_selection::SplitDeviceSelection()> splitDevices;
 };
 
 struct NormalizedLoad {
