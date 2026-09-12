@@ -61,6 +61,27 @@ handleImageNoUpscale(common_params& params, const std::string& raw) {
   }
 }
 
+// Drops the projector's audio encoder while keeping its vision encoder. The
+// addon already defaults this to true (see normalizeLoadForFit), so the
+// useful case here is an explicit "off", which loads the audio tower back.
+static void handleMmprojNoAudio(common_params& params, const std::string& raw) {
+  std::string val = raw;
+  std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+  if (val == "1" || val == "on" || val == "true") {
+    params.mmproj_no_audio = true;
+  } else if (val == "0" || val == "off" || val == "false") {
+    params.mmproj_no_audio = false;
+  } else {
+    throw qvac_errors::StatusError(
+        errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "mmproj-no-audio must be 0/off/false or 1/on/true, got: %s",
+            raw.c_str()));
+  }
+}
+
 static void
 handleImageMaxTokens(common_params& params, const std::string& raw) {
   try {
@@ -100,6 +121,8 @@ const LoadConfigHandlerList LOAD_CONFIG_HANDLERS = {
     {"image_min_tokens", handleImageMinTokens},
     {"image-no-upscale", handleImageNoUpscale},
     {"image_no_upscale", handleImageNoUpscale},
+    {"mmproj-no-audio", handleMmprojNoAudio},
+    {"mmproj_no_audio", handleMmprojNoAudio},
 };
 
 void applyLoadConfigHandlers(

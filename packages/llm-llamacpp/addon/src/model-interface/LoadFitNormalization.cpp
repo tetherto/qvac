@@ -750,6 +750,9 @@ NormalizedLoad normalizeLoadForFit(
         "embedded chat template is applied\n");
   }
 
+  // Skip the projector's audio encoder by default.
+  params.mmproj_no_audio = true;
+
   qvac_lib_inference_addon_llama::applyLoadConfigHandlers(
       params, configFilemap);
 
