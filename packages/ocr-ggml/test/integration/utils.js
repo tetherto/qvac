@@ -690,23 +690,49 @@ function prestagedModelPath(modelName) {
   return staged ? staged.src : null
 }
 
+// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
+// file already sits in the app's own writable Documents dir — so copying it
+// into the model dir spends that whole budget for nothing. Hardlink instead:
+// same inode, zero bytes. On Android the staging dir is a different filesystem,
+// so link() fails EXDEV and we fall back to the copy that has always run there.
+// `link`/`copy` are injectable so that fallback is unit-testable.
+function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    console.log(
+      `[prestage] hardlink failed on ${platform} (${err.message}); falling back to a byte copy`
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
 // The host pushes an exact byte-count sidecar with each model. Require both the
-// staged source and copied destination to match it so truncated adb/app copies
-// fall through to the network download.
+// staged source and the materialised destination to match it so truncated
+// adb/app transfers fall through to the network download.
 function copyPrestagedModel(modelName, destPath, minBytes = 1024 * 1024) {
   const staged = readPrestagedModel(modelName)
   if (!staged || staged.expectedSize < minBytes) return false
   try {
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(staged.src, destPath)
+    const how = linkOrCopySync({ src: staged.src, dest: destPath })
     if (fs.statSync(destPath).size === staged.expectedSize) {
-      console.log(`[prestage] Using pre-staged model ${modelName}`)
+      console.log(
+        `[prestage] Using pre-staged model ${modelName} (${how === 'link' ? 'hardlinked' : 'copied'})`
+      )
       return true
     }
     fs.unlinkSync(destPath)
   } catch (err) {
-    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+    console.log(`[prestage] staging of ${modelName} failed: ${err.message}`)
     try {
       fs.unlinkSync(destPath)
     } catch (_) {}
@@ -1418,6 +1444,7 @@ module.exports = {
   ensureModelPath,
   ensureDoctrModels,
   copyPrestagedModel,
+  linkOrCopySync,
   prestagedModelPath,
   GGML_MODELS_DIR,
   formatOCRPerformanceMetrics,

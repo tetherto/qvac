@@ -32,9 +32,34 @@ function iosPrestagedModelDir() {
   return typeof dir === 'string' && dir.length > 0 ? dir : null
 }
 
-// Returns true when a non-empty copy landed; the caller re-verifies it against
-// urls.json (size + sha256) before trusting it, so a truncated push falls back
-// to the network download. No-op off mobile pre-stage platforms.
+// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
+// file already sits in the app's own writable Documents dir — so copying it
+// into the model dir spends that whole budget for nothing. Hardlink instead:
+// same inode, zero bytes. On Android the staging dir is a different filesystem,
+// so link() fails EXDEV and we fall back to the copy that has always run there.
+// `link`/`copy` are injectable so that fallback is unit-testable.
+function linkOrCopySync({ src, dest, platform = '', link = fs.linkSync, copy = fs.copyFileSync }) {
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    console.log(
+      `[vla-model] hardlink failed on ${platform} (${err && err.message}); ` +
+        'falling back to a byte copy'
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
+// Returns true when a non-empty staged file landed; the caller re-verifies it
+// against urls.json (size + sha256) before trusting it, so a truncated push
+// falls back to the network download. No-op off mobile pre-stage platforms.
 function copyPrestagedModel(modelFilename, destPath) {
   let os
   try {
@@ -52,10 +77,10 @@ function copyPrestagedModel(modelFilename, destPath) {
     if (!fs.existsSync(src) || fs.statSync(src).size === 0) return false
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(src, destPath)
+    linkOrCopySync({ src, dest: destPath, platform })
     return fs.statSync(destPath).size > 0
   } catch (err) {
-    console.log(`[vla-model] pre-stage copy of ${modelFilename} failed: ${err && err.message}`)
+    console.log(`[vla-model] pre-staging of ${modelFilename} failed: ${err && err.message}`)
     return false
   }
 }
@@ -249,6 +274,7 @@ async function verifyCachedModel(filePath, urlConfig) {
 module.exports = {
   loadUrlsConfig,
   copyPrestagedModel,
+  linkOrCopySync,
   streamDownload,
   downloadFile,
   sha256File,

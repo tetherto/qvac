@@ -1777,6 +1777,80 @@ test('mobile shards pass grep explicitly and retain host-phase failure logs', ()
   assert.match(collectLogs, /Host phase log:/)
 })
 
+// A native abort() kills the app before Bare flushes its console buffer, so the
+// .ips crash report is the only place the faulting stack survives.
+test('iOS mobile runs collect on-device crash reports', () => {
+  const generateTestspec = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
+  )
+  const collectLogs = read(
+    '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
+  )
+
+  // Must run in the test phase: Device Farm skips post_test when the test phase
+  // exits non-zero, i.e. exactly when a crash report is what we need.
+  const wdioCall = generateTestspec.indexOf('node node_modules/@wdio/cli/bin/wdio.js')
+  const crashPull = generateTestspec.lastIndexOf('pymobiledevice3 crash pull')
+  const androidLogcat = generateTestspec.indexOf('adb logcat -d -b all')
+  // Anchor on the emitted YAML key, not the word — prose above mentions it too.
+  const postTestPhase = generateTestspec.indexOf('  post_test:\n    commands:')
+  assert.ok(crashPull > 0, 'iOS crash-report pull must exist')
+  assert.ok(androidLogcat > 0, 'Android logcat collection must stay in post_test')
+  assert.ok(
+    crashPull < postTestPhase,
+    'crash pull must be emitted in the test phase — post_test never runs on a failed test',
+  )
+
+  // Re-exits with wdio's own code, so wrapping cannot change a run's verdict.
+  const exitLine = generateTestspec.indexOf('exit $WDIO_RC')
+  const rcCapture = generateTestspec.indexOf('WDIO_RC=$?')
+  assert.ok(rcCapture > wdioCall, 'wdio exit code must be captured right after the run')
+  assert.ok(exitLine > crashPull, 'the wrapper must re-exit after collecting logs')
+  assert.match(
+    generateTestspec.slice(0, wdioCall),
+    /if \[ "\$PLATFORM" = "iOS" \]/,
+    'wrapper must be iOS-only',
+  )
+  assert.doesNotMatch(
+    generateTestspec.slice(wdioCall, exitLine),
+    /^\s+set -e$/m,
+    'set -e must not be re-enabled around log collection',
+  )
+
+  assert.match(generateTestspec, /\[CRASH_REPORT_START\]/)
+  assert.match(generateTestspec, /\[CRASH_REPORT_END\]/)
+
+  // Device Farm reuses phones and every shard is the same bundle id, so the
+  // reports already present before wdio ran are snapshotted by NAME and
+  // subtracted afterwards. An mtime window cannot distinguish them.
+  assert.ok(
+    generateTestspec.indexOf('BEFORE_LIST') < wdioCall,
+    'the pre-run crash snapshot must be taken before wdio starts',
+  )
+  assert.match(generateTestspec.slice(crashPull), /grep -Fxq "\$\(basename "\$f"\)" "\$BEFORE_LIST"/)
+  assert.doesNotMatch(generateTestspec, /-mmin/, 'no rolling time window — names are exact')
+
+  // A snapshot that never ran is not an empty phone. Both pulls are guarded,
+  // the snapshot's status is kept, and a report can only be presented as this
+  // run's when that status is good — otherwise it is labelled UNVERIFIED.
+  assert.match(generateTestspec, /SNAP_RC=\$\?/, "the snapshot's exit status must be captured")
+  assert.strictEqual(
+    (generateTestspec.match(/command -v pymobiledevice3 >\/dev\/null 2>&1/g) || []).length,
+    3,
+    'install check plus both pulls are guarded',
+  )
+  assert.match(
+    generateTestspec,
+    /if \[ -n "\$NEWEST" \] && \[ "\$SNAP_RC" -eq 0 \]/,
+    'a verified report requires a successful snapshot',
+  )
+  assert.match(generateTestspec, /CRASH_REPORT_START_UNVERIFIED/)
+
+  // ...and they have to reach the uploaded artifact.
+  assert.match(collectLogs, /-type d -name "crash-reports"/)
+  assert.match(collectLogs, /Extracted iOS crash report/)
+})
+
 test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {
   const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
   // The workflow_call branch (benchmark || functional) is unchanged; it is now

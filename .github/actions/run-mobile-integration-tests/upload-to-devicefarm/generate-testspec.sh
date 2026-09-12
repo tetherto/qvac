@@ -152,7 +152,103 @@ cat <<EOF
   test:
     commands:
       - cd \$DEVICEFARM_TEST_PACKAGE_PATH
+EOF
+
+# --- Test invocation ---
+# iOS wraps wdio so the on-device crash reports (.ips) are pulled in the SAME
+# phase, then re-exits with wdio's own code. This cannot live in post_test:
+# Device Farm skips that phase when the test phase exits non-zero, i.e. exactly
+# when a crash report is what we need. An abort() in the addon kills the app
+# before Bare flushes its console buffer, so bare_console.log stops mid-test and
+# Device Farm surfaces no iOS crash report of its own.
+# `set +e` stays on so log collection can never rewrite a run's verdict.
+if [ "$PLATFORM" = "iOS" ]; then
+  cat <<'EOF'
+      - |
+        set +e
+        export PATH="$HOME/.local/bin:$PATH"
+        # Under sudo these make pymobiledevice3 chown its config and fail EPERM.
+        unset SUDO_UID SUDO_GID
+        # Installed already by the model pre-stage step; install it otherwise.
+        if ! command -v pymobiledevice3 >/dev/null 2>&1; then
+          python3 -m pip install --quiet pymobiledevice3==10.3.1 >/dev/null 2>&1 \
+            || pip3 install --quiet pymobiledevice3==10.3.1 >/dev/null 2>&1 \
+            || python3 -m pip install --quiet --break-system-packages pymobiledevice3==10.3.1 >/dev/null 2>&1 \
+            || true
+        fi
+        # Snapshot the reports already on the phone. Device Farm reuses devices
+        # and every addon shard is the same bundle id, so a leftover .ips from
+        # an earlier job would otherwise be reported as this run's crash. Names
+        # carry the crash time and are unique, so comparing names is exact —
+        # unlike an mtime window, which cannot tell the two apart.
+        #
+        # SNAP_RC is what lets us tell "the phone had no prior reports" from "we
+        # never managed to ask". This runs at phase start, when the device is
+        # least ready (usbmux hiccup, pairing race, still booting); treating a
+        # failed snapshot as an empty one would let every stale report through
+        # as this run's crash, which is worse than reporting none.
+        SNAP_RC=1
+        BEFORE_DIR=$(mktemp -d)
+        BEFORE_LIST=$(mktemp)
+        if command -v pymobiledevice3 >/dev/null 2>&1; then
+          pymobiledevice3 crash pull "$BEFORE_DIR" >/dev/null 2>&1
+          SNAP_RC=$?
+        fi
+        find "$BEFORE_DIR" -type f -exec basename {} \; > "$BEFORE_LIST" 2>/dev/null
+        rm -rf "$BEFORE_DIR"
+
+        node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js
+        WDIO_RC=$?
+
+        CRASH_DIR="$DEVICEFARM_LOG_DIR/crash-reports"
+        mkdir -p "$CRASH_DIR"
+        if command -v pymobiledevice3 >/dev/null 2>&1; then
+          pymobiledevice3 crash pull "$CRASH_DIR" >/dev/null 2>&1
+        else
+          echo "[crash] pymobiledevice3 unavailable - skipping crash-report pull"
+        fi
+        # Keep this app's reports. Subtract the pre-run snapshot only when we
+        # actually have one — otherwise we cannot tell this run's crash from a
+        # leftover, and say so rather than claiming provenance we never had.
+        find "$CRASH_DIR" -type f | while IFS= read -r f; do
+          case "$(basename "$f")" in
+            QvacAddonTester*) ;;
+            *) rm -f "$f"; continue ;;
+          esac
+          if [ "$SNAP_RC" -eq 0 ] && grep -Fxq "$(basename "$f")" "$BEFORE_LIST" 2>/dev/null; then
+            rm -f "$f"
+          fi
+        done
+        rm -f "$BEFORE_LIST"
+        find "$CRASH_DIR" -mindepth 1 -type d -empty -delete 2>/dev/null
+        # Echo it inline too: Customer_Artifacts can be missed, this output can't.
+        NEWEST=$(ls -t "$CRASH_DIR"/QvacAddonTester* 2>/dev/null | head -1)
+        if [ -n "$NEWEST" ] && [ "$SNAP_RC" -eq 0 ]; then
+          echo "[CRASH_REPORT_START] $(basename "$NEWEST")"
+          head -c 20000 "$NEWEST"
+          echo ""
+          echo "[CRASH_REPORT_END]"
+        elif [ -n "$NEWEST" ]; then
+          echo "[crash] UNVERIFIED: the pre-run snapshot failed (rc=$SNAP_RC), so these reports"
+          echo "[crash] UNVERIFIED: cannot be attributed to this run — the phone is reused."
+          echo "[CRASH_REPORT_START_UNVERIFIED] $(basename "$NEWEST")"
+          head -c 20000 "$NEWEST"
+          echo ""
+          echo "[CRASH_REPORT_END_UNVERIFIED]"
+        elif [ "$SNAP_RC" -eq 0 ]; then
+          echo "[crash] no new QvacAddonTester crash report from this run"
+        else
+          echo "[crash] no QvacAddonTester crash report on the device (snapshot also failed, rc=$SNAP_RC)"
+        fi
+        exit $WDIO_RC
+EOF
+else
+  cat <<'EOF'
       - node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js
+EOF
+fi
+
+cat <<EOF
 
   post_test:
     commands:

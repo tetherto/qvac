@@ -443,15 +443,43 @@ function prestagedModelDir(modelName) {
   return null
 }
 
+// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
+// file already sits in the app's own writable Documents dir — so copying it
+// into modelDir spends that whole budget for nothing (the gemma shard stages
+// 4.45 GB and was killed mid-copy). Hardlink instead: same inode, zero bytes.
+// On Android the staging dir is a different filesystem, so link() fails EXDEV
+// and we fall back to the copy that has always run there.
+// `link`/`copy` are injectable so that fallback is unit-testable.
+function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    console.log(
+      `[prestage] hardlink failed on ${os.platform()} (${err.message}); ` +
+        'falling back to a byte copy'
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
 async function copyPrestagedModel({ stagedDir, modelName, modelPath, entry }) {
-  fs.copyFileSync(path.join(stagedDir, modelName), modelPath)
+  const how = linkOrCopySync({ src: path.join(stagedDir, modelName), dest: modelPath })
   const res = await verifyModelFileOnce(modelPath, entry)
   if (!res.ok) {
     try {
       fs.unlinkSync(modelPath)
     } catch (_) {}
-    throw new Error(`[prestage] copied model ${modelName} failed integrity: ${res.reason}`)
+    const verb = how === 'link' ? 'hardlinked' : 'copied'
+    throw new Error(`[prestage] ${verb} model ${modelName} failed integrity: ${res.reason}`)
   }
+  return how
 }
 
 // The standalone default modelDir assignment is patched by the mobile test
@@ -483,17 +511,20 @@ async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, do
     } catch (_) {}
   }
 
-  // Pre-staged path: copy the host-staged model from the read-only staging dir
-  // into the normal (app-private, WRITABLE) modelDir, then return modelDir. The
-  // copy is a fast local operation (no network). Returning a writable dir is
-  // essential: tests write sibling files next to the model (session caches,
-  // finetuning checkpoints via path.join(modelDir, ...)), which would
-  // fail if we returned the read-only /data/local/tmp staging dir directly.
+  // Pre-staged path: materialise the host-staged model in the normal
+  // (app-private, WRITABLE) modelDir, then return modelDir. Returning a
+  // writable dir is essential: tests write sibling files next to the model
+  // (session caches, finetuning checkpoints via path.join(modelDir, ...)),
+  // which would fail if we returned Android's read-only /data/local/tmp
+  // staging dir directly.
   const staged = prestagedModelDir(modelName)
   if (staged) {
     fs.mkdirSync(dir, { recursive: true })
-    console.log(`[prestage] Using pre-staged model ${modelName} (copying into writable modelDir)`)
-    await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
+    const how = await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
+    console.log(
+      `[prestage] Using pre-staged model ${modelName} (` +
+        `${how === 'link' ? 'hardlinked' : 'copied'} into writable modelDir)`
+    )
     return [modelName, dir]
   }
 
@@ -1057,6 +1088,7 @@ module.exports = {
   sha256File,
   resetVerificationCache,
   copyPrestagedModel,
+  linkOrCopySync,
   getDownloadCount,
   resetDownloadCount,
   getMediaPath,

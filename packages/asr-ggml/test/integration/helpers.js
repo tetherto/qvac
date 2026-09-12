@@ -6,6 +6,7 @@ const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const ASRGgml = require('../../index.js')
 const { roundTo } = require('./memory-usage.js')
+const { linkOrCopySync } = require('./_link-or-copy.js')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -362,25 +363,26 @@ function prestagedModelPath(modelName) {
   return staged ? staged.src : null
 }
 
-// Require the exact host-recorded byte count on both sides of the app copy so
-// truncated staged files fall through to the normal HuggingFace download.
+// Require the exact host-recorded byte count on both sides of the staging step
+// so truncated staged files fall through to the normal HuggingFace download.
 function copyPrestagedModel(modelName, destPath, minBytes) {
   const staged = readPrestagedModel(modelName)
   if (!staged || staged.expectedSize < minBytes) return false
   try {
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(staged.src, destPath)
+    const how = linkOrCopySync({ src: staged.src, dest: destPath })
     const size = fs.statSync(destPath).size
     if (size === staged.expectedSize) {
       console.log(
-        `[prestage] Using pre-staged model ${modelName} (${(size / 1024 / 1024).toFixed(1)}MB)`
+        `[prestage] Using pre-staged model ${modelName} (${(size / 1024 / 1024).toFixed(1)}MB, ` +
+          `${how === 'link' ? 'hardlinked' : 'copied'})`
       )
       return true
     }
     fs.unlinkSync(destPath)
   } catch (err) {
-    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+    console.log(`[prestage] staging of ${modelName} failed: ${err.message}`)
     try {
       fs.unlinkSync(destPath)
     } catch (_) {}
@@ -1045,6 +1047,7 @@ module.exports = {
   ensureWhisperModel,
   ensureVADModel,
   copyPrestagedModel,
+  linkOrCopySync,
   prestagedModelPath,
   waitUntilIdle,
   runTranscription,
