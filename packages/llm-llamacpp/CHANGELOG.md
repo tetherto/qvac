@@ -70,6 +70,19 @@
 
 ### Fixed
 
+- `RuntimeStats.avgConcurrentSeq` is now a token-weighted mean rather than a
+  per-step one, so it measures how much traffic shared the backend instead of
+  how finely the scheduler sliced its work. The previous step-weighted mean
+  rose the more a co-resident prefill was throttled, which meant removing the
+  one-token-per-step prefill clamp read as a concurrency regression even
+  though the backend decoded exactly the same sequences over the same tokens.
+- The continuous-batching MTMD smoke test now pairs the image with a
+  *generating* text request instead of a one-word answer. Paired with a
+  one-word answer the text slot finished after ~2 decode steps while the image
+  still had a dozen media segments to encode, so the only way to clear the
+  co-residency bar was for the text slot to be starved — which is exactly what
+  the media-barrier prefill clamp used to do, and exactly what this test is
+  meant to catch.
 - A tool grammar applied for one request no longer leaks into a following
   request that carries no tools on the same loaded model, and no longer leaves
   its lazy-grammar triggers attached to a later per-request `grammar` or

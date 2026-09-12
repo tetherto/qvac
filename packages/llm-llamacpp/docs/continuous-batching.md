@@ -140,7 +140,7 @@ A prefill-only item (`runOptions.prefill: true`) earns a scheduler lane exactly 
 
 ### Stats
 
-`RuntimeStats` gains `avgConcurrentSeq`: the mean number of sequences decoded together, measured across all `llama_decode` steps. It describes the shared backend, not any one request — a request contributes at most 1 to it; the rest is overlapping traffic from other callers, capped by the `parallel` configuration. `1.0` means the model was effectively yours alone; `~N` means each request's tokens shared compute with N-1 others (so a request's observed `TPS` is roughly the aggregate rate divided by N). Even for a single request it distinguishes "slow model" from "busy backend".
+`RuntimeStats` gains `avgConcurrentSeq`: the mean number of sequences decoded together, weighted by the tokens each `llama_decode` step carried rather than counting every step alike. It describes the shared backend, not any one request — a request contributes at most 1 to it; the rest is overlapping traffic from other callers, capped by the `parallel` configuration. `1.0` means the model was effectively yours alone; `~N` means each request's tokens shared compute with N-1 others (so a request's observed `TPS` is roughly the aggregate rate divided by N). Even for a single request it distinguishes "slow model" from "busy backend".
 
 `TPS` reflects decode throughput and `ppTPS` reflects prefill throughput, each measured from per-step wall-clock timing. (llama.cpp's context counters misfile batched generation as prompt eval, so phase-separated rates require independent timing.)
 
@@ -450,10 +450,10 @@ Stats are collected in two places and merged at the end:
 `avgConcurrentSeq` is computed as:
 
 ```
-concurrentSeqSum_ / decodeStepCount_
+concurrentSeqTokenSum_ / weightedTokenTotal_
 ```
 
-where `concurrentSeqSum_` accumulates `numActiveSequences` on every step.
+where `concurrentSeqTokenSum_` accumulates `numActiveSequences * (prefillTokens + decodeTokens)` on every step and `weightedTokenTotal_` accumulates that step's token count. It is a **token-weighted** mean, not a per-step one: a step that feeds a 512-token prefill chunk alongside a generating slot represents 512 tokens' worth of sharing, while a step that samples one token each for two slots represents two. Weighting by step instead would make the figure depend on how finely the scheduler slices its work rather than on how much traffic shared the backend — throttling a co-resident prefill to one token per step stretches identical sharing across many more steps and would read as *higher* concurrency, so making prefill faster would look like a regression. Token weighting is also what makes the `observed TPS * avgConcurrentSeq ~= aggregate TPS` relation below hold. If an epoch's steps all carried zero tokens, the figure falls back to the step-weighted mean `concurrentSeqSum_ / decodeStepCount_`.
 
 When the batch completes, `BatchResult.stats` carries the full snapshot. `LlamaModel` maps it to `RuntimeStats` for the JS side (`TPS`, `ppTPS`, `CacheTokens`, etc.).
 
@@ -646,8 +646,9 @@ its own.
 
 Plainly: this key describes the BACKEND, not your request. It answers "how
 busy was the shared engine while my request ran?" — the mean number of
-sequences the model decoded together, averaged over every `llama_decode`
-step of the epoch (`concurrentSeqSum_ / decodeStepCount_`).
+sequences the model decoded together, averaged over the epoch's tokens
+(`concurrentSeqTokenSum_ / weightedTokenTotal_`), so that each step counts
+for as much work as it actually carried.
 
 Your request contributes at most 1 to it (a batched group, up to its size);
 the rest is other traffic sharing the same backend plus how the backend was
