@@ -2,8 +2,8 @@
  * @qvac/sdk/electron-forge
  *
  * Electron Forge plugin: bundles the QVAC worker, verifies its native addons,
- * then configures Electron Packager to tree-shake unused @qvac/* addons and
- * non-target prebuilds.
+ * then configures Electron Packager to tree-shake unused @qvac/* addons (along
+ * with their per-platform prebuild packages) and non-target prebuilds.
  *
  * macOS universal (`arch: "universal"`) is not supported — native addon
  * prebuilds are arch-specific. Build darwin-arm64 and darwin-x64 separately.
@@ -146,16 +146,45 @@ function findQvacScopeDir(startDir) {
 }
 
 /**
- * Discovers installed @qvac addon packages by scanning node_modules/@qvac
- * for packages that have `addon: true` in package.json.
+ * Reads the addon a per-platform prebuild package ships binaries for.
+ *
+ * Addons that split their prebuilds (`@qvac/tts-ggml` since 0.9.0, along with
+ * `@qvac/asr-ggml` 0.5.0 and `@qvac/audiogen-ggml` 0.4.0) publish the host's
+ * `.bare` in `@qvac/<addon>-<host>` (iOS flavours grouped as
+ * `@qvac/<addon>-ios`). Those packages carry no top-level `addon: true`;
+ * instead they embed an inner `addon/` package named after the meta addon.
+ * Returns that addon name, or null when `pkgDir` is not a platform package.
+ * Exposed for unit testing.
+ */
+function readPlatformPackageAddon(pkgDir) {
+  const addonPkgJsonPath = path.join(pkgDir, 'addon', 'package.json')
+  if (!fs.existsSync(addonPkgJsonPath)) return null
+
+  try {
+    const pkg = JSON.parse(fs.readFileSync(addonPkgJsonPath, 'utf8'))
+    if (pkg.addon === true && typeof pkg.name === 'string' && pkg.name.length > 0) {
+      return pkg.name
+    }
+  } catch (err) {
+    logger.warn(`Failed to parse ${addonPkgJsonPath}: ${err.message}`)
+  }
+  return null
+}
+
+/**
+ * Discovers installed @qvac packages by scanning node_modules/@qvac: the
+ * addons (`addon: true` in package.json) and the per-platform prebuild
+ * packages, each mapped to the addon it belongs to.
  */
 function discoverQvacAddonPackages(projectDir) {
+  const nothing = { addons: [], platformPackages: [] }
+
   let scopeDir
   try {
     scopeDir = findQvacScopeDir(projectDir)
   } catch (err) {
     logger.warn(err.message)
-    return []
+    return nothing
   }
 
   let entries
@@ -163,10 +192,11 @@ function discoverQvacAddonPackages(projectDir) {
     entries = fs.readdirSync(scopeDir)
   } catch (err) {
     logger.fsError('discoverQvacAddonPackages', err)
-    return []
+    return nothing
   }
 
-  const discovered = []
+  const addons = []
+  const platformPackages = []
 
   for (const name of entries) {
     const pkgDir = path.join(scopeDir, name)
@@ -175,18 +205,25 @@ function discoverQvacAddonPackages(projectDir) {
     const pkgJsonPath = path.join(pkgDir, 'package.json')
     if (!fs.existsSync(pkgJsonPath)) continue
 
+    const packageName = `@qvac/${name}`
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
       if (pkg.addon === true) {
-        discovered.push(`@qvac/${name}`)
+        addons.push(packageName)
+        continue
       }
     } catch (err) {
       logger.warn(`Failed to parse ${pkgJsonPath}: ${err.message}`)
+      continue
     }
+
+    const addon = readPlatformPackageAddon(pkgDir)
+    if (addon !== null) platformPackages.push({ name: packageName, addon })
   }
 
-  discovered.sort()
-  return discovered
+  addons.sort()
+  platformPackages.sort((a, b) => a.name.localeCompare(b.name))
+  return { addons, platformPackages }
 }
 
 /**
@@ -203,25 +240,49 @@ function diffAddons(installed, required) {
 }
 
 /**
- * Computes the list of installed @qvac addons that aren't in `required`.
+ * Pure diff: per-platform prebuild packages whose addon is not in the
+ * required set. A platform package ships only its addon's binaries, so it
+ * follows that addon's include/exclude decision.
+ * Exposed for unit testing.
+ */
+function diffPlatformPackages(platformPackages, required) {
+  const requiredSet = new Set(required)
+  const exclusions = []
+  for (const { name, addon } of platformPackages) {
+    if (!requiredSet.has(addon)) exclusions.push(name)
+  }
+  return exclusions
+}
+
+/**
+ * Computes the list of installed @qvac addons that aren't in `required`,
+ * plus the per-platform prebuild packages of those excluded addons.
  * Logs include/exclude decisions for each discovered package.
  */
 function computeExclusions(required, projectDir) {
-  const installed = discoverQvacAddonPackages(projectDir)
+  const { addons, platformPackages } = discoverQvacAddonPackages(projectDir)
 
-  if (installed.length === 0) {
+  if (addons.length === 0) {
     logger.warn('No @qvac addon packages discovered. Skipping addon exclusions.')
     return []
   }
 
   const requiredSet = new Set(required)
   const exclusions = []
-  for (const pkg of installed) {
+  for (const pkg of addons) {
     if (requiredSet.has(pkg)) {
       logger.info(`Including required addon: ${pkg}`)
     } else {
       logger.info(`Excluding unused addon: ${pkg}`)
       exclusions.push(pkg)
+    }
+  }
+  for (const { name, addon } of platformPackages) {
+    if (requiredSet.has(addon)) {
+      logger.info(`Including platform package ${name} (prebuilds for ${addon})`)
+    } else {
+      logger.info(`Excluding platform package ${name} (prebuilds for unused addon ${addon})`)
+      exclusions.push(name)
     }
   }
   return exclusions
@@ -772,6 +833,8 @@ module.exports.QvacForgePluginError = QvacForgePluginError
 // Internal helpers exposed for unit tests. Not part of the stable API.
 module.exports.createIgnore = createIgnore
 module.exports.diffAddons = diffAddons
+module.exports.diffPlatformPackages = diffPlatformPackages
+module.exports.readPlatformPackageAddon = readPlatformPackageAddon
 module.exports.detectTargetHosts = detectTargetHosts
 module.exports.resolveHosts = resolveHosts
 module.exports.runBundleAndVerify = runBundleAndVerify
