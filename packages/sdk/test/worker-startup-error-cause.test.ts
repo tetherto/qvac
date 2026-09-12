@@ -56,3 +56,33 @@ test('startup cause carries the registered error identity', (t) => {
   t.is(cause.name, 'WORKER_STARTUP_FAILED')
   t.is(cause.code, SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED)
 })
+
+test('missing libatomic gives an actionable hint without changing startup metadata', (t) => {
+  const stderr =
+    'Error: libatomic.so.1: cannot open shared object file: No such file or directory\n' +
+    'at rocksdb-native/prebuilds/linux-arm64/rocksdb-native.bare\n'
+
+  for (const workerExit of [null, { code: 134, signal: null }]) {
+    const cause = createRPCInitTimeoutCause(stderr, workerExit)
+
+    t.ok(cause.message.includes('Missing Linux runtime library libatomic.so.1'))
+    t.ok(cause.message.includes('On Debian or Ubuntu, install libatomic1'))
+    t.is(cause.stderrTail, stderr.trimEnd())
+    t.is(cause.workerExited, workerExit !== null)
+    t.is(cause.exitCode, workerExit?.code ?? null)
+    t.is(cause.code, SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED)
+  }
+})
+
+test('other loader failures and library mentions do not suggest libatomic1', (t) => {
+  for (const stderr of [
+    'Cannot find addon rocksdb-native',
+    'libvulkan.so.1: cannot open shared object file: No such file or directory',
+    'libatomic.so.1: version ATOMIC_9.0 not found',
+    'Loaded libatomic.so.1 successfully'
+  ]) {
+    const cause = createRPCInitTimeoutCause(stderr, { code: 1, signal: null })
+    t.absent(cause.message.includes('install libatomic1'))
+    t.is(cause.stderrTail, stderr)
+  }
+})
