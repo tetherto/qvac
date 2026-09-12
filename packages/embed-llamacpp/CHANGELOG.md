@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.37.1] - 2026-09-11
+
+### Fixed
+
+- Native builds no longer fail against `bare-headers` 1.32+ (`js_set_array_elements`
+  const mismatch in `qvac-lib-inference-addon-cpp` 1.3.3 `JsUtils.hpp`). Configure
+  now pins `bare-headers@1.30.0` before `add_bare_module()` so cmake-npm keeps the
+  last compatible headers. Drop the pin once addon-cpp compiles against
+  `bare-headers >= 1.32.0` and the vcpkg floor is raised.
+
+### Changed
+
+- `qvac-fabric` is now built with `-DLLAMA_OPENSSL=OFF`, via a repo-local
+  overlay port that is otherwise a verbatim copy of the registry port for
+  `10297.1.1`. Upstream defaults `LLAMA_OPENSSL` to `ON`, so
+  `vendor/cpp-httplib` ran `find_package(OpenSSL)` and linked `OpenSSL::SSL` /
+  `OpenSSL::Crypto` into the installed `cpp-httplib` target whenever
+  `LLAMA_BUILD_COMMON` was on — which is always, since the port requests the
+  `llama` feature. Nothing in this addon uses httplib's HTTPS path, so the
+  prebuild no longer carries a build-host-dependent system OpenSSL it never
+  calls. Same fabric source (`REF v${VERSION}`, same SHA512) and the same
+  `version>=` floor as 0.37.0; only the configure flag differs.
+
 ## [0.37.0] - 2026-08-29
 
 ### Changed
