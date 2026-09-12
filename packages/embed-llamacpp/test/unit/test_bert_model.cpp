@@ -962,7 +962,7 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeLayer) {
   }
 }
 
-TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
+TEST_F(BertModelTest, CommonParamsParseSplitModeRowRejected) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -971,25 +971,218 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
   config["device"] = test_common::getTestDevice();
   config["split-mode"] = "row";
 
-  BertModel model(getValidModelPath(), config);
-  model.initializeBackend(test_backends_dir);
-  model.waitForLoadInitialization();
-  ASSERT_TRUE(model.isLoaded());
-
-  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
-  if (backendDevice == 0.0) {
-    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
-  } else {
-    // Row-split requires split buffers from every GPU device the model is
-    // distributed over, and as of qvac-fabric v10069 only the SYCL backend
-    // provides them (CUDA moved tensor parallelism to LLAMA_SPLIT_MODE_TENSOR).
-    // None of the backends this addon ships qualify, so a requested 'row' is
-    // always degraded to 'layer'. Asserted unconditionally on purpose: this is
-    // the pin on the degrade itself, so it fails if the degrade stops working.
-    // If a split-buffer-capable backend is ever shipped, that failure is the
-    // intended signal to revisit this expectation.
-    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
+  try {
+    BertModel model(getValidModelPath(), config);
+    model.initializeBackend(test_backends_dir);
+    model.waitForLoadInitialization();
+    FAIL() << "split-mode 'row' must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_EQ(
+        std::string(error.what()),
+        "parseSplitMode: split-mode 'row' is no longer accepted; it never took "
+        "effect on any shipped backend. Use 'layer' (accepted values: 'none', "
+        "'layer').\n");
   }
+}
+
+TEST_F(BertModelTest, SplitDeviceSelectionPinsEligibleConsumerList) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config;
+  auto first = reinterpret_cast<ggml_backend_dev_t>(0x1);
+  auto second = reinterpret_cast<ggml_backend_dev_t>(0x2);
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0", .handle = first, .sourceGpuIndex = 0},
+           {.name = "Vulkan1", .handle = second, .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
+
+  applySplitDeviceSelection(params, config, selection);
+  ASSERT_EQ(params.devices.size(), 3U);
+  EXPECT_EQ(params.devices[0], first);
+  EXPECT_EQ(params.devices[1], second);
+  EXPECT_EQ(params.devices[2], nullptr);
+}
+
+TEST_F(BertModelTest, SplitDeviceSelectionRemapsTensorShares) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{
+      {"tensor-split", "1,2,3"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "RPC0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 2}},
+      .sourceGpuCount = 3};
+
+  applySplitDeviceSelection(params, config, selection);
+  ASSERT_EQ(params.devices.size(), 3U);
+  EXPECT_EQ(config.at("tensor-split"), "1,3");
+}
+
+// RPC0 is hoisted ahead of Vulkan0, yet the shares pass through untouched:
+// two matches the eligible count and not the three registered GPUs.
+TEST_F(BertModelTest, EligibleCountTensorSharesTakenAsFinalOrder) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{{"tensor-split", "1,2"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "RPC0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 2},
+           {.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 0}},
+      .sourceGpuCount = 3};
+
+  applySplitDeviceSelection(params, config, selection);
+  ASSERT_EQ(params.devices.size(), 3U);
+  EXPECT_EQ(config.at("tensor-split"), "1,2");
+}
+
+// Eligible count wins the tie with the registered count, so the order is kept.
+TEST_F(BertModelTest, TensorSplitTrimsShareWhitespace) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{{"tensor-split", "1, 2"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan1",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 1},
+           {.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 0}},
+      .sourceGpuCount = 2};
+
+  applySplitDeviceSelection(params, config, selection);
+  ASSERT_EQ(params.devices.size(), 3U);
+  EXPECT_EQ(config.at("tensor-split"), "1,2");
+}
+
+// Checked even when the mapping did not move: fabric zero-pads a short list,
+// leaving the second GPU with no layers.
+TEST_F(BertModelTest, ShortTensorSplitRejectedWhenMappingUnchanged) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{{"tensor-split", "1"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan1",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
+
+  EXPECT_THROW(
+      applySplitDeviceSelection(params, config, selection),
+      qvac_errors::StatusError);
+}
+
+// Too many shares: fabric would silently drop the tail.
+TEST_F(BertModelTest, LongTensorSplitRejectedWhenMappingUnchanged) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{
+      {"tensor-split", "1,2,3"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan1",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
+
+  EXPECT_THROW(
+      applySplitDeviceSelection(params, config, selection),
+      qvac_errors::StatusError);
+}
+
+// Fabric's std::stof throws on the empty field a leading delimiter yields.
+TEST_F(BertModelTest, TensorSplitDropsLeadingDelimiter) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{{"tensor-split", ",1,2"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan1",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
+
+  applySplitDeviceSelection(params, config, selection);
+  ASSERT_EQ(params.devices.size(), 3U);
+  EXPECT_EQ(config.at("tensor-split"), "1,2");
+}
+
+// Only one spelling can be remapped; the other would race it downstream.
+TEST_F(BertModelTest, TensorSplitRejectsBothSpellings) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config{
+      {"tensor-split", "1,1"}, {"tensor_split", "2,1"}};
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x1),
+            .sourceGpuIndex = 0},
+           {.name = "Vulkan1",
+            .handle = reinterpret_cast<ggml_backend_dev_t>(0x2),
+            .sourceGpuIndex = 1}},
+      .sourceGpuCount = 2};
+
+  EXPECT_THROW(
+      applySplitDeviceSelection(params, config, selection),
+      qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, SplitTraitsFlagOpenClFromAnyDevice) {
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "Vulkan0", .sourceGpuIndex = 0, .isOpenCl = false},
+           {.name = "GPUOpenCL", .sourceGpuIndex = 1, .isOpenCl = true}},
+      .sourceGpuCount = 2};
+
+  const SplitBackendTraits traits = splitBackendTraits(selection);
+  EXPECT_TRUE(traits.isOpenCl);
+  EXPECT_EQ(traits.backendName, "Vulkan0");
+}
+
+TEST_F(BertModelTest, SplitTraitsReportFirstLocalDeviceOverRpc) {
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "RPC0", .sourceGpuIndex = 1, .isRpc = true},
+           {.name = "Vulkan0", .sourceGpuIndex = 0, .isOpenCl = false}},
+      .sourceGpuCount = 2};
+
+  const SplitBackendTraits traits = splitBackendTraits(selection);
+  EXPECT_FALSE(traits.isOpenCl);
+  EXPECT_EQ(traits.backendName, "Vulkan0");
+}
+
+TEST_F(BertModelTest, SplitTraitsFallBackToRpcWhenOnlyRpc) {
+  backend_selection::SplitDeviceSelection selection{
+      .devices =
+          {{.name = "RPC0", .sourceGpuIndex = 0, .isRpc = true},
+           {.name = "RPC1", .sourceGpuIndex = 1, .isRpc = true}},
+      .sourceGpuCount = 2};
+
+  const SplitBackendTraits traits = splitBackendTraits(selection);
+  EXPECT_FALSE(traits.isOpenCl);
+  EXPECT_EQ(traits.backendName, "RPC0");
+}
+
+TEST_F(BertModelTest, EmptySplitDeviceSelectionLeavesParamsUntouched) {
+  common_params params;
+  std::unordered_map<std::string, std::string> config;
+  applySplitDeviceSelection(
+      params, config, backend_selection::SplitDeviceSelection{});
+
+  EXPECT_TRUE(params.devices.empty());
 }
 
 TEST_F(BertModelTest, CommonParamsParseSplitModeCaseInsensitive) {
@@ -1043,6 +1236,96 @@ TEST_F(BertModelTest, CpuFallbackClearsGpuSplitParams) {
   EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
   double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
   EXPECT_EQ(backendDevice, 0.0);
+  EXPECT_EQ(
+      model.getCommonParams().devices,
+      std::vector<ggml_backend_dev_t>{nullptr});
+  // The shares were erased before parsing, so none reached fabric.
+  EXPECT_EQ(model.getCommonParams().tensor_split[0], 0.0F);
+  EXPECT_EQ(model.getCommonParams().tensor_split[1], 0.0F);
+}
+
+TEST_F(BertModelTest, CpuFallbackClearsUnderscoreTensorSplit) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = "cpu";
+  config["split_mode"] = "layer";
+  config["tensor_split"] = "50,50";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(
+      model.getCommonParams().devices,
+      std::vector<ggml_backend_dev_t>{nullptr});
+  EXPECT_EQ(model.getCommonParams().tensor_split[0], 0.0F);
+  EXPECT_EQ(model.getCommonParams().tensor_split[1], 0.0F);
+}
+
+// The share count is probed rather than hardcoded: a fixed two-share value is
+// a wrong-cardinality request on a single-GPU host and is rejected during load.
+TEST_F(BertModelTest, GpuSplitRequestWithoutEligibleDeviceFallsBackToCpu) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  size_t eligibleDevices = 0;
+  {
+    std::unordered_map<std::string, std::string> probeConfig;
+    probeConfig["device"] = "gpu";
+    probeConfig["split-mode"] = "layer";
+
+    BertModel probe(getValidModelPath(), probeConfig);
+    probe.initializeBackend(test_backends_dir);
+    probe.waitForLoadInitialization();
+    ASSERT_TRUE(probe.isLoaded());
+    if (getStatValue(probe.runtimeStats(), "backendDevice") != 0.0) {
+      // params.devices carries a nullptr terminator past the pinned devices.
+      ASSERT_GE(probe.getCommonParams().devices.size(), 2U);
+      eligibleDevices = probe.getCommonParams().devices.size() - 1;
+    }
+  }
+
+  // With no eligible GPU any share count reaches the CPU fallback branch.
+  std::string shares = "50,50";
+  if (eligibleDevices > 0) {
+    shares.clear();
+    for (size_t index = 0; index < eligibleDevices; ++index) {
+      if (!shares.empty()) {
+        shares += ',';
+      }
+      shares += "50";
+    }
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = "gpu";
+  config["split-mode"] = "layer";
+  config["tensor-split"] = shares;
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+    EXPECT_EQ(
+        model.getCommonParams().devices,
+        std::vector<ggml_backend_dev_t>{nullptr});
+    EXPECT_EQ(model.getCommonParams().tensor_split[0], 0.0F);
+    EXPECT_EQ(model.getCommonParams().tensor_split[1], 0.0F);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
+    ASSERT_GE(model.getCommonParams().devices.size(), 2U);
+    EXPECT_EQ(model.getCommonParams().devices.back(), nullptr);
+  }
 }
 
 TEST_F(BertModelTest, CommonParamsParseSplitModeInvalid) {
