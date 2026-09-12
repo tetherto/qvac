@@ -2,10 +2,8 @@
 #include "nmt_state_backend.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -14,10 +12,10 @@
 #include <ggml-backend.h>
 #include <ggml.h>
 
+#include "inference-addon-cpp/Logger.hpp"
 #include "nmt.hpp"
 #include "nmt_graph_decoder.hpp"
 #include "nmt_graph_encoder.hpp"
-#include "inference-addon-cpp/Logger.hpp"
 #include "nmt_utils.hpp"
 
 void nmtBatchPrepLegacy(
@@ -317,34 +315,6 @@ struct nmt_global {
 
 static nmt_global g_state;
 
-// Extract trailing numeric ordinal from an ggml device name.
-// E.g. "Vulkan0" → 0, "OpenCL1" → 1, "Metal" → -1.
-// GGML assigns the same ordinal to different API surfaces that wrap the
-// same physical GPU (e.g. Vulkan0 and OpenCL0 both map to GPU #0).
-static int nmtExtractDeviceOrdinal(const char* name) {
-  if (name == nullptr) {
-    return -1;
-  }
-  static constexpr size_t kMaxNameLen = 256;
-  size_t len = strnlen(name, kMaxNameLen);
-  if (len == 0) {
-    return -1;
-  }
-  size_t digit_start = len;
-  while (digit_start > 0 &&
-         std::isdigit(static_cast<unsigned char>(name[digit_start - 1]))) {
-    --digit_start;
-  }
-  if (digit_start == len) {
-    return -1;
-  }
-  int ordinal = 0;
-  for (size_t j = digit_start; j < len; ++j) {
-    ordinal = ordinal * 10 + (name[j] - '0');
-  }
-  return ordinal;
-}
-
 static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   ggml_log_set(g_state.log_callback, g_state.log_callback_user_data);
 
@@ -358,26 +328,11 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       oss_gpu_init.str());
 
-  // Compute-device selection when use_gpu=true.
-  //
-  // Matching compute devices by `!= CPU` (rather than a named GPU/ACCEL
-  // allow-list) is resilient to ggml inserting new enum values between
-  // builds; Android's qvac-fabric ggml reports some devices with an enum
-  // value between GPU and ACCEL.
-  //
-  // Two selection modes:
-  //   1. params.gpu_backend non-empty → explicit single-pass filter:
-  //      pick the first non-CPU device whose name contains gpu_backend
-  //      (case-insensitive substring). `gpu_device` is the ordinal
-  //      within matches, so {gpu_backend="vulkan", gpu_device=1} picks
-  //      the second Vulkan adapter. Bypasses the OpenCL guard — an
-  //      explicit "opencl" request is an informed opt-in.
-  //   2. params.gpu_backend empty → gated default: when
-  //      QVAC_NMTCPP_USE_OPENCL is defined, prefer an OpenCL-named
-  //      device first; otherwise (and always as a fallback) pick any
-  //      non-CPU device. When the guard is off, the fallback also
-  //      skips OpenCL-named devices so Bergamot/IndicTrans on Adreno
-  //      830 don't hit the q4_0 transpose crash (QVAC-17790).
+  // Compute-device selection when use_gpu=true: GPU/IGPU Vulkan, Metal,
+  // OpenCL, CUDA and RPC are eligible. Without an explicit gpu_backend,
+  // OpenCL is only picked when QVAC_NMTCPP_USE_OPENCL is defined — otherwise
+  // Bergamot/IndicTrans on Adreno 830 hit a q4_0 transpose crash
+  // (QVAC-17790).
   // Delegate to the shared selector so make_buft_list (in nmt_loader.cpp)
   // and this function agree on the same physical device — historical
   // drift between the two has caused scheduler crashes (R2-C1, R4-C2).
@@ -457,79 +412,10 @@ nmt_backend_init(const nmt_context_params& params) {
 
   std::vector<ggml_backend_t> result;
 
+  // Translation runs on one selected compute device plus CPU.
   ggml_backend_t backend_gpu = nmt_backend_init_gpu(params);
-
-  // Primary backend may also be an ACCEL device (see nmt_backend_init_gpu —
-  // Android Vulkan registers as ACCEL). Track the device pointer we already
-  // picked so the secondary ACCEL loop below doesn't re-init the same device.
-  ggml_backend_dev_t primary_dev =
-      backend_gpu ? ggml_backend_get_device(backend_gpu) : nullptr;
-
   if (backend_gpu) {
     result.push_back(backend_gpu);
-  }
-
-  // ACCEL backends (in addition to the primary if it was an ACCEL device).
-  //
-  // On Android (and other mobile SoCs with a single physical GPU), multiple
-  // GGML backends (Vulkan, OpenCL) may register as separate ACCEL devices
-  // for the same hardware.  Initialising all of them adds synchronisation
-  // overhead in ggml_backend_sched without any parallel-compute benefit
-  // because the scheduler executes splits sequentially.
-  //
-  // Filter strategy:
-  //   1. Skip the device pointer already selected as primary (same as before).
-  //   2. Skip OpenCL devices when the build-time USE_OPENCL guard is off
-  //      (consistent with Mode 2b in nmtSelectGpuDevice).
-  //   3. Skip any ACCEL device whose trailing ordinal matches the primary's.
-  //      GGML names devices as "<API><ordinal>" (e.g. Vulkan0, OpenCL0).
-  //      Same ordinal + different API prefix = same physical GPU exposed
-  //      through a different backend.  This is immune to driver-level
-  //      description string variation and consistent with the JS-side
-  //      dedup in _extractPhysicalGpuKey.
-  const char* primary_name =
-      primary_dev ? ggml_backend_dev_name(primary_dev) : nullptr;
-  int primary_ordinal = nmtExtractDeviceOrdinal(primary_name);
-
-  for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
-    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-    if (dev == nullptr) {
-      continue;
-    }
-    if (primary_dev != nullptr && dev == primary_dev) {
-      continue;
-    }
-    if (ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_ACCEL) {
-      continue;
-    }
-    const char* dev_name = ggml_backend_dev_name(dev);
-
-#ifndef QVAC_NMTCPP_USE_OPENCL
-    if (nmtNameContainsCi(dev_name, "opencl")) {
-      std::ostringstream oss;
-      oss << "Skipping ACCEL device '" << (dev_name ? dev_name : "(null)")
-          << "' — OpenCL guard is off (QVAC-17790)";
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
-      continue;
-    }
-#endif
-
-    int dev_ordinal = nmtExtractDeviceOrdinal(dev_name);
-    if (primary_ordinal >= 0 && dev_ordinal >= 0 &&
-        primary_ordinal == dev_ordinal) {
-      std::ostringstream oss;
-      oss << "Skipping ACCEL device '" << (dev_name ? dev_name : "(null)")
-          << "' — same GPU ordinal (" << dev_ordinal << ") as primary '"
-          << (primary_name ? primary_name : "(null)") << "'";
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
-      continue;
-    }
-
-    ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
-    if (!backend) {
-      continue;
-    }
-    result.push_back(backend);
   }
 
   ggml_backend_t backend_cpu =

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <thread>
 
@@ -25,21 +26,37 @@ std::string sanitizePrintableAscii(const std::string& input);
 // in lock-step.
 bool nmtNameContainsCi(const char* name, const std::string& needleLower);
 
+struct NmtBackendInterface {
+  size_t (*deviceCount)();
+  ggml_backend_dev_t (*deviceGet)(size_t index);
+  enum ggml_backend_dev_type (*deviceType)(ggml_backend_dev_t device);
+  const char* (*deviceName)(ggml_backend_dev_t device);
+  ggml_backend_reg_t (*deviceRegistry)(ggml_backend_dev_t device);
+  const char* (*registryName)(ggml_backend_reg_t registry);
+  ggml_backend_buffer_type_t (*deviceBufferType)(ggml_backend_dev_t device);
+};
+
 // Shared GPU device selection used by both nmt_backend_init_gpu (for backend
 // init) and make_buft_list (for buffer-type assignment). Returning the same
 // dev pointer from one helper guarantees compute and tensor-buffer placement
 // agree — repeated drift between the two functions has been a maintenance
-// hazard across multiple review rounds (see QVAC-17790 round-8 R8-D1).
+// hazard (see QVAC-17790 round-8 R8-D1). gpuDevice is an ordinal within the
+// eligible family inventory, which lists dedicated GPUs before integrated ones.
 //
 // `logPrefix` is used only for diagnostic WARN/DEBUG messages so each caller
 // can be identified in logcat (e.g. "[nmt_backend_init_gpu]" vs
 // "[make_buft_list]"). Does NOT take the global init mutex; caller must
 // ensure backend registration is complete before calling.
 //
-// Returns the selected non-CPU device whose buffer type is verified non-null,
+// Returns the selected eligible GPU/iGPU device with a non-null buffer type,
 // or nullptr if no eligible device was found (including when a device matched
 // but its buffer type was null — a WARNING is emitted in that case). Callers
 // do NOT need to re-check the buffer type of a non-null return value.
 ggml_backend_dev_t nmtSelectGpuDevice(
     bool useGpu, const std::string& gpuBackend, int gpuDevice,
     const char* logPrefix);
+
+ggml_backend_dev_t nmtSelectGpuDevice(
+    const NmtBackendInterface& backend, bool useGpu,
+    const std::string& gpuBackend, int gpuDevice, const char* logPrefix,
+    bool allowDefaultOpenCl = false);

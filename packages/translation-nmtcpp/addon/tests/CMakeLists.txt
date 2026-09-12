@@ -11,6 +11,7 @@ set(TEST_SOURCES
   nmt_model_wrapper_test_indic.cpp
   nmt_test.cpp
   test_nmt_lazy_init_backend.cpp
+  nmt_gpu_selection_test.cpp
   backend_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TranslationModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt.cpp
