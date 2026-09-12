@@ -31,5 +31,6 @@ temp/
 *.webm
 test/model/
 test/results/
+validation-results/
 test/integration/all.js
 test/unit/all.js

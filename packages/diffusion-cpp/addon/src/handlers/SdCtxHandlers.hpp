@@ -93,10 +93,6 @@ struct SdCtxConfig {
   // "dedicated" (the discrete GPU with the most VRAM). Empty = let the backend
   // choose. Resolved to a concrete ggml device backend name in SdModel::load().
   std::string mainGpu;
-  bool keepClipOnCpu = false;      // clip_on_cpu: keep CLIP encoder in CPU RAM
-                                   // (params_backend spec "clip=cpu")
-  bool keepVaeOnCpu = false;       // vae_on_cpu:  keep VAE decoder in CPU RAM
-                                   // (params_backend spec "vae=cpu")
   bool vaeAutoCpuFallback = false; // preflight oversized VAE GPU graphs
   float vaeAutoCpuFallbackMemoryRatio = 0.9f;
   // Addon-level contract: when true, encoder-dependent jobs (e.g. LTX
@@ -195,6 +191,12 @@ using SdCtxHandlersMap = std::unordered_map<std::string, SdCtxHandlerFn>;
 
 /** All supported load-time config keys and their handlers. */
 extern const SdCtxHandlersMap SD_CTX_HANDLERS;
+
+/** True when a params_backend assignment contains the disk backend. */
+bool paramsBackendSpecUsesDisk(const std::string& spec);
+/** Prepends the offload_to_cpu default before explicit module assignments. */
+std::string
+effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu);
 
 /**
  * Apply SD_CTX_HANDLERS to configMap, writing results into config.
