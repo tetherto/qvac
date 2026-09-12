@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <common/common.h>
 
@@ -26,11 +27,7 @@ void expect(bool condition, const char* message) {
 }
 
 BackendDevice cpu() {
-  return {
-      .name = "CPU",
-      .description = "host",
-      .type = BackendDeviceType::Cpu,
-      .supportsSplitBuffer = false};
+  return {.name = "CPU", .description = "host", .type = BackendDeviceType::Cpu};
 }
 
 BackendDevice metal() {
@@ -38,7 +35,7 @@ BackendDevice metal() {
       .name = "Metal0",
       .description = "Apple GPU",
       .type = BackendDeviceType::Gpu,
-      .supportsSplitBuffer = false};
+      .handle = reinterpret_cast<ggml_backend_dev_t>(1)};
 }
 
 BackendDevice adreno() {
@@ -46,9 +43,11 @@ BackendDevice adreno() {
       .name = "Vulkan0",
       .description = "Adreno 830",
       .type = BackendDeviceType::Gpu,
-      .supportsSplitBuffer = false};
+      .handle = reinterpret_cast<ggml_backend_dev_t>(2)};
 }
 
+// Each device gets its own registry identity, derived from the handle; use
+// `withRegistryOf` for the shared case.
 BackendDevice device(
     const char* name, const char* description, BackendDeviceType type,
     uintptr_t handle, const char* registryName = "") {
@@ -56,9 +55,15 @@ BackendDevice device(
       .name = name,
       .description = description,
       .type = type,
-      .supportsSplitBuffer = false,
       .handle = reinterpret_cast<ggml_backend_dev_t>(handle),
-      .registryName = registryName};
+      .registryName = registryName,
+      .registry = reinterpret_cast<ggml_backend_reg_t>(handle)};
+}
+
+// Makes `device` report `owner`'s registry handle.
+BackendDevice withRegistryOf(BackendDevice device, const BackendDevice& owner) {
+  device.registry = owner.registry;
+  return device;
 }
 
 // `llama_model_params::devices` is a NULL-terminated list (llama.h:296), so a
@@ -74,6 +79,23 @@ bool isPinnedGpu(const common_params& params, const BackendDevice& expected) {
   return params.devices.size() == 2 &&
          params.devices.front() == expected.handle &&
          params.devices.back() == nullptr && params.main_gpu == 0;
+}
+
+// Checks a two-device `tensor-split` positionally. A malformed value cannot be
+// caught here — see `remapTensorSplit`.
+bool splitsAcross(
+    const std::string& tensorSplit, const std::vector<BackendDevice>& devices,
+    float first, float second) {
+  const auto normalized = model_fit::normalizeLlamaLoadConfig(
+      "/model.gguf",
+      LlamaConfigMap{
+          {"device", "gpu"},
+          {"split-mode", "layer"},
+          {"tensor-split", tensorSplit}},
+      ModelTraits{},
+      devices);
+  return normalized.supported && normalized.params.tensor_split[0] == first &&
+         normalized.params.tensor_split[1] == second;
 }
 
 } // namespace
@@ -251,20 +273,24 @@ int main() {
   }
 
   {
+    // Two eligible GPUs: a two-share `tensor-split` is well-formed only for a
+    // two-device split.
+    const BackendDevice metal1 =
+        device("Metal1", "Apple GPU 1", BackendDeviceType::Gpu, 3, "Metal");
     const auto normalized = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
             {"device", "gpu"},
             {"ctx_size", "4096"},
-            {"split-mode", "row"},
+            {"split-mode", "layer"},
             {"tensor-split", "0.25,0.75"}},
         ModelTraits{},
-        {metal(), cpu()});
+        {metal(), metal1, cpu()});
 
     expect(normalized.supported, "ordinary GPU config must be supported");
     expect(
         normalized.params.split_mode == LLAMA_SPLIT_MODE_LAYER,
-        "row split must fall back to layer without split buffers");
+        "layer split must be kept as written");
     expect(
         normalized.params.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_ENABLED,
         "ordinary GPU config must default flash attention on");
@@ -385,6 +411,42 @@ int main() {
           "every quantized KV type with flash attention must be unsupported on "
           "Adreno 800+ Vulkan");
     }
+
+    // The crash guard asks whether flash attention MIGHT be on, so `auto` arms
+    // it even though it leaves the quantized KV auto-default alone.
+    const auto autoFlashRejected = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"cache-type-v", "q8_0"},
+            {"flash-attn", "auto"}},
+        ModelTraits{},
+        {device("Vulkan0", "Adreno 830", BackendDeviceType::Gpu, 1), cpu()});
+    expect(
+        !autoFlashRejected.supported,
+        "flash-attn=auto with quantized KV must be unsupported on Adreno 800+ "
+        "Vulkan");
+
+    // An RPC device's description is its endpoint string, so an endpoint
+    // reading as 830 beside a local 740 must not raise the reported tier.
+    const auto rpcEndpointTierNoSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {device(
+             "RPC0",
+             "adreno830.local:50052",
+             BackendDeviceType::Gpu,
+             11,
+             "RPC"),
+         device("Vulkan0", "Adreno 740", BackendDeviceType::Gpu, 12, "Vulkan"),
+         cpu()});
+    expect(
+        rpcEndpointTierNoSplit.supported &&
+            rpcEndpointTierNoSplit.params.cache_type_k == GGML_TYPE_Q8_0 &&
+            rpcEndpointTierNoSplit.params.cache_type_v == GGML_TYPE_Q8_0,
+        "an RPC endpoint string must not raise the Adreno tier without a "
+        "split");
 
     const auto metalStandard = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
@@ -654,57 +716,51 @@ int main() {
         isPinnedGpu(fallback.params, gpuOne),
         "invalid main-gpu must fall back to ordinary GPU selection");
 
-    const auto selectedCpu = model_fit::normalizeLlamaLoadConfig(
+    const auto cpuFirst = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
             {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "0"}},
         ModelTraits{},
         {cpu(), gpuOne});
-    expect(selectedCpu.supported, "valid CPU main-gpu index must be supported");
+    expect(cpuFirst.supported, "raw CPU main-gpu must fall back to CPU");
     expect(
-        isCpuPlacement(selectedCpu.params),
-        "valid CPU main-gpu index must examine only CPU and fall back to CPU");
+        isCpuPlacement(cpuFirst.params),
+        "main-gpu zero must preserve the raw CPU registry identity");
 
     const BackendDevice accelerator =
         device("ANE0", "accelerator", BackendDeviceType::Accelerator, 33);
-    const auto selectedAccelerator = model_fit::normalizeLlamaLoadConfig(
+    const auto acceleratorFirst = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
             {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "0"}},
         ModelTraits{},
         {accelerator, gpuOne});
     expect(
-        selectedAccelerator.supported,
-        "valid accelerator main-gpu index must be supported");
+        acceleratorFirst.supported, "raw accelerator main-gpu must be handled");
     expect(
-        isCpuPlacement(selectedAccelerator.params),
-        "valid accelerator main-gpu index must examine only it and fall back "
-        "to CPU");
+        isCpuPlacement(acceleratorFirst.params),
+        "main-gpu zero must preserve the raw accelerator registry identity");
+  }
 
-    BackendDevice splitCapable =
+  {
+    const BackendDevice vulkan =
         device("Vulkan0", "local GPU", BackendDeviceType::Gpu, 34, "Vulkan");
-    splitCapable.supportsSplitBuffer = true;
-    const BackendDevice rpcWithoutSplit =
-        device("RPC0", "remote GPU", BackendDeviceType::Gpu, 35, "RPC");
-    const auto rpcRow = model_fit::normalizeLlamaLoadConfig(
+    const auto row = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{{"device", "gpu"}, {"split-mode", "row"}},
         ModelTraits{},
-        {splitCapable, rpcWithoutSplit, cpu()});
+        {vulkan, cpu()});
     expect(
-        rpcRow.params.split_mode == LLAMA_SPLIT_MODE_LAYER,
-        "RPC GPU without split buffers must force row fallback");
-
-    const BackendDevice openClWithoutSplit =
-        device("OpenCL0", "Mali GPU", BackendDeviceType::Gpu, 36, "OpenCL");
-    const auto openClRow = model_fit::normalizeLlamaLoadConfig(
-        "/model.gguf",
-        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "row"}},
-        ModelTraits{},
-        {splitCapable, openClWithoutSplit, cpu()});
+        !row.supported &&
+            row.unsupportedDetail ==
+                "split-mode row is not accepted: no supported backend "
+                "provides split buffers; use layer",
+        "split-mode row must be rejected and redirected to layer");
     expect(
-        openClRow.params.split_mode == LLAMA_SPLIT_MODE_LAYER,
-        "non-Adreno OpenCL GPU without split buffers must force row fallback");
+        model_fit::preBackendUnsupportedLlamaLoad(
+            LlamaConfigMap{{"device", "gpu"}, {"split-mode", "row"}},
+            model_fit::LlamaFitPlatform::Desktop) == row.unsupportedDetail,
+        "split-mode row must be rejected before backend discovery");
   }
 
   {
@@ -718,8 +774,18 @@ int main() {
         ModelTraits{},
         {rpc, cpu()});
     expect(
-        isCpuPlacement(rpcOnly.params),
-        "RPC-only inventory must fall back to CPU");
+        isPinnedGpu(rpcOnly.params, rpc), "RPC-only inventory must select RPC");
+
+    const BackendDevice cudaOnlyDevice =
+        device("CUDA0", "NVIDIA GPU", BackendDeviceType::Gpu, 42, "CUDA");
+    const auto cudaOnly = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {cudaOnlyDevice, cpu()});
+    expect(
+        isPinnedGpu(cudaOnly.params, cudaOnlyDevice),
+        "CUDA-only inventory must select CUDA");
 
     const auto mixed = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
@@ -727,8 +793,520 @@ int main() {
         ModelTraits{},
         {rpc, vulkan, cpu()});
     expect(
-        isPinnedGpu(mixed.params, vulkan),
-        "mixed inventory must ignore RPC and select local GPU");
+        isPinnedGpu(mixed.params, rpc),
+        "mixed inventory must preserve eligible registry order");
+
+    const BackendDevice rocm =
+        device("ROCm0", "AMD Radeon", BackendDeviceType::Gpu, 45, "HIP");
+    const auto rocmOnly = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {rocm, cpu()});
+    expect(
+        isCpuPlacement(rocmOnly.params),
+        "ROCm-only inventory must fall back to CPU");
+
+    const auto splitMixed = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{},
+        {rocm, vulkan, cpu()});
+    expect(
+        splitMixed.params.devices.size() == 2 &&
+            splitMixed.params.devices.front() == vulkan.handle &&
+            splitMixed.params.devices.back() == nullptr,
+        "split-mode device list must exclude ROCm and remain terminated");
+
+    const BackendDevice vulkan1 =
+        device("Vulkan1", "NVIDIA GPU 1", BackendDeviceType::Gpu, 46, "Vulkan");
+
+    const auto remappedTensorSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"split-mode", "layer"},
+            {"tensor-split", "1,2,3"}},
+        ModelTraits{},
+        {rocm, vulkan, vulkan1, cpu()});
+    expect(
+        remappedTensorSplit.supported &&
+            remappedTensorSplit.params.tensor_split[0] == 2.0F &&
+            remappedTensorSplit.params.tensor_split[1] == 3.0F,
+        "tensor shares must follow surviving source GPU positions");
+
+    const auto ambiguousTensorSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"split-mode", "layer"},
+            {"tensor-split", "2,3"}},
+        ModelTraits{},
+        {rocm, vulkan, vulkan1, cpu()});
+    expect(
+        ambiguousTensorSplit.supported &&
+            ambiguousTensorSplit.params.tensor_split[0] == 2.0F &&
+            ambiguousTensorSplit.params.tensor_split[1] == 3.0F,
+        "final-list tensor shares must remain positional after filtering");
+
+    // Fabric tokenizes `--tensor-split` on the regex [,/]+, so a run of
+    // delimiters collapses and "1,,2" is two shares, not three.
+    expect(
+        splitsAcross("1,,2", {rocm, vulkan, vulkan1, cpu()}, 1.0F, 2.0F),
+        "collapsed tensor-split delimiters must yield one share per surviving "
+        "device");
+    expect(
+        splitsAcross("1, 2", {rocm, vulkan, vulkan1, cpu()}, 1.0F, 2.0F),
+        "tensor shares must be trimmed before reaching qvac-fabric");
+    expect(
+        splitsAcross(",1,2", {vulkan, vulkan1, cpu()}, 1.0F, 2.0F),
+        "a leading tensor-split delimiter must not survive into the emitted "
+        "value, which fabric's std::stof would throw on");
+
+    const auto shortTensorSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"}, {"split-mode", "layer"}, {"tensor-split", "1"}},
+        ModelTraits{},
+        {vulkan, vulkan1, cpu()});
+    expect(
+        !shortTensorSplit.supported &&
+            shortTensorSplit.unsupportedDetail ==
+                "tensor-split cardinality does not match the registered GPU "
+                "device list after filtering",
+        "a short tensor-split list must be rejected even when the device "
+        "mapping did not move: fabric zero-pads it and leaves the second GPU "
+        "with no layers");
+
+    const auto longTensorSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"split-mode", "layer"},
+            {"tensor-split", "1,2,3"}},
+        ModelTraits{},
+        {vulkan, vulkan1, cpu()});
+    expect(
+        !longTensorSplit.supported &&
+            longTensorSplit.unsupportedDetail ==
+                "tensor-split cardinality does not match the registered GPU "
+                "device list after filtering",
+        "a long tensor-split list must be rejected even when the device "
+        "mapping did not move: fabric silently drops the tail");
+
+    // One share per eligible device is read as the final order even when that
+    // order is unstable: ROCm filters out and RPC is hoisted ahead of the local
+    // GPU, so the surviving source indices run {2, 1}.
+    expect(
+        splitsAcross("1,2", {rocm, vulkan, rpc, cpu()}, 1.0F, 2.0F),
+        "final-list tensor shares must be accepted across a reordered device "
+        "list");
+
+    const auto unrelatedTensorSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"split-mode", "layer"},
+            {"tensor-split", "1,2,3,4"}},
+        ModelTraits{},
+        {rocm, vulkan, vulkan1, cpu()});
+    expect(
+        !unrelatedTensorSplit.supported &&
+            unrelatedTensorSplit.unsupportedDetail ==
+                "tensor-split cardinality does not match the registered GPU "
+                "device list after filtering",
+        "a tensor-split list matching neither the eligible nor the registered "
+        "GPU count must be rejected");
+
+    const auto layerMainGpu = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"}, {"split-mode", "layer"}, {"main-gpu", "0"}},
+        ModelTraits{},
+        {rocm, vulkan, vulkan1, cpu()});
+    expect(
+        layerMainGpu.params.main_gpu == 0 &&
+            layerMainGpu.params.devices.front() == vulkan.handle,
+        "layer split must keep its inert main-gpu and eligible devices");
+
+    const auto mappedMainGpu = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "1"}},
+        ModelTraits{},
+        {rocm, vulkan, vulkan1, cpu()});
+    expect(
+        mappedMainGpu.params.main_gpu == 0 &&
+            mappedMainGpu.params.devices.front() == vulkan.handle,
+        "main-gpu must index the raw registry before allowlist validation");
+
+    const auto cpuFirstMainGpu = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"}, {"split-mode", "none"}, {"main-gpu", "0"}},
+        ModelTraits{},
+        {cpu(), vulkan, vulkan1});
+    expect(
+        isCpuPlacement(cpuFirstMainGpu.params),
+        "main-gpu targeting a raw CPU registry entry must fall back to CPU");
+
+    const auto handles = model_fit::eligibleBackendDeviceHandles(
+        {rocm, vulkan, cpu()}, model_fit::LlamaLoadKind::Completion);
+    expect(
+        handles.size() == 2 && handles.front() == vulkan.handle &&
+            handles.back() == nullptr,
+        "generic fit device seam must exclude ROCm");
+    expect(
+        model_fit::isSupportedGpuOrdinal(
+            {rocm, vulkan, vulkan1, cpu()},
+            model_fit::LlamaLoadKind::Completion,
+            1),
+        "a supported raw target must map to the one-device fit list");
+    expect(
+        !model_fit::isSupportedGpuOrdinal(
+            {cpu(), vulkan, vulkan1}, model_fit::LlamaLoadKind::Completion, 0),
+        "main-gpu targeting a raw CPU entry must be rejected");
+    expect(
+        !model_fit::isSupportedGpuOrdinal(
+            {rocm, vulkan, vulkan1, cpu()},
+            model_fit::LlamaLoadKind::Completion,
+            0),
+        "main-gpu targeting a raw ROCm entry must be rejected");
+    expect(
+        !model_fit::isSupportedGpuOrdinal(
+            {rocm, vulkan, vulkan1, cpu()},
+            model_fit::LlamaLoadKind::Completion,
+            4),
+        "main-gpu past the registry must be rejected");
+    // The seam trusts the index; rejection is the caller's job.
+    llama_model_params fitParams = llama_model_default_params();
+    std::vector<ggml_backend_dev_t> fitDeviceStorage =
+        model_fit::eligibleBackendDeviceHandles(
+            {rocm, vulkan, vulkan1, cpu()},
+            model_fit::LlamaLoadKind::Completion);
+    model_fit::applyBackendDeviceAllowlist(
+        fitParams, fitDeviceStorage, {rocm, vulkan, vulkan1, cpu()}, 1);
+    expect(
+        fitParams.devices == fitDeviceStorage.data() &&
+            fitParams.devices[0] == vulkan.handle &&
+            fitParams.devices[1] == nullptr && fitParams.main_gpu == 0,
+        "generic common_fit_params seam must isolate the supported raw "
+        "main-gpu target");
+    llama_model_params splitFitParams = llama_model_default_params();
+    std::vector<ggml_backend_dev_t> splitFitStorage =
+        model_fit::eligibleBackendDeviceHandles(
+            {rocm, vulkan, vulkan1, cpu()},
+            model_fit::LlamaLoadKind::Completion);
+    model_fit::applyBackendDeviceAllowlist(
+        splitFitParams, splitFitStorage, {rocm, vulkan, vulkan1, cpu()});
+    expect(
+        splitFitParams.devices == splitFitStorage.data() &&
+            splitFitParams.devices[0] == vulkan.handle &&
+            splitFitParams.devices[1] == vulkan1.handle &&
+            splitFitParams.devices[2] == nullptr,
+        "generic common_fit_params seam without a target must pin the whole "
+        "eligible list");
+
+    const BackendDevice mtlRegistry = device(
+        "Apple GPU", "Apple M3", BackendDeviceType::IntegratedGpu, 48, "MTL");
+    const auto mtlConfig = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {mtlRegistry, cpu()});
+    expect(
+        isPinnedGpu(mtlConfig.params, mtlRegistry),
+        "MTL registry identity must be eligible without a Metal device name");
+
+    const BackendDevice falseVulkan = device(
+        "Future0", "Future GPU", BackendDeviceType::Gpu, 49, "NotVulkan");
+    const auto falseVulkanConfig = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {falseVulkan, cpu()});
+    expect(
+        isCpuPlacement(falseVulkanConfig.params),
+        "registry family matching must use exact identities");
+
+    const BackendDevice falseVulkanName = device(
+        "NotVulkan0", "Future GPU", BackendDeviceType::Gpu, 51, "Future");
+    const auto falseVulkanNameConfig = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {falseVulkanName, cpu()});
+    expect(
+        isCpuPlacement(falseVulkanNameConfig.params),
+        "device family matching must use known prefixes");
+
+    // Dedup is on the raw `device_id`, as fabric compares it.
+    BackendDevice cuda =
+        device("CUDA0", "NVIDIA GPU", BackendDeviceType::Gpu, 52, "CUDA");
+    BackendDevice sameGpuVulkan =
+        device("Vulkan0", "NVIDIA GPU", BackendDeviceType::Gpu, 53, "Vulkan");
+    cuda.deviceId = "0000:01:00.0";
+    sameGpuVulkan.deviceId = "0000:01:00.0";
+    const auto sameCard = model_fit::eligibleBackendDeviceHandles(
+        {cuda, sameGpuVulkan, cpu()}, model_fit::LlamaLoadKind::Completion);
+    expect(
+        sameCard.size() == 2 && sameCard.front() == cuda.handle,
+        "one card seen through CUDA and Vulkan must be kept once");
+
+    BackendDevice virtualZero =
+        device("CUDA0", "NVIDIA GPU", BackendDeviceType::Gpu, 58, "CUDA");
+    BackendDevice virtualOne =
+        device("CUDA1", "NVIDIA GPU", BackendDeviceType::Gpu, 59, "CUDA");
+    virtualZero.deviceId = "0000:01:00.0-v0";
+    virtualOne.deviceId = "0000:01:00.0-v1";
+    const auto virtualDevices = model_fit::eligibleBackendDeviceHandles(
+        {virtualZero, virtualOne, cpu()}, model_fit::LlamaLoadKind::Completion);
+    expect(
+        virtualDevices.size() == 3 && virtualDevices[0] == virtualZero.handle &&
+            virtualDevices[1] == virtualOne.handle,
+        "virtual CUDA devices with distinct ids must both be kept");
+
+    BackendDevice rpcFirst = rpc;
+    const BackendDevice localIntegrated = device(
+        "MTL0", "Apple GPU", BackendDeviceType::IntegratedGpu, 55, "MTL");
+    const auto rpcAndIntegrated = model_fit::eligibleBackendDeviceHandles(
+        {localIntegrated, rpcFirst, cpu()},
+        model_fit::LlamaLoadKind::Completion);
+    expect(
+        rpcAndIntegrated.size() == 3 &&
+            rpcAndIntegrated[0] == rpcFirst.handle &&
+            rpcAndIntegrated[1] == localIntegrated.handle,
+        "RPC must be prepended without suppressing the local iGPU");
+
+    BackendDevice adrenoIntegrated = device(
+        "OpenCL0",
+        "Adreno 830",
+        BackendDeviceType::IntegratedGpu,
+        56,
+        "OpenCL");
+    const auto finalSplitTraits = model_fit::normalizeLlamaLoadConfig(
+        model_fit::LlamaLoadKind::Embedding,
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{},
+        {adrenoIntegrated, vulkan, cpu()});
+    expect(
+        finalSplitTraits.params.devices.front() == vulkan.handle &&
+            finalSplitTraits.params.flash_attn_type !=
+                LLAMA_FLASH_ATTN_TYPE_DISABLED,
+        "split-mode traits must come from the final discrete device set");
+
+    // The 740 sorts first on purpose: a first-device read would report 740 and
+    // leave the Adreno-800+ quantized-KV guard disarmed. That guard is what the
+    // assertions observe — armed, it suppresses the q8_0 KV default.
+    const BackendDevice adrenoLowVulkan =
+        device("Vulkan0", "Adreno 740", BackendDeviceType::Gpu, 70, "Vulkan");
+    const BackendDevice adrenoHighVulkan =
+        device("Vulkan1", "Adreno 830", BackendDeviceType::Gpu, 71, "Vulkan");
+    const auto mixedTierSplit = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{},
+        {adrenoLowVulkan, adrenoHighVulkan, cpu()});
+    expect(
+        mixedTierSplit.supported &&
+            mixedTierSplit.params.cache_type_k == GGML_TYPE_F16 &&
+            mixedTierSplit.params.cache_type_v == GGML_TYPE_F16,
+        "mixed-tier split set must report the max Adreno tier and suppress the "
+        "quantized KV default");
+    const auto mixedTierSplitRejected = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"split-mode", "layer"},
+            {"cache-type-v", "q8_0"},
+            {"flash-attn", "on"}},
+        ModelTraits{},
+        {adrenoLowVulkan, adrenoHighVulkan, cpu()});
+    expect(
+        !mixedTierSplitRejected.supported,
+        "an 800+ local participant must arm the quantized KV rejection "
+        "whatever position it holds");
+
+    // An RPC device's description is its endpoint string, so an endpoint
+    // reading as 830 beside a local 740 must not raise the reported tier.
+    const BackendDevice rpcAdrenoEndpoint = device(
+        "RPC0", "adreno830.local:50052", BackendDeviceType::Gpu, 72, "RPC");
+    const auto rpcEndpointTier = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{},
+        {rpcAdrenoEndpoint, adrenoLowVulkan, cpu()});
+    expect(
+        rpcEndpointTier.supported &&
+            rpcEndpointTier.params.cache_type_k == GGML_TYPE_Q8_0 &&
+            rpcEndpointTier.params.cache_type_v == GGML_TYPE_Q8_0,
+        "an RPC endpoint string must not raise the reported Adreno tier");
+
+    // The one-bit BitNet Adreno policy governs the final split set too, because
+    // the llm addon applies it there (`applyAdrenoRestrictions`).
+    const BackendDevice adrenoLowVulkanTwo =
+        device("Vulkan2", "Adreno 740", BackendDeviceType::Gpu, 73, "Vulkan");
+    const auto bitnetSplitBelow800 = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {adrenoLowVulkan, adrenoLowVulkanTwo, cpu()});
+    expect(
+        bitnetSplitBelow800.supported &&
+            isCpuPlacement(bitnetSplitBelow800.params) &&
+            bitnetSplitBelow800.params.split_mode == LLAMA_SPLIT_MODE_NONE,
+        "one-bit BitNet on an Adreno <800 split set must project CPU");
+
+    // At 800+ the policy drops OpenCL and keeps Vulkan.
+    const BackendDevice adrenoHighOpenCl =
+        device("GPUOpenCL", "Adreno 830", BackendDeviceType::Gpu, 74, "OpenCL");
+    const auto bitnetSplitAbove800 = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {adrenoHighVulkan, adrenoHighOpenCl, cpu()});
+    expect(
+        bitnetSplitAbove800.supported &&
+            isPinnedGpu(bitnetSplitAbove800.params, adrenoHighVulkan),
+        "one-bit BitNet on an Adreno 800+ split set must drop OpenCL and keep "
+        "Vulkan");
+
+    // The restriction's tier max excludes RPC too: an endpoint reading as 830
+    // must not cancel the CPU fallback a local 740 demands.
+    const auto bitnetSplitRpcRaisesTier = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {rpcAdrenoEndpoint, adrenoLowVulkan, cpu()});
+    expect(
+        bitnetSplitRpcRaisesTier.supported &&
+            isCpuPlacement(bitnetSplitRpcRaisesTier.params),
+        "an RPC endpoint must not raise the restriction's tier past 800");
+
+    // And a sub-800 endpoint beside a local non-Adreno GPU must restrict
+    // nothing: there is no local Adreno at all.
+    const BackendDevice rpcLowAdrenoEndpoint = device(
+        "RPC1", "adreno740.local:50052", BackendDeviceType::Gpu, 75, "RPC");
+    const BackendDevice nonAdrenoVulkan =
+        device("Vulkan3", "NVIDIA GPU", BackendDeviceType::Gpu, 76, "Vulkan");
+    const auto bitnetSplitRpcLowersTier = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {rpcLowAdrenoEndpoint, nonAdrenoVulkan, cpu()});
+    expect(
+        bitnetSplitRpcLowersTier.supported &&
+            bitnetSplitRpcLowersTier.params.devices.size() == 3 &&
+            bitnetSplitRpcLowersTier.params.devices.front() ==
+                rpcLowAdrenoEndpoint.handle &&
+            bitnetSplitRpcLowersTier.params.devices[1] ==
+                nonAdrenoVulkan.handle,
+        "an RPC endpoint must not restrict a split set with no local Adreno");
+
+    BackendDevice rocmDiscrete = rocm;
+    rocmDiscrete.deviceId = "pci-amd";
+    adrenoIntegrated.handle = reinterpret_cast<ggml_backend_dev_t>(54);
+    expect(
+        model_fit::eligibleBackendDeviceHandles(
+            {rocmDiscrete, adrenoIntegrated, cpu()},
+            model_fit::LlamaLoadKind::Completion)
+                .front() == adrenoIntegrated.handle,
+        "unsupported discrete GPUs must not hide an eligible integrated GPU");
+
+    // A second iGPU from a different backend registry is the same physical
+    // device enumerated twice, so it is dropped. These two share a registry
+    // NAME and still have distinct handles: the rule compares identity.
+    BackendDevice firstIntegrated = device(
+        "Vulkan0",
+        "Integrated GPU 0",
+        BackendDeviceType::IntegratedGpu,
+        60,
+        "Vulkan");
+    BackendDevice secondIntegrated = device(
+        "Vulkan1",
+        "Integrated GPU 1",
+        BackendDeviceType::IntegratedGpu,
+        61,
+        "Vulkan");
+    firstIntegrated.deviceId = "igpu-0";
+    secondIntegrated.deviceId = "igpu-1";
+    const auto twoIntegrated = model_fit::eligibleBackendDeviceHandles(
+        {firstIntegrated, secondIntegrated, cpu()},
+        model_fit::LlamaLoadKind::Completion);
+    expect(
+        twoIntegrated.size() == 2 &&
+            twoIntegrated.front() == firstIntegrated.handle,
+        "only the first integrated GPU must survive when the two come from "
+        "distinct backend registries");
+
+    // CUDA reports virtual devices as integrated GPUs, so iGPUs sharing the
+    // kept one's registry are distinct devices.
+    const BackendDevice firstVirtual = device(
+        "CUDA0", "NVIDIA GB10", BackendDeviceType::IntegratedGpu, 62, "CUDA");
+    const BackendDevice secondVirtual = withRegistryOf(
+        device(
+            "CUDA1",
+            "NVIDIA GB10",
+            BackendDeviceType::IntegratedGpu,
+            63,
+            "CUDA"),
+        firstVirtual);
+    const auto sharedRegistry = model_fit::eligibleBackendDeviceHandles(
+        {firstVirtual, secondVirtual, cpu()},
+        model_fit::LlamaLoadKind::Completion);
+    expect(
+        sharedRegistry.size() == 3 &&
+            sharedRegistry[0] == firstVirtual.handle &&
+            sharedRegistry[1] == secondVirtual.handle,
+        "iGPUs sharing one backend registry must both survive");
+
+    // Retention chains off the most recently KEPT iGPU, not the most recently
+    // SEEN one: a dropped device's registry must not admit a later device.
+    const BackendDevice foreignIntegrated = device(
+        "Vulkan2",
+        "Integrated GPU 2",
+        BackendDeviceType::IntegratedGpu,
+        64,
+        "Vulkan");
+    const auto chained = model_fit::eligibleBackendDeviceHandles(
+        {firstVirtual,
+         foreignIntegrated,
+         withRegistryOf(
+             device(
+                 "Vulkan3",
+                 "Integrated GPU 3",
+                 BackendDeviceType::IntegratedGpu,
+                 65,
+                 "Vulkan"),
+             foreignIntegrated),
+         cpu()},
+        model_fit::LlamaLoadKind::Completion);
+    expect(
+        chained.size() == 2 && chained.front() == firstVirtual.handle,
+        "a dropped iGPU's registry must not admit a later iGPU sharing it");
+
+    const BackendDevice legacyDreno = device(
+        "OpenCL0",
+        "Qualcomm dreno-compatible",
+        BackendDeviceType::Gpu,
+        50,
+        "OpenCL");
+    const auto completionDreno = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {legacyDreno, cpu()});
+    const auto embeddingDreno = model_fit::normalizeLlamaLoadConfig(
+        model_fit::LlamaLoadKind::Embedding,
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {legacyDreno, cpu()});
+    expect(
+        isPinnedGpu(completionDreno.params, legacyDreno) &&
+            isCpuPlacement(embeddingDreno.params),
+        "completion dreno and embedding adreno policies must remain distinct");
 
     const auto nonAdrenoOpenCl = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
@@ -750,6 +1328,83 @@ int main() {
     expect(
         isPinnedGpu(eligibleAdrenoOpenCl.params, adrenoOpenCl),
         "Adreno OpenCL inventory must remain eligible");
+
+    // Eligibility and traits share one family predicate, so a registry-only
+    // OpenCL identity is both selected and treated as OpenCL.
+    const BackendDevice registryOpenCl =
+        device("GPU0", "Adreno 830", BackendDeviceType::Gpu, 57, "OpenCL");
+    const auto registryOpenClEmbedding = model_fit::normalizeLlamaLoadConfig(
+        model_fit::LlamaLoadKind::Embedding,
+        "/embedding.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{},
+        {registryOpenCl, cpu()});
+    expect(
+        isPinnedGpu(registryOpenClEmbedding.params, registryOpenCl) &&
+            registryOpenClEmbedding.params.flash_attn_type ==
+                LLAMA_FLASH_ATTN_TYPE_DISABLED,
+        "registry-only OpenCL identity must drive eligibility and traits "
+        "alike");
+  }
+
+  {
+    // Split-mode traits are properties of the final device set, not of the
+    // device that happens to be listed first.
+    const BackendDevice rpcRemote =
+        device("RPC0", "remote GPU", BackendDeviceType::Gpu, 61, "RPC");
+    const BackendDevice adrenoVulkan =
+        device("Vulkan0", "Adreno 830", BackendDeviceType::Gpu, 62, "Vulkan");
+    const auto rpcThenAdreno = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{},
+        {rpcRemote, adrenoVulkan, cpu()});
+    expect(
+        rpcThenAdreno.supported && rpcThenAdreno.params.devices.size() == 3 &&
+            rpcThenAdreno.params.devices.front() == rpcRemote.handle &&
+            rpcThenAdreno.params.devices[1] == adrenoVulkan.handle,
+        "RPC must stay first in the split list");
+    expect(
+        rpcThenAdreno.params.cache_type_k == GGML_TYPE_F16 &&
+            rpcThenAdreno.params.cache_type_v == GGML_TYPE_F16,
+        "Adreno 800+ Vulkan traits must come from the local device behind RPC");
+
+    const BackendDevice discreteVulkan =
+        device("Vulkan0", "NVIDIA GPU", BackendDeviceType::Gpu, 63, "Vulkan");
+    const BackendDevice adrenoOpenClDiscrete =
+        device("GPUOpenCL", "Adreno 830", BackendDeviceType::Gpu, 64, "OpenCL");
+    const auto vulkanThenOpenCl = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"split-mode", "layer"}},
+        ModelTraits{},
+        {discreteVulkan, adrenoOpenClDiscrete, cpu()});
+    expect(
+        vulkanThenOpenCl.supported &&
+            vulkanThenOpenCl.params.devices.size() == 3 &&
+            vulkanThenOpenCl.params.devices.front() == discreteVulkan.handle,
+        "Vulkan must stay first in the split list");
+    expect(
+        vulkanThenOpenCl.params.cache_type_k == GGML_TYPE_F16 &&
+            vulkanThenOpenCl.params.cache_type_v == GGML_TYPE_F16,
+        "an OpenCL participant must suppress the q8_0 KV auto-default");
+    const auto quantizedOnOpenClSet = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{
+            {"device", "gpu"},
+            {"split-mode", "layer"},
+            {"cache-type-k", "q8_0"}},
+        ModelTraits{},
+        {discreteVulkan, adrenoOpenClDiscrete, cpu()});
+    // The exact detail matters: a first-device-only read would reject this load
+    // by the Adreno-800+ flash-attention rule instead, and only the message
+    // separates the two.
+    expect(
+        !quantizedOnOpenClSet.supported &&
+            quantizedOnOpenClSet.unsupportedDetail ==
+                "only f32, f16, and bf16 KV cache are supported on Adreno "
+                "OpenCL",
+        "an OpenCL participant must reject quantized KV for the whole set by "
+        "the OpenCL rule");
   }
 
   {
@@ -790,6 +1445,40 @@ int main() {
           isCpuPlacement(completion.params),
           "BitNet completion Adreno policy must remain CPU fallback");
     }
+
+    // Mesa's Turnip driver types an Adreno as an integrated Vulkan adapter, so
+    // a linux-arm64 host can present 800+ with no discrete GPU. The addon drops
+    // only the OpenCL candidates at that tier and falls through to its iGPU
+    // list.
+    const BackendDevice integratedAdreno = device(
+        "Vulkan0", "Adreno 830", BackendDeviceType::IntegratedGpu, 9, "Vulkan");
+    const auto bitnetIntegratedOnly = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {integratedAdreno, cpu()});
+    expect(
+        bitnetIntegratedOnly.supported &&
+            isPinnedGpu(bitnetIntegratedOnly.params, integratedAdreno),
+        "one-bit BitNet on an integrated-only Adreno 800+ host must keep the "
+        "iGPU, not fall back to CPU");
+
+    // The OpenCL candidate is still dropped at 800+, and with nothing else
+    // eligible that leaves CPU.
+    const auto bitnetIntegratedOpenClOnly = model_fit::normalizeLlamaLoadConfig(
+        "/bitnet.gguf",
+        LlamaConfigMap{{"device", "gpu"}},
+        ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
+        {device(
+             "OpenCL0",
+             "Adreno 830",
+             BackendDeviceType::IntegratedGpu,
+             10,
+             "OpenCL"),
+         cpu()});
+    expect(
+        isCpuPlacement(bitnetIntegratedOpenClOnly.params),
+        "an OpenCL-only Adreno 800+ host must still project CPU");
   }
 
   {

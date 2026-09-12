@@ -16,6 +16,7 @@
 #include <llama/common/log.h>
 
 #include "AsyncWeightsLoader.hpp"
+#include "BackendSelection.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "ModelMetadata.hpp"
 #include "inference-addon-cpp/GGUFShards.hpp"
@@ -69,6 +70,20 @@ struct BertModelSetup {
   bool ctxSizeConfigured = false;
   int64_t resolvedBackendDevice = 0;
 };
+
+/// Apply the final split-device handles and remap positional tensor shares.
+void applySplitDeviceSelection(
+    common_params& params, std::unordered_map<std::string, std::string>& config,
+    const backend_selection::SplitDeviceSelection& selection);
+
+/// Traits of the whole split set; requires a non-empty set.
+struct SplitBackendTraits {
+  std::string backendName;
+  bool isOpenCl = false;
+};
+
+SplitBackendTraits
+splitBackendTraits(const backend_selection::SplitDeviceSelection& selection);
 
 /// @brief Instantiates a BERT language model. An open source architecture
 /// designed to help machines understand context in sentences and used for
