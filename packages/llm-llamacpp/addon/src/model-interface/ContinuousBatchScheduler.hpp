@@ -70,6 +70,17 @@ struct ObservedRequestStats {
   double genTps = 0.0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
+  /// Reasoning blocks this request's own driver discarded, and renders where
+  /// its own chat template dropped the tool definitions. Both are read off the
+  /// slot driver at drain rather than off the scheduler-wide accumulator: that
+  /// accumulator is copied wholesale into every group (`group->stats =
+  /// stats_`), so under overlapping top-level `run()` calls it attributes a
+  /// peer's figures to this request. `toolDefinitionsDropped` in particular is
+  /// the per-response signal the SDK is to consume in place of its current
+  /// user-message heuristic (QVAC-23460), so an aggregate cannot stand in for
+  /// it.
+  int64_t thinkingBlockDiscards = 0;
+  int64_t toolDefinitionsDropped = 0;
   /// Why this request's generation stopped. Per-sequence, so it is honest for
   /// a single request; `nullopt` when unknown (never finalized) or when a
   /// group's requests disagree, since one reason cannot describe many.
@@ -163,6 +174,7 @@ struct TimedDecodeResult {
 struct RuntimeStatsSnapshot {
   int64_t cacheTokens = 0;
   int64_t thinkingBlockDiscards = 0;
+  int64_t toolDefinitionsDropped = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
 
@@ -178,9 +190,12 @@ struct RuntimeStatsSnapshot {
       uint64_t numActiveSequences, uint64_t prefillTokens,
       uint64_t decodeTokens, std::chrono::nanoseconds stepDuration);
 
-  /// Fold one completed slot's contribution into the running totals.
-  void
-  accumulateSlot(int64_t nPast, int64_t thinkingDiscards, const Request& req);
+  /// Fold one completed slot's contribution into the running totals. Every
+  /// counter is required: a defaulted one would let a future caller drop a
+  /// stat silently, with no compile error.
+  void accumulateSlot(
+      int64_t nPast, int64_t thinkingDiscards, int64_t toolsDropped,
+      const Request& req);
 
   /// How busy the shared backend was, NOT a property of any one request: the
   /// mean number of sequences decoded together, averaged over every
