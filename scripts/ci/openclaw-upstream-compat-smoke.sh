@@ -3,14 +3,34 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 VERIFY_AGENT_OUTPUT="$SCRIPT_DIR/verify-openclaw-agent-output.cjs"
+VERIFY_PROMPT_SURFACE="$SCRIPT_DIR/verify-openclaw-prompt-surface.cjs"
 
 SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
 QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
-# Keep in step with OPENCLAW_AGENT_TIMEOUT below: readiness is awaited inside
+# Must stay under OPENCLAW_AGENT_TIMEOUT_SECONDS: readiness is awaited inside
 # the agent run, so a longer value here is unreachable.
-QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-480000}"
-OPENCLAW_AGENT_TIMEOUT="${OPENCLAW_AGENT_TIMEOUT:-10m}"
+QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-180000}"
+
+# Passed to `openclaw agent --timeout` so a deadline arrives as a JSON envelope
+# rather than a signal; the shell `timeout` below is only a backstop. Keep the
+# two different -- when both were 600s the shell won every time and deadlines
+# arrived as an opaque SIGTERM. The attempt budget multiplies this, and the
+# product has to fit the job timeout in openclaw-upstream-compat.yml.
+OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-240}"
+OPENCLAW_AGENT_BACKSTOP_SECONDS="$((OPENCLAW_AGENT_TIMEOUT_SECONDS + 60))"
+
+# OpenClaw's advertised tool count sets the prompt size, which on a 2-core
+# runner sets the per-turn cost -- and the count is upstream's, having moved
+# between 35, 36 and 12 across three releases. Pin it so this tripwire's cost
+# does not track upstream's catalog. `tools: true` stays on below, so schemas
+# still render through the Jinja path; this bounds the surface rather than
+# switching tool support off.
+OPENCLAW_TOOL_PROFILE="${OPENCLAW_TOOL_PROFILE:-minimal}"
+
+# A widened surface is compatibility drift, so it has to fail rather than pass
+# more slowly.
+OPENCLAW_MAX_ADVERTISED_TOOLS="${OPENCLAW_MAX_ADVERTISED_TOOLS:-8}"
 OPENCLAW_PACKAGE_SPEC="${OPENCLAW_PACKAGE_SPEC:-openclaw@latest}"
 QVAC_OPENCLAW_PLUGIN_SPEC="${QVAC_OPENCLAW_PLUGIN_SPEC:-@qvac/openclaw-plugin@latest}"
 QVAC_CLI_SPEC="${QVAC_CLI_SPEC:-@qvac/cli@latest}"
@@ -243,6 +263,20 @@ npx openclaw onboard \
   > "$ARTIFACT_DIR/openclaw-onboard.stdout" \
   2> "$ARTIFACT_DIR/openclaw-onboard.stderr"
 
+# After `onboard`, which defaults a fresh config to `tools.profile: coding`.
+npx openclaw config set tools.profile "$OPENCLAW_TOOL_PROFILE" \
+  > "$ARTIFACT_DIR/openclaw-config-tool-profile.stdout" \
+  2> "$ARTIFACT_DIR/openclaw-config-tool-profile.stderr"
+
+# OpenClaw applies Tool Search to local routes regardless of profile, and its
+# `tool_search`/`tool_describe`/`tool_call` trio is enough on its own to pull
+# the model into tool round-trips instead of answering: run 34453332533 spent
+# two attempts on failed Tool Search calls and timed out on both. Tool-call
+# plumbing is not what this tripwire proves, so opt out.
+npx openclaw config set tools.toolSearch false --strict-json \
+  > "$ARTIFACT_DIR/openclaw-config-tool-search.stdout" \
+  2> "$ARTIFACT_DIR/openclaw-config-tool-search.stderr"
+
 npx openclaw config validate \
   > "$ARTIFACT_DIR/openclaw-config-validate.stdout" \
   2> "$ARTIFACT_DIR/openclaw-config-validate.stderr"
@@ -293,6 +327,14 @@ if [[ "${SKIP_OPENCLAW_AGENT:-0}" == "1" ]]; then
   exit 0
 fi
 
+# Three wordings failed here, each for a different reason: "exactly this text"
+# was read as a file-write instruction, naming tools ("do not call any tools")
+# primed tool syntax, and asking for a sentence made a compliant answer
+# indistinguishable from a mention. So ask for the word, and say nothing about
+# tools. Must match what the verifier asserts, and stay in step with the
+# OpenCode sibling smoke.
+AGENT_PROMPT="${AGENT_PROMPT:-Reply with only the word qvac-ok.}"
+
 # Each attempt gets a fresh session id. Retrying into the same session would
 # replay the poisoned transcript that caused the first failure -- the 2026-08-27
 # timeout looped for 13 turns before the run was killed, and resuming it would
@@ -306,13 +348,14 @@ run_agent_attempt() {
     --local
     --session-id "qvac-openclaw-upstream-compat-${attempt}"
     --model "qvac/${QVAC_MODEL}"
-    --message "Reply with exactly this text and nothing else: qvac-ok"
+    --message "$AGENT_PROMPT"
     --thinking off
+    --timeout "$OPENCLAW_AGENT_TIMEOUT_SECONDS"
     --json
   )
 
   if command -v timeout > /dev/null 2>&1; then
-    timeout "$OPENCLAW_AGENT_TIMEOUT" "${run_openclaw[@]}" \
+    timeout -k 30 "$OPENCLAW_AGENT_BACKSTOP_SECONDS" "${run_openclaw[@]}" \
       > "$stdout_path" \
       2> "$stderr_path"
   else
@@ -322,15 +365,11 @@ run_agent_attempt() {
   fi
 }
 
-# Replaying this verifier over the 13 most recent scheduled runs that produced
-# agent output, 6 did not answer the prompt -- a ~46% per-attempt rate, every
-# one of them reported green at the time. The failures are model variance, not
-# integration breakage: bare `[[reply_to_current]]` routing tokens (x4), and
-# unrelated replies like "Hello." So retry enough times that model variance does
-# not dominate the signal. At the measured rate three attempts leave ~10%, and
-# the sharpened prompt should push it well below that. Every attempt is kept as
-# an artifact so a real break is still legible.
-OPENCLAW_AGENT_MAX_ATTEMPTS="${OPENCLAW_AGENT_MAX_ATTEMPTS:-3}"
+# The budget carries model variance, measured at a ~46% per-attempt miss rate.
+# Six is affordable only because the bounded surface made an attempt ~80s wall
+# instead of the old 600s deadline. Every attempt is kept as an artifact so the
+# rate stays measurable rather than assumed.
+OPENCLAW_AGENT_MAX_ATTEMPTS="${OPENCLAW_AGENT_MAX_ATTEMPTS:-6}"
 agent_ok=0
 agent_failure=""
 
@@ -346,11 +385,15 @@ for (( attempt = 1; attempt <= OPENCLAW_AGENT_MAX_ATTEMPTS; attempt++ )); do
   cp "$attempt_stderr" "$ARTIFACT_DIR/openclaw-agent.stderr"
 
   if (( agent_status != 0 )); then
-    if (( agent_status == 124 )); then
-      agent_failure="attempt ${attempt}: agent timed out after ${OPENCLAW_AGENT_TIMEOUT}"
-    else
-      agent_failure="attempt ${attempt}: agent exited ${agent_status}"
-    fi
+    case "$agent_status" in
+      # 124/137 are the shell backstop killing a process that blew past its own
+      # deadline, and arrive with empty stdout. Any other status is OpenClaw
+      # exiting on its own terms, so its stdout holds a readable envelope; 2 is
+      # the status upstream documents for a deadline.
+      124 | 137) agent_failure="attempt ${attempt}: agent ignored its ${OPENCLAW_AGENT_TIMEOUT_SECONDS}s deadline and was killed by the ${OPENCLAW_AGENT_BACKSTOP_SECONDS}s backstop" ;;
+      2) agent_failure="attempt ${attempt}: agent exited 2, upstream's documented deadline status (limit ${OPENCLAW_AGENT_TIMEOUT_SECONDS}s); see openclaw-agent.attempt-${attempt}.stdout" ;;
+      *) agent_failure="attempt ${attempt}: agent exited ${agent_status}; see openclaw-agent.attempt-${attempt}.stdout" ;;
+    esac
     echo "$agent_failure" >&2
     continue
   fi
@@ -366,6 +409,19 @@ for (( attempt = 1; attempt <= OPENCLAW_AGENT_MAX_ATTEMPTS; attempt++ )); do
   echo "$agent_failure" >&2
 done
 
+# Tool count and prompt size explain a slow turn, so report them next to the
+# result -- on the failure path too.
+surface_status=0
+node "$VERIFY_PROMPT_SURFACE" \
+  "$ARTIFACT_DIR/qvac-serve.stdout" \
+  "$OPENCLAW_TOOL_PROFILE" \
+  "$OPENCLAW_MAX_ADVERTISED_TOOLS" \
+  "$ARTIFACT_DIR/prompt-surface.md" || surface_status=$?
+
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" && -f "$ARTIFACT_DIR/prompt-surface.md" ]]; then
+  cat "$ARTIFACT_DIR/prompt-surface.md" >> "$GITHUB_STEP_SUMMARY"
+fi
+
 if (( agent_ok != 1 )); then
   echo "OpenClaw agent failed after ${OPENCLAW_AGENT_MAX_ATTEMPTS} attempt(s): ${agent_failure}" >&2
   {
@@ -373,6 +429,33 @@ if (( agent_ok != 1 )); then
     echo "## Smoke result"
     echo
     echo "OpenClaw agent failed after ${OPENCLAW_AGENT_MAX_ATTEMPTS} attempt(s): ${agent_failure}"
+    echo
+    echo "See \`prompt-surface.md\` for the tool count and prompt size this run drove."
+  } | tee "$ARTIFACT_DIR/smoke-result.md" > /dev/null
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    cat "$ARTIFACT_DIR/smoke-result.md" >> "$GITHUB_STEP_SUMMARY"
+  fi
+  exit 1
+fi
+
+# Only status 1 means drift. Anything else is the check itself being broken
+# (2 is a bad ceiling argument, 127 a missing node), which must not be reported
+# as an upstream tool-surface change.
+if (( surface_status != 0 && surface_status != 1 )); then
+  echo "warning: prompt-surface check exited ${surface_status}; tool ceiling not enforced for this run" >&2
+  surface_status=0
+fi
+
+# After the turn verdict, so a widened surface is reported as drift rather than
+# hidden behind a green run that only got slower.
+if (( surface_status != 0 )); then
+  {
+    echo
+    echo "## Smoke result"
+    echo
+    echo "The agent turn answered correctly, but the advertised tool surface is above the \`${OPENCLAW_MAX_ADVERTISED_TOOLS}\` ceiling -- see \`prompt-surface.md\`."
+    echo
+    echo "Upstream widened what \`tools.profile=${OPENCLAW_TOOL_PROFILE}\` admits. Re-pin the surface, or raise \`OPENCLAW_MAX_ADVERTISED_TOOLS\` if the wider set is intended; leaving it unbounded is what made this tripwire unable to pass in #4112."
   } | tee "$ARTIFACT_DIR/smoke-result.md" > /dev/null
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     cat "$ARTIFACT_DIR/smoke-result.md" >> "$GITHUB_STEP_SUMMARY"

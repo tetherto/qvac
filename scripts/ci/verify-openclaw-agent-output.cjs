@@ -4,31 +4,28 @@
  * Verifies the `openclaw agent --json` output produced by
  * scripts/ci/openclaw-upstream-compat-smoke.sh.
  *
- * Every field this reads lives under `meta`. An earlier version of these
- * checks read them off the top level, where none of them exist, so each one
- * silently fell through to a `JSON.stringify` of the whole payload -- a blob
- * that always contains "qvac-ok" (echoed back as meta.finalPromptText),
- * "qvac", and the model id. The result was a verifier that could not fail:
- * runs where the model refused outright, or replied with nothing but a routing
- * token, were reported green for weeks. Assert against the assistant text and
- * the structured metadata only, never the serialized blob.
+ * Every field read here lives under `meta`. Assert against the assistant text
+ * and the structured metadata only -- never a `JSON.stringify` of the payload,
+ * which always contains the token, "qvac" and the model id, and so cannot fail.
  *
  * Run locally:
  *   node scripts/ci/verify-openclaw-agent-output.cjs <agent-stdout.json> <model>
  *   node --test scripts/ci/__tests__/verify-openclaw-agent-output.test.cjs
  */
 
-// A compliant reply is the token and little else. The cap is deliberately
-// loose -- observed passes are under 50 characters and observed refusals run
-// past 300 -- so it rejects non-answers without policing phrasing. It exists
-// because a refusal quotes the token back while declining ("...your specific
-// query about \"qvac-ok\"..."), which a bare substring check would accept.
-const MAX_COMPLIANT_REPLY_CHARS = 120
+// A compliant reply *is* the token, not one that contains it: a length-capped
+// substring rule accepted every short non-answer that mentioned it, including
+// refusals and a sentence claiming a "qvac-ok command" had run.
+const EXPECTED_TOKEN = 'qvac-ok'
 
-// OpenClaw reply-routing directives are control tokens, not content. A small
-// model parrots them out of the system prompt, historically as a bare
-// directive with no answer behind it.
+// OpenClaw reply-routing directives are control tokens, not content; a small
+// model parrots them out of the system prompt with no answer behind them.
 const ROUTING_TOKEN = /\[\[[^\]]*\]\]/g
+
+// Leaked tool-call markup is a malformed tool call, not an answer. Contents go
+// with the block: a token emitted inside it was never spoken to the user. An
+// unclosed opener strips to end of text, since a truncated block is markup too.
+const TOOL_CALL_MARKUP = /<tool_call\b[\s\S]*?(?:<\/tool_call>|$)/gi
 
 function parseJsonOutput (value) {
   try {
@@ -44,6 +41,18 @@ function parseJsonOutput (value) {
     }
     throw new Error('OpenClaw agent stdout did not contain JSON output')
   }
+}
+
+// Strips markup and the formatting a model wraps a bare answer in. Never
+// strips words -- surrounding prose is what separates an answer from a mention.
+function normalizeReply (text) {
+  return String(text)
+    .replace(TOOL_CALL_MARKUP, '')
+    .replace(ROUTING_TOKEN, '')
+    .trim()
+    .replace(/^[\s"'`*_]+/, '')
+    .replace(/[\s"'`*_.!]+$/, '')
+    .toLowerCase()
 }
 
 function assistantTextOf (result) {
@@ -72,16 +81,13 @@ function verifyAgentOutput (text, model) {
     throw new Error('OpenClaw agent produced no assistant text')
   }
 
-  const compact = finalText.replace(ROUTING_TOKEN, '').trim()
+  const compact = finalText.replace(TOOL_CALL_MARKUP, '').replace(ROUTING_TOKEN, '').trim()
   if (!compact) {
     throw new Error(`OpenClaw agent replied with no content: ${finalText.trim().slice(0, 300)}`)
   }
-  if (!/qvac-ok/i.test(compact)) {
-    throw new Error(`OpenClaw agent response did not include qvac-ok: ${compact.slice(0, 300)}`)
-  }
-  if (compact.length > MAX_COMPLIANT_REPLY_CHARS) {
+  if (normalizeReply(compact) !== EXPECTED_TOKEN) {
     throw new Error(
-      `OpenClaw agent did not answer the prompt (${compact.length} chars, expected <= ${MAX_COMPLIANT_REPLY_CHARS}): ${compact.slice(0, 300)}`
+      `OpenClaw agent did not answer with ${EXPECTED_TOKEN}: ${compact.slice(0, 300)}`
     )
   }
   if (meta.aborted === true) {
@@ -103,7 +109,7 @@ function verifyAgentOutput (text, model) {
   }
 }
 
-module.exports = { verifyAgentOutput, parseJsonOutput, assistantTextOf, MAX_COMPLIANT_REPLY_CHARS }
+module.exports = { verifyAgentOutput, parseJsonOutput, assistantTextOf, normalizeReply, EXPECTED_TOKEN }
 
 if (require.main === module) {
   const { readFileSync } = require('node:fs')

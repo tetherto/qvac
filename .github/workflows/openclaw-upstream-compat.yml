@@ -11,9 +11,26 @@ on:
     paths:
       - ".github/workflows/openclaw-upstream-compat.yml"
       - "scripts/ci/openclaw-upstream-compat-smoke.sh"
+      # The verifiers decide the verdict, so a change to one changes this
+      # workflow's behaviour.
+      - "scripts/ci/verify-openclaw-agent-output.cjs"
+      - "scripts/ci/verify-openclaw-prompt-surface.cjs"
   schedule:
     - cron: "30 7 * * *" # daily 07:30 UTC, after the OpenCode compatibility smoke
   workflow_dispatch:
+    inputs:
+      attempts:
+        description: "Agent attempts before failing (1 for a single-shot debugging run)"
+        required: false
+        default: "6"
+      tool_profile:
+        description: "OpenClaw tools.profile for the run (minimal | coding | messaging | full)"
+        required: false
+        default: "minimal"
+      agent_prompt:
+        description: "Override the agent prompt. For calibrating compliance without a code change; blank uses the default."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -24,23 +41,22 @@ concurrency:
 
 env:
   QVAC_SMOKE_MODEL: qwen3.5-0.8b
-  # Must stay under OPENCLAW_AGENT_TIMEOUT: the readiness wait happens inside
-  # the agent run, so a readyTimeoutMs longer than the agent timeout can never
-  # be reached -- the agent timeout fires first and reports an opaque kill
-  # instead of the plugin's "service never became healthy" error. Observed
-  # readiness is well under a minute, so 8m is generous.
-  QVAC_READY_TIMEOUT_MS: "480000"
-  OPENCLAW_AGENT_TIMEOUT: 10m
+  # Must stay under OPENCLAW_AGENT_TIMEOUT_SECONDS: readiness is awaited inside
+  # the agent run, so a longer value is unreachable and the agent timeout fires
+  # first, reporting an opaque kill instead of "service never became healthy".
+  QVAC_READY_TIMEOUT_MS: "180000"
+  # Passed to `openclaw agent --timeout` so a deadline arrives as a readable
+  # envelope rather than a signal. A healthy attempt is ~80s wall.
+  OPENCLAW_AGENT_TIMEOUT_SECONDS: "240"
 
 jobs:
   smoke:
     name: openclaw@latest + @qvac/openclaw-plugin@latest
     runs-on: ubuntu-latest
-    # PR runs skip the agent turn (SKIP_OPENCLAW_AGENT below) so 15m covers
-    # install + plugin setup; scheduled/dispatch runs exercise the full agent
-    # turn and need headroom for install plus up to three 10m agent attempts.
-    # A healthy end-to-end run takes ~6m and a healthy agent turn ~3.4m, so 45m
-    # covers the worst case without letting a wedged server burn a full hour.
+    # PR runs skip the agent turn, so 15m covers install and setup. Otherwise
+    # the attempt budget has to fit: six attempts at the 300s backstop is 30m,
+    # plus ~6m of setup. Raising `attempts` past 6 on a dispatch needs this
+    # raised too, or the job is killed before the artifact upload.
     timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 45 }}
     permissions:
       contents: read
@@ -58,7 +74,12 @@ jobs:
           ARTIFACT_DIR: ${{ runner.temp }}/openclaw-compat-artifacts
           QVAC_MODEL: ${{ env.QVAC_SMOKE_MODEL }}
           QVAC_READY_TIMEOUT_MS: ${{ env.QVAC_READY_TIMEOUT_MS }}
-          OPENCLAW_AGENT_TIMEOUT: ${{ env.OPENCLAW_AGENT_TIMEOUT }}
+          OPENCLAW_AGENT_TIMEOUT_SECONDS: ${{ env.OPENCLAW_AGENT_TIMEOUT_SECONDS }}
+          OPENCLAW_AGENT_MAX_ATTEMPTS: ${{ inputs.attempts || '6' }}
+          OPENCLAW_TOOL_PROFILE: ${{ inputs.tool_profile || 'minimal' }}
+          # Blank falls through to the script's default, so scheduled runs are
+          # unaffected. The script must therefore treat empty as unset.
+          AGENT_PROMPT: ${{ inputs.agent_prompt }}
           SKIP_OPENCLAW_AGENT: ${{ github.event_name == 'pull_request' && '1' || '0' }}
         run: bash scripts/ci/openclaw-upstream-compat-smoke.sh
 
@@ -95,8 +116,10 @@ jobs:
               ``,
               `- Run: ${runUrl}`,
               `- Artifact: \`openclaw-upstream-compat\``,
-              `- Triage: diff \`versions.md\` against the last passing run's artifact **first**. If no package version moved, this is not upstream drift — look at \`openclaw-agent.stderr\` (turn count, \`failover decision\` lines), \`sessions/\`, and \`qvac-serve.stdout\`/\`qvac-serve.stderr\` for a loop or a wedged server.`,
-              `- Possible causes, in the order worth checking: a version bump visible in \`versions.md\` (upstream \`openclaw\`, or QVAC's own \`@qvac/openclaw-plugin\` / \`@qvac/cli\` / \`@qvac/sdk\`); a wedged \`qvac serve\` that stops answering mid-run; or model nondeterminism — the smoke drives a 0.8b model and retries up to three times before failing.`,
+              `- Triage: read \`prompt-surface.md\` **first** — it reports the advertised tool count and prompt size. A count above the ceiling means upstream widened \`tools.profile\`, which is the failure this tripwire exists to catch.`,
+              `- Then diff \`versions.md\` against the last passing run's artifact. If no package version moved, this is not upstream drift — look at \`openclaw-agent.stderr\` (turn count, \`failover decision\` lines), \`sessions/\`, and \`qvac-serve.stdout\`/\`qvac-serve.stderr\`.`,
+              `- Possible causes, in the order worth checking: a widened tool surface (see above); a version bump visible in \`versions.md\`; a wedged \`qvac serve\` that stops answering mid-run; or model nondeterminism — the smoke drives a 0.8b model and retries before failing, so check every \`openclaw-agent.attempt-*.stdout\`.`,
+              `- To reproduce cheaply, dispatch this workflow with \`attempts: 1\`; \`tool_profile\` switches the surface back to \`coding\` if you need the pre-#4112 regime.`,
             ].join('\n');
 
             const issues = await github.paginate(github.rest.issues.listForRepo, {
