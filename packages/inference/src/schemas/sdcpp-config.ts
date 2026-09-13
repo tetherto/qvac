@@ -1039,7 +1039,8 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
   for (const [field, value] of [
     ['mode', 'txt2vid'],
     ['fps', 24],
-    ['cfg_scale', 1]
+    ['cfg_scale', 1],
+    ['scheduler', 'discrete']
   ] as const) {
     if (data[field] !== undefined && data[field] !== value) {
       ctx.addIssue({
