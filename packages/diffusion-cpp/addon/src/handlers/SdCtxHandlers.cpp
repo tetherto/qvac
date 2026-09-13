@@ -84,8 +84,7 @@ bool paramsBackendSpecHasModuleLessEntry(const std::string& spec) {
     const std::string_view assignment = trim(remaining.substr(0, comma));
     // A non-empty entry with no '=' is a bare backend name, which the engine
     // applies as the spec-wide default rather than to a single module.
-    if (!assignment.empty() &&
-        assignment.find('=') == std::string_view::npos) {
+    if (!assignment.empty() && assignment.find('=') == std::string_view::npos) {
       return true;
     }
     if (comma == std::string_view::npos) {
