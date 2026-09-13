@@ -256,11 +256,21 @@ runs the diffusion model on CUDA and the text encoder on CPU.
 
 `params_backend: 'diffusion=cpu'` keeps diffusion weights in CPU RAM and stages
 them to the runtime backend. `params_backend: 'diffusion=disk'` reloads those
-weights from the model file on demand and releases them after use. Disk is not
-selected automatically. `offload_to_cpu: true` supplies a `*=cpu` default, and
-an explicit `params_backend` assignment overrides that default per module. For
-example, `params_backend: 'te=disk'` keeps TE weights on disk while other
-parameters remain in CPU RAM.
+weights from the model file on demand and releases them after use — on every
+job, not only the first — so a disk-backed module also disables eager weight
+loading for the whole context. Disk is not selected automatically.
+
+`offload_to_cpu: true` supplies a `*=cpu` default. An explicit `params_backend`
+entry written in `module=backend` form overrides that default **for that module
+only**: `params_backend: 'te=disk'` with `offload_to_cpu: true` keeps TE weights
+on disk while other parameters remain in CPU RAM.
+
+An entry with **no** `module=` prefix is a whole-spec default rather than a
+per-module override, and the last default wins — so
+`params_backend: 'cuda0'` with `offload_to_cpu: true` puts *every* module on
+`cuda0` and offloads nothing. The addon logs when this happens. Write
+`params_backend: 'diffusion=cuda0'` to move one module and leave the rest
+offloaded.
 
 A nonzero `max_vram` enables graph-cut segmentation even without
 `stream_layers`. Positive values cap the VRAM budget in GiB. Negative values
@@ -282,6 +292,14 @@ config: {
 
 It does not stream from disk. Use `params_backend: 'diffusion=disk'` for
 on-demand reads from the model file.
+
+`stream_layers` is forwarded to the engine as configured; the engine itself
+skips streaming when its prerequisites are unmet. If `max_vram` resolves to no
+budget — unset, `0`, or an all-zero assignment such as `'cuda0=0'` — the addon
+reports that streaming will not run. That message, and the `main-gpu` and
+`params_backend` notices above, are the only diagnostics emitted at the default
+`verbosity: 0`; set `verbosity: 2` to also see the effective `backend`,
+`params_backend` and `max_vram` assignments the addon passes to the engine.
 
 The 16-case Linux hardware matrix is available in
 `scripts/validate-layer-streaming.sh`. It expects the MiniMax-H3 files under
@@ -662,8 +680,12 @@ All three wrappers return a `QvacResponse`.
   video expert, `total` = its step count) and, when `vae_tiling` is enabled,
   VAE tile passes (`total` = tile count). Each sequence restarts at
   `step: 0`, so a bar renderer should key on `total` changes rather than
-  assume a single monotonic sequence. Model weights load eagerly at
-  `load()`, not inside generation.
+  assume a single monotonic sequence. Model weights normally load eagerly at
+  `load()`, so generation emits no loader ticks. Two configurations load
+  lazily instead and do emit loader ticks inside generation: mobile targets,
+  and any `params_backend` naming `disk` for one or more modules — the latter
+  on every job, since disk-backed weights are released after each phase. In
+  those cases the first job's `conditionerMs` also absorbs weight-load time.
 - Image generation and ESRGAN emit PNG `Uint8Array` values.
 - Video generation emits one MJPG AVI `Uint8Array`.
 - If `opts.stats` is enabled, a `stats` event is emitted before completion.
