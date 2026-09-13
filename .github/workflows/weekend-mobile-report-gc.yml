@@ -55,7 +55,7 @@ jobs:
     name: Sweep stale weekly-mobile-report issues
     runs-on: ubuntu-latest
     # Paginated listForRepo + per-issue timeline reads and writes can hang on
-    # API trouble; bound the job (devops/github-actions.mdc § Failure handling).
+    # API trouble; bound the job per the repository CI guidance.
     timeout-minutes: 10
     steps:
       - name: Mark stale / close abandoned report issues
