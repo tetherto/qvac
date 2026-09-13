@@ -645,8 +645,8 @@ test('completion: kv-cache survives an unrecognised addon failure between turns'
 })
 
 // Scripted fake: on `cancelOnRun` the run cancels its own request after the
-// first token, the way a stop button lands mid-decode. `stopReason` is what
-// the addon reports on the finished run; a cancelled run reports none.
+// first token, the way a stop button lands mid-decode. `stats` is what the
+// addon reports on the finished run; a cancelled run reports no stop reason.
 function registerScriptedModel(
   modelId: string,
   calls: RecordedCall[],
@@ -654,7 +654,8 @@ function registerScriptedModel(
   script: {
     cancelOnRun?: number
     tokensOnRun?: (run: number) => string[]
-    stopReason?: string
+    statsOnRun?: (run: number) => Record<string, unknown>
+    config?: Record<string, unknown>
   }
 ): void {
   const registry = getRequestRegistry()
@@ -687,13 +688,13 @@ function registerScriptedModel(
           },
           await: () => written,
           cancel: () => Promise.resolve(),
-          stats: script.stopReason ? { stopReason: script.stopReason } : {}
+          stats: script.statsOnRun?.(run) ?? {}
         }
       },
       addon: { cancel: () => Promise.resolve() }
     } as unknown as AnyModel,
     path: `/tmp/${modelId}.gguf`,
-    config: {},
+    config: script.config ?? {},
     modelType: ModelType.llamacppCompletion
   })
 }
@@ -753,7 +754,10 @@ test('completion: kv-cache drops the file when an abort lands after generation f
   const modelId = `kvcache-late-abort-${Date.now()}`
   const calls: RecordedCall[] = []
   const cachePaths: string[] = []
-  registerScriptedModel(modelId, calls, cachePaths, { cancelOnRun: 2, stopReason: 'eos' })
+  registerScriptedModel(modelId, calls, cachePaths, {
+    cancelOnRun: 2,
+    statsOnRun: () => ({ stopReason: 'eos' })
+  })
   const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
     modelId,
     calls,
@@ -778,7 +782,7 @@ test('completion: kv-cache drops the file after a zero-token warm turn', async (
   const cachePaths: string[] = []
   registerScriptedModel(modelId, calls, cachePaths, {
     tokensOnRun: (run) => (run === 2 ? [] : ['25.']),
-    stopReason: 'eos'
+    statsOnRun: () => ({ stopReason: 'eos' })
   })
   const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
     modelId,
@@ -787,6 +791,57 @@ test('completion: kv-cache drops the file after a zero-token warm turn', async (
     'zero-token-key'
   )
   t.absent(fileSurvivedRefusal, 'the cache file is unlinked after a zero-token turn')
+  t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A turn stopped by the prediction budget finished normally for the addon, so
+// the file holds a truncated reply the caller never pushed back into history.
+test('completion: kv-cache drops the file after a budget-stopped warm turn', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-budget-stop-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerScriptedModel(modelId, calls, cachePaths, {
+    config: { predict: 2 },
+    statsOnRun: (run) =>
+      run === 2 ? { generatedTokens: 2, stopReason: 'predictionLimit' } : { stopReason: 'eos' }
+  })
+  const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'budget-stop-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the cache file is unlinked after a budget-stopped turn')
+  t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// Same for a run the addon ended at the context boundary.
+test('completion: kv-cache drops the file after a context-boundary stop', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-context-stop-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerScriptedModel(modelId, calls, cachePaths, {
+    statsOnRun: (run) => ({ stopReason: run === 2 ? 'contextOverflow' : 'eos' })
+  })
+  const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'context-stop-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the cache file is unlinked after a context-boundary stop')
   t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
 
   unregisterModel(modelId)
