@@ -66,6 +66,13 @@ if [[ -x /usr/bin/time ]]; then
   time_command=(/usr/bin/time -v)
 fi
 
+# Optional extended-regex assertion against the engine's own per-module
+# residency report, which is the only engine-side evidence that a params_backend
+# assignment was actually honoured -- the "Effective ... params backend" line the
+# other assertions use is the addon re-printing its own input. Set immediately
+# before a run_case call; run_case consumes and clears it.
+CASE_RESIDENCY_REGEX=""
+
 sample_gpu_memory() {
   local output_file="$1"
   local process_id="$2"
@@ -136,6 +143,9 @@ run_case() {
   fi
 
   echo "Running $name"
+  # A reused RESULTS_DIR would otherwise let the previous run's AVI satisfy the
+  # non-empty output check for a case that crashed before writing one.
+  rm -f "$output_file"
   printf 'case=%s\nbackend=%s\nparams_backend=%s\nmax_vram=%s\nstream_layers=%s\noffload_to_cpu=%s\n\n' \
     "$name" "$backend" "${params_backend:-unset}" "${max_vram:-unset}" \
     "$stream_layers" "$offload_to_cpu" >"$log_file"
@@ -177,6 +187,12 @@ run_case() {
     echo "Validation failed: unexpected log evidence: $forbidden_log" >>"$log_file"
     status=1
   fi
+  if ((status == 0)) && [[ -n "$CASE_RESIDENCY_REGEX" ]] &&
+    ! grep -Eq -- "$CASE_RESIDENCY_REGEX" "$log_file"; then
+    echo "Validation failed: engine residency report did not match: $CASE_RESIDENCY_REGEX" >>"$log_file"
+    status=1
+  fi
+  CASE_RESIDENCY_REGEX=""
 
   printf '%s\t%s\t%s\t%s\t%s\n' \
     "$name" "$status" "$log_file" "$metrics_file" "$output_file" >>"$SUMMARY"
@@ -193,6 +209,20 @@ max_vram_log="Effective stable-diffusion max_vram"
 params_backend_log="Effective stable-diffusion params backend"
 backend_log="Explicit stable-diffusion backend assignment"
 
+# The engine's own residency report, emitted once per load at INFO:
+#   total params memory size = ...: text_encoders 123.45MB(RAM),
+#   diffusion_model 123.45MB(VRAM), vae 123.45MB(RAM), controlnet ..., ...
+# RAM means the module's params backend is CPU, VRAM that it is a device. This
+# is the only engine-side evidence that a params_backend assignment took
+# effect. Note it cannot distinguish disk: the engine reports a disk-backed
+# module against its runtime backend, so the `disk` cases below still rely on
+# the addon-side assertion plus the absence of streaming evidence.
+te_ram='text_encoders [0-9.]+MB\(RAM\)'
+te_vram='text_encoders [0-9.]+MB\(VRAM\)'
+diffusion_ram='diffusion_model [0-9.]+MB\(RAM\)'
+diffusion_vram='diffusion_model [0-9.]+MB\(VRAM\)'
+vae_ram='vae [0-9.]+MB\(RAM\)'
+
 run_case baseline "$BACKEND" "" "" 0 "" "" "" "$graph_cut_log"
 run_case disabled "$BACKEND" "" 0 0 "$max_vram_log '0'" "" "" "$graph_cut_log"
 run_case fixed-low "$BACKEND" "" 2 0 "$graph_cut_log" "$max_vram_log '2'"
@@ -200,11 +230,18 @@ run_case fixed-medium "$BACKEND" "" 6 0 "$graph_cut_log" "$max_vram_log '6'"
 run_case auto "$BACKEND" "" -1 0 "$graph_cut_log" "$max_vram_log '-1'"
 run_case assigned "$BACKEND" "" "$BACKEND=6" 0 "$graph_cut_log" \
   "$max_vram_log '$BACKEND=6'"
+# stream_layers is forwarded unchanged now, so what proves streaming did not
+# run is the absence of graph cutting rather than a suppressed flag. The engine
+# stays quiet in this case because the diffusion params backend IS cpu, so its
+# own "--stream-layers has no effect" warning does not fire -- which is exactly
+# why the addon has to report the missing budget itself.
+CASE_RESIDENCY_REGEX="$diffusion_ram"
 run_case stream-without-max-vram "$BACKEND" diffusion=cpu "" 1 \
-  "stream_layers has no effect without max_vram; ignoring" "" "" \
+  "stream_layers needs a non-zero max_vram to enable graph cutting" "" "" \
   "$graph_cut_log"
 run_case stream-without-cpu "$BACKEND" "" 6 1 "$graph_cut_log" \
   "$max_vram_log '6'" "$stream_ignored_log"
+CASE_RESIDENCY_REGEX="$diffusion_ram"
 run_case cpu-staged "$BACKEND" diffusion=cpu 6 0 "$graph_cut_log" \
   "$max_vram_log '6'" "$params_backend_log 'diffusion=cpu'"
 run_case cpu-streamed "$BACKEND" diffusion=cpu 6 1 "$graph_cut_log" \
@@ -213,14 +250,30 @@ run_case disk "$BACKEND" diffusion=disk 6 0 "$graph_cut_log" \
   "$max_vram_log '6'" "$params_backend_log 'diffusion=disk'"
 run_case disk-with-stream "$BACKEND" diffusion=disk 6 1 "$stream_ignored_log" \
   "$max_vram_log '6'" "$params_backend_log 'diffusion=disk'"
+# Params follow the runtime backend per module when no params_backend is set,
+# so te/vae land in RAM and diffusion on the device.
+CASE_RESIDENCY_REGEX="$te_ram, $diffusion_vram, $vae_ram"
 run_case runtime-mix "diffusion=$BACKEND,te=cpu,vae=cpu" "" 6 0 "$graph_cut_log" \
   "$max_vram_log '6'" "$backend_log 'diffusion=$BACKEND,te=cpu,vae=cpu'"
+CASE_RESIDENCY_REGEX="$te_ram, $diffusion_ram, $vae_ram"
 run_case params-mix "$BACKEND" diffusion=cpu,te=cpu,vae=cpu 6 0 "$graph_cut_log" \
   "$max_vram_log '6'" "$params_backend_log 'diffusion=cpu,te=cpu,vae=cpu'"
+# The '*=cpu' offload default must reach every module, not just be logged.
+CASE_RESIDENCY_REGEX="$te_ram, $diffusion_ram, $vae_ram"
 run_case offload-only "$BACKEND" "" 6 0 "$graph_cut_log" "$max_vram_log '6'" \
   "$params_backend_log '*=cpu'" "" 1
+# The explicit diffusion=disk entry must override the '*=cpu' default for that
+# module only, leaving te/vae in RAM. Disk itself is reported against the
+# runtime backend, hence VRAM for diffusion rather than a disk marker.
+CASE_RESIDENCY_REGEX="$te_ram, $diffusion_vram, $vae_ram"
 run_case offload-with-params "$BACKEND" diffusion=disk 6 0 "$graph_cut_log" \
   "$max_vram_log '6'" "$params_backend_log '*=cpu,diffusion=disk'" "" 1
+# Not covered here on purpose: the module-less params_backend case, where a
+# bare backend name replaces the '*=cpu' offload default for every module. A
+# matrix case for it would have to force every module onto the device, which
+# need not fit in the budget these cases use, so an OOM would masquerade as an
+# assertion failure. It is pinned deterministically instead by
+# DetectsModuleLessParamsBackendEntries in test/unit/test_sd_ctx_handlers.cpp.
 
 echo "Validation complete: $RESULTS_DIR"
 column -t -s $'\t' "$SUMMARY" 2>/dev/null || cat "$SUMMARY"
