@@ -229,6 +229,47 @@ TEST(SdCtxHandlers_MemoryFlags, ComposesOffloadDefaultWithExplicitAssignments) {
       effectiveParamsBackendSpec("diffusion=disk", false), "diffusion=disk");
   EXPECT_EQ(effectiveParamsBackendSpec("", true), "*=cpu");
   EXPECT_EQ(effectiveParamsBackendSpec("te=disk", true), "*=cpu,te=disk");
+  // Pins the precedence this package relies on: the engine lets an explicit
+  // module entry beat a wildcard regardless of order, so prepending is safe.
+  // Without this a change from prepend to append would pass every other
+  // assertion here while inverting the semantics the feature rests on.
+  EXPECT_EQ(effectiveParamsBackendSpec("*=cuda0", true), "*=cpu,*=cuda0");
+  EXPECT_EQ(effectiveParamsBackendSpec("cuda0", true), "*=cpu,cuda0");
+}
+
+TEST(SdCtxHandlers_MemoryFlags, DetectsModuleLessParamsBackendEntries) {
+  // A bare backend name is a whole-spec default for the engine and the last
+  // default wins, so it replaces the offload_to_cpu wildcard for every module
+  // instead of composing with it. The addon reports that rather than letting
+  // "offload everything, but pin this" silently mean "offload nothing".
+  EXPECT_TRUE(paramsBackendSpecHasModuleLessEntry("cuda0"));
+  EXPECT_TRUE(paramsBackendSpecHasModuleLessEntry("disk"));
+  EXPECT_TRUE(paramsBackendSpecHasModuleLessEntry("te=cpu,cuda0"));
+  EXPECT_TRUE(paramsBackendSpecHasModuleLessEntry(" te=cpu , cuda0 "));
+  EXPECT_FALSE(paramsBackendSpecHasModuleLessEntry(""));
+  EXPECT_FALSE(paramsBackendSpecHasModuleLessEntry("te=cpu"));
+  EXPECT_FALSE(paramsBackendSpecHasModuleLessEntry("*=cpu,te=disk"));
+  EXPECT_FALSE(paramsBackendSpecHasModuleLessEntry("te=cpu,,vae=cpu"));
+}
+
+TEST(SdCtxHandlers_MemoryFlags, DetectsWhetherMaxVramEnablesGraphCut) {
+  EXPECT_TRUE(maxVramSpecEnablesGraphCut("6"));
+  EXPECT_TRUE(maxVramSpecEnablesGraphCut("-1"));
+  EXPECT_TRUE(maxVramSpecEnablesGraphCut("cuda0=6,vulkan0=4"));
+  EXPECT_TRUE(maxVramSpecEnablesGraphCut("cuda0=0,vulkan0=4"));
+  // Unparseable values belong to the engine, which rejects them with a
+  // specific error; reading them as "no budget" here would pre-empt that with
+  // an unrelated warning.
+  EXPECT_TRUE(maxVramSpecEnablesGraphCut("nonsense"));
+  // Every spelling of "no budget". The guard this replaced tested the spec for
+  // emptiness, so it missed all but the first of these -- including "0", which
+  // the README documents as the default value of max_vram.
+  EXPECT_FALSE(maxVramSpecEnablesGraphCut(""));
+  EXPECT_FALSE(maxVramSpecEnablesGraphCut("0"));
+  EXPECT_FALSE(maxVramSpecEnablesGraphCut("0.0"));
+  EXPECT_FALSE(maxVramSpecEnablesGraphCut("  "));
+  EXPECT_FALSE(maxVramSpecEnablesGraphCut("vulkan0=0"));
+  EXPECT_FALSE(maxVramSpecEnablesGraphCut("cuda0=0,vulkan0=0"));
 }
 
 TEST(SdCtxHandlers_MemoryFlags, ReportsRemovedOptionsInStableOrder) {

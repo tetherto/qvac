@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <cstddef>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -41,6 +42,19 @@ bool equalsIgnoreCase(std::string_view lhs, std::string_view rhs) {
          });
 }
 
+// True only for a value that parses cleanly to zero. Anything unparseable is
+// reported as non-zero so the engine gets to reject it with its own message
+// instead of this addon pre-empting it with an unrelated warning.
+bool budgetValueIsZero(std::string_view value) {
+  try {
+    std::size_t consumed = 0;
+    const float parsed = std::stof(std::string(value), &consumed);
+    return consumed == value.size() && parsed == 0.0F;
+  } catch (...) {
+    return false;
+  }
+}
+
 } // namespace
 
 bool paramsBackendSpecUsesDisk(const std::string& spec) {
@@ -60,6 +74,46 @@ bool paramsBackendSpecUsesDisk(const std::string& spec) {
     }
     remaining.remove_prefix(comma + 1);
   }
+  return false;
+}
+
+bool paramsBackendSpecHasModuleLessEntry(const std::string& spec) {
+  std::string_view remaining = spec;
+  while (!remaining.empty()) {
+    const std::size_t comma = remaining.find(',');
+    const std::string_view assignment = trim(remaining.substr(0, comma));
+    // A non-empty entry with no '=' is a bare backend name, which the engine
+    // applies as the spec-wide default rather than to a single module.
+    if (!assignment.empty() &&
+        assignment.find('=') == std::string_view::npos) {
+      return true;
+    }
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    remaining.remove_prefix(comma + 1);
+  }
+  return false;
+}
+
+bool maxVramSpecEnablesGraphCut(const std::string& spec) {
+  std::string_view remaining = spec;
+  while (!remaining.empty()) {
+    const std::size_t comma = remaining.find(',');
+    std::string_view assignment = trim(remaining.substr(0, comma));
+    if (const std::size_t equals = assignment.find('=');
+        equals != std::string_view::npos) {
+      assignment = trim(assignment.substr(equals + 1));
+    }
+    if (!assignment.empty() && !budgetValueIsZero(assignment)) {
+      return true;
+    }
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    remaining.remove_prefix(comma + 1);
+  }
+  // Empty spec, or every budget in it is zero: no graph cutting either way.
   return false;
 }
 

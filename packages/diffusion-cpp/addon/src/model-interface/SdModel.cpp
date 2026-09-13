@@ -50,10 +50,14 @@ struct ProgressCtx {
   // The pinned engine's progress emitters are: the sampler (one sequence per
   // image batch item / video expert, total = its step count) and sd_tiling
   // (VAE encode/decode tile passes, total = tile count, only when vae_tiling
-  // is enabled). Text encoders do NOT tick, and with eager_load = true (set
-  // at ctx creation) the model loader ticks during load(), not inside
-  // generate_*(). Ticks are attributed to the denoise window by their
-  // reported total:
+  // is enabled). Text encoders do NOT tick. With eager_load = true (set at ctx
+  // creation) the model loader ticks during load(), not inside generate_*().
+  // eager_load is false on mobile and for any disk-backed params_backend, and
+  // in those cases loader ticks DO land inside generate_*() -- for a
+  // disk-backed module on every job, not just the first, because the engine
+  // releases those weights at each phase boundary and re-reads them from the
+  // model file on the next use. Ticks are attributed to the denoise window by
+  // their reported total:
   //   - exact mode (denoiseTotals non-empty): a tick is denoise iff its total
   //     is one of the known sampler step counts (image: steps; video: the
   //     explicit high/low expert totals).
@@ -400,11 +404,26 @@ void SdModel::load() {
 
   params.max_vram =
       config_.maxVramSpec.empty() ? nullptr : config_.maxVramSpec.c_str();
-  params.stream_layers = config_.streamLayers && !config_.maxVramSpec.empty();
-  if (config_.streamLayers && config_.maxVramSpec.empty()) {
+  // Forward stream_layers exactly as configured. The engine consumes it twice:
+  // once for layer residency, which does require an active graph-cut budget,
+  // and once as a memory-pressure hint for the LoRA apply decision, which does
+  // not. Rewriting it to false here suppressed the second use as well, which on
+  // an all-CPU diffusion path flipped apply_lora_immediately from false to true
+  // and reintroduced the full-model LoRA merge buffers the engine avoids on
+  // constrained setups. The engine already disables streaming on its own when
+  // its prerequisites are unmet, so the addon reports and does not decide.
+  params.stream_layers = config_.streamLayers;
+  if (config_.streamLayers &&
+      !qvac_lib_inference_addon_sd::maxVramSpecEnablesGraphCut(
+          config_.maxVramSpec)) {
+    // ERROR rather than WARNING purely for visibility: g_verbosityLevel starts
+    // at ERROR and callers rarely set "verbosity", so a WARNING here would be
+    // invisible on exactly the default configuration that triggers it. Do not
+    // "correct" this to WARNING without also raising the default verbosity.
     QLOG_IF(
-        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-        "stream_layers has no effect without max_vram; ignoring");
+        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+        "stream_layers needs a non-zero max_vram to enable graph cutting; "
+        "layer streaming will not run for this configuration");
   }
   if (!config_.maxVramSpec.empty()) {
     QLOG_IF(
@@ -415,6 +434,19 @@ void SdModel::load() {
   std::string paramsBackend =
       qvac_lib_inference_addon_sd::effectiveParamsBackendSpec(
           config_.paramsBackendSpec, config_.offloadToCpu);
+  if (config_.offloadToCpu &&
+      qvac_lib_inference_addon_sd::paramsBackendSpecHasModuleLessEntry(
+          config_.paramsBackendSpec)) {
+    // The engine applies a bare entry as the spec-wide default and the last one
+    // wins, so this replaces offload_to_cpu's "*=cpu" for every module instead
+    // of composing with it. Same visibility reasoning as above.
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+        "params_backend '" + config_.paramsBackendSpec +
+            "' has an entry with no 'module=' prefix, which replaces the "
+            "offload_to_cpu default for every module; use the 'module=backend' "
+            "form to keep CPU offload for the remaining modules");
+  }
   if (!paramsBackend.empty()) {
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -512,9 +544,15 @@ void SdModel::load() {
     const std::string path = config_.diffusionModelPath.empty()
                                  ? config_.modelPath
                                  : config_.diffusionModelPath;
+    // Derived from what was actually handed to the engine, not from what the
+    // caller set. offload_to_cpu synthesizes a params_backend and an
+    // unsatisfiable main-gpu resolves a backend, and neither is visible in the
+    // corresponding config_ spec string -- so reading the config here sent
+    // those two cases to the model-path message even though a backend or
+    // residency spec is exactly what the engine rejected.
     const bool hasExplicitMemoryOrBackendConfig =
-        !config_.backendSpec.empty() || !config_.paramsBackendSpec.empty() ||
-        !config_.maxVramSpec.empty();
+        params.backend != nullptr || params.params_backend != nullptr ||
+        params.max_vram != nullptr;
     const std::string guidance =
         hasExplicitMemoryOrBackendConfig
             ? "Check backend, params_backend, max_vram, model path, and model "

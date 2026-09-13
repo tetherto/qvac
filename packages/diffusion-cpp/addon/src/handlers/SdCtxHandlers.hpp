@@ -194,13 +194,34 @@ extern const SdCtxHandlersMap SD_CTX_HANDLERS;
 
 /** True when a params_backend assignment contains the disk backend. */
 bool paramsBackendSpecUsesDisk(const std::string& spec);
+/**
+ * True when a params_backend spec carries an entry with no "module=" prefix.
+ *
+ * The engine reads a bare entry as a whole-spec default, and the last default
+ * wins, so such an entry replaces the "*=cpu" that offload_to_cpu contributes
+ * rather than composing with it per module. Callers use this to report the
+ * override instead of letting it pass silently.
+ */
+bool paramsBackendSpecHasModuleLessEntry(const std::string& spec);
+/**
+ * True when a max_vram spec declares at least one non-zero budget, i.e. when
+ * graph-cut segmentation can actually run.
+ *
+ * Deliberately not an emptiness test: the engine disables graph cutting for a
+ * zero budget, so "0", "0.0" and "cuda0=0" mean the same thing as "" here.
+ * Negative values select the auto budget and therefore do enable cutting. An
+ * unparseable value reads as enabling, because the engine rejects it with a
+ * specific error and a warning here would only pre-empt that.
+ */
+bool maxVramSpecEnablesGraphCut(const std::string& spec);
 /** Prepends the offload_to_cpu default before explicit module assignments. */
 std::string
 effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu);
 
 /**
  * Apply SD_CTX_HANDLERS to configMap, writing results into config.
- * Unknown keys are silently ignored (forward compatibility).
+ * Unknown keys are silently ignored (forward compatibility), except for the
+ * removed CPU-placement options, which throw with migration guidance.
  */
 void applySdCtxHandlers(
     SdCtxConfig& config,
