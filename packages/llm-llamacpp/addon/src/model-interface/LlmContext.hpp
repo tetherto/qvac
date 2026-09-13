@@ -657,6 +657,81 @@ protected:
     ctxTgtSeqRmProbed_ = true;
   }
 
+  // Build the MTP draft context and its `common_speculative` driver over the
+  // same bundled-MTP model as the target, and wire the two together.
+  //
+  // Both derived constructors ran byte-identical copies of this, and the
+  // duplication had already started to cost: the `K_MAX_SPEC_DRAFT` clamp below
+  // lived in both of them, and a third time in LoadFitNormalization, for a
+  // single invariant. `logTag` is the only thing that legitimately differed.
+  // MtmdLlmContext's extra `specDisabledByMedia_` bookkeeping stays in its own
+  // `initializeMtpDraftContext()` wrapper, which is also what re-runs this
+  // after a media turn has torn the draft context down.
+  //
+  // Callers gate on spec-type=draft-mtp, `n_parallel <= 1` and `n_batch >= 2`
+  // before calling -- see the construction sites for why each of those aborts
+  // the process rather than merely wasting memory.
+  //
+  // Safe to call from a derived constructor body: the derived object is fully
+  // constructed by then, so the `getParams()` / `getCtx()` / `getModel()`
+  // virtuals dispatch normally.
+  //
+  // Does not propagate exceptions. On any failure it logs, leaves `spec_` and
+  // `ctxDraft_` null, and returns false so the caller continues
+  // non-speculatively.
+  bool buildMtpDraftContext(const char* logTag) {
+    common_params& params = getParams();
+    try {
+      auto cparamsMtp = common_context_params_to_llama(params);
+      cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+      cparamsMtp.type_k = params.speculative.draft.cache_type_k;
+      cparamsMtp.type_v = params.speculative.draft.cache_type_v;
+      cparamsMtp.n_rs_seq = 0;
+      cparamsMtp.n_outputs_max =
+          static_cast<uint32_t>(std::max(1, params.n_parallel));
+      ctxDraft_.reset(llama_init_from_model(getModel(), cparamsMtp));
+      if (!ctxDraft_) {
+        QLOG_IF(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            string_format(
+                "[%s] MTP draft context could not be created for this model; "
+                "spec-type=draft-mtp will be inert\n",
+                logTag));
+        spec_.reset();
+        return false;
+      }
+      params.speculative.draft.ctx_tgt = getCtx();
+      params.speculative.draft.ctx_dft = ctxDraft_.get();
+      // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
+      // draft loop is bounded: it uses its own construction-time params.n_max
+      // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
+      // per-round dp.n_max hint. K_MAX_SPEC_DRAFT matches
+      // runSpeculativeGeneration.
+      params.speculative.draft.n_max =
+          std::clamp(params.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
+      spec_.reset(common_speculative_init(
+          params.speculative, std::max<uint32_t>(1, params.n_parallel)));
+      probeTargetSeqRmTypeOnce();
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          string_format(
+              "[%s] MTP draft context + common_speculative initialized\n",
+              logTag));
+      return true;
+    } catch (const std::exception& e) {
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          string_format(
+              "[%s] MTP draft setup failed (%s); continuing without "
+              "speculative decoding\n",
+              logTag,
+              e.what()));
+      spec_.reset();
+      ctxDraft_.reset();
+      return false;
+    }
+  }
+
   void rollbackDraftContext(llama_pos startPos = -1) noexcept {
     if (!ctxDraft_) {
       return;

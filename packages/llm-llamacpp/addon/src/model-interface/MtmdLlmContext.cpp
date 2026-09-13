@@ -254,48 +254,19 @@ void MtmdLlmContext::initializeCommonState() {
 }
 
 void MtmdLlmContext::initializeMtpDraftContext() {
-  try {
-    auto cparamsMtp = common_context_params_to_llama(params_);
-    cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
-    cparamsMtp.type_k = params_.speculative.draft.cache_type_k;
-    cparamsMtp.type_v = params_.speculative.draft.cache_type_v;
-    cparamsMtp.n_rs_seq = 0;
-    cparamsMtp.n_outputs_max =
-        static_cast<uint32_t>(std::max(1, params_.n_parallel));
-    ctxDraft_.reset(llama_init_from_model(modelCtx_.model, cparamsMtp));
-    if (!ctxDraft_) {
-      QLOG_IF(
-          Priority::WARNING,
-          "[MtmdLlm] MTP draft context could not be created for this "
-          "model; spec-type=draft-mtp will be inert\n");
-      spec_.reset();
-      return;
-    }
-    params_.speculative.draft.ctx_tgt = modelCtx_.lctx;
-    params_.speculative.draft.ctx_dft = ctxDraft_.get();
-    // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
-    // draft loop is bounded: it uses its own construction-time params.n_max
-    // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
-    // per-round dp.n_max hint. K_MAX_SPEC_DRAFT matches
-    // runSpeculativeGeneration.
-    params_.speculative.draft.n_max =
-        std::clamp(params_.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
-    spec_.reset(common_speculative_init(
-        params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
-    probeTargetSeqRmTypeOnce();
+  // The construction itself is shared with TextLlmContext -- see
+  // LlmContext::buildMtpDraftContext. What is Mtmd-only is the flag: this
+  // function is also the media-turn rebuild path, reached from resetState after
+  // an image turn set `specDisabledByMedia_`, so a successful rebuild is what
+  // clears it.
+  //
+  // A failed build leaves the flag set, preserving the pre-refactor behaviour
+  // exactly. Note that this is not free: resetState's rebuild is gated on the
+  // flag being set, so a persistently failing init retries a full
+  // llama_context allocation on every resetState, unbounded. That is a
+  // separate open finding, not something this extraction changes.
+  if (buildMtpDraftContext("MtmdLlm")) {
     specDisabledByMedia_ = false;
-    QLOG_IF(
-        Priority::INFO,
-        "[MtmdLlm] MTP draft context + common_speculative initialized\n");
-  } catch (const std::exception& e) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "[MtmdLlm] MTP draft setup failed (%s); continuing without "
-            "speculative decoding\n",
-            e.what()));
-    spec_.reset();
-    ctxDraft_.reset();
   }
 }
 
