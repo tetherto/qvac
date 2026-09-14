@@ -59,11 +59,14 @@ try {
   console.log(`▸ Snapshot written to ${writtenPath}`)
 
   const reloaded = await loadVectorIndex({ path: snapshotPath })
-  const [best] = await reloaded.search({ query: queryVector, k: 1 })
-  console.log(
-    `▸ After reload, best match is still id=${best?.id}: ${documents.get(best?.id ?? '')}`
-  )
+  const [reloadedBest] = await reloaded.search({ query: queryVector, k: 1 })
   await reloaded.dispose()
+  if (!reloadedBest || reloadedBest.id !== hits[0]?.id) {
+    throw new Error(
+      `Reloaded index returned id=${reloadedBest?.id} but the original returned id=${hits[0]?.id}`
+    )
+  }
+  console.log(`▸ Reloaded index agrees: best match id=${reloadedBest.id}`)
 
   await unloadModel({ modelId })
 } catch (error) {
