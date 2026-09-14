@@ -1,6 +1,6 @@
 #include <algorithm>
 #include <cctype>
-#include <iostream>
+#include <deque>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -23,15 +23,15 @@ struct MockDevice {
   std::string backend_name;
   std::string regName;
   enum ggml_backend_dev_type type;
-  /// Whether this device's backend registry exposes
-  /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
-  /// SYCL does as of qvac-fabric v10069, so this defaults to false.
-  bool hasSplitBuffers = false;
   /// `ggml_backend_dev_props::device_id` — the PCI bus id for Vulkan, unique
   /// per physical card. Empty means ggml reported null, which is the "cannot
   /// dedupe, keep it" case. Descriptions are NOT unique: Vulkan reports the
   /// raw device name, identical across identical cards.
   std::string deviceId;
+  /// Index of the device whose `ggml_backend_reg_t` this device reports; unset
+  /// means its own. The iGPU retention rule compares registry identity, not
+  /// name, so a shared registry can only be modelled by aliasing a handle.
+  std::optional<size_t> regAliasIndex;
 
   MockDevice(
       std::string&& desc, std::string&& backend,
@@ -45,8 +45,8 @@ static MockDevice withDeviceId(MockDevice device, std::string&& id) {
   return device;
 }
 
-static MockDevice withSplitBuffers(MockDevice device) {
-  device.hasSplitBuffers = true;
+static MockDevice withRegistryOf(MockDevice device, size_t deviceIndex) {
+  device.regAliasIndex = deviceIndex;
   return device;
 }
 
@@ -70,8 +70,9 @@ static MockDevice createCPUDevice(std::string&& desc, std::string&& backend) {
 class MockBackendInterface {
 public:
   std::vector<MockDevice> devices;
+  std::vector<std::pair<ggml_log_level, std::string>> logs;
   // Store string results to ensure they persist during function calls
-  mutable std::vector<std::string> string_storage;
+  mutable std::deque<std::string> string_storage;
 
   // Static pointer for function pointer callbacks (thread-safe for tests)
   static thread_local MockBackendInterface* currentInstance;
@@ -81,6 +82,7 @@ public:
   void clearDevices() {
     devices.clear();
     string_storage.clear();
+    logs.clear();
   }
 
   // Convert to BackendInterface function pointers
@@ -96,7 +98,6 @@ public:
         &MockBackendInterface::static_dev_description,
         &MockBackendInterface::static_dev_name,
         &MockBackendInterface::static_dev_type,
-        &MockBackendInterface::static_reg_get_proc_address,
         &MockBackendInterface::static_dev_get_props,
         &MockBackendInterface::static_llamaLogCallback};
   }
@@ -113,6 +114,15 @@ private:
   }
 
   static ggml_backend_reg_t static_dev_backend_reg(ggml_backend_dev_t dev) {
+    // One registry per device unless the device aliases another's, resolved
+    // through the live vector so a reallocation cannot leave a stale pointer.
+    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
+    if (currentInstance != nullptr && mock_dev != nullptr &&
+        mock_dev->regAliasIndex.has_value() &&
+        mock_dev->regAliasIndex.value() < currentInstance->devices.size()) {
+      return reinterpret_cast<ggml_backend_reg_t>(
+          &currentInstance->devices[mock_dev->regAliasIndex.value()]);
+    }
     return reinterpret_cast<ggml_backend_reg_t>(dev);
   }
 
@@ -179,25 +189,11 @@ private:
     return GGML_BACKEND_DEVICE_TYPE_CPU;
   }
 
-  // `static_dev_backend_reg` hands back the device pointer as the registry
-  // handle, so recover the MockDevice from it to answer per-device.
-  static void*
-  static_reg_get_proc_address(ggml_backend_reg_t reg, const char* name) {
-    if (currentInstance == nullptr || reg == nullptr || name == nullptr) {
-      return nullptr;
-    }
-    MockDevice* dev = reinterpret_cast<MockDevice*>(reg);
-    if (dev->hasSplitBuffers &&
-        std::string(name) == "ggml_backend_split_buffer_type") {
-      // Callers only test the address for presence, so any non-null will do.
-      return reinterpret_cast<void*>(dev);
-    }
-    return nullptr;
-  }
-
   static void static_llamaLogCallback(
       ggml_log_level level, const char* text, void* userData) {
-    std::cout << "LLAMA LOG CALLBACK: " << text << std::endl;
+    if (currentInstance != nullptr) {
+      currentInstance->logs.emplace_back(level, text != nullptr ? text : "");
+    }
   }
 };
 
@@ -258,6 +254,15 @@ void expectChosen(
     const std::optional<MainGpu>& mainGpu) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   auto result = chooseBackend(expectedBackend, bckI, nullptr, mainGpu);
+  expectChosen(result, expectedBackend, expectedBackendName);
+}
+
+void expectChosenForPreference(
+    MockBackendInterface& mockBackend, BackendType preferredBackend,
+    BackendType expectedBackend, const std::string& expectedBackendName,
+    const std::optional<MainGpu>& mainGpu = std::nullopt) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(preferredBackend, bckI, nullptr, mainGpu);
   expectChosen(result, expectedBackend, expectedBackendName);
 }
 
@@ -375,12 +380,91 @@ TEST_F(BackendSelectionTest, PreferredCPUAlwaysReturnsCPU) {
   expectChosen(mockBackend, BackendType::CPU, "none");
 }
 
-// RPC backend is ignored
-TEST_F(BackendSelectionTest, RPCBackendIsIgnored) {
+TEST_F(BackendSelectionTest, RpcBackendIsEligible) {
   mockBackend.addDevice(
-      MockDevice("Adreno 840", "OpenCL", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
-  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
-  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+      MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  expectChosen(mockBackend, BackendType::GPU, "rpc0");
+}
+
+// An RPC device's description is its endpoint string, so it never contributes
+// an Adreno tier however it is spelled.
+TEST_F(BackendSelectionTest, RpcEndpointDoesNotRaiseAdrenoVersion) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(MockDevice(
+      "adreno-880-rig:50052", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  std::optional<int> adrenoVersion;
+  auto result = chooseBackend(
+      BackendType::GPU, bckI, nullptr, std::nullopt, &adrenoVersion);
+  EXPECT_EQ(result.first, BackendType::GPU);
+  ASSERT_TRUE(adrenoVersion.has_value());
+  EXPECT_EQ(adrenoVersion.value(), 740);
+}
+
+// The Mali flag reads the same description field as the Adreno tier, so an
+// endpoint hostname must not set it either.
+TEST_F(BackendSelectionTest, RpcEndpointDoesNotSetMaliFlag) {
+  mockBackend.addDevice(createGPUDevice("intel graphics", "vulkan0"));
+  mockBackend.addDevice(MockDevice(
+      "mali-rig.local:50052", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  std::optional<int> adrenoVersion;
+  bool isMaliGpu = true;
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      &adrenoVersion,
+      false,
+      &isMaliGpu);
+  EXPECT_EQ(result.first, BackendType::GPU);
+  EXPECT_FALSE(isMaliGpu);
+}
+
+TEST_F(BackendSelectionTest, CudaBackendIsEligible) {
+  mockBackend.addDevice(MockDevice(
+      "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
+TEST_F(BackendSelectionTest, ShippingFamiliesAreEligibleByRegistryIdentity) {
+  for (const char* registry : {"Vulkan", "MTL", "OpenCL"}) {
+    mockBackend.clearDevices();
+    const std::string description =
+        std::string(registry) == "OpenCL" ? ADRENO_DESC : "supported GPU";
+    mockBackend.addDevice(MockDevice(
+        std::string(description),
+        "SomeGpu",
+        GGML_BACKEND_DEVICE_TYPE_GPU,
+        std::string(registry)));
+    expectChosen(mockBackend, BackendType::GPU, "somegpu");
+  }
+}
+
+TEST_F(BackendSelectionTest, FamilyDeviceNameWorksWithForeignRegistry) {
+  mockBackend.addDevice(MockDevice(
+      "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "Plugin"));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
+// The OpenCL bucket is keyed on backend family, so a device the OpenCL registry
+// names after the GPU must still land in it for the Adreno rules to reach it.
+TEST_F(BackendSelectionTest, OpenClRegistryDeviceLandsInOpenClBucket) {
+  mockBackend.addDevice(MockDevice(
+      ADRENO_DESC, "Adreno0", GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL"));
+  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "adreno0");
+  EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.second == "Chosen GPU OpenCL";
+  }));
+}
+
+TEST_F(BackendSelectionTest, OpenClRegistryDeviceIsConsideredUnderMainGpuType) {
+  mockBackend.addDevice(MockDevice(
+      ADRENO_DESC, "Adreno0", GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL"));
+  MainGpu mainGpu = MainGpuType::Integrated;
+  expectChosen(mockBackend, BackendType::GPU, "adreno0", mainGpu);
 }
 
 // Multiple Adreno OpenCL/Vulkan backends - chooses opencl
@@ -398,6 +482,120 @@ TEST_F(BackendSelectionTest, MetalGPUShouldBeChosenOverCPU) {
   mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
   mockBackend.addDevice(createCPUDevice("apple m1", "cpu"));
   expectChosen(mockBackend, BackendType::GPU, "metal");
+}
+
+TEST_F(BackendSelectionTest, RocmOnlyFallsBackToCpu) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("ROCm0 (standard)") != std::string::npos;
+  }));
+}
+
+TEST_F(BackendSelectionTest, UnknownGpuFallsBackToCpu) {
+  mockBackend.addDevice(createIGPUDevice("Future GPU", "FutureBackend0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+}
+
+TEST_F(BackendSelectionTest, MtlDeviceIsEligibleCaseInsensitively) {
+  mockBackend.addDevice(createIGPUDevice("Apple M3", "MtL0"));
+  expectChosen(mockBackend, BackendType::GPU, "mtl0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuIndexTargetingRocmFallsBackToCpu) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  MainGpu mainGpu = 0;
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+}
+
+TEST_F(BackendSelectionTest, MainGpuIntegratedWarnsAboutRefusedDiscreteGpu) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  MainGpu mainGpu = MainGpuType::Integrated;
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("ROCm0 (standard)") != std::string::npos;
+  }));
+}
+
+TEST_F(BackendSelectionTest, MainGpuDedicatedWarnsAboutRefusedIntegratedGpu) {
+  mockBackend.addDevice(createIGPUDevice("AMD Radeon", "ROCm0"));
+  MainGpu mainGpu = MainGpuType::Dedicated;
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("ROCm0 (standard)") != std::string::npos;
+  }));
+}
+
+TEST_F(BackendSelectionTest, RegistryFamilyNamesRequireExactIdentity) {
+  mockBackend.addDevice(MockDevice(
+      "Future GPU", "Future0", GGML_BACKEND_DEVICE_TYPE_GPU, "NotVulkan"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+}
+
+TEST_F(BackendSelectionTest, DeviceFamilyNamesRequireKnownPrefixes) {
+  mockBackend.addDevice(MockDevice(
+      "Future GPU", "NotVulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Future"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+}
+
+// MUSA (Moore Threads) is a real ggml backend outside the allowlist; the
+// matcher reads two identities, so both must reject it.
+TEST_F(BackendSelectionTest, MusaDeviceNameFallsBackToCpu) {
+  mockBackend.addDevice(createGPUDevice("MTT S80", "MUSA0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("MUSA0 (standard)") != std::string::npos;
+  }));
+}
+
+TEST_F(BackendSelectionTest, MusaRegistryNameFallsBackToCpu) {
+  mockBackend.addDevice(
+      MockDevice("MTT S80", "MttGpu0", GGML_BACKEND_DEVICE_TYPE_GPU, "MUSA"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("MttGpu0 (MUSA)") != std::string::npos;
+  }));
+}
+
+// The allowlist runs on IGPU-typed devices too: AMD APUs register their
+// integrated graphics through ROCm/HIP.
+TEST_F(BackendSelectionTest, IntegratedRocmIsExcluded) {
+  mockBackend.addDevice(createIGPUDevice("AMD Radeon 780M", "ROCm0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("ROCm0 (standard)") != std::string::npos;
+  }));
+}
+
+// The eligible device is the IGPU-typed one and the unknown family is
+// GPU-typed, so a wrongly admitted unknown would win the bucket ordering.
+TEST_F(BackendSelectionTest, UnknownGpuBeforeVulkanChoosesVulkan) {
+  mockBackend.addDevice(createGPUDevice("Future GPU", "FutureBackend0"));
+  mockBackend.addDevice(createIGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, UnknownGpuAfterVulkanChoosesVulkan) {
+  mockBackend.addDevice(createIGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice("Future GPU", "FutureBackend0"));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
 }
 
 // Test tryMainGpuFromMap with integer device index
@@ -986,11 +1184,11 @@ TEST_F(BackendSelectionTest, GpuCount_TwoDgpusPlusIgpu_ReturnsDgpuCount) {
   EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 2u);
 }
 
-TEST_F(BackendSelectionTest, GpuCount_TwoIgpus_ReturnsTwo) {
+TEST_F(BackendSelectionTest, GpuCount_TwoIgpus_ReturnsFabricSelectedOne) {
   mockBackend.addDevice(createIGPUDevice("intel uhd 770", VULKAN0_BACK));
   mockBackend.addDevice(createIGPUDevice("intel iris xe", VULKAN1_BACK));
   BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 2u);
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
 }
 
 TEST_F(BackendSelectionTest, GpuCount_AccelAndCpuIgnored) {
@@ -1001,75 +1199,21 @@ TEST_F(BackendSelectionTest, GpuCount_AccelAndCpuIgnored) {
   EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
 }
 
-// ---- gpuBackendSupportsRowSplit ----
-//
-// qvac-fabric builds a split buffer list for EVERY device it distributes over
-// and throws on the first one whose backend lacks split buffers, so the
-// predicate must require all of them rather than any one. `withSplitBuffers()`
-// marks a mock device as SYCL-like (registry exposes
-// `ggml_backend_split_buffer_type`); plain devices are Vulkan/Metal/OpenCL-like
-// and expose nothing, which is every backend shipped at qvac-fabric v10069.
-
-TEST_F(BackendSelectionTest, RowSplit_NoDevices_ReturnsFalse) {
+TEST_F(BackendSelectionTest, GpuCount_UnsupportedBackendsIgnored) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon", "ROCm0"));
+  mockBackend.addDevice(createIGPUDevice("Future GPU", "FutureBackend0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
   BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
 }
 
-TEST_F(BackendSelectionTest, RowSplit_OnlyCpu_ReturnsFalse) {
-  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
-  BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
-}
-
-TEST_F(BackendSelectionTest, RowSplit_SingleGpuWithoutSplitBuffers_False) {
-  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
-  BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
-}
-
-TEST_F(BackendSelectionTest, RowSplit_SingleGpuWithSplitBuffers_True) {
+TEST_F(BackendSelectionTest, GpuCount_CudaAndRpcAreEligible) {
+  mockBackend.addDevice(MockDevice(
+      "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));
   mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+      MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
   BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
-}
-
-TEST_F(BackendSelectionTest, RowSplit_AllGpusWithSplitBuffers_True) {
-  mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
-  mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL1")));
-  BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
-}
-
-// The all-vs-any pin: one unsupported backend registered alongside a supported
-// one is enough for qvac-fabric to reject the load, so the answer is false.
-TEST_F(BackendSelectionTest, RowSplit_OneGpuMissingSplitBuffers_False) {
-  mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
-  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
-  BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
-}
-
-// Same for an iGPU enumerated alongside a supported discrete GPU: it is still a
-// device qvac-fabric will try to build a split buffer for.
-TEST_F(BackendSelectionTest, RowSplit_IgpuMissingSplitBuffers_False) {
-  mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
-  mockBackend.addDevice(createIGPUDevice("intel uhd 770", VULKAN0_BACK));
-  BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
-}
-
-TEST_F(BackendSelectionTest, RowSplit_AccelAndCpuIgnored_True) {
-  mockBackend.addDevice(
-      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
-  mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
-  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
-  BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 2u);
 }
 
 // QVAC-21867: chooseBackend reports Mali GPUs via outIsMaliGpu so the caller
@@ -1173,110 +1317,241 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenPreferredCpu) {
   EXPECT_FALSE(isMaliGpu);
 }
 
-// ---- getTensorSplitDeviceNames ----
+// ---- getSplitDeviceNames ----
 //
-// QVAC-24253: the explicit device list for LLAMA_SPLIT_MODE_TENSOR.
+// QVAC-24253: the device list pinned in every split mode, which also enforces
+// the addon's backend allowlist (isEligibleGpuDevice).
 //
 // qvac-fabric's tensor branch selects devices with no type filter and no
 // dedupe, so without this list it recruits integrated GPUs alongside discrete
 // ones and shards a physical GPU registered by two backends twice. These pin
 // the filtering the addon does on fabric's behalf.
 
-TEST_F(BackendSelectionTest, TensorDevices_NoDevices_ReturnsEmpty) {
+TEST_F(BackendSelectionTest, SplitDevices_NoDevices_ReturnsEmpty) {
   BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_TRUE(getTensorSplitDeviceNames(bckI).empty());
+  EXPECT_TRUE(getSplitDeviceNames(bckI).empty());
 }
 
-TEST_F(BackendSelectionTest, TensorDevices_OnlyCpuAndAccel_ReturnsEmpty) {
+TEST_F(BackendSelectionTest, SplitDevices_OnlyCpuAndAccel_ReturnsEmpty) {
   mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
   mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
   BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_TRUE(getTensorSplitDeviceNames(bckI).empty());
+  EXPECT_TRUE(getSplitDeviceNames(bckI).empty());
+}
+
+TEST_F(BackendSelectionTest, SplitDevices_ExcludeRocmAndSycl) {
+  mockBackend.addDevice(
+      MockDevice("AMD Radeon", "ROCm0", GGML_BACKEND_DEVICE_TYPE_GPU, "HIP"));
+  mockBackend.addDevice(
+      MockDevice("Intel Arc", "SYCL0", GGML_BACKEND_DEVICE_TYPE_GPU, "SYCL"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA GPU", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI), (std::vector<std::string>{VULKAN0_BACK}));
 }
 
 // The headline case: a discrete + integrated host must not put weights or KV
 // on the iGPU, because tensor parallelism paces the model by its slowest
 // participant.
-TEST_F(BackendSelectionTest, TensorDevices_ExcludesIgpuWhenDiscretePresent) {
+TEST_F(BackendSelectionTest, SplitDevices_ExcludesIgpuWhenDiscretePresent) {
   mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", "vulkan0"));
   mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090 #2", "vulkan1"));
   mockBackend.addDevice(createIGPUDevice("Intel UHD 770", "vulkan2"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(
-      getTensorSplitDeviceNames(bckI),
+      getSplitDeviceNames(bckI),
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
-// An iGPU-only host still gets tensor mode rather than nothing.
-TEST_F(BackendSelectionTest, TensorDevices_FallsBackToIgpuWhenNoDiscrete) {
-  mockBackend.addDevice(createIGPUDevice("Intel UHD 770", "vulkan0"));
+// A second iGPU from a different backend registry is the same physical device
+// enumerated twice. These two share a registry NAME but not a handle, and the
+// rule compares handles; their device_ids differ, so device_id dedup cannot
+// explain the single survivor.
+TEST_F(BackendSelectionTest, SplitSelectionKeepsOneIgpuPerDistinctRegistry) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "Intel UHD 770", "vulkan0", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"),
+      "0000:00:02.0"));
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "Intel Iris Xe", "vulkan1", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"),
+      "0000:00:02.1"));
   BackendInterface bckI = mockBackend.toBackendInterface();
-  EXPECT_EQ(
-      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+
+  // Both were eligible and counted, but only the first is kept.
+  EXPECT_EQ(selection.sourceGpuCount, 2U);
+  EXPECT_TRUE(selection.rejectedDevices.empty());
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].sourceGpuIndex, 0U);
 }
 
-// One physical GPU registered by both Vulkan and HIP under GGML_BACKEND_DL
-// must be listed once, or it receives two shards. Same device_id, same
-// description — this is what a dual-registered card actually looks like.
-TEST_F(BackendSelectionTest, TensorDevices_DedupesDualRegisteredGpu) {
+// CUDA reports virtual devices as integrated GPUs, so a later iGPU sharing the
+// kept one's registry handle is a distinct device and must survive.
+TEST_F(BackendSelectionTest, SplitSelectionKeepsIgpusSharingOneRegistry) {
   mockBackend.addDevice(withDeviceId(
-      createGPUDevice("AMD Radeon 8060S", "vulkan0"), "0000:03:00.0"));
-  mockBackend.addDevice(withDeviceId(
-      createGPUDevice("AMD Radeon 8060S", "rocm0"), "0000:03:00.0"));
+      MockDevice("NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),
+      "0000:01:00.0-v0"));
+  mockBackend.addDevice(withRegistryOf(
+      withDeviceId(
+          MockDevice(
+              "NVIDIA GB10", "CUDA1", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),
+          "0000:01:00.0-v1"),
+      0));
   BackendInterface bckI = mockBackend.toBackendInterface();
+
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+
+  EXPECT_EQ(selection.sourceGpuCount, 2U);
+  EXPECT_TRUE(selection.rejectedDevices.empty());
   EXPECT_EQ(
-      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0", "CUDA1"}));
+  ASSERT_EQ(selection.devices.size(), 2U);
+  EXPECT_EQ(selection.devices[0].sourceGpuIndex, 0U);
+  EXPECT_EQ(selection.devices[1].sourceGpuIndex, 1U);
+}
+
+// Retention chains off the most recently KEPT iGPU, not the most recently SEEN
+// one, so a dropped device's registry cannot admit a later device sharing it.
+TEST_F(BackendSelectionTest, SplitSelectionChainsIgpuRegistryFromLastKept) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice("NVIDIA GB10", "CUDA0", GGML_BACKEND_DEVICE_TYPE_IGPU, "CUDA"),
+      "0000:01:00.0-v0"));
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "Intel UHD 770", "vulkan0", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan"),
+      "0000:00:02.0"));
+  mockBackend.addDevice(withRegistryOf(
+      withDeviceId(
+          MockDevice(
+              "Intel Iris Xe",
+              "vulkan1",
+              GGML_BACKEND_DEVICE_TYPE_IGPU,
+              "Vulkan"),
+          "0000:00:02.1"),
+      1));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
+}
+
+// An iGPU-only host still gets tensor mode rather than nothing.
+TEST_F(BackendSelectionTest, SplitDevices_FallsBackToIgpuWhenNoDiscrete) {
+  mockBackend.addDevice(createIGPUDevice("Intel UHD 770", "vulkan0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+}
+
+TEST_F(BackendSelectionTest, SplitDevices_DedupesDualRegisteredGpu) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice("Adreno 830", "vulkan0"), "0000:03:00.0"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice("Adreno 830", "gpuopencl"), "0000:03:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
 }
 
 // Two identical cards: Vulkan reports the SAME description for both and
 // distinguishes them only by device_id (PCI bus id). Deduping on description
 // would silently collapse this to one device — which is the canonical
 // tensor-parallel setup, so it must not happen.
-TEST_F(BackendSelectionTest, TensorDevices_KeepsTwoIdenticalCards) {
+TEST_F(BackendSelectionTest, SplitDevices_KeepsTwoIdenticalCards) {
   mockBackend.addDevice(withDeviceId(
       createGPUDevice("NVIDIA GeForce RTX 4090", "vulkan0"), "0000:01:00.0"));
   mockBackend.addDevice(withDeviceId(
       createGPUDevice("NVIDIA GeForce RTX 4090", "vulkan1"), "0000:02:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(
-      getTensorSplitDeviceNames(bckI),
+      getSplitDeviceNames(bckI),
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
 // A null device_id cannot be deduped against, so the device is kept —
 // dropping a real GPU is worse than tolerating a duplicate. Mirrors fabric,
 // whose find_if only matches when both ids are non-null.
-TEST_F(BackendSelectionTest, TensorDevices_KeepsDevicesWithoutDeviceId) {
+TEST_F(BackendSelectionTest, SplitDevices_KeepsDevicesWithoutDeviceId) {
   mockBackend.addDevice(createGPUDevice("Some GPU", "vulkan0"));
   mockBackend.addDevice(createGPUDevice("Some GPU", "vulkan1"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(
-      getTensorSplitDeviceNames(bckI),
+      getSplitDeviceNames(bckI),
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
-// ggml types RPC devices as GPU (ggml-rpc.cpp, with a TODO). qvac-fabric
-// segregates them so they do not count as discrete GPUs — otherwise the local
-// iGPU is dropped on an iGPU + RPC host. chooseBackend already skips RPC; this
-// enumeration must too.
-TEST_F(BackendSelectionTest, TensorDevices_ExcludesRpcDevices) {
+TEST_F(BackendSelectionTest, SplitDevices_IncludeRpcDevices) {
   mockBackend.addDevice(
       MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
   mockBackend.addDevice(withDeviceId(
       createGPUDevice("NVIDIA RTX 4090", "vulkan0"), "0000:01:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(
-      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"rpc0", "vulkan0"}));
 }
 
-// The case fabric's comment calls out by name: an RPC device must not make the
-// discrete bucket non-empty and displace the host's own integrated GPU.
-TEST_F(BackendSelectionTest, TensorDevices_RpcDoesNotDisplaceLocalIgpu) {
+TEST_F(BackendSelectionTest, SplitDevices_RpcDoesNotSuppressLocalIgpu) {
   mockBackend.addDevice(
       MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
   mockBackend.addDevice(withDeviceId(
       createIGPUDevice("Intel UHD 770", "vulkan0"), "0000:00:02.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(
-      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"rpc0", "vulkan0"}));
+}
+
+TEST_F(BackendSelectionTest, SplitDevices_RpcIsPrepended) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA RTX 4090", "vulkan0"), "0000:01:00.0"));
+  mockBackend.addDevice(
+      MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"rpc0", "vulkan0"}));
+}
+
+// One physical card registered by both CUDA and Vulkan reports the same PCI
+// bus id from each, so it is kept once; the CUDA entry wins by registry order.
+TEST_F(BackendSelectionTest, SplitDevices_DedupesCudaAndVulkanAlias) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA RTX 4090", "vulkan0"), "0000:01:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
+}
+
+// ggml-cuda suffixes the PCI bus id with -v<N> for virtual (MPS/MIG) devices
+// and fabric compares device_id verbatim, so two such entries are two devices.
+TEST_F(BackendSelectionTest, SplitDevices_KeepsVirtualCudaDevices) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0-v0"));
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA1", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0-v1"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0", "CUDA1"}));
+}
+
+// sourceGpuIndex is the ordinal among GPU/IGPU devices, not the registry
+// index: CPU and ACCEL entries interleaved with the GPUs must not shift it.
+TEST_F(BackendSelectionTest, SplitDevices_TracksRawGpuIndices) {
+  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA GPU", "vulkan0"));
+  mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
+  mockBackend.addDevice(
+      MockDevice("AMD Radeon", "ROCm0", GGML_BACKEND_DEVICE_TYPE_GPU, "HIP"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA GPU", "vulkan1"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+  ASSERT_EQ(selection.devices.size(), 2U);
+  EXPECT_EQ(selection.sourceGpuCount, 3U);
+  EXPECT_EQ(selection.devices[0].sourceGpuIndex, 0U);
+  EXPECT_EQ(selection.devices[1].sourceGpuIndex, 2U);
 }
