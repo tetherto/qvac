@@ -15,7 +15,7 @@
         },
         "vector-index"
       ],
-      "version>=": "10549.0.0#2"
+      "version>=": "10549.0.0#3"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
