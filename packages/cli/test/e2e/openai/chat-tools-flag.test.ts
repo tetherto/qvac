@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import { createServer } from '../helpers/server.js'
 import { JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
 
-const TOOLS = [
+const CHAT_TOOLS = [
   {
     type: 'function',
     function: {
@@ -10,6 +10,15 @@ const TOOLS = [
       description: 'Get weather',
       parameters: { type: 'object', properties: { city: { type: 'string' } } }
     }
+  }
+]
+
+const RESPONSES_TOOLS = [
+  {
+    type: 'function',
+    name: 'get_weather',
+    description: 'Get weather',
+    parameters: { type: 'object', properties: { city: { type: 'string' } } }
   }
 ]
 
@@ -22,39 +31,47 @@ const CONFIG = {
 }
 
 describe('serve: tools load flag', () => {
-  it('chat: tools request without config.tools returns 400 tools_not_enabled', async (t) => {
-    const app = await createServer(t, {
-      config: CONFIG,
-      loadModelOverride: async () => 'mock-model-id'
-    })
-    const res = await app.inject({
-      method: 'POST',
-      url: '/v1/chat/completions',
-      headers: JSON_HEADERS,
-      payload: {
-        model: 'test-llm',
-        messages: [{ role: 'user', content: 'What is the weather in Lagos?' }],
-        tools: TOOLS
-      }
-    })
-    assertStatusAndError(res, 400, 'tools_not_enabled')
-  })
+  it(
+    'chat: tools request without config.tools returns 400 tools_not_enabled',
+    { timeout: 15000 },
+    async (t) => {
+      const app = await createServer(t, {
+        config: CONFIG,
+        loadModelOverride: async () => 'mock-model-id'
+      })
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/chat/completions',
+        headers: JSON_HEADERS,
+        payload: {
+          model: 'test-llm',
+          messages: [{ role: 'user', content: 'What is the weather in Lagos?' }],
+          tools: CHAT_TOOLS
+        }
+      })
+      assertStatusAndError(res, 400, 'tools_not_enabled')
+    }
+  )
 
-  it('responses: tools request without config.tools returns 400 tools_not_enabled', async (t) => {
-    const app = await createServer(t, {
-      config: CONFIG,
-      loadModelOverride: async () => 'mock-model-id'
-    })
-    const res = await app.inject({
-      method: 'POST',
-      url: '/v1/responses',
-      headers: JSON_HEADERS,
-      payload: {
-        model: 'test-llm',
-        input: 'What is the weather in Lagos?',
-        tools: TOOLS
-      }
-    })
-    assertStatusAndError(res, 400, 'tools_not_enabled')
-  })
+  it(
+    'responses: tools request without config.tools returns 400 tools_not_enabled',
+    { timeout: 15000 },
+    async (t) => {
+      const app = await createServer(t, {
+        config: CONFIG,
+        loadModelOverride: async () => 'mock-model-id'
+      })
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/responses',
+        headers: JSON_HEADERS,
+        payload: {
+          model: 'test-llm',
+          input: 'What is the weather in Lagos?',
+          tools: RESPONSES_TOOLS
+        }
+      })
+      assertStatusAndError(res, 400, 'tools_not_enabled')
+    }
+  )
 })
