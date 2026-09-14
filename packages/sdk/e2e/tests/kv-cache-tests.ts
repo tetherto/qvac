@@ -338,10 +338,15 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
   testId: 'kv-cache-cancel-keeps-committed-cache',
   params: {
     cacheKey: 'cancel-keeps-committed-session',
-    // Turn one must finish on its own: a budget-stopped turn is not committed.
-    firstUserMessage: 'List ten animals, one per line.',
-    cancelledUserMessage: 'Now tell me a long story about wizards.',
-    thirdUserMessage: 'What is 2+2? Answer with just the number.',
+    // One turn per message. `predict` has to cover the longest of them: a
+    // budget-stopped turn is not committed, so it would not leave a cache for
+    // the cancel to preserve.
+    messages: [
+      'List ten animals, one per line.',
+      'Now tell me a long story about wizards.',
+      'What is 2+2? Answer with just the number.'
+    ],
+    cancelTurn: 2,
     expectedAnswerContains: '4',
     cancelAfterTokens: 3,
     generationParams: { temp: 0, top_k: 1, seed: 42, predict: 256 }

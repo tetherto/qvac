@@ -692,17 +692,16 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     }
   }
 
-  // Turn one commits, turn two is cancelled mid-stream, turn three must still
-  // be warm. A run of turn three's history with `kvCache: false` is the cold
-  // reference, every message including the system prompt: the warm turn has to
-  // send far fewer prompt tokens than that, or the cancel destroyed the
-  // committed cache and the whole history was re-sent.
+  // Runs `messages` as consecutive turns on one cache key, cancelling the turn
+  // at `cancelTurn` mid-stream. The cancelled turn is discarded, so the last
+  // turn continues from the committed history and must still be warm: it has
+  // to send far fewer prompt tokens than the same history costs with
+  // `kvCache: false`, or the cancel destroyed the committed cache.
   async cancelKeepsCommittedCache(
     params: {
       cacheKey: string
-      firstUserMessage: string
-      cancelledUserMessage: string
-      thirdUserMessage: string
+      messages: string[]
+      cancelTurn: number
       expectedAnswerContains: string
       cancelAfterTokens?: number
       generationParams?: Record<string, unknown>
@@ -712,13 +711,26 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     const modelId = await this.resources.ensureLoaded('llm')
     const cancelAfterTokens = params.cancelAfterTokens ?? 3
     const generationParams = params.generationParams as never
-    const system: ChatMessage = { role: 'system', content: 'You are a helpful assistant.' }
+    const history: ChatMessage[] = [{ role: 'system', content: 'You are a helpful assistant.' }]
+
+    const start = (turnHistory: ChatMessage[], kvCache: string | false) =>
+      completion({
+        modelId,
+        history: turnHistory,
+        stream: true,
+        kvCache: kvCache as never,
+        generationParams
+      })
 
     const finish = async (run: { tokenStream: AsyncIterable<string>; stats: Promise<unknown> }) => {
       let text = ''
       for await (const token of run.tokenStream) text += token
       const stats = (await run.stats) as { promptTokens?: number } | undefined
       return { text, promptTokens: stats?.promptTokens }
+    }
+
+    if (params.cancelTurn >= params.messages.length) {
+      return { passed: false, output: 'cancelTurn must leave a later turn to measure' }
     }
 
     try {
@@ -728,80 +740,48 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         /* fresh start */
       }
 
-      const first = await callWhenAddonIdle(() =>
-        finish(
-          completion({
-            modelId,
-            history: [system, { role: 'user', content: params.firstUserMessage }],
-            stream: true,
-            kvCache: params.cacheKey,
-            generationParams
-          })
-        )
-      )
-      const committed: ChatMessage[] = [
-        system,
-        { role: 'user', content: params.firstUserMessage },
-        { role: 'assistant', content: first.text }
-      ]
-      const thirdHistory = [...committed, { role: 'user', content: params.thirdUserMessage }]
+      let warm: { text: string; promptTokens?: number } | null = null
+      let lastHistory: ChatMessage[] = []
+      let cancelledAfter = 0
 
-      const cold = await callWhenAddonIdle(() =>
-        finish(
-          completion({
-            modelId,
-            history: thirdHistory,
-            stream: true,
-            kvCache: false,
-            generationParams
-          })
-        )
-      )
+      for (const [index, content] of params.messages.entries()) {
+        history.push({ role: 'user', content })
 
-      const cancelledRun = completion({
-        modelId,
-        history: [...committed, { role: 'user', content: params.cancelledUserMessage }],
-        stream: true,
-        kvCache: params.cacheKey,
-        generationParams
-      })
-      let receivedTokens = 0
-      let cancelInvoked = false
-      try {
-        for await (const _ of cancelledRun.tokenStream) {
-          receivedTokens++
-          if (!cancelInvoked && receivedTokens >= cancelAfterTokens) {
-            cancelInvoked = true
-            await cancel({ requestId: cancelledRun.requestId })
+        if (index + 1 === params.cancelTurn) {
+          const run = start(history, params.cacheKey)
+          try {
+            for await (const _ of run.tokenStream) {
+              cancelledAfter++
+              if (cancelledAfter === cancelAfterTokens) await cancel({ requestId: run.requestId })
+            }
+          } catch (streamErr) {
+            if (cancelledAfter < cancelAfterTokens) throw streamErr
           }
+          if (cancelledAfter < cancelAfterTokens) {
+            return {
+              passed: false,
+              output: `Turn ${index + 1} ended after ${cancelledAfter} tokens, before it could be cancelled at ${cancelAfterTokens}`
+            }
+          }
+          history.pop()
+          continue
         }
-      } catch (streamErr) {
-        if (!cancelInvoked) throw streamErr
-      }
-      if (!cancelInvoked) {
-        return {
-          passed: false,
-          output: `Second turn ended before cancel (received ${receivedTokens} tokens, expected >=${cancelAfterTokens})`
-        }
+
+        lastHistory = [...history]
+        warm = await callWhenAddonIdle(() => finish(start(lastHistory, params.cacheKey)))
+        history.push({ role: 'assistant', content: warm.text })
       }
 
-      const warm = await callWhenAddonIdle(() =>
-        finish(
-          completion({
-            modelId,
-            history: thirdHistory,
-            stream: true,
-            kvCache: params.cacheKey,
-            generationParams
-          })
-        )
-      )
+      const cold = await callWhenAddonIdle(() => finish(start(lastHistory, false)))
 
+      if (warm === null) {
+        return { passed: false, output: 'No uncancelled turn ran' }
+      }
       const expected = params.expectedAnswerContains
       if (!warm.text.toLowerCase().includes(expected.toLowerCase())) {
         return {
           passed: false,
-          output: `Third turn did not include ${JSON.stringify(expected)}. Got: ${JSON.stringify(warm.text.slice(0, 200))}`
+          output: `The last turn did not include ${JSON.stringify(expected)}. Got: ${JSON.stringify(warm.text.slice(0, 200))}`
         }
       }
       if (typeof warm.promptTokens !== 'number' || typeof cold.promptTokens !== 'number') {
@@ -814,12 +794,12 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       if (warm.promptTokens * 2 >= cold.promptTokens) {
         return {
           passed: false,
-          output: `Cancelling the second turn destroyed the committed cache: the third turn re-sent the history. ${summary}`
+          output: `Cancelling turn ${params.cancelTurn} destroyed the committed cache: the last turn re-sent the history. ${summary}`
         }
       }
       return {
         passed: true,
-        output: `Committed cache survived the cancel after ${receivedTokens} tokens. ${summary}`
+        output: `Committed cache survived a cancel after ${cancelledAfter} tokens. ${summary}`
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
