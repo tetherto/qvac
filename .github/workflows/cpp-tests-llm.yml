@@ -23,6 +23,13 @@ on:
         type: string
         required: false
         default: "packages/llm-llamacpp"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -173,6 +180,25 @@ jobs:
         run: |
           npm install
 
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          # The matrix names the Windows row `windows`, but the fabric prebuilds
+          # bundle names that directory `win32-x64` (reusable-prebuilds.yml), and
+          # overlay-local-fabric concatenates `${PLATFORM}-${ARCH}` verbatim.
+          platform: ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }}
+          arch: ${{ matrix.arch || 'x64' }}
+
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
 
@@ -219,9 +245,14 @@ jobs:
         id: cpp-tests
         shell: bash
         working-directory: ${{ env.WORKDIR }}
-        env:
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt
         run: |
+          # scripts/run-cpp-tests.js applies the fabric-boundary ASAN_OPTIONS
+          # (alloc_dealloc_mismatch=0:detect_leaks=0) and points LSAN_OPTIONS at
+          # the checked-in suppressions file. addon-test links ASan but dlopens
+          # the non-ASan, -static-libstdc++ @qvac/fabric prebuild; cross-module
+          # new/delete and fabric's long-lived runtime allocations would
+          # otherwise abort after gtest already passed. See
+          # test/unit/CMakeLists.txt.
           if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
             npm run coverage:cpp:run:ci
           else
