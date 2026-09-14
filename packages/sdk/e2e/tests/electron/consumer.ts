@@ -567,6 +567,10 @@ export const executor = createExecutor({
       'Electron skips no-lingering-bare tests because they spawn and terminate standalone Bare workers outside the packaged app lifecycle'
     ),
     new SkipExecutor(
+      /^worker-restart-/,
+      'Electron skips the kv-cache worker-restart test because it asserts on Bare worker processes outside the packaged app lifecycle'
+    ),
+    new SkipExecutor(
       /^vla-/,
       'Electron skips VLA tests because VLA model execution takes too long for the stable Electron pass'
     ),
