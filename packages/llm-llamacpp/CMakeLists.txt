@@ -82,6 +82,7 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/FitToFreeDeviceMemory.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
@@ -140,6 +141,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/FitToFreeDeviceMemory.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp

@@ -1,5 +1,46 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- qvac-fabric's automatic GPU/CPU placement (`--fit`) now runs when a single-file
+  model is loaded from disk. Every such load left `tensor_buft_overrides` empty,
+  which reaches fabric as a null pointer, so the fitter aborted at its first
+  precondition with `common_fit_params: failed to fit params to free device
+  memory: did not provide buffer to set tensor_buft_overrides` and the model
+  loaded with every layer offloaded to the GPU — with nothing in the log to say
+  the placement had been skipped. On a model larger than VRAM the driver then
+  spilled the excess back to host memory: the reporter's 125B MoE read
+  `offloaded 49/49 layers to GPU` and a 78 GB Vulkan buffer on a 24 GB card, and
+  generated at 2.5 tok/s against 22 tok/s for the placement the fit would have
+  picked. The fit now runs here rather than inside `common_init_from_params`,
+  which runs it in place against the load's own buffers and discards the status,
+  and its result — layer count, context size, tensor split, per-tensor buffer
+  overrides, MoE cache and weight prefetch — is folded into the load parameters.
+  A `gpu_layers`, `ctx_size` or `override-tensor` the caller pinned still wins,
+  and still stops the fit, which is unchanged (QVAC-25039).
+- A fit that does not succeed no longer leaves behind the placement it rejected.
+  `common_fit_params` writes a candidate placement into the caller's
+  `tensor_split` and `tensor_buft_overrides` on every probe of its descent
+  search, and when it gives up it restores the two parameter structs but not the
+  buffers they point at — so a fit that failed mid-descent could hand the load a
+  placement the fitter had explicitly rejected, up to and including every MoE
+  expert pinned to CPU. The fit now runs against scratch buffers and adopts them
+  only on success: a `FAILURE` or an `ERROR` leaves the load to proceed with
+  exactly the configuration the caller asked for, and an `ERROR` is reported at
+  error level rather than passing as quietly as a routine "does not fit".
+- The process-global ggml log callback is restored after every fit. The fitter
+  installs a pointer to one of its own stack frames as the log user_data and
+  restores it on the way out, but not exception-safely — it throws from inside
+  that window and turns the throw into a status rather than putting the logger
+  back, leaving every later log line from every live model in the process going
+  through a freed frame.
+
+Sharded and streamed loads are deliberately untouched: neither ran the fit
+before and neither runs it now. Sharded placement is fixed in
+`inference-addon-cpp`, which owns the split loader.
+
 ## [0.53.0] - 2026-09-15
 
 ### Added

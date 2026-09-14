@@ -35,6 +35,7 @@
 #include "addon/LlmErrors.hpp"
 #include "handlers/LoadConfigHandlers.hpp"
 #include "inference-addon-cpp/LlamacppUtils.hpp"
+#include "model-interface/FitToFreeDeviceMemory.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -200,15 +201,52 @@ void LlamaModel::init(bool acquireLock) {
       pendingFinetuneOverrides_,
       load_fit_normalization::productionDependencies(
           LlamaModel::llamaLogCallback));
-  snap->normalizedFitSnapshot_ = normalized.fitSnapshot;
   runtimeBackendDevice_ = normalized.runtimeBackendDevice;
   common_params params = std::move(normalized.params);
+
+  // QVAC-25039: run qvac-fabric's automatic GPU/CPU placement here, for the one
+  // load path that would otherwise have fabric run it implicitly inside
+  // `common_init_from_params` — against `params`' own buffers, with the
+  // returned status discarded. `fitParamsToFreeDeviceMemory` fits against
+  // scratch and adopts the result only on success; see its header for why that
+  // distinction is not cosmetic.
+  //
+  // The two conditions are the exact expressions `initFromConfig` branches on,
+  // and together they select its `common_init_from_params` arm. The streamed
+  // arms have no on-disk GGUF for the fitter to read, and the sharded arm is
+  // fitted inside inference-addon-cpp, so neither is touched here.
+  const bool singleFileFromDisk = !snap->asyncWeightsLoader_.isStreaming() &&
+                                  snap->shards_.gguf_files.empty();
+  if (singleFileFromDisk) {
+    fit_to_free_device_memory::fitParamsToFreeDeviceMemory(params, modelPath);
+  }
+
+  // Taken after the fit, so the snapshot keeps describing the configuration the
+  // load actually uses rather than the one that was asked for. The fit only
+  // ever moves parameters the caller left unset, so for a fully pinned config
+  // this is the same object it was before. `normalized.fitSnapshot.nCtx` is the
+  // already-resolved trained context, and is read only when `n_ctx` is still
+  // the 0 sentinel.
+  snap->normalizedFitSnapshot_ =
+      load_fit_normalization::makeNormalizedFitSnapshot(
+          params, normalized.fitSnapshot.nCtx);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
       snap->asyncWeightsLoader_.extractIndividualStreamedFiles();
 
   snap.demoteToRead();
+
+  // The fit has already run, under conditions where its status is checked.
+  // fabric gates its own in-place fit on this flag, so clear it across the
+  // call — and put it back afterwards, because the flag records what the
+  // caller asked for rather than what has already happened. `params` is passed
+  // by reference and `common_init_from_params` writes model-derived sampler
+  // settings back into it, so this cannot be done on a copy.
+  const bool fitRequested = params.fit_params;
+  if (singleFileFromDisk) {
+    params.fit_params = false;
+  }
 
   common_init_result_ptr llamaInit = initFromConfig(
       params,
@@ -219,6 +257,8 @@ void LlamaModel::init(bool acquireLock) {
       snap->asyncWeightsLoader_.isStreaming(),
       ADDON_ID,
       errorWhenFailed);
+
+  params.fit_params = fitRequested;
 
   if (!snap.promoteToWrite()) {
     return;

@@ -377,6 +377,49 @@ TEST_F(LoadFitNormalizationTest, ExplicitContextAndMinimumClampAreCanonical) {
   EXPECT_EQ(result.fitSnapshot.nCtx, 8U);
 }
 
+// QVAC-25039: normalization deliberately does NOT pad this vector out to
+// llama_max_tensor_buft_overrides(). The fitter needs a writable buffer of that
+// size, but it gets scratch of its own in fitParamsToFreeDeviceMemory — see
+// test_fit_to_free_device_memory.cpp — and `params` is copied by value into
+// every per-slot context, so carrying a 4096-entry pad here would cost ~64 KiB
+// per slot for nothing.
+TEST_F(LoadFitNormalizationTest, TensorBuftOverridesAreNotPaddedHere) {
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      baseConfig(),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_TRUE(result.params.tensor_buft_overrides.empty());
+  EXPECT_TRUE(result.fitSnapshot.tensorBufferOverrides.empty());
+}
+
+TEST_F(LoadFitNormalizationTest, CallerSuppliedOverridesAreTerminated) {
+  auto config = baseConfig();
+  config["cpu-moe"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  // The caller's single override, then the null entry that terminates it.
+  ASSERT_EQ(result.params.tensor_buft_overrides.size(), 2U);
+  EXPECT_NE(result.params.tensor_buft_overrides[0].pattern, nullptr);
+  EXPECT_EQ(
+      result.params.tensor_buft_overrides[0].buft,
+      ggml_backend_cpu_buffer_type());
+  EXPECT_EQ(result.params.tensor_buft_overrides[1].pattern, nullptr);
+  EXPECT_EQ(result.params.tensor_buft_overrides[1].buft, nullptr);
+  // common_model_params_to_llama asserts the list is null-terminated.
+  common_params params = result.params;
+  const llama_model_params mparams = common_model_params_to_llama(params);
+  EXPECT_EQ(mparams.tensor_buft_overrides, params.tensor_buft_overrides.data());
+  ASSERT_EQ(result.fitSnapshot.tensorBufferOverrides.size(), 1U);
+}
+
 TEST_F(
     LoadFitNormalizationTest, MissingContextMetadataLeavesSnapshotUnresolved) {
   const auto result = lfn::normalizeLoadForFit(

@@ -19,6 +19,7 @@ add_executable(
   test_reload_cancel_state.cpp
   test_backend_selection.cpp
   test_load_fit_normalization.cpp
+  test_fit_to_free_device_memory.cpp
   test_tune_config_map.cpp
   test_generation_params_apply.cpp
   test_llm_parsers.cpp
@@ -70,6 +71,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/FitToFreeDeviceMemory.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
