@@ -344,10 +344,12 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
     messages: [
       'List ten animals, one per line.',
       'Now tell me a long story about wizards.',
-      'What is 2+2? Answer with just the number.'
+      'What is the capital of France? Answer with just the city name.'
     ],
     cancelTurn: 2,
-    expectedAnswerContains: '4',
+    // A token no other turn in this conversation can produce, so the assertion
+    // fails if anything but the last turn's answer is measured.
+    expectedAnswerContains: 'Paris',
     cancelAfterTokens: 3,
     generationParams: { temp: 0, top_k: 1, seed: 42, predict: 256 }
   },
