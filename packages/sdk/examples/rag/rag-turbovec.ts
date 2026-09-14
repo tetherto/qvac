@@ -4,7 +4,8 @@ import {
   loadModel,
   loadVectorIndex,
   unloadModel,
-  GTE_LARGE_FP16
+  GTE_LARGE_FP16,
+  VectorIndexStorage
 } from '@qvac/sdk'
 
 // Retrieval over documents kept in your own store. The SDK holds only the
@@ -35,7 +36,10 @@ try {
   const { embedding: vectors } = await embed({ modelId, text: [...documents.values()] })
 
   console.log('▸ Building the vector index...')
-  const index = await createVectorIndex({ dim: vectors[0]!.length, storage: 'turbovec-q4' })
+  const index = await createVectorIndex({
+    dim: vectors[0]!.length,
+    storage: VectorIndexStorage.TURBOVEC_Q4
+  })
   await index.add({ ids: [...documents.keys()], vectors })
   console.log(`▸ Indexed ${index.length} vectors of dimension ${index.dim}`)
 

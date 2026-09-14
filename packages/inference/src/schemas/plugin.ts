@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
-import type { TurboVecIndexProvider } from '@qvac/rag'
+import type { TurboVecIndex, TurboVecIndexProvider } from '@qvac/rag'
 import type { ModelSrcInput } from '@/schemas/model-src-utils'
 import type { RuntimeContext } from '@/schemas/runtime-context'
 
@@ -125,6 +125,15 @@ export interface PluginLogging {
 export interface QvacPluginCapabilities {
   turbovecIndexProvider?: TurboVecIndexProvider
 }
+
+/**
+ * Contract the vector index feature is written against. TurboVec is the only
+ * backend a plugin can supply today, so these are the rag package's TurboVec
+ * types under the names the feature uses; a second backend would widen them
+ * here and in `getVectorIndexProvider`.
+ */
+export type VectorIndexProvider = TurboVecIndexProvider
+export type VectorIndexBackend = TurboVecIndex
 
 /**
  * Function to resolve a model source (URL or path) to a local file path.

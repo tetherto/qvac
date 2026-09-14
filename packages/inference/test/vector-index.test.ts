@@ -10,7 +10,7 @@ import {
   disposeAllVectorIndexes,
   getOpenVectorIndexCount,
   resolveVectorIndexPath
-} from '@/vector-index/index'
+} from '@/runtime/vector-index-registry'
 import { getConfiguredCacheDir } from '@/runtime/state'
 import {
   RequestValidationFailedError,

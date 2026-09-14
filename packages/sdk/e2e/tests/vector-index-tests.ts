@@ -1,11 +1,12 @@
 // Vector index test definitions: embed() + createVectorIndex() without a RAG workspace.
 import type { TestDefinition } from '@qvac/test-suite'
+import type { VectorIndexStorage } from '@qvac/sdk'
 
 export interface VectorIndexParams {
   documents: Record<string, string>
   query: string
   expectedId: string
-  storage?: 'f32' | 'q8' | 'q4' | 'turbovec-q4' | 'turbovec-q2'
+  storage?: VectorIndexStorage
   removeId?: string
   snapshot?: boolean
 }

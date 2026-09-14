@@ -13,7 +13,7 @@ import {
   removeVectors,
   searchVectors,
   writeVectorIndex
-} from '@/vector-index/index-manager'
+} from '@/runtime/vector-index-registry'
 
 registerOperationMetrics<{ operation?: string }, { length?: number; results?: unknown[] }>({
   op: 'vectorIndex',
