@@ -178,7 +178,7 @@ When adding or editing that step:
 - Set **`working-directory: .`** so `rm -rf "$GITHUB_WORKSPACE"` runs from the repo root, not from an inherited `packages/<pkg>/` default.
 - Gate with **`if: runner.environment != 'github-hosted'`** (not `startsWith(matrix.runner, 'qvac-')`) when the matrix mixes hosted and self-hosted runners.
 
-Full rationale and checklist: [`docs/ci/SELF-HOSTED-RUNNERS.md`](../../../docs/ci/SELF-HOSTED-RUNNERS.md). Workflow authoring rule: [`.cursor/rules/devops/github-actions.mdc`](../../../.cursor/rules/devops/github-actions.mdc) (section **Self-hosted runners — Manual Workspace Cleanup**).
+Full rationale and checklist: [`docs/ci/SELF-HOSTED-RUNNERS.md`](../../../docs/ci/SELF-HOSTED-RUNNERS.md). Repository workflow guidance: [`.github/AGENTS.md`](../../../.github/AGENTS.md).
 
 ## Failure Classification Guide
 

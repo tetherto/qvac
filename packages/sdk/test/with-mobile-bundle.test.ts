@@ -4,12 +4,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   MOBILE_HOSTS,
+  MOBILE_UNSUPPORTED_MODULES,
   patchBareKitLinkers,
   runIOSAddonLinker
 } from '@/expo/plugins/withMobileBundle'
 
 test('MOBILE_HOSTS: canonical mobile host set', (t) => {
   t.alike(MOBILE_HOSTS, ['android-arm64', 'ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'])
+})
+
+test('MOBILE_UNSUPPORTED_MODULES: desktop-only fit subprocess stays out of mobile bundles', (t) => {
+  t.alike(MOBILE_UNSUPPORTED_MODULES, ['bare-runtime/spawn', '@qvac/model-fit/process'])
 })
 
 test('patchBareKitLinkers: returns paths for patched platforms', (t) => {

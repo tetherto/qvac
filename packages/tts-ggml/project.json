@@ -1,0 +1,1039 @@
+{
+  "name": "@qvac/tts-ggml",
+  "root": "packages/tts-ggml",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "hasCppLint": true,
+          "hasCoload": true,
+          "coloadActive": true
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "artifactNamePrefix": "tts-ggml-",
+          "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev",
+          "includeVulkanSdk": true,
+          "setupPythonOnWindows": true
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/tts-ggml"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "timeoutMinutes": 120,
+          "envVarName": "GITHUB_TOKEN",
+          "envSecretName": "GITHUB_TOKEN",
+          "runIntegrationTests": true,
+          "linuxArmApt": ["libgomp1", "libomp5", "libblas3", "mesa-vulkan-drivers"],
+          "windowsVulkan": { "setSdk": true, "visibleDevices": true },
+          "modelCache": [
+            {
+              "paths": "packages/tts-ggml/models",
+              "hashFilesGlob": "packages/tts-ggml/scripts/download-tts-ggml-models.js",
+              "warm": "false"
+            }
+          ],
+          "modelEnv": { "INTEGRATION_TEST_TIMEOUT": "1800", "LD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}", "DYLD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}" },
+          "modelDownloadScript": "download-models:registry",
+          "modelDownloadSkipOnCacheHit": true,
+          "runRtfBenchmarks": false,
+          "rtfBenchmark": {
+            "command": "node scripts/run-rtf-benchmark-matrix.js",
+            "matrixEnvVar": "QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON"
+          },
+          "platforms": [
+            {
+              "os": "ubuntu-22.04",
+              "platform": "linux",
+              "arch": "x64",
+              "runner": "qvac-ubuntu2204-x64-gpu",
+              "benchmarkMatrixJson": [
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                }
+              ]
+            },
+            {
+              "os": "ubuntu-24.04",
+              "platform": "linux",
+              "arch": "x64",
+              "runner": "qvac-ubuntu2404-x64-gpu",
+              "benchmarkMatrixJson": [
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                }
+              ]
+            },
+            {
+              "os": "ubuntu-26.04",
+              "platform": "linux",
+              "arch": "x64",
+              "noGpu": true,
+              "benchmarkMatrixJson": [
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                }
+              ]
+            },
+            {
+              "os": "ubuntu-24.04-arm",
+              "platform": "linux",
+              "arch": "arm64",
+              "noGpu": true,
+              "benchmarkMatrixJson": [
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                }
+              ]
+            },
+            {
+              "os": "macos-26",
+              "platform": "darwin",
+              "arch": "arm64",
+              "runner": "qvac-macos26-arm64-gpu",
+              "benchmarkMatrixJson": [
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "metal"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": true,
+                  "backendHint": "metal"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "metal"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": true,
+                  "backendHint": "metal"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": true,
+                  "backendHint": "metal"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "metal",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "metal",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "metal",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "metal",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "metal",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "metal",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "metal",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "metal",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                }
+              ]
+            },
+            {
+              "os": "macos-15-large",
+              "platform": "darwin",
+              "arch": "x64",
+              "noGpu": true,
+              "benchmarkMatrixJson": [
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                }
+              ]
+            },
+            {
+              "os": "windows-2025",
+              "platform": "win32",
+              "arch": "x64",
+              "runner": "qvac-win25-x64-gpu",
+              "benchmarkMatrixJson": [
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": false,
+                  "backendHint": "cpu"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "chatterbox-mtl",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic-mtl",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic3",
+                  "useGPU": true,
+                  "backendHint": "vulkan"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "chatterbox",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "denoiser": "lavasr"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": false,
+                  "backendHint": "cpu",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "f32"
+                },
+                {
+                  "engine": "supertonic",
+                  "useGPU": true,
+                  "backendHint": "vulkan",
+                  "enhancer": "lavasr",
+                  "enhancerVariant": "q8_0"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-tts-ggml-rtf.js",
+          "manualDir": "packages/tts-ggml/benchmarks/manual-results"
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/tts-ggml"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "mode": "coverage",
+          "continueOnError": true,
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
+          ],
+          "hasCcache": true,
+          "needsTtsVenvModels": true,
+          "hardGateCommand": "cd build && ./tts_ggml_tests --gtest_filter='-*RealGguf*'",
+          "buildOutputDir": "build",
+          "testEnvVars": [
+            { "name": "QVAC_TEST_CHATTERBOX_T3_GGUF", "path": "models/chatterbox-t3-mtl.gguf" },
+            { "name": "QVAC_TEST_CHATTERBOX_S3GEN_GGUF", "path": "models/chatterbox-s3gen-mtl.gguf" },
+            { "name": "QVAC_TEST_SUPERTONIC_GGUF", "path": "models/supertonic.gguf" }
+          ]
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "buildStep": "none",
+          "verifyGenerated": true,
+          "nameTransform": "rename-prefix",
+          "repoName": "tts-ggml",
+          "testGateMode": "post-publish-integration"
+        }
+      }
+    }
+  },
+  "implicitDependencies": [
+    "inference-addon-cpp",
+    "lint-cpp"
+  ]
+}

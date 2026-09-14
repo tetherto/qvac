@@ -17,6 +17,8 @@ export async function handleDeleteCache(request: DeleteCacheRequest): Promise<De
   try {
     if ('all' in request && request.all) {
       await deleteKvCacheState({ all: true })
+    } else if ('auto' in request && request.auto) {
+      await deleteKvCacheState({ auto: true })
     } else if ('kvCacheKey' in request) {
       await deleteKvCacheState({
         kvCacheKey: request.kvCacheKey,

@@ -64,10 +64,19 @@ if((ANDROID OR UNIX) AND NOT APPLE)
 endif()
 
 set(BACKEND_DL_LOOSE_SOS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  if(VCPKG_INSTALLED_PATH AND EXISTS "${VCPKG_INSTALLED_PATH}/lib")
+if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
+  if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
+    message(WARNING "audiogen-ggml: VCPKG_INSTALLED_PATH "
+      "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
+      "ggml backend module pickup -- the runtime may fail to find "
+      "Vulkan / OpenCL / CUDA backends.")
+  else()
     file(GLOB BACKEND_DL_LOOSE_SOS
-      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so")
+      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so"
+      "${VCPKG_INSTALLED_PATH}/lib/qvac-speech-ggml-*.dll")
+    foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
+      message(STATUS "audiogen-ggml: will stage ggml backend ${_lib}")
+    endforeach()
   endif()
 endif()
 

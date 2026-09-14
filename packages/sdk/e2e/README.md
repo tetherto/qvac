@@ -45,14 +45,31 @@ Which rebuild command you run depends on what changed.
 
 | You changed                              | Command                      | Rebuild packaged apps?                    |
 | ---------------------------------------- | ---------------------------- | ----------------------------------------- |
+| Inference source (`packages/inference/`) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
 | SDK source (`packages/sdk/` outside e2e) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
 | Test code or assets in `e2e/`            | `npm run install:build`      | Yes for mobile and Electron               |
 | Only the producer side (filter, suite)   | none                         | No — use `--skip-build`                   |
 
 - `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
-- `install:build:full` = `prepare:sdk` (bun install + bun run build in `packages/sdk/`) + `install:build`.
-  Use after any SDK change. If you've already rebuilt the SDK yourself (`cd .. && bun run build`), plain
-  `install:build` is enough.
+- `install:build:sdk` is a faster opt-in shortcut: it builds `packages/sdk/` (`prepare:sdk`), clears the
+  SDK snapshot, reconciles `@qvac/inference` if it was previously pinned (see below), then reinstalls and
+  bundles — skipping the inference rebuild and leaving `@qvac/inference` on its published range. Only
+  reach for it when you know your local `packages/inference` matches what's published. CI always builds
+  inference from the branch, so anything else can pass here and still fail there.
+- `install:build:full` builds the whole local chain — `packages/inference` → `packages/sdk` → `e2e` — and is
+  the one to run when in doubt. `packages/sdk` pins `@qvac/inference` to a published range, so the script
+  packs the local inference to a tarball, swaps the spec in for the install, and restores the manifest
+  afterwards (the working tree stays clean even on failure or Ctrl-C).
+- **Mobile needs the same inference pinned separately.** It installs its own npm tree later, after
+  `install:build:full` has already restored `packages/sdk/package.json` — so it also writes an
+  `@qvac/inference` npm `override` into `@qvac/test-suite`'s consumer template
+  (`scripts/pin-consumer-inference.mjs`). Without it, mobile silently gets the published inference and
+  crashes at bootstrap (`SyntaxError: ... does not provide an export named ...`) while desktop passes.
+  Re-apply or drop with `npm run pin:consumer-inference` / `unpin:consumer-inference`.
+- **A second `install:build:full`/`install:build:sdk` run can serve stale inference.** npm doesn't
+  re-resolve a cached `file:` dependency just because its spec or tarball content changed.
+  `scripts/reconcile-e2e-inference.mjs` forces a fresh resolve before each install — unconditionally in
+  `install:build:full`, only when needed in `install:build:sdk`.
 - **Mobile requires a fresh APK/IPA** to pick up either SDK or test-code changes — the baked app bundle
   contains the compiled test executors and the SDK. Omit `--skip-build` to rebuild.
 - **Electron requires a fresh Forge package** to pick up SDK, test-code, or `fixtures/qvac.config.electron.json`
@@ -61,6 +78,24 @@ Which rebuild command you run depends on what changed.
 - **`--skip-build` is for fast iteration that doesn't touch compiled code**: re-running the same build with
   a different `--filter` or `--suite`, or just re-running to debug flakiness. The producer reads
   definitions fresh each run, so filter / suite changes are picked up without rebuilding.
+
+### Resetting the local tree
+
+`clean:*` scripts are split by what they throw away, so a routine reset doesn't cost you more than it needs
+to:
+
+| Script               | Removes                                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clean:build`        | `dist`, `build`, `out`, `qvac`, `.sdk-e2e`, the generated `snap/*` build dirs, and the mobile consumer pin (it names a tarball in `.sdk-e2e`) |
+| `clean:config`       | Generated `qvac.config*.json`                                                                                                                 |
+| `clean:cache`        | `.qvac-cache` (downloaded models), `.qvac-worker-backup`, `rag-hyperdb`, `rag-turbovec`                                                       |
+| `clean:dependencies` | `node_modules` / lockfiles here, in `packages/sdk`, and in `packages/inference`                                                               |
+| `clean:all`          | All of the above                                                                                                                              |
+
+**`clean:cache` and `clean:all` discard downloaded models.** If `cacheDirectory` is configured to a local
+path (CI always does this; see `.github/workflows/test-node-sdk.yml`), that's where `run:bootstrap:*`
+pre-downloads them — running a bootstrap step and then `clean:cache`/`clean:all`, or the reverse, throws
+that work away. Reach for `clean:build` alone for a routine "rebuild my scripts" reset.
 
 ### Electron local smoke
 

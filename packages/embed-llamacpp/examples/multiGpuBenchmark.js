@@ -158,7 +158,8 @@ function printSummary (results) {
 
 async function main () {
   console.log('Multi-GPU Split Mode Benchmark (Embed)')
-  console.log('Compares: single GPU vs layer parallelism vs tensor parallelism')
+  console.log('Compares: single GPU vs layer parallelism')
+  console.log("(split-mode 'row' is rejected by this addon; use 'layer')")
   console.log('')
   console.log('Usage: bare examples/multiGpuBenchmark.js [options]')
   console.log('Options:')
@@ -194,10 +195,6 @@ async function main () {
     {
       label: 'Layer parallelism',
       config: { ...baseConfig, 'split-mode': 'layer', 'tensor-split': tensorSplit }
-    },
-    {
-      label: 'Tensor parallelism (row)',
-      config: { ...baseConfig, 'split-mode': 'row', 'tensor-split': tensorSplit }
     }
   ]
 
