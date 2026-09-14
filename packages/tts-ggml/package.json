@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 engines from tts-cpp)",
   "addon": true,
   "engines": {
@@ -9,24 +9,45 @@
   "imports": {
     "#host-addon": {
       "linux": {
-        "x64": ["@qvac/tts-ggml-linux-x64", "./addon-unavailable.js"],
-        "arm64": ["@qvac/tts-ggml-linux-arm64", "./addon-unavailable.js"],
+        "x64": [
+          "@qvac/tts-ggml-linux-x64",
+          "./addon-unavailable.js"
+        ],
+        "arm64": [
+          "@qvac/tts-ggml-linux-arm64",
+          "./addon-unavailable.js"
+        ],
         "default": "./addon-unavailable.js"
       },
       "darwin": {
-        "arm64": ["@qvac/tts-ggml-darwin-arm64", "./addon-unavailable.js"],
-        "x64": ["@qvac/tts-ggml-darwin-x64", "./addon-unavailable.js"],
+        "arm64": [
+          "@qvac/tts-ggml-darwin-arm64",
+          "./addon-unavailable.js"
+        ],
+        "x64": [
+          "@qvac/tts-ggml-darwin-x64",
+          "./addon-unavailable.js"
+        ],
         "default": "./addon-unavailable.js"
       },
       "win32": {
-        "x64": ["@qvac/tts-ggml-win32-x64", "./addon-unavailable.js"],
+        "x64": [
+          "@qvac/tts-ggml-win32-x64",
+          "./addon-unavailable.js"
+        ],
         "default": "./addon-unavailable.js"
       },
       "android": {
-        "arm64": ["@qvac/tts-ggml-android-arm64", "./addon-unavailable.js"],
+        "arm64": [
+          "@qvac/tts-ggml-android-arm64",
+          "./addon-unavailable.js"
+        ],
         "default": "./addon-unavailable.js"
       },
-      "ios": ["@qvac/tts-ggml-ios", "./addon-unavailable.js"],
+      "ios": [
+        "@qvac/tts-ggml-ios",
+        "./addon-unavailable.js"
+      ],
       "default": "./addon-unavailable.js"
     }
   },
@@ -154,7 +175,11 @@
   "devDependencies": {
     "@qvac/asr-ggml": "^0.3.2",
     "@qvac/registry-client": "^0.6.1",
+    "bare-https": "^3.0.0",
+    "bare-stream": "^2.7.0",
+    "bare-url": "^2.1.6",
     "cmake-bare": "^1.7.5",
+    "cmake-npm": "^1.1.0",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
@@ -165,11 +190,7 @@
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.63.0",
-    "cmake-npm": "^1.1.0",
-    "bare-url": "^2.1.6",
-    "bare-https": "^3.0.0",
-    "bare-stream": "^2.7.0"
+    "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",

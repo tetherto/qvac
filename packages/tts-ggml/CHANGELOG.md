@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-14
+
+### Fixed
+
+- `@qvac/tts-ggml/addonLogging` no longer loads the native binding when it is
+  imported; the load moves to the first `setLogger()` / `releaseLogger()`
+  call. Since the 0.9.0 per-platform split the binding lives in an `os`/`cpu`
+  filtered platform package, so requiring it throws wherever that package was
+  not installed — a `--omit=optional` or Yarn v1 install, a workspace checkout
+  with no local build, or a host whose platform package was filtered out.
+  Consumers import this module while registering a plugin, long before any
+  model is requested, and the eager require turned that import into a fatal
+  startup error instead of failing only the call that needs the addon.
+
 ## [0.9.0] - 2026-09-11
 
 ### Added

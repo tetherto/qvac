@@ -71,3 +71,15 @@ test('the imports map routes unpublished hosts to the actionable error module', 
     t.alike(importsTargetsForHost(host), [ADDON_UNAVAILABLE_TARGET], host)
   }
 })
+
+test('importing addonLogging does not load the native binding', (t) => {
+  // The test above pins that `#host-addon` throws here: this checkout has no
+  // platform package. Consumers import this module while wiring a plugin up,
+  // well before they ask for a model, so that import has to survive — an
+  // eager `require('./binding')` used to make it fatal and take the whole
+  // process down at startup. The load belongs on the first actual call.
+  const addonLogging = require('../../addonLogging.js')
+
+  t.is(typeof addonLogging.setLogger, 'function')
+  t.is(typeof addonLogging.releaseLogger, 'function')
+})
