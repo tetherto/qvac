@@ -48,7 +48,9 @@ export class VectorIndexExecutor extends AbstractModelExecutor<typeof vectorInde
       output.push(`length:${index.length}`)
 
       if (p.snapshot) {
-        const snapshotPath = `vector-index-e2e/${embeddingModelId.substring(0, 8)}-${Date.now()}.qvi`
+        // A fixed name so repeated runs overwrite one file instead of
+        // accumulating snapshots in the data directory.
+        const snapshotPath = `vector-index-e2e/${embeddingModelId.substring(0, 8)}.qvi`
         await index.write({ path: snapshotPath })
         await index.dispose()
         const reloaded = await loadVectorIndex({ path: snapshotPath })
@@ -56,6 +58,7 @@ export class VectorIndexExecutor extends AbstractModelExecutor<typeof vectorInde
         const [reloadedBest] = await reloaded.search({ query: queryVector, k: 1 })
         output.push(`reloaded:${reloadedBest?.id ?? 'none'}`)
         output.push(`reloaded-length:${reloaded.length}`)
+        output.push(`reloaded-storage:${reloaded.storage ?? 'unknown'}`)
       }
 
       return ValidationHelpers.validate(output.join('\n'), expectation as Expectation)

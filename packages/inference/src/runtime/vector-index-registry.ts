@@ -131,7 +131,14 @@ export function containsVectors(params: { indexId: string; ids: VectorIdWire[] }
 export async function writeVectorIndex(params: { indexId: string; path: string }) {
   const index = getIndex(params.indexId)
   const snapshotPath = resolveVectorIndexPath(params.path)
-  await fsPromises.mkdir(path.dirname(snapshotPath), { recursive: true })
+  try {
+    await fsPromises.mkdir(path.dirname(snapshotPath), { recursive: true })
+  } catch (error) {
+    throw new VectorIndexFailedError(
+      `cannot create the snapshot directory for ${snapshotPath}: ${error instanceof Error ? error.message : String(error)}`,
+      error
+    )
+  }
   runBackend(() => index.write(snapshotPath))
   return { path: snapshotPath }
 }

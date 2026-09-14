@@ -40,7 +40,11 @@ export interface VectorIndex {
   readonly indexId: string
   /** Vector dimensionality every added vector and query must match. */
   readonly dim: number
-  /** Storage mode; `undefined` for a loaded snapshot whose native index does not report it. */
+  /**
+   * Storage mode. Known after `createVectorIndex`. After `loadVectorIndex` it
+   * is derived from the snapshot's bit width, so 4-bit snapshots (`q4` or
+   * `turbovec-q4`) report `undefined`.
+   */
   readonly storage: VectorIndexStorage | undefined
   /** Number of live entries as of the last call that changed or reported it. */
   readonly length: number
@@ -140,10 +144,12 @@ export function createVectorIndexClient(transport: typeof send) {
       )
     }
 
+    // The flag is set only after the worker confirms, so a failed dispose
+    // can be retried instead of leaking the index until worker shutdown.
     async function dispose(options?: RPCOptions) {
       if (disposed) return
-      disposed = true
       await call({ type: 'vectorIndex', operation: 'dispose', indexId }, options)
+      disposed = true
     }
 
     async function search(params: VectorIndexSearchParams, options?: RPCOptions) {

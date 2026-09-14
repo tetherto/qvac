@@ -12,6 +12,7 @@ import {
   resolveVectorIndexPath
 } from '@/runtime/vector-index-registry'
 import { getConfiguredCacheDir } from '@/runtime/state'
+import { storageFromBitWidth } from '@/plugins/turbovec-backend'
 import {
   RequestValidationFailedError,
   VectorIndexFailedError,
@@ -59,6 +60,14 @@ async function expectRejects(
     t.ok(error instanceof errorClass, message)
   }
 }
+
+test('storageFromBitWidth: maps unambiguous widths and leaves 4 bits undefined', (t) => {
+  t.is(storageFromBitWidth(32), 'f32')
+  t.is(storageFromBitWidth(8), 'q8')
+  t.is(storageFromBitWidth(2), 'turbovec-q2')
+  t.is(storageFromBitWidth(4), undefined, 'q4 and turbovec-q4 share a bit width')
+  t.is(storageFromBitWidth(undefined), undefined)
+})
 
 test('createVectorIndex: rejects when no plugin provides a vector index', async (t) => {
   clearPlugins()
@@ -256,7 +265,7 @@ test('vector index: write resolves relative paths under the data dir and load re
       const loaded = await loadVectorIndex({ path: relative })
       t.is(calls.load, 1)
       t.is(loaded.dim, 8)
-      t.is(loaded.storage, undefined, 'the fixture index does not report storage')
+      t.is(loaded.storage, 'q8', 'storage is derived from the loaded index bit width')
       t.is(getOpenVectorIndexCount(), 2)
       await loaded.dispose()
     } finally {

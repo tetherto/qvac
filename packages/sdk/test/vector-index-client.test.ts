@@ -174,6 +174,36 @@ test('vector index client: write returns the resolved path and dispose is idempo
   }
 })
 
+test('vector index client: a failed dispose can be retried', async (t) => {
+  let failNext = true
+  const { send, sent } = fakeTransport({
+    dispose: () => {
+      if (failNext) {
+        failNext = false
+        throw new Error('worker busy')
+      }
+      return { type: 'vectorIndex', operation: 'dispose', disposed: true }
+    }
+  })
+  const { createVectorIndex } = createVectorIndexClient(send)
+  const index = await createVectorIndex({ dim: 2 })
+
+  try {
+    await index.dispose()
+    t.fail('expected the first dispose to reject')
+  } catch (error) {
+    t.ok(error instanceof Error && error.message === 'worker busy')
+  }
+  await index.dispose()
+  await index.dispose()
+  const disposeRequests = sent.filter((entry) => entry.request['operation'] === 'dispose')
+  t.is(
+    disposeRequests.length,
+    2,
+    'the retry reaches the worker; the confirmed dispose does not repeat'
+  )
+})
+
 test('vector index client: load reports dim and length and leaves storage undefined when absent', async (t) => {
   const { send } = fakeTransport()
   const { loadVectorIndex } = createVectorIndexClient(send)

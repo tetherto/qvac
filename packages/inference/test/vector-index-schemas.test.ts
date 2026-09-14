@@ -2,7 +2,6 @@ import test from 'brittle'
 import {
   createVectorIndexParamsSchema,
   findVectorRowLengthMismatch,
-  readVectorIndexStorage,
   toWireVectorIds,
   VECTOR_ID_RESERVED,
   VectorIndexStorage,
@@ -117,9 +116,6 @@ test('helpers: ids, row lengths, and storage parsing', (t) => {
     -1
   )
   t.is(findVectorRowLengthMismatch([[1, 2], [3]], 2), 1)
-  t.is(readVectorIndexStorage('turbovec-q2'), 'turbovec-q2')
-  t.is(readVectorIndexStorage('q16'), undefined)
-  t.is(readVectorIndexStorage(undefined), undefined)
   t.alike(Object.values(VectorIndexStorage), ['f32', 'q8', 'q4', 'turbovec-q4', 'turbovec-q2'])
   t.is(VectorIndexStorage.TURBOVEC_Q4, 'turbovec-q4')
 })
