@@ -3201,7 +3201,7 @@
     "description": "FLUX.2 Klein 4B model",
     "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
     "licenseId": "Apache-2.0",
-    "quantization": "Q4_0",
+    "quantization": "q4_0",
     "params": "4B",
     "tags": ["generation", "diffusion"]
   },
@@ -8666,7 +8666,7 @@
     "quantization": "Q4_0",
     "params": "27B",
     "licenseId": "Apache-2.0",
-    "tags": ["generation", "multimodal", "qwen3.8", "mtp"],
+    "tags": ["generation", "qwen3.8", "mtp"],
     "notes": "Q4_0 multi-token prediction head for Qwen3.8 27B. Used with the matching Qwen3.8 27B model for speculative decoding.",
     "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/tree/main/MTP"
   },
