@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.0] - 2026-09-14
+
+### Fixed
+
+- Sharded models loaded from disk now run qvac-fabric's automatic GPU/CPU placement (`--fit`). `initFromConfig` routes a multi-shard model through `llama_model_load_from_splits`, which bypasses `common_init_from_params` — the only place fabric runs the fit — so a sharded model larger than VRAM was offloaded whole and spilled back to host memory by the driver, while the same model merged into a single GGUF was fitted normally. The fit now runs before the split load, reading the model shape from the first shard, and its result (layer count, context size, tensor split, per-tensor buffer overrides, MoE cache and prefetch settings) is folded back into the load parameters so the context is created at the size the fit chose rather than the one it rejected. A failed fit is non-fatal and leaves the caller's configuration untouched, and a `gpu_layers` the caller pinned still wins (QVAC-25039).
+
+### Added
+
+- `fitParamsToFreeDeviceMemory(params, modelPath)` and `padTensorBuftOverridesForFit(params)` in `LlamacppUtils.hpp`, for loaders that build a model outside `common_init_from_params` and therefore have to run the fit themselves. The padding is what gives `common_fit_params` somewhere to write its placement; without it the fitter aborts with "did not provide buffer to set tensor_buft_overrides".
+
+### Breaking
+
+- qvac-fabric >= 10549.0.0 headers are required. `LlamacppUtils.hpp` now includes `common/fit.h` and calls the nine-argument `common_fit_params`, reading `common_params::prefetch_weights_auto` and `llama_context_params::prefetch_weights`. Fabric 10297.1.2 and older declare an eight-argument `common_fit_params` and have neither field, so they no longer compile. This port declares no qvac-fabric dependency of its own — consumers supply the fabric headers — so consumers must be on 10549.0.0 before taking this version. No function signature in this port changed and nothing was removed: existing calls are source- and ABI-compatible.
+- `initFromShards(shards, params)` (the on-disk overload, and therefore `initFromConfig` for a non-streaming sharded model) now writes back to the `common_params&` it is given: `n_gpu_layers`, `n_ctx`, `prefetch_weights` and `moe_cache_size` carry the fit's decision after the call, where previously the parameters were only read. A caller that sizes anything from those fields afterwards sees the fitted values rather than the requested ones — which is the point, since the context is built from them — and a caller that wants the old behaviour sets `params.fit_params = false`.
+
 ## [1.4.0] - 2026-09-07
 
 ### Fixed

@@ -10,6 +10,83 @@
 
 #include "GGUFShards.hpp"
 #include "common/common.h"
+#include "common/fit.h"
+#include "common/log.h"
+
+/// @brief Pads `params.tensor_buft_overrides` up to the buffer size
+/// `common_fit_params` writes its placement into.
+/// @note This mirrors the padding qvac-fabric's own `common_params_parse` does
+/// (common/arg.cpp). Without it the vector stays empty for a caller that set no
+/// override of its own, `common_model_params_to_llama` maps an empty vector to
+/// a null `tensor_buft_overrides` pointer, and the fitter aborts with "did not
+/// provide buffer to set tensor_buft_overrides" — leaving the model to load
+/// with every layer on the GPU. Every padding entry is a null one, so the first
+/// of them still terminates whatever overrides the caller did set, and
+/// re-running the padding is a no-op.
+inline void padTensorBuftOverridesForFit(common_params& params) {
+  const size_t maxOverrides = llama_max_tensor_buft_overrides();
+  while (params.tensor_buft_overrides.size() < maxOverrides) {
+    params.tensor_buft_overrides.push_back({nullptr, nullptr});
+  }
+}
+
+/// @brief Runs qvac-fabric's automatic GPU/CPU placement (`--fit`) for a model
+/// that is loaded outside `common_init_from_params`, and folds the result back
+/// into @p params.
+/// @param params Load configuration; updated in place on a successful fit.
+/// @param fitModelPath GGUF the fitter reads the model shape from. For a
+/// sharded model this is the first shard — llama's loader walks the rest of the
+/// split set from its metadata.
+/// @note `common_init_from_params` runs the fit itself, so only the loaders
+/// that bypass it (the shard loaders) need this. A fit that fails is not fatal:
+/// `common_fit_params` restores the parameters it was given and logs why, and
+/// the load proceeds with exactly the configuration the caller asked for.
+inline void fitParamsToFreeDeviceMemory(
+    common_params& params, const std::string& fitModelPath) {
+  if (!params.fit_params) {
+    return;
+  }
+  if (fitModelPath.empty() || !std::filesystem::exists(fitModelPath)) {
+    LOG_WRN(
+        "%s: skipping automatic placement: no readable model file at '%s'\n",
+        __func__,
+        fitModelPath.c_str());
+    return;
+  }
+
+  padTensorBuftOverridesForFit(params);
+
+  llama_model_params mparams = common_model_params_to_llama(params);
+  llama_context_params cparams = common_context_params_to_llama(params);
+
+  const common_params_fit_status status = common_fit_params(
+      fitModelPath.c_str(),
+      &mparams,
+      &cparams,
+      params.tensor_split,
+      params.tensor_buft_overrides.data(),
+      params.fit_params_target.data(),
+      params.fit_params_min_ctx,
+      params.prefetch_weights_auto,
+      params.verbosity >= LOG_LEVEL_DEBUG ? GGML_LOG_LEVEL_DEBUG
+                                          : GGML_LOG_LEVEL_ERROR);
+
+  if (status != COMMON_PARAMS_FIT_STATUS_SUCCESS) {
+    return;
+  }
+
+  // Fold the fit back into `params` rather than carrying the fitted `mparams`
+  // forward: the shard loaders hand `params` — not these locals — to
+  // `common_init_from_model_and_params`, which rebuilds the context parameters
+  // from scratch. Without the write-back the weights would land where the fit
+  // put them while the context was still created at the size the fit rejected.
+  // `tensor_split` and `tensor_buft_overrides` need no copy: the fitter wrote
+  // through the `params`-owned buffers passed above.
+  params.n_gpu_layers = mparams.n_gpu_layers;
+  params.n_ctx = static_cast<int32_t>(cparams.n_ctx);
+  params.prefetch_weights = cparams.prefetch_weights;
+  params.moe_cache_size = cparams.moe_cache_size;
+}
 
 /// @note async version
 inline common_init_result_ptr initFromShards(
@@ -38,6 +115,13 @@ initFromShards(const GGUFShards& shards, common_params& params) {
   LOG_INF(
       "%s: load the model from disk shards and apply lora adapter, if any.\n",
       __func__);
+  // `llama_model_load_from_splits` bypasses `common_init_from_params`, which is
+  // the only place fabric runs its automatic placement, so a sharded model
+  // would otherwise never be fitted: every layer goes to the GPU and the driver
+  // spills whatever does not fit back to host memory.
+  if (!shards.gguf_files.empty()) {
+    fitParamsToFreeDeviceMemory(params, shards.gguf_files.front());
+  }
   llama_model_params mparams = common_model_params_to_llama(params);
   auto pathsView =
       shards.gguf_files |
