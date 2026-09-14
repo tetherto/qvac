@@ -180,6 +180,13 @@ jobs:
           post_integration_rows=$(echo "$rows" | jq -c '[.[] | select(.testGateMode == "post-publish-integration")]')
           verify_generated_rows=$(echo "$rows" | jq -c '[.[] | select(.verifyGenerated == true)]')
 
+          # Log the resolved config: these rows carry every per-package publish
+          # decision (nameTransform, testGateMode, slicePlatformPackages,
+          # prebuildExtraDirs), and without this the only way to see what a run
+          # decided is to infer it from which jobs ran.
+          echo "Selected packages: $packages"
+          echo "Rows: $rows"
+
           echo "any=$any" >> "$GITHUB_OUTPUT"
           echo "matrix=$rows" >> "$GITHUB_OUTPUT"
           echo "prebuild-rows=$prebuild_rows" >> "$GITHUB_OUTPUT"
