@@ -729,7 +729,7 @@ export const completionMtp = createCompletionTest(
     generationParams: { ...DETERMINISTIC, predict: 64, reasoning_budget: 0 }
   },
   { validation: 'regex', pattern: '[Pp]aris' },
-  { dependency: 'none', estimatedDurationMs: 30000 }
+  { dependency: 'none', estimatedDurationMs: 30000, suites: ['smoke'] }
 )
 
 export const completionTests = [
