@@ -68,11 +68,14 @@ struct FitRequest {
   // field's range is legitimate — including 0, which is a valid split mode,
   // device index and ggml type.
 
-  /// `enum llama_split_mode`: how the model splits across multiple GPUs.
+  /// `enum llama_split_mode`: how the model splits across multiple GPUs. ROW is
+  /// not accepted — see `applyFitRequest`.
   int32_t splitMode = 0;
   bool hasSplitMode = false;
 
-  /// Device holding the model, or -1 for an explicit CPU-only NONE placement.
+  /// Raw ggml registry index of the device a NONE placement goes on; inert, and
+  /// so unvalidated, under any other mode. Out of range throws; in range but
+  /// outside the supported GPU list projects CPU-only. -1 is the CPU sentinel.
   int32_t mainGpu = 0;
   bool hasMainGpu = false;
 
@@ -101,6 +104,15 @@ struct FitRequest {
 void applyFitRequest(
     const FitRequest& request, llama_model_params& modelParams,
     llama_context_params& contextParams);
+
+/// The CPU-only sentinel: 0 layers and mainGpu -1. Split mode is not checked
+/// here; the only caller has already established NONE before it asks.
+bool isExplicitCpuPlacement(const FitRequest& request);
+
+/// Whether `request` cannot be honoured without a supported GPU: TENSOR always,
+/// NONE unless it is the CPU sentinel or its `mainGpu` target was rejected to
+/// CPU.
+bool requiresSupportedGpu(const FitRequest& request, bool mainGpuRejectedToCpu);
 
 /// Why a fit ended the way it did. `status` alone cannot distinguish an
 /// unreadable model from a machine with no usable backend, which leaves the SDK
@@ -155,8 +167,9 @@ struct FitResult {
 
   /// `enum llama_split_mode` — how the model is split across multiple GPUs.
   int32_t splitMode = 0;
-  /// Device holding the model, or -1 for an explicit CPU-only NONE placement.
-  int32_t mainGpu = 0;
+  /// Ordinal into the pinned device list: 0 for a GPU plan, -1 for a CPU-only
+  /// one. Never the caller's raw registry index.
+  int32_t mainGpu = -1;
   /// `enum ggml_type` for the K cache. Changes KV memory, so it changes the
   /// fit.
   int32_t typeK = 0;
@@ -178,10 +191,21 @@ struct FitResult {
   /// machine it cannot see.
   size_t nDevices = 0;
 
-  /// Subset of `nDevices` that are accelerators (GPU or integrated GPU). Zero
-  /// means the projection is host-only and carries no GPU offload information.
+  /// Raw GPU/iGPU subset of `nDevices`; may include unsupported families.
   size_t nGpuDevices = 0;
 };
+
+/// Whether a SUCCESS plan runs entirely on the host: the bare device
+/// terminator, or no offloaded layer. Always false on any other status, whose
+/// fields carry no decision.
+bool isCpuOnlyPlan(const FitResult& result, const ggml_backend_dev_t* devices);
+
+/// On a SUCCESS: a GPU plan reports `mainGpu` 0; a CPU-only plan reports -1
+/// and, unless the caller pinned them, split mode NONE and zero layers. Other
+/// statuses are left as the fitter returned them.
+void normalizePlanPlacement(
+    FitResult& result, const ggml_backend_dev_t* devices, bool splitModePinned,
+    bool nGpuLayersPinned);
 
 /// Runs `common_fit_params` for `req`. Never loads weight data — the fitter
 /// uses its internal no-alloc simulation, so this is safe to call before a real
@@ -192,9 +216,11 @@ struct FitResult {
 /// Throws `std::invalid_argument` for arguments that cannot be acted on:
 ///  - a `modelPath` that is empty or relative;
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
-///  - a pinned `splitMode` of NONE on a host with no GPU device, unless the
-///    request is explicitly CPU-only, or with a `mainGpu` past the registered
-///    ones;
+///  - a `mainGpu` at or past `nDevices` when `splitMode` is pinned to NONE; an
+///    in-range but unsupported index projects CPU-only instead;
+///  - a pinned `splitMode` of ROW — see `applyFitRequest`;
+///  - a pinned `splitMode` of NONE or TENSOR on a host with no supported GPU —
+///    see `requiresSupportedGpu`;
 ///  - an `nCtx`, or an explicitly requested `nCtxMin`, above the context
 ///    length the model declares.
 FitResult runFit(const FitRequest& req);

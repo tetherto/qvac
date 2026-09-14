@@ -153,19 +153,34 @@ jobs:
           pattern: perf-report-bci-whispercpp-*
           path: benchmark-artifacts/mobile
 
+      # EXPECTED_DESKTOP_DEVICES is empty when the desktop leg was skipped
+      # (include_desktop=false) or died before producing the reusable
+      # workflow's output — the gate only arms when the desktop matrix
+      # actually ran. When armed, a device with zero rows fails this step
+      # AFTER the report files are written, so the steps below still publish
+      # the incomplete report.
       - name: Generate consolidated benchmark report
+        env:
+          EXPECTED_DESKTOP_DEVICES: ${{ needs.desktop-benchmarks.outputs.rtf_expected_devices }}
         run: |
+          expect_args=()
+          if [ -n "$EXPECTED_DESKTOP_DEVICES" ]; then
+            expect_args=(--expect-devices "$EXPECTED_DESKTOP_DEVICES")
+          fi
           node scripts/perf-report/aggregate-bci-rtf.js \
             --dir benchmark-artifacts \
             --manual-dir packages/bci-whispercpp/benchmarks/manual-results \
             --output benchmark-artifacts/bci-performance-findings.md \
             --output-json benchmark-artifacts/bci-performance-findings.json \
-            --output-html benchmark-artifacts/bci-performance-findings.html
+            --output-html benchmark-artifacts/bci-performance-findings.html \
+            "${expect_args[@]}"
 
       - name: Add summary
+        if: ${{ !cancelled() }}
         run: cat benchmark-artifacts/bci-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload consolidated benchmark report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: bci-performance-findings

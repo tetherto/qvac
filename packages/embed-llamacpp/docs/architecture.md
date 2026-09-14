@@ -53,7 +53,7 @@
 - **Caller-supplied paths**: Application passes absolute file paths; addon streams them from disk
 - **Batch processing**: Process multiple texts in a single forward pass
 - **GPU acceleration**: Metal, Vulkan, OpenCL
-- **Multi-GPU**: `split-mode`/`tensor-split` config for pipeline (`'layer'`) parallelism (see `examples/multiGpuBenchmark.js`). Tensor parallelism (`'row'`) needs split buffers, which only SYCL provides as of qvac-fabric v10069 — none of the backends shipped here do, so `'row'` is accepted but degraded to `'layer'` at load with a warning
+- **Multi-GPU**: `split-mode`/`tensor-split` config for pipeline (`'layer'`) parallelism (see `examples/multiGpuBenchmark.js`). `split-mode: 'row'` is rejected at load: it needs split buffers, which none of the backends this addon admits provide, and fabric marks the mode deprecated. Use `'layer'`
 - **Quantized models**: GGUF format (Q2-Q8, 1-bit variants)
 - **Sharded loading**: Caller passes every shard + `.tensors.txt` companion; addon streams them in order
 - **Encoder-only models**: Optimized for embedding generation
@@ -74,7 +74,7 @@ Tier 1: Platform targets for which prebuilds are provided as defined by the .git
 - inference-addon-cpp (≥1.1.5#1): C++ addon framework
 - @qvac/infer-base: Provides `createJobHandler` and `exclusiveRunQueue` helpers (composition, no base class)
 - @qvac/logging: `QvacLogger` wrapper and native logging bridge
-- qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
+- @qvac/fabric (^0.13.0): Shared llama.cpp/ggml inference engine, including the vector-index API
 - Bare Runtime (≥1.24.0): JavaScript runtime (provides `bare-fs` for direct file streaming)
 
 ---
@@ -133,7 +133,7 @@ graph TB
 | @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` helpers (composition, no base class) |
 | @qvac/logging | Framework | ^0.1.0 | `QvacLogger` wrapper and C++ log routing |
 | inference-addon-cpp | Native | ≥1.1.5#1 | C++ addon framework |
-| qvac-fabric-llm.cpp | Native | ≥7248.2.3 | llama.cpp-based inference engine |
+| @qvac/fabric | Native | ^0.13.0 | Shared llama.cpp/ggml inference engine + vector-index, dynamically linked as `qvac__fabric@0.bare` |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution, `bare-fs`, `bare-path` |
 
 **Integration Points:**

@@ -141,6 +141,11 @@ class AssessModelFitResponseExecution(Enum):
     concurrent = "concurrent"
 
 
+class AssessModelFitResponseEvidence(Enum):
+    calibration = "calibration"
+    computed_only = "computed-only"
+
+
 class AssessModelFitResponseBudget(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -193,6 +198,11 @@ class AssessModelFitResponseModelsItemVerdict(Enum):
     unknown = "unknown"
 
 
+class AssessModelFitResponseModelsItemEvidence(Enum):
+    calibration = "calibration"
+    computed_only = "computed-only"
+
+
 class AssessModelFitResponseModelsItemEstimate(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -210,18 +220,32 @@ class AssessModelFitResponseModelsItem(GeneratedBaseModel):
         AssessModelFitResponseModelsItemVerdict,
         Field(title="AssessModelFitResponseModelsItemVerdict"),
     ]
+    evidence: Annotated[
+        AssessModelFitResponseModelsItemEvidence | None,
+        Field(
+            description="What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
+            title="AssessModelFitResponseModelsItemEvidence",
+        ),
+    ] = None
     estimate: Annotated[
         AssessModelFitResponseModelsItemEstimate | None,
         Field(
-            description="Absent when this model assessed as `unknown`.",
+            description="Two-sided bound from calibrated coefficients. Absent under computed-only evidence, or when this model assessed as `unknown` for want of any evidence.",
             title="AssessModelFitResponseModelsItemEstimate",
+        ),
+    ] = None
+    floor_bytes: Annotated[
+        float | None,
+        Field(
+            alias="floorBytes",
+            description="Under computed-only evidence: the smallest resident footprint the catalog facts prove — artifact bytes, plus the KV cache for llama.cpp. A floor only; the true cost is above it by an unmeasured amount.",
         ),
     ] = None
     estimator_version: Annotated[
         str | None,
         Field(
             alias="estimatorVersion",
-            description="Estimator that produced the bounds, e.g. `llm-v1`.",
+            description="Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
         ),
     ] = None
     reasons: Annotated[list[str], Field(description="Why this model got this verdict.")]
@@ -252,6 +276,13 @@ class AssessModelFitResponse(GeneratedBaseModel):
             title="AssessModelFitResponseExecution",
         ),
     ]
+    evidence: Annotated[
+        AssessModelFitResponseEvidence | None,
+        Field(
+            description="The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or an uncalibrated floor, never a missing model.",
+            title="AssessModelFitResponseEvidence",
+        ),
+    ] = None
     budget: Annotated[
         AssessModelFitResponseBudget | None,
         Field(
@@ -262,8 +293,15 @@ class AssessModelFitResponse(GeneratedBaseModel):
     estimate: Annotated[
         AssessModelFitResponseEstimate | None,
         Field(
-            description="Absent when the combined verdict is `unknown`.",
+            description="Combined two-sided bound. Absent when the combined verdict is `unknown` for want of evidence, and under computed-only evidence, which has no upper bound.",
             title="AssessModelFitResponseEstimate",
+        ),
+    ] = None
+    floor_bytes: Annotated[
+        float | None,
+        Field(
+            alias="floorBytes",
+            description="Under computed-only evidence: the combined floor across every candidate, aggregated under `execution`. Compared against the budget for `likely-too-large`; never enough for `likely-fits`.",
         ),
     ] = None
     models: Annotated[
@@ -1068,6 +1106,9 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -1197,6 +1238,9 @@ class BatchCompletionStreamResponseStats(GeneratedBaseModel):
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -1938,6 +1982,9 @@ class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseM
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -2462,6 +2509,9 @@ class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel)
     )
     time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
     tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    prompt_tokens_per_second: Annotated[
+        float | None, Field(alias="promptTokensPerSecond")
+    ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
@@ -2673,6 +2723,11 @@ class Verbosity(Enum):
 class DeleteCacheAllRequest(GeneratedBaseModel):
     type: Literal["deleteCache"] = "deleteCache"
     all: Literal[True] = True
+
+
+class DeleteCacheAutoRequest(GeneratedBaseModel):
+    type: Literal["deleteCache"] = "deleteCache"
+    auto: Literal[True] = True
 
 
 class DeleteCacheKvEntryRequest(GeneratedBaseModel):
@@ -18387,9 +18442,13 @@ class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
     ]
 
 
-class Request_2(RootModel[DeleteCacheAllRequest | DeleteCacheKvEntryRequest]):
+class Request_2(
+    RootModel[
+        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest
+    ]
+):
     root: Annotated[
-        DeleteCacheAllRequest | DeleteCacheKvEntryRequest,
+        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest,
         Field(title="DeleteCacheRequest"),
     ]
 

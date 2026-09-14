@@ -1,7 +1,9 @@
 import test from 'brittle'
+import Buffer from 'bare-buffer'
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
+import { type DecoderOutput } from '@qvac/decoder-audio'
 import {
   decodeAudioToStream,
   decoderResponseToStream,
@@ -14,7 +16,7 @@ import {
  * that many chunks (never finishing) to simulate a hung decoder.
  */
 function fakeResponse(chunks: number, gapMs: number, stallAfter = Infinity) {
-  let onUpdate: ((output: { outputArray: ArrayBuffer }) => void) | undefined
+  let onUpdate: ((output: DecoderOutput) => void) | undefined
   let onFinish: (() => void) | undefined
   let resolveAwait: () => void = () => {}
   const awaited = new Promise<void>((resolve) => {
@@ -40,7 +42,7 @@ function fakeResponse(chunks: number, gapMs: number, stallAfter = Infinity) {
     for (let index = 0; index < chunks; index++) {
       if (index >= stallAfter) return
       await new Promise<void>((resolve) => setTimeout(resolve, gapMs))
-      onUpdate?.({ outputArray: new Float32Array([index]).buffer })
+      onUpdate?.({ outputArray: Buffer.from(new Float32Array([index]).buffer) })
     }
     onFinish?.()
     resolveAwait()

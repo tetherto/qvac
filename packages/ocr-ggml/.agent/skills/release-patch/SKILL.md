@@ -98,8 +98,8 @@ Push the helper branch; open PR #1 with **base = `release-<pkg>-<newver>`** (fou
 source PR(s)).
 
 **CI:** add the matrix labels — `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`,
-`run-mobile-addon-tests`, `run-coload-tests` — to run the fix-validating jobs. **Do not add
-`verified`**: `ci-router` reads only those five names, so `verified` selects no stage and fails
+`run-mobile-addon-tests` — to run the fix-validating jobs. **Do not add
+`verified`**: `ci-router` reads only those four names, so `verified` selects no stage and fails
 silently, costing a CI round. (The label still exists and its siblings' descriptions still read
 "requires verified" — that text is stale; the label gate was retired, and
 `ci-trust-policy.test.mjs` asserts it stays retired.) Auto-approve the `release`

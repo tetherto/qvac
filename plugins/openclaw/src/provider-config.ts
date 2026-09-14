@@ -333,6 +333,17 @@ export function normalizeApiKey(value: unknown, option: string): string {
   return normalized
 }
 
+// base64url includes `-`, and `normalizeApiKey` rejects a leading one so a
+// stored key can never be mistaken for a CLI flag. A raw draw therefore fails
+// its own validator about once in 64. Redrawing keeps every position uniform;
+// rewriting the first character would bias it and shrink the keyspace.
+export function generateApiKey(): string {
+  for (;;) {
+    const candidate = randomBytes(32).toString('base64url')
+    if (!candidate.startsWith('-')) return candidate
+  }
+}
+
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error
 }
@@ -390,14 +401,14 @@ export function ensureApiKeyFile(keyFile: string, configuredApiKey?: string): st
     // place (over the already-validated regular-file path) instead of leaving the
     // user to delete the file by hand. Read failures (EACCES, …) still propagate.
     if (error instanceof TypeError) {
-      const replacement = randomBytes(32).toString('base64url')
+      const replacement = generateApiKey()
       writePrivateKeyFile(keyFile, replacement, false)
       return replacement
     }
     if (!isNodeError(error) || error.code !== 'ENOENT') throw error
   }
 
-  const generated = randomBytes(32).toString('base64url')
+  const generated = generateApiKey()
   try {
     writePrivateKeyFile(keyFile, generated, true)
     return generated

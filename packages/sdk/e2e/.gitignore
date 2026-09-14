@@ -13,3 +13,5 @@ qvac.config.e2e.generated.json
 .env
 .env.bak-*
 rag-hyperdb/
+rag-turbovec/
+.sdk-e2e/

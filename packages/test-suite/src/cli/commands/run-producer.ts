@@ -3,6 +3,7 @@ import { config as loadDotenv } from 'dotenv'
 import * as path from 'node:path'
 import { loadConfig } from '../../utils/config-loader.js'
 import { loadTests } from '../../utils/test-loader.js'
+import { selectTests } from '../../utils/test-selection.js'
 import { buildMqttConnectionConfig, createMqttClient } from '../../utils/mqtt-connection.js'
 
 interface ProducerOptions {
@@ -14,6 +15,7 @@ interface ProducerOptions {
   filter?: string
   suite?: string
   excludeSuite?: string
+  include?: string
   reportDir?: string
 }
 
@@ -38,38 +40,34 @@ export async function runProducer(options: ProducerOptions) {
     }
 
     console.log(`📋 Loading tests from: ${config.testDir}`)
-    let tests = await loadTests(config, configDir)
+    const catalog = await loadTests(config, configDir)
 
-    const originalCount = tests.length
-    let filtered = false
+    if (options.suite) console.log(`🏷️  Including suites: ${options.suite}`)
+    if (options.excludeSuite) console.log(`🚫 Excluding suites: ${options.excludeSuite}`)
+    if (options.filter) console.log(`🔍 Filtering tests by: ${options.filter}`)
 
-    if (options.suite) {
-      const suites = options.suite.split(',').map((s) => s.trim())
-      console.log(`🏷️  Including suites: ${suites.join(', ')}`)
-      tests = tests.filter((test) => test.suites?.some((s) => suites.includes(s)))
-      filtered = true
-    }
+    const selection = selectTests(catalog, options)
+    const tests = selection.tests
 
-    if (options.excludeSuite) {
-      const excluded = options.excludeSuite.split(',').map((s) => s.trim())
-      console.log(`🚫 Excluding suites: ${excluded.join(', ')}`)
-      tests = tests.filter((test) => !test.suites?.some((s) => excluded.includes(s)))
-      filtered = true
-    }
-
-    if (options.filter) {
-      const filters = options.filter.split(',').map((f) => f.trim())
-      console.log(`🔍 Filtering tests by: ${filters.join(', ')}`)
-      tests = tests.filter((test) =>
-        filters.some(
-          (filter) => test.testId.startsWith(filter) || test.metadata?.category === filter
-        )
+    // A typo would otherwise drop the test and let the run go green, which is
+    // the opposite of what asking for it by name means. Ids match exactly, so a
+    // prefix that works with --filter will land here.
+    if (selection.unknownTestIds.length > 0) {
+      throw new Error(
+        `${selection.unknownTestIds.length} requested test id(s) are not in the catalog: ` +
+          `${selection.unknownTestIds.join(', ')}. --include matches ids exactly.`
       )
-      filtered = true
     }
 
-    if (filtered) {
-      console.log(`📋 Filtered: ${tests.length} of ${originalCount} tests\n`)
+    if (selection.addedTestIds.length > 0) {
+      console.log(
+        `➕ Also running ${selection.addedTestIds.length} explicitly requested test(s): ` +
+          selection.addedTestIds.join(', ')
+      )
+    }
+
+    if (selection.filtered) {
+      console.log(`📋 Filtered: ${tests.length} of ${catalog.length} tests\n`)
     } else {
       console.log(`✅ Loaded ${tests.length} tests\n`)
     }
