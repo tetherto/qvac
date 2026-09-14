@@ -3,8 +3,13 @@
 const test = require('brittle')
 
 const RegistryConfig = require('../../lib/config')
+const { ENV_KEYS } = require('../../shared/constants')
 
-const ENV_KEY = 'QVAC_BLOB_CORE_GENERATION'
+const ENV_KEY = ENV_KEYS.QVAC_BLOB_CORE_GENERATION
+
+test('registry schema exports the blob core generation environment key', (t) => {
+  t.is(ENV_KEY, 'QVAC_BLOB_CORE_GENERATION')
+})
 
 test('RegistryConfig defaults blob core generation to legacy core', (t) => {
   withEnv(t, ENV_KEY, undefined)
