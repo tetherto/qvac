@@ -312,15 +312,6 @@ install(FILES
 
 # --- Platform-specific -------------------------------------------------------
 if(ANDROID)
-  # Deliberately no Vulkan. The qvac-fabric port is built with GGML_BACKEND_DL,
-  # so the Vulkan backend ships as a separate dlopen'd module (staged above via
-  # BACKEND_DL_LIBS) and this module references no Vulkan symbol at all. Linking
-  # libvulkan.so anyway recorded a DT_NEEDED that the loader must satisfy before
-  # @qvac/fabric can load, which defeats the per-backend fallback that lets a
-  # device without a usable Vulkan driver drop to OpenCL or CPU. It also made
-  # find_package(Vulkan REQUIRED) a hard configure-time requirement on the build
-  # host; ggml-config.cmake drops find_dependency(Vulkan) under DL for the same
-  # reason.
   target_link_libraries(${qvac-fabric} PRIVATE log)
 endif()
 
