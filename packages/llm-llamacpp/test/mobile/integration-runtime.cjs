@@ -160,6 +160,7 @@ global.__shouldRunTest = function shouldRunTest(testName) {
   // guarantees os.getEnv() inside the test's module init sees the
   // dispatched value.
   loadPerfConfigOnce()
+  initNativeTail()
 
   if (!__filterRe) return true
   return __filterRe.test(testName)
@@ -193,6 +194,7 @@ const NATIVE_TAIL_MAX_BYTES = 8 * 1024 * 1024
 let _nativeTailPath = null
 let _nativeTailBytes = 0
 let _nativeTailStopped = false
+let _nativeTailWarned = false
 
 function _nativeTailWrite(level, args) {
   if (!_nativeTailPath || _nativeTailStopped) return
@@ -243,14 +245,20 @@ function initNativeTail() {
   // Loud on every bail-out: a tail that silently never starts is worse than no
   // tail, because the run looks instrumented and isn't.
   if (!dir) {
-    console.log('[native-tail] not started: global.testDir is not set')
+    if (!_nativeTailWarned) {
+      _nativeTailWarned = true
+      console.log('[native-tail] not started: global.testDir is not set')
+    }
     return
   }
   const target = path.join(dir, 'native-tail.log')
   try {
     fs.writeFileSync(target, '')
   } catch (err) {
-    console.log('[native-tail] not started: cannot write ' + target + ': ' + err.message)
+    if (!_nativeTailWarned) {
+      _nativeTailWarned = true
+      console.log('[native-tail] not started: cannot write ' + target + ': ' + err.message)
+    }
     return
   }
   _nativeTailPath = target

@@ -67,6 +67,7 @@ const NATIVE_TAIL_MAX_BYTES = 8 * 1024 * 1024
 let _nativeTailPath = null
 let _nativeTailBytes = 0
 let _nativeTailStopped = false
+let _nativeTailWarned = false
 
 function _nativeTailWrite (level, args) {
   if (!_nativeTailPath || _nativeTailStopped) return
@@ -117,14 +118,20 @@ function initNativeTail () {
   // Loud on every bail-out: a tail that silently never starts is worse than no
   // tail, because the run looks instrumented and isn't.
   if (!dir) {
-    console.log('[native-tail] not started: global.testDir is not set')
+    if (!_nativeTailWarned) {
+      _nativeTailWarned = true
+      console.log('[native-tail] not started: global.testDir is not set')
+    }
     return
   }
   const target = path.join(dir, 'native-tail.log')
   try {
     fs.writeFileSync(target, '')
   } catch (err) {
-    console.log('[native-tail] not started: cannot write ' + target + ': ' + err.message)
+    if (!_nativeTailWarned) {
+      _nativeTailWarned = true
+      console.log('[native-tail] not started: cannot write ' + target + ': ' + err.message)
+    }
     return
   }
   _nativeTailPath = target
@@ -156,5 +163,9 @@ async function runIntegrationModule (relativeModulePath, options = {}) {
 }
 
 global.runIntegrationModule = runIntegrationModule
+
+// Module scope: the framework may import test modules itself rather than
+// through runIntegrationModule, so do not rely on that being reached.
+initNativeTail()
 
 console.log('[integration-runtime] Mobile integration tests initialized')
