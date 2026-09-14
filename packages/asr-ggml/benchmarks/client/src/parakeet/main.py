@@ -2,7 +2,7 @@ import argparse
 from src.parakeet.client import AddonResults, ParakeetClient
 from src.parakeet.config import Config, DatasetType
 from src.parakeet.dataset.dataset import load_dataset_by_type
-from src.parakeet.metrics import calculate_wer, calculate_cer
+from src.parakeet.metrics import calculate_wer, calculate_cer, summarize_first_partial_latency
 from src.parakeet.utils import save_benchmark_results
 from transformers import WhisperProcessor
 
@@ -49,7 +49,14 @@ def main(config_path=None):
         cer_score = calculate_cer(results.transcriptions, references)
         print(f"Calculated CER score: {cer_score:.2f}%")
 
-    save_benchmark_results(cfg, wer_score, cer_score, results)
+    first_partial = summarize_first_partial_latency(results.first_partial_ms)
+    if first_partial:
+        print(
+            f"Time to first partial: avg {first_partial['avg_ms']:.2f} ms, "
+            f"median {first_partial['median_ms']:.2f} ms"
+        )
+
+    save_benchmark_results(cfg, wer_score, cer_score, results, first_partial=first_partial)
 
 
 if __name__ == "__main__":

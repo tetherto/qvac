@@ -10,6 +10,7 @@ const RPC_METHODS = Object.freeze([
   'put-license',
   'update-model-metadata',
   'delete-model',
+  'get-storage-capacity',
   'ping'
 ])
 

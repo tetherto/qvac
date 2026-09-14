@@ -99,6 +99,11 @@ function resolveCollision(
   while (usedNames.has(finalName)) {
     finalName = `${exportName}_${counter++}`
   }
+  if (counter > 1) {
+    console.warn(
+      `⚠️  Name collision: ${exportName} → ${finalName} (positional counter; the source entries need distinguishing tags)`
+    )
+  }
 
   usedNames.add(finalName)
   return finalName
@@ -377,8 +382,16 @@ function generateDiffusionName({
   tags
 }: BaseNameInput): string {
   if (tags.includes('vae')) {
-    const name = modelName || 'SD'
-    return `${cleanPart(name)}_VAE`
+    const name = cleanPart(modelName || 'SD')
+    // Related VAEs can share a model name (LTX ships audio + video VAEs), so
+    // splice in a type tag. Tag order is a convention, not a contract, so take
+    // the first non-'vae' tag that isn't included in the family name.
+    for (const tag of tags) {
+      const type = cleanPart(tag)
+      if (!type || type === 'VAE' || `_${name}_`.includes(`_${type}_`)) continue
+      return `${name}_${type}_VAE`
+    }
+    return `${name}_VAE`
   }
 
   let family = filename
@@ -399,18 +412,40 @@ function generateDiffusionName({
   return nameParts.map(cleanPart).join('_')
 }
 
+function isIndicConformer(filename: string, lowerPath: string) {
+  const haystack = `${filename.toLowerCase()} ${lowerPath}`
+  return haystack.includes('indic-conformer') || haystack.includes('indic_conformer')
+}
+
 function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInput): string {
   const lower = filename.toLowerCase()
+  const family = isIndicConformer(filename, lowerPath) ? 'INDIC_CONFORMER' : ''
 
   let variant = ''
-  if (lowerPath.includes('parakeet-tdt') || lowerPath.includes('parakeet/')) {
-    variant = 'TDT'
-  } else if (lowerPath.includes('parakeet-ctc')) {
-    variant = 'CTC'
-  } else if (lowerPath.includes('eou') || lowerPath.includes('parakeet-rs')) {
-    variant = 'EOU'
-  } else if (lowerPath.includes('sortformer')) {
+  if (lower.includes('sortformer') || lower.includes('diar_streaming')) {
     variant = 'SORTFORMER'
+  } else if (lower.includes('ctc') || lowerPath.includes('parakeet-ctc')) {
+    variant = 'CTC'
+  } else if (lower.includes('eou') || lowerPath.includes('parakeet-rs')) {
+    variant = 'EOU'
+  } else if (lower.includes('tdt') || lowerPath.includes('parakeet-tdt')) {
+    variant = 'TDT'
+  } else if (lower.includes('unified') || lowerPath.includes('parakeet-unified')) {
+    variant = 'UNIFIED'
+  }
+
+  if (lower.endsWith('.gguf')) {
+    const paramsMatch = filename.match(/(?:^|[-_])(\d+(?:\.\d+)?[mb])(?=[-_.])/i)
+    const versionMatch = filename.match(/[-_]v(\d+(?:\.\d+)?)/i)
+    const speakerMatch = filename.match(/(\d+spk)/i)
+    const paramsHint = paramsMatch ? paramsMatch[1]! : ''
+    const versionHint = versionMatch ? `V${versionMatch[1]!}` : ''
+    const speakerHint = speakerMatch ? speakerMatch[1]! : ''
+
+    const nameParts = [family, variant, paramsHint, speakerHint, versionHint, quantization].filter(
+      (p) => p && p !== ''
+    )
+    return `PARAKEET_${nameParts.map(cleanPart).join('_')}`
   }
 
   let fileRole = ''
@@ -438,6 +473,6 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
     fileRole = cleanPart(filename.replace(/\.\w+$/, ''))
   }
 
-  const nameParts = [variant, fileRole, quantization].filter((p) => p && p !== '')
+  const nameParts = [family, variant, fileRole, quantization].filter((p) => p && p !== '')
   return `PARAKEET_${nameParts.map(cleanPart).join('_')}`
 }

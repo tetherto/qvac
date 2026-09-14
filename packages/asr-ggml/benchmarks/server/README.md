@@ -92,7 +92,10 @@ Whisper request body:
 ```
 
 Parakeet request body (`config.path` is a single `.gguf` checkpoint; the
-model type is auto-detected from the GGUF metadata):
+model type is auto-detected from the GGUF metadata). With `streaming: true`
+the server drives the addon's duplex `runStreaming()` session using the
+ms-based controls (`streamingChunkMs`, `streamingEmitPartials`, and the
+Sortformer-only `streamingHistoryMs`) instead of batching the audio:
 
 ```json
 {
@@ -110,14 +113,21 @@ model type is auto-detected from the GGUF metadata):
       "timestampsEnabled": true
     },
     "sampleRate": 16000,
-    "streaming": false,
-    "streamingChunkSize": 64000
+    "streaming": true,
+    "streamingChunkMs": 320,
+    "streamingEmitPartials": true
   }
 }
 ```
 
 Sample response body (`whisperVersion` / `parakeetVersion` mirrors the
-engine that ran):
+engine that ran; `time.firstPartialMs` is present on parakeet streaming runs
+only and carries one entry per input — milliseconds from opening the
+streaming session to the first emitted transcript segment, `null` when the
+input produced none. The engine streams finalized per-chunk increments;
+`streamingEmitPartials` is forwarded, but a separate partial-hypothesis
+channel is not implemented in the engine yet, so this measures the first
+transcript output a streaming consumer would see):
 
 ```json
 {
@@ -126,7 +136,8 @@ engine that ran):
     "whisperVersion": "0.1.0",
     "time": {
       "loadModelMs": 5500.68625,
-      "runMs": 864.597875
+      "runMs": 864.597875,
+      "firstPartialMs": [421.5, 398.25]
     }
   }
 }

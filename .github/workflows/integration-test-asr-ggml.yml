@@ -76,6 +76,18 @@ on:
         required: false
         default: "packages/asr-ggml"
         type: string
+    outputs:
+      # One entry per run-integration-tests matrix row, resolved through the
+      # same runner_names outputs the matrix rows use (matrix.runner ||
+      # matrix.os), so a runner-label rename cannot desynchronize the two.
+      # benchmark-performance-asr-ggml.yml feeds this to the aggregator's
+      # --expect-devices gate so a lane that loses its rtf-results artifact
+      # fails the summarize job instead of silently shrinking the report.
+      # Keep in step with the matrix `include` list below — the arity is
+      # asserted by scripts/perf-report/__tests__/rtf-expected-devices-guard.test.js.
+      rtf_expected_devices:
+        description: "Comma-separated device labels every RTF benchmark matrix row reports as"
+        value: ${{ format('{0},{1},{2},{3},{4},{5},{6},{7}', jobs.runner_names.outputs.linux_ubuntu2204_x64, jobs.runner_names.outputs.linux_ubuntu2204_x64_gpu, jobs.runner_names.outputs.linux_ubuntu2404_x64_gpu, jobs.runner_names.outputs.ubuntu_2604, jobs.runner_names.outputs.ubuntu_2404_arm, jobs.runner_names.outputs.macos_arm64_gpu, jobs.runner_names.outputs.macos_15_large, jobs.runner_names.outputs.win_2025_x64_gpu) }}
 
 jobs:
   runner_names:
@@ -182,11 +194,19 @@ jobs:
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
-          # Linux GPU runners exercise the published Vulkan desktop backend.
+          # The linux-x64 prebuild bundles the CUDA and Vulkan backend modules
+          # and ggml registers CUDA first, so the GPU backend is decided by
+          # whether the CUDA module's cudart/cuBLAS DT_NEEDED entries resolve.
+          # cuda_libs points this row's test steps at the runner's CUDA
+          # toolkit (kept outside ldconfig), giving it end-to-end CUDA
+          # coverage; qvac-ubuntu2404-x64-gpu leaves the CUDA module
+          # unresolvable, so ggml skips it and that row keeps dedicated
+          # Vulkan coverage plus the fallback path itself.
           - os: ubuntu-22.04
             platform: linux
             arch: x64
             runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+            cuda_libs: /usr/local/cuda/lib64
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]
           - os: ubuntu-24.04
@@ -304,13 +324,36 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
           mkdir -p prebuilds "${{ runner.temp }}/tmp"
           rm -f "${{ runner.temp }}/tmp"/*.tgz
           rm -rf "${{ runner.temp }}/tmp/package"
-          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          npm pack "$PREBUILD_PACKAGE" --pack-destination "${{ runner.temp }}/tmp"
           tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
-          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
+          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
+          # meta tarball; split releases ship them in the per-host platform
+          # package under addon/prebuilds/.
+          if [ -d "${{ runner.temp }}/tmp/package/prebuilds" ]; then
+            cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
+          else
+            SPEC="$PREBUILD_PACKAGE"
+            REST="${SPEC#?}"
+            if [ "${REST#*@}" != "$REST" ]; then
+              VERSION="${SPEC##*@}"
+              NAME="${SPEC%@"$VERSION"}"
+            else
+              VERSION=""
+              NAME="$SPEC"
+            fi
+            HOST_SPEC="${NAME}-${{ matrix.platform }}-${{ matrix.arch }}${VERSION:+@$VERSION}"
+            rm -f "${{ runner.temp }}/tmp"/*.tgz
+            rm -rf "${{ runner.temp }}/tmp/package"
+            npm pack "$HOST_SPEC" --pack-destination "${{ runner.temp }}/tmp"
+            tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+            cp -r "${{ runner.temp }}/tmp"/package/addon/prebuilds/* prebuilds/
+          fi
           find prebuilds -type f -name 'tetherto__*' | while read f; do
             mv "$f" "${f/tetherto__/qvac__}"
           done
@@ -319,10 +362,12 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
           New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
           New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
-          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
+          npm pack $env:PREBUILD_PACKAGE --pack-destination "${{ runner.temp }}\tmp"
           $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
           # Extract from inside the temp dir with a RELATIVE archive name. The
           # tar on PATH (Git's MSYS GNU tar) mangles absolute Windows paths — it
@@ -331,7 +376,30 @@ jobs:
           Push-Location "${{ runner.temp }}\tmp"
           tar -xzf $tgz.Name
           Pop-Location
-          Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
+          # meta tarball; split releases ship them in the per-host platform
+          # package under addon/prebuilds/.
+          if (Test-Path "${{ runner.temp }}\tmp\package\prebuilds") {
+            Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          } else {
+            $spec = $env:PREBUILD_PACKAGE
+            $atIndex = $spec.LastIndexOf('@')
+            if ($atIndex -gt 0) {
+              $name = $spec.Substring(0, $atIndex)
+              $version = $spec.Substring($atIndex + 1)
+              $hostSpec = "$name-${{ matrix.platform }}-${{ matrix.arch }}@$version"
+            } else {
+              $hostSpec = "$spec-${{ matrix.platform }}-${{ matrix.arch }}"
+            }
+            Remove-Item "${{ runner.temp }}\tmp\*.tgz" -Force
+            Remove-Item "${{ runner.temp }}\tmp\package" -Recurse -Force
+            npm pack $hostSpec --pack-destination "${{ runner.temp }}\tmp"
+            $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
+            Push-Location "${{ runner.temp }}\tmp"
+            tar -xzf $tgz.Name
+            Pop-Location
+            Copy-Item -Path "${{ runner.temp }}\tmp\package\addon\prebuilds\*" -Destination prebuilds -Recurse -Force
+          }
           Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
             $newName = $_.Name -replace 'tetherto__', 'qvac__'
             Rename-Item -Path $_.FullName -NewName $newName
@@ -425,7 +493,9 @@ jobs:
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           # ggml backend .so/.dylib files load transitively from the prebuilds
           # dir (parakeet's transitive-.so gotcha) — keep for the merged addon.
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          # matrix.cuda_libs additionally resolves the CUDA module's
+          # cudart/cuBLAS dependencies on the CUDA-lane runner.
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.cuda_libs && format(':{0}', matrix.cuda_libs) || '' }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Run integration test (Windows)
@@ -450,7 +520,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.cuda_libs && format(':{0}', matrix.cuda_libs) || '' }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Run integration GPU test (Windows)
@@ -546,7 +616,19 @@ jobs:
       # Runner-qualified artifact name: two same-platform runners (e.g.
       # qvac-ubuntu2204-x64 cpu-only and qvac-ubuntu2204-x64-gpu) would
       # otherwise collide on one artifact name.
+      #
+      # Two attempts. The retry exists for DATA RECOVERY: a transient upload
+      # failure (run 34062003154, CreateArtifact ETIMEDOUT on the darwin-arm64
+      # runner) silently dropped all 48 of that lane's rows from the
+      # consolidated report, and a second attempt keeps the report COMPLETE
+      # rather than merely flagged. Losing both attempts does not by itself
+      # turn the run red — this job runs with job-level continue-on-error —
+      # the summarize job's --expect-devices gate is what fails the run on a
+      # missing device. `if-no-files-found: error` instead of `warn` so a
+      # zero-file upload is loud; the verify step above already guarantees
+      # files exist on the happy path.
       - name: Upload RTF benchmark results
+        id: upload-rtf-results
         if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
         continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
@@ -554,7 +636,17 @@ jobs:
           name: rtf-results-asr-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
           path: packages/asr-ggml/benchmarks/results/rtf-benchmark-*.json
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
+
+      - name: Upload RTF benchmark results (retry)
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks && steps.upload-rtf-results.outcome == 'failure' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-asr-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
+          path: packages/asr-ggml/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: error
+          overwrite: true
 
       - name: Print run state (Unix)
         if: ${{ matrix.platform != 'win32' }}

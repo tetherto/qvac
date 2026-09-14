@@ -70,6 +70,17 @@ struct ObservedRequestStats {
   double genTps = 0.0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
+  /// Reasoning blocks this request's own driver discarded, and renders where
+  /// its own chat template dropped the tool definitions. Both are read off the
+  /// slot driver at drain rather than off the scheduler-wide accumulator: that
+  /// accumulator is copied wholesale into every group (`group->stats =
+  /// stats_`), so under overlapping top-level `run()` calls it attributes a
+  /// peer's figures to this request. `toolDefinitionsDropped` in particular is
+  /// the per-response signal the SDK is to consume in place of its current
+  /// user-message heuristic (QVAC-23460), so an aggregate cannot stand in for
+  /// it.
+  int64_t thinkingBlockDiscards = 0;
+  int64_t toolDefinitionsDropped = 0;
   /// Why this request's generation stopped. Per-sequence, so it is honest for
   /// a single request; `nullopt` when unknown (never finalized) or when a
   /// group's requests disagree, since one reason cannot describe many.
@@ -163,6 +174,7 @@ struct TimedDecodeResult {
 struct RuntimeStatsSnapshot {
   int64_t cacheTokens = 0;
   int64_t thinkingBlockDiscards = 0;
+  int64_t toolDefinitionsDropped = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
 
@@ -178,21 +190,33 @@ struct RuntimeStatsSnapshot {
       uint64_t numActiveSequences, uint64_t prefillTokens,
       uint64_t decodeTokens, std::chrono::nanoseconds stepDuration);
 
-  /// Fold one completed slot's contribution into the running totals.
-  void
-  accumulateSlot(int64_t nPast, int64_t thinkingDiscards, const Request& req);
+  /// Fold one completed slot's contribution into the running totals. Every
+  /// counter is required: a defaulted one would let a future caller drop a
+  /// stat silently, with no compile error.
+  void accumulateSlot(
+      int64_t nPast, int64_t thinkingDiscards, int64_t toolsDropped,
+      const Request& req);
 
   /// How busy the shared backend was, NOT a property of any one request: the
-  /// mean number of sequences decoded together, averaged over every
-  /// `llama_decode` step of the epoch (`concurrentSeqSum_ / decodeStepCount_`).
+  /// mean number of sequences decoded together, averaged over the epoch's
+  /// tokens rather than its steps
+  /// (`concurrentSeqTokenSum_ / weightedTokenTotal_`).
   /// A request contributes at most 1; the rest is other traffic on the same
   /// backend, capped by its configuration (`parallel`). 1.0 = the model was
   /// effectively yours alone; ~N = your tokens shared compute with N-1 others,
   /// so a request's observed `TPS` is roughly the aggregate rate divided by N
   /// (`observed TPS * avgConcurrentSeq ~= aggregate TPS`). Useful even on a
   /// single request: it tells apart "slow model" from "busy backend". Always
-  /// reported model-level, never overridden per job. See
-  /// docs/continuous-batching.md ("Stats").
+  /// reported model-level, never overridden per job.
+  ///
+  /// Weighting by tokens is what makes that `TPS` relation hold, and it is
+  /// also what keeps the number independent of how the scheduler happens to
+  /// chunk its work: a step feeding 512 tokens of a co-resident prefill is
+  /// 512 tokens' worth of sharing, not one step's worth. A step-weighted mean
+  /// would instead read *higher* the more finely prefill is sliced, so
+  /// speeding prefill up would look like a concurrency regression while the
+  /// backend does exactly the same work. See docs/continuous-batching.md
+  /// ("Stats").
   [[nodiscard]] double avgConcurrentSeq() const;
   [[nodiscard]] double elapsedMs() const;
 
@@ -213,6 +237,11 @@ struct RuntimeStatsSnapshot {
 private:
   uint64_t decodeStepCount_ = 0;
   uint64_t concurrentSeqSum_ = 0;
+  // Token-weighted numerator/denominator for `avgConcurrentSeq`. Separate
+  // from the step counters above, which remain the fallback for an epoch
+  // whose steps all carried zero tokens.
+  uint64_t concurrentSeqTokenSum_ = 0;
+  uint64_t weightedTokenTotal_ = 0;
   double decodeTimeMs_ = 0.0;
   double prefillTimeMs_ = 0.0;
   uint64_t decodeTokenCount_ = 0;

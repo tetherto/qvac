@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-09-10
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.10.0` -> `^0.13.0`, which carries `qvac-fabric` `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.10.0` would not have resolved `0.13.0` on its own. No API change for this package.
+- This package runs MobileNetV3-Small on CPU, so it gains nothing directly from 10549's GPU-side and vector-index work; the bump keeps it on the current shared runtime rather than a superseded one.
+- Also ships the pnpm+nx monorepo foundation (#3543), which landed after `0.24.0` with no version bump of its own.
+
 ## [0.24.0] - 2026-09-07
 
 ### Changed
