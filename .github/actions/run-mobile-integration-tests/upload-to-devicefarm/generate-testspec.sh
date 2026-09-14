@@ -170,6 +170,14 @@ if [ "$PLATFORM" = "iOS" ]; then
         # Under sudo these make pymobiledevice3 chown its config and fail EPERM.
         unset SUDO_UID SUDO_GID
         # Installed already by the model pre-stage step; install it otherwise.
+        #
+        # VERSION CONTRACT (10.3.1): `crash pull` must exit 0 on a device that
+        # has no reports at all. The snapshot below records that exit status and
+        # the verified-report path is gated on it, so a version whose empty pull
+        # exits non-zero would make every genuine crash print as UNVERIFIED
+        # instead of failing outright. If you bump this pin, check an iOS run
+        # whose device is clean still logs "no new ... report from this run"
+        # rather than the UNVERIFIED branch.
         if ! command -v pymobiledevice3 >/dev/null 2>&1; then
           python3 -m pip install --quiet pymobiledevice3==10.3.1 >/dev/null 2>&1 \
             || pip3 install --quiet pymobiledevice3==10.3.1 >/dev/null 2>&1 \
