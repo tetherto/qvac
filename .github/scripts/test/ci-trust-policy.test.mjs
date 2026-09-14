@@ -1350,6 +1350,28 @@ function jobDependsOnAuthorize(job) {
   return /\bneeds:[\s\S]*?\bauthorize\b/.test(job.text)
 }
 
+/**
+ * A job's `if:` value alone, flattened to one line. Both block-scalar styles
+ * (`|`/`|-`/`|+` and `>`/`>-`/`>+`) and the inline form are handled.
+ *
+ * Scoped to the condition rather than the whole job on purpose: several jobs
+ * forward the same expression as an input — sanity-checks passes
+ * `run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}` — and
+ * matching job text would accept that as a gate when the `if:` has none.
+ */
+function jobCondition(jobText) {
+  const block = jobText.match(/^ {4}if:[ \t]*[|>][-+]?[ \t]*\n((?: {6}.*\n|[ \t]*\n)*)/m)
+  if (block) {
+    return block[1]
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(' ')
+  }
+  const inline = jobText.match(/^ {4}if:[ \t]*(.+)$/m)
+  return inline ? inline[1].trim() : ''
+}
+
 const reusablePrivilege = new Map()
 
 /**
@@ -1402,6 +1424,12 @@ function jobRunsPrivilegedForkSurface(job) {
   return true
 }
 
+// always(), !cancelled(), success() and failure() each suppress the implicit
+// "all needs succeeded" check over the WHOLE of needs. A job carrying one of
+// them is no longer skipped by a failed or skipped fork-approval, so its
+// `needs:` entry stops being a gate and becomes mere ordering.
+const STATUS_CHECK_FUNCTION = /\b(?:always|cancelled|success|failure)\s*\(\s*\)/
+
 test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated fork run)', () => {
   for (const path of forkCiTargets()) {
     for (const job of eachJob(read(path))) {
@@ -1412,6 +1440,21 @@ test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated 
         job.text,
         /needs:[\s\S]*?\bfork-approval\b/,
         `${path}: job '${job.name}' gates on authorize but does not depend on fork-approval (fail-open)`,
+      )
+
+      // QVAC-24913. Same hazard as validate-artifacts above: once a status-check
+      // function is in the condition, `needs: [fork-approval, authorize]` no
+      // longer skips this job when either is skipped, so the ONLY thing keeping
+      // a fork PR off a credentialed self-hosted runner is the allowed clause
+      // written out in the `if:`. jobDependsOnAuthorize() is satisfied by the
+      // needs: entry alone, so without this assertion deleting that clause left
+      // the entire suite green.
+      const condition = jobCondition(job.text)
+      if (!STATUS_CHECK_FUNCTION.test(condition)) continue
+      assert.match(
+        condition,
+        /needs\.authorize\.outputs\.allowed == 'true'/,
+        `${path}: job '${job.name}' suppresses implicit needs-skipping with a status-check function, so it must if-gate on needs.authorize.outputs.allowed == 'true' explicitly (fail-open)`,
       )
     }
   }
