@@ -445,7 +445,7 @@ jobs:
 
       - name: Install bare tooling
         shell: bash
-        run: npm install -g --force bare bare-make bare-runtime bare-https brittle
+        run: npm install -g --force bare@1.31.0 bare-make@1.8.0 bare-runtime bare-https brittle
 
       # Branch JS + published native prebuild: pull the host's prebuild
       # (linux-x64 / darwin-arm64) from the public npm package into the

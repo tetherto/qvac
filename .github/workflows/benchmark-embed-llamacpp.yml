@@ -221,7 +221,7 @@ jobs:
           cache-dependency-path: ${{ env.WORKDIR }}/benchmarks/client/requirements.txt
 
       - name: Install bare runtime
-        run: npm install -g --force bare
+        run: npm install -g --force bare@1.31.0
 
       - name: Get vcpkg cache (monorepo)
         if: inputs.addon_version == ''
@@ -250,7 +250,7 @@ jobs:
           sudo rm -rf /opt/hostedtoolcache/CodeQL /opt/ghc /usr/share/dotnet /usr/local/lib/android || true
           df -h
 
-          npm install -g --force bare-make
+          npm install -g --force bare-make@1.8.0
 
           # Configure vcpkg
           echo "VCPKG_INSTALLATION_ROOT=$VCPKG_INSTALLATION_ROOT"

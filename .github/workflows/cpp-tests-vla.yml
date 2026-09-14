@@ -159,7 +159,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare@1.31.0 bare-make@1.8.0
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Set Vulkan SDK Path on Linux

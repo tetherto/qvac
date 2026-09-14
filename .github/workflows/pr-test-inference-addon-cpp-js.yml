@@ -151,7 +151,7 @@ jobs:
           node-version: 22
 
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare@1.31.0 bare-make@1.8.0
 
       - if: ${{ matrix.platform == 'win32' }}
         name: Setup CMake on Windows

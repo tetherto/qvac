@@ -415,7 +415,7 @@ jobs:
       - name: Install Bare runtime
         run: |
           npm install -g --force bare-dev
-          npm install -g --force bare bare-make
+          npm install -g --force bare@1.31.0 bare-make@1.8.0
 
       - name: Download prebuilds
         id: prebuilds

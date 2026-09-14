@@ -298,7 +298,7 @@ jobs:
           npm install
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make bare-runtime bare-https brittle
+        run: npm install -g --force bare@1.31.0 bare-make@1.8.0 bare-runtime bare-https brittle
 
       - run: mkdir -p ${{ runner.temp }}/qvac-diffusion-cpp
       - run: mkdir -p ${{ env.WORKDIR }}/prebuilds

@@ -249,7 +249,7 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare@1.31.0 bare-make@1.8.0
       - name: Build and test on host
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
@@ -314,7 +314,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare@1.31.0 bare-make@1.8.0
 
       - name: Build Android prebuild
         working-directory: ${{ env.ADDON_WORKDIR }}
@@ -364,7 +364,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare@1.31.0 bare-make@1.8.0
 
       # No CMake install step on purpose: bare-make spawns its OWN bundled CMake
       # (lib/generate.js -> require('cmake-runtime/spawn') -> cmake-runtime-darwin-universal)

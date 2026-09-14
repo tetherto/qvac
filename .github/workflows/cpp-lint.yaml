@@ -138,7 +138,7 @@ jobs:
           node-version: lts/*
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare@1.31.0 bare-make@1.8.0
 
       # - if: ${{ inputs.include-vulkan-sdk }}
       #   name: Setup Vulkan SDK

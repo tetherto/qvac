@@ -332,7 +332,7 @@ jobs:
           # Install the Bare runtime once if any changed package needs it.
           if echo "$PACKAGES" | jq -e 'any(.[]; .needs_bare == true)' > /dev/null; then
             echo "::group::Install Bare runtime"
-            npm install -g --force bare
+            npm install -g --force bare@1.31.0
             echo "::endgroup::"
           fi
 

@@ -143,7 +143,7 @@ jobs:
           npm install
           # --force so the global install succeeds on the persistent
           # self-hosted runner where these may already be present.
-          npm install -g --force bare bare-make
+          npm install -g --force bare@1.31.0 bare-make@1.8.0
 
       - name: Download fabric-prebuilds for overlay
         if: ${{ inputs.fabric-overlay-artifact != '' }}
