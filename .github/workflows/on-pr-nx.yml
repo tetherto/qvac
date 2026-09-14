@@ -368,7 +368,10 @@ jobs:
   ts-checks:
     name: await ts-checks (${{ matrix.package }})
     needs: [fork-approval, authorize, matrix]
-    if: github.event_name == 'pull_request_target' && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
+    # TEMP on this probe branch only: the branch runs under pull_request (see
+    # the trigger above), so the production pull_request_target-only clause
+    # would skip this job and leave the await untested.
+    if: (github.event_name == 'pull_request_target' || github.event_name == 'pull_request') && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
     strategy:
       fail-fast: false
       matrix:
