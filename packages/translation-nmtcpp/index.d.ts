@@ -105,7 +105,7 @@ declare namespace TranslationNmtcpp {
         modelType: TranslationNmtcppModelTypes[keyof TranslationNmtcppModelTypes];
         pivotConfig?: Record<string, unknown>;
         /**
-         * Enable GPU (non-CPU) compute backend. Read once at load() time.
+         * Enable an eligible Vulkan, Metal, OpenCL, or CUDA compute backend.
          * Bergamot is CPU-only by design — this flag is a no-op for that backend.
          *
          * `use_gpu` mirrors the C-struct field (`nmt_context_params::use_gpu`)
@@ -117,10 +117,10 @@ declare namespace TranslationNmtcpp {
         use_gpu?: boolean;
         useGPU?: boolean;
         /**
-         * Case-insensitive substring filter over the ggml device name when selecting
+         * Case-insensitive substring filter over eligible ggml device names when selecting
          * a compute backend (e.g. "vulkan", "vulkan0", "opencl", "metal"). When set,
          * replaces the default gated selector with a single explicit pass.
-         * An explicit "opencl" bypasses the build-time USE_OPENCL guard.
+         * Any explicit selector resolving to OpenCL bypasses the build-time USE_OPENCL guard.
          *
          * `gpu_backend` mirrors the C-struct field and is the primary key.
          * `gpuBackend` is the camelCase alias matching the sibling-addon convention.
