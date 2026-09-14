@@ -3,15 +3,22 @@ import { z } from 'zod'
 // ============== Storage vocabulary ==============
 
 /**
- * Storage modes of the native vector index. The `turbovec-*` modes are the
+ * Storage modes of the native vector index. The `TURBOVEC_*` modes are the
  * quantised TurboVec formats and require a dimension divisible by 8 and no
- * greater than 1024. `f32`, `q8` and `q4` are the generic stores of the same
- * addon and accept any dimension.
+ * greater than 1024. `F32`, `Q8` and `Q4` are the generic stores of the same
+ * addon and accept any dimension. Declared as a name-to-value map, like
+ * `ModelType`, so the contract carries the names for generated clients.
  */
-export const VECTOR_INDEX_STORAGES = ['f32', 'q8', 'q4', 'turbovec-q4', 'turbovec-q2'] as const
-export const vectorIndexStorageSchema = z.enum(VECTOR_INDEX_STORAGES)
-export type VectorIndexStorage = z.infer<typeof vectorIndexStorageSchema>
-export const DEFAULT_VECTOR_INDEX_STORAGE: VectorIndexStorage = 'turbovec-q4'
+export const VectorIndexStorage = {
+  F32: 'f32',
+  Q8: 'q8',
+  Q4: 'q4',
+  TURBOVEC_Q4: 'turbovec-q4',
+  TURBOVEC_Q2: 'turbovec-q2'
+} as const
+export type VectorIndexStorage = (typeof VectorIndexStorage)[keyof typeof VectorIndexStorage]
+export const vectorIndexStorageSchema = z.enum(VectorIndexStorage)
+export const DEFAULT_VECTOR_INDEX_STORAGE: VectorIndexStorage = VectorIndexStorage.TURBOVEC_Q4
 
 // ============== Ids ==============
 

@@ -105,7 +105,7 @@ The following script keeps the documents in a plain `Map`, embeds them with `emb
 </Tabs>
 
 <Callout type="info">
-TurboVec quantises vectors (`turbovec-q4` by default, `turbovec-q2` for half the memory) and needs a dimension divisible by 8 and no greater than 1024. `GTE_LARGE_FP16` produces 1024-dimensional vectors and fits. Search uses dot products, so L2-normalise vectors when you need cosine similarity. The index lives in the SDK worker; after a worker restart, reopen it from the snapshot.
+TurboVec quantises vectors (`VectorIndexStorage.TURBOVEC_Q4` by default, `TURBOVEC_Q2` for half the memory) and needs a dimension divisible by 8 and no greater than 1024. `GTE_LARGE_FP16` produces 1024-dimensional vectors and fits. Search uses dot products, so L2-normalise vectors when you need cosine similarity. The index lives in the SDK worker; after a worker restart, reopen it from the snapshot.
 </Callout>
 
 ### External vector DB

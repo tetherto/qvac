@@ -5,7 +5,7 @@ import {
   readVectorIndexStorage,
   toWireVectorIds,
   VECTOR_ID_RESERVED,
-  VECTOR_INDEX_STORAGES,
+  VectorIndexStorage,
   vectorIdWireSchema,
   vectorIndexRequestSchema,
   vectorIndexResponseSchema
@@ -120,5 +120,6 @@ test('helpers: ids, row lengths, and storage parsing', (t) => {
   t.is(readVectorIndexStorage('turbovec-q2'), 'turbovec-q2')
   t.is(readVectorIndexStorage('q16'), undefined)
   t.is(readVectorIndexStorage(undefined), undefined)
-  t.alike([...VECTOR_INDEX_STORAGES], ['f32', 'q8', 'q4', 'turbovec-q4', 'turbovec-q2'])
+  t.alike(Object.values(VectorIndexStorage), ['f32', 'q8', 'q4', 'turbovec-q4', 'turbovec-q2'])
+  t.is(VectorIndexStorage.TURBOVEC_Q4, 'turbovec-q4')
 })

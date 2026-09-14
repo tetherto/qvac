@@ -1,7 +1,8 @@
 import {
   pluginDefinitionRuntimeSchema,
   type QvacPlugin,
-  type PluginHandlerDefinition
+  type PluginHandlerDefinition,
+  type VectorIndexProvider
 } from '@/schemas/plugin'
 import { isModelTypeAlias } from '@/schemas/index'
 import {
@@ -142,6 +143,11 @@ export function getAllPlugins(): QvacPlugin[] {
 
 export function getTurboVecIndexProvider() {
   return findPluginProvidingTurboVecIndex()?.capabilities?.turbovecIndexProvider
+}
+
+// The vector index feature has one backend today: the TurboVec capability.
+export function getVectorIndexProvider(): VectorIndexProvider | undefined {
+  return getTurboVecIndexProvider()
 }
 
 export function clearPlugins(): void {

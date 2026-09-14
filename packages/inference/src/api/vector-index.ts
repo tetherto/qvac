@@ -259,7 +259,7 @@ const client = createVectorIndexClient(send)
  *
  * @param params - Index parameters
  * @param params.dim - Vector dimensionality, for example 1024 for GTE Large. TurboVec storage needs a multiple of 8 no greater than 1024.
- * @param params.storage - Storage mode; defaults to `"turbovec-q4"`. `"turbovec-q2"` halves memory again at lower recall; `"f32"`, `"q8"`, and `"q4"` are exact or generically quantised stores for dimensions TurboVec cannot hold.
+ * @param params.storage - Storage mode from `VectorIndexStorage`; defaults to `TURBOVEC_Q4`. `TURBOVEC_Q2` halves memory again at lower recall; `F32`, `Q8`, and `Q4` are exact or generically quantised stores for dimensions TurboVec cannot hold.
  * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns A handle whose methods add, search, remove, snapshot, and dispose the index.
  * @throws {VectorIndexProviderUnavailableError} When no registered plugin exposes a vector index provider

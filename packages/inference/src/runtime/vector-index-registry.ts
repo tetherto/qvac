@@ -1,8 +1,8 @@
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { QvacErrorBase } from '@qvac/error'
-import type { TurboVecIndex } from '@qvac/rag'
-import { getTurboVecIndexProvider } from '@/plugins/registry'
+import { getVectorIndexProvider } from '@/plugins/registry'
+import type { VectorIndexBackend } from '@/schemas/plugin'
 import { getConfiguredCacheDir } from '@/runtime/state'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { getEngineLogger } from '@/logging/index'
@@ -21,7 +21,7 @@ import {
 } from '@/errors/index'
 
 interface VectorIndexEntry {
-  index: TurboVecIndex
+  index: VectorIndexBackend
   storage: VectorIndexStorage | undefined
   // TurboVec precomputes rotation and codebook state on the first search
   // after a mutation; running it eagerly keeps that cost out of the first
@@ -33,7 +33,7 @@ const PADDING_ID = BigInt(VECTOR_ID_RESERVED)
 const indexes = new Map<string, VectorIndexEntry>()
 
 function requireProvider() {
-  const provider = getTurboVecIndexProvider()
+  const provider = getVectorIndexProvider()
   if (!provider) throw new VectorIndexProviderUnavailableError()
   return provider
 }
@@ -83,7 +83,7 @@ function toNativeIds(ids: VectorIdWire[]): BigUint64Array {
   return new BigUint64Array(ids.map((id) => BigInt(id)))
 }
 
-function registerIndex(index: TurboVecIndex, storage: VectorIndexStorage | undefined) {
+function registerIndex(index: VectorIndexBackend, storage: VectorIndexStorage | undefined) {
   const indexId = generateRandomRequestId()
   indexes.set(indexId, { index, storage, needsPrepare: true })
   return indexId
