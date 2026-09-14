@@ -130,6 +130,9 @@ Usage:
 
 Options:
   --model-path <path>       MTP GGUF path. Default: ${DEFAULT_MODEL_PATH}
+  --projection-model-path <path>
+                            Optional projection model to benchmark the Mtmd text path
+  --spec-draft-model <path> Optional separate MTP head model
   --addon-source <source>   local or npm. Default: local
   --device <device>         cpu or gpu. Default: gpu
   --gpu-layers <n>          GPU layer count. Default: 999
@@ -208,6 +211,9 @@ function createRuntimeConfig(args, nPredict, mode) {
   if (args['flash-attn']) runtimeConfig['flash-attn'] = args['flash-attn']
   if (mode === 'mtp') {
     runtimeConfig['spec-type'] = 'draft-mtp'
+    if (args['spec-draft-model']) {
+      runtimeConfig['spec-draft-model'] = path.resolve(String(args['spec-draft-model']))
+    }
     for (const key of [
       'spec-draft-n-max',
       'spec-draft-n-min',
@@ -260,10 +266,12 @@ async function collectResponse(response) {
   }
 }
 
-async function loadAddon({ Addon, modelPath, config, debug }) {
+async function loadAddon({ Addon, modelPath, projectionModelPath, config, debug }) {
   const logger = createAddonRuntimeLogger(debug)
+  const files = { model: [modelPath] }
+  if (projectionModelPath) files.projectionModel = projectionModelPath
   const addon = new Addon({
-    files: { model: [modelPath] },
+    files,
     config,
     logger,
     opts: { stats: true }
@@ -305,8 +313,24 @@ async function runInference(addon, messages) {
   }
 }
 
-async function runMode({ Addon, modelPath, config, prompt, mode, repeats, warmups, debug }) {
-  const { addon, loadMs } = await loadAddon({ Addon, modelPath, config, debug })
+async function runMode({
+  Addon,
+  modelPath,
+  projectionModelPath,
+  config,
+  prompt,
+  mode,
+  repeats,
+  warmups,
+  debug
+}) {
+  const { addon, loadMs } = await loadAddon({
+    Addon,
+    modelPath,
+    projectionModelPath,
+    config,
+    debug
+  })
   const runs = []
   let unloadMs = null
 
@@ -322,7 +346,7 @@ async function runMode({ Addon, modelPath, config, prompt, mode, repeats, warmup
         throw new Error(`${mode} generatedTokens missing or zero`)
       }
       if (mode === 'mtp' && result.draftTotal <= 0) {
-        throw new Error('MTP run produced no draft tokens; verify the model has bundled MTP heads')
+        throw new Error('MTP run produced no draft tokens; verify the configured MTP head')
       }
       runs.push(result)
     }
@@ -439,6 +463,12 @@ function renderMarkdown(report) {
   lines.push(`- Started: ${report.startedAt}`)
   lines.push(`- Finished: ${report.finishedAt}`)
   lines.push(`- Model: ${report.modelPath}`)
+  if (report.projectionModelPath) {
+    lines.push(`- Projection model: ${report.projectionModelPath}`)
+  }
+  if (report.specDraftModelPath) {
+    lines.push(`- MTP head model: ${report.specDraftModelPath}`)
+  }
   lines.push(`- Addon source: ${report.addonSource}`)
   lines.push(`- Repeats: ${report.repeats}`)
   lines.push(`- Warmups: ${report.warmups}`)
@@ -484,6 +514,18 @@ async function main() {
   if (!fs.existsSync(modelPath)) {
     throw new Error(`Model file not found: ${modelPath}`)
   }
+  const projectionModelPath = args['projection-model-path']
+    ? path.resolve(String(args['projection-model-path']))
+    : null
+  if (projectionModelPath && !fs.existsSync(projectionModelPath)) {
+    throw new Error(`Projection model file not found: ${projectionModelPath}`)
+  }
+  const specDraftModelPath = args['spec-draft-model']
+    ? path.resolve(String(args['spec-draft-model']))
+    : null
+  if (specDraftModelPath && !fs.existsSync(specDraftModelPath)) {
+    throw new Error(`MTP head model file not found: ${specDraftModelPath}`)
+  }
 
   const addonSource = parseAddonSource(args['addon-source'] || 'local')
   const Addon = resolveAddonCtor(addonSource)
@@ -513,6 +555,8 @@ async function main() {
   const scenarios = []
 
   console.log(`MTP benchmark model: ${modelPath}`)
+  if (projectionModelPath) console.log(`Projection model: ${projectionModelPath}`)
+  if (specDraftModelPath) console.log(`MTP head model: ${specDraftModelPath}`)
   console.log(
     `Cases: prompts=${promptCases.join(',')} n_predict=${nPredictValues.join(',')} repeats=${repeats} warmups=${warmups}`
   )
@@ -528,6 +572,7 @@ async function main() {
       const baseline = await runMode({
         Addon,
         modelPath,
+        projectionModelPath,
         config: createRuntimeConfig(args, nPredict, 'baseline'),
         prompt,
         mode: 'baseline',
@@ -542,6 +587,7 @@ async function main() {
       const mtp = await runMode({
         Addon,
         modelPath,
+        projectionModelPath,
         config: createRuntimeConfig(args, nPredict, 'mtp'),
         prompt,
         mode: 'mtp',
@@ -575,6 +621,8 @@ async function main() {
     startedAt,
     finishedAt: new Date().toISOString(),
     modelPath,
+    projectionModelPath,
+    specDraftModelPath,
     addonSource,
     repeats,
     warmups,

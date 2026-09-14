@@ -1110,6 +1110,8 @@ namespace LlmLlamacpp {
     "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
     /** Enable MTP self-speculative decoding for models with a next-n head. */
     "spec-type"?: "draft-mtp";
+    /** Optional path to a separate MTP head model. */
+    "spec-draft-model"?: string;
     /** Maximum number of draft tokens proposed per MTP verification round. */
     "spec-draft-n-max"?: number | string;
     /** Minimum number of draft tokens proposed per MTP verification round. */

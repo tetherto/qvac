@@ -1329,6 +1329,7 @@ NormalizedLoad normalizeLoadForFit(
       "--no-spec-draft-backend-sampling",
       "--spec-draft-device",
       "--spec-draft-ngl",
+      "--spec-draft-model",
       // Draft KV cache types. `benchmarks/performance/mtp-benchmark.js`
       // documents and forwards both, and without them here the parser rejects
       // the documented invocation as an invalid argument.

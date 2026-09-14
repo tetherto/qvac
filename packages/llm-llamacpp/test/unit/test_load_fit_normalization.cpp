@@ -1705,10 +1705,7 @@ TEST_F(LoadFitNormalizationTest, RetiredContextShiftKeysAreRejected) {
 
 TEST_F(LoadFitNormalizationTest, CliOnlyFileOptionsRemainRejected) {
   for (const std::string& key :
-       {"chat-template-file",
-        "system-prompt-file",
-        "log-prompts-dir",
-        "spec-draft-model"}) {
+       {"chat-template-file", "system-prompt-file", "log-prompts-dir"}) {
     auto config = baseConfig();
     config[key] = "/tmp/untrusted";
     try {
@@ -1723,6 +1720,21 @@ TEST_F(LoadFitNormalizationTest, CliOnlyFileOptionsRemainRejected) {
       EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"));
     }
   }
+}
+
+TEST_F(LoadFitNormalizationTest, SeparateMtpHeadPathIsAccepted) {
+  auto config = baseConfig();
+  config["spec-type"] = "draft-mtp";
+  config["spec-draft-model"] = "/tmp/mtp-head.gguf";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.speculative.draft.mparams.path, "/tmp/mtp-head.gguf");
 }
 
 TEST_F(LoadFitNormalizationTest, UnsupportedSpecTypesAreActuallyFiltered) {

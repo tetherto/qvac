@@ -37,12 +37,9 @@ const MODEL = {
   url: 'https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.Q8_0.gguf'
 }
 
-// Gemma-4 E2B: a real multimodal model WITHOUT a bundled MTP (nextn) head.
-// Gemma-4 ships its MTP as a separate `-assistant` draft model (llama.cpp's
-// two-file `-m base --spec-draft-model draft` workflow), which this addon's
-// single-file self-MTP loader does not use. So spec-type=draft-mtp must stay
-// INERT here (draftTotal === 0) while generation still succeeds
-// non-speculatively — the graceful-fallback contract for a model with no head.
+// Gemma-4 E2B has no bundled MTP head. Its separately packaged assistant model
+// exercises the two-file `spec-draft-model` path. Omitting the assistant must
+// still fall back to non-speculative decoding.
 //
 // DESKTOP ONLY (see the `skip: isMobile` on the test below). Deliberately no
 // `url` here: scripts/generate-model-manifest.js discovers mobile staging
@@ -61,6 +58,13 @@ const MODEL = {
 // prestage-ignore: google_gemma-4-E2B-it-Q4_K_M.gguf - desktop-only fallback coverage, too large for mobile staging.
 const GEMMA_MODEL = {
   name: 'google_gemma-4-E2B-it-Q4_K_M.gguf'
+}
+
+// The Gemma target is desktop-only, so staging its small assistant head alone
+// would not make the separate-head tests runnable on mobile.
+// prestage-ignore: gemma-4-E2B-it-assistant.Q4_K_M.gguf - used only with the desktop-only Gemma target.
+const GEMMA_DRAFT_MODEL = {
+  name: 'gemma-4-E2B-it-assistant.Q4_K_M.gguf'
 }
 
 const PROMPT = [
@@ -101,13 +105,20 @@ function baseConfig(overrides = {}) {
 // log sink) on the test. Returns the loaded addon so a test can drive multiple
 // run() calls against a single context (needed to exercise the between-request
 // reset / cache-reuse paths where the ctxDraft_ rollback lives).
-async function loadAddon(t, { model = MODEL, withSpec = true, overrides = {} } = {}) {
+async function loadAddon(
+  t,
+  { model = MODEL, draftModel = null, withSpec = true, overrides = {} } = {}
+) {
   const [modelName, dirPath] = await ensureModel({ modelName: model.name })
   const modelPath = path.join(dirPath, modelName)
 
   const config = baseConfig(overrides)
   if (withSpec) {
     config['spec-type'] = 'draft-mtp'
+  }
+  if (draftModel) {
+    const [draftName, draftDir] = await ensureModel({ modelName: draftModel.name })
+    config['spec-draft-model'] = path.join(draftDir, draftName)
   }
 
   const specLogger = attachSpecLogger({ forwardToConsole: true })
@@ -175,7 +186,7 @@ safeTest(
     // draft-mtp must degrade to plain decoding: coherent output, zero drafts, no
     // crash. This guards the "spec-type requested on a model without an MTP head
     // -> gracefully non-speculative" contract (and documents that Gemma-4's MTP
-    // assistant is a separate draft model this loader doesn't consume).
+    // assistant is not selected).
     const { output, stats } = await runOnce(t, { model: GEMMA_MODEL, withSpec: true })
     t.ok(output.length > 0, `Gemma-4 fallback run produced output (${output.length} chars)`)
     console.log(`  gemma fallback output: "${output.slice(0, 200)}"`)
@@ -185,6 +196,77 @@ safeTest(
     t.ok(/paris/i.test(output), 'Gemma-4 still names the capital running non-speculatively')
   }
 )
+
+safeTest(
+  'Gemma-4 E2B drafts with a separate MTP head',
+  { skip: isMobile, timeout: 600_000 },
+  async (t) => {
+    const { output, stats } = await runOnce(t, {
+      model: GEMMA_MODEL,
+      draftModel: GEMMA_DRAFT_MODEL
+    })
+    t.ok(output.length > 0, `separate-head run produced output (${output.length} chars)`)
+    t.ok(/paris/i.test(output), 'separate-head output names the capital (Paris)')
+    console.log(`  draftAccepted=${stats.draftAccepted} draftTotal=${stats.draftTotal}`)
+    t.ok(stats.draftTotal > 0, `separate head produced drafts (draftTotal=${stats.draftTotal})`)
+    t.ok(
+      stats.draftAccepted > 0,
+      `target accepted separate-head drafts (draftAccepted=${stats.draftAccepted})`
+    )
+  }
+)
+
+safeTest(
+  'missing separate MTP head falls back without failing model load',
+  { skip: isMobile, timeout: 600_000 },
+  async (t) => {
+    const missingPath = path.join(os.tmpdir(), `missing-mtp-head-${Date.now()}.gguf`)
+    const { output, stats } = await runOnce(t, {
+      model: GEMMA_MODEL,
+      overrides: { 'spec-draft-model': missingPath }
+    })
+    t.ok(output.length > 0, `missing-head fallback produced output (${output.length} chars)`)
+    t.ok(/paris/i.test(output), 'missing-head fallback still answers coherently')
+    t.is(stats.draftTotal, 0, 'missing head produces no drafts')
+    t.is(stats.draftAccepted, 0, 'missing head accepts no drafts')
+  }
+)
+
+safeTest(
+  'mismatched separate MTP head falls back without failing model load',
+  { skip: isMobile, timeout: 600_000 },
+  async (t) => {
+    const { output, stats } = await runOnce(t, {
+      model: GEMMA_MODEL,
+      draftModel: MODEL
+    })
+    t.ok(output.length > 0, `mismatched-head fallback produced output (${output.length} chars)`)
+    t.ok(/paris/i.test(output), 'mismatched-head fallback still answers coherently')
+    t.is(stats.draftTotal, 0, 'mismatched head produces no drafts')
+    t.is(stats.draftAccepted, 0, 'mismatched head accepts no drafts')
+  }
+)
+
+for (const gate of [
+  { name: 'parallel > 1', overrides: { parallel: '2' } },
+  { name: 'batch-size below 2', overrides: { 'batch-size': '1' } }
+]) {
+  safeTest(
+    `separate MTP head respects the ${gate.name} gate`,
+    { skip: isMobile, timeout: 600_000 },
+    async (t) => {
+      const { output, stats } = await runOnce(t, {
+        model: GEMMA_MODEL,
+        draftModel: GEMMA_DRAFT_MODEL,
+        overrides: gate.overrides
+      })
+      t.ok(output.length > 0, `${gate.name} fallback produced output (${output.length} chars)`)
+      t.ok(/paris/i.test(output), `${gate.name} fallback still answers coherently`)
+      t.is(stats.draftTotal, 0, `${gate.name} disables separate-head drafting`)
+      t.is(stats.draftAccepted, 0, `${gate.name} accepts no drafts`)
+    }
+  )
+}
 
 safeTest(
   'Qwen3.5-0.8B MTP with reasoning enabled stays coherent + balanced',

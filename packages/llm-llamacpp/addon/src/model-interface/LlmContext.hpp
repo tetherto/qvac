@@ -608,7 +608,10 @@ protected:
   llama_seq_id seqId_ = 0;
 
   // MTP speculative decoding state, shared by TextLlmContext + MtmdLlmContext.
-  // The derived contexts populate these during their own initialization.
+  // modelDraft_ is populated only when spec-draft-model names a separate MTP
+  // head. Declaration order is intentional: destruction runs spec_, context,
+  // then model.
+  llama_model_ptr modelDraft_;
   llama_context_ptr ctxDraft_;
   common_speculative_ptr spec_;
   // Hard ceiling on the MTP draft length, independent of the unvalidated
@@ -666,8 +669,9 @@ protected:
     ctxTgtSeqRmProbed_ = true;
   }
 
-  // Build the MTP draft context and its `common_speculative` driver over the
-  // same bundled-MTP model as the target, and wire the two together.
+  // Build the MTP draft context and its `common_speculative` driver. By
+  // default the target model supplies its bundled head. spec-draft-model can
+  // instead name a separately packaged head model.
   //
   // Both derived constructors ran byte-identical copies of this, and the
   // duplication had already started to cost: the `K_MAX_SPEC_DRAFT` clamp below
@@ -691,26 +695,69 @@ protected:
   bool buildMtpDraftContext(const char* logTag) {
     common_params& params = getParams();
     try {
-      auto cparamsMtp = common_context_params_to_llama(params);
+      spec_.reset();
+      ctxDraft_.reset();
+      modelDraft_.reset();
+      common_params draftParams = common_base_params_to_speculative(params);
+      auto cparamsMtp = common_context_params_to_llama(draftParams);
       cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
       cparamsMtp.type_k = params.speculative.draft.cache_type_k;
       cparamsMtp.type_v = params.speculative.draft.cache_type_v;
       cparamsMtp.n_rs_seq = 0;
       cparamsMtp.n_outputs_max =
           static_cast<uint32_t>(std::max(1, params.n_parallel));
-      ctxDraft_.reset(llama_init_from_model(getModel(), cparamsMtp));
+      cparamsMtp.ctx_other = getCtx();
+
+      llama_model* draftModel = getModel();
+      const std::string& draftPath = params.speculative.draft.mparams.path;
+      if (!draftPath.empty()) {
+        auto modelParamsMtp = common_model_params_to_llama(draftParams);
+        modelDraft_.reset(
+            llama_model_load_from_file(draftPath.c_str(), modelParamsMtp));
+        if (!modelDraft_) {
+          QLOG_IF(
+              qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+              string_format(
+                  "[%s] MTP draft model could not be loaded from '%s'; "
+                  "continuing without speculative decoding\n",
+                  logTag,
+                  draftPath.c_str()));
+          return false;
+        }
+        draftModel = modelDraft_.get();
+
+        const bool embeddingWidthMatches = llama_model_n_embd_out(draftModel) ==
+                                           llama_model_n_embd_out(getModel());
+        const bool vocabularyMatches =
+            llama_vocab_n_tokens(llama_model_get_vocab(draftModel)) ==
+            llama_vocab_n_tokens(llama_model_get_vocab(getModel()));
+        if (!embeddingWidthMatches || !vocabularyMatches) {
+          QLOG_IF(
+              qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+              string_format(
+                  "[%s] MTP draft model is incompatible with the target; "
+                  "continuing without speculative decoding\n",
+                  logTag));
+          modelDraft_.reset();
+          return false;
+        }
+      }
+
+      ctxDraft_.reset(llama_init_from_model(draftModel, cparamsMtp));
       if (!ctxDraft_) {
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
             string_format(
-                "[%s] MTP draft context could not be created for this model; "
+                "[%s] MTP draft context could not be created; "
                 "spec-type=draft-mtp will be inert\n",
                 logTag));
         spec_.reset();
+        modelDraft_.reset();
         return false;
       }
       if (!rebuildMtpSpeculator(logTag)) {
         ctxDraft_.reset();
+        modelDraft_.reset();
         return false;
       }
       probeTargetSeqRmTypeOnce();
@@ -730,6 +777,7 @@ protected:
               e.what()));
       spec_.reset();
       ctxDraft_.reset();
+      modelDraft_.reset();
       return false;
     }
   }
@@ -788,11 +836,13 @@ protected:
     }
   }
 
-  // Derived contexts own the model used by the draft context. Their destructor
-  // bodies call this before their model-owning members are destroyed.
+  // Derived contexts own the target model. The base optionally owns a separate
+  // draft model. Both require the speculative driver and draft context to be
+  // destroyed first.
   void teardownSpeculative() noexcept {
     spec_.reset();
     ctxDraft_.reset();
+    modelDraft_.reset();
   }
 
   // Wraps llama_decode(target, batch). When MTP is active, also feeds the

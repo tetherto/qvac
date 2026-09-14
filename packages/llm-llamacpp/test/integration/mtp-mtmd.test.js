@@ -37,6 +37,21 @@ const MMPROJ = {
   url: 'https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.mmproj-q8_0.gguf'
 }
 
+// Gemma's target and assistant head are desktop-only because the target plus
+// projection model exceed the mobile test memory budget.
+// prestage-ignore: google_gemma-4-E2B-it-Q4_K_M.gguf - desktop-only separate-head coverage.
+const GEMMA_MODEL = {
+  name: 'google_gemma-4-E2B-it-Q4_K_M.gguf'
+}
+// prestage-ignore: mmproj-google_gemma-4-E2B-it-f16.gguf - desktop-only separate-head coverage.
+const GEMMA_MMPROJ = {
+  name: 'mmproj-google_gemma-4-E2B-it-f16.gguf'
+}
+// prestage-ignore: gemma-4-E2B-it-assistant.Q4_K_M.gguf - used only with the desktop-only Gemma target.
+const GEMMA_DRAFT_MODEL = {
+  name: 'gemma-4-E2B-it-assistant.Q4_K_M.gguf'
+}
+
 const TEXT_PROMPT = [
   { role: 'system', content: 'You are a helpful assistant.' },
   { role: 'user', content: 'What is the capital of France? Answer in one complete sentence.' }
@@ -57,9 +72,13 @@ async function collectResponse(response) {
   return chunks.join('').trim()
 }
 
-async function loadMtmdMtp(t, overrides = {}) {
-  const [modelName, dirPath] = await ensureModel({ modelName: MODEL.name })
-  const [projName, projDir] = await ensureModel({ modelName: MMPROJ.name })
+async function loadMtmdMtp(
+  t,
+  { model = MODEL, projectionModel = MMPROJ, draftModel = null, overrides = {} } = {}
+) {
+  const [modelName, dirPath] = await ensureModel({ modelName: model.name })
+  const [projName, projDir] = await ensureModel({ modelName: projectionModel.name })
+  const draft = draftModel ? await ensureModel({ modelName: draftModel.name }) : null
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   const addon = new LlmLlamacpp({
     files: {
@@ -76,6 +95,7 @@ async function loadMtmdMtp(t, overrides = {}) {
       'reasoning-budget': '0',
       'spec-type': 'draft-mtp',
       verbosity: '2',
+      ...(draft ? { 'spec-draft-model': path.join(draft[1], draft[0]) } : {}),
       ...overrides
     },
     logger: console,
@@ -106,11 +126,34 @@ safeTest('mtmd context: text turn drafts through the MTP head', { timeout: 600_0
   )
 })
 
+safeTest(
+  'mtmd context: text turn drafts through a separate MTP head',
+  { skip: platform === 'ios' || platform === 'android', timeout: 600_000 },
+  async (t) => {
+    const addon = await loadMtmdMtp(t, {
+      model: GEMMA_MODEL,
+      projectionModel: GEMMA_MMPROJ,
+      draftModel: GEMMA_DRAFT_MODEL,
+      overrides: { ctx_size: '1024' }
+    })
+    const response = await addon.run(TEXT_PROMPT)
+    const output = await collectResponse(response)
+    const stats = response.stats
+    t.ok(output.length > 0, `separate-head text turn produced output (${output.length} chars)`)
+    t.ok(/paris/i.test(output), 'separate-head text output names the capital (Paris)')
+    t.ok(stats.draftTotal > 0, `separate head drafted tokens (draftTotal=${stats.draftTotal})`)
+    t.ok(
+      stats.draftAccepted > 0,
+      `target accepted separate-head drafts (draftAccepted=${stats.draftAccepted})`
+    )
+  }
+)
+
 safeTest('mtmd context: one-token MTP text turn commits to KV', { timeout: 600_000 }, async (t) => {
   const cachePath = path.join(os.tmpdir(), `qvac-mtp-mtmd-one-token-${Date.now()}.bin`)
   t.teardown(() => cleanupIntegrationCacheFiles(cachePath, `${cachePath}.mtp-draft`))
 
-  const addon = await loadMtmdMtp(t, { n_predict: '1' })
+  const addon = await loadMtmdMtp(t, { overrides: { n_predict: '1' } })
   const response = await addon.run(TEXT_PROMPT, { cacheKey: cachePath, saveCacheToDisk: true })
   const output = await collectResponse(response)
   const stats = response.stats
@@ -189,9 +232,11 @@ safeTest(
     // prompt inflated) so several iterations happen with a small, fast prompt
     // that stays well inside ctx_size on memory-constrained mobile GPUs.
     const addon = await loadMtmdMtp(t, {
-      ctx_size: '2048',
-      'batch-size': '256',
-      n_predict: '32'
+      overrides: {
+        ctx_size: '2048',
+        'batch-size': '256',
+        n_predict: '32'
+      }
     })
     // ~600 tokens of filler — spans several 256-token sub-batches.
     const filler = Array.from(
