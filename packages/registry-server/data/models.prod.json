@@ -3201,7 +3201,7 @@
     "description": "FLUX.2 Klein 4B model",
     "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
     "licenseId": "Apache-2.0",
-    "quantization": "q4_0",
+    "quantization": "Q4_0",
     "params": "4B",
     "tags": ["generation", "diffusion"]
   },
@@ -8663,7 +8663,7 @@
     "source": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4ca720788d1e01f1bff70c033e0d0028fd02e502/MTP/mtp-Qwen3.8-27B-Q4_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "MTP head for Qwen3.8 27B",
-    "quantization": "Q4_0",
+    "quantization": "q4_0",
     "params": "27B",
     "licenseId": "Apache-2.0",
     "tags": ["generation", "qwen3.8", "mtp"],
