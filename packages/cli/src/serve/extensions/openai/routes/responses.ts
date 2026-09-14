@@ -6,7 +6,7 @@ import { HttpError } from '@/serve/lib/http-error'
 import { initSSE } from '@/serve/lib/sse'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
-import { assertToolsEnabled } from '@/serve/lib/assert-tools-enabled'
+import { assertToolsEnabled, toolsRequested } from '@/serve/lib/assert-tools-enabled'
 import {
   responsesBody,
   responsesIdParams,
@@ -143,8 +143,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       if (
         sdk.responseFormat &&
         sdk.responseFormat.type !== 'text' &&
-        sdk.tools &&
-        sdk.tools.length > 0
+        toolsRequested(sdk.tools)
       ) {
         throw new HttpError(
           400,

@@ -1,11 +1,15 @@
 import { HttpError } from '@/serve/lib/http-error'
 
+export function toolsRequested(tools: { length: number } | undefined): boolean {
+  return Boolean(tools && tools.length > 0)
+}
+
 export function assertToolsEnabled(
   modelConfig: Record<string, unknown>,
   tools: { length: number } | undefined,
   modelAlias: string
 ): void {
-  if (!tools || tools.length === 0) return
+  if (!toolsRequested(tools)) return
   if (modelConfig['tools'] === true) return
   throw new HttpError(
     400,
