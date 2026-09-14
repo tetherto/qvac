@@ -145,7 +145,22 @@ jobs:
         run: |
           {
             echo "cpplint=$(echo "$M" | jq -c '[.[] | select(.hasCppLint == true)]')"
-            echo "tschecks=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true)]')"
+            # TS checks run PR-head code, so they live in the unprivileged
+            # on-pr-<pkg>-ts.yml workflows; we only await their check run. The
+            # slug is not the package name, and diffusion predates the shared
+            # reusable so its check has no "/ ts-checks" suffix.
+            echo "tschecks=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true) | {package, tsCheckName: (
+              {
+                "classification-ggml": "classification-ggml-pr-head-ts-checks / ts-checks",
+                "diffusion-cpp":       "diffusion-pr-head-ts-checks",
+                "embed-llamacpp":      "embed-pr-head-ts-checks / ts-checks",
+                "llm-llamacpp":        "llm-pr-head-ts-checks / ts-checks",
+                "model-fit":           "model-fit-pr-head-ts-checks / ts-checks",
+                "ocr-ggml":            "ocr-ggml-pr-head-ts-checks / ts-checks",
+                "translation-nmtcpp":  "translation-nmtcpp-pr-head-ts-checks / ts-checks",
+                "vla-ggml":            "vla-pr-head-ts-checks / ts-checks"
+              }[.package] // error("no ts check name mapped for \(.package)")
+            )}] | unique_by(.package)')"
             echo "fabric=$(echo "$M" | jq -c '[.[] | select(.hasFabricLockstep == true)]')"
             echo "perfcomposite=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "composite" and .perfReportPattern != null)]')"
             echo "perfrtf=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "rtf")]')"
@@ -343,38 +358,24 @@ jobs:
       workdir: ${{ matrix.workdir }}
       include-rocm-sdk: ${{ matrix.includeRocmSdk == true }}
 
+  # main #4396 moved TS checks out of the privileged workflow: on-pr-<pkg>-ts.yml
+  # runs them on pull_request against PR head, and this only awaits the result.
+  # The old inline job took no checkout ref, so under pull_request_target it
+  # type-checked the base branch rather than the PR.
   ts-checks:
-    name: ts-checks (${{ matrix.package }})
+    name: await ts-checks (${{ matrix.package }})
     needs: [fork-approval, authorize, matrix]
-    if: needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
+    if: github.event_name == 'pull_request_target' && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.tschecks || '[]') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: release
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 20
-      - name: Install dependencies
-        working-directory: ${{ matrix.workdir }}
-        run: npm install
-      - name: Type declaration check
-        working-directory: ${{ matrix.workdir }}
-        run: npm run test:dts
-      - name: Run lint and unit tests
-        if: matrix.tsChecksMode == 'dts+lint'
-        uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.GITHUB_TOKEN }}
-          registry-type: gpr
-          workdir: ${{ matrix.workdir }}
+    permissions:
+      checks: read
+      contents: read
+    uses: ./.github/workflows/reusable-await-ts-checks.yml
+    with:
+      check_name: ${{ matrix.tsCheckName }}
 
   fabric-lockstep:
     name: fabric-lockstep (${{ matrix.package }})

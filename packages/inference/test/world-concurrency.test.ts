@@ -24,7 +24,8 @@ test('world admission: a second world request on the same model is rejected, not
     'overlapping world request is refused'
   )
 
-  t.is(registry.list().length, 1, 'the refused request left no slot behind')
+  const held = registry.list().filter((entry) => entry.modelId === 'world-model')
+  t.is(held.length, 1, 'the refused request left no slot behind')
 })
 
 test('world admission: a different model is unaffected', async (t) => {

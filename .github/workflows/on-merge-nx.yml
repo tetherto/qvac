@@ -195,8 +195,12 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard (${{ matrix.package }})
     needs: detect
+    # Both events, as main's per-package files gate it. publish-npm accepts a
+    # 'skipped' guard, so a push-only condition would let a workflow_dispatch
+    # from a release-* branch reach npm with no version or changelog check.
     if: >-
-      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -354,6 +358,8 @@ jobs:
         with:
           workdir: ${{ matrix.workdir }}
           package: ${{ matrix.package }}
+          # fabric ships its C++ SDK under prebuilds/include and prebuilds/share.
+          extra-dirs: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
 
       - name: Set up Node.js
         if: matrix.buildStep != 'none'
@@ -468,6 +474,8 @@ jobs:
         with:
           workdir: ${{ matrix.workdir }}
           package: ${{ matrix.package }}
+          # fabric ships its C++ SDK under prebuilds/include and prebuilds/share.
+          extra-dirs: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
 
       - name: Set up Node.js
         if: matrix.buildStep != 'none'
@@ -495,6 +503,57 @@ jobs:
         with:
           workdir: ${{ matrix.workdir }}
           tag: ${{ matrix.npmTagOverride || inputs.npm_tag }}
+
+      # asr-ggml, audiogen-ggml and tts-ggml ship one npm package per platform
+      # plus a JS-only meta package carrying version-locked optionalDependencies.
+      # Ported from main's per-package on-merge workflows. npm only: GPR keeps
+      # publishing the unsliced -mono package.
+      - name: Slice platform packages
+        if: matrix.slicePlatformPackages
+        run: node scripts/ci/slice-platform-packages.mjs --workdir ${{ matrix.workdir }} --out-dir "${{ runner.temp }}/platform-packages"
+
+      - name: Set up Node.js for platform package publish
+        if: matrix.slicePlatformPackages
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "24.14.1"
+          registry-url: https://registry.npmjs.org/
+          scope: "@qvac"
+
+      # Platform packages first, meta last: there is no npm transaction, so
+      # meta-last keeps the name consumers depend on from ever appearing
+      # without its binaries.
+      - name: Publish platform packages to npm
+        if: matrix.slicePlatformPackages
+        shell: bash
+        env:
+          DIST_TAG: ${{ steps.dist-tag.outputs.tag }}
+          OUT_DIR: ${{ runner.temp }}/platform-packages
+        run: |
+          set -euo pipefail
+          for dir in "$OUT_DIR"/*/; do
+            NAME=$(node -p "require('${dir}package.json').name")
+            VERSION=$(node -p "require('${dir}package.json').version")
+            # Skip only on a confirmed hit, publish only on a confirmed miss. Any
+            # other npm view failure is a registry error, and publishing blind
+            # would 403 on an immutable version and abort before the meta ships.
+            set +e
+            VIEW_OUT=$(npm view "${NAME}@${VERSION}" version 2>&1)
+            VIEW_RC=$?
+            set -e
+            VIEW_TRIMMED=$(printf '%s' "$VIEW_OUT" | tr -d '[:space:]')
+            if [ "$VIEW_RC" -eq 0 ] && [ -n "$VIEW_TRIMMED" ]; then
+              echo "${NAME}@${VERSION} already on npm, skipping"
+              continue
+            fi
+            if [ "$VIEW_RC" -ne 0 ] && ! printf '%s' "$VIEW_OUT" | grep -q 'E404'; then
+              echo "::error title=npm view failed::Could not query ${NAME}@${VERSION} (exit ${VIEW_RC}); refusing to publish blind. Re-run after the registry recovers." >&2
+              printf '%s\n' "$VIEW_OUT" >&2
+              exit 1
+            fi
+            echo "Publishing ${NAME}@${VERSION} with tag ${DIST_TAG}"
+            (cd "$dir" && npm publish --tag "$DIST_TAG" --access public --provenance)
+          done
 
       - name: Publish to npm
         id: publish
