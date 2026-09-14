@@ -33,15 +33,16 @@ export function observableIndexProvider() {
         }
         for (const id of ids) indexIds.push(id)
       },
+      // Pads short rows with UINT64_MAX and a very negative score, as the
+      // native index does.
       search(_queries, k) {
         calls.search++
         const ids = indexIds.slice(0, k)
-        return {
-          scores: new Float32Array(ids.length).fill(1),
-          ids: new BigUint64Array(ids),
-          m: 1,
-          k: ids.length
-        }
+        const paddedIds = new BigUint64Array(k).fill(0xffffffffffffffffn)
+        paddedIds.set(ids)
+        const scores = new Float32Array(k).fill(-3.4e38)
+        scores.fill(1, 0, ids.length)
+        return { scores, ids: paddedIds, m: 1, k }
       },
       contains(id) {
         calls.contains++

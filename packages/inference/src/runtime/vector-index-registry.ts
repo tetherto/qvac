@@ -1,18 +1,12 @@
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { QvacErrorBase } from '@qvac/error'
-import { getVectorIndexProvider } from '@/plugins/registry'
-import type { VectorIndexBackend } from '@/schemas/plugin'
+import { getTurboVecBackend } from '@/plugins/turbovec-backend'
+import type { OpenVectorIndex, VectorIndexBackend } from '@/runtime/vector-index-backend'
 import { getConfiguredCacheDir } from '@/runtime/state'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { getEngineLogger } from '@/logging/index'
-import {
-  readVectorIndexStorage,
-  VECTOR_ID_RESERVED,
-  type VectorIdWire,
-  type VectorIndexHit,
-  type VectorIndexStorage
-} from '@/schemas/index'
+import type { VectorIdWire, VectorIndexStorage } from '@/schemas/index'
 import {
   VectorIndexFailedError,
   VectorIndexInvalidVectorsError,
@@ -20,33 +14,27 @@ import {
   VectorIndexProviderUnavailableError
 } from '@/errors/index'
 
-interface VectorIndexEntry {
-  index: VectorIndexBackend
-  storage: VectorIndexStorage | undefined
-  // TurboVec precomputes rotation and codebook state on the first search
-  // after a mutation; running it eagerly keeps that cost out of the first
-  // query's latency.
-  needsPrepare: boolean
+// Worker-side bookkeeping for open indexes: ids, wire-to-native conversion,
+// row validation, snapshot paths, and lifetime. Engine behaviour lives in
+// the backend.
+const indexes = new Map<string, OpenVectorIndex>()
+
+function requireBackend(): VectorIndexBackend {
+  const backend = getTurboVecBackend()
+  if (!backend) throw new VectorIndexProviderUnavailableError()
+  return backend
 }
 
-const PADDING_ID = BigInt(VECTOR_ID_RESERVED)
-const indexes = new Map<string, VectorIndexEntry>()
-
-function requireProvider() {
-  const provider = getVectorIndexProvider()
-  if (!provider) throw new VectorIndexProviderUnavailableError()
-  return provider
+function getIndex(indexId: string): OpenVectorIndex {
+  const index = indexes.get(indexId)
+  if (!index) throw new VectorIndexNotFoundError(indexId)
+  return index
 }
 
-function getEntry(indexId: string): VectorIndexEntry {
-  const entry = indexes.get(indexId)
-  if (!entry) throw new VectorIndexNotFoundError(indexId)
-  return entry
-}
-
-// The addon throws plain TypeError/RangeError/Error values; wrap them so the
-// caller receives a coded error with the native message preserved as cause.
-function runNative<T>(action: () => T): T {
+// Backends throw plain TypeError/RangeError/Error values from the native
+// layer; wrap them so the caller receives a coded error with the original
+// message preserved as cause.
+function runBackend<T>(action: () => T): T {
   try {
     return action()
   } catch (error) {
@@ -83,97 +71,78 @@ function toNativeIds(ids: VectorIdWire[]): BigUint64Array {
   return new BigUint64Array(ids.map((id) => BigInt(id)))
 }
 
-function registerIndex(index: VectorIndexBackend, storage: VectorIndexStorage | undefined) {
+function track(index: OpenVectorIndex) {
   const indexId = generateRandomRequestId()
-  indexes.set(indexId, { index, storage, needsPrepare: true })
+  indexes.set(indexId, index)
   return indexId
 }
 
 export function createVectorIndex(params: { dim: number; storage: VectorIndexStorage }) {
-  const provider = requireProvider()
-  const index = runNative(() => provider.create({ dim: params.dim, storage: params.storage }))
-  const indexId = registerIndex(index, params.storage)
+  const backend = requireBackend()
+  const index = runBackend(() => backend.create(params.dim, params.storage))
+  const indexId = track(index)
   return { indexId, dim: index.dim, storage: params.storage, length: index.length }
 }
 
 export function loadVectorIndex(params: { path: string }) {
-  const provider = requireProvider()
-  const snapshotPath = resolveVectorIndexPath(params.path)
-  const index = runNative(() => provider.load(snapshotPath))
-  const storage = readVectorIndexStorage((index as { storage?: unknown }).storage)
-  const indexId = registerIndex(index, storage)
+  const backend = requireBackend()
+  const index = runBackend(() => backend.load(resolveVectorIndexPath(params.path)))
+  const indexId = track(index)
   return {
     indexId,
     dim: index.dim,
     length: index.length,
-    ...(storage !== undefined && { storage })
+    ...(index.storage !== undefined && { storage: index.storage })
   }
 }
 
 export function addVectors(params: { indexId: string; ids: VectorIdWire[]; vectors: number[][] }) {
-  const entry = getEntry(params.indexId)
+  const index = getIndex(params.indexId)
   if (params.ids.length !== params.vectors.length) {
     throw new VectorIndexInvalidVectorsError(
       `ids has ${params.ids.length} entries but vectors has ${params.vectors.length} rows`
     )
   }
-  const vectors = flattenRows(params.vectors, entry.index.dim, 'vectors')
+  const vectors = flattenRows(params.vectors, index.dim, 'vectors')
   const ids = toNativeIds(params.ids)
-  runNative(() => entry.index.addWithIds(vectors, ids))
-  entry.needsPrepare = true
-  return { length: entry.index.length }
+  runBackend(() => index.add(vectors, ids))
+  return { length: index.length }
 }
 
 export function searchVectors(params: { indexId: string; queries: number[][]; k: number }) {
-  const entry = getEntry(params.indexId)
-  const queries = flattenRows(params.queries, entry.index.dim, 'queries')
-  if (entry.needsPrepare) {
-    runNative(() => entry.index.prepare())
-    entry.needsPrepare = false
-  }
-  const result = runNative(() => entry.index.search(queries, params.k))
-  const results: VectorIndexHit[][] = []
-  for (let row = 0; row < result.m; row++) {
-    const hits: VectorIndexHit[] = []
-    for (let slot = 0; slot < result.k; slot++) {
-      const offset = row * result.k + slot
-      const id = result.ids[offset]
-      if (id === undefined || id === PADDING_ID) break
-      hits.push({ id: id.toString(), score: result.scores[offset] ?? 0 })
-    }
-    results.push(hits)
-  }
+  const index = getIndex(params.indexId)
+  const queries = flattenRows(params.queries, index.dim, 'queries')
+  const results = runBackend(() => index.search(queries, params.k))
   return { results }
 }
 
 export function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) {
-  const entry = getEntry(params.indexId)
-  const removed = params.ids.map((id) => runNative(() => entry.index.remove(BigInt(id))))
-  if (removed.some(Boolean)) entry.needsPrepare = true
-  return { removed, length: entry.index.length }
+  const index = getIndex(params.indexId)
+  const removed = params.ids.map((id) => runBackend(() => index.remove(BigInt(id))))
+  return { removed, length: index.length }
 }
 
 export function containsVectors(params: { indexId: string; ids: VectorIdWire[] }) {
-  const entry = getEntry(params.indexId)
-  const present = params.ids.map((id) => runNative(() => entry.index.contains(BigInt(id))))
+  const index = getIndex(params.indexId)
+  const present = params.ids.map((id) => runBackend(() => index.contains(BigInt(id))))
   return { present }
 }
 
 export async function writeVectorIndex(params: { indexId: string; path: string }) {
-  const entry = getEntry(params.indexId)
+  const index = getIndex(params.indexId)
   const snapshotPath = resolveVectorIndexPath(params.path)
   await fsPromises.mkdir(path.dirname(snapshotPath), { recursive: true })
-  runNative(() => entry.index.write(snapshotPath))
+  runBackend(() => index.write(snapshotPath))
   return { path: snapshotPath }
 }
 
 // Disposing an unknown id is not an error: the caller may retry after a
 // worker restart, and the memory it refers to is already gone.
 export function disposeVectorIndex(params: { indexId: string }) {
-  const entry = indexes.get(params.indexId)
-  if (!entry) return { disposed: false }
+  const index = indexes.get(params.indexId)
+  if (!index) return { disposed: false }
   indexes.delete(params.indexId)
-  runNative(() => entry.index.dispose())
+  runBackend(() => index.dispose())
   return { disposed: true }
 }
 
@@ -182,9 +151,9 @@ export function getOpenVectorIndexCount() {
 }
 
 export function disposeAllVectorIndexes() {
-  for (const [indexId, entry] of indexes) {
+  for (const [indexId, index] of indexes) {
     try {
-      entry.index.dispose()
+      index.dispose()
     } catch (error) {
       getEngineLogger().warn(`Failed to dispose vector index '${indexId}' during cleanup:`, error)
     }
