@@ -199,12 +199,18 @@ jobs:
         shell: bash
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
+      # Exports TOOLCHAIN_FINGERPRINT for the cache key below. Must run before
+      # both cache steps. See the action for why the key cannot omit it.
+      - name: Fingerprint the toolchain
+        uses: ./.github/actions/vcpkg-toolchain-fingerprint
+
       # This job runs PR-head code, so only trusted events may write the shared
       # cache (.cursor/rules/devops/github-actions.mdc:82). No restore-keys: a
       # prefix match would re-save the previous entry's archives and grow without
-      # bound. The key cannot cover the runner image's compiler: a toolchain bump
-      # there gives an exact hit whose contents all miss, and actions/cache skips
-      # the save on an exact hit -- bump `v6` to recover.
+      # bound. The key covers the manifests, the shared vcpkg overlays and the
+      # toolchain that builds them -- the last of those because vcpkg's ABI
+      # hashes include the compiler, so an entry keyed without it restores,
+      # yields nothing usable and can never re-save.
       - name: Get vcpkg cache (restore + save, trusted contexts)
         if: >-
           github.event_name == 'push' ||
@@ -221,7 +227,7 @@ jobs:
                 'vcpkg-overlays/triplets/**',
                 'vcpkg-overlays/toolchains/**'
               )
-            }}
+            }}-${{ env.TOOLCHAIN_FINGERPRINT }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - name: Get vcpkg cache (restore-only, untrusted contexts)
@@ -240,7 +246,7 @@ jobs:
                 'vcpkg-overlays/triplets/**',
                 'vcpkg-overlays/toolchains/**'
               )
-            }}
+            }}-${{ env.TOOLCHAIN_FINGERPRINT }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - if: ${{ matrix.platform == 'darwin' }}

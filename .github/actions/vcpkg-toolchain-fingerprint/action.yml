@@ -1,0 +1,111 @@
+name: "vcpkg toolchain fingerprint"
+description: >-
+  Hash the compiler that will build this job's vcpkg packages and export it as
+  TOOLCHAIN_FINGERPRINT, for folding into the vcpkg binary cache key.
+
+# vcpkg names every cached package by an ABI hash that includes the toolchain,
+# so an archive built by one compiler is unusable by another. A cache key that
+# does not move with the toolchain therefore produces the worst possible
+# outcome: the entry restores, vcpkg reports "Restored 0 package(s)" and
+# rebuilds from source, and because actions/cache skips the save on an exact
+# primary-key hit, the unusable entry is never replaced. The only recovery is a
+# manual version bump, which just moves the problem to whichever machine loses
+# the next race.
+#
+# Observed twice in this repo:
+#   - the two Windows pools (qvac-win25-x64-* vs qvac-win25-x64-2-*) never share
+#     packages, run 34470123454 -> 34471431551
+#   - the same macOS runner (qvac-macos26-arm64-gpu) restored 6 packages from an
+#     entry on 2026-09-10 and 0 from the identical entry on 2026-09-14
+#
+# Folding this value into the key gives each distinct toolchain its own entry,
+# so both machines stay warm and a toolchain bump self-heals on the next trusted
+# run instead of needing a human.
+
+outputs:
+  fingerprint:
+    description: "First 16 hex characters of the toolchain digest"
+    value: ${{ steps.unix.outputs.fingerprint || steps.windows.outputs.fingerprint }}
+
+runs:
+  using: composite
+  steps:
+    - id: unix
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        probe_file="${RUNNER_TEMP}/vcpkg-toolchain-probe.txt"
+
+        if [ "${RUNNER_OS}" = "macOS" ]; then
+          # The homebrew llvm that is on PATH at this point is moved aside later
+          # in these jobs, so whatever `clang` resolves to now is not what
+          # builds. Ask xcrun for the Apple clang that will, and pair it with the
+          # SDK, which moves independently of the compiler.
+          apple_clang="$(xcrun --find clang)"
+          "${apple_clang}" --version > "${probe_file}"
+          xcrun --show-sdk-version >> "${probe_file}"
+          xcrun --show-sdk-build-version >> "${probe_file}"
+        else
+          "${CC:-clang}" --version > "${probe_file}"
+        fi
+
+        echo "--- toolchain ---"
+        cat "${probe_file}"
+
+        if command -v sha256sum > /dev/null 2>&1; then
+          digest_line="$(sha256sum "${probe_file}")"
+        else
+          digest_line="$(shasum -a 256 "${probe_file}")"
+        fi
+        rm -f "${probe_file}"
+
+        fingerprint="${digest_line:0:16}"
+        if [ -z "${fingerprint}" ]; then
+          echo "::error::could not fingerprint the toolchain"
+          exit 1
+        fi
+
+        echo "TOOLCHAIN_FINGERPRINT=${fingerprint}" >> "${GITHUB_ENV}"
+        echo "fingerprint=${fingerprint}" >> "${GITHUB_OUTPUT}"
+        echo "toolchain fingerprint: ${fingerprint}"
+
+    - id: windows
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        if (-not (Test-Path $vswhere)) {
+          Write-Output "::error::vswhere not found at $vswhere"
+          exit 1
+        }
+
+        $vsPath = & $vswhere -latest -products * -property installationPath
+        $toolsFile = Join-Path $vsPath 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+        $toolsVersion = (Get-Content $toolsFile -Raw).Trim()
+
+        $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\Include'
+        $sdkVersion = (Get-ChildItem $sdkRoot -Directory | Sort-Object Name | Select-Object -Last 1).Name
+
+        if ([string]::IsNullOrWhiteSpace($toolsVersion) -or [string]::IsNullOrWhiteSpace($sdkVersion)) {
+          Write-Output "::error::could not fingerprint the toolchain"
+          exit 1
+        }
+
+        $probe = "vctools=$toolsVersion sdk=$sdkVersion"
+        Write-Output "--- toolchain ---"
+        Write-Output $probe
+
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($probe)
+        $digest = -join ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') })
+        $fingerprint = $digest.Substring(0, 16)
+
+        # Matches the `>>` form every other PowerShell step in these workflows
+        # uses to write $GITHUB_ENV, which is verified working on these runners.
+        echo "TOOLCHAIN_FINGERPRINT=$fingerprint" >> $env:GITHUB_ENV
+        echo "fingerprint=$fingerprint" >> $env:GITHUB_OUTPUT
+        Write-Output "toolchain fingerprint: $fingerprint"

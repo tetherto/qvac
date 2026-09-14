@@ -2033,3 +2033,39 @@ test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
   }
   assert.deepEqual(offenders, [])
 })
+
+// vcpkg names every cached package by an ABI hash that includes the toolchain,
+// so a vcpkg cache key that does not move with the compiler restores an entry
+// whose archives all miss -- and an exact primary-key hit suppresses the save,
+// so the dead entry is never replaced. Observed on both Windows pools and on a
+// single macOS runner four days apart. Both cache steps in a workflow must
+// carry the fingerprint, and the step that produces it must come first.
+test('cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint', () => {
+  const offenders = []
+  for (const path of workflowPaths()) {
+    if (!/\/cpp-tests?-/.test(path)) continue
+    const code = withoutComments(read(path))
+
+    const producer = code.indexOf('actions/vcpkg-toolchain-fingerprint')
+    const steps = code.split(/\n      - /)
+
+    for (const step of steps) {
+      if (!/uses: actions\/cache(\/restore)?@/.test(step)) continue
+      // Only the vcpkg cache; the model caches are keyed on manifests and are
+      // toolchain-independent by construction.
+      if (!/vcpkg\/cache/.test(step)) continue
+      if (!step.includes('env.TOOLCHAIN_FINGERPRINT')) {
+        offenders.push(`${path}: a vcpkg cache step's key omits env.TOOLCHAIN_FINGERPRINT`)
+        continue
+      }
+      if (producer === -1) {
+        offenders.push(`${path}: uses env.TOOLCHAIN_FINGERPRINT but never runs the action that sets it`)
+        continue
+      }
+      if (code.indexOf(step) < producer) {
+        offenders.push(`${path}: a vcpkg cache step runs before the fingerprint action that sets its key`)
+      }
+    }
+  }
+  assert.deepEqual(offenders, [])
+})
