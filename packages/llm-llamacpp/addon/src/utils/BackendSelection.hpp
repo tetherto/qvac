@@ -44,8 +44,6 @@ struct BackendInterface {
   const char* (*ggml_backend_dev_name)(ggml_backend_dev_t device);
   enum ggml_backend_dev_type (*ggml_backend_dev_type)(
       ggml_backend_dev_t device);
-  void* (*ggml_backend_reg_get_proc_address)(
-      ggml_backend_reg_t reg, const char* name);
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
@@ -81,55 +79,55 @@ std::pair<BackendType, std::string> chooseBackend(
     std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
     bool* outIsMaliGpu = nullptr);
 
-/// @brief Count GPU devices available for multi-GPU split mode.
-/// Returns the number of discrete GPUs when any are present; otherwise
-/// falls back to the iGPU count. This mirrors backends like Vulkan which
-/// exclude iGPUs by default when discrete GPUs exist.
+/// @brief Count devices in the final Fabric-compatible split set.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-/// @brief The ordered device names to hand to `--device` for
-/// LLAMA_SPLIT_MODE_TENSOR.
+struct SplitDevice {
+  std::string name;
+  ggml_backend_dev_t handle = nullptr;
+  size_t sourceGpuIndex = 0;
+  bool isRpc = false;
+  std::optional<int> adrenoVersion;
+  bool isOpenCl = false;
+  bool isMetal = false;
+};
+
+struct SplitDeviceSelection {
+  std::vector<SplitDevice> devices;
+  size_t sourceGpuCount = 0;
+  std::vector<std::string> rejectedDevices;
+};
+
+/// @brief The authoritative allowlisted device set for multi-GPU modes.
+SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
+
+/// @brief `getSplitDeviceSelection()` against the real ggml registry.
+SplitDeviceSelection getSplitDeviceSelection();
+
+/// @brief Apply the Adreno workload restrictions to a split device set.
 ///
-/// QVAC-24253. Tensor mode is the one split mode qvac-fabric selects devices
-/// for with no type filter and no deduplication: its branch in `src/llama.cpp`
-/// keeps everything whose buffer type is not the CPU buffer type, so
-/// integrated GPUs are included unconditionally and a physical GPU registered
-/// by two backends (e.g. Vulkan and HIP under GGML_BACKEND_DL) is added twice
-/// and receives two shards. `layer` and `row` route through fabric's filtered
-/// branch and are unaffected, so only tensor mode needs an explicit list.
+/// For one-bit (TQ1_0/TQ2_0) BitNet and for finetuning, using the max tier
+/// across the set's local devices:
+///   - Adreno <800: CPU only  -> clears @p selection.devices
+///   - Adreno 800+: prefer Vulkan over OpenCL -> drops the OpenCL devices
+void applyAdrenoRestrictions(
+    SplitDeviceSelection& selection, const ModelMetaData& metadata,
+    bool isFinetuning);
+
+/// @brief The names of `getSplitDeviceSelection()`'s devices, in order.
 ///
-/// Selection mirrors qvac-fabric's own filtered branch (`src/llama.cpp`) so the
-/// pinned list matches what fabric would have picked for `layer`/`row`:
-///   - RPC devices are excluded. ggml reports them as
-///     `GGML_BACKEND_DEVICE_TYPE_GPU` (`ggml-rpc.cpp`, with a TODO), and fabric
-///     segregates them precisely so they do not count as discrete GPUs —
-///     otherwise the local iGPU is dropped on an iGPU + RPC host. This also
-///     matches `emplaceIfValidDevice`, which already skips RPC.
-///   - Discrete GPUs when any are present, otherwise the integrated ones.
+/// Selection mirrors qvac-fabric's device ordering while applying this addon's
+/// supported-backend allowlist:
+///   - CUDA, RPC, Vulkan, Metal and Adreno OpenCL devices are eligible.
+///   - RPC devices are prepended and do not suppress a local integrated GPU.
+///   - Local discrete GPUs when any are present, otherwise the first
+///     integrated GPU plus any later one sharing its backend registry handle.
 ///   - Duplicates are dropped by `ggml_backend_dev_props::device_id`, the same
 ///     key fabric uses. Deduping by *description* would be wrong: Vulkan sets
 ///     the description to the raw device name, which is identical for two
 ///     identical cards, so a 2x RTX 4090 host would silently collapse to one.
 ///     A device whose `device_id` is null is kept rather than dropped.
 ///
-/// Returns an empty vector when no GPU device is present; callers must then
-/// leave `--device` alone rather than emitting an empty list.
-std::vector<std::string>
-getTensorSplitDeviceNames(const BackendInterface& bckI);
-
-/// @brief `getTensorSplitDeviceNames()` against the real ggml backend registry.
-std::vector<std::string> getTensorSplitDeviceNames();
-
-/// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
-/// True only when at least one GPU device is present AND every available
-/// GPU/iGPU device's backend provides split buffers, because qvac-fabric
-/// requires split buffers from each device it distributes over and throws on
-/// the first one that lacks them. Callers should degrade row -> layer when this
-/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
-/// this is false in every shipped configuration.
-bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
-
-/// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
-/// registry.
-bool gpuBackendSupportsRowSplit();
+/// Returns an empty vector when callers must fall back to CPU.
+std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 } // namespace backend_selection

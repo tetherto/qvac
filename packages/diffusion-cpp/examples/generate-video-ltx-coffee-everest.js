@@ -168,9 +168,9 @@ async function main() {
       // LTX-2.3 plus Gemma and the VAE exceed a 32 GB card. Keep parameters in
       // system RAM by default so Vulkan has headroom for generation buffers.
       offload_to_cpu: envFlag('LTX_OFFLOAD_TO_CPU', true),
-      // An explicit CPU override remains available. Otherwise preflight each
-      // VAE graph and route only oversized graphs to CPU; DiT remains on Vulkan.
-      vae_on_cpu: envFlag('LTX_VAE_ON_CPU', false),
+      // The explicit override controls VAE parameter residency. Runtime graph
+      // placement remains handled by the automatic VAE fallback below.
+      params_backend: envFlag('LTX_VAE_ON_CPU', false) ? 'vae=cpu' : undefined,
       vae_auto_cpu_fallback: envFlag('LTX_VAE_AUTO_CPU_FALLBACK', true),
       vae_auto_cpu_fallback_memory_ratio: Number(
         process.env.LTX_VAE_AUTO_CPU_FALLBACK_MEMORY_RATIO || 0.9

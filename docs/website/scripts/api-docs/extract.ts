@@ -586,19 +586,43 @@ function buildApiFunction(
     // see it, leaving the description as the only signal. Fall back to
     // the parsed-from-typedoc form when the source reader can't find the
     // overload (e.g. cross-file re-exports).
+    //
+    // Overload-inheritance rule: when overloads 2+ have no docstring of
+    // their own, TypeDoc still surfaces the first overload's `@throws` on
+    // their `sigBlockTags` (block tags inherit from the primary signature —
+    // this is why `worldCreateScene`'s three signatures each render a
+    // throws section). Our source reader is stricter: it only picks up
+    // tags written literally above overload `idx`, so `perOverloadThrows`
+    // is empty for the inheriting overloads. Falling straight to
+    // `sigBlockTags` in that case strips every `{ClassName}` (already gone
+    // by parse time) and renders inherited throws as classless bullets
+    // even though overload 0 has the class names on disk. Mirror TypeDoc's
+    // inherit-from-first behaviour by reusing `perOverloadThrows[0]` before
+    // dropping to the class-name-losing path.
     const sourceThrows = perOverloadThrows?.[idx];
+    const inheritedSourceThrows =
+      idx > 0 &&
+      (!sourceThrows || sourceThrows.length === 0) &&
+      perOverloadThrows &&
+      perOverloadThrows[0] &&
+      perOverloadThrows[0].length > 0
+        ? perOverloadThrows[0]
+        : null;
+    const effectiveSourceThrows =
+      sourceThrows && sourceThrows.length > 0 ? sourceThrows : inheritedSourceThrows;
     const throws =
-      sourceThrows && sourceThrows.length > 0
-        ? sourceThrows
+      effectiveSourceThrows && effectiveSourceThrows.length > 0
+        ? effectiveSourceThrows
         : sigBlockTags
             .filter((t: any) => t.tag === "@throws")
             .map((t: any) => {
               const text = extractComment(t.content);
-              const m = text.match(/^\{([^}]+)\}\s*(.*)/);
-              if (m) return { error: m[1], description: m[2] };
-              return { error: text, description: "" };
+              const m = text.match(/^\{([^}]+)\}\s*(.*)/s);
+              if (m) return { error: m[1], description: m[2].trim() };
+              // Classless throws: description-only, no forged error name.
+              return { error: "", description: text.trim() };
             })
-            .filter((t: any) => t.error);
+            .filter((t: any) => t.error || t.description);
     // Author-provided short label, written as `@overloadLabel "Single text"`.
     // When missing, the heading falls back to plain `Overload N`.
     const labelTag = sigBlockTags.find((t: any) => t.tag === "@overloadLabel");
@@ -786,11 +810,12 @@ function buildApiFunction(
         .filter((tag: any) => tag.tag === "@throws")
         .map((tag: any) => {
           const text = extractComment(tag.content);
-          const match = text.match(/^\{([^}]+)\}\s*(.*)/);
-          if (match) return { error: match[1], description: match[2] };
-          return { error: text, description: "" };
+          const match = text.match(/^\{([^}]+)\}\s*(.*)/s);
+          if (match) return { error: match[1], description: match[2].trim() };
+          // Classless throws: description-only, no forged error name.
+          return { error: "", description: text.trim() };
         })
-        .filter((t: any) => t.error);
+        .filter((t: any) => t.error || t.description);
     })(),
     examples: blockTags
       .filter((tag: any) => tag.tag === "@example")
@@ -1203,18 +1228,40 @@ function mergeSampleProseIntoFunction(
   // with the rest of this function: "SDK JSDoc always wins"). Previously we
   // replaced `fn.throws` wholesale when the sample had any row, which could
   // silently discard errors the JSDoc declared but the sample didn't.
+  //
+  // The dedup Map is keyed on `error` (class name) — that only works for
+  // classed entries, which have identity. Classless entries (`error === ""`,
+  // legitimate under the classless-@throws support in `parseThrowsBlockTags`)
+  // all share the same map key and would collapse to one via `Map.set("", ...)`,
+  // silently dropping throws. Handle them positionally instead: preserve JSDoc
+  // classless entries in place; append sample classless only when the JSDoc
+  // declared none of its own (mirroring the field-level fill-empty-only rule).
   if (prose.throws.length > 0) {
-    const existing = new Map<string, { error: string; description: string }>();
-    for (const t of fn.throws ?? []) existing.set(t.error, t);
+    const classedByName = new Map<string, { error: string; description: string }>();
+    const result: { error: string; description: string }[] = [];
+    let jsdocHasClassless = false;
+    for (const t of fn.throws ?? []) {
+      if (t.error) classedByName.set(t.error, t);
+      else jsdocHasClassless = true;
+      result.push(t);
+    }
     for (const s of prose.throws) {
-      const current = existing.get(s.error);
-      if (!current) {
-        existing.set(s.error, { error: s.error, description: s.description });
-      } else if (!current.description || current.description.trim() === "") {
-        current.description = s.description;
+      if (s.error) {
+        const current = classedByName.get(s.error);
+        if (!current) {
+          const entry = { error: s.error, description: s.description };
+          classedByName.set(s.error, entry);
+          result.push(entry);
+        } else if (!current.description || current.description.trim() === "") {
+          current.description = s.description;
+        }
+      } else if (!jsdocHasClassless) {
+        // Sample-only classless: append in sample order, once we know the
+        // JSDoc declared no classless entries of its own.
+        result.push({ error: s.error, description: s.description });
       }
     }
-    fn.throws = [...existing.values()];
+    fn.throws = result;
   }
 }
 
@@ -1393,10 +1440,13 @@ function parseThrowsFromJsDoc(
     const error = (m[1] ?? "").trim();
     const description = (m[2] ?? "").trim();
     if (!error && !description) continue;
-    entries.push({
-      error: error || description,
-      description: error ? description : "",
-    });
+    // `@throws` without a `{ClassName}` header is valid TSDoc: the tag body is
+    // free-form. Leave `error` empty in that case so the renderer can pick a
+    // representation for classless entries (see `single-page.njk`) instead of
+    // shoehorning the description into a field that will later be wrapped in
+    // inline-code backticks — which produces MDX with mismatched fences when
+    // the description carries its own backticks or JSX-like tokens.
+    entries.push({ error, description });
   }
   return entries;
 }

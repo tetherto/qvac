@@ -120,7 +120,7 @@ SDK code — see [Engine Selection](#engine-selection).
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA via `build:cuda` / `ASR_CUDA=ON` |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA (x64 prebuild; arm64 via `build:cuda` / `ASR_CUDA=ON`) |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan; CUDA via `build:cuda` / `ASR_CUDA=ON` |
 
@@ -527,15 +527,16 @@ that ends mid-sample is rejected.
 GPU backends are selected per platform via `vcpkg.json` features; no
 `bare-make generate` flag is needed:
 
-- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host)
+- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host); the linux-x64 prebuild additionally bundles CUDA, see below
 - **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
 - **macOS / iOS** — Metal, statically linked
 
 **CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
 gated behind the `ASR_CUDA` CMake option — supported on linux-x64,
-linux-arm64 and win32-x64. Published prebuilds do not enable it; build it
-yourself with `npm run build:cuda` (or `bare-make generate -D ASR_CUDA=ON`),
-which adds the `cuda` feature to the `speech-cpp` dependency and turns on
+linux-arm64 and win32-x64. The published linux-x64 prebuild turns it on (the
+prebuild workflow installs the CUDA toolkit); elsewhere build it yourself
+with `npm run build:cuda` (or `bare-make generate -D ASR_CUDA=ON`). The
+option adds the `cuda` feature to the `speech-cpp` dependency and turns on
 `GGML_CUDA`. Every linux-x64 and linux-arm64 build, and win32-x64 with the
 cuda feature, uses ggml's hybrid dynamically-loaded backend mode: the
 per-arch CPU-variant and Vulkan backends ship as runtime-loaded modules
