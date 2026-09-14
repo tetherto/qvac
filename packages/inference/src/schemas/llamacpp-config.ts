@@ -43,7 +43,9 @@ export const llmConfigBaseSchema = z.object({
   gpu_layers: z
     .number()
     .optional()
-    .describe('Number of model layers to offload to the GPU. Default 99 (offload all).'),
+    .describe(
+      'Number of model layers to offload to the GPU. Unset by default, which lets the runtime fit the placement to free device memory (offloading every layer when it fits). Setting it pins the layer count and disables that fit.'
+    ),
   lora: z
     .string()
     .optional()
@@ -184,9 +186,16 @@ export const llmConfigBaseSchema = z.object({
 export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>
 
 // Default values - typed as partial of the config
+//
+// gpu_layers is deliberately absent (QVAC-25039). Injecting one made every load
+// look user-pinned to qvac-fabric, so its automatic GPU/CPU placement aborted
+// with "n_gpu_layers already set by user to 99" and a model larger than VRAM was
+// offloaded whole and spilled back to host memory by the driver. Leaving it
+// unset hands the addon fabric's own -1 sentinel, which already means "every
+// layer" whenever the fit does not run — so the placement is unchanged in every
+// case where the fit was not going to help anyway.
 export const LLM_CONFIG_DEFAULTS = {
   ctx_size: 1024,
-  gpu_layers: 99,
   device: 'gpu',
   system_prompt: 'You are a helpful assistant.',
   image_tile_mode: 'sequential'
