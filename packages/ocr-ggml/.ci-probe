@@ -1,2 +1,2 @@
 ci-probe marker, not published
-probe 9: ocr-ggml only, await ts-checks + review fixes
+probe 10: lockfile fixed, await ts-checks
