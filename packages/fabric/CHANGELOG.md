@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1] - 2026-09-14
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0` -> `10549.0.0#1` (`LLAMA_OPENSSL=OFF`, so native prebuilds do not link OpenSSL; no API change for this package).
+- Android builds no longer link `libvulkan.so` into `qvac__fabric.bare`. The port is built with `GGML_BACKEND_DL`, so the Vulkan backend is a separate dlopen'd module and the carrier module references no Vulkan symbol; the direct link only added a `DT_NEEDED` the loader had to satisfy before the module could load, and made the Vulkan SDK a hard configure-time requirement for Android builds. Vulkan acceleration is unaffected — it still arrives via the staged backend module.
+
 ## [0.13.0] - 2026-09-10
 
 ### Changed
