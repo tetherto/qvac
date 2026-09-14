@@ -276,11 +276,17 @@ bool restoreRecurrentState(
     return llama_memory_seq_rm(mem, seqId, -1, -1);
   }
   size_t nTokenCount = 0;
+  // Since the change to `llama_state_seq_load_file`: a null
+  // `tokens_out` now only peeks the header (token count) and returns
+  // WITHOUT restoring the sequence state. Pass a dummy output buffer so
+  // the call performs the full restore; our snapshot files always carry
+  // n_token_count == 0, so capacity 0 never truncates.
+  llama_token tokensDummy = LLAMA_TOKEN_NULL;
   const size_t loadedBytes = llama_state_seq_load_file(
       lctx,
       snapshot.filePath().c_str(),
       seqId,
-      /*tokens_out=*/nullptr,
+      /*tokens_out=*/&tokensDummy,
       /*n_token_capacity=*/0,
       &nTokenCount);
   return loadedBytes != 0;
