@@ -251,16 +251,13 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
          c.prediction = EDM_V_PRED;
        else if (v == "flow")
          c.prediction = FLOW_PRED;
-       else if (v == "flux_flow") {
-         c.prediction = FLUX_FLOW_PRED;
-       } else if (v == "flux2_flow") {
+       else if (v == "flux2_flow") {
          c.prediction = PREDICTION_COUNT; // auto: no FLUX.2 override exists
          c.flux2Requested = true;
        } else
          throw StatusError(
              general_error::InvalidArgument,
-             "prediction must be one of: eps, v, edm_v, flow, flux_flow, "
-             "flux2_flow");
+             "prediction must be one of: eps, v, edm_v, flow, flux2_flow");
      }},
 
     // -- LoRA apply mode

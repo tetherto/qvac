@@ -72,7 +72,12 @@ try {
   for (const [index, model] of result.models.entries()) {
     const mark = VERDICT_MARK[model.verdict]
     const size = gib(CANDIDATES[index]!.expectedSize).padStart(9)
-    const needs = model.estimate ? `needs ${gib(model.estimate.upperBoundBytes)}` : ''
+    // A calibrated row has a two-sided estimate; a computed-only row has the floor.
+    const needs = model.estimate
+      ? `needs ${gib(model.estimate.upperBoundBytes)}`
+      : model.evidence === 'computed-only' && model.floorBytes
+        ? `at least ${gib(model.floorBytes)}`
+        : ''
     console.log(`  ${mark} ${model.name.padEnd(46)} ${size} on disk  ${needs}`)
     // Present on every `unknown`, and worth surfacing: it names what is missing.
     if (model.verdict === 'unknown') {
