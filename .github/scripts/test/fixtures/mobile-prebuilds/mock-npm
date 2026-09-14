@@ -17,10 +17,7 @@ esac
 COMMAND="${1:-}"
 SPEC="${2:-}"
 
-# `npm pack <spec> [--ignore-scripts] [--pack-destination <dir>]`. The action
-# packs the meta package and its per-platform package into separate dirs so the
-# `*.tgz` globs it extracts with stay unambiguous, so the mock has to honour
-# --pack-destination rather than always dropping the tarball in cwd. Flags are
+# `npm pack <spec> [--ignore-scripts] [--pack-destination <dir>]`. Flags are
 # scanned rather than read at fixed positions, so adding or reordering one does
 # not silently break the destination handling. Positional parameters are NOT
 # shifted: the `config get` branch below still reads them.
@@ -148,22 +145,14 @@ fi
 # drives package.json so the provenance assertion can be exercised, and
 # MOCK_NPM_NO_PREBUILDS omits prebuilds/ to exercise that guard.
 #
-# Two layouts are modelled, because QVAC-24574 gave split addons a second one:
+# Three layouts, because QVAC-24574 gave split addons a second and third:
+#   unsplit meta  package/prebuilds/<host>/addon.bare
+#   split meta    package.json only, slices pinned in optionalDependencies
+#   slice         package/addon/prebuilds/<host>/addon.bare  <- one level DEEPER
 #
-#   meta (unsplit, and every @tetherto -mono dev build)
-#     package/package.json
-#     package/prebuilds/<host>/addon.bare
-#
-#   meta (split: JS only, slices pinned in optionalDependencies)
-#     package/package.json   -> optionalDependencies: { "<name>-<suffix>": ver }
-#
-#   slice (per-platform package)
-#     package/package.json
-#     package/addon/prebuilds/<host>/addon.bare      <- one level DEEPER
-#
-# Slice suffixes and their host dirs mirror SLICE_DEFINITIONS in
-# scripts/ci/slice-platform-packages.mjs; note that all three iOS host dirs
-# ship in the single 'ios' slice.
+# Suffixes and host dirs mirror SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs; all three iOS host dirs ship in the
+# single 'ios' slice.
 SLICE_SUFFIXES="linux-x64 linux-arm64 darwin-arm64 darwin-x64 win32-x64 android-arm64 ios"
 
 # Derive the name the way npm does, not with a blind strip at the last '@':
