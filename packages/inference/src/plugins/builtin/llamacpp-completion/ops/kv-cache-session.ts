@@ -65,6 +65,15 @@ const cachedPrefixSchema = z.object({
 })
 type CachedPrefix = z.infer<typeof cachedPrefixSchema>
 
+// The sidecar is written after the addon has already saved the `.bin`, so a
+// crash between the two leaves a boundary that describes an older file. The
+// `.bin` size is a function of the tokens it holds: it is unchanged when the
+// addon re-saves the same state (cancel rewind, key switch) and larger once
+// another turn landed in it, which is the case the fingerprint must catch.
+const persistedPrefixSchema = cachedPrefixSchema.extend({
+  binSize: z.number().int().nonnegative()
+})
+
 /**
  * What the kv-cache file on disk is known to cover, keyed by cache path.
  * Written by `commitTurn`, read by `getSavedCount`, deleted by `rollback` /
@@ -91,24 +100,40 @@ async function writePrefixSidecar(
   logger: Logger
 ): Promise<void> {
   try {
-    await fsPromises.writeFile(prefixSidecarPath(cachePath), JSON.stringify(prefix))
+    const { size } = await fsPromises.stat(cachePath)
+    await fsPromises.writeFile(
+      prefixSidecarPath(cachePath),
+      JSON.stringify({ ...prefix, binSize: size })
+    )
   } catch (error) {
+    // A sidecar from the previous commit would describe a shorter file than
+    // the one now on disk, so it must go: a restart then starts cold.
+    await forgetPrefix(cachePath)
     logger.warn(
-      `[kv-cache] Failed to persist saved-message boundary; a restart will resend full history. path=${cachePath} error=${error instanceof Error ? error.message : String(error)}`
+      `[kv-cache] Failed to persist saved-message boundary; a restart will start this cache from a cold boundary. path=${cachePath} error=${error instanceof Error ? error.message : String(error)}`
     )
   }
 }
 
-// Anything unreadable or malformed is treated as absent: the cache is then
-// used from a cold boundary, which is the pre-sidecar behaviour.
+// Anything unreadable, malformed, or describing a `.bin` of a different size
+// is discarded: the cache is then used from a cold boundary, which is the
+// pre-sidecar behaviour.
 async function readPrefixSidecar(cachePath: string): Promise<CachedPrefix | null> {
+  let parsed: z.infer<typeof persistedPrefixSchema>
   try {
     const raw = await fsPromises.readFile(prefixSidecarPath(cachePath), 'utf8')
-    const parsed = cachedPrefixSchema.safeParse(JSON.parse(raw))
-    return parsed.success ? parsed.data : null
+    const result = persistedPrefixSchema.safeParse(JSON.parse(raw))
+    if (!result.success) return null
+    parsed = result.data
   } catch {
     return null
   }
+  const { size } = await fsPromises.stat(cachePath)
+  if (size !== parsed.binSize) {
+    await forgetPrefix(cachePath)
+    return null
+  }
+  return { messages: parsed.messages, toolBlock: parsed.toolBlock }
 }
 
 async function forgetPrefix(cachePath: string): Promise<void> {
@@ -487,13 +512,13 @@ export interface KvCacheSession {
   releaseTurn(turn: TurnHandle): Promise<void>
 
   /**
-   * Forget the in-memory saved-message count for the turn's path
-   * without unlinking the file or clearing the init flag. Used when
-   * `decideCachedHistorySlice` detects a stale boundary
+   * Forget the saved-message count for the turn's path, in memory and in the
+   * sidecar, without unlinking the cache file or clearing the init flag. Used
+   * when `decideCachedHistorySlice` detects a stale boundary
    * (`clearStaleCount: true`) — the next turn re-sends the full history
    * but the cache itself is still usable.
    */
-  dropStaleSavedCount(turn: TurnHandle): void
+  dropStaleSavedCount(turn: TurnHandle): Promise<void>
 }
 
 interface InternalTurnState {
@@ -585,14 +610,14 @@ export function createKvCacheSession(
     // Resolved before the handle is made so it snapshots the restored boundary.
     let exists = initializedCaches.has(cachePath)
     if (!exists) exists = await restorePersistedCache(cachePath)
+    // A boundary without its `.bin` describes a cache that no longer exists.
+    if (!exists) await forgetPrefix(cachePath)
     const handle = makeHandle(cachePath, undefined, releaseWriteLock, input.signal)
 
     try {
       logCacheStatus(input.customKey, exists)
 
       if (!exists) {
-        // A sidecar without its `.bin` describes a cache that no longer exists.
-        await forgetPrefix(cachePath)
         // Recreate the parent dir if a same-key peer's rollback pruned it after our lock wait.
         await fsPromises.mkdir(path.dirname(cachePath), { recursive: true })
         // The access probe / mkdir above yielded, so a cancel may have landed
@@ -868,10 +893,10 @@ export function createKvCacheSession(
     if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
   }
 
-  function dropStaleSavedCount(turn: TurnHandle): void {
+  async function dropStaleSavedCount(turn: TurnHandle): Promise<void> {
     const state = turnState.get(turn)
     if (!state) return
-    cachedPrefixes.delete(state.cachePath)
+    await forgetPrefix(state.cachePath)
   }
 
   return {

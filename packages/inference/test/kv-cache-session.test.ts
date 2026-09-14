@@ -957,19 +957,32 @@ test('kv-cache-session: dropStaleSavedCount forgets the count without touching t
       primeIfMissing
     })
     fs.writeFileSync(turn.cachePath, 'good-bytes')
-    mod.__kvCacheSessionTestHooks.setSavedCountForTest(turn.cachePath, 99)
+    await session.commitTurn(turn, { kind: 'static', messageCount: 99, toolBlockCached: false })
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(turn.cachePath)
+    t.ok(fs.existsSync(sidecarPath), 'the commit wrote the boundary sidecar')
+    const second = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'session-stale',
+      configHash,
+      primeIfMissing
+    })
 
-    session.dropStaleSavedCount(turn)
+    await session.dropStaleSavedCount(second)
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),
       undefined,
       'stale saved count was forgotten'
     )
+    t.absent(
+      fs.existsSync(sidecarPath),
+      'the sidecar went with it, so a restart cannot revive the count'
+    )
     t.ok(
       fs.existsSync(turn.cachePath),
       'the on-disk cache file is preserved (still usable next turn)'
     )
+    await session.releaseTurn(second)
     t.ok(
       mod.__kvCacheSessionTestHooks.hasInitializedPath(
         await utils.getCacheFilePath('test-model', configHash, 'session-stale')
@@ -1688,6 +1701,45 @@ test('kv-cache-session: a committed named-cache boundary survives a worker resta
     t.is(second.savedCount, 5, 'the saved-message boundary is restored from disk')
     t.is(second.toolBlockCached, true, 'the tool-block flag is restored with it')
     await restarted.releaseTurn(second)
+  } finally {
+    cleanup()
+  }
+})
+
+// A crash between the addon's `.bin` save and the sidecar write leaves a
+// boundary that describes the previous, shorter file. The size fingerprint
+// catches it: the restart starts cold instead of slicing too little.
+test('kv-cache-session: a sidecar describing a different-sized .bin is discarded on restart', async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    let primeCallCount = 0
+    const primeIfMissing = async (p: string) => {
+      primeCallCount++
+      writeFakeCache(p)
+    }
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-grown',
+      configHash,
+      primeIfMissing
+    })
+    await session.commitTurn(first, { kind: 'static', messageCount: 5, toolBlockCached: false })
+    fs.writeFileSync(first.cachePath, 'fake-kv-cache-bytes-plus-a-turn-the-sidecar-never-saw')
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(first.cachePath)
+
+    mod.__kvCacheSessionTestHooks.resetForTest()
+    const second = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'restart-grown',
+      configHash,
+      primeIfMissing
+    })
+    t.is(primeCallCount, 1, 'the grown .bin is still trusted and reused')
+    t.is(second.savedCount, 0, 'the mismatched boundary is not applied')
+    t.absent(fs.existsSync(sidecarPath), 'the mismatched sidecar was removed')
   } finally {
     cleanup()
   }
