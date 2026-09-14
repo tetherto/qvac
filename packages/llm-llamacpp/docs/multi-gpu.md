@@ -213,12 +213,12 @@ CPU. Set `devices` in that case (e.g. `'RPC0,RPC1'`).
 - **One server per pipeline stage.** A server handles one client connection
   serially, so devices behind the same server process are not pipelined against
   each other.
-- **Mobile worker support.** Physical ARM64 Android and iOS devices can run the
-  managed `@qvac/ggml-rpc-server` TCP worker. This has been validated with a
-  desktop client splitting inference across one Android phone and one iPhone
-  over wired USB/TCP. Running the `@qvac/llm-llamacpp` RPC client on mobile is
-  not yet validated and remains rejected. Keep mobile workers on a controlled
-  wired or trusted private transport.
+- **Mobile support.** Physical ARM64 Android and iOS devices can run the managed
+  `@qvac/ggml-rpc-server` TCP worker and can use `@qvac/llm-llamacpp` as an RPC
+  client. Mobile clients must set `devices` explicitly when `rpc-servers` is
+  configured. Distributed `split-mode` and `tensor-split` settings are allowed;
+  local-only multi-GPU settings and `main-gpu` remain rejected. Keep mobile RPC
+  traffic on a controlled wired or trusted private transport.
 
 ### Verifying it actually distributed
 

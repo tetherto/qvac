@@ -112,6 +112,9 @@ void tuneLoadConfigMap(
     const FinetuneConfigOverrides& finetuneOverrides = {},
     bool isOpenCl = false, bool isMetal = false, bool isGpu = false);
 
+void validateMobileMultiDeviceConfig(
+    const ConfigMap& configFilemap, llama_split_mode splitMode);
+
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,
     const ModelMetaData& metadata,
