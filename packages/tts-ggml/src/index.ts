@@ -19,6 +19,7 @@ import {
   type TTSOutputCallback,
 } from "./tts";
 import * as errorModule from "./lib/error";
+import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
 import { splitTtsText } from "./lib/textChunker";
 import {
   accumulateTextStream,
@@ -1785,7 +1786,7 @@ class TTSGgml {
     this._backendsDir = firstNonEmpty(
       options.backendsDir,
       this._config.backendsDir,
-      path.join(__dirname, "prebuilds"),
+      resolveBackendsDirImpl(),
     );
     this._openclCacheDir = firstNonEmpty(
       options.openclCacheDir,
@@ -3469,6 +3470,8 @@ namespace TTSGgml {
   export type TTSRunInput = NamespaceRunInput;
   export type InferenceState = NamespaceInferenceState;
   export type CosyvoiceInstruct = NamespaceCosyvoiceInstruct;
+
+  export const resolveBackendsDir = resolveBackendsDirImpl;
 }
 
 export = TTSGgml;

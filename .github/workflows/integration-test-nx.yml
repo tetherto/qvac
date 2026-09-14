@@ -10,6 +10,11 @@ on:
       - ".github/workflows/integration-test-nx.yml"
   workflow_dispatch:
     inputs:
+      packages:
+        description: "JSON array of explicit package short-names, bypassing nx-affected. Empty = normal nx-affected."
+        required: false
+        type: string
+        default: "[]"
       base-ref:
         required: false
         type: string
