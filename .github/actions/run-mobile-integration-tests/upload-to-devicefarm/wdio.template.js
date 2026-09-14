@@ -90,6 +90,55 @@ exports.config = {
     // runs on crash paths where the WDIO command queue may have a pending
     // command stuck behind a long timeout (e.g. waitForDisplayed 60s on an
     // element that will never appear). Raw HTTP bypasses the queue.
+    // Pull one file out of the app's documents container. Returns its text, or
+    // null when the file does not exist (a run with no native tail, say).
+    global.pullDeviceFile = async function (remoteName) {
+      var http = require('http');
+      var body = JSON.stringify({ path: '@' + BUNDLE_ID + ':documents/' + remoteName });
+      var b64 = await new Promise(function (resolve, reject) {
+        var req = http.request({
+          hostname: '127.0.0.1', port: 4723,
+          path: '/wd/hub/session/' + browser.sessionId + '/appium/device/pull_file',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        }, function (res) {
+          var chunks = '';
+          res.on('data', function (c) { chunks += c; });
+          res.on('end', function () {
+            try { resolve(JSON.parse(chunks).value); } catch (e) { reject(e); }
+          });
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+      });
+      if (typeof b64 !== 'string') return null;
+      return Buffer.from(b64, 'base64').toString();
+    };
+
+    // The app's C++ logs reach JS through a callback, are printed with
+    // console.log, and the framework buffers that into bare_console.log. An
+    // abort() kills the chain, so the lines explaining a native crash never
+    // reach the file — bare_console.log just stops. The runtime mirrors console
+    // output into native-tail.log with synchronous writes, so those lines are
+    // already on disk; pull it whenever we pull the console log.
+    global.flushNativeTail = async function (reason) {
+      if ('__ENABLE_FLUSH_BARE_LOG__' !== 'true') return;
+      try {
+        var text = await global.pullDeviceFile('native-tail.log');
+        if (text === null) {
+          console.log('[native-tail] ' + reason + ': no native-tail.log on device');
+          return;
+        }
+        var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
+        require('fs').writeFileSync(logDir + '/native-tail.log', text);
+        console.log('[native-tail] ' + reason + ' flush ok (' + text.length + ' bytes)');
+      } catch (e) {
+        // Absent file surfaces as an Appium error; not a failure worth shouting about.
+        console.log('[native-tail] ' + reason + ' flush skipped: ' + e.message);
+      }
+    };
+
     global.flushBareLog = async function (reason) {
       if ('__ENABLE_FLUSH_BARE_LOG__' !== 'true') return;
       try {
@@ -178,8 +227,15 @@ exports.config = {
           setTimeout(function () { process.exit(1); }, 5000);
           try {
             await browser.pause(1500);
+            // Both pulls run concurrently and share the window: on a crash the
+            // native tail is the artifact that carries the reason, and waiting
+            // for the console log first could spend the whole budget before it
+            // is fetched. Still bounded by the process.exit above.
             await Promise.race([
-              global.flushBareLog('crash-' + stage),
+              Promise.all([
+                global.flushNativeTail('crash-' + stage),
+                global.flushBareLog('crash-' + stage),
+              ]),
               new Promise(function (_, reject) {
                 setTimeout(function () { reject(new Error('flush timed out')); }, 3000);
               }),
@@ -267,6 +323,7 @@ exports.config = {
     }
     console.log('[bare-log] Waiting for log flush...');
     await browser.pause(3000);
+    if (global.flushNativeTail) await global.flushNativeTail('after');
     if (global.flushBareLog) await global.flushBareLog('after');
 
     // Android: on FAILURE, dump logcat here (test phase) so the bare runtime
