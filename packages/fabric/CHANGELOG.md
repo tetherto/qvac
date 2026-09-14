@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.1] - 2026-09-14
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0` -> `10549.0.0#1` (`LLAMA_OPENSSL=OFF`, so native prebuilds do not link OpenSSL; no API change for this package).
+
 ## [0.13.0] - 2026-09-10
 
 ### Changed
