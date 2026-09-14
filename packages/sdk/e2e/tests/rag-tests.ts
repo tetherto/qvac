@@ -70,6 +70,7 @@ export const ragTurboVecIngestSearch: TestDefinition = {
     validation: 'contains-all',
     contains: ['ORANGE-742', 'checkpoint:present']
   },
+  suites: ['smoke'],
   metadata: { category: 'rag', dependency: 'embeddings', estimatedDurationMs: 30000 }
 }
 

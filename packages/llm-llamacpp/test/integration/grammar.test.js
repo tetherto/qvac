@@ -238,3 +238,37 @@ safeTest(
     )
   }
 )
+
+// A per-request json_schema takes precedence over the template's tool grammar:
+// the answer is schema-shaped and no tool call is emitted for that request.
+safeTest(
+  'generationParams | json_schema takes precedence over the tool grammar',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model } = await setupModel(t, { seed: '42', tools: 'true', n_predict: '128' })
+
+    const prompt = [
+      { role: 'system', content: 'Extract the person info as JSON. /no_think' },
+      {
+        type: 'function',
+        name: 'lookupPerson',
+        description: 'Look up a person by name',
+        parameters: {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: ['name']
+        }
+      },
+      { role: 'user', content: "Hi, I'm Alice and I'm 30 years old." }
+    ]
+    const response = await model.run(prompt, {
+      generationParams: { json_schema: PERSON_SCHEMA, seed: 42 }
+    })
+    const output = (await collectResponse(response)).trim()
+
+    t.absent(output.includes('<tool_call>'), `no tool call emitted: ${output.slice(0, 200)}`)
+    const parsed = JSON.parse(output.replace(/^<think>[\s\S]*?<\/think>\s*/, ''))
+    t.is(typeof parsed.name, 'string', 'answer matches the response schema (name)')
+    t.ok(Number.isInteger(parsed.age), 'answer matches the response schema (age)')
+  }
+)

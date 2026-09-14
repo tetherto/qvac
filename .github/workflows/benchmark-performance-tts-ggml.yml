@@ -151,16 +151,29 @@ jobs:
           pattern: perf-report-tts-ggml-*
           path: benchmark-artifacts/mobile
 
+      # EXPECTED_DESKTOP_DEVICES is empty when the desktop leg was skipped
+      # (run_desktop=false) or died before producing the reusable workflow's
+      # output — the gate only arms when the desktop matrix actually ran. When
+      # armed, a device with zero rows fails this step AFTER the report files
+      # are written, so the steps below still publish the incomplete report.
       - name: Generate consolidated benchmark report
+        env:
+          EXPECTED_DESKTOP_DEVICES: ${{ needs.desktop-benchmarks.outputs.rtf_expected_devices }}
         run: |
           mkdir -p benchmark-artifacts
+          expect_args=()
+          if [ -n "$EXPECTED_DESKTOP_DEVICES" ]; then
+            expect_args=(--expect-devices "$EXPECTED_DESKTOP_DEVICES")
+          fi
           node scripts/perf-report/aggregate-tts-ggml-rtf.js \
             --dir benchmark-artifacts \
             --manual-dir packages/tts-ggml/benchmarks/manual-results \
             --output benchmark-artifacts/tts-ggml-performance-findings.md \
-            --output-json benchmark-artifacts/tts-ggml-performance-findings.json
+            --output-json benchmark-artifacts/tts-ggml-performance-findings.json \
+            "${expect_args[@]}"
 
       - name: Add summary
+        if: ${{ !cancelled() }}
         run: |
           cat benchmark-artifacts/tts-ggml-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -177,6 +190,7 @@ jobs:
           echo "| opencl | Android Adreno (e.g. Samsung Galaxy S25, mobile) | AWS Device Farm; manual drops into packages/tts-ggml/benchmarks/manual-results/ |" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload consolidated benchmark report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: tts-ggml-performance-findings

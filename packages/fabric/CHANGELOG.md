@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.13.1] - 2026-09-14
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0` -> `10549.0.0#1` (`LLAMA_OPENSSL=OFF`, so native prebuilds do not link OpenSSL; no API change for this package).
+- Android builds no longer link `libvulkan.so` into `qvac__fabric.bare`. The port is built with `GGML_BACKEND_DL`, so the Vulkan backend is a separate dlopen'd module and the carrier module references no Vulkan symbol; the direct link only added a `DT_NEEDED` the loader had to satisfy before the module could load, and made the Vulkan SDK a hard configure-time requirement for Android builds. Vulkan acceleration is unaffected — it still arrives via the staged backend module.
+
+## [0.13.0] - 2026-09-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). Includes a fix that annotates the `ggml_vec_index_*` C API with default visibility, so those symbols stay exportable from this runtime under the library's hidden visibility preset; no API change for this package.
+
+## [0.12.0] - 2026-09-08
+
+### Added
+
+- ggml vector-index API (`ggml_vec_index_*`) in the shared runtime, via the
+  `qvac-fabric[vector-index]` feature. `@qvac/embed-llamacpp` is the only
+  consumer of this API and was the last blocker to migrating it off its own
+  `qvac-fabric` vcpkg build: it requested the feature per-consumer, so a
+  fabric-based embed had nowhere to resolve `ggml_vec_index_*` from. The header
+  (`ggml-vector-index.h`) ships with the rest of the include tree, and the
+  existing `ggml_*` allow-list in `symbols.map` / `exports.txt` / the Windows
+  `.def` generator already covers the symbol names, so no export surface had to
+  be enumerated by hand.
+
+  The library is whole-archived into `qvac__fabric.bare` on ELF/Mach-O targets.
+  This is required rather than incidental: no llama or ggml code calls
+  `ggml_vec_index_*`, so a plain link pulls in none of those archive members and
+  the version script would filter an empty set. Windows needs no whole-archive
+  equivalent — entries in the generated `.def` act as references that pull the
+  members in — but the archive must still be on the link line, because unlike
+  `ggml-base` it is not a dependency of llama.
+
+  Released as a **minor** for the same reason 0.9.0 was: this widens the
+  runtime's exported API surface. Consumers pinned to `^0.10.0` or `^0.11.0` do
+  not pick it up automatically and adopt it by widening their range.
+
 ## [0.11.0] - 2026-09-08
 
 ### Changed

@@ -86,16 +86,29 @@ test('no direct CUDA linkage - the hybrid MODULE backend carries its own', () =>
   )
 })
 
-test('the whisper backend loader covers desktop Linux for hybrid GGML_BACKEND_DL builds', () => {
+test('the whisper backend loader covers every hybrid GGML_BACKEND_DL platform', () => {
   assert.match(
     whisperModelSource,
-    /#if defined\(__ANDROID__\) \|\| defined\(__linux__\)/,
-    'ensureBackendsLoaded must compile on all Linux targets, not just arm64'
+    /#if defined\(__ANDROID__\) \|\| defined\(__linux__\) \|\| defined\(_WIN32\)/,
+    'ensureBackendsLoaded must compile on Android, all Linux targets, and Windows'
   )
   assert.equal(
     /defined\(__aarch64__\)/.test(whisperModelSource),
     false,
     'no arm64-only gate may remain around the backend loader'
+  )
+})
+
+test('the CMake loose pickup stages Windows .dll modules on CUDA builds', () => {
+  assert.match(
+    cmakeSource,
+    /\(WIN32 AND ASR_CUDA\)/,
+    'a win32 ASR_CUDA build must enter the loose module pickup'
+  )
+  assert.match(
+    cmakeSource,
+    /qvac-speech-ggml-\*\.dll/,
+    'the loose pickup glob must match the Windows backend module names'
   )
 })
 

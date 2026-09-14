@@ -20,11 +20,54 @@ import { isAddonContextOverflowError } from '@/plugins/builtin/llamacpp-completi
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { getModelParallel } from '@/utils/config-transform'
 import { getEngineLogger } from '@/logging/index'
+import {
+  isTranslatePsyModel,
+  buildTranslatePsyMessages,
+  TRANSLATEPSY_GENERATION_PARAMS
+} from '@/plugins/ops/translatepsy-utils'
+
+const AFRICAN_LANGUAGE_ALIASES = new Map([
+  ['af', 'afr_Latn'],
+  ['sw', 'swh_Latn'],
+  ['so', 'som_Latn'],
+  ['am', 'amh_Ethi'],
+  ['ha', 'hau_Latn'],
+  ['rw', 'kin_Latn'],
+  ['ln', 'lin_Latn'],
+  ['lg', 'lug_Latn'],
+  ['zu', 'zul_Latn'],
+  ['ig', 'ibo_Latn'],
+  ['mg', 'plt_Latn'],
+  ['xh', 'xho_Latn'],
+  ['sn', 'sna_Latn'],
+  ['yo', 'yor_Latn'],
+  ['wo', 'wol_Latn'],
+  ['ny', 'nya_Latn'],
+  ['st', 'sot_Latn'],
+  ['ti', 'tir_Ethi'],
+  ['om', 'gaz_Latn'],
+  ['tn', 'tsn_Latn'],
+  ['swa', 'swh_Latn'],
+  ['mlg', 'plt_Latn'],
+  ['orm', 'gaz_Latn']
+])
+
+// Names missing from langdetect-text, kept separate from Afrique prompt selection.
+const ADDITIONAL_LANGUAGE_NAMES = new Map([
+  ['lin', 'Lingala'],
+  ['lug', 'Luganda'],
+  ['wol', 'Wolof']
+])
 
 export function getLanguage(code: string | undefined): string {
   if (!code) return ''
-  if (AFRICAN_LANGUAGES_MAP.has(code)) return AFRICAN_LANGUAGES_MAP.get(code)!
-  const fullName = getLangName(code)
+  const languageCode = AFRICAN_LANGUAGE_ALIASES.get(code) ?? code
+  if (AFRICAN_LANGUAGES_MAP.has(languageCode)) return AFRICAN_LANGUAGES_MAP.get(languageCode)!
+  for (const [scriptCode, name] of AFRICAN_LANGUAGES_MAP) {
+    if (scriptCode.split('_')[0] === languageCode) return name
+  }
+  const baseCode = languageCode.split('_')[0]!
+  const fullName = ADDITIONAL_LANGUAGE_NAMES.get(baseCode) ?? getLangName(baseCode)
   return fullName ?? code.toUpperCase()
 }
 
@@ -103,6 +146,7 @@ export async function* translate(
   }
 
   const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to))
+  const translatePsy = isLlm && isTranslatePsyModel(entry.local)
 
   const fromLanguage = getLanguage(from)
   const toLanguage = getLanguage(to)
@@ -178,14 +222,16 @@ export async function* translate(
   const input =
     canonicalModelType === ModelType.nmtcppTranslation
       ? singleText
-      : [
-          {
-            role: afriquePrompt ? 'user' : 'system',
-            content: afriquePrompt
-              ? `Translate ${fromLanguage} to ${toLanguage}.\n${fromLanguage}: ${singleText}\n${toLanguage}:`
-              : `${context ? `${context}. ` : ''}Translate the following text from ${fromLanguage} into ${toLanguage}. Only output the translation, nothing else.\n\n${fromLanguage}: ${singleText}\n${toLanguage}:`
-          }
-        ]
+      : translatePsy
+        ? buildTranslatePsyMessages(fromLanguage, toLanguage, singleText!)
+        : [
+            {
+              role: afriquePrompt ? 'user' : 'system',
+              content: afriquePrompt
+                ? `Translate ${fromLanguage} to ${toLanguage}.\n${fromLanguage}: ${singleText}\n${toLanguage}:`
+                : `${context ? `${context}. ` : ''}Translate the following text from ${fromLanguage} into ${toLanguage}. Only output the translation, nothing else.\n\n${fromLanguage}: ${singleText}\n${toLanguage}:`
+            }
+          ]
 
   // A translate cancelled before native work (queued-cancel, or the model being
   // unloaded) must not call run(): LLM could decode against an exclusive finetune
@@ -199,7 +245,11 @@ export async function* translate(
 
   const modelStart = nowMs()
   let response
-  if (
+  if (translatePsy) {
+    response = await model.run(input, {
+      generationParams: TRANSLATEPSY_GENERATION_PARAMS
+    })
+  } else if (
     canonicalModelType === ModelType.llamacppCompletion &&
     !shouldSkipPerCallSampling(entry.local.name)
   ) {

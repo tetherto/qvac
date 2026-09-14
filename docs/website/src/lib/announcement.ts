@@ -29,12 +29,12 @@ export type Announcement = {
 };
 
 export const announcement: Announcement | null = {
-  id: 'visionpsy-nano-460m',
+  id: 'translatepsy-afrislm',
   label: 'New:',
-  title: 'VisionPsy-Nano,',
-  description: 'a 460M vision model that outperforms models twice its size.',
+  title: 'TranslatePsy-AfriSLM',
+  description: 'translates directly between 19 African languages, offline.',
   cta: {
     text: 'Download Model',
-    href: 'https://get.qvac.tether.io/VisionPsy',
+    href: 'https://huggingface.co/collections/qvac/translatepsy-afrislm',
   },
 };

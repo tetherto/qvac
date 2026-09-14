@@ -183,10 +183,10 @@ You create and manage the MCP client, connect it to one or more MCP servers, and
 The `kvCache` parameter on `completion()` both enables caching and sets the cache key. It accepts:
 
 - A **non-empty string** (e.g. `"user-123-session-a"`) — use this key for a caller-managed cache. You control the session identity, so you can reuse the same key across turns and later clean it up with [`deleteCache({ kvCacheKey })`](/reference/api#deletecache).
-- `true` — SDK-managed auto cache. The SDK generates the key internally from the conversation history. Convenient for single-session use, but you don't get a stable key for manual cleanup.
+- `true` — SDK-managed auto cache. The SDK generates the key internally from the conversation history. Convenient for single-session use; you don't get a stable key for per-session cleanup, but you can reclaim them in bulk with [`deleteCache({ auto: true })`](/reference/api#deletecache).
 - `false` or `undefined` — no caching (default).
 
-SDK-managed auto caches are removed after 24 hours idle or under disk quota pressure. The quota is 512 MiB on React Native and 4 GiB on other runtimes. Caller-managed string-key caches are not subject to this automatic retention policy.
+SDK-managed auto caches are removed after 24 hours idle or under disk quota pressure. The quota is 512 MiB on React Native and 4 GiB on other runtimes. [`deleteCache({ auto: true })`](/reference/api#deletecache) reclaims them on demand instead of waiting for either bound, skipping any cache a request is still using. Caller-managed string-key caches are not subject to the automatic retention policy and are not touched by that call — clean those up with [`deleteCache({ kvCacheKey })`](/reference/api#deletecache).
 
 There is no separate `kvCacheKey` completion parameter — when you want a caller-managed cache, pass the key string directly as `kvCache`:
 
