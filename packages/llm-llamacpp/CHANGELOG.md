@@ -162,6 +162,24 @@
   large record per failing request.
 - A sequence in the generation phase no longer throttles concurrently prefilling sequences to one prompt token per decode step. `MultiRequestBatcher` fed every active slot a single shared chunk size, computed as the minimum `remainingToFeed()` across them; a generating slot reports `1`, so as soon as any one request started generating, every request still feeding its prompt was cut to one token per step and needed roughly as many decode steps to reach its first token as its prompt had tokens. Slots are now budgeted individually and water-filled against the batch capacity, so a generating slot takes its one token while a concurrent prefill keeps its full micro-batch. On a `parallel: 4` model answering six concurrent requests, time to first token for the stalled group drops from ~1710 ms to ~308 ms, aggregate throughput rises ~25% and wall clock falls ~21%. Peak batch size is unchanged — the sum of the per-slot budgets is bounded by the same `batch.capacity()` the shared chunk was. Note that a step taken while a large prefill is co-resident now carries more tokens, so an already-generating sequence sees a correspondingly larger spread in per-token latency.
 
+## [0.53.0] - 2026-09-14
+
+This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. llama.cpp, ggml, mtmd and libcommon are now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer, which drops the addon binary from tens of MB to ~3.2 MB.
+
+### Changed
+
+- The llama.cpp / ggml / mtmd / libcommon runtime and its compute backends are now provided by the `@qvac/fabric` npm dependency (`^0.13.0`) instead of the statically-linked `qvac-fabric` vcpkg port. The engine is dynamically linked as `qvac__fabric@0.bare` and loaded once per process, so a host that also runs another fabric consumer (`@qvac/embed-llamacpp`, `@qvac/ocr-ggml`, …) shares a single copy of it rather than one per addon. `@qvac/fabric` carries the prebuilt runtime inside its own tarball, so run `npm install` before `bare-make generate`/`build` and do not prune the dependency at runtime.
+- On desktop the addon resolves the single `@qvac/fabric` install and loads the ggml backend modules from `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to this addon's own `prebuilds/` on mobile, where the package tree is not resolvable from the packed worklet bundle. Correspondingly, the native `BACKENDS_SUBDIR` moved from `<host>/llm-llamacpp` to `<host>/qvac__fabric`.
+- Finetuning is unaffected as an API but now resolves its training entry points (`llama_opt_*`, `ggml_opt_*`, `common_opt_sft_dataset_init`) from the shared runtime rather than from objects linked into this addon.
+- `CMakeLists.txt` now builds on the shared `cmake/qvac-addon` template, replacing the hand-rolled preamble (vcpkg triplet overlay, libc++ flags, lint-cpp config sync, Windows lean-header defines, `--exclude-libs,ALL`, `JS_LOGGER`/`BACKENDS_SUBDIR`, the manual `GGML_AVAILABLE_BACKENDS` staging loop). This also picks up the Android 16 KB page-size link flags and the Apple compiler-rt `force_load` that the template applies to every addon.
+- The C++ test binary and the optional `BUILD_CLI` tool link the shared runtime too. Neither gets the runtime wiring `add_bare_module()` gives the `.bare` module, so both stage `qvac__fabric` and its `dlopen`'d backends next to the binary and rpath them in. The test binary explicitly preloads the backends from that directory, since a `GGML_BACKEND_DL` build registers none on its own.
+- `scripts/run-cpp-tests.js` now sets the ASan relaxations the C++ suite needs against a non-ASan, `-static-libstdc++` fabric prebuild (`alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1`) instead of relying on the CI workflow to export them, so a local run and a CI run behave the same. An explicit `ASAN_OPTIONS` in the environment still wins, and `LSAN_OPTIONS` keeps pointing at the checked-in suppressions file for anyone who re-enables leak detection.
+
+### Removed
+
+- `qvac-fabric` from `vcpkg.json`, along with the `find_package(llama)` and `find_package(OpenSSL)` calls it required. The addon's remaining vcpkg dependencies are `picojson`, `nlohmann-json`, `concurrentqueue`, `qvac-lib-inference-addon-cpp` and `qvac-lint-cpp`.
+- The `vk-profiling` build feature, and the `VK_PROFILING` CMake option and `vk-profiling` prebuild input behind it. Vulkan profiling is now a property of the shared runtime, selected when building `@qvac/fabric`.
+
 ## [0.52.1] - 2026-09-14
 
 ### Changed
