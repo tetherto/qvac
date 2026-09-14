@@ -88,7 +88,7 @@ if(NOT WIN32)
       -fsanitize=address
   )
 endif()
-if((ANDROID OR UNIX) AND NOT APPLE)
+if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     add_custom_command(TARGET addon-test POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -103,4 +103,3 @@ add_test(NAME EmbedModelTests COMMAND addon-test)
 set_tests_properties(EmbedModelTests PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   TIMEOUT 900)
-
