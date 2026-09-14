@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
+option(ANDROID_STL "Android STL linkage" c++_shared)
+
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
@@ -17,6 +19,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
+if(WIN32)
+  add_definitions(-DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI)
+endif()
+
 find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
@@ -29,7 +35,32 @@ find_package(llama CONFIG REQUIRED)
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(PREBUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/prebuilds/${bare_target_value}/${module_name}")
+set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 message("Building ggml-rpc-server tool bundle at '${PREBUILD_DIR}'")
+
+set(BACKEND_DL_LIBS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+  endforeach()
+endif()
+
+add_bare_module(ggml-rpc-server-addon EXPORTS ${BACKEND_DL_LIBS})
+target_sources(
+  ${ggml-rpc-server-addon}
+  PRIVATE
+    ${PROJECT_SOURCE_DIR}/addon/binding.cpp
+)
+target_link_libraries(${ggml-rpc-server-addon} PRIVATE llama::llama)
+target_compile_features(${ggml-rpc-server-addon} PRIVATE cxx_std_17)
+target_compile_definitions(
+  ${ggml-rpc-server-addon}
+  PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
+)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${ggml-rpc-server-addon}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
 
 if(WIN32)
   set(RPC_SERVER_TOOL_NAME "ggml-rpc-server.exe")
@@ -53,16 +84,3 @@ add_custom_target(
           "${PREBUILD_DIR}/${RPC_SERVER_TOOL_NAME}"
   COMMENT "Copying ggml-rpc-server to prebuild directory"
 )
-
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    add_custom_command(
-      TARGET ggml-rpc-server-tool
-      POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-              $<TARGET_FILE:ggml::${_backend}>
-              "${PREBUILD_DIR}"
-      COMMENT "Copying ggml backend ${_backend} to RPC server prebuild directory"
-    )
-  endforeach()
-endif()

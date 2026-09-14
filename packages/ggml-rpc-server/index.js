@@ -4,6 +4,7 @@ exports.RpcServerRdmaUnavailableError =
   exports.RpcServerStartTimeoutError =
   exports.RpcServerExitedError =
   exports.RpcServerSpawnError =
+  exports.RpcServerInvalidHostError =
   exports.RpcServerNonLoopbackHostError =
   exports.RpcServerPortAllocationError =
   exports.RpcServerUnsupportedPlatformError =
@@ -13,6 +14,7 @@ exports.RpcServerRdmaUnavailableError =
   exports.DEFAULT_RPC_SERVER_START_TIMEOUT_MS =
   exports.DEFAULT_RPC_SERVER_HOST =
     void 0;
+exports.resolveRpcServerPrebuildTarget = resolveRpcServerPrebuildTarget;
 exports.resolveRpcServerBinaryPath = resolveRpcServerBinaryPath;
 exports.allocateFreePort = allocateFreePort;
 exports.rpcServerLogsIndicateRdmaSupport = rpcServerLogsIndicateRdmaSupport;
@@ -30,9 +32,11 @@ const PREBUILD_MODULE_DIR = "qvac__ggml-rpc-server";
 const SUPPORTED_PREBUILD_TARGETS = new Set([
   "android-arm64",
   "darwin-arm64",
+  "darwin-x64",
   "ios-arm64",
   "linux-x64",
   "linux-arm64",
+  "win32-x64",
 ]);
 const RDMA_SUPPORT_MARKER = "RDMA auto-negotiate enabled";
 const TRUSTED_LAN_WARNING_CODE = "QVAC_GGML_RPC_SERVER_TRUSTED_LAN";
@@ -68,6 +72,13 @@ class RpcServerNonLoopbackHostError extends Error {
   }
 }
 exports.RpcServerNonLoopbackHostError = RpcServerNonLoopbackHostError;
+class RpcServerInvalidHostError extends Error {
+  constructor(host) {
+    super(`ggml-rpc-server requires an IPv4 address or localhost: ${host}`);
+    this.name = "RpcServerInvalidHostError";
+  }
+}
+exports.RpcServerInvalidHostError = RpcServerInvalidHostError;
 class RpcServerSpawnError extends Error {
   constructor(message, cause) {
     super(message, { cause });
@@ -118,7 +129,7 @@ class RpcServerRdmaUnavailableError extends Error {
   }
 }
 exports.RpcServerRdmaUnavailableError = RpcServerRdmaUnavailableError;
-function prebuildTarget(
+function resolveRpcServerPrebuildTarget(
   runtimePlatform = node_process_1.platform,
   runtimeArch = node_process_1.arch,
 ) {
@@ -156,7 +167,7 @@ function resolveRpcServerBinaryPath() {
   const resolved = (0, node_path_1.join)(
     __dirname,
     "prebuilds",
-    prebuildTarget(),
+    resolveRpcServerPrebuildTarget(),
     PREBUILD_MODULE_DIR,
     binaryName(),
   );
@@ -165,14 +176,19 @@ function resolveRpcServerBinaryPath() {
   }
   return resolved;
 }
-function allocateFreePort(host = exports.DEFAULT_RPC_SERVER_HOST, options = {}) {
-  assertLoopbackHost(host, options.allowNonLoopbackHost);
+function allocateFreePort(
+  host = exports.DEFAULT_RPC_SERVER_HOST,
+  options = {},
+) {
+  const bindHost = normalizeHost(host);
+  assertSupportedHost(bindHost);
+  assertLoopbackHost(bindHost, options.allowNonLoopbackHost);
   return new Promise((resolve, reject) => {
     const server = (0, node_net_1.createServer)();
     server.once("error", (err) =>
       reject(new RpcServerPortAllocationError(err)),
     );
-    server.listen({ host, port: 0 }, () => {
+    server.listen({ host: bindHost, port: 0 }, () => {
       const address = server.address();
       if (address === null || typeof address === "string") {
         server.close(() => reject(new RpcServerPortAllocationError()));
@@ -222,8 +238,15 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 function isLoopbackHost(host) {
-  if (host === "localhost" || host === "::1") return true;
   return (0, node_net_1.isIP)(host) === 4 && host.startsWith("127.");
+}
+function normalizeHost(host) {
+  return host === "localhost" ? exports.DEFAULT_RPC_SERVER_HOST : host;
+}
+function assertSupportedHost(host) {
+  if ((0, node_net_1.isIP)(host) !== 4) {
+    throw new RpcServerInvalidHostError(host);
+  }
 }
 function assertLoopbackHost(host, allowNonLoopbackHost = false) {
   if (allowNonLoopbackHost) {
@@ -313,6 +336,9 @@ async function waitForListening(params) {
 }
 function rpcServerArgs(options) {
   const args = ["--host", options.host, "--port", String(options.port)];
+  if (options.threads !== undefined) {
+    args.push("--threads", String(options.threads));
+  }
   if (options.device !== undefined && options.device.length > 0) {
     args.push("--device", options.device);
   }
@@ -322,6 +348,18 @@ function rpcServerArgs(options) {
 function normalizeDevice(device) {
   if (typeof device === "string" || device === undefined) return device;
   return device.join(",");
+}
+function validatePort(port) {
+  if (!Number.isSafeInteger(port) || port <= 0 || port > 65535) {
+    throw new RangeError("port must be an integer between 1 and 65535");
+  }
+}
+function validateDuration(name, value, allowZero) {
+  if (!Number.isFinite(value) || value < 0 || (!allowZero && value === 0)) {
+    throw new RangeError(
+      `${name} must be a ${allowZero ? "non-negative" : "positive"} finite number`,
+    );
+  }
 }
 function signalProcessTree(child, signal) {
   const pid = child.pid;
@@ -366,9 +404,23 @@ function attachExitCleanup(child) {
   return () => process.removeListener("exit", cleanup);
 }
 async function startRpcServer(options = {}) {
-  const host = options.host ?? exports.DEFAULT_RPC_SERVER_HOST;
+  const host = normalizeHost(options.host ?? exports.DEFAULT_RPC_SERVER_HOST);
+  assertSupportedHost(host);
   assertLoopbackHost(host, options.allowNonLoopbackHost);
   warnForTrustedLanHost(host, options.allowNonLoopbackHost);
+  if (options.port !== undefined) validatePort(options.port);
+  if (options.startTimeoutMs !== undefined) {
+    validateDuration("startTimeoutMs", options.startTimeoutMs, false);
+  }
+  if (options.shutdownGraceMs !== undefined) {
+    validateDuration("shutdownGraceMs", options.shutdownGraceMs, true);
+  }
+  if (
+    options.threads !== undefined &&
+    (!Number.isSafeInteger(options.threads) || options.threads <= 0)
+  ) {
+    throw new TypeError("threads must be a positive integer");
+  }
   const port =
     options.port ??
     (await allocateFreePort(host, {
@@ -386,6 +438,7 @@ async function startRpcServer(options = {}) {
     host,
     port,
     cache: options.cache ?? false,
+    threads: options.threads,
   });
   const spawnOptions = {
     detached: true,
@@ -425,6 +478,7 @@ async function startRpcServer(options = {}) {
   const rdmaCapable =
     binaryRdmaCapable || rpcServerLogsIndicateRdmaSupport(getTail());
   return {
+    runtime: "process",
     child,
     pid: child.pid,
     host,

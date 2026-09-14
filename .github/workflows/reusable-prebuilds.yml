@@ -6,7 +6,7 @@
 # and MODEL_S3_BUCKET.
 #
 # Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
-# llm-llamacpp, nmtcpp, parakeet, tts-ggml,
+# ggml-rpc-server, llm-llamacpp, nmtcpp, parakeet, tts-ggml,
 # whispercpp. All prebuild workflows in the monorepo
 # now route through this reusable.
 name: "Prebuilds (reusable)"
@@ -30,6 +30,25 @@ on:
       artifact-name-prefix:
         description: >-
           Optional prefix for the per-matrix prebuild artifact name. The merged artifact is always uploaded under the well-known name `prebuilds`, but downstream mobile-integration test workflows download per-matrix artifacts via glob patterns built from this prefix (see PREBUILD_ARTIFACT_PREFIX in integration-mobile-test-*.yml), so it must match the convention expected by the consumer. It also scopes the merge job's download: a caller that publishes any other artifact in the same run (`fabric-overlay-artifact`) must set it, or that artifact is merged into the bundle.
+        type: string
+        required: false
+        default: ""
+      matrix-include:
+        description: >-
+          JSON array of matrix combinations. Defaults to the canonical native
+          package matrix and may be narrowed by packages with a smaller support
+          surface.
+        type: string
+        required: false
+        default: >-
+          [{"os":"ubuntu-22.04","platform":"linux","arch":"x64","runner":"qvac-ubuntu2204-x64"},{"os":"ubuntu-22.04-arm","platform":"linux","arch":"arm64"},{"os":"ubuntu-24.04","platform":"android","arch":"arm64"},{"os":"macos-15","platform":"ios","arch":"arm64"},{"os":"macos-15","platform":"ios","arch":"arm64","tags":"-simulator","flags":"--simulator"},{"os":"macos-15","platform":"ios","arch":"x64","tags":"-simulator","flags":"--simulator"},{"os":"macos-15","platform":"darwin","arch":"arm64"},{"os":"macos-15-intel","platform":"darwin","arch":"x64"},{"os":"windows-2025","platform":"win32","arch":"x64","runner":"qvac-win25-x64"}]
+      desktop-smoke-command:
+        description: Command to run against built prebuilds on desktop targets
+        type: string
+        required: false
+        default: ""
+      extra-strip-binary-name:
+        description: Extensionless executable basename to strip in addition to native libraries
         type: string
         required: false
         default: ""
@@ -123,40 +142,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-22.04
-            platform: linux
-            arch: x64
-            runner: qvac-ubuntu2204-x64
-          - os: ubuntu-22.04-arm
-            platform: linux
-            arch: arm64
-          - os: ubuntu-24.04
-            platform: android
-            arch: arm64
-          - os: macos-15
-            platform: ios
-            arch: arm64
-          - os: macos-15
-            platform: ios
-            arch: arm64
-            tags: -simulator
-            flags: --simulator
-          - os: macos-15
-            platform: ios
-            arch: x64
-            tags: -simulator
-            flags: --simulator
-          - os: macos-15
-            platform: darwin
-            arch: arm64
-          - os: macos-15-intel
-            platform: darwin
-            arch: x64
-          - os: windows-2025
-            platform: win32
-            arch: x64
-            runner: qvac-win25-x64
+        include: ${{ fromJSON(inputs.matrix-include) }}
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
@@ -383,6 +369,16 @@ jobs:
         shell: bash
         run: bare-make install
 
+      - name: Smoke-test desktop prebuild
+        if: >-
+          inputs.desktop-smoke-command != '' &&
+          (matrix.platform == 'linux' || matrix.platform == 'darwin' || matrix.platform == 'win32')
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          DESKTOP_SMOKE_COMMAND: ${{ inputs.desktop-smoke-command }}
+        run: bash -c "$DESKTOP_SMOKE_COMMAND"
+
       - name: Strip static libraries (.a) from prebuilds (Linux / MacOS)
         if: matrix.os != 'windows-2025'
         working-directory: ${{ env.WORKDIR }}
@@ -438,6 +434,38 @@ jobs:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
 
+      - name: Strip extensionless executable
+        if: inputs.extra-strip-binary-name != '' && matrix.platform != 'win32'
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          BINARY_NAME: ${{ inputs.extra-strip-binary-name }}
+          BUILD_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$BINARY_NAME" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Invalid executable basename: $BINARY_NAME"
+            exit 1
+          fi
+          MATCHES=$(find prebuilds -type f -name "$BINARY_NAME" -print)
+          if [ -z "$MATCHES" ]; then
+            echo "::error::No executable named $BINARY_NAME was found under prebuilds/"
+            exit 1
+          fi
+          case "$BUILD_PLATFORM" in
+            darwin|ios)
+              find prebuilds -type f -name "$BINARY_NAME" -exec strip -S {} \;
+              ;;
+            linux)
+              find prebuilds -type f -name "$BINARY_NAME" -exec strip --strip-debug {} \;
+              ;;
+            android)
+              LLVM_STRIP="${ANDROID_TOOLCHAIN_ROOT:-${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64}/bin/llvm-strip"
+              test -x "$LLVM_STRIP"
+              find prebuilds -type f -name "$BINARY_NAME" -exec "$LLVM_STRIP" --strip-debug {} \;
+              ;;
+          esac
+
       # Static guard: fail the prebuild if the addon module is left with
       # unresolvable engine symbols (the @qvac/tts-ggml@0.2.1 ggml_backend_is_cpu
       # dlopen crash) -- caught here, off the artifact, before any device run.
@@ -450,8 +478,9 @@ jobs:
           workdir: ${{ env.WORKDIR }}
 
       # Guards against regressing the static-runtime build: addons must link the
-      # static MSVC runtime, so the shipped .bare/.dll must not import the dynamic
-      # Visual C++ runtime (vcruntime140.dll / msvcp140.dll / ucrtbase.dll / the
+      # static MSVC runtime, so shipped .bare/.dll/.exe files must not import
+      # the dynamic Visual C++ runtime (vcruntime140.dll / msvcp140.dll /
+      # ucrtbase.dll / the
       # api-ms-win-crt-* UCRT forwarders). Re-introducing msvcrt.lib or a
       # dynamic-CRT vcpkg triplet would make these appear and fail the build.
       - name: Verify no dynamic C/C++ runtime dependency (Windows)
@@ -499,9 +528,9 @@ jobs:
           # Dynamic C/C++ runtime import names that must never appear.
           $forbidden = 'vcruntime\d', 'msvcp\d', 'msvcr\d', 'msvcrt\.dll', 'ucrtbase', 'api-ms-win-crt', 'concrt\d'
 
-          $binaries = Get-ChildItem -Path "prebuilds" -Recurse -File -Include *.bare, *.dll
+          $binaries = Get-ChildItem -Path "prebuilds" -Recurse -File -Include *.bare, *.dll, *.exe
           if (-not $binaries) {
-            Write-Error "No .bare/.dll binaries found under prebuilds/"
+            Write-Error "No .bare/.dll/.exe binaries found under prebuilds/"
             exit 1
           }
 

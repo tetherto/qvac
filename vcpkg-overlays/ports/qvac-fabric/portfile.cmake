@@ -10,6 +10,8 @@ vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
   URL https://github.com/tetherto/qvac-fabric-llm.cpp
   REF 4238f1ff50165b79b736f38b7348e8fe0a1d4d63
+  PATCHES
+    managed-rpc-server-lifecycle.patch
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.

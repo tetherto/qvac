@@ -11,9 +11,11 @@ const {
   DEFAULT_RPC_SERVER_START_TIMEOUT_MS,
   DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS,
   RPC_SERVER_HEALTH_POLL_INTERVAL_MS,
+  RpcServerInvalidHostError,
   RpcServerNonLoopbackHostError,
   RpcServerRdmaUnavailableError,
   allocateFreePort,
+  resolveRpcServerPrebuildTarget,
   rpcServerLogsIndicateRdmaSupport,
   startRpcServer,
 } = require("../../index.js");
@@ -73,6 +75,36 @@ test("exports conservative lifecycle defaults", () => {
   assert.equal(RPC_SERVER_HEALTH_POLL_INTERVAL_MS, 100);
 });
 
+test("resolves every supported prebuild target", () => {
+  const targets = [
+    ["android", "arm64", "android-arm64"],
+    ["darwin", "arm64", "darwin-arm64"],
+    ["darwin", "x64", "darwin-x64"],
+    ["ios", "arm64", "ios-arm64"],
+    ["linux", "arm64", "linux-arm64"],
+    ["linux", "x64", "linux-x64"],
+    ["win32", "x64", "win32-x64"],
+  ];
+
+  for (const [runtimePlatform, runtimeArch, expected] of targets) {
+    assert.equal(
+      resolveRpcServerPrebuildTarget(runtimePlatform, runtimeArch),
+      expected,
+    );
+  }
+});
+
+test("rejects unsupported prebuild targets", () => {
+  assert.throws(
+    () => resolveRpcServerPrebuildTarget("win32", "arm64"),
+    /not packaged for win32-arm64/,
+  );
+  assert.throws(
+    () => resolveRpcServerPrebuildTarget("freebsd", "x64"),
+    /not packaged for freebsd-x64/,
+  );
+});
+
 test("rejects non-loopback hosts", async () => {
   assert.throws(
     () => allocateFreePort("0.0.0.0"),
@@ -85,6 +117,39 @@ test("rejects non-loopback hosts", async () => {
         host: "0.0.0.0",
       }),
     RpcServerNonLoopbackHostError,
+  );
+});
+
+test("normalizes localhost for the IPv4 RPC listener", async () => {
+  const fixture = createFakeRpcServerBinary();
+
+  try {
+    const server = await startRpcServer({
+      binaryPath: fixture.binaryPath,
+      host: "localhost",
+      startTimeoutMs: 5000,
+    });
+    assert.equal(server.host, DEFAULT_RPC_SERVER_HOST);
+    assert.match(server.url, /^127\.0\.0\.1:\d+$/);
+    await server.stop();
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("rejects hosts unsupported by the IPv4 RPC listener", async () => {
+  assert.throws(
+    () => allocateFreePort("::1", { allowNonLoopbackHost: true }),
+    RpcServerInvalidHostError,
+  );
+  await assert.rejects(
+    () =>
+      startRpcServer({
+        binaryPath: process.execPath,
+        host: "example.test",
+        allowNonLoopbackHost: true,
+      }),
+    RpcServerInvalidHostError,
   );
 });
 
@@ -126,6 +191,7 @@ test("starts and stops a managed server process", async () => {
       startTimeoutMs: 5000,
     });
     assert.equal(process.listenerCount("exit"), exitListenersBefore + 1);
+    assert.equal(server.runtime, "process");
     assert.equal(server.host, DEFAULT_RPC_SERVER_HOST);
     assert.match(server.url, /^127\.0\.0\.1:\d+$/);
     assert.equal(server.rdmaCapable, false);
@@ -138,9 +204,46 @@ test("starts and stops a managed server process", async () => {
   }
 });
 
+test("rejects an invalid server thread count", async () => {
+  const fixture = createFakeRpcServerBinary();
+  try {
+    await assert.rejects(
+      () => startRpcServer({ binaryPath: fixture.binaryPath, threads: 0 }),
+      /threads must be a positive integer/,
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("rejects invalid ports and lifecycle durations before spawning", async () => {
+  await assert.rejects(
+    () => startRpcServer({ binaryPath: process.execPath, port: 0 }),
+    /port must be an integer between 1 and 65535/,
+  );
+  await assert.rejects(
+    () =>
+      startRpcServer({
+        binaryPath: process.execPath,
+        startTimeoutMs: Number.NaN,
+      }),
+    /startTimeoutMs must be a positive finite number/,
+  );
+  await assert.rejects(
+    () =>
+      startRpcServer({
+        binaryPath: process.execPath,
+        shutdownGraceMs: Number.POSITIVE_INFINITY,
+      }),
+    /shutdownGraceMs must be a non-negative finite number/,
+  );
+});
+
 test("detects RDMA-capable startup logs", async () => {
   assert.equal(
-    rpcServerLogsIndicateRdmaSupport("transport      : TCP (RDMA auto-negotiate enabled)"),
+    rpcServerLogsIndicateRdmaSupport(
+      "transport      : TCP (RDMA auto-negotiate enabled)",
+    ),
     true,
   );
   assert.equal(rpcServerLogsIndicateRdmaSupport("transport      : TCP"), false);

@@ -15,6 +15,9 @@ export declare class RpcServerPortAllocationError extends Error {
 export declare class RpcServerNonLoopbackHostError extends Error {
     constructor(host: string);
 }
+export declare class RpcServerInvalidHostError extends Error {
+    constructor(host: string);
+}
 export declare class RpcServerSpawnError extends Error {
     constructor(message: string, cause?: unknown);
 }
@@ -43,12 +46,14 @@ export interface StartRpcServerOptions {
     readonly binaryPath?: string;
     readonly startTimeoutMs?: number;
     readonly shutdownGraceMs?: number;
+    readonly threads?: number;
     readonly env?: NodeJS.ProcessEnv;
     readonly cleanupOnExit?: boolean;
     readonly expectRdma?: boolean;
     readonly allowNonLoopbackHost?: boolean;
 }
 export interface RpcServerProcess {
+    readonly runtime: 'process';
     readonly child: ChildProcess;
     readonly pid: number;
     readonly host: string;
@@ -62,6 +67,7 @@ export interface RpcServerProcess {
 export interface AllocateFreePortOptions {
     readonly allowNonLoopbackHost?: boolean;
 }
+export declare function resolveRpcServerPrebuildTarget(runtimePlatform?: string, runtimeArch?: string): string;
 export declare function resolveRpcServerBinaryPath(): string;
 export declare function allocateFreePort(host?: string, options?: AllocateFreePortOptions): Promise<number>;
 export declare function rpcServerLogsIndicateRdmaSupport(logs: string): boolean;

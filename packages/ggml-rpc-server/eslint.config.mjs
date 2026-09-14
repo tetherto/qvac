@@ -6,6 +6,8 @@ export default [
     ignores: [
       "index.js",
       "index.d.ts",
+      "mobile.js",
+      "mobile.d.ts",
       "build/**",
       "prebuilds/**",
       "test/**",

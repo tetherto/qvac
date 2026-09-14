@@ -1403,6 +1403,20 @@ test('fork-ci: fork-approval caller grants statuses: write (reusable cannot elev
   }
 })
 
+test('ggml-rpc-server mobile caller grants the reusable workflow required permissions', () => {
+  const path = '.github/workflows/on-pr-ggml-rpc-server.yml'
+  const mobile = eachJob(read(path)).find((job) => job.name === 'mobile')
+  assert.ok(mobile, `${path}: must define the mobile workflow caller`)
+  assert.match(mobile.text, /permissions:[\s\S]*?contents:\s*read/)
+  assert.match(mobile.text, /permissions:[\s\S]*?packages:\s*read/)
+  assert.match(
+    mobile.text,
+    /permissions:[\s\S]*?pull-requests:\s*write/,
+    `${path}: mobile must grant PR write access for the reusable workflow's result comment`,
+  )
+  assert.match(mobile.text, /permissions:[\s\S]*?id-token:\s*write/)
+})
+
 function jobDependsOnAuthorize(job) {
   if (job.text.includes('authorize.outputs.allowed')) return true
   return /\bneeds:[\s\S]*?\bauthorize\b/.test(job.text)

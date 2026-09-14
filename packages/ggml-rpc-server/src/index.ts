@@ -14,9 +14,11 @@ const PREBUILD_MODULE_DIR = 'qvac__ggml-rpc-server'
 const SUPPORTED_PREBUILD_TARGETS = new Set([
   'android-arm64',
   'darwin-arm64',
+  'darwin-x64',
   'ios-arm64',
   'linux-x64',
   'linux-arm64',
+  'win32-x64',
 ])
 const RDMA_SUPPORT_MARKER = 'RDMA auto-negotiate enabled'
 const TRUSTED_LAN_WARNING_CODE = 'QVAC_GGML_RPC_SERVER_TRUSTED_LAN'
@@ -46,6 +48,13 @@ export class RpcServerNonLoopbackHostError extends Error {
   constructor(host: string) {
     super(`ggml-rpc-server only supports loopback hosts in this package: ${host}`)
     this.name = 'RpcServerNonLoopbackHostError'
+  }
+}
+
+export class RpcServerInvalidHostError extends Error {
+  constructor(host: string) {
+    super(`ggml-rpc-server requires an IPv4 address or localhost: ${host}`)
+    this.name = 'RpcServerInvalidHostError'
   }
 }
 
@@ -104,6 +113,7 @@ export interface StartRpcServerOptions {
   readonly binaryPath?: string
   readonly startTimeoutMs?: number
   readonly shutdownGraceMs?: number
+  readonly threads?: number
   readonly env?: NodeJS.ProcessEnv
   readonly cleanupOnExit?: boolean
   readonly expectRdma?: boolean
@@ -111,6 +121,7 @@ export interface StartRpcServerOptions {
 }
 
 export interface RpcServerProcess {
+  readonly runtime: 'process'
   readonly child: ChildProcess
   readonly pid: number
   readonly host: string
@@ -126,7 +137,10 @@ export interface AllocateFreePortOptions {
   readonly allowNonLoopbackHost?: boolean
 }
 
-function prebuildTarget(runtimePlatform = platform, runtimeArch = arch): string {
+export function resolveRpcServerPrebuildTarget(
+  runtimePlatform: string = platform,
+  runtimeArch: string = arch
+): string {
   let target: string | undefined
   switch (runtimePlatform) {
     case 'darwin':
@@ -161,7 +175,7 @@ export function resolveRpcServerBinaryPath(): string {
   const resolved = join(
     __dirname,
     'prebuilds',
-    prebuildTarget(),
+    resolveRpcServerPrebuildTarget(),
     PREBUILD_MODULE_DIR,
     binaryName()
   )
@@ -175,11 +189,13 @@ export function allocateFreePort(
   host = DEFAULT_RPC_SERVER_HOST,
   options: AllocateFreePortOptions = {}
 ): Promise<number> {
-  assertLoopbackHost(host, options.allowNonLoopbackHost)
+  const bindHost = normalizeHost(host)
+  assertSupportedHost(bindHost)
+  assertLoopbackHost(bindHost, options.allowNonLoopbackHost)
   return new Promise((resolve, reject) => {
     const server = createServer()
     server.once('error', (err) => reject(new RpcServerPortAllocationError(err)))
-    server.listen({ host, port: 0 }, () => {
+    server.listen({ host: bindHost, port: 0 }, () => {
       const address = server.address()
       if (address === null || typeof address === 'string') {
         server.close(() => reject(new RpcServerPortAllocationError()))
@@ -228,8 +244,17 @@ function delay(ms: number): Promise<void> {
 }
 
 function isLoopbackHost(host: string): boolean {
-  if (host === 'localhost' || host === '::1') return true
   return isIP(host) === 4 && host.startsWith('127.')
+}
+
+function normalizeHost(host: string): string {
+  return host === 'localhost' ? DEFAULT_RPC_SERVER_HOST : host
+}
+
+function assertSupportedHost(host: string): void {
+  if (isIP(host) !== 4) {
+    throw new RpcServerInvalidHostError(host)
+  }
 }
 
 function assertLoopbackHost(host: string, allowNonLoopbackHost = false): void {
@@ -326,8 +351,12 @@ function rpcServerArgs(options: {
   readonly host: string
   readonly port: number
   readonly cache: boolean
+  readonly threads?: number
 }): string[] {
   const args = ['--host', options.host, '--port', String(options.port)]
+  if (options.threads !== undefined) {
+    args.push('--threads', String(options.threads))
+  }
   if (options.device !== undefined && options.device.length > 0) {
     args.push('--device', options.device)
   }
@@ -338,6 +367,18 @@ function rpcServerArgs(options: {
 function normalizeDevice(device: string | readonly string[] | undefined): string | undefined {
   if (typeof device === 'string' || device === undefined) return device
   return device.join(',')
+}
+
+function validatePort(port: number): void {
+  if (!Number.isSafeInteger(port) || port <= 0 || port > 65535) {
+    throw new RangeError('port must be an integer between 1 and 65535')
+  }
+}
+
+function validateDuration(name: string, value: number, allowZero: boolean): void {
+  if (!Number.isFinite(value) || value < 0 || (!allowZero && value === 0)) {
+    throw new RangeError(`${name} must be a ${allowZero ? 'non-negative' : 'positive'} finite number`)
+  }
 }
 
 function signalProcessTree(child: ChildProcess, signal: NodeJS.Signals): boolean {
@@ -383,9 +424,23 @@ function attachExitCleanup(child: ChildProcess): () => void {
 }
 
 export async function startRpcServer(options: StartRpcServerOptions = {}): Promise<RpcServerProcess> {
-  const host = options.host ?? DEFAULT_RPC_SERVER_HOST
+  const host = normalizeHost(options.host ?? DEFAULT_RPC_SERVER_HOST)
+  assertSupportedHost(host)
   assertLoopbackHost(host, options.allowNonLoopbackHost)
   warnForTrustedLanHost(host, options.allowNonLoopbackHost)
+  if (options.port !== undefined) validatePort(options.port)
+  if (options.startTimeoutMs !== undefined) {
+    validateDuration('startTimeoutMs', options.startTimeoutMs, false)
+  }
+  if (options.shutdownGraceMs !== undefined) {
+    validateDuration('shutdownGraceMs', options.shutdownGraceMs, true)
+  }
+  if (
+    options.threads !== undefined &&
+    (!Number.isSafeInteger(options.threads) || options.threads <= 0)
+  ) {
+    throw new TypeError('threads must be a positive integer')
+  }
   const port =
     options.port ??
     (await allocateFreePort(host, {
@@ -400,7 +455,8 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     device,
     host,
     port,
-    cache: options.cache ?? false
+    cache: options.cache ?? false,
+    threads: options.threads
   })
   const spawnOptions: SpawnOptions = {
     detached: true,
@@ -438,6 +494,7 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
   const rdmaCapable = binaryRdmaCapable || rpcServerLogsIndicateRdmaSupport(getTail())
 
   return {
+    runtime: 'process',
     child,
     pid: child.pid,
     host,

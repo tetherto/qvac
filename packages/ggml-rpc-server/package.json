@@ -1,27 +1,34 @@
 {
   "name": "@qvac/ggml-rpc-server",
   "version": "0.1.0",
-  "description": "Managed ggml RPC server process for QVAC LLM inference",
+  "description": "Managed ggml RPC server for QVAC LLM inference",
   "addon": true,
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
-    "build:native": "bare-make generate && bare-make build",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
+    "check:generated": "node scripts/check-generated.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
     "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "lint-cpp": "clang-tidy -p build addon/binding.cpp",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "test": "npm run build:ts && npm run test:node",
     "test:node": "node --test test/node/*.test.cjs",
-    "test:types": "npm run typecheck",
+    "test:unit": "npm run test:node",
+    "test:types": "npm run typecheck && npm run check:generated",
     "test:dts": "npm run test:types"
   },
   "files": [
     "index.js",
     "index.d.ts",
+    "mobile.js",
+    "mobile.d.ts",
+    "binding.js",
     "prebuilds",
+    "CHANGELOG.md",
     "LICENSE",
     "NOTICE",
     "README.md"
@@ -48,14 +55,29 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.63.0"
   },
+  "dependencies": {
+    "bare-net": "^2.3.2",
+    "bare-path": "^3.0.0"
+  },
   "engines": {
+    "bare": ">=1.24.0",
     "node": ">=20.0.0"
   },
   "exports": {
     "./package": "./package.json",
     ".": {
-      "types": "./index.d.ts",
-      "default": "./index.js"
+      "bare": {
+        "types": "./mobile.d.ts",
+        "default": "./mobile.js"
+      },
+      "node": {
+        "types": "./index.d.ts",
+        "default": "./index.js"
+      },
+      "default": {
+        "types": "./index.d.ts",
+        "default": "./index.js"
+      }
     }
   },
   "types": "index.d.ts"
