@@ -36,7 +36,7 @@ export const videosCreateBody = z
       )
       .optional()
       .describe(
-        'Target duration in seconds. Mapped to `video_frames = 17*k+5` at 24 FPS for a model whose config declares the MiniMax-H3 layout, and to `nearest_4k+1(seconds * fps)` otherwise.'
+        'Target duration in seconds. MiniMax-H3 uses 24 FPS and the nearest `17*k+5` frame count; other models use the existing nearest `4*k+1` mapping with the requested or default FPS, followed by normal model-specific validation.'
       ),
     size: z
       .string()

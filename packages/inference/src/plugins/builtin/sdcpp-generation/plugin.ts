@@ -252,11 +252,9 @@ export const diffusionPlugin = definePlugin({
         "modelConfig.audioVaeModelSrc requires mode: 'video' (LTX-2 or MiniMax-H3)."
       )
     }
-    // Without the LTX-2 connectors, the audio VAE selects MiniMax-H3; an `llm`
-    // does too, but only when no Wan text encoder is present — a Wan config
-    // carrying a stray `llmModelSrc` has always had it dropped below, and
-    // stealing that field would break it. Reject the companions H3 cannot
-    // consume up front, before any of them is downloaded and then dropped.
+    // `t5XxlModelSrc` selects Wan and `llmModelSrc` is ignored for that layout.
+    // Without T5, `llmModelSrc` plus both VAEs selects MiniMax-H3. Reject the
+    // companions H3 cannot consume before any of them is downloaded.
     if (
       cfg.mode === 'video' &&
       !embeddingsConnectorsModelSrc &&

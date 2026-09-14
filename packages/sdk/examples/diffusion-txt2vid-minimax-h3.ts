@@ -8,8 +8,14 @@ if (!modelsDir) {
   throw new Error('Usage: diffusion-txt2vid-minimax-h3.ts <models-directory> [output.avi]')
 }
 const outputPath = process.argv[3] || 'minimax-h3.avi'
-const modelSrc = path.resolve(modelsDir, 'minimax_h3_fl2va_pruned-Q4_K.gguf')
-const llmModelSrc = path.resolve(modelsDir, 'qwen3vl_32b_minimax_h3-Q4_K_M.gguf')
+const modelSrc = path.resolve(
+  modelsDir,
+  process.env['H3_MODEL'] || 'minimax_h3_fl2va_pruned-Q4_K.gguf'
+)
+const llmModelSrc = path.resolve(
+  modelsDir,
+  process.env['H3_LLM'] || 'qwen3vl_32b_minimax_h3-Q4_K_M.gguf'
+)
 const vaeModelSrc = path.resolve(modelsDir, 'vae/minimax_h3_video_vae_fp16.safetensors')
 const audioVaeModelSrc = path.resolve(modelsDir, 'vae/minimax_h3_audio_vae_fp32.safetensors')
 for (const file of [modelSrc, llmModelSrc, vaeModelSrc, audioVaeModelSrc]) fs.accessSync(file)
