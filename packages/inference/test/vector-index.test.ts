@@ -109,6 +109,9 @@ test('vector index: create, add, search, contains, remove, dispose round trip', 
     await index.search({ query: [1, 0, 0, 0], k: 1 })
     t.is(calls.prepare, 1, 'repeated searches do not prepare again')
 
+    const padded = await index.search({ query: [1, 0, 0, 0], k: 5 })
+    t.is(padded.length, 3, 'padding slots beyond the live entries are stripped')
+
     const rows = await index.search({ queries: [[0, 1, 0, 0]], k: 1 })
     t.is(rows.length, 1, 'multi-query search returns one list per query')
     t.is(rows[0]?.length, 1)

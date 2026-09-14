@@ -8,7 +8,6 @@ export {
   getPlugin,
   getPluginHandler,
   getTurboVecIndexProvider,
-  getVectorIndexProvider,
   hasPlugin,
   getAllPlugins,
   clearPlugins,
