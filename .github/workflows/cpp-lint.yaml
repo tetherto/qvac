@@ -59,7 +59,7 @@ jobs:
     # A cold `setup-cuda` curls ~1GB from developer.download.nvidia.com, then a
     # changed fabric overlay can need a full CUDA build during generation.
     # Warm runs finish in 1.5 to 2.5 minutes.
-    timeout-minutes: 60
+    timeout-minutes: 120
     environment: release
     permissions:
       contents: read

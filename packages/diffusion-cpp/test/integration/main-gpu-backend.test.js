@@ -24,7 +24,7 @@ async function waitForLog(logs, predicate, timeoutMs = 5000) {
   return logs.find(predicate)
 }
 
-test('main-gpu requests Vulkan0 on Windows multi-GPU runner', { timeout: 600000 }, async (t) => {
+test('main-gpu selects CUDA0 on Windows multi-GPU runner', { timeout: 600000 }, async (t) => {
   if (os.platform() !== 'win32' || os.arch() !== 'x64') {
     t.pass('main-gpu Windows multi-GPU integration is win32-x64 only')
     return
@@ -42,7 +42,7 @@ test('main-gpu requests Vulkan0 on Windows multi-GPU runner', { timeout: 600000 
 
   let model = null
   try {
-    const targetName = 'Vulkan0'
+    const targetName = 'CUDA0'
     const targetIndex = 0
 
     const [modelName, modelDir] = await ensureModel({
@@ -68,15 +68,11 @@ test('main-gpu requests Vulkan0 on Windows multi-GPU runner', { timeout: 600000 
 
     await model.load()
 
-    const resolvedLog = await waitForLog(logs, (line) =>
-      line.includes(`main-gpu resolved to backend '${targetName}'`)
-    )
-    const backendPinLog = await waitForLog(logs, (line) =>
-      line.includes(`main-gpu pinning stable-diffusion backend '${targetName}'`)
+    const selectedLog = await waitForLog(logs, (line) =>
+      line.includes(`Selected stable-diffusion backend '${targetName}'`)
     )
 
-    t.ok(resolvedLog, `main-gpu resolved to ${targetName}`)
-    t.ok(backendPinLog, `stable-diffusion.cpp was asked to use ${targetName}`)
+    t.ok(selectedLog, `main-gpu selected ${targetName}`)
   } finally {
     if (model) await model.unload().catch(() => {})
     releaseJsLogger(binding)
