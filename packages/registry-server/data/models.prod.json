@@ -8660,6 +8660,17 @@
     "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
   },
   {
+    "source": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4ca720788d1e01f1bff70c033e0d0028fd02e502/MTP/mtp-Qwen3.8-27B-Q4_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MTP head for Qwen3.8 27B",
+    "quantization": "Q4_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "qwen3.8", "mtp"],
+    "notes": "Q4_0 multi-token prediction head for Qwen3.8 27B. Used with the matching Qwen3.8 27B model for speculative decoding.",
+    "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/tree/main/MTP"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF/resolve/5d16c055a7c5cb276e721ee154f9c22420dde2a1/UD-Q2_K_XL/Qwen3.8-Flash-Next-UD-Q2_K_XL-00001-of-00003.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Qwen3.8 Flash Next 177B UD-Q2_K_XL model",
