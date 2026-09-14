@@ -194,7 +194,7 @@ test('advisory fit: the env opt-out disables the check without logging', async (
   t.is(records.length, 0)
 })
 
-test('advisory fit: never launches a child on mobile', async (t) => {
+test('advisory fit: runs the fitter on mobile', async (t) => {
   const { logger } = recordingLogger()
   const { calls, runFit } = fitReturning({ status: 'completed', result: FIT_PLAN })
 
@@ -207,11 +207,11 @@ test('advisory fit: never launches a child on mobile', async (t) => {
 
   t.alike(outcome, {
     ...PROVENANCE,
-    verdict: 'unknown',
-    reason: 'unsupported-load',
-    message: 'mobile has no disposable process boundary'
+    verdict: 'fit',
+    reason: 'fits',
+    plan: { nCtx: 4096, nGpuLayers: 32, nGpuDevices: 1 }
   })
-  t.is(calls.length, 0)
+  t.is(calls.length, 1)
 })
 
 test('advisory fit: absorbs a supervisor that rejects', async (t) => {
