@@ -693,9 +693,10 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
   }
 
   // Turn one commits, turn two is cancelled mid-stream, turn three must still
-  // be warm. A no-cache run of turn three's history is the cold reference: the
-  // warm turn has to send far fewer prompt tokens than that, or the cancel
-  // destroyed the committed cache and the whole history was re-sent.
+  // be warm. A run of turn three's history with `kvCache: false` is the cold
+  // reference, every message including the system prompt: the warm turn has to
+  // send far fewer prompt tokens than that, or the cancel destroyed the
+  // committed cache and the whole history was re-sent.
   async cancelKeepsCommittedCache(
     params: {
       cacheKey: string
@@ -746,7 +747,15 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       const thirdHistory = [...committed, { role: 'user', content: params.thirdUserMessage }]
 
       const cold = await callWhenAddonIdle(() =>
-        finish(completion({ modelId, history: thirdHistory, stream: true, generationParams }))
+        finish(
+          completion({
+            modelId,
+            history: thirdHistory,
+            stream: true,
+            kvCache: false,
+            generationParams
+          })
+        )
       )
 
       const cancelledRun = completion({

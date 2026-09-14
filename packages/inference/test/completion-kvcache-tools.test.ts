@@ -645,8 +645,11 @@ test('completion: kv-cache survives an unrecognised addon failure between turns'
 })
 
 // Scripted fake: on `cancelOnRun` the run cancels its own request after the
-// first token, the way a stop button lands mid-decode. `stats` is what the
-// addon reports on the finished run; a cancelled run reports no stop reason.
+// first token, the way a stop button lands mid-decode. `statsOnRun` is what
+// the addon reports for the run; by default a cancelled run reports the
+// `none` stop reason the addon gives a rewound run and any other run `eos`.
+// `statsThrowOnRun` makes reading `stats` throw, an engine-side failure that
+// lands after the addon has already saved.
 function registerScriptedModel(
   modelId: string,
   calls: RecordedCall[],
@@ -655,6 +658,7 @@ function registerScriptedModel(
     cancelOnRun?: number
     tokensOnRun?: (run: number) => string[]
     statsOnRun?: (run: number) => Record<string, unknown>
+    statsThrowOnRun?: number
     config?: Record<string, unknown>
   }
 ): void {
@@ -677,6 +681,9 @@ function registerScriptedModel(
             ? writeCacheFile(opts.cacheKey)
             : Promise.resolve()
         const tokens = script.tokensOnRun?.(run) ?? ['The area is 25 square units.']
+        const stats = script.statsOnRun?.(run) ?? {
+          stopReason: run === script.cancelOnRun ? 'none' : 'eos'
+        }
         return {
           iterate: async function* () {
             await written
@@ -688,7 +695,10 @@ function registerScriptedModel(
           },
           await: () => written,
           cancel: () => Promise.resolve(),
-          stats: script.statsOnRun?.(run) ?? {}
+          get stats() {
+            if (run === script.statsThrowOnRun) throw new Error('stats exploded after the save')
+            return stats
+          }
         }
       },
       addon: { cancel: () => Promise.resolve() }
@@ -765,6 +775,56 @@ test('completion: kv-cache drops the file when an abort lands after generation f
     'late-abort-key'
   )
   t.absent(fileSurvivedRefusal, 'the cache file is unlinked after a late abort')
+  t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A run that reports no stop reason at all is read as finished, so an abort
+// racing it drops the file: the cost is a re-prefill, never a duplicated turn.
+test('completion: kv-cache drops the file when an aborted run reports no stop reason', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-abort-no-stats-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerScriptedModel(modelId, calls, cachePaths, {
+    cancelOnRun: 2,
+    statsOnRun: (run) => (run === 2 ? {} : { stopReason: 'eos' })
+  })
+  const { fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'abort-no-stats-key'
+  )
+  t.absent(fileSurvivedRefusal, 'the cache file is unlinked when the stop reason is unknown')
+  t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// An engine-side throw after the addon finished lands after the save, so the
+// file already holds this turn with no boundary recorded for it: it must go.
+test('completion: kv-cache drops the file when the engine throws after the addon saved', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-post-save-throw-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerScriptedModel(modelId, calls, cachePaths, { statsThrowOnRun: 2 })
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'post-save-throw-key'
+  )
+  t.ok(refusal instanceof Error && /stats exploded/.test(refusal.message), 'turn two fails')
+  t.absent(fileSurvivedRefusal, 'the cache file is unlinked after a post-save failure')
   t.ok(turnCalls[2]!.messages.length > 1, 'the retry is cold — the full history is re-sent')
 
   unregisterModel(modelId)

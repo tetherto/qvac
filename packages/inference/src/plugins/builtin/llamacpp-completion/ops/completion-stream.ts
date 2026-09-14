@@ -69,9 +69,11 @@ interface ProcessModelResponseResult extends CompletionResult {
    */
   producedTokens: boolean
   /**
-   * True when the addon reports a terminal stop reason, i.e. generation ran
-   * to its own end and the cache file holds this turn. A cancelled run has
-   * none: the addon rewinds it to the pre-request state before saving.
+   * False only when the addon reports the `none` stop reason it gives a
+   * cancelled run, which it rewinds to the pre-request state before saving.
+   * Any other value, including a missing one, is treated as a finished run
+   * whose output is in the cache file: the safe reading, since it costs a
+   * re-prefill rather than a duplicated turn.
    */
   generationFinished: boolean
 }
@@ -321,7 +323,8 @@ async function* processModelResponse(
   generationParams?: CompletionGenerationParams,
   cacheOptions?: CacheRunOptions,
   dialect?: ToolDialect,
-  onResponse?: (response: { cancel(): Promise<void> }) => void
+  onResponse?: (response: { cancel(): Promise<void> }) => void,
+  onRunSettled?: () => void
 ): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
   const runOptions: CacheRunOptions & {
     generationParams?: CompletionGenerationParams
@@ -356,6 +359,8 @@ async function* processModelResponse(
     yield { token: tokenStr }
   }
   const modelExecutionMs = nowMs() - modelStart
+  // The addon has finished, and saved the cache file if it was going to.
+  onRunSettled?.()
 
   if (cacheOptions?.saveCacheToDisk && cacheOptions.cacheKey) {
     logCacheSave(cacheOptions.cacheKey)
@@ -376,7 +381,7 @@ async function* processModelResponse(
     responseText: accumulatedText,
     producedTokens,
     stoppedAtContextBoundary: stopReason === 'contextOverflow',
-    generationFinished: stopReason !== undefined && stopReason !== 'none'
+    generationFinished: stopReason !== 'none'
   }
 }
 
@@ -564,6 +569,7 @@ export async function* completion(
   logMessagesToAddon(messagesToSend, 'PROMPT_SEND')
 
   let result
+  let addonRunSettled = false
   try {
     result = yield* processModelResponse(
       model,
@@ -572,13 +578,17 @@ export async function* completion(
       mergedGenerationParams,
       { cacheKey: turn.cachePath, saveCacheToDisk: true },
       dialect,
-      setActiveResponse
+      setActiveResponse,
+      () => {
+        addonRunSettled = true
+      }
     )
   } catch (error) {
     // The addon writes the cache file only after a run completes and skips the
     // save on every error path, so a run that threw left the committed file as
-    // it was.
-    preserveCacheOnUnwind = true
+    // it was. An engine-side throw after the run settled is the opposite: the
+    // file already holds this turn while no boundary was recorded for it.
+    preserveCacheOnUnwind = !addonRunSettled
     throw error
   }
   const shouldCommitTurn = shouldCommitCachedTurn({
