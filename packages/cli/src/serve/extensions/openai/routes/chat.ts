@@ -65,6 +65,8 @@ async function prepare(
     throw err
   }
 
+  assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
+
   if (
     sdk.responseFormat &&
     sdk.responseFormat.type !== 'text' &&
@@ -77,8 +79,6 @@ async function prepare(
       '"response_format" (json_object/json_schema) cannot be combined with "tools".'
     )
   }
-
-  assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
 
   return {
     ...sdk,

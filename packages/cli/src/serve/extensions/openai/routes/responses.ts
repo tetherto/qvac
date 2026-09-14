@@ -138,6 +138,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         throw err
       }
 
+      assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
+
       if (
         sdk.responseFormat &&
         sdk.responseFormat.type !== 'text' &&
@@ -150,8 +152,6 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           'Structured output (json_object/json_schema) cannot be combined with "tools".'
         )
       }
-
-      assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
 
       let history = sdk.history
       if (sdk.previousResponseId) {
