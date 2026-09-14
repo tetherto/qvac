@@ -77,15 +77,23 @@ bool paramsBackendSpecUsesDisk(const std::string& spec) {
   return false;
 }
 
-bool paramsBackendSpecHasModuleLessEntry(const std::string& spec) {
+bool paramsBackendSpecHasWholeSpecDefault(const std::string& spec) {
   std::string_view remaining = spec;
   while (!remaining.empty()) {
     const std::size_t comma = remaining.find(',');
     const std::string_view assignment = trim(remaining.substr(0, comma));
-    // A non-empty entry with no '=' is a bare backend name, which the engine
-    // applies as the spec-wide default rather than to a single module.
-    if (!assignment.empty() && assignment.find('=') == std::string_view::npos) {
-      return true;
+    if (!assignment.empty()) {
+      const std::size_t equals = assignment.find('=');
+      // A bare backend name and the *, all, and default assignment aliases all
+      // update the same spec-wide default in the engine. The last one wins.
+      if (equals == std::string_view::npos) {
+        return true;
+      }
+      const std::string_view key = trim(assignment.substr(0, equals));
+      if (key == "*" || equalsIgnoreCase(key, "all") ||
+          equalsIgnoreCase(key, "default")) {
+        return true;
+      }
     }
     if (comma == std::string_view::npos) {
       break;
@@ -95,7 +103,7 @@ bool paramsBackendSpecHasModuleLessEntry(const std::string& spec) {
   return false;
 }
 
-bool maxVramSpecEnablesGraphCut(const std::string& spec) {
+bool maxVramSpecHasNonZeroBudget(const std::string& spec) {
   std::string_view remaining = spec;
   while (!remaining.empty()) {
     const std::size_t comma = remaining.find(',');

@@ -265,12 +265,12 @@ entry written in `module=backend` form overrides that default **for that module
 only**: `params_backend: 'te=disk'` with `offload_to_cpu: true` keeps TE weights
 on disk while other parameters remain in CPU RAM.
 
-An entry with **no** `module=` prefix is a whole-spec default rather than a
-per-module override, and the last default wins — so
-`params_backend: 'cuda0'` with `offload_to_cpu: true` puts *every* module on
-`cuda0` and offloads nothing. The addon logs when this happens. Write
-`params_backend: 'diffusion=cuda0'` to move one module and leave the rest
-offloaded.
+A bare entry or an assignment to `*`, `all`, or `default` sets the whole-spec
+default rather than a per-module override, and the last default wins. For
+example, `params_backend: 'cuda0'` with `offload_to_cpu: true` puts every module
+on `cuda0` and offloads nothing. The addon logs when a whole-spec default follows
+`offload_to_cpu`. Write `params_backend: 'diffusion=cuda0'` to move one module
+and leave the rest offloaded.
 
 A nonzero `max_vram` enables graph-cut segmentation even without
 `stream_layers`. Positive values cap the VRAM budget in GiB. Negative values
@@ -294,12 +294,14 @@ It does not stream from disk. Use `params_backend: 'diffusion=disk'` for
 on-demand reads from the model file.
 
 `stream_layers` is forwarded to the engine as configured; the engine itself
-skips streaming when its prerequisites are unmet. If `max_vram` resolves to no
-budget — unset, `0`, or an all-zero assignment such as `'cuda0=0'` — the addon
-reports that streaming will not run. That message, and the `main-gpu` and
-`params_backend` notices above, are the only diagnostics emitted at the default
-`verbosity: 0`; set `verbosity: 2` to also see the effective `backend`,
-`params_backend` and `max_vram` assignments the addon passes to the engine.
+skips streaming when its prerequisites are unmet. The addon reports the cases
+it can prove before engine initialization: `max_vram` is unset, `0`, or an
+all-zero assignment such as `'cuda0=0'`. Per-backend and automatic negative
+budgets are resolved by the engine using the selected runtime backend and its
+free memory. That message, and the `main-gpu` and `params_backend` notices above,
+are the only diagnostics emitted at the default `verbosity: 0`; set
+`verbosity: 2` to also see the effective `backend`, `params_backend` and
+`max_vram` assignments the addon passes to the engine.
 
 The 16-case Linux hardware matrix is available in
 `scripts/validate-layer-streaming.sh`. It expects the MiniMax-H3 files under

@@ -237,39 +237,43 @@ TEST(SdCtxHandlers_MemoryFlags, ComposesOffloadDefaultWithExplicitAssignments) {
   EXPECT_EQ(effectiveParamsBackendSpec("cuda0", true), "*=cpu,cuda0");
 }
 
-TEST(SdCtxHandlers_MemoryFlags, DetectsModuleLessParamsBackendEntries) {
-  // A bare backend name is a whole-spec default for the engine and the last
-  // default wins, so it replaces the offload_to_cpu wildcard for every module
-  // instead of composing with it. The addon reports that rather than letting
-  // "offload everything, but pin this" silently mean "offload nothing".
-  EXPECT_TRUE(paramsBackendSpecHasModuleLessEntry("cuda0"));
-  EXPECT_TRUE(paramsBackendSpecHasModuleLessEntry("disk"));
-  EXPECT_TRUE(paramsBackendSpecHasModuleLessEntry("te=cpu,cuda0"));
-  EXPECT_TRUE(paramsBackendSpecHasModuleLessEntry(" te=cpu , cuda0 "));
-  EXPECT_FALSE(paramsBackendSpecHasModuleLessEntry(""));
-  EXPECT_FALSE(paramsBackendSpecHasModuleLessEntry("te=cpu"));
-  EXPECT_FALSE(paramsBackendSpecHasModuleLessEntry("*=cpu,te=disk"));
-  EXPECT_FALSE(paramsBackendSpecHasModuleLessEntry("te=cpu,,vae=cpu"));
+TEST(SdCtxHandlers_MemoryFlags, DetectsWholeSpecParamsBackendDefaults) {
+  // The engine treats bare names and these three assignment aliases as the
+  // same whole-spec default. The last default replaces offload_to_cpu's
+  // wildcard instead of composing with it per module.
+  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("cuda0"));
+  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("disk"));
+  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("te=cpu,cuda0"));
+  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault(" te=cpu , cuda0 "));
+  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("*=cuda0"));
+  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("ALL=cuda0"));
+  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault(" Default = cuda0 "));
+  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("*=cpu,te=disk"));
+  EXPECT_FALSE(paramsBackendSpecHasWholeSpecDefault(""));
+  EXPECT_FALSE(paramsBackendSpecHasWholeSpecDefault("te=cpu"));
+  EXPECT_FALSE(paramsBackendSpecHasWholeSpecDefault("te=cpu,,vae=cpu"));
 }
 
-TEST(SdCtxHandlers_MemoryFlags, DetectsWhetherMaxVramEnablesGraphCut) {
-  EXPECT_TRUE(maxVramSpecEnablesGraphCut("6"));
-  EXPECT_TRUE(maxVramSpecEnablesGraphCut("-1"));
-  EXPECT_TRUE(maxVramSpecEnablesGraphCut("cuda0=6,vulkan0=4"));
-  EXPECT_TRUE(maxVramSpecEnablesGraphCut("cuda0=0,vulkan0=4"));
+TEST(SdCtxHandlers_MemoryFlags, DetectsSyntacticNonzeroMaxVramBudget) {
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("6"));
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("-1"));
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("cuda0=6,vulkan0=4"));
+  // This helper deliberately does not claim that the active backend resolves
+  // to a budget. Only the engine can resolve this mixed assignment.
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("cuda0=0,vulkan0=4"));
   // Unparseable values belong to the engine, which rejects them with a
   // specific error; reading them as "no budget" here would pre-empt that with
   // an unrelated warning.
-  EXPECT_TRUE(maxVramSpecEnablesGraphCut("nonsense"));
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("nonsense"));
   // Every spelling of "no budget". The guard this replaced tested the spec for
   // emptiness, so it missed all but the first of these -- including "0", which
   // the README documents as the default value of max_vram.
-  EXPECT_FALSE(maxVramSpecEnablesGraphCut(""));
-  EXPECT_FALSE(maxVramSpecEnablesGraphCut("0"));
-  EXPECT_FALSE(maxVramSpecEnablesGraphCut("0.0"));
-  EXPECT_FALSE(maxVramSpecEnablesGraphCut("  "));
-  EXPECT_FALSE(maxVramSpecEnablesGraphCut("vulkan0=0"));
-  EXPECT_FALSE(maxVramSpecEnablesGraphCut("cuda0=0,vulkan0=0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget(""));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("0.0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("  "));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("vulkan0=0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("cuda0=0,vulkan0=0"));
 }
 
 TEST(SdCtxHandlers_MemoryFlags, ReportsRemovedOptionsInStableOrder) {

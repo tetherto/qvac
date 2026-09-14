@@ -414,7 +414,7 @@ void SdModel::load() {
   // its prerequisites are unmet, so the addon reports and does not decide.
   params.stream_layers = config_.streamLayers;
   if (config_.streamLayers &&
-      !qvac_lib_inference_addon_sd::maxVramSpecEnablesGraphCut(
+      !qvac_lib_inference_addon_sd::maxVramSpecHasNonZeroBudget(
           config_.maxVramSpec)) {
     // ERROR rather than WARNING purely for visibility: g_verbosityLevel starts
     // at ERROR and callers rarely set "verbosity", so a WARNING here would be
@@ -435,17 +435,18 @@ void SdModel::load() {
       qvac_lib_inference_addon_sd::effectiveParamsBackendSpec(
           config_.paramsBackendSpec, config_.offloadToCpu);
   if (config_.offloadToCpu &&
-      qvac_lib_inference_addon_sd::paramsBackendSpecHasModuleLessEntry(
+      qvac_lib_inference_addon_sd::paramsBackendSpecHasWholeSpecDefault(
           config_.paramsBackendSpec)) {
-    // The engine applies a bare entry as the spec-wide default and the last one
-    // wins, so this replaces offload_to_cpu's "*=cpu" for every module instead
-    // of composing with it. Same visibility reasoning as above.
+    // The engine applies bare entries and *, all, or default assignments as the
+    // spec-wide default. The last one wins, so any of these replaces
+    // offload_to_cpu's "*=cpu" instead of composing with it per module. Same
+    // visibility reasoning as above.
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         "params_backend '" + config_.paramsBackendSpec +
-            "' has an entry with no 'module=' prefix, which replaces the "
-            "offload_to_cpu default for every module; use the 'module=backend' "
-            "form to keep CPU offload for the remaining modules");
+            "' sets a whole-spec default after offload_to_cpu, so the last "
+            "default wins; use a module-specific assignment to keep CPU "
+            "offload for the remaining modules");
   }
   if (!paramsBackend.empty()) {
     QLOG_IF(

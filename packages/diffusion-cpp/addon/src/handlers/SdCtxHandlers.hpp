@@ -195,25 +195,25 @@ extern const SdCtxHandlersMap SD_CTX_HANDLERS;
 /** True when a params_backend assignment contains the disk backend. */
 bool paramsBackendSpecUsesDisk(const std::string& spec);
 /**
- * True when a params_backend spec carries an entry with no "module=" prefix.
+ * True when a params_backend spec carries a whole-spec default.
  *
- * The engine reads a bare entry as a whole-spec default, and the last default
- * wins, so such an entry replaces the "*=cpu" that offload_to_cpu contributes
- * rather than composing with it per module. Callers use this to report the
- * override instead of letting it pass silently.
+ * The engine accepts a bare backend name and assignments to "*", "all", or
+ * "default" as whole-spec defaults. The last default wins, so any of these
+ * entries replaces the "*=cpu" that offload_to_cpu contributes rather than
+ * composing with it per module. Callers report the override instead of letting
+ * it pass silently.
  */
-bool paramsBackendSpecHasModuleLessEntry(const std::string& spec);
+bool paramsBackendSpecHasWholeSpecDefault(const std::string& spec);
 /**
- * True when a max_vram spec declares at least one non-zero budget, i.e. when
- * graph-cut segmentation can actually run.
+ * True when a max_vram spec syntactically declares a non-zero budget.
  *
- * Deliberately not an emptiness test: the engine disables graph cutting for a
- * zero budget, so "0", "0.0" and "cuda0=0" mean the same thing as "" here.
- * Negative values select the auto budget and therefore do enable cutting. An
- * unparseable value reads as enabling, because the engine rejects it with a
- * specific error and a warning here would only pre-empt that.
+ * This only detects the definitely disabled empty and all-zero forms. It does
+ * not resolve per-backend assignments or automatic negative budgets because
+ * the engine determines those from the selected runtime backend and its free
+ * memory. An unparseable value reads as non-zero because the engine rejects it
+ * with a specific error and an addon warning would only pre-empt that.
  */
-bool maxVramSpecEnablesGraphCut(const std::string& spec);
+bool maxVramSpecHasNonZeroBudget(const std::string& spec);
 /** Prepends the offload_to_cpu default before explicit module assignments. */
 std::string
 effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu);
