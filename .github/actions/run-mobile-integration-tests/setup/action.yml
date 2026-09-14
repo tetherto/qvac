@@ -458,6 +458,21 @@ runs:
         # convention that could drift. Only the platform under test is fetched;
         # the desktop slices are pruned a few steps later anyway.
         if [ ! -d "$META_DIR/package/prebuilds" ]; then
+          # A GPR dev build is never sliced, so for @tetherto the absence of
+          # prebuilds/ is a broken publish, not a split layout. Say that instead
+          # of falling through and naming a @tetherto/<addon>-mono-<platform>
+          # package that cannot exist — which would send someone testing an
+          # unmerged native change hunting for a GPR slice.
+          case "$PACKED_NAME" in
+            @tetherto/*)
+              echo "::error::$PACKED_NAME@$PACKED_VERSION ships no prebuilds/."
+              echo "publish-library-to-gpr publishes the UNSLICED tree, so a -mono dev build"
+              echo "always carries its own prebuilds/. This one does not, which means the"
+              echo "On Merge Trigger run published it without its prebuild artifacts — there"
+              echo "is no per-platform package to fall back to on GitHub Packages."
+              exit 1
+              ;;
+          esac
           # Suffixes mirror SLICE_DEFINITIONS in slice-platform-packages.mjs:
           # every iOS host dir (device + both simulators) ships in one 'ios'
           # slice, Android arm64 in its own.
@@ -472,10 +487,13 @@ runs:
               ;;
           esac
           PLATFORM_PKG="$PACKED_NAME-$PLATFORM_SUFFIX"
-          # Version-locked in optionalDependencies. Read it rather than reusing
-          # $PACKED_VERSION so a slice published at a different version than its
-          # meta is still resolved correctly; absence means this package is not
-          # split at all, which is the genuine "no prebuilds anywhere" case.
+          # Read from optionalDependencies so the tarball names its own slices
+          # rather than the convention being guessed here; absence means this
+          # package is not split at all, which is the genuine "no prebuilds
+          # anywhere" case. The value is then held to $PACKED_VERSION below —
+          # buildOptionalDependencies() writes metaManifest.version verbatim, so
+          # the two are equal by construction and a difference means the manifest
+          # is wrong or tampered with.
           PLATFORM_PKG_VERSION=$(node -p "(require('$PACKED_MANIFEST').optionalDependencies||{})['$PLATFORM_PKG']||''" 2>/dev/null || echo "")
           if [ -z "$PLATFORM_PKG_VERSION" ]; then
             echo "::error::No prebuilds in $PACKED_NAME@$PACKED_VERSION and no $PLATFORM_PKG in its optionalDependencies."
@@ -498,11 +516,37 @@ runs:
           # (buildOptionalDependencies uses metaManifest.version), so this can be
           # tighter than that regex: exact semver, optional prerelease/build
           # suffix, and no character that could introduce a spec type.
+          # Charset gate FIRST, and as a `case` over the whole string: grep
+          # matches per LINE, so a value like "0.0.1\ngit+https://evil/x.git"
+          # would satisfy the shape check below on its first line alone. `case`
+          # sees the embedded newline (it is outside the permitted set) and
+          # rejects it, so the guard refuses what it advertises.
+          case "$PLATFORM_PKG_VERSION" in
+            *[!0-9A-Za-z.+_-]*)
+              echo "::error::$PACKED_NAME@$PACKED_VERSION pins $PLATFORM_PKG at a value containing characters that cannot appear in a version."
+              echo "Refusing to hand it to npm pack. A ':' or '/' would make it a"
+              echo "git/file/https/github/npm alias; a newline would hide one from a"
+              echo "line-oriented check."
+              exit 1
+              ;;
+          esac
           if ! printf '%s' "$PLATFORM_PKG_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9._-]+)*$'; then
             echo "::error::$PACKED_NAME@$PACKED_VERSION pins $PLATFORM_PKG at '$PLATFORM_PKG_VERSION', which is not an exact version."
             echo "scripts/ci/slice-platform-packages.mjs always writes an exact semver pin."
-            echo "Anything else — a git/file/https/github/npm alias, a dist-tag or a range —"
-            echo "is refused rather than handed to npm pack."
+            echo "Anything else — a dist-tag or a range — is refused rather than resolved."
+            exit 1
+          fi
+          # The slice pin must be the meta's OWN version. buildOptionalDependencies()
+          # copies metaManifest.version, so the two are equal for every package the
+          # slicer produced. Following a different value would install binaries from
+          # a build the caller never pinned while the step has already printed
+          # "Verified: ... (pinned)" for the meta — the QVAC-21879 failure shape,
+          # where a benchmark baseline measured a binary nobody asked for.
+          if [ "$PLATFORM_PKG_VERSION" != "$PACKED_VERSION" ]; then
+            echo "::error::$PACKED_NAME@$PACKED_VERSION pins $PLATFORM_PKG at $PLATFORM_PKG_VERSION, not at its own version."
+            echo "The slicer writes the meta version into every optionalDependencies entry,"
+            echo "so these always match for a package it produced. Refusing to install"
+            echo "binaries from a build that was not the one resolved and verified above."
             exit 1
           fi
           PLATFORM_SPEC="$PLATFORM_PKG@$PLATFORM_PKG_VERSION"

@@ -228,10 +228,16 @@ elif [ -n "${MOCK_NPM_SPLIT:-}" ]; then
   # MOCK_NPM_SLICE_PIN pins the slices at a DIFFERENT version than the meta, so
   # a test can prove the action reads the pin rather than reusing the meta's.
   SLICE_PIN="${MOCK_NPM_SLICE_PIN:-$VERSION}"
+  # A manifest is JSON, so a pin containing a newline is written ESCAPED and
+  # parses back to a string with a real newline in it. Emitting the raw byte
+  # would just be invalid JSON, which the action rejects far earlier and would
+  # make the newline-smuggling test vacuous.
+  SLICE_PIN_JSON="${SLICE_PIN//\\/\\\\}"
+  SLICE_PIN_JSON="${SLICE_PIN_JSON//$'\n'/\\n}"
   OPTIONAL=""
   for suffix in $SLICE_SUFFIXES; do
     [ -n "$OPTIONAL" ] && OPTIONAL="$OPTIONAL,"
-    OPTIONAL="$OPTIONAL\"$NAME-$suffix\":\"$SLICE_PIN\""
+    OPTIONAL="$OPTIONAL\"$NAME-$suffix\":\"$SLICE_PIN_JSON\""
   done
   printf '{"name":"%s","version":"%s","optionalDependencies":{%s}}\n' \
     "$NAME" "$VERSION" "$OPTIONAL" > "$STAGE/package/package.json"

