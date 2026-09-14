@@ -138,3 +138,20 @@ test('a corrupt staged model is still rejected and unlinked', async function (t)
     fs.rmSync(modelDir, { recursive: true, force: true })
   }
 })
+
+// Sidj's catch in review: delete-first turned the same-path case destructive.
+// The copy this replaced was a no-op there; unlinking first would destroy the
+// staged model and leave link() and copy() both failing ENOENT.
+test('a same-path stage is left alone, not deleted', function (t) {
+  const dir = mkTmpDir()
+  const p = path.join(dir, 'model.bin')
+  try {
+    fs.writeFileSync(p, CONTENT)
+
+    t.is(linkOrCopySync({ src: p, dest: p }), 'link', 'nothing to do — reported as a link')
+    t.ok(fs.existsSync(p), 'the staged model still exists')
+    t.is(fs.readFileSync(p, 'utf8'), CONTENT, 'and is untouched')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})

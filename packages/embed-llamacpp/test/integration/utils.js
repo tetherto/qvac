@@ -444,6 +444,12 @@ function prestagedModelDir(modelName) {
 // link() fails EXDEV and we fall back to the copy that has always run there.
 // `link`/`copy` are injectable so that fallback is unit-testable.
 function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  // Same path in and out — the staged file IS the destination (a caller whose
+  // model dir is testDir itself). Deleting first would destroy the staged model
+  // and leave both link() and copy() failing ENOENT; the copy this replaced was
+  // a harmless no-op here.
+  if (path.resolve(src) === path.resolve(dest)) return 'link'
+
   try {
     fs.unlinkSync(dest)
   } catch (_) {}
