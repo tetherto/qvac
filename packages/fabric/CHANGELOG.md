@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.14.0] - 2026-09-15
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0` (upstream movement on the b10549 line: uninitialized ggml views after oversized MoE cache banks, plus KV-cache, hybrid-index memory, mtmd/clip and RPC backend changes; no API change for this package).
+
 ## [0.13.1] - 2026-09-14
 
 ### Changed
