@@ -40,7 +40,21 @@ async function* untilAborted<T>(
       yield next.value
     }
   } finally {
-    await iterator.return?.()
+    const returned = iterator.return?.()
+    if (returned !== undefined) {
+      // When the abort won the race above, the `iterator.next()` it raced is
+      // still pending — the client is idle inside `for await (const buf of
+      // inputStream)`. An async generator queues `return()` behind that
+      // outstanding `next()`, so awaiting here would not settle until the
+      // client sends more text or closes the stream, which is exactly what an
+      // idle cancel cannot count on. Blocking would keep this generator alive,
+      // so `runStreaming`'s text source would never end, the op would never
+      // return, and the model's single concurrency slot would stay held. Let
+      // the cleanup settle on its own in that case, and keep awaiting it on
+      // the ordinary paths, where no `next()` is outstanding.
+      if (signal.aborted) void Promise.resolve(returned).catch(() => {})
+      else await returned
+    }
   }
 }
 

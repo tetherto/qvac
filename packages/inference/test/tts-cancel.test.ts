@@ -68,6 +68,64 @@ function fakeTtsModel(): FakeTtsModel {
   return model
 }
 
+// Like `fakeTtsModel`, but `iterate` only finishes once the text source it was
+// handed has ended — the addon's real sentence-stream contract, where
+// synthesis keeps running until the text stream closes. `fakeTtsModel` lets
+// `iterate` finish on its own, which lets an op return even while its text
+// source is still stuck, so only this coupling makes an idle-cancel unwind
+// observable.
+function fakeSourceBoundTtsModel(): FakeTtsModel {
+  let endIterate!: () => void
+  const textSourceEnded = new Promise<void>((resolve) => {
+    endIterate = resolve
+  })
+
+  const iterate = async function* () {
+    yield { outputArray: [1, 2, 3], sampleRate: 24000 }
+    await textSourceEnded
+  }
+
+  const model: FakeTtsModel = {
+    cancelCalls: 0,
+    runCalls: [],
+    release: () => endIterate(),
+    getEngineType: () => 'chatterbox',
+    async cancel() {
+      // Matches the addon: a cancel with no live native job is a no-op, so it
+      // deliberately does not end `iterate`. Only the text source can.
+      model.cancelCalls++
+    },
+    async run(job) {
+      model.runCalls.push(job)
+      return { stats: { audioDurationMs: 10 }, iterate }
+    },
+    async runStreaming(source) {
+      void (async () => {
+        for await (const _fragment of source) {
+          /* consume */
+        }
+        endIterate()
+      })()
+      return { stats: { audioDurationMs: 10 }, iterate }
+    }
+  }
+
+  return model
+}
+
+/** Rejects instead of hanging the suite when a step never settles. */
+async function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>
+  const expiry = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms)
+  })
+  try {
+    return await Promise.race([work, expiry])
+  } finally {
+    clearTimeout(timer!)
+  }
+}
+
 function register(modelId: string, model: FakeTtsModel) {
   registerModel(modelId, {
     model: model as never,
@@ -236,6 +294,52 @@ test('cancelling a duplex session ends it and reaches the addon', async (t) => {
       'the slot is released without waiting for input'
     )
     endInput()
+  } finally {
+    unregisterModel(modelId)
+  }
+})
+
+test('a model-scoped cancel unwinds an idle duplex session whose client never closes', async (t) => {
+  const modelId = 'tts-cancel-duplex-idle'
+  const requestId = 'req-duplex-idle'
+  const model = fakeSourceBoundTtsModel()
+  register(modelId, model)
+
+  try {
+    // The client writes one sentence and goes idle. Its input stream stays
+    // open, so nothing but the abort can end the op's text source — the case
+    // `untilAborted` exists for.
+    const input = (async function* () {
+      yield Buffer.from('Hello.')
+      await new Promise<void>(() => {})
+    })()
+
+    const stream = textToSpeechStream(
+      { type: 'textToSpeechStream', modelId, requestId, inputType: 'text' },
+      input
+    )
+    const first = await stream.next()
+    t.alike(first.value, { buffer: [1, 2, 3], sampleRate: 24000 })
+
+    t.is(getRequestRegistry().cancel({ modelId }), 1, 'the model-scoped cancel finds the request')
+    t.is(model.cancelCalls, 1, 'the cancel still reaches the addon')
+
+    // The unwind has to come from the abort alone: `cancel({ modelId })` does
+    // not close the client's input stream, and the addon's `cancel()` is a
+    // no-op with no live job. If `untilAborted` awaited an `iterator.return()`
+    // queued behind the idle client's pending `next()`, the text source would
+    // never end, `iterate` would never finish, and this would hang.
+    const after = await withTimeout(
+      stream.next(),
+      5000,
+      'the idle duplex session never unwound after a model-scoped cancel'
+    )
+    t.is(after.done, true, 'the session ends without the client closing its input')
+    t.is(
+      getRequestRegistry().get(requestId),
+      null,
+      'the model concurrency slot is released rather than held by the stuck source'
+    )
   } finally {
     unregisterModel(modelId)
   }
