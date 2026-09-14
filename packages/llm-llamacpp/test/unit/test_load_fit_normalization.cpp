@@ -642,6 +642,34 @@ TEST_F(LoadFitNormalizationTest, RpcServersReachesTheRegistrarAndIsErased) {
       ::testing::ElementsAre("127.0.0.1:50052,127.0.0.1:50053"));
 }
 
+TEST_F(LoadFitNormalizationTest, RpcDeviceCountIsLeftToFabric) {
+  auto config = baseConfig();
+  const std::string endpoints =
+      "127.0.0.1:50052,127.0.0.1:50053,127.0.0.1:50054,"
+      "127.0.0.1:50055";
+  config["rpc-servers"] = endpoints;
+  config["split-mode"] = "tensor";
+  config["tensor-split"] = "1,1,1,1";
+  std::vector<std::string> registrations;
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "none"}, false,
+          &registrations));
+
+  EXPECT_THAT(registrations, ::testing::ElementsAre(endpoints));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+  ASSERT_GE(result.fitSnapshot.tensorSplit.size(), 4U);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[0], 1.F);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[1], 1.F);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[2], 1.F);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[3], 1.F);
+}
+
 // The CPU-only-head-node case a code review caught: a machine with no local
 // GPU that asked for 'rpc-servers' but not 'devices' used to silently fall
 // back to single-device local CPU inference, generating correct output while
@@ -727,6 +755,16 @@ TEST(MobileMultiDeviceConfigTest, AllowsRpcWithExplicitDevices) {
 
   EXPECT_NO_THROW(
       lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_LAYER));
+  EXPECT_NO_THROW(
+      lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_TENSOR));
+}
+
+TEST(MobileMultiDeviceConfigTest, AllowsFourRpcDevicesForTensorParallelism) {
+  lfn::ConfigMap config{
+      {"rpc-servers", "host-a:50052,host-b:50052,host-c:50052,host-d:50052"},
+      {"devices", "RPC0,RPC1,RPC2,RPC3"},
+      {"tensor-split", "1,1,1,1"}};
+
   EXPECT_NO_THROW(
       lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_TENSOR));
 }

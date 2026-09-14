@@ -185,6 +185,9 @@ Remote devices are named `RPC0`, `RPC1`, … in the order given to `rpc-servers`
 Set `devices` to name exactly which ones take part. Without it, split modes
 distribute across *every* visible device — sensible for local multi-GPU, but
 rarely what you want here, because the registry then mixes local and remote.
+The addon forwards the endpoint list, device list, split mode, and split weights
+without imposing a device-count limit. Fabric determines which device counts a
+parallel mode supports.
 
 Automatic backend selection never considers RPC devices on its own — it can't
 reason about whether a remote device is reachable or suitable the way it can
