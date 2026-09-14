@@ -355,7 +355,11 @@ runs:
             ;;
         esac
         echo "No prebuilds from artifacts — downloading $SPEC from $REGISTRY_DESC..."
-        if ! (cd "$PACK_DIR" && npm pack "$SPEC" --pack-destination "$META_DIR"); then
+        # --ignore-scripts: packing a REGISTRY tarball never needs a lifecycle
+        # script, so this is a no-op on every legitimate path — but it neuters
+        # the `prepare` execution a git spec would otherwise get if one ever
+        # slipped past the validation above.
+        if ! (cd "$PACK_DIR" && npm pack "$SPEC" --ignore-scripts --pack-destination "$META_DIR"); then
           echo "ERROR: Failed to download $SPEC from $REGISTRY_DESC"
           case "$SPEC" in
             @tetherto/*)
@@ -481,9 +485,29 @@ runs:
             echo "to test."
             exit 1
           fi
+          # The version half is registry-controlled content — it comes out of the
+          # downloaded tarball's manifest, not from the caller. `name@<spec>` is
+          # an npm ALIAS: whatever follows the '@' decides the spec type no
+          # matter what the name is, so an optionalDependencies value of
+          # "evil/repo", "git+https://…", "https://…tgz", "file:/…" or
+          # "npm:other@1" would make the pack below clone or fetch from an
+          # attacker and, for a git spec, RUN its prepare script — in a step that
+          # holds a GPR credential. That is the same hazard the spec regex above
+          # closes for the caller-supplied spec, so the same class of control
+          # applies here. The slicer only ever writes an exact version
+          # (buildOptionalDependencies uses metaManifest.version), so this can be
+          # tighter than that regex: exact semver, optional prerelease/build
+          # suffix, and no character that could introduce a spec type.
+          if ! printf '%s' "$PLATFORM_PKG_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9._-]+)*$'; then
+            echo "::error::$PACKED_NAME@$PACKED_VERSION pins $PLATFORM_PKG at '$PLATFORM_PKG_VERSION', which is not an exact version."
+            echo "scripts/ci/slice-platform-packages.mjs always writes an exact semver pin."
+            echo "Anything else — a git/file/https/github/npm alias, a dist-tag or a range —"
+            echo "is refused rather than handed to npm pack."
+            exit 1
+          fi
           PLATFORM_SPEC="$PLATFORM_PKG@$PLATFORM_PKG_VERSION"
           echo "$PACKED_NAME@$PACKED_VERSION ships no prebuilds/ (split addon) — resolving $PLATFORM_SPEC from $REGISTRY_DESC..."
-          if ! (cd "$PACK_DIR" && npm pack "$PLATFORM_SPEC" --pack-destination "$PLATFORM_DIR"); then
+          if ! (cd "$PACK_DIR" && npm pack "$PLATFORM_SPEC" --ignore-scripts --pack-destination "$PLATFORM_DIR"); then
             echo "::error::Failed to download $PLATFORM_SPEC from $REGISTRY_DESC."
             echo "$PACKED_NAME@$PACKED_VERSION declares it in optionalDependencies, so the"
             echo "platform package should exist at that exact version. A publish that shipped"

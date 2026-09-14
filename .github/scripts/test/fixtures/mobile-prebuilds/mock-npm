@@ -14,15 +14,43 @@ case "${1:-}" in
     ;;
 esac
 
+COMMAND="${1:-}"
 SPEC="${2:-}"
 
-# `npm pack <spec> --pack-destination <dir>`. The action packs the meta package
-# and its per-platform package into separate dirs so the `*.tgz` globs it
-# extracts with stay unambiguous, so the mock has to honour the flag rather than
-# always dropping the tarball in cwd.
+# `npm pack <spec> [--ignore-scripts] [--pack-destination <dir>]`. The action
+# packs the meta package and its per-platform package into separate dirs so the
+# `*.tgz` globs it extracts with stay unambiguous, so the mock has to honour
+# --pack-destination rather than always dropping the tarball in cwd. Flags are
+# scanned rather than read at fixed positions, so adding or reordering one does
+# not silently break the destination handling. Positional parameters are NOT
+# shifted: the `config get` branch below still reads them.
 PACK_DESTINATION="$PWD"
-if [ "${3:-}" = "--pack-destination" ]; then
-  PACK_DESTINATION="${4:?--pack-destination needs a directory}"
+IGNORE_SCRIPTS="no"
+if [ "$COMMAND" = "pack" ]; then
+  pack_args_seen=0
+  expect_destination="no"
+  for arg in "$@"; do
+    pack_args_seen=$((pack_args_seen + 1))
+    # Skip `pack` and the spec itself.
+    [ "$pack_args_seen" -le 2 ] && continue
+    if [ "$expect_destination" = "yes" ]; then
+      PACK_DESTINATION="$arg"
+      expect_destination="no"
+      continue
+    fi
+    case "$arg" in
+      --pack-destination) expect_destination="yes" ;;
+      --ignore-scripts)   IGNORE_SCRIPTS="yes" ;;
+      *)
+        echo "mock-npm: unsupported pack flag '$arg'" >&2
+        exit 64
+        ;;
+    esac
+  done
+  if [ "$expect_destination" = "yes" ]; then
+    echo "mock-npm: --pack-destination needs a directory" >&2
+    exit 64
+  fi
 fi
 
 # Reproduce npm's ACTUAL project-config rule, not a cwd approximation: npm reads
@@ -104,6 +132,7 @@ npmrc_mode () {
   echo "auth=$AUTH"
   echo "npmrc_present=$([ -f "$NPMRC" ] && echo yes || echo no)"
   echo "npmrc_mode=$(npmrc_mode)"
+  echo "ignore_scripts=$IGNORE_SCRIPTS"
 } >> "$LOG"
 
 echo "mock-npm: pack $SPEC via $REGISTRY (auth=$AUTH)"

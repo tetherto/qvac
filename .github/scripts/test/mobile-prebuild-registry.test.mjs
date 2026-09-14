@@ -733,6 +733,85 @@ test('a @tetherto dev build of a split addon still uses its inline prebuilds', (
   )
 })
 
+// The version half of the slice spec is REGISTRY-CONTROLLED — it is read out of
+// the downloaded tarball's manifest, not supplied by the caller. `name@<spec>`
+// is an npm alias, so whatever follows the '@' decides the spec type regardless
+// of the name: a value like "evil/repo" resolves as a GitHub shorthand and
+// `npm pack` would clone it and RUN its prepare script, in a step holding a GPR
+// credential. The caller-supplied spec is already regex-gated for exactly this
+// reason; the slice spec must be too.
+const HOSTILE_SLICE_PINS = [
+  'evil/repo',
+  'git+https://github.com/evil/x.git',
+  'git+ssh://git@evil.example/x.git',
+  'https://evil.example/payload.tgz',
+  'file:/tmp/evil.tgz',
+  'npm:other-package@1.0.0',
+  'github:attacker/repo',
+  'latest',
+  '^1.2.0',
+  '1.0.0 && curl evil.example',
+]
+
+for (const pin of HOSTILE_SLICE_PINS) {
+  test(`a slice pinned to a non-exact-version spec is refused: ${pin}`, () => {
+    const run = runStep({
+      addonName: '@qvac/asr-ggml',
+      packageVersion: '@qvac/asr-ggml@0.5.0',
+      force: 'true',
+      npmEnv: { ...SPLIT, MOCK_NPM_SLICE_PIN: pin },
+    })
+
+    assert.notEqual(run.status, 0, `must fail closed on slice pin ${pin}`)
+    assert.match(run.output, /is not an exact version/)
+    // The decisive assertion: npm is never handed the hostile spec, so no
+    // clone, fetch or prepare script can run.
+    assert.doesNotMatch(
+      run.invocations,
+      /-android-arm64@/,
+      `npm must not be invoked for slice pin ${pin}`,
+    )
+    assert.equal(run.androidPrebuildInstalled, false)
+  })
+}
+
+test('a legitimate prerelease slice pin is still accepted', () => {
+  // The guard must not be so tight that it rejects what the slicer can write:
+  // the meta version it copies may carry a prerelease/build suffix.
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: { ...SPLIT, MOCK_NPM_SLICE_PIN: '0.5.0-rc.1' },
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.match(run.invocations, /spec=@qvac\/asr-ggml-android-arm64@0\.5\.0-rc\.1/)
+  assert.ok(run.androidPrebuildInstalled)
+})
+
+test('both npm pack invocations disable lifecycle scripts', () => {
+  // Defence in depth behind the two spec validations: packing a registry
+  // tarball never needs a lifecycle script, so --ignore-scripts is a no-op on
+  // every legitimate path and neuters `prepare` if a non-registry spec ever
+  // slips past.
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: SPLIT,
+  })
+
+  assert.equal(run.status, 0, run.output)
+  const packs = run.invocations.match(/^ignore_scripts=(.*)$/gm) || []
+  assert.equal(packs.length, 2, `expected two packs, got:\n${run.invocations}`)
+  assert.deepEqual(
+    [...new Set(packs)],
+    ['ignore_scripts=yes'],
+    'every npm pack must pass --ignore-scripts',
+  )
+})
+
 // Artifact-first precedence is upstream of all of this: when the run built its
 // own binaries, no npm resolve happens at all, split or not.
 test("artifacts still win over a split addon's published slices", () => {
