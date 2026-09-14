@@ -961,8 +961,8 @@ importers:
         specifier: ^0.3.2
         version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/bci-whispercpp':
-        specifier: ^0.8.0
-        version: 0.8.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.9.1
+        version: link:../bci-whispercpp
       '@qvac/classification-ggml':
         specifier: ^0.23.0
         version: 0.23.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -1612,8 +1612,8 @@ importers:
         specifier: ^0.3.2
         version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/bci-whispercpp':
-        specifier: ^0.8.0
-        version: 0.8.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.9.1
+        version: link:../bci-whispercpp
       '@qvac/classification-ggml':
         specifier: ^0.23.0
         version: 0.23.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -4177,10 +4177,6 @@ packages:
     resolution: {integrity: sha512-S3WIBFl++cl8d6++Evruhti0Ug6CWUnYLg8GJUyEPvjYcSVFJkLNufS1q1+jpS1nhiSNOU0i+Hu9HNAWVeYNwA==}
     engines: {bare: '>=1.19.0'}
     hasBin: true
-
-  '@qvac/bci-whispercpp@0.8.2':
-    resolution: {integrity: sha512-vCgsFsICaK+U/MUsBYA0Tga2lN+MnQ3Rmi/bWoWjWhv/J9i1SnmhvdKb4RGYAb7AZREbDMoxO+7IzN7uKMFcDQ==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/classification-ggml@0.23.0':
     resolution: {integrity: sha512-TxQmvpeYWK5ewmNB9uy8yMnpA+ylVpdTClXJeEHIqQ9Dv91+svgslnJgduEWbEVF+gXOpjxNCZiGE4YYRf/RwQ==}
@@ -13262,18 +13258,6 @@ snapshots:
       bare-os: 3.9.3
       bare-path: 3.1.1
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
-  '@qvac/bci-whispercpp@0.8.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
