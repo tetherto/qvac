@@ -16,6 +16,15 @@ esac
 
 SPEC="${2:-}"
 
+# `npm pack <spec> --pack-destination <dir>`. The action packs the meta package
+# and its per-platform package into separate dirs so the `*.tgz` globs it
+# extracts with stay unambiguous, so the mock has to honour the flag rather than
+# always dropping the tarball in cwd.
+PACK_DESTINATION="$PWD"
+if [ "${3:-}" = "--pack-destination" ]; then
+  PACK_DESTINATION="${4:?--pack-destination needs a directory}"
+fi
+
 # Reproduce npm's ACTUAL project-config rule, not a cwd approximation: npm reads
 # the project .npmrc from its localPrefix — the nearest ANCESTOR directory (cwd
 # first, then upward) containing package.json or node_modules. Modelling this
@@ -109,8 +118,25 @@ fi
 # Success: emit a tarball shaped like a real addon package. MOCK_NPM_VERSION
 # drives package.json so the provenance assertion can be exercised, and
 # MOCK_NPM_NO_PREBUILDS omits prebuilds/ to exercise that guard.
-STAGE="$(mktemp -d)"
-mkdir -p "$STAGE/package"
+#
+# Two layouts are modelled, because QVAC-24574 gave split addons a second one:
+#
+#   meta (unsplit, and every @tetherto -mono dev build)
+#     package/package.json
+#     package/prebuilds/<host>/addon.bare
+#
+#   meta (split: JS only, slices pinned in optionalDependencies)
+#     package/package.json   -> optionalDependencies: { "<name>-<suffix>": ver }
+#
+#   slice (per-platform package)
+#     package/package.json
+#     package/addon/prebuilds/<host>/addon.bare      <- one level DEEPER
+#
+# Slice suffixes and their host dirs mirror SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs; note that all three iOS host dirs
+# ship in the single 'ios' slice.
+SLICE_SUFFIXES="linux-x64 linux-arm64 darwin-arm64 darwin-x64 win32-x64 android-arm64 ios"
+
 # Derive the name the way npm does, not with a blind strip at the last '@':
 # a scoped spec starts with '@', so "${SPEC%@*}" is EMPTY for a versionless
 # "@scope/name". Fabricating a name there would make any name-provenance
@@ -120,16 +146,77 @@ case "${SPEC#@*/}" in
   *@*) NAME="${SPEC%@*}" ;;
   *)   NAME="$SPEC" ;;
 esac
-NAME="${MOCK_NPM_NAME:-$NAME}"
 VERSION="${MOCK_NPM_VERSION:-${SPEC##*@}}"
-printf '{"name":"%s","version":"%s"}\n' "$NAME" "$VERSION" > "$STAGE/package/package.json"
-if [ -z "${MOCK_NPM_NO_PREBUILDS:-}" ]; then
-  mkdir -p "$STAGE/package/prebuilds/android-arm64" "$STAGE/package/prebuilds/ios-arm64"
-  echo mock > "$STAGE/package/prebuilds/android-arm64/addon.bare"
-  echo mock > "$STAGE/package/prebuilds/ios-arm64/addon.bare"
+
+# Is this a per-platform package? Decided from the requested name, before any
+# MOCK_NPM_*_NAME override, so a test can make the registry return the wrong
+# name without also changing which layout it returns.
+SLICE_SUFFIX=""
+for suffix in $SLICE_SUFFIXES; do
+  case "$NAME" in
+    *"-$suffix") SLICE_SUFFIX="$suffix" ;;
+  esac
+done
+
+if [ -n "$SLICE_SUFFIX" ]; then
+  # MOCK_NPM_SLICE_FAIL rejects only the slice resolve, leaving the meta
+  # resolve to succeed — the "meta published without its slices" case.
+  if [ -n "${MOCK_NPM_SLICE_FAIL:-}" ]; then
+    echo "npm error code E404" >&2
+    echo "npm error 404 - GET ${REGISTRY}/${NAME} - Not found" >&2
+    exit 1
+  fi
+  NAME="${MOCK_NPM_SLICE_NAME:-$NAME}"
+  # A slice resolve honours the version it was ASKED for. MOCK_NPM_VERSION
+  # belongs to the meta resolve (it models a dist-tag landing on a concrete
+  # version); letting it leak here would make the slice appear to resolve
+  # elsewhere on every split test. MOCK_NPM_SLICE_VERSION is the explicit
+  # "registry returned a different version" override.
+  VERSION="${MOCK_NPM_SLICE_VERSION:-${SPEC##*@}}"
+else
+  NAME="${MOCK_NPM_NAME:-$NAME}"
 fi
 
-TARBALL="mock-package.tgz"
+STAGE="$(mktemp -d)"
+mkdir -p "$STAGE/package"
+
+if [ -n "$SLICE_SUFFIX" ]; then
+  printf '{"name":"%s","version":"%s"}\n' "$NAME" "$VERSION" > "$STAGE/package/package.json"
+  # MOCK_NPM_SLICE_NO_PREBUILDS models a corrupted publish: the slice exists and
+  # passes provenance but carries no binaries.
+  if [ -z "${MOCK_NPM_SLICE_NO_PREBUILDS:-}" ]; then
+    case "$SLICE_SUFFIX" in
+      ios)   SLICE_HOSTS="ios-arm64 ios-arm64-simulator ios-x64-simulator" ;;
+      *)     SLICE_HOSTS="$SLICE_SUFFIX" ;;
+    esac
+    for host in $SLICE_HOSTS; do
+      mkdir -p "$STAGE/package/addon/prebuilds/$host"
+      echo mock > "$STAGE/package/addon/prebuilds/$host/addon.bare"
+    done
+  fi
+elif [ -n "${MOCK_NPM_SPLIT:-}" ]; then
+  # Split meta: no prebuilds/, every slice pinned at an exact version.
+  # MOCK_NPM_SLICE_PIN pins the slices at a DIFFERENT version than the meta, so
+  # a test can prove the action reads the pin rather than reusing the meta's.
+  SLICE_PIN="${MOCK_NPM_SLICE_PIN:-$VERSION}"
+  OPTIONAL=""
+  for suffix in $SLICE_SUFFIXES; do
+    [ -n "$OPTIONAL" ] && OPTIONAL="$OPTIONAL,"
+    OPTIONAL="$OPTIONAL\"$NAME-$suffix\":\"$SLICE_PIN\""
+  done
+  printf '{"name":"%s","version":"%s","optionalDependencies":{%s}}\n' \
+    "$NAME" "$VERSION" "$OPTIONAL" > "$STAGE/package/package.json"
+else
+  printf '{"name":"%s","version":"%s"}\n' "$NAME" "$VERSION" > "$STAGE/package/package.json"
+  if [ -z "${MOCK_NPM_NO_PREBUILDS:-}" ]; then
+    mkdir -p "$STAGE/package/prebuilds/android-arm64" "$STAGE/package/prebuilds/ios-arm64"
+    echo mock > "$STAGE/package/prebuilds/android-arm64/addon.bare"
+    echo mock > "$STAGE/package/prebuilds/ios-arm64/addon.bare"
+  fi
+fi
+
+mkdir -p "$PACK_DESTINATION"
+TARBALL="$PACK_DESTINATION/mock-package.tgz"
 tar -czf "$TARBALL" -C "$STAGE" package
 rm -rf "$STAGE"
 echo "$TARBALL"
