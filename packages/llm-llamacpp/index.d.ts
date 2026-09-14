@@ -138,12 +138,9 @@ declare namespace LlmLlamacpp {
          * - 'none' (default) — pin the whole model to a single GPU.
          * - 'layer' — pipeline parallelism; each GPU holds a contiguous slice of
          *   layers. The compatible choice, effective on every backend shipped here.
-         * - 'row' — legacy tensor parallelism. Needs split buffers, which only the
-         *   SYCL backend provides as of qvac-fabric v10069 and no backend this
-         *   package ships does, so it is accepted but degraded to 'layer' at load
-         *   with a WARNING.
          * - 'tensor' — EXPERIMENTAL tensor parallelism via qvac-fabric's meta
-         *   device; weights *and* KV cache are split across every visible GPU.
+         *   device; weights *and* KV cache are split across the eligible devices
+         *   the addon pins.
          *   Desktop only (rejected on Android/iOS). Requires flash attention, so
          *   'flash-attn': 'off' is rejected with InvalidArgument. Disables auto-fit
          *   — gpu_layers then defaults to every layer and ctx_size to the model's
@@ -151,9 +148,11 @@ declare namespace LlmLlamacpp {
          *   available for every architecture; unsupported ones are rejected up
          *   front with the architecture named.
          *
-         * See docs/multi-gpu.md.
+         * 'row' (llama.cpp's legacy split-buffer tensor parallelism) is rejected
+         * with InvalidArgument: it never took effect on any shipped backend. Use
+         * 'layer' or 'tensor'. See docs/multi-gpu.md.
          */
-        "split-mode"?: "none" | "layer" | "row" | "tensor";
+        "split-mode"?: "none" | "layer" | "tensor";
         /**
          * Flash attention. Defaults to `'on'`, except when finetuning or on a
          * BitNet model, where it is forced off. `'auto'` lets qvac-fabric decide.
@@ -519,7 +518,9 @@ declare namespace LlmLlamacpp {
         toolDefinitionsDropped: number;
         /**
          * How busy the shared backend was, not a property of your request: the
-         * mean number of sequences decoded together per engine step, including
+         * mean number of sequences decoded together, weighted by the tokens each
+         * engine step carried so the figure tracks how much traffic shared the
+         * backend rather than how finely the scheduler sliced its work. Includes
          * overlapping requests from other callers (capped by the `parallel`
          * configuration). 1.0 = the model was effectively yours alone; ~N = your
          * tokens shared compute with N-1 others, so this request's observed `TPS`
