@@ -67,11 +67,7 @@ async function prepare(
 
   assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
 
-  if (
-    sdk.responseFormat &&
-    sdk.responseFormat.type !== 'text' &&
-    toolsRequested(sdk.tools)
-  ) {
+  if (sdk.responseFormat && sdk.responseFormat.type !== 'text' && toolsRequested(sdk.tools)) {
     throw new HttpError(
       400,
       'invalid_response_format',
