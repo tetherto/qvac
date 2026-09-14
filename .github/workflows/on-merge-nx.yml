@@ -86,7 +86,14 @@ jobs:
       post-integration-rows: ${{ steps.rows.outputs.post-integration-rows }}
       verify-generated-rows: ${{ steps.rows.outputs.verify-generated-rows }}
     steps:
+      # fetch-depth: 0 is load-bearing. dorny diffs against github.event.before;
+      # in a shallow clone it cannot resolve that commit (a merge commit in
+      # particular) and falls back to reporting every file as added, which
+      # selects all 13 packages and publishes them. trigger-reusable-lib does
+      # the same.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Filter changed packages
         id: filter
