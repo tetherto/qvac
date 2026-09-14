@@ -117,19 +117,21 @@ async function writePrefixSidecar(
 
 // Anything unreadable, malformed, or describing a `.bin` of a different size
 // is discarded: the cache is then used from a cold boundary, which is the
-// pre-sidecar behaviour.
+// pre-sidecar behaviour. Never throws: the caller holds the cache-path write
+// lock and a `.bin` can vanish under it (`deleteKvCacheState` takes no locks).
 async function readPrefixSidecar(cachePath: string): Promise<CachedPrefix | null> {
   let parsed: z.infer<typeof persistedPrefixSchema>
+  let binSize: number
   try {
     const raw = await fsPromises.readFile(prefixSidecarPath(cachePath), 'utf8')
     const result = persistedPrefixSchema.safeParse(JSON.parse(raw))
     if (!result.success) return null
     parsed = result.data
+    binSize = (await fsPromises.stat(cachePath)).size
   } catch {
     return null
   }
-  const { size } = await fsPromises.stat(cachePath)
-  if (size !== parsed.binSize) {
+  if (binSize !== parsed.binSize) {
     await forgetPrefix(cachePath)
     return null
   }
@@ -1131,6 +1133,9 @@ export const __kvCacheSessionTestHooks = {
   },
   getPrefixSidecarPathForTest(cachePath: string): string {
     return prefixSidecarPath(cachePath)
+  },
+  readPrefixSidecarForTest(cachePath: string): Promise<CachedPrefix | null> {
+    return readPrefixSidecar(cachePath)
   },
   hasInitializedPath(cachePath: string): boolean {
     return initializedCaches.has(cachePath)

@@ -1706,6 +1706,26 @@ test('kv-cache-session: a committed named-cache boundary survives a worker resta
   }
 })
 
+// The read runs under the cache-path write lock, and `deleteKvCacheState`
+// takes no locks, so the `.bin` can vanish between the existence probe and
+// the size check. A throw here would escape `beginTurn` with the lock held.
+test('kv-cache-session: reading a sidecar whose .bin vanished yields a cold boundary, not a throw', async (t) => {
+  const { fs, mod, utils, cleanup } = await loadSession()
+  try {
+    const configHash = mod.generateConfigHash('sys', [])
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'restart-vanished')
+    fs.writeFileSync(
+      mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(cachePath),
+      JSON.stringify({ messages: 4, toolBlock: false, binSize: 19 })
+    )
+
+    const prefix = await mod.__kvCacheSessionTestHooks.readPrefixSidecarForTest(cachePath)
+    t.is(prefix, null, 'a sidecar with no .bin behind it reads as absent')
+  } finally {
+    cleanup()
+  }
+})
+
 // A crash between the addon's `.bin` save and the sidecar write leaves a
 // boundary that describes the previous, shorter file. The size fingerprint
 // catches it: the restart starts cold instead of slicing too little.
