@@ -175,10 +175,13 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
   Request reqB = makeStubRequest();
   Request reqC = makeStubRequest();
 
-  // (nPast, thinkingDiscards, req)
-  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/1, reqA);
-  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/0, reqB);
-  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/2, reqC);
+  // (nPast, thinkingDiscards, toolsDropped, req)
+  stats.accumulateSlot(
+      /*nPast=*/0, /*thinkingDiscards=*/1, /*toolsDropped=*/0, reqA);
+  stats.accumulateSlot(
+      /*nPast=*/0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
+  stats.accumulateSlot(
+      /*nPast=*/0, /*thinkingDiscards=*/2, /*toolsDropped=*/0, reqC);
 
   EXPECT_EQ(stats.thinkingBlockDiscards, 3);
 }
@@ -186,11 +189,40 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
 TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsThinkingDiscards) {
   RuntimeStatsSnapshot stats;
   Request req = makeStubRequest();
-  stats.accumulateSlot(0, 5, req);
+  stats.accumulateSlot(0, 5, 0, req);
   EXPECT_EQ(stats.thinkingBlockDiscards, 5);
 
   stats.reset();
   EXPECT_EQ(stats.thinkingBlockDiscards, 0);
+}
+
+// `toolsDropped` is the per-slot count of renders where the chat template did
+// not carry the tool definitions; the scheduler sums it across the batch into
+// `RuntimeStats.toolDefinitionsDropped`. Mirrors the thinkingDiscards pair
+// above, which is the sibling counter added the same way.
+TEST(RuntimeStatsAccumulate, AccumulateSlotSumsToolDefinitionsDropped) {
+  RuntimeStatsSnapshot stats;
+  Request reqA = makeStubRequest();
+  Request reqB = makeStubRequest();
+  Request reqC = makeStubRequest();
+
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/1, reqA);
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/2, reqC);
+
+  EXPECT_EQ(stats.toolDefinitionsDropped, 3);
+  EXPECT_EQ(stats.thinkingBlockDiscards, 0)
+      << "the two counters must not alias each other";
+}
+
+TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsToolDefinitionsDropped) {
+  RuntimeStatsSnapshot stats;
+  Request req = makeStubRequest();
+  stats.accumulateSlot(0, 0, 5, req);
+  EXPECT_EQ(stats.toolDefinitionsDropped, 5);
+
+  stats.reset();
+  EXPECT_EQ(stats.toolDefinitionsDropped, 0);
 }
 
 // promptTokens must reflect tokens ACTUALLY prefilled, not the prompt size
@@ -212,7 +244,8 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
   RuntimeStatsSnapshot stats;
   // Same call the cancel path makes via accumulateSlotRuntimeStats: nothing
   // was processed, so nPast and the generated vector are empty.
-  stats.accumulateSlot(/*nPast=*/0, /*thinkingDiscards=*/0, req);
+  stats.accumulateSlot(
+      /*nPast=*/0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 0);
 }
@@ -232,7 +265,8 @@ TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
   ASSERT_TRUE(req.isPrefillComplete());
 
   RuntimeStatsSnapshot stats;
-  stats.accumulateSlot(/*nPast=*/42, /*thinkingDiscards=*/0, req);
+  stats.accumulateSlot(
+      /*nPast=*/42, /*thinkingDiscards=*/0, /*toolsDropped=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 42);
 }
@@ -298,6 +332,27 @@ TEST(ObservedRequestStats, GroupAggregateAveragesActiveAndSumsCounts) {
   EXPECT_DOUBLE_EQ(agg.genTps, 20.0);
   EXPECT_EQ(agg.generatedTokens, 42);
   EXPECT_EQ(agg.promptTokens, 35);
+}
+
+// The two per-slot counters sum like the token counts rather than averaging:
+// a group's caller asked one question, and "two of my renders dropped their
+// tools" is the honest answer to it. Summing is also what leaves a one-item
+// group — the concurrent single-prompt path — reporting its own figure
+// unchanged.
+TEST(ObservedRequestStats, GroupAggregateSumsPerSlotCounters) {
+  const std::vector<ObservedRequestStats> group{
+      {.thinkingBlockDiscards = 2, .toolDefinitionsDropped = 1},
+      {.thinkingBlockDiscards = 3, .toolDefinitionsDropped = 0},
+      {.thinkingBlockDiscards = 0, .toolDefinitionsDropped = 1}};
+
+  const ObservedRequestStats agg = aggregateObservedStats(group);
+  EXPECT_EQ(agg.thinkingBlockDiscards, 5);
+  EXPECT_EQ(agg.toolDefinitionsDropped, 2);
+
+  const ObservedRequestStats single = aggregateObservedStats(
+      {{.thinkingBlockDiscards = 4, .toolDefinitionsDropped = 1}});
+  EXPECT_EQ(single.thinkingBlockDiscards, 4);
+  EXPECT_EQ(single.toolDefinitionsDropped, 1);
 }
 
 TEST(ObservedRequestStats, GroupAggregateOfNothingIsZero) {

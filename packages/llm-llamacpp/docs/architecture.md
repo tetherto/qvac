@@ -55,7 +55,7 @@
 - **Quantized models**: GGUF format
 - **Multimodal**: Vision models (i.e. Qwen3-VL, SmolVLM, etc.)
 - **Sharded loading**: Caller passes every shard (and the `.tensors.txt` companion); the addon streams them into llama.cpp in order
-- **Multi-GPU**: `split-mode`/`tensor-split` for pipeline (`'layer'`) and tensor (`'row'` on CUDA/SYCL) parallelism — see [multi-gpu.md](multi-gpu.md)
+- **Multi-GPU**: `split-mode`/`tensor-split` for pipeline (`'layer'`) and EXPERIMENTAL tensor (`'tensor'`) parallelism — see [multi-gpu.md](multi-gpu.md)
 
 ## Target Platforms
 

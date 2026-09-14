@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.0] - 2026-09-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). Includes a fix that annotates the `ggml_vec_index_*` C API with default visibility, so those symbols stay exportable from this runtime under the library's hidden visibility preset; no API change for this package.
+
 ## [0.12.0] - 2026-09-08
 
 ### Added
