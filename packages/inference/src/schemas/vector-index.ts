@@ -170,8 +170,8 @@ const vectorIndexCreateResponseSchema = vectorIndexResponseBaseSchema.extend({
   length: lengthSchema
 })
 
-// A loaded snapshot reports its storage only when the native index exposes
-// it; older addon builds report the dimension and length alone.
+// A loaded snapshot reports its storage only when the backend can derive it;
+// the native index exposes a bit width, and 4 bits is ambiguous.
 const vectorIndexLoadResponseSchema = vectorIndexResponseBaseSchema.extend({
   operation: z.literal('load'),
   indexId: indexIdSchema,
@@ -253,9 +253,4 @@ export function findVectorRowLengthMismatch(
   dim: number
 ): number {
   return rows.findIndex((row) => row.length !== dim)
-}
-
-export function readVectorIndexStorage(value: unknown): VectorIndexStorage | undefined {
-  const parsed = vectorIndexStorageSchema.safeParse(value)
-  return parsed.success ? parsed.data : undefined
 }

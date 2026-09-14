@@ -1,15 +1,29 @@
 import type { TurboVecIndex } from '@qvac/rag'
 import { getTurboVecIndexProvider } from '@/plugins/registry'
-import {
-  readVectorIndexStorage,
-  VECTOR_ID_RESERVED,
-  type VectorIndexHit,
-  type VectorIndexStorage
-} from '@/schemas/index'
+import { VECTOR_ID_RESERVED, VectorIndexStorage, type VectorIndexHit } from '@/schemas/index'
 import type { OpenVectorIndex, VectorIndexBackend } from '@/runtime/vector-index-backend'
 
 // The native index pads short result rows with UINT64_MAX.
 const PADDING_ID = BigInt(VECTOR_ID_RESERVED)
+
+/**
+ * The native index reports only its effective bit width after a load. Three
+ * widths map to one storage mode each; 4 bits is either `q4` or
+ * `turbovec-q4`, which the snapshot header distinguishes but the addon does
+ * not expose yet, so those loads report no storage mode.
+ */
+export function storageFromBitWidth(bitWidth: unknown): VectorIndexStorage | undefined {
+  switch (bitWidth) {
+    case 32:
+      return VectorIndexStorage.F32
+    case 8:
+      return VectorIndexStorage.Q8
+    case 2:
+      return VectorIndexStorage.TURBOVEC_Q2
+    default:
+      return undefined
+  }
+}
 
 function toHitRows(result: ReturnType<TurboVecIndex['search']>): VectorIndexHit[][] {
   const rows: VectorIndexHit[][] = []
@@ -72,8 +86,7 @@ function openIndex(index: TurboVecIndex, storage: VectorIndexStorage | undefined
  * embedding plugin exposes through the `turbovecIndexProvider` capability.
  * It serves every `VectorIndexStorage` mode; the two TurboVec modes add the
  * dimension rule (multiple of 8, at most 1024), which the native index
- * enforces itself. A loaded snapshot reports its storage mode only when the
- * native object exposes one; older addon builds do not.
+ * enforces itself.
  */
 export function getTurboVecBackend(): VectorIndexBackend | undefined {
   const provider = getTurboVecIndexProvider()
@@ -84,7 +97,7 @@ export function getTurboVecBackend(): VectorIndexBackend | undefined {
     },
     load(path) {
       const index = provider.load(path)
-      return openIndex(index, readVectorIndexStorage((index as { storage?: unknown }).storage))
+      return openIndex(index, storageFromBitWidth((index as { bitWidth?: unknown }).bitWidth))
     }
   }
 }

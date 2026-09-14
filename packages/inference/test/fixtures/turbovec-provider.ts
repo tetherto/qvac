@@ -19,13 +19,16 @@ export function observableIndexProvider() {
     dispose: 0
   }
 
-  function createIndex(dim: number): TurboVecIndex {
+  // `bitWidth` mirrors the real IdMapIndex getter that a loaded snapshot
+  // exposes; the TurboVecIndex interface itself does not declare it.
+  function createIndex(dim: number, bitWidth?: number): TurboVecIndex & { bitWidth?: number } {
     const indexIds: bigint[] = []
     return {
       get length() {
         return indexIds.length
       },
       dim,
+      ...(bitWidth !== undefined && { bitWidth }),
       addWithIds(_vectors, ids) {
         calls.addWithIds++
         for (const id of ids) {
@@ -75,7 +78,7 @@ export function observableIndexProvider() {
     },
     load() {
       calls.load++
-      return createIndex(8)
+      return createIndex(8, 8)
     }
   }
   return { provider, calls }

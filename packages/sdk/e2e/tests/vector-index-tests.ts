@@ -63,7 +63,7 @@ export const vectorIndexWriteLoad = createVectorIndexTest(
     storage: 'turbovec-q2',
     snapshot: true
   },
-  ['best:3', 'reloaded:3', 'reloaded-length:3']
+  ['best:3', 'reloaded:3', 'reloaded-length:3', 'reloaded-storage:turbovec-q2']
 )
 
 export const vectorIndexTests = [
