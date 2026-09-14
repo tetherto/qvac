@@ -25,6 +25,12 @@ on:
       - "packages/llm-llamacpp/vcpkg-configuration.json"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
+      # The rest of the key lives here: the version segment in the cpp-tests
+      # workflow, and the toolchain digest the action computes. Without these a
+      # key change merges without warming anything and every PR leg stays cold
+      # until the cron.
+      - ".github/workflows/cpp-tests-llm.yml"
+      - ".github/actions/vcpkg-toolchain-fingerprint/**"
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:

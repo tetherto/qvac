@@ -2012,23 +2012,41 @@ const TRUSTED_CACHE_EXEMPT = new Set([
   '.github/workflows/cpp-test-coverage-tts-ggml.yml',
 ])
 
-test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
-  const offenders = []
+// Events that must never appear in a cache WRITE gate. `pull_request_target` is
+// the whole point -- a gate that merely lists the four trusted events still
+// passes a presence check while carrying `|| github.event_name ==
+// 'pull_request_target'` alongside them, which is exactly the hole this test
+// exists to close. So assert the untrusted ones are absent too.
+const UNTRUSTED_CACHE_EVENTS = ['pull_request', 'pull_request_target', 'issue_comment']
+
+// Every `uses: actions/cache@` (write) step in the cpp-tests family, as
+// {path, code, steps, index}. Steps are split on the six-space step indent
+// these workflows use; `index` is the step's position, for ordering checks.
+function eachCppTestsCacheStep (opts = {}) {
+  const found = []
   for (const path of workflowPaths()) {
     if (!/\/cpp-tests?-/.test(path)) continue
-    if (TRUSTED_CACHE_EXEMPT.has(path)) continue
+    if (!opts.includeExempt && TRUSTED_CACHE_EXEMPT.has(path)) continue
     const code = withoutComments(read(path))
-    // Each `uses: actions/cache@` step (not .../restore@) and the `if:` block
-    // that precedes it inside the same step.
     const steps = code.split(/\n      - /)
-    for (const step of steps) {
-      if (!/uses: actions\/cache@/.test(step)) continue
-      if (/uses: actions\/cache\/restore@/.test(step)) continue
-      for (const event of TRUSTED_CACHE_EVENTS) {
-        if (!step.includes(`github.event_name == '${event}'`)) {
-          offenders.push(`${path}: a cache write step does not gate on ${event}`)
-        }
-      }
+    steps.forEach((step, index) => {
+      if (!opts.match.test(step)) return
+      found.push({ path, code, steps, step, index })
+    })
+  }
+  return found
+}
+
+test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
+  const offenders = []
+  for (const { path, step } of eachCppTestsCacheStep({ match: /uses: actions\/cache@/ })) {
+    const missing = TRUSTED_CACHE_EVENTS.filter((e) => !step.includes(`github.event_name == '${e}'`))
+    if (missing.length) {
+      offenders.push(`${path}: a cache write step does not gate on ${missing.join(', ')}`)
+    }
+    const forbidden = UNTRUSTED_CACHE_EVENTS.filter((e) => step.includes(`github.event_name == '${e}'`))
+    if (forbidden.length) {
+      offenders.push(`${path}: a cache write step admits untrusted ${forbidden.join(', ')}`)
     }
   }
   assert.deepEqual(offenders, [])
@@ -2042,29 +2060,27 @@ test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
 // carry the fingerprint, and the step that produces it must come first.
 test('cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint', () => {
   const offenders = []
-  for (const path of workflowPaths()) {
-    if (!/\/cpp-tests?-/.test(path)) continue
-    const code = withoutComments(read(path))
+  // Only the vcpkg cache; the model caches are keyed on manifests and are
+  // toolchain-independent by construction.
+  const vcpkgCacheSteps = eachCppTestsCacheStep({
+    match: /uses: actions\/cache(\/restore)?@[\s\S]*vcpkg\/cache/,
+    includeExempt: true,
+  })
 
-    const producer = code.indexOf('actions/vcpkg-toolchain-fingerprint')
-    const steps = code.split(/\n      - /)
-
-    for (const step of steps) {
-      if (!/uses: actions\/cache(\/restore)?@/.test(step)) continue
-      // Only the vcpkg cache; the model caches are keyed on manifests and are
-      // toolchain-independent by construction.
-      if (!/vcpkg\/cache/.test(step)) continue
-      if (!step.includes('env.TOOLCHAIN_FINGERPRINT')) {
-        offenders.push(`${path}: a vcpkg cache step's key omits env.TOOLCHAIN_FINGERPRINT`)
-        continue
-      }
-      if (producer === -1) {
-        offenders.push(`${path}: uses env.TOOLCHAIN_FINGERPRINT but never runs the action that sets it`)
-        continue
-      }
-      if (code.indexOf(step) < producer) {
-        offenders.push(`${path}: a vcpkg cache step runs before the fingerprint action that sets its key`)
-      }
+  for (const { path, steps, step, index } of vcpkgCacheSteps) {
+    if (!step.includes('env.TOOLCHAIN_FINGERPRINT')) {
+      offenders.push(`${path}: a vcpkg cache step's key omits env.TOOLCHAIN_FINGERPRINT`)
+      continue
+    }
+    // Compare step positions, not string offsets: two textually identical steps
+    // resolve to the same offset, and the restore/save pair very nearly is one.
+    const producer = steps.findIndex((s) => s.includes('actions/vcpkg-toolchain-fingerprint'))
+    if (producer === -1) {
+      offenders.push(`${path}: uses env.TOOLCHAIN_FINGERPRINT but never runs the action that sets it`)
+      continue
+    }
+    if (index < producer) {
+      offenders.push(`${path}: a vcpkg cache step runs before the fingerprint action that sets its key`)
     }
   }
   assert.deepEqual(offenders, [])
