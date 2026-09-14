@@ -28,14 +28,9 @@ exports.DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS = 2000;
 exports.RPC_SERVER_HEALTH_POLL_INTERVAL_MS = 100;
 const PREBUILD_MODULE_DIR = "qvac__ggml-rpc-server";
 const SUPPORTED_PREBUILD_TARGETS = new Set([
-  "android-arm",
   "android-arm64",
-  "android-ia32",
-  "android-x64",
   "darwin-arm64",
   "ios-arm64",
-  "ios-arm64-simulator",
-  "ios-x64-simulator",
   "linux-x64",
   "linux-arm64",
 ]);
@@ -141,14 +136,10 @@ function prebuildTarget(
       if (runtimeArch === "x64") target = "win32-x64";
       break;
     case "android":
-      if (runtimeArch === "arm") target = "android-arm";
       if (runtimeArch === "arm64") target = "android-arm64";
-      if (runtimeArch === "ia32") target = "android-ia32";
-      if (runtimeArch === "x64") target = "android-x64";
       break;
     case "ios":
       if (runtimeArch === "arm64") target = "ios-arm64";
-      if (runtimeArch === "x64") target = "ios-x64-simulator";
       break;
   }
   if (target !== undefined && SUPPORTED_PREBUILD_TARGETS.has(target)) {
