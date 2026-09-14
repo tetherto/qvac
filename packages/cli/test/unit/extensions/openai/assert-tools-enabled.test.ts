@@ -21,6 +21,13 @@ describe('assertToolsEnabled', () => {
     assert.doesNotThrow(() => assertToolsEnabled({ tools: true }, TOOLS, 'my-llm'))
   })
 
+  it('rejects a tools request when config.tools is not boolean true', () => {
+    assert.throws(
+      () => assertToolsEnabled({ tools: 'true' }, TOOLS, 'my-llm'),
+      (err: unknown) => err instanceof HttpError && err.code === 'tools_not_enabled'
+    )
+  })
+
   it('does not reject when the request has no tools', () => {
     assert.doesNotThrow(() => assertToolsEnabled({}, undefined, 'my-llm'))
     assert.doesNotThrow(() => assertToolsEnabled({}, [], 'my-llm'))
