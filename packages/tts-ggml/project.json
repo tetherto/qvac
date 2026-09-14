@@ -1027,7 +1027,8 @@
           "verifyGenerated": true,
           "nameTransform": "rename-prefix",
           "repoName": "tts-ggml",
-          "testGateMode": "post-publish-integration"
+          "testGateMode": "post-publish-integration",
+          "slicePlatformPackages": true
         }
       }
     }

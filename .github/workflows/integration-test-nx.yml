@@ -4,6 +4,11 @@ name: "Integration Tests (nx)"
 on:
   workflow_dispatch:
     inputs:
+      packages:
+        description: "JSON array of explicit package short-names, bypassing nx-affected. Empty = normal nx-affected."
+        required: false
+        type: string
+        default: "[]"
       base-ref:
         required: false
         type: string
@@ -17,6 +22,18 @@ on:
         type: boolean
         required: false
         default: false
+      # Must mirror the workflow_call inputs below: the test and RTF steps read
+      # inputs.*, which are empty (falsy) on a dispatch if not declared here.
+      run_rtf_benchmarks:
+        description: "Enable the RTF benchmark leg for packages declaring an rtfBenchmark block."
+        type: boolean
+        required: false
+        default: false
+      run_integration_tests:
+        description: "When false, skip the functional integration suite."
+        type: boolean
+        required: false
+        default: true
       overrides:
         description: "JSON object of {package: {ciField: value}} to override per-run (e.g. flip runRtfBenchmarks on for one package)"
         type: string
@@ -25,12 +42,12 @@ on:
   workflow_call:
     inputs:
       run_rtf_benchmarks:
-        description: "Forwarded to the carve-out reusables, which gate their RTF benchmark leg on it. benchmark-performance-nx sets it true. Does not affect the generic matrix jobs."
+        description: "Enables the RTF benchmark leg for packages declaring an rtfBenchmark block, in both the carve-out reusables and the generic matrix. benchmark-performance-nx sets it true."
         required: false
         type: boolean
         default: false
       run_integration_tests:
-        description: "Forwarded to the carve-out reusables so a benchmark run does not also run their functional leg. Does not affect the generic matrix jobs."
+        description: "When false, skips the functional integration suite so a benchmark run produces only RTF results."
         required: false
         type: boolean
         default: true
@@ -84,10 +101,12 @@ jobs:
   matrix:
     name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
       carveouts: ${{ steps.compute.outputs.carveouts }}
+      pinmodel: ${{ steps.filter.outputs.pinmodel }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - id: compute
@@ -98,6 +117,14 @@ jobs:
           head-ref: ${{ inputs.head-ref }}
           overrides: ${{ inputs.overrides }}
           packages: ${{ inputs.packages }}
+      - id: filter
+        shell: bash
+        env:
+          M: ${{ steps.compute.outputs.matrix }}
+        run: |
+          # One row per package, not per platform: the job pins the manifest once
+          # and runs on its own non-GPU runner regardless of the platform rows.
+          echo "pinmodel=$(echo "$M" | jq -c '[.[] | select(.hasPinModelManifest == true) | {package, workdir}] | unique_by(.package)')" >> "$GITHUB_OUTPUT"
 
   # Carve-outs asr-ggml and llm-llamacpp have bespoke integration flows; routed to
   # their own reusable when nx flags them affected (options.ci carveOut:true).
@@ -134,41 +161,37 @@ jobs:
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
     needs: [matrix, runner_names]
-    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
+    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest && needs.matrix.outputs.pinmodel != '[]'
     strategy:
       matrix:
-        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+        include: ${{ fromJSON(needs.matrix.outputs.pinmodel || '[]') }}
     # Non-GPU: downloads and hashes only, no native binary (#4102).
     runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    timeout-minutes: 60
     environment: release
     permissions:
       contents: read
     steps:
-      # matrix isn't available in a job-level if:, so gating is per-step.
       - name: Manual Workspace Cleanup
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
         working-directory: .
       - name: Checkout code
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
       - name: Setup Node.js
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
       - name: Generate pins from fresh downloads
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         working-directory: ${{ matrix.workdir }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: node scripts/generate-model-manifest.mjs --force
       - name: Upload pinned model manifest
-        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: ${{ matrix.package }}-model-manifest
@@ -205,6 +228,9 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          # This tree is fork code and npm install runs over it, so the token
+          # must not be left behind in .git/config.
+          persist-credentials: false
 
       # Dual-registry auth (options.ci.dualRegistry) — packages with @tetherto
       # (GitHub Packages) deps need an .npmrc + git insteadOf before npm install.
@@ -469,7 +495,7 @@ jobs:
             })'
 
       - name: Run integration tests (Unix, tee'd)
-        if: matrix.useTeeLogging && matrix.platform != 'win32'
+        if: inputs.run_integration_tests && matrix.useTeeLogging && matrix.platform != 'win32'
         working-directory: ${{ matrix.workdir }}
         shell: bash
         env:
@@ -500,7 +526,7 @@ jobs:
           exit "$EXIT"
 
       - name: Run integration tests (Windows, tee'd)
-        if: matrix.useTeeLogging && matrix.platform == 'win32'
+        if: inputs.run_integration_tests && matrix.useTeeLogging && matrix.platform == 'win32'
         working-directory: ${{ matrix.workdir }}
         shell: powershell
         env:
@@ -527,7 +553,7 @@ jobs:
           exit $testExit
 
       - name: Run integration tests
-        if: '!matrix.useTeeLogging'
+        if: inputs.run_integration_tests && !matrix.useTeeLogging
         working-directory: ${{ matrix.workdir }}
         env:
           QVAC_ENV_NAME: ${{ matrix.envVarName }}
@@ -549,20 +575,25 @@ jobs:
       # RTF benchmark leg: benchmarkMatrixJson is the fully expanded per-platform
       # matrix (hand-rolled in project.json), just set under the runner's env var.
       - name: Set RTF benchmark matrix env var
-        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        if: always() && !cancelled() && (matrix.runRtfBenchmarks || inputs.run_rtf_benchmarks) && matrix.rtfBenchmark
         shell: bash
         env:
+          # toJson pretty-prints, so these arrive multi-line and quote-bearing.
+          # Passing them via env: keeps them clear of shell quoting, and node
+          # re-minifies the matrix to the single line $GITHUB_ENV requires.
+          RTF_MATRIX_VAR: ${{ matrix.rtfBenchmark.matrixEnvVar }}
+          RTF_MATRIX_JSON: ${{ toJson(matrix.benchmarkMatrixJson) }}
           # options.ci.rtfBenchmark.env — optional {VAR: value} map of extra
           # benchmark tuning vars a package's runner reads (e.g. audiogen's RUNS).
           RTF_EXTRA_ENV: ${{ toJson(matrix.rtfBenchmark.env) }}
         run: |
-          echo "${{ matrix.rtfBenchmark.matrixEnvVar }}=${{ toJson(matrix.benchmarkMatrixJson) }}" >> "$GITHUB_ENV"
+          node -e 'const fs=require("fs");const v=process.env.RTF_MATRIX_VAR,j=process.env.RTF_MATRIX_JSON;if(v&&j&&j!=="null")fs.appendFileSync(process.env.GITHUB_ENV,`${v}=${JSON.stringify(JSON.parse(j))}\n`)'
           if [ -n "${RTF_EXTRA_ENV:-}" ] && [ "$RTF_EXTRA_ENV" != "null" ]; then
             node -e 'const e=JSON.parse(process.env.RTF_EXTRA_ENV||"{}");for(const[k,v]of Object.entries(e))require("fs").appendFileSync(process.env.GITHUB_ENV,`${k}=${v}\n`)'
           fi
 
       - name: Run RTF benchmark
-        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        if: always() && !cancelled() && (matrix.runRtfBenchmarks || inputs.run_rtf_benchmarks) && matrix.rtfBenchmark
         continue-on-error: true
         working-directory: ${{ matrix.workdir }}
         run: ${{ matrix.rtfBenchmark.command }}
@@ -572,7 +603,7 @@ jobs:
       # Loud gate: the runner above is continue-on-error, so a run producing ZERO
       # artifacts would otherwise pass silently.
       - name: Verify RTF benchmark output exists
-        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        if: always() && !cancelled() && (matrix.runRtfBenchmarks || inputs.run_rtf_benchmarks) && matrix.rtfBenchmark
         working-directory: ${{ matrix.workdir }}
         shell: bash
         run: |
@@ -585,7 +616,7 @@ jobs:
           echo "RTF benchmark produced ${#files[@]} result file(s)"
 
       - name: Upload RTF benchmark results
-        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        if: always() && !cancelled() && (matrix.runRtfBenchmarks || inputs.run_rtf_benchmarks) && matrix.rtfBenchmark
         continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:

@@ -49,10 +49,19 @@ permissions:
   packages: read
   id-token: write
 
+# Safe here because this workflow is dispatch-only. The called leaves must NOT
+# get one: in a reusable, github.workflow resolves to the caller, so the group
+# string would collide with on-merge-nx's and the leaf would wait on a group its
+# own caller holds.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   matrix:
     name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
@@ -69,6 +78,7 @@ jobs:
     needs: matrix
     if: needs.matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       repository: ${{ steps.ctx.outputs.repository }}
       ref: ${{ steps.ctx.outputs.ref }}
@@ -251,6 +261,7 @@ jobs:
       - mobile-tts-ggml
     if: always() && needs.matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:

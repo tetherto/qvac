@@ -79,6 +79,7 @@ void badFlashAttn;
 const generationParams: LlmLlamacpp.GenerationParams = {
   temp: 0.7,
   json_schema: { type: "object" },
+  tool_choice: "required",
   remove_thinking_from_context: true,
 };
 void generationParams;
@@ -160,6 +161,7 @@ const stats: LlmLlamacpp.RuntimeStats = {
   generatedTokens: 5,
   promptTokens: 6,
   thinkingBlockDiscards: 0,
+  toolDefinitionsDropped: 0,
   avgConcurrentSeq: 1,
   backendDevice: "gpu",
   stopReason: "eos",

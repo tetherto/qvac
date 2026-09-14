@@ -4,6 +4,11 @@ name: "Prebuilds (nx)"
 on:
   workflow_dispatch:
     inputs:
+      packages:
+        description: "JSON array of explicit package short-names, bypassing nx-affected. Empty = normal nx-affected."
+        required: false
+        type: string
+        default: "[]"
       base-ref:
         required: false
         type: string
@@ -57,6 +62,7 @@ jobs:
   matrix:
     name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
