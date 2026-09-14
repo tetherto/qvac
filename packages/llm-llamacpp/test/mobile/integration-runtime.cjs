@@ -238,12 +238,19 @@ function _nativeTailWrite(level, args) {
 }
 
 function initNativeTail() {
+  if (_nativeTailPath) return
   const dir = global.testDir
-  if (!dir || _nativeTailPath) return
+  // Loud on every bail-out: a tail that silently never starts is worse than no
+  // tail, because the run looks instrumented and isn't.
+  if (!dir) {
+    console.log('[native-tail] not started: global.testDir is not set')
+    return
+  }
   const target = path.join(dir, 'native-tail.log')
   try {
     fs.writeFileSync(target, '')
-  } catch (_) {
+  } catch (err) {
+    console.log('[native-tail] not started: cannot write ' + target + ': ' + err.message)
     return
   }
   _nativeTailPath = target

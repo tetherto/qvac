@@ -204,6 +204,14 @@ runs:
                 cp "$results_json" "$CONSOLE_DIR/${device}_test-results.json"
                 echo "  Extracted: ${device}_test-results.json"
               fi
+              # Synchronous mirror of the device console. bare_console.log is
+              # buffered and stops mid-test when the addon aborts; this one has
+              # the lines that explain the abort.
+              native_tail=$(find "$tmpdir" -name "native-tail.log" -type f 2>/dev/null | head -1)
+              if [ -n "$native_tail" ]; then
+                cp "$native_tail" "$CONSOLE_DIR/${device}_native-tail.log"
+                echo "  Extracted: ${device}_native-tail.log"
+              fi
               logcat_full=$(find "$tmpdir" -name "logcat_full.txt" -type f 2>/dev/null | head -1)
               if [ -n "$logcat_full" ]; then
                 cp "$logcat_full" "$CONSOLE_DIR/${device}_logcat_full.txt"
