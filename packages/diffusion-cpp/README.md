@@ -268,9 +268,10 @@ on disk while other parameters remain in CPU RAM.
 A bare entry or an assignment to `*`, `all`, or `default` sets the whole-spec
 default rather than a per-module override, and the last default wins. For
 example, `params_backend: 'cuda0'` with `offload_to_cpu: true` puts every module
-on `cuda0` and offloads nothing. The addon logs when a whole-spec default follows
-`offload_to_cpu`. Write `params_backend: 'diffusion=cuda0'` to move one module
-and leave the rest offloaded.
+on `cuda0` and offloads nothing. The addon logs when the final whole-spec default
+differs from CPU. Equivalent defaults such as `all=cpu` do not produce an error.
+Write `params_backend: 'diffusion=cuda0'` to move one module and leave the rest
+offloaded.
 
 A nonzero `max_vram` enables graph-cut segmentation even without
 `stream_layers`. Positive values cap the VRAM budget in GiB. Negative values

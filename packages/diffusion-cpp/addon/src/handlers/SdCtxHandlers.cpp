@@ -4,8 +4,10 @@
 #include <array>
 #include <cctype>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 
 #ifdef __APPLE__
@@ -42,6 +44,83 @@ bool equalsIgnoreCase(std::string_view lhs, std::string_view rhs) {
          });
 }
 
+bool isWholeSpecDefaultKey(std::string_view key) {
+  return key.empty() || key == "*" || equalsIgnoreCase(key, "all") ||
+         equalsIgnoreCase(key, "default");
+}
+
+template <typename Callback>
+void forEachSpecAssignment(std::string_view spec, Callback&& callback) {
+  while (!spec.empty()) {
+    const std::size_t comma = spec.find(',');
+    const std::string_view assignment = trim(spec.substr(0, comma));
+    if (!assignment.empty()) {
+      const std::size_t equals = assignment.find('=');
+      if (equals == std::string_view::npos) {
+        callback(std::string_view{}, assignment);
+      } else {
+        callback(
+            trim(assignment.substr(0, equals)),
+            trim(assignment.substr(equals + 1)));
+      }
+    }
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    spec.remove_prefix(comma + 1);
+  }
+}
+
+std::string normalizedAssignmentKey(std::string_view key) {
+  std::string normalized;
+  normalized.reserve(key.size());
+  for (const char character : key) {
+    if (character != '-' && character != '_') {
+      normalized.push_back(
+          static_cast<char>(
+              std::tolower(static_cast<unsigned char>(character))));
+    }
+  }
+  return normalized;
+}
+
+std::optional<std::size_t> paramsBackendModuleIndex(std::string_view key) {
+  const std::string normalized = normalizedAssignmentKey(key);
+  if (normalized == "diffusion" || normalized == "model" ||
+      normalized == "unet" || normalized == "dit") {
+    return 0;
+  }
+  if (normalized == "te" || normalized == "clip" || normalized == "text" ||
+      normalized == "textencoder" || normalized == "textencoders" ||
+      normalized == "conditioner" || normalized == "cond" ||
+      normalized == "llm" || normalized == "t5" || normalized == "t5xxl") {
+    return 1;
+  }
+  if (normalized == "clipvision" || normalized == "vision") {
+    return 2;
+  }
+  if (normalized == "vae" || normalized == "firststage" ||
+      normalized == "autoencoder" || normalized == "tae") {
+    return 3;
+  }
+  if (normalized == "controlnet" || normalized == "control") {
+    return 4;
+  }
+  if (normalized == "photomaker" || normalized == "photomakerid" ||
+      normalized == "pmid" || normalized == "photo") {
+    return 5;
+  }
+  if (normalized == "upscaler" || normalized == "esrgan" ||
+      normalized == "hires") {
+    return 6;
+  }
+  if (normalized == "detector" || normalized == "adetailer" ||
+      normalized == "yolo") {
+    return 7;
+  }
+  return std::nullopt;
+}
+
 // True only for a value that parses cleanly to zero. Anything unparseable is
 // reported as non-zero so the engine gets to reject it with its own message
 // instead of this addon pre-empting it with an unrelated warning.
@@ -58,69 +137,57 @@ bool budgetValueIsZero(std::string_view value) {
 } // namespace
 
 bool paramsBackendSpecUsesDisk(const std::string& spec) {
-  std::string_view remaining = spec;
-  while (!remaining.empty()) {
-    const std::size_t comma = remaining.find(',');
-    std::string_view assignment = trim(remaining.substr(0, comma));
-    if (const std::size_t equals = assignment.find('=');
-        equals != std::string_view::npos) {
-      assignment = trim(assignment.substr(equals + 1));
-    }
-    if (equalsIgnoreCase(assignment, "disk")) {
+  std::optional<std::string_view> defaultBackend;
+  std::array<std::optional<std::string_view>, 8> moduleBackends;
+  forEachSpecAssignment(
+      spec, [&](std::string_view key, std::string_view value) {
+        if (isWholeSpecDefaultKey(key)) {
+          defaultBackend = value;
+        } else if (
+            const auto module = paramsBackendModuleIndex(key);
+            module.has_value()) {
+          moduleBackends[*module] = value;
+        }
+      });
+
+  if (defaultBackend.has_value() && equalsIgnoreCase(*defaultBackend, "disk")) {
+    return true;
+  }
+  for (const auto& backend : moduleBackends) {
+    if (backend.has_value() && equalsIgnoreCase(*backend, "disk")) {
       return true;
     }
-    if (comma == std::string_view::npos) {
-      break;
-    }
-    remaining.remove_prefix(comma + 1);
   }
   return false;
 }
 
-bool paramsBackendSpecHasWholeSpecDefault(const std::string& spec) {
-  std::string_view remaining = spec;
-  while (!remaining.empty()) {
-    const std::size_t comma = remaining.find(',');
-    const std::string_view assignment = trim(remaining.substr(0, comma));
-    if (!assignment.empty()) {
-      const std::size_t equals = assignment.find('=');
-      // A bare backend name and the *, all, and default assignment aliases all
-      // update the same spec-wide default in the engine. The last one wins.
-      if (equals == std::string_view::npos) {
-        return true;
-      }
-      const std::string_view key = trim(assignment.substr(0, equals));
-      if (key == "*" || equalsIgnoreCase(key, "all") ||
-          equalsIgnoreCase(key, "default")) {
-        return true;
-      }
-    }
-    if (comma == std::string_view::npos) {
-      break;
-    }
-    remaining.remove_prefix(comma + 1);
-  }
-  return false;
+bool paramsBackendSpecOverridesCpuDefault(const std::string& spec) {
+  std::optional<std::string_view> defaultBackend;
+  forEachSpecAssignment(
+      spec, [&](std::string_view key, std::string_view value) {
+        if (isWholeSpecDefaultKey(key)) {
+          defaultBackend = value;
+        }
+      });
+  return defaultBackend.has_value() &&
+         !equalsIgnoreCase(*defaultBackend, "cpu");
 }
 
 bool maxVramSpecHasNonZeroBudget(const std::string& spec) {
-  std::string_view remaining = spec;
-  while (!remaining.empty()) {
-    const std::size_t comma = remaining.find(',');
-    std::string_view assignment = trim(remaining.substr(0, comma));
-    if (const std::size_t equals = assignment.find('=');
-        equals != std::string_view::npos) {
-      assignment = trim(assignment.substr(equals + 1));
-    }
-    if (!assignment.empty() && !budgetValueIsZero(assignment)) {
+  std::unordered_map<std::string, std::string_view> effectiveBudgets;
+  forEachSpecAssignment(
+      spec, [&](std::string_view key, std::string_view value) {
+        const std::string normalizedKey = isWholeSpecDefaultKey(key)
+                                              ? std::string{}
+                                              : normalizedAssignmentKey(key);
+        effectiveBudgets[normalizedKey] = value;
+      });
+
+  for (const auto& budget : effectiveBudgets) {
+    if (!budget.second.empty() && !budgetValueIsZero(budget.second)) {
       return true;
     }
-    if (comma == std::string_view::npos) {
-      break;
-    }
-    remaining.remove_prefix(comma + 1);
   }
-  // Empty spec, or every budget in it is zero: no graph cutting either way.
   return false;
 }
 

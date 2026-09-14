@@ -217,8 +217,14 @@ TEST(SdCtxHandlers_MemoryFlags, DetectsDiskParameterAssignments) {
   EXPECT_TRUE(paramsBackendSpecUsesDisk("diffusion=disk"));
   EXPECT_TRUE(paramsBackendSpecUsesDisk("te=cpu, diffusion = DISK"));
   EXPECT_TRUE(paramsBackendSpecUsesDisk("vae=cpu, default=disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("cpu,disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("diffusion=cpu,diffusion=disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("te=cpu,clip=disk"));
   EXPECT_FALSE(paramsBackendSpecUsesDisk(""));
   EXPECT_FALSE(paramsBackendSpecUsesDisk("cpu"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("disk,cpu"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("diffusion=disk,diffusion=cpu"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("clip=disk,te=cpu"));
   EXPECT_FALSE(paramsBackendSpecUsesDisk("diffusion=cpu,vae=vulkan0"));
   EXPECT_FALSE(paramsBackendSpecUsesDisk("diffusion=diskette"));
 }
@@ -237,27 +243,34 @@ TEST(SdCtxHandlers_MemoryFlags, ComposesOffloadDefaultWithExplicitAssignments) {
   EXPECT_EQ(effectiveParamsBackendSpec("cuda0", true), "*=cpu,cuda0");
 }
 
-TEST(SdCtxHandlers_MemoryFlags, DetectsWholeSpecParamsBackendDefaults) {
+TEST(SdCtxHandlers_MemoryFlags, DetectsCpuDefaultOverrides) {
   // The engine treats bare names and these three assignment aliases as the
   // same whole-spec default. The last default replaces offload_to_cpu's
   // wildcard instead of composing with it per module.
-  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("cuda0"));
-  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("disk"));
-  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("te=cpu,cuda0"));
-  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault(" te=cpu , cuda0 "));
-  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("*=cuda0"));
-  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("ALL=cuda0"));
-  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault(" Default = cuda0 "));
-  EXPECT_TRUE(paramsBackendSpecHasWholeSpecDefault("*=cpu,te=disk"));
-  EXPECT_FALSE(paramsBackendSpecHasWholeSpecDefault(""));
-  EXPECT_FALSE(paramsBackendSpecHasWholeSpecDefault("te=cpu"));
-  EXPECT_FALSE(paramsBackendSpecHasWholeSpecDefault("te=cpu,,vae=cpu"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("cuda0"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("disk"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("te=cpu,cuda0"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault(" te=cpu , cuda0 "));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("*=cuda0"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("ALL=cuda0"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault(" Default = cuda0 "));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("cpu,disk"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("disk,cpu"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("cpu"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("*=cpu"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("all=cpu,te=disk"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("default=CPU"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault(""));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("te=cpu"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("te=cpu,,vae=cpu"));
 }
 
 TEST(SdCtxHandlers_MemoryFlags, DetectsSyntacticNonzeroMaxVramBudget) {
   EXPECT_TRUE(maxVramSpecHasNonZeroBudget("6"));
   EXPECT_TRUE(maxVramSpecHasNonZeroBudget("-1"));
   EXPECT_TRUE(maxVramSpecHasNonZeroBudget("cuda0=6,vulkan0=4"));
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("0,6"));
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("cuda0=0,cuda0=6"));
   // This helper deliberately does not claim that the active backend resolves
   // to a budget. Only the engine can resolve this mixed assignment.
   EXPECT_TRUE(maxVramSpecHasNonZeroBudget("cuda0=0,vulkan0=4"));
@@ -274,6 +287,8 @@ TEST(SdCtxHandlers_MemoryFlags, DetectsSyntacticNonzeroMaxVramBudget) {
   EXPECT_FALSE(maxVramSpecHasNonZeroBudget("  "));
   EXPECT_FALSE(maxVramSpecHasNonZeroBudget("vulkan0=0"));
   EXPECT_FALSE(maxVramSpecHasNonZeroBudget("cuda0=0,vulkan0=0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("6,0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("cuda0=6,cuda0=0"));
 }
 
 TEST(SdCtxHandlers_MemoryFlags, ReportsRemovedOptionsInStableOrder) {

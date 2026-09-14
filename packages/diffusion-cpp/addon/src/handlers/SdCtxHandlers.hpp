@@ -195,23 +195,22 @@ extern const SdCtxHandlersMap SD_CTX_HANDLERS;
 /** True when a params_backend assignment contains the disk backend. */
 bool paramsBackendSpecUsesDisk(const std::string& spec);
 /**
- * True when a params_backend spec carries a whole-spec default.
+ * True when the final whole-spec params_backend default differs from CPU.
  *
  * The engine accepts a bare backend name and assignments to "*", "all", or
  * "default" as whole-spec defaults. The last default wins, so any of these
- * entries replaces the "*=cpu" that offload_to_cpu contributes rather than
- * composing with it per module. Callers report the override instead of letting
- * it pass silently.
+ * entries can replace the "*=cpu" that offload_to_cpu contributes. Callers use
+ * the final value so an equivalent CPU default does not produce an error.
  */
-bool paramsBackendSpecHasWholeSpecDefault(const std::string& spec);
+bool paramsBackendSpecOverridesCpuDefault(const std::string& spec);
 /**
  * True when a max_vram spec syntactically declares a non-zero budget.
  *
- * This only detects the definitely disabled empty and all-zero forms. It does
- * not resolve per-backend assignments or automatic negative budgets because
- * the engine determines those from the selected runtime backend and its free
- * memory. An unparseable value reads as non-zero because the engine rejects it
- * with a specific error and an addon warning would only pre-empt that.
+ * Repeated defaults and backend assignments follow the engine's last-write-wins
+ * order. This does not resolve the selected runtime backend or automatic
+ * negative budgets because the engine determines those from the initialized
+ * backend and its free memory. An unparseable value reads as non-zero because
+ * the engine rejects it with a specific error.
  */
 bool maxVramSpecHasNonZeroBudget(const std::string& spec);
 /** Prepends the offload_to_cpu default before explicit module assignments. */

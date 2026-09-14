@@ -435,18 +435,16 @@ void SdModel::load() {
       qvac_lib_inference_addon_sd::effectiveParamsBackendSpec(
           config_.paramsBackendSpec, config_.offloadToCpu);
   if (config_.offloadToCpu &&
-      qvac_lib_inference_addon_sd::paramsBackendSpecHasWholeSpecDefault(
+      qvac_lib_inference_addon_sd::paramsBackendSpecOverridesCpuDefault(
           config_.paramsBackendSpec)) {
     // The engine applies bare entries and *, all, or default assignments as the
-    // spec-wide default. The last one wins, so any of these replaces
-    // offload_to_cpu's "*=cpu" instead of composing with it per module. Same
-    // visibility reasoning as above.
+    // spec-wide default. Only report when the final default is not CPU, so an
+    // equivalent CPU default does not produce a false error.
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         "params_backend '" + config_.paramsBackendSpec +
-            "' sets a whole-spec default after offload_to_cpu, so the last "
-            "default wins; use a module-specific assignment to keep CPU "
-            "offload for the remaining modules");
+            "' replaces the offload_to_cpu default; use a module-specific "
+            "assignment to keep CPU offload for the remaining modules");
   }
   if (!paramsBackend.empty()) {
     QLOG_IF(
