@@ -68,7 +68,10 @@ export async function resolvePrebuildLocations(
   ]
 
   const platformPackage = platformPackageName(addon.name, host)
-  const platformRoot = await findInstalledPackage(addon.packageRoot, platformPackage)
+  const platformRoot = await findInstalledPackage(
+    await realPackageRoot(addon.packageRoot),
+    platformPackage
+  )
   if (platformRoot !== null) {
     locations.push({
       hostDir: path.join(platformRoot, PLATFORM_ADDON_DIR, PREBUILDS_DIR, host),
@@ -77,6 +80,24 @@ export async function resolvePrebuildLocations(
   }
 
   return locations
+}
+
+/**
+ * The directory the addon really lives in. Under pnpm's isolated layout
+ * `node_modules/@qvac/tts-ggml` is a symlink into the virtual store
+ * (`node_modules/.pnpm/<id>/node_modules/@qvac/tts-ggml`), and the addon's
+ * dependencies — its platform package included — are linked next to it in
+ * that store directory rather than at the project's top-level `node_modules`.
+ * Node resolves from the real path, so the platform-package search starts
+ * there too. An unresolvable path (a fixture, a bundle path that no longer
+ * exists) is searched as given.
+ */
+async function realPackageRoot(packageRoot: string): Promise<string> {
+  try {
+    return await fsp.realpath(packageRoot)
+  } catch {
+    return path.resolve(packageRoot)
+  }
 }
 
 export async function checkPrebuilds(
@@ -131,8 +152,9 @@ function describeMissingPrebuild(
 /**
  * Locates `packageName` the way Node's resolver would from `fromDir`: in
  * `<dir>/node_modules/<packageName>` for `fromDir` and each of its ancestors.
- * Covers both a hoisted platform package next to the meta package and one
- * nested under the meta package's own `node_modules`.
+ * Covers a hoisted platform package next to the meta package, one nested
+ * under the meta package's own `node_modules`, and — given the meta package's
+ * real path — the sibling link pnpm places in its virtual-store directory.
  */
 async function findInstalledPackage(fromDir: string, packageName: string): Promise<string | null> {
   let dir = path.resolve(fromDir)

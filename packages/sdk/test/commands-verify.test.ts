@@ -683,7 +683,62 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
       ])
     })
   })
+
+  it('follows the meta package symlink into a pnpm virtual store to find its platform package', async () => {
+    await withTempDir(async (dir) => {
+      // pnpm's isolated layout: the project's node_modules/@qvac/tts-ggml is a
+      // symlink into node_modules/.pnpm/<id>/node_modules/@qvac/tts-ggml, and
+      // the addon's own dependencies — the platform package included — are
+      // linked next to it in that store directory, never at the top level.
+      const storeScope = 'node_modules/.pnpm/@qvac+tts-ggml@0.9.0/node_modules/@qvac'
+      const realPackageRoot = writePackageJson(dir, `${storeScope}/tts-ggml`, {
+        name: '@qvac/tts-ggml',
+        version: '0.9.0',
+        addon: true
+      })
+      const platformRoot = writePlatformPackage(
+        dir,
+        'node_modules/.pnpm/@qvac+tts-ggml-darwin-arm64@0.9.0/node_modules/@qvac/tts-ggml-darwin-arm64',
+        {
+          name: '@qvac/tts-ggml-darwin-arm64',
+          addon: '@qvac/tts-ggml',
+          hosts: ['darwin-arm64']
+        }
+      )
+      symlinkDir(platformRoot, path.join(dir, storeScope, 'tts-ggml-darwin-arm64'))
+      const linkedPackageRoot = path.join(dir, 'node_modules', '@qvac', 'tts-ggml')
+      symlinkDir(realPackageRoot, linkedPackageRoot)
+
+      // The node_modules walker hands the verifier the top-level symlink path.
+      const issues = await checkPrebuilds({
+        addon: metaAddon(linkedPackageRoot),
+        hosts: ['darwin-arm64']
+      })
+      assert.deepEqual(issues, [])
+
+      const locations = await resolvePrebuildLocations(metaAddon(linkedPackageRoot), 'darwin-arm64')
+      assert.deepEqual(locations, [
+        { hostDir: path.join(linkedPackageRoot, 'prebuilds', 'darwin-arm64') },
+        {
+          hostDir: path.join(
+            realPackageRoot,
+            '..',
+            'tts-ggml-darwin-arm64',
+            'addon',
+            'prebuilds',
+            'darwin-arm64'
+          ),
+          platformPackage: '@qvac/tts-ggml-darwin-arm64'
+        }
+      ])
+    })
+  })
 })
+
+function symlinkDir(target: string, linkPath: string): void {
+  fs.mkdirSync(path.dirname(linkPath), { recursive: true })
+  fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+}
 
 describe('resolveBareRuntime', () => {
   it('uses the explicit bareRuntimeVersion when provided', async () => {
