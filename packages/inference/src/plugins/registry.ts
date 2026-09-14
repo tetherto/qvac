@@ -21,8 +21,55 @@ interface PluginLoggingModule {
   releaseLogger?: () => void
 }
 
+/**
+ * A plugin may hand over its addon's logging module directly, or a resolver
+ * that produces it. A resolver defers loading the addon: `import()`ing an
+ * addon's `addonLogging` entry point pulls in its native binding, and since
+ * the per-platform prebuild split that binding is absent on any host whose
+ * platform package was not installed. Registering a plugin must not depend on
+ * that — every addon is an optional peer dependency — so a resolver is called
+ * when a model of that type is first loaded, not when the plugin registers.
+ */
+type PluginLoggingResolver = () => unknown
+
+/** Addon logging modules wired through a resolver, keyed by namespace. */
+const lazyAddonLoggers = new Map<string, PluginLoggingModule>()
+/** In-flight resolutions, so concurrent loads wire a namespace exactly once. */
+const pendingAddonLoggers = new Map<string, Promise<void>>()
+
+function getLoggingResolver(plugin: QvacPlugin): PluginLoggingResolver | undefined {
+  const declared = plugin.logging?.module
+  return typeof declared === 'function' ? (declared as PluginLoggingResolver) : undefined
+}
+
+/**
+ * The eagerly-supplied module, if the plugin gave one. Resolver-based plugins
+ * report nothing here, so registration-time validation, the shared-module
+ * dedupe, and the release sweeps all continue to see exactly what they saw
+ * before for plugins that pass a module directly.
+ */
 function getLoggingModule(plugin: QvacPlugin) {
+  if (getLoggingResolver(plugin)) return undefined
   return plugin.logging?.module as PluginLoggingModule | undefined
+}
+
+/** CommonJS addons resolve through `import()` as a namespace with `default`. */
+function unwrapLoggingModule(resolved: unknown): unknown {
+  if (resolved && typeof resolved === 'object' && 'default' in resolved) {
+    const inner = (resolved as { default: unknown }).default
+    if (inner && typeof (inner as PluginLoggingModule).setLogger === 'function') return inner
+  }
+  return resolved
+}
+
+function assertLoggingModuleShape(modelType: string, candidate: unknown): PluginLoggingModule {
+  if (!candidate || typeof (candidate as Record<string, unknown>)['setLogger'] !== 'function') {
+    throw new PluginLoggingInvalidError(
+      modelType,
+      'logging.module must have a setLogger(callback) function'
+    )
+  }
+  return candidate as PluginLoggingModule
 }
 
 function findPluginUsingLoggingModule(loggingModule: PluginLoggingModule) {
@@ -68,15 +115,11 @@ export function registerPlugin(plugin: QvacPlugin): void {
     )
   }
 
-  // Validate logging module shape if provided
-  if (plugin.logging?.module) {
-    const loggingModule = plugin.logging.module as Record<string, unknown>
-    if (typeof loggingModule['setLogger'] !== 'function') {
-      throw new PluginLoggingInvalidError(
-        plugin.modelType,
-        'logging.module must have a setLogger(callback) function'
-      )
-    }
+  // Validate logging module shape if provided. A resolver is checked when it
+  // runs instead: calling it here to inspect its result would load the addon,
+  // which is the whole thing registration is meant to avoid.
+  if (plugin.logging?.module && !getLoggingResolver(plugin)) {
+    assertLoggingModuleShape(plugin.modelType, plugin.logging.module)
   }
 
   const loggingModule = getLoggingModule(plugin)
@@ -106,6 +149,82 @@ export function registerPlugins(pluginList: readonly QvacPlugin[]): void {
   }
 }
 
+/**
+ * Wires the addon logger of a plugin that supplied a resolver, loading the
+ * addon on the way. Call it once a model of this type is actually being
+ * created: it is the point where the addon is needed anyway, so a host
+ * missing that addon's platform package fails the load it asked for instead
+ * of failing every plugin registration at startup.
+ *
+ * A no-op for plugins that passed their module directly — those are already
+ * wired by `registerPlugin` — and for a namespace that is already wired,
+ * which is how two plugins over one addon (whisper and Parakeet over ASR)
+ * share a single `setLogger` call.
+ */
+export async function ensureAddonLoggerReady(plugin: QvacPlugin): Promise<void> {
+  const resolver = getLoggingResolver(plugin)
+  const namespace = plugin.logging?.namespace
+  if (!resolver || !namespace) return
+  if (lazyAddonLoggers.has(namespace)) return
+
+  const pending = pendingAddonLoggers.get(namespace)
+  if (pending) return pending
+
+  const wiring = (async () => {
+    const loggingModule = assertLoggingModuleShape(
+      plugin.modelType,
+      unwrapLoggingModule(await resolver())
+    )
+
+    for (const [wiredNamespace, wiredModule] of lazyAddonLoggers) {
+      if (wiredModule === loggingModule && wiredNamespace !== namespace) {
+        throw new PluginLoggingInvalidError(
+          plugin.modelType,
+          'plugins sharing logging.module must use the same namespace'
+        )
+      }
+    }
+
+    loggingModule.setLogger(createAddonLoggerCallback(namespace))
+    lazyAddonLoggers.set(namespace, loggingModule)
+  })()
+
+  pendingAddonLoggers.set(namespace, wiring)
+  try {
+    await wiring
+  } finally {
+    pendingAddonLoggers.delete(namespace)
+  }
+}
+
+/** Releases a lazily-wired addon logger once no registered plugin claims it. */
+function releaseLazyAddonLogger(namespace: string | undefined, modelType: string): void {
+  if (namespace === undefined) return
+  const loggingModule = lazyAddonLoggers.get(namespace)
+  if (!loggingModule) return
+
+  const stillClaimed = Array.from(plugins.values()).some(
+    (candidate) => getLoggingResolver(candidate) && candidate.logging?.namespace === namespace
+  )
+  if (stillClaimed) return
+
+  lazyAddonLoggers.delete(namespace)
+  releaseLoggerSafely(loggingModule, modelType)
+}
+
+function releaseLoggerSafely(loggingModule: PluginLoggingModule, modelType: string): void {
+  try {
+    loggingModule.releaseLogger?.()
+  } catch (error) {
+    // Teardown must not abort the sweep or leave the registry half-cleared for
+    // the next caller — but surface it, so a leaked reference or async handle
+    // is not masked as a clean teardown.
+    getEngineLogger().warn(
+      `[${modelType}] releaseLogger failed: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
+
 export function getPlugin(modelType: string): QvacPlugin | undefined {
   return plugins.get(modelType)
 }
@@ -128,10 +247,12 @@ export function unregisterPlugin(modelType: string): boolean {
   if (!plugin) return false
 
   const loggingModule = getLoggingModule(plugin)
+  const resolverNamespace = getLoggingResolver(plugin) ? plugin.logging?.namespace : undefined
   plugins.delete(modelType)
   if (loggingModule && !findPluginUsingLoggingModule(loggingModule)) {
     loggingModule.releaseLogger?.()
   }
+  releaseLazyAddonLogger(resolverNamespace, modelType)
 
   return true
 }
@@ -152,7 +273,9 @@ export function clearPlugins(): void {
       loggingModules.set(loggingModule, plugin.modelType)
     }
   }
+  const lazyModules = new Map(lazyAddonLoggers)
   plugins.clear()
+  lazyAddonLoggers.clear()
   for (const [loggingModule, modelType] of loggingModules) {
     try {
       loggingModule.releaseLogger?.()
@@ -166,5 +289,10 @@ export function clearPlugins(): void {
         }`
       )
     }
+  }
+  // Loggers wired through a resolver are keyed by namespace rather than held
+  // on the plugin, so they need the same sweep.
+  for (const [namespace, loggingModule] of lazyModules) {
+    releaseLoggerSafely(loggingModule, namespace)
   }
 }

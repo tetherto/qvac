@@ -6,7 +6,6 @@ import ImgStableDiffusion, {
   type SdConfig,
   type VideoStableDiffusionArgs
 } from '@qvac/diffusion-cpp'
-import addonLogging from '@qvac/diffusion-cpp/addonLogging'
 import type { WorldConfig } from '@qvac/diffusion-cpp/world'
 import {
   definePlugin,
@@ -586,7 +585,7 @@ export const diffusionPlugin = definePlugin({
   },
 
   logging: {
-    module: addonLogging,
+    module: () => import('@qvac/diffusion-cpp/addonLogging'),
     namespace: ModelType.sdcppGeneration
   }
 })

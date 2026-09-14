@@ -1,4 +1,3 @@
-import ttsAddonLogging from '@qvac/tts-ggml/addonLogging'
 import TTSGgml from '@qvac/tts-ggml'
 import {
   definePlugin,
@@ -575,7 +574,7 @@ export const ttsPlugin = definePlugin({
   },
 
   logging: {
-    module: ttsAddonLogging,
+    module: () => import('@qvac/tts-ggml/addonLogging'),
     namespace: ModelType.ttsGgml
   }
 })
