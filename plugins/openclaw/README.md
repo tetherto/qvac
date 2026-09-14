@@ -3,7 +3,7 @@
 Run [OpenClaw](https://openclaw.ai) against a **local, on-device** QVAC model
 using OpenClaw's native `localService` lifecycle support. The plugin registers a
 `qvac` provider, exposes the shared QVAC model catalog, and asks OpenClaw to
-start `qvac serve openai` when the provider is used.
+start `qvac serve --openai --no-default` when the provider is used.
 
 ## Install
 
@@ -163,7 +163,7 @@ mode `0600`.
 
 OpenClaw's provider config uses a file SecretRef, and the local-service arguments
 contain only the key-file path. The launcher validates that file and points
-`qvac serve openai --api-key-file` at it. A missing, invalid, or unsafe key prevents the
+`qvac serve --openai --api-key-file` at it. A missing, invalid, or unsafe key prevents the
 server from starting. The generated QVAC serve config does not contain the key.
 The SecretRef provider id is namespaced as `qvac_key_file` so setup does not
 replace an unrelated `secrets.providers.qvac` entry.
@@ -287,10 +287,10 @@ If the local service fails with `--api-key-file requires a value`, see
 - Provider id: `qvac`
 - API adapter: `openai-completions`
 - Bearer authentication: the configured provider `apiKey` is required by the
-  managed `qvac serve openai` process through a file SecretRef
+  managed `qvac serve --openai` process through a file SecretRef
 - Base URL: `http://127.0.0.1:11434/v1` by default
 - Local service command: `node <plugin>/dist/local-service.js`, which writes a
-  temporary QVAC serve config and starts `qvac serve openai`
+  temporary QVAC serve config and starts `qvac serve --openai --no-default`
 - Model catalog: the shared `@qvac/ai-sdk-provider` catalog ids, including
   `qwen3.5-0.8b`, `qwen3.5-2b`, `qwen3.5-4b`, `qwen3.5-9b`,
   `qwen3.6-27b`, `qwen3.6-35b-a3b`, `gpt-oss-20b`, and `gemma4-31b`

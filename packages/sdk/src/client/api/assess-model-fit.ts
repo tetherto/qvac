@@ -38,8 +38,10 @@ export async function assessModelFit(input: AssessModelFitInput): Promise<Assess
     verdict: response.verdict,
     basis: response.basis,
     execution: response.execution,
+    ...(response.evidence && { evidence: response.evidence }),
     ...(response.budget && { budget: response.budget }),
     ...(response.estimate && { estimate: response.estimate }),
+    ...(response.floorBytes !== undefined && { floorBytes: response.floorBytes }),
     models: response.models,
     reasons: response.reasons,
     assumptions: response.assumptions

@@ -120,6 +120,24 @@ class TestModelConfig:
 
         assert config.language == "hi"
 
+    def test_streaming_controls_default_to_the_documented_values(self, tmp_path):
+        model_path = tmp_path / "model.gguf"
+        model_path.touch()
+
+        config = ModelConfig(path=str(model_path))
+
+        assert config.streaming is False
+        assert config.streaming_chunk_ms == 320
+        assert config.streaming_history_ms is None
+        assert config.streaming_emit_partials is True
+
+    def test_streaming_chunk_ms_must_be_positive(self, tmp_path):
+        model_path = tmp_path / "model.gguf"
+        model_path.touch()
+
+        with pytest.raises(ValueError):
+            ModelConfig(path=str(model_path), streaming_chunk_ms=0)
+
 
 class TestModelTypes:
     def test_all_model_types(self):
@@ -152,3 +170,16 @@ class TestShippedConfigs:
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
         ModelType(raw["model"]["model_type"])
+
+    @pytest.mark.parametrize(
+        "config_path", PARAKEET_CONFIGS, ids=lambda path: path.name
+    )
+    def test_model_block_carries_only_known_keys(self, config_path):
+        """Pydantic ignores unknown keys, so a template carrying a retired key
+        (e.g. the old byte-based streaming_chunk_size) would silently do
+        nothing. Keep template keys within the client's model vocabulary.
+        """
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+        unknown = set(raw["model"]) - set(ModelConfig.model_fields)
+        assert not unknown, f"{config_path.name} carries unknown model keys: {sorted(unknown)}"

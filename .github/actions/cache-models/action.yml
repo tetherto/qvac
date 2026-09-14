@@ -117,8 +117,8 @@ runs:
     # push, workflow_dispatch, merge_group). The combined cache action
     # registers a post-step that saves models downloaded LATER in the job.
     #
-    # Cache writes from fork-PR code are the poisoning risk the devops rule
-    # guards against (.cursor/rules/devops/github-actions.mdc). This is not a
+    # Cache writes from fork-PR code are the poisoning risk the repository CI
+    # guidance guards against (.github/AGENTS.md). This is not a
     # hard boundary (the action runs from PR-head code); consumer-side manifest
     # validation in each addon's download util catches missing, truncated, or
     # wrong-size files. SHA-256 pins can be added later for stronger poisoning

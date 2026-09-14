@@ -124,7 +124,7 @@ declare namespace LlmLlamacpp {
         top_k?: NumericLike;
         predict?: NumericLike;
         seed?: NumericLike;
-        load_mode?: "none" | "mmap" | "mlock" | "mmap+mlock" | "dio";
+        load_mode?: "auto" | "none" | "mmap" | "mlock" | "mmap+mlock" | "dio";
         reverse_prompt?: string;
         repeat_penalty?: NumericLike;
         presence_penalty?: NumericLike;
@@ -138,12 +138,9 @@ declare namespace LlmLlamacpp {
          * - 'none' (default) — pin the whole model to a single GPU.
          * - 'layer' — pipeline parallelism; each GPU holds a contiguous slice of
          *   layers. The compatible choice, effective on every backend shipped here.
-         * - 'row' — legacy tensor parallelism. Needs split buffers, which only the
-         *   SYCL backend provides as of qvac-fabric v10069 and no backend this
-         *   package ships does, so it is accepted but degraded to 'layer' at load
-         *   with a WARNING.
          * - 'tensor' — EXPERIMENTAL tensor parallelism via qvac-fabric's meta
-         *   device; weights *and* KV cache are split across every visible GPU.
+         *   device; weights *and* KV cache are split across the eligible devices
+         *   the addon pins.
          *   Desktop only (rejected on Android/iOS). Requires flash attention, so
          *   'flash-attn': 'off' is rejected with InvalidArgument. Disables auto-fit
          *   — gpu_layers then defaults to every layer and ctx_size to the model's
@@ -151,9 +148,11 @@ declare namespace LlmLlamacpp {
          *   available for every architecture; unsupported ones are rejected up
          *   front with the architecture named.
          *
-         * See docs/multi-gpu.md.
+         * 'row' (llama.cpp's legacy split-buffer tensor parallelism) is rejected
+         * with InvalidArgument: it never took effect on any shipped backend. Use
+         * 'layer' or 'tensor'. See docs/multi-gpu.md.
          */
-        "split-mode"?: "none" | "layer" | "row" | "tensor";
+        "split-mode"?: "none" | "layer" | "tensor";
         /**
          * Flash attention. Defaults to `'on'`, except when finetuning or on a
          * BitNet model, where it is forced off. `'auto'` lets qvac-fabric decide.
@@ -308,6 +307,16 @@ declare namespace LlmLlamacpp {
          * JSON Schema. Mutually exclusive with `grammar` — passing both throws.
          */
         json_schema?: string | Record<string, unknown>;
+        /**
+         * Tool choice for a request whose prompt declares `function` tools, in the
+         * OpenAI style: `"auto"` (default) lets the model decide and constrains a
+         * call only once it starts one; `"required"` forces a tool call;
+         * `"none"` disables the tool-call grammar while leaving the tool
+         * definitions in the prompt; any other string names one declared function
+         * and forces a call to it. Ignored when the prompt carries no tools;
+         * `"required"` or a function name without tools throws.
+         */
+        tool_choice?: "auto" | "none" | "required" | (string & {});
         /**
          * Per-request reasoning channel budget. `-1` keeps the model's reasoning
          * channel on; `0` disables it for this request; any positive integer caps
@@ -492,8 +501,26 @@ declare namespace LlmLlamacpp {
          */
         thinkingBlockDiscards: number;
         /**
+         * Number of prompt renders in this request that provably left the tool
+         * definitions out — the template either rejected them, or supplying them
+         * did not change the rendered prompt at all. Such a render has its tool
+         * list stripped, so no tool grammar constrains it.
+         *
+         * Read this in one direction only. Non-zero means definitions were dropped
+         * and the model did not see them. **0 is not a guarantee that the model saw
+         * every definition**: a template that renders only some of the supplied
+         * tools changes the render and so reports no drop. Closing that needs the
+         * renderer to report what it consumed.
+         *
+         * Per-inference for single requests; summed across completed slots for
+         * batch requests. 0 when no tools were sent.
+         */
+        toolDefinitionsDropped: number;
+        /**
          * How busy the shared backend was, not a property of your request: the
-         * mean number of sequences decoded together per engine step, including
+         * mean number of sequences decoded together, weighted by the tokens each
+         * engine step carried so the figure tracks how much traffic shared the
+         * backend rather than how finely the scheduler sliced its work. Includes
          * overlapping requests from other callers (capped by the `parallel`
          * configuration). 1.0 = the model was effectively yours alone; ~N = your
          * tokens shared compute with N-1 others, so this request's observed `TPS`

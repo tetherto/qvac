@@ -113,6 +113,8 @@ class RegistryService extends ReadyResource {
     this.ackThreshold = opts.ackThreshold ?? 0
     this.autobaseBootstrap = opts.autobaseBootstrap || null
     this.blindPeerKeys = Array.isArray(opts.blindPeerKeys) ? opts.blindPeerKeys : []
+    this.storagePath = opts.storagePath || this.config.getRegistryStorage?.() || null
+    this._statfs = opts.statfs || fsPromises.statfs
     this.skipStorageCheck = opts.skipStorageCheck ?? false
     this.clearAfterReseed = opts.clearAfterReseed ?? false
     this.compactionIntervalMs = opts.compactionIntervalMs ?? 60 * 60 * 1000
@@ -755,6 +757,21 @@ class RegistryService extends ReadyResource {
       }
     })
 
+    rpc.respond('get-storage-capacity', async () => {
+      if (this.metrics) this.metrics.recordRpcRequest('get-storage-capacity')
+      try {
+        ensureWriterAccess()
+
+        if (!this.opened) await this.ready()
+        await this._ensureIndexer()
+
+        return await this._getStorageCapacity()
+      } catch (err) {
+        if (this.metrics) this.metrics.recordRpcError('get-storage-capacity')
+        throw err
+      }
+    })
+
     // lunte-disable-next-line require-await
     rpc.respond('ping', async () => {
       if (this.metrics) this.metrics.recordRpcRequest('ping')
@@ -776,6 +793,23 @@ class RegistryService extends ReadyResource {
     if (!remoteKeyHex) return false
     const keys = this.config.getAllowedWriterKeys()
     return keys.has(remoteKeyHex)
+  }
+
+  async _getStorageCapacity() {
+    try {
+      if (!this.storagePath) throw new Error('Registry storage path is unavailable')
+
+      const stats = await this._statfs(this.storagePath, { bigint: true })
+      const availableBytes = BigInt(stats.bavail) * BigInt(stats.bsize)
+
+      return { availableBytes: availableBytes.toString() }
+    } catch (err) {
+      this.logger.error({ error: err.message }, 'Failed to read registry storage capacity')
+
+      const capacityError = new Error('Registry storage capacity is unavailable')
+      capacityError.code = 'ERR_STORAGE_CAPACITY_UNAVAILABLE'
+      throw capacityError
+    }
   }
 
   _validateAddModelRequest(entry) {

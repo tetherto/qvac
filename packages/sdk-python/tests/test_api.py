@@ -206,6 +206,13 @@ async def test_delete_cache_all():
     assert result == {"success": True}
 
 
+async def test_delete_cache_auto():
+    transport = FakeTransport({"type": "deleteCache", "success": True})
+    result = await api.delete_cache(transport, auto=True)
+    assert transport.sent == {"type": "deleteCache", "auto": True}
+    assert result == {"success": True}
+
+
 async def test_delete_cache_by_kv_cache_key():
     transport = FakeTransport({"type": "deleteCache", "success": True})
     await api.delete_cache(transport, kv_cache_key="key-1", model_id="model-1")

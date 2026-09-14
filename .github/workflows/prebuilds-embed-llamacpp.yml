@@ -4,9 +4,6 @@ name: Prebuilds (Embed)
 on:
   workflow_dispatch:
     inputs:
-      vk-profiling:
-        type: boolean
-        default: false
       workdir:
         description: "Working directory (optional)"
         required: false
@@ -23,16 +20,18 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      vk-profiling:
-        description: "Enable Vulkan profiling"
-        type: boolean
-        required: false
-        default: false
       workdir:
         description: "Working directory (optional)"
         required: false
         type: string
         default: "packages/embed-llamacpp"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -50,5 +49,5 @@ jobs:
       repository: ${{ inputs.repository }}
       artifact-name-prefix: llama-cpp-
       include-vulkan-sdk: true
-      extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
+      fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
     secrets: inherit

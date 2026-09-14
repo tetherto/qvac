@@ -10,6 +10,7 @@ import type { ToolDialect } from '@/schemas/completion-stream'
 export const completionStatsSchema = z.object({
   timeToFirstToken: z.number().optional(),
   tokensPerSecond: z.number().optional(),
+  promptTokensPerSecond: z.number().optional(),
   cacheTokens: z.number().optional(),
   promptTokens: z.number().optional(),
   // Decode count (`llama_perf` `n_eval`) — length / KV-cache budget decisions.

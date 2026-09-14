@@ -1,9 +1,10 @@
 name: "Setup CUDA toolkit for nvcc compile"
 description: >-
   Assembles a pinned CUDA toolkit from NVIDIA's redistributable component
-  archives on a linux runner, x64 or arm64, and exports
-  CUDA_PATH/CUDACXX/PATH(bin)/VCPKG_KEEP_ENV_VARS/LD_LIBRARY_PATH so a
-  consumer's speech-cpp cuda feature can compile the ggml CUDA backend.
+  archives on a linux (x64 or arm64) or windows x64 runner and exports
+  CUDA_PATH/CUDACXX/PATH(bin)/VCPKG_KEEP_ENV_VARS (plus LD_LIBRARY_PATH on
+  Linux) so a consumer's speech-cpp cuda feature can compile the ggml CUDA
+  backend.
   Component tarballs are used instead of the runfile installer because the
   installer hardcodes /tmp/cuda-installer.log and segfaults for every runner
   user on a shared host after the first user's install ("Log file not open.").
@@ -38,12 +39,15 @@ runs:
     # main's privileged runs then restore, and cpp-lint reaches here with no
     # label at all. r1 -> r2 because splitting only stops new writes; rotating
     # makes whatever the old lane already wrote unreachable.
+    # runner.os is part of the key too: a windows-x64 and a linux-x64 job
+    # share runner.arch == 'X64' and would otherwise restore each other's
+    # toolkit.
     - name: Restore CUDA toolkit
       id: cache-cuda
       uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r2
+        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.os }}-${{ runner.arch }}-r2
 
     - name: Download + verify + assemble CUDA toolkit
       if: steps.cache-cuda.outputs.cache-hit != 'true'
@@ -58,11 +62,17 @@ runs:
         #
         # QVAC-24442: NVIDIA calls the arm64 build "sbsa". It is a native
         # toolkit, not a cross-compiler, so it only runs on an arm64 runner.
-        case "$(uname -m)" in
-          x86_64)  REDIST_ARCH=linux-x86_64 ;;
-          aarch64) REDIST_ARCH=linux-sbsa ;;
-          *) echo "::error::setup-cuda: no CUDA redist for $(uname -m)"; exit 1 ;;
-        esac
+        # QVAC-24314: on Windows uname reports the MSYS environment, so the
+        # runner facts decide first.
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          REDIST_ARCH=windows-x86_64
+        else
+          case "$(uname -m)" in
+            x86_64)  REDIST_ARCH=linux-x86_64 ;;
+            aarch64) REDIST_ARCH=linux-sbsa ;;
+            *) echo "::error::setup-cuda: no CUDA redist for $(uname -m)"; exit 1 ;;
+          esac
+        fi
         echo "Assembling the $REDIST_ARCH toolkit"
 
         COMPONENTS_linux_x86_64="\
@@ -83,32 +93,67 @@ runs:
         cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.2.51-archive.tar.xz 35244c4d90e5b1aa48fb98d655f6dfa3f9e4f7d0ac220266ebf85c0928a7524b
         libcublas/linux-sbsa/libcublas-linux-sbsa-13.3.0.5-archive.tar.xz edadce2ec8d997ffb08f5a1c4ee6b1d14a2c883f2aa11e1d3208b4f077d9225f"
 
-        # Same seven components and release either way, only the path and hash
+        # QVAC-24314: Windows ships the same release as zip archives; culibos
+        # does not exist as a Windows component (it is a Linux static lib) and
+        # is not needed there.
+        COMPONENTS_windows_x86_64="\
+        cuda_nvcc/windows-x86_64/cuda_nvcc-windows-x86_64-13.2.51-archive.zip a6bacac79adb923e310eb39f2b86d4d9e756c896d035dfead50c69403eca4661
+        libnvvm/windows-x86_64/libnvvm-windows-x86_64-13.2.51-archive.zip ef2a24cf40f9394e2f13df5a8a7315c65325103006a53692cd12b8c48431e372
+        cuda_crt/windows-x86_64/cuda_crt-windows-x86_64-13.2.51-archive.zip 02892bd6bc7ec832c5fc6fc794491803166ee8455bd87d52976c4b195b76c8e7
+        cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-13.2.51-archive.zip 906b430b53e6396f7cbaa6874fbe7f9307a184e830b119a4ad3f58dc6e0165c6
+        cuda_cccl/windows-x86_64/cuda_cccl-windows-x86_64-13.2.27-archive.zip fb61bbca384ea9e5722f3b77cfdd635c916f33593d187562510ce14831aa629a
+        libcublas/windows-x86_64/libcublas-windows-x86_64-13.3.0.5-archive.zip 438a88f07af3721eda15ed1f4d2b957ea810e29061b2a6292837f35520dbd212"
+
+        # Same components and release either way, only the path and hash
         # differ. An explicit case rather than an indirect expansion: it fails
         # closed if a new arch is added above without a matching list here,
         # instead of silently expanding to an empty COMPONENTS and assembling
         # nothing.
         case "$REDIST_ARCH" in
-          linux-x86_64) COMPONENTS="$COMPONENTS_linux_x86_64" ;;
-          linux-sbsa)   COMPONENTS="$COMPONENTS_linux_sbsa" ;;
+          linux-x86_64)    COMPONENTS="$COMPONENTS_linux_x86_64" ;;
+          linux-sbsa)      COMPONENTS="$COMPONENTS_linux_sbsa" ;;
+          windows-x86_64)  COMPONENTS="$COMPONENTS_windows_x86_64" ;;
           *) echo "::error::setup-cuda: no COMPONENTS list for $REDIST_ARCH"; exit 1 ;;
         esac
 
         prefix="$RUNNER_TEMP/cuda/toolkit"
+        # QVAC-24314: git-bash tools want POSIX paths — GNU tar parses the
+        # drive colon in C:\... as a remote-host spec ("Cannot connect to C").
+        # The exported CUDA_PATH/CUDACXX keep the Windows form CMake needs.
+        if command -v cygpath >/dev/null 2>&1; then
+          prefix="$(cygpath -u "$prefix")"
+          dl_dir="$(cygpath -u "$RUNNER_TEMP")"
+        else
+          dl_dir="$RUNNER_TEMP"
+        fi
         mkdir -p "$prefix"
+        # The Windows components are .zip, which GNU tar cannot read, and
+        # which of the two tars a Windows runner's bash resolves varies by
+        # machine. Use the system bsdtar explicitly there (zip-capable,
+        # native Windows paths); plain tar handles the Linux .tar.xz
+        # archives.
+        extract_archive() {
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            /c/Windows/System32/tar.exe -xf "$(cygpath -w "$1")" \
+              --strip-components=1 -C "$(cygpath -w "$prefix")"
+          else
+            tar -xJf "$1" --strip-components=1 -C "$prefix"
+          fi
+        }
         echo "$COMPONENTS" | while read -r rel sha; do
           [ -z "$rel" ] && continue
           url="https://developer.download.nvidia.com/compute/cuda/redist/$rel"
-          out="$RUNNER_TEMP/$(basename "$rel")"
+          out="$dl_dir/$(basename "$rel")"
           echo "Downloading $url"
           curl -fsSL --retry 3 "$url" -o "$out"
           echo "$sha  $out" | sha256sum -c -
-          tar -xJf "$out" --strip-components=1 -C "$prefix"
+          extract_archive "$out"
           rm -f "$out"
         done
-        # Redist archives ship lib/, not lib64/; some consumers look for
-        # lib64, so provide it as an alias.
-        if [ -d "$prefix/lib" ] && [ ! -e "$prefix/lib64" ]; then
+        # Redist archives ship lib/, not lib64/; some Linux consumers look
+        # for lib64, so provide it as an alias. Windows keeps NVIDIA's
+        # lib/x64 import-library layout, which FindCUDAToolkit knows.
+        if [ "$RUNNER_OS" != "Windows" ] && [ -d "$prefix/lib" ] && [ ! -e "$prefix/lib64" ]; then
           ln -s lib "$prefix/lib64"
         fi
 
@@ -122,14 +167,17 @@ runs:
       uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.arch }}-r2
+        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.os }}-${{ runner.arch }}-r2
 
     - name: Export CUDA environment
       shell: bash
       run: |
-        nvcc="$RUNNER_TEMP/cuda/toolkit/bin/nvcc"
-        if [ ! -x "$nvcc" ]; then echo "::error::nvcc not found after assembly"; exit 1; fi
         cuda_prefix="$RUNNER_TEMP/cuda/toolkit"
+        nvcc="$cuda_prefix/bin/nvcc"
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          nvcc="$nvcc.exe"
+        fi
+        if [ ! -x "$nvcc" ]; then echo "::error::nvcc not found after assembly"; exit 1; fi
         echo "CUDA prefix: $cuda_prefix"
         echo "CUDA_PATH=$cuda_prefix" >> "$GITHUB_ENV"
         echo "CUDACXX=$nvcc" >> "$GITHUB_ENV"
@@ -138,4 +186,6 @@ runs:
         # only sees the toolkit through an explicit keep-list. Append rather
         # than assign so a sibling setup action's keep-list survives.
         echo "VCPKG_KEEP_ENV_VARS=${VCPKG_KEEP_ENV_VARS:+$VCPKG_KEEP_ENV_VARS;}CUDA_PATH;CUDACXX" >> "$GITHUB_ENV"
-        echo "LD_LIBRARY_PATH=$cuda_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        if [ "$RUNNER_OS" != "Windows" ]; then
+          echo "LD_LIBRARY_PATH=$cuda_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        fi

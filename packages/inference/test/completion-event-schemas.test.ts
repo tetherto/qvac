@@ -70,6 +70,7 @@ test('completionStatsSchema: all fields optional, promptTokens carries a number'
   ok({
     timeToFirstToken: 12.5,
     tokensPerSecond: 42,
+    promptTokensPerSecond: 850.5,
     cacheTokens: 100,
     promptTokens: 1234,
     generatedTokens: 56,
@@ -85,6 +86,7 @@ test('completionStatsSchema: all fields optional, promptTokens carries a number'
   bad({ promptTokens: '1234' })
   bad({ promptTokens: null })
   bad({ avgConcurrentSeq: '3.5' })
+  bad({ promptTokensPerSecond: '850.5' })
 })
 
 test('statsEvent: promptTokens flows through the wire event shape', (t) => {

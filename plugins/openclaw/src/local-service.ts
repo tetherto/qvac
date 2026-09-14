@@ -258,6 +258,10 @@ export interface QvacLaunch {
   readonly args: string[]
 }
 
+// `--no-default` is part of the pair, not an extra: bare `--openai` also mounts
+// the QVAC surface on the port, while the `serve openai` subcommand this
+// replaces exposed `/v1/*` alone. Keeping both preserves that and keeps the
+// extra surface off a port the plugin authenticates and owns.
 function qvacLaunch(options: LocalServiceOptions, configPath: string, apiKey: string): QvacLaunch {
   const cli = resolveQvacCli(options.qvacCommand)
   return {
@@ -265,7 +269,8 @@ function qvacLaunch(options: LocalServiceOptions, configPath: string, apiKey: st
     args: [
       ...cli.baseArgs,
       'serve',
-      'openai',
+      '--openai',
+      '--no-default',
       '--config',
       configPath,
       '--host',

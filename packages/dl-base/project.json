@@ -1,0 +1,20 @@
+{
+  "name": "@qvac/dl-base",
+  "root": "packages/dl-base",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/dl-base"
+      }
+    },
+    "test:dts": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:dts",
+        "cwd": "packages/dl-base"
+      }
+    }
+  }
+}

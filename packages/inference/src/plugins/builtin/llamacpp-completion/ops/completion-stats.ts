@@ -10,6 +10,7 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
 
   const timeToFirstToken = finiteNumber(stats.TTFT)
   const tokensPerSecond = finiteNumber(stats.TPS)
+  const promptTokensPerSecond = finiteNumber(stats.ppTPS)
   const cacheTokens = finiteNumber(stats.CacheTokens)
   const promptTokens = finiteNumber(stats.promptTokens)
   const generatedTokens = finiteNumber(stats.generatedTokens)
@@ -18,6 +19,7 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
   const normalized: CompletionStats = {
     ...(timeToFirstToken !== undefined && { timeToFirstToken }),
     ...(tokensPerSecond !== undefined && { tokensPerSecond }),
+    ...(promptTokensPerSecond !== undefined && { promptTokensPerSecond }),
     ...(cacheTokens !== undefined && { cacheTokens }),
     ...(promptTokens !== undefined && { promptTokens }),
     ...(generatedTokens !== undefined && { generatedTokens }),
@@ -28,6 +30,7 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
   if (
     timeToFirstToken === undefined &&
     tokensPerSecond === undefined &&
+    promptTokensPerSecond === undefined &&
     cacheTokens === undefined &&
     promptTokens === undefined &&
     generatedTokens === undefined &&

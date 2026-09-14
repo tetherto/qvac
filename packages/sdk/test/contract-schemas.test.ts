@@ -15,7 +15,13 @@ test('contract completionStream.response: validates streaming event chunks', (t)
       {
         type: 'completionStats',
         seq: 0,
-        stats: { timeToFirstToken: 80, tokensPerSecond: 75, cacheTokens: 12, backendDevice: 'cpu' }
+        stats: {
+          timeToFirstToken: 80,
+          tokensPerSecond: 75,
+          promptTokensPerSecond: 850,
+          cacheTokens: 12,
+          backendDevice: 'cpu'
+        }
       },
       { type: 'completionDone', seq: 1 }
     ]

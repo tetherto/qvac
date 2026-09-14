@@ -136,13 +136,17 @@ and `timestamps_enabled`. Indic Conformer also requires a two-letter
 - **Model (parakeet)**: `path` (`.gguf` file), `sample_rate`, `audio_format`,
   `model_type` (`tdt`/`unified`/`ctc`/`eou`/`sortformer`/`indic-conformer`),
   `language` (required by Indic Conformer), `max_threads`, `use_gpu`,
-  `caption_enabled`, `timestamps_enabled`, `streaming`, `streaming_chunk_size`
+  `caption_enabled`, `timestamps_enabled`, `streaming`, `streaming_chunk_ms`,
+  `streaming_history_ms` (Sortformer only), `streaming_emit_partials` —
+  streaming runs drive the addon's duplex `runStreaming()` session with these
+  ms-based controls
 
 ## Output
 
 - WER / CER scores (if enabled); AraDiaWER details for Arabic whisper runs
 - Total model load time
 - Total transcription time
+- Time to first partial (avg/median, parakeet streaming runs only)
 - Result markdown files under `../results/<model>/`
 
 ## Development

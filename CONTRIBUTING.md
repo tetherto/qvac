@@ -4,12 +4,12 @@ We welcome contributions! Feel free to open a pull request, report bugs, or shar
 
 ## API Reference Docs
 
-The SDK's public API summary (`docs/website/content/docs/reference/api/index.mdx`) is generated from TypeScript source by a pipeline under `docs/website/scripts/`. To regenerate it locally:
+The SDK's public API summary is generated from TypeScript source by a pipeline under `docs/website/scripts/`. Content lives at `docs/website/content/docs/reference/api/v<X.Y>.x.mdx` (one permanent page per minor series); the canonical URL `/reference/api` is served by a thin `index.mdx` shim that `<include>`s the current-latest series file. To regenerate the current-latest series locally:
 
 ```bash
 cd docs/website
 npm install
-npm run docs:generate-api -- 0.9.1 --latest  # writes content/docs/reference/api/index.mdx
+npm run docs:generate-api -- 0.9.1  # writes content/docs/reference/api/v0.9.x.mdx
 ```
 
 Full workflow, CLI flags, determinism guarantees, and troubleshooting are documented in [docs/website/docs-workflow.md](docs/website/docs-workflow.md). `docs:generate-api` requires `bun` on PATH (listed as a devDependency of `docs/website`).
