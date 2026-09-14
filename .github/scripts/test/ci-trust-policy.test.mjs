@@ -2117,7 +2117,7 @@ test('release policy: no workflow cuts a GitHub Release outside the SDK surface'
 // fork-ci is approved, so a cache WRITE (actions/cache, as opposed to
 // actions/cache/restore) must be gated on trusted events only. The split is easy
 // to undo by accident -- the two steps are near-identical and differ by four
-// lines -- so pin it here. See .cursor/rules/devops/github-actions.mdc:82.
+// lines -- so pin it here. See .github/AGENTS.md.
 const TRUSTED_CACHE_EVENTS = ['push', 'workflow_dispatch', 'merge_group', 'schedule']
 
 // Known-ungated, tracked on QVAC-24711. Both write a ccache/models cache with no

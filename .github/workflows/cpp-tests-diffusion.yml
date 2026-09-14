@@ -151,7 +151,7 @@ jobs:
         uses: ./.github/actions/vcpkg-toolchain-fingerprint
 
       # This job runs PR-head code, so only trusted events may write the shared
-      # cache (.cursor/rules/devops/github-actions.mdc:82). No restore-keys: a
+      # cache (see .github/AGENTS.md). No restore-keys: a
       # prefix match would re-save the previous entry's archives and grow without
       # bound. The key covers the manifests, the shared vcpkg overlays and the
       # toolchain that builds them -- the last of those because vcpkg's ABI
