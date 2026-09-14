@@ -46,6 +46,11 @@ metadata peer does not model this rotation procedure.
    ```
 
    The startup log should report the label `models-2026-09-10` and its core key.
+   `qvac_registry_blob_core_length` and
+   `qvac_registry_blob_core_byte_length` now describe the new active core and
+   therefore restart at or near zero. This is expected and does not indicate data
+   loss. Use `qvac_registry_total_blob_bytes`, which is derived from all model
+   metadata, to confirm that the registry's logical blob size remains stable.
 
 5. Resume ingestion and add a canary model through the normal model-ingestion
    workflow.
