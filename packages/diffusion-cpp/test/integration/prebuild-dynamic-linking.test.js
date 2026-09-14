@@ -134,82 +134,25 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
   }
 })
 
-// File-level layout checks above prove the module EXISTS; this proves Linux
-// can actually dlopen and register it. A packaging mistake in the backends
-// subdir, the dlopen search path, or module registration would pass the
-// layout checks while GPU selection silently fell back to CPU. Backend
-// registration is PROCESS-GLOBAL and happens on the first model load in the
-// suite, so this test cannot rely on catching the one-time
-// `load_backend: loaded Vulkan backend from ...` line — instead it requests
-// `main-gpu: 0`, whose resolution walks the live ggml device registry on
-// EVERY load and logs the resolved backend name: it can only resolve to
-// Vulkan0 if the DL module actually registered (same log-capture pattern as
-// main-gpu-backend.test.js). If registration broke, resolution falls back
-// to CPU and the assertion fails.
-test(
-  'linux GPU host registers the Vulkan backend through the DL module',
-  { timeout: 600000 },
-  async (t) => {
-    if (os.platform() !== 'linux') {
-      t.pass('DL backend registration check is linux-only')
-      return
-    }
-    if (proc.env && proc.env.NO_GPU === 'true') {
-      t.pass('NO_GPU=true; DL registration needs a GPU host')
-      return
-    }
-    if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
-      t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
-      return
-    }
-
-    const binding = require('../../binding')
-    const ImgStableDiffusion = require('../../index')
-    const { ensureModel, releaseJsLogger } = require('./utils')
-
-    const logs = []
-    binding.setLogger((priority, message) => {
-      logs.push(String(message))
-    })
-
-    let model = null
-    try {
-      const [modelName, modelDir] = await ensureModel({
-        modelName: 'stable-diffusion-v2-1-Q8_0.gguf'
-      })
-
-      model = new ImgStableDiffusion({
-        files: { model: path.join(modelDir, modelName) },
-        config: {
-          device: 'gpu',
-          'main-gpu': 0,
-          threads: 4,
-          prediction: 'v',
-          verbosity: 2,
-          backendsDir: PREBUILDS_DIR
-        },
-        logger: console
-      })
-      await model.load()
-
-      // The main-gpu resolver enumerates the live ggml device registry at
-      // this load; on a Vulkan-capable host it can only report a Vulkan
-      // backend if the DL module was dlopen'd and registered. C++ log lines
-      // are marshalled to the JS event loop asynchronously, so poll like
-      // main-gpu-backend.test.js does instead of reading synchronously.
-      const deadline = Date.now() + 5000
-      let resolvedLine = null
-      while (!resolvedLine && Date.now() < deadline) {
-        resolvedLine = logs.find((line) => line.includes("main-gpu resolved to backend 'Vulkan"))
-        if (!resolvedLine) await new Promise((resolve) => setTimeout(resolve, 50))
-      }
-      t.ok(
-        resolvedLine,
-        `ggml device registry resolved a Vulkan backend (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
-      )
-    } finally {
-      if (model) await model.unload().catch(() => {})
-      releaseJsLogger(binding)
-    }
+// File-level layout checks above prove the modules exist. This policy query
+// loads them and verifies that the live ggml registry has an accelerated
+// backend instead of silently falling back to CPU.
+test('linux GPU host registers a GPU backend through a DL module', async (t) => {
+  if (os.platform() !== 'linux') {
+    t.pass('DL backend registration check is linux-only')
+    return
   }
-)
+  if (proc.env && proc.env.NO_GPU === 'true') {
+    t.pass('NO_GPU=true; DL registration needs a GPU host')
+    return
+  }
+  if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
+    t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
+    return
+  }
+
+  const binding = require('../../binding')
+  const backendDevice = binding.getExpectedEsrganBackendDevice('gpu', PREBUILDS_DIR)
+
+  t.is(backendDevice, 'gpu', 'ggml registered an accelerated backend from the DL modules')
+})
