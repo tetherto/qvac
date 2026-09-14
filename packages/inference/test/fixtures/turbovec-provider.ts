@@ -7,7 +7,17 @@ import type { TurboVecIndex, TurboVecIndexProvider } from '@qvac/rag'
 import { registerPlugin } from '@/plugins'
 
 export function observableIndexProvider() {
-  const calls = { create: 0, load: 0, addWithIds: 0, search: 0 }
+  const calls = {
+    create: 0,
+    load: 0,
+    addWithIds: 0,
+    search: 0,
+    remove: 0,
+    contains: 0,
+    prepare: 0,
+    write: 0,
+    dispose: 0
+  }
 
   function createIndex(dim: number): TurboVecIndex {
     const indexIds: bigint[] = []
@@ -18,6 +28,9 @@ export function observableIndexProvider() {
       dim,
       addWithIds(_vectors, ids) {
         calls.addWithIds++
+        for (const id of ids) {
+          if (indexIds.includes(id)) throw new Error(`duplicate id ${id}`)
+        }
         for (const id of ids) indexIds.push(id)
       },
       search(_queries, k) {
@@ -31,19 +44,26 @@ export function observableIndexProvider() {
         }
       },
       contains(id) {
+        calls.contains++
         return indexIds.includes(id)
       },
       remove(id) {
+        calls.remove++
         const index = indexIds.indexOf(id)
         if (index === -1) return false
         indexIds.splice(index, 1)
         return true
       },
-      prepare() {},
+      prepare() {
+        calls.prepare++
+      },
       write(snapshotPath) {
+        calls.write++
         fs.writeFileSync(snapshotPath, 'test index\n')
       },
-      dispose() {}
+      dispose() {
+        calls.dispose++
+      }
     }
   }
 
